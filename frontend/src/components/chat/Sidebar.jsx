@@ -1,13 +1,44 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { Search, Settings, User, LogOut, MessageSquare } from 'lucide-react';
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal }) {
   const { user, logout, token } = useContext(AuthContext);
-  const { onlineUsers } = useContext(SocketContext);
+  const { onlineUsers, lastNotification } = useContext(SocketContext);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [recentChats, setRecentChats] = useState([]);
+
+  // Fetches the persistent chat list - anyone you've ever exchanged a
+  // message with, most recent first, WITH unread counts. This is what
+  // makes a message from someone you never searched for still show up.
+  const loadRecentChats = useCallback(() => {
+    fetch('/api/users/recent', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => setRecentChats(data))
+      .catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
+    loadRecentChats();
+  }, [loadRecentChats]);
+
+  // Whenever a new message notification arrives (from ANY conversation,
+  // whether currently open or not), refresh the list so it reorders and
+  // unread badges update immediately.
+  useEffect(() => {
+    if (lastNotification) {
+      loadRecentChats();
+    }
+  }, [lastNotification, loadRecentChats]);
+
+  // Also refresh after switching chats (marks read, so the badge should clear)
+  useEffect(() => {
+    if (activeChat) loadRecentChats();
+  }, [activeChat, loadRecentChats]);
 
   // Search Users
   useEffect(() => {
@@ -75,16 +106,40 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         ) : (
           <div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '0.5rem 0.5rem' }}>CHATS</p>
-            {activeChat ? (
-              <div onClick={() => setActiveChat(activeChat)} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', borderRadius: '10px', cursor: 'pointer', background: 'var(--bg-card)' }}>
-                <img src={activeChat.avatar} alt="Avatar" style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
-                <div>
-                  <h4 style={{ fontSize: '0.9rem' }}>{activeChat.displayName}</h4>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>@{activeChat.username}</p>
+            {recentChats.length > 0 ? (
+              recentChats.map(u => (
+                <div
+                  key={u.id}
+                  onClick={() => handleSelectUser(u)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', borderRadius: '10px',
+                    cursor: 'pointer',
+                    background: activeChat?.id === u.id ? 'var(--bg-card)' : 'transparent'
+                  }}
+                >
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <img src={u.avatar} alt="Avatar" style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
+                    {onlineUsers.includes(u.id) && <div style={{ position: 'absolute', right: 0, bottom: 0, width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', border: '2px solid var(--bg-sidebar)' }} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h4 style={{ fontSize: '0.9rem', fontWeight: u.unreadCount > 0 ? 700 : 500 }}>{u.displayName}</h4>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.lastMessageFromMe ? 'You: ' : ''}{u.lastMessage || `@${u.username}`}
+                    </p>
+                  </div>
+                  {u.unreadCount > 0 && (
+                    <span style={{
+                      background: 'var(--accent)', color: '#fff', fontSize: '0.7rem', fontWeight: 700,
+                      minWidth: '20px', height: '20px', borderRadius: '100px', display: 'flex',
+                      alignItems: 'center', justifyContent: 'center', padding: '0 6px', flexShrink: 0
+                    }}>
+                      {u.unreadCount}
+                    </span>
+                  )}
                 </div>
-              </div>
+              ))
             ) : (
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>Search @username above to start chatting!</p>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>Search @username above to start messaging!</p>
             )}
           </div>
         )}

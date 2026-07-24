@@ -3,6 +3,13 @@ const router = express.Router();
 const db = require('../database/db');
 const authMiddleware = require('../middleware/authMiddleware');
 
+// Persistent conversation list (shown by default in the sidebar) - includes
+// anyone who has messaged you OR whom you've messaged, even without a search
+router.get('/recent', authMiddleware, async (req, res) => {
+  const conversations = await db.getRecentConversations(req.user.id);
+  res.json(conversations);
+});
+
 // Search users by Name or @username
 router.get('/search', authMiddleware, async (req, res) => {
   const query = (req.query.q || '').toLowerCase().trim().replace(/^@/, '');

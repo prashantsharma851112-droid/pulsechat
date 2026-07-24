@@ -11,6 +11,7 @@ export function SocketProvider({ children }) {
   const [socket, setSocket] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingMap, setTypingMap] = useState({});
+  const [lastNotification, setLastNotification] = useState(null);
 
   useEffect(() => {
     if (user) {
@@ -31,12 +32,20 @@ export function SocketProvider({ children }) {
         setTypingMap(prev => ({ ...prev, [chatId]: null }));
       });
 
+      // This fires for EVERY incoming message, regardless of whether the
+      // relevant chat is currently open. We store it as an object (not an
+      // array) that changes on every message, so components can watch it
+      // with useEffect and react (refresh the sidebar list, show a toast).
+      newSocket.on('message_notification', (msg) => {
+        setLastNotification({ ...msg, receivedAt: Date.now() });
+      });
+
       return () => newSocket.disconnect();
     }
   }, [user]);
 
   return (
-    <SocketContext.Provider value={{ socket, onlineUsers, typingMap }}>
+    <SocketContext.Provider value={{ socket, onlineUsers, typingMap, lastNotification }}>
       {children}
     </SocketContext.Provider>
   );

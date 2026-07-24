@@ -37,5 +37,49 @@ module.exports = {
   updateMessageStatus: async (msgId, status) => {
     const updated = await Message.findOneAndUpdate({ id: msgId }, { status }, { new: true }).lean();
     return updated;
+  },
+
+  // Returns everyone the given user has EVER exchanged a message with,
+  // ordered by most recent activity, each with the last message preview
+  // and an unread count. This powers the persistent "Chats" list in the
+  // sidebar - it does NOT depend on the user having searched for anyone,
+  // so if someone messages you first, you'll see them here automatically.
+  getRecentConversations: async (myId) => {
+    const messages = await Message.find({ $or: [{ senderId: myId }, { receiverId: myId }] })
+      .sort({ timestamp: -1 })
+      .lean();
+
+    const seen = new Set();
+    const ordered = [];
+    for (const msg of messages) {
+      const otherId = msg.senderId === myId ? msg.receiverId : msg.senderId;
+      if (otherId && !seen.has(otherId)) {
+        seen.add(otherId);
+        ordered.push({ otherId, lastMessage: msg });
+      }
+    }
+
+    const results = [];
+    for (const { otherId, lastMessage } of ordered) {
+      const otherUser = await User.findOne({ id: otherId }).lean();
+      if (!otherUser) continue;
+
+      const unreadCount = await Message.countDocuments({
+        senderId: otherId,
+        receiverId: myId,
+        status: { $ne: 'read' }
+      });
+
+      const { passwordHash, ...safeUser } = otherUser;
+      results.push({
+        ...safeUser,
+        lastMessage: lastMessage.type === 'text' ? lastMessage.content : `[${lastMessage.type}]`,
+        lastMessageTime: lastMessage.timestamp,
+        lastMessageFromMe: lastMessage.senderId === myId,
+        unreadCount
+      });
+    }
+
+    return results;
   }
 };
