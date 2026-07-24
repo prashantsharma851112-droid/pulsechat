@@ -1,0 +1,125 @@
+:root {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+}
+
+/* --- THEME VARIATION VARIABLES --- */
+[data-theme="dark"] {
+  --bg-main: #0b0f19;
+  --bg-sidebar: #111827;
+  --bg-chat: #090d16;
+  --bg-card: #1f293d;
+  --text-main: #f3f4f6;
+  --text-muted: #9ca3af;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --bubble-sent: #4338ca;
+  --bubble-received: #1e293b;
+  --border: #1f2937;
+}
+
+[data-theme="emerald"] {
+  --bg-main: #071e16;
+  --bg-sidebar: #0f2d24;
+  --bg-chat: #05140e;
+  --bg-card: #173e32;
+  --text-main: #e6f4f0;
+  --text-muted: #80b3a3;
+  --accent: #10b981;
+  --accent-hover: #059669;
+  --bubble-sent: #065f46;
+  --bubble-received: #133a2e;
+  --border: #1a4d3e;
+}
+
+[data-theme="neon"] {
+  --bg-main: #05050d;
+  --bg-sidebar: #0b0c1b;
+  --bg-chat: #030308;
+  --bg-card: #141634;
+  --text-main: #ffffff;
+  --text-muted: #a5b4fc;
+  --accent: #ec4899;
+  --accent-hover: #db2777;
+  --bubble-sent: #be185d;
+  --bubble-received: #1e1b4b;
+  --border: #2e1065;
+}
+
+[data-theme="light"] {
+  --bg-main: #f3f4f6;
+  --bg-sidebar: #ffffff;
+  --bg-chat: #f9fafb;
+  --bg-card: #ffffff;
+  --text-main: #111827;
+  --text-muted: #6b7280;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --bubble-sent: #4f46e5;
+  --bubble-received: #e5e7eb;
+  --border: #e5e7eb;
+}
+
+[data-theme="sunset"] {
+  --bg-main: #1c0a14;
+  --bg-sidebar: #2a101f;
+  --bg-chat: #15060f;
+  --bg-card: #3a162b;
+  --text-main: #fdf2f8;
+  --text-muted: #f472b6;
+  --accent: #f43f5e;
+  --accent-hover: #e11d48;
+  --bubble-sent: #be123c;
+  --bubble-received: #4c1d37;
+  --border: #4c1d3e;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  height: 100vh;
+  overflow: hidden;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+input, textarea {
+  font-family: inherit;
+  outline: none;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+/* Pulse Glow Animation */
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.pulse-glow {
+  animation: pulse-ring 2s infinite ease-in-out;
+}
