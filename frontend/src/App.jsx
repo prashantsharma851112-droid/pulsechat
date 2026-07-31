@@ -96,6 +96,21 @@ export default function App() {
   const handleDeclineIncomingCall = () => {
     if (incomingCallData && socket) {
       socket.emit('reject_call', { to: incomingCallData.from });
+
+      const chatId = [user.id, incomingCallData.from].sort().join('_');
+      socket.emit('send_message', {
+        chatId,
+        senderId: incomingCallData.from,
+        receiverId: user.id,
+        isGroup: false,
+        type: 'call',
+        content: incomingCallData.isVideo ? 'Video Call' : 'Voice Call',
+        callData: {
+          isVideo: incomingCallData.isVideo,
+          status: 'declined',
+          duration: 0
+        }
+      });
     }
     setIncomingCallData(null);
   };

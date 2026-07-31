@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
-import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, Trash2, GitBranch, Sparkles } from 'lucide-react';
+import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 
 export default function MessageItem({ message, isMine, chatId, senderName, onDeleteLocal }) {
@@ -142,6 +142,40 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
         {message.type === 'image' && message.mediaUrl && (
           <div style={{ borderRadius: '8px', overflow: 'hidden', marginBottom: '4px' }}>
             <img src={message.mediaUrl} alt="Attached Media" style={{ maxWidth: '100%', maxHeight: '240px', objectFit: 'cover' }} />
+          </div>
+        )}
+
+        {/* Call Log Message */}
+        {message.type === 'call' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: '200px', padding: '2px 0' }}>
+            <div style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: message.callData?.status === 'completed' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+              color: message.callData?.status === 'completed' ? '#10b981' : '#ef4444',
+              display: 'flex',
+              alignItems: 'center',
+              justify-content: 'center',
+              flexShrink: 0
+            }}>
+              {message.callData?.isVideo ? (
+                message.callData?.status === 'completed' ? <Video size={18} /> : <VideoOff size={18} />
+              ) : (
+                message.callData?.status === 'completed' ? <Phone size={18} /> : <PhoneOff size={18} />
+              )}
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                {message.callData?.isVideo ? 'Video Call' : 'Voice Call'}
+              </h4>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                {message.callData?.status === 'completed'
+                  ? `Duration: ${Math.floor((message.callData?.duration || 0) / 60)}m ${((message.callData?.duration || 0) % 60)}s`
+                  : (message.callData?.status === 'declined' ? 'Call Declined' : 'Missed Call')}
+              </p>
+            </div>
           </div>
         )}
 

@@ -114,10 +114,16 @@ module.exports = {
         status: { $ne: 'read' }
       });
 
+      const lastMsgText = lastMessage.type === 'text'
+        ? lastMessage.content
+        : (lastMessage.type === 'call'
+            ? (lastMessage.callData?.isVideo ? '📹 Video Call' : '📞 Voice Call')
+            : `[${lastMessage.type}]`);
+
       const { passwordHash, ...safeUser } = otherUser;
       results.push({
         ...safeUser,
-        lastMessage: lastMessage.type === 'text' ? lastMessage.content : `[${lastMessage.type}]`,
+        lastMessage: lastMsgText,
         lastMessageTime: lastMessage.timestamp,
         lastMessageFromMe: lastMessage.senderId === myId,
         unreadCount

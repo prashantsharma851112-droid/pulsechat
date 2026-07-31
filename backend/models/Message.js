@@ -10,10 +10,11 @@ const messageSchema = new mongoose.Schema({
   receiverId: { type: String, default: '' },
   isGroup: { type: Boolean, default: false },
   content: { type: String, default: '' },
-  type: { type: String, default: 'text' }, // 'text' | 'audio' | 'image' | 'poll'
+  type: { type: String, default: 'text' }, // 'text' | 'voice' | 'image' | 'poll' | 'call'
   audioUrl: { type: String, default: null },
   mediaUrl: { type: String, default: null },
-  pollData: { type: Object, default: null }, // { question: String, options: [{ id, text, votes: [userId] }], isMultipleChoice: Boolean }
+  pollData: { type: Object, default: null },
+  callData: { type: Object, default: null }, // { isVideo: Boolean, status: String, duration: Number }
   status: { type: String, default: 'sent' }, // 'sent' | 'delivered' | 'read'
   timestamp: { type: String, default: () => new Date().toISOString() },
   reactions: { type: Object, default: {} }

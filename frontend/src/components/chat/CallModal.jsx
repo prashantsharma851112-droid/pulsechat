@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useContext } from 'react';
-import { PhoneOff, Mic, MicOff, Video, VideoOff, Monitor, Maximize2, Minimize2 } from 'lucide-react';
+import { PhoneOff, Mic, MicOff, Video, VideoOff, Monitor } from 'lucide-react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
 
@@ -15,9 +15,12 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
+  const remoteAudioRef = useRef(null);
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
   const screenStreamRef = useRef(null);
+  const pendingCandidatesRef = useRef([]);
+  const callLoggedRef = useRef(false);
 
   // Timer counter
   useEffect(() => {
@@ -30,8 +33,6 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
     return () => clearInterval(timer);
   }, [callStatus]);
 
-  const pendingCandidatesRef = useRef([]);
-
   const flushPendingCandidates = async () => {
     if (pcRef.current && pcRef.current.remoteDescription && pendingCandidatesRef.current.length > 0) {
       for (const candidate of pendingCandidatesRef.current) {
@@ -43,6 +44,29 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
       }
       pendingCandidatesRef.current = [];
     }
+  };
+
+  const logCallInChat = (statusOverride) => {
+    if (callLoggedRef.current) return;
+    callLoggedRef.current = true;
+    if (!socket || !currentUser || !targetUser?.id) return;
+
+    const chatId = [currentUser.id, targetUser.id].sort().join('_');
+    const finalStatus = statusOverride || (duration > 0 ? 'completed' : 'missed');
+
+    socket.emit('send_message', {
+      chatId,
+      senderId: currentUser.id,
+      receiverId: targetUser.id,
+      isGroup: false,
+      type: 'call',
+      content: isVideo ? 'Video Call' : 'Voice Call',
+      callData: {
+        isVideo,
+        status: finalStatus,
+        duration: duration
+      }
+    });
   };
 
   useEffect(() => {
@@ -62,13 +86,40 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
     const pc = new RTCPeerConnection(configuration);
     pcRef.current = pc;
 
-    // Remote Track Handler
-    pc.ontrack = (event) => {
-      if (remoteVideoRef.current && event.streams[0]) {
-        remoteVideoRef.current.srcObject = event.streams[0];
-        remoteVideoRef.current.play().catch(err => console.warn("Remote stream play catch:", err));
+    pc.onconnectionstatechange = () => {
+      console.log('⚡ Connection state:', pc.connectionState);
+      if (pc.connectionState === 'connected') {
+        setCallStatus('Connected');
+      } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        handleEndCall();
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('⚡ ICE state:', pc.iceConnectionState);
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
         setCallStatus('Connected');
       }
+    };
+
+    // Remote Track Handler
+    pc.ontrack = (event) => {
+      console.log('⚡ Remote track event:', event);
+      const incomingStream = (event.streams && event.streams[0])
+        ? event.streams[0]
+        : new MediaStream([event.track]);
+
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = incomingStream;
+        remoteVideoRef.current.play().catch(err => console.warn("Remote video play catch:", err));
+      }
+
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = incomingStream;
+        remoteAudioRef.current.play().catch(err => console.warn("Remote audio play catch:", err));
+      }
+
+      setCallStatus('Connected');
     };
 
     // ICE Candidate Handler
@@ -84,7 +135,7 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
     // Get User Media Stream
     navigator.mediaDevices.getUserMedia({
       audio: true,
-      video: isVideo ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false
+      video: isVideo ? { width: { ideal: 640 }, height: { ideal: 480 } } : false
     }).then(async (stream) => {
       if (!mounted) return;
       localStreamRef.current = stream;
@@ -111,15 +162,19 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
           isVideo
         });
       } else if (incomingSignal) {
-        await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal));
-        await flushPendingCandidates();
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal));
+          await flushPendingCandidates();
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
 
-        socket.emit('answer_call', {
-          to: targetUser.id,
-          signal: answer
-        });
+          socket.emit('answer_call', {
+            to: targetUser.id,
+            signal: answer
+          });
+        } catch (err) {
+          console.error("Error creating answer:", err);
+        }
       }
     }).catch(err => {
       console.error('Failed to get media devices:', err);
@@ -155,7 +210,7 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
 
       socket.on('call_rejected', () => {
         setCallStatus('Call Declined');
-        setTimeout(() => handleEndCall(), 1200);
+        setTimeout(() => handleEndCall('declined'), 1000);
       });
 
       socket.on('call_ended', () => {
@@ -187,9 +242,12 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
     }
   };
 
-  const handleEndCall = () => {
+  const handleEndCall = (statusOverride) => {
     if (socket && targetUser?.id) {
       socket.emit('end_call', { to: targetUser.id });
+    }
+    if (isCaller) {
+      logCallInChat(statusOverride);
     }
     cleanupMedia();
     onClose();
@@ -270,6 +328,9 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
 
   return (
     <div className="call-modal-overlay">
+      {/* Hidden dedicated audio playback element for audio calls */}
+      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
+
       <div className="call-modal-container">
         {/* Call Info Header */}
         <div className="call-header">
@@ -304,15 +365,17 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
           </div>
 
           {/* Local PIP Video */}
-          <div className="local-video-container">
-            <video
-              ref={localVideoRef}
-              autoPlay
-              muted
-              playsInline
-              className="local-video-element"
-            />
-          </div>
+          {isVideo && (
+            <div className="local-video-container">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="local-video-element"
+              />
+            </div>
+          )}
         </div>
 
         {/* Controls */}
@@ -346,7 +409,7 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
           )}
 
           <button
-            onClick={handleEndCall}
+            onClick={() => handleEndCall()}
             className="call-ctrl-btn ctrl-end"
             title="End Call"
           >
@@ -357,3 +420,4 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
     </div>
   );
 }
+

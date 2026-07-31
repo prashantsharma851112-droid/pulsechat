@@ -71,7 +71,7 @@ io.on('connection', (socket) => {
 
   // Send Real-Time Message
   socket.on('send_message', async (messageData) => {
-    const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, pollData } = messageData;
+    const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, pollData, callData } = messageData;
 
     const newMsg = {
       id: 'msg_' + Date.now(),
@@ -84,6 +84,7 @@ io.on('connection', (socket) => {
       audioUrl: audioUrl || null,
       mediaUrl: mediaUrl || null,
       pollData: pollData || null,
+      callData: callData || null,
       status: receiverId && onlineUsers.has(receiverId) ? 'delivered' : 'sent',
       timestamp: new Date().toISOString(),
       reactions: {}
