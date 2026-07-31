@@ -102,7 +102,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-main)', color: 'var(--text-main)' }}>
+      <div style={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-main)', color: 'var(--text-main)' }}>
         Loading PulseChat...
       </div>
     );
@@ -117,7 +117,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', position: 'relative' }}>
+    <div style={{ display: 'flex', height: '100dvh', width: '100vw', overflow: 'hidden', position: 'relative' }}>
       {/* Master Post-Login Entrance Animation */}
       {showEntrance && (
         <EntranceAnimation

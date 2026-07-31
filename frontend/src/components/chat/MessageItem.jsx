@@ -9,6 +9,7 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
   const { user: currentUser } = useContext(AuthContext);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioObj, setAudioObj] = useState(null);
+  const [audioProgress, setAudioProgress] = useState(0);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [showThread, setShowThread] = useState(false);
 
@@ -18,11 +19,27 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
       if (audioObj) audioObj.pause();
       setIsPlaying(false);
     } else {
-      const audio = new Audio(message.audioUrl);
-      audio.play();
-      setIsPlaying(true);
-      setAudioObj(audio);
-      audio.onended = () => setIsPlaying(false);
+      let audio = audioObj;
+      if (!audio) {
+        audio = new Audio(message.audioUrl);
+        setAudioObj(audio);
+      }
+      audio.ontimeupdate = () => {
+        if (audio.duration) {
+          setAudioProgress((audio.currentTime / audio.duration) * 100);
+        }
+      };
+      audio.onended = () => {
+        setIsPlaying(false);
+        setAudioProgress(0);
+      };
+      audio.onerror = () => {
+        setIsPlaying(false);
+      };
+      audio.play().then(() => setIsPlaying(true)).catch((err) => {
+        console.error("Voice note playback failed:", err);
+        setIsPlaying(false);
+      });
     }
   };
 
@@ -71,7 +88,7 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
       { label: 'Excited', emoji: '🔥', color: '#f59e0b' },
       { label: 'Casual', emoji: '💬', color: '#6366f1' }
     ];
-    const index = Math.abs(msgId.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % emotions.length;
+    const index = Math.abs((msgId || '').split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % emotions.length;
     return emotions[index];
   };
 
@@ -106,11 +123,11 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
         {message.type === 'voice' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '200px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <button onClick={toggleAudio} style={{ background: 'var(--accent)', color: '#fff', border: 'none', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <button onClick={toggleAudio} style={{ background: 'var(--accent)', color: '#fff', border: 'none', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
                 {isPlaying ? <Pause size={18} /> : <Play size={18} />}
               </button>
               <div style={{ flex: 1, height: '4px', background: 'rgba(255,255,255,0.3)', borderRadius: '2px', overflow: 'hidden' }}>
-                <div style={{ width: isPlaying ? '100%' : '0%', height: '100%', background: '#fff', transition: 'width 3s linear' }} />
+                <div style={{ width: `${audioProgress}%`, height: '100%', background: '#fff', transition: 'width 0.1s linear' }} />
               </div>
             </div>
 
