@@ -133,6 +133,19 @@ io.on('connection', (socket) => {
     io.to(chatId).emit('reaction_updated', { messageId, emoji, userId });
   });
 
+  // Real-Time Collaborative Whiteboard
+  socket.on('wb_join', ({ chatId }) => {
+    socket.join(chatId);
+  });
+
+  socket.on('wb_draw', ({ chatId, stroke }) => {
+    socket.to(chatId).emit('wb_draw', stroke);
+  });
+
+  socket.on('wb_clear', ({ chatId }) => {
+    socket.to(chatId).emit('wb_clear');
+  });
+
   // Audio/Video Call WebRTC Signaling
   socket.on('call_user', ({ userToCall, signalData, from, callerName, callerAvatar, isVideo }) => {
     const recipientSocket = onlineUsers.get(userToCall);
