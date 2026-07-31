@@ -10,6 +10,7 @@ const db = require('./database/db');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const messageRoutes = require('./routes/messages');
+const groupRoutes = require('./routes/groups');
 
 const app = express();
 const server = http.createServer(app);
@@ -21,6 +22,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/groups', groupRoutes);
 
 // Serve Frontend static files if built together
 const frontendDist = path.join(__dirname, '../frontend/dist');
@@ -52,7 +54,7 @@ io.on('connection', (socket) => {
     io.emit('online_users_list', Array.from(onlineUsers.keys()));
   });
 
-  // Join Chat Room
+  // Join Chat Room / Group Room
   socket.on('join_chat', (chatId) => {
     socket.join(chatId);
   });
@@ -68,18 +70,20 @@ io.on('connection', (socket) => {
 
   // Send Real-Time Message
   socket.on('send_message', async (messageData) => {
-    const { chatId, senderId, receiverId, content, type, audioUrl, mediaUrl } = messageData;
+    const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, pollData } = messageData;
 
     const newMsg = {
       id: 'msg_' + Date.now(),
       chatId,
       senderId,
-      receiverId,
+      receiverId: receiverId || '',
+      isGroup: !!isGroup,
       content: content || '',
       type: type || 'text',
       audioUrl: audioUrl || null,
       mediaUrl: mediaUrl || null,
-      status: onlineUsers.has(receiverId) ? 'delivered' : 'sent',
+      pollData: pollData || null,
+      status: receiverId && onlineUsers.has(receiverId) ? 'delivered' : 'sent',
       timestamp: new Date().toISOString(),
       reactions: {}
     };
@@ -89,9 +93,19 @@ io.on('connection', (socket) => {
     // Emit to room & direct recipient
     io.to(chatId).emit('new_message', newMsg);
 
-    const recipientSocketId = onlineUsers.get(receiverId);
-    if (recipientSocketId) {
-      io.to(recipientSocketId).emit('message_notification', newMsg);
+    if (receiverId && !isGroup) {
+      const recipientSocketId = onlineUsers.get(receiverId);
+      if (recipientSocketId) {
+        io.to(recipientSocketId).emit('message_notification', newMsg);
+      }
+    }
+  });
+
+  // Poll Vote Handler
+  socket.on('vote_poll', async ({ messageId, optionId, userId, chatId }) => {
+    const updatedMsg = await db.updatePollVote(messageId, optionId, userId);
+    if (updatedMsg) {
+      io.to(chatId).emit('poll_updated', { messageId, pollData: updatedMsg.pollData });
     }
   });
 
@@ -106,11 +120,11 @@ io.on('connection', (socket) => {
     io.to(chatId).emit('reaction_updated', { messageId, emoji, userId });
   });
 
-  // Audio/Video Call Signaling
-  socket.on('call_user', ({ userToCall, signalData, from, callerName, isVideo }) => {
+  // Audio/Video Call WebRTC Signaling
+  socket.on('call_user', ({ userToCall, signalData, from, callerName, callerAvatar, isVideo }) => {
     const recipientSocket = onlineUsers.get(userToCall);
     if (recipientSocket) {
-      io.to(recipientSocket).emit('incoming_call', { signal: signalData, from, callerName, isVideo });
+      io.to(recipientSocket).emit('incoming_call', { signal: signalData, from, callerName, callerAvatar, isVideo });
     }
   });
 
@@ -118,6 +132,20 @@ io.on('connection', (socket) => {
     const callerSocket = onlineUsers.get(data.to);
     if (callerSocket) {
       io.to(callerSocket).emit('call_accepted', data.signal);
+    }
+  });
+
+  socket.on('ice_candidate', ({ to, candidate }) => {
+    const targetSocket = onlineUsers.get(to);
+    if (targetSocket) {
+      io.to(targetSocket).emit('ice_candidate', { candidate });
+    }
+  });
+
+  socket.on('reject_call', ({ to }) => {
+    const targetSocket = onlineUsers.get(to);
+    if (targetSocket) {
+      io.to(targetSocket).emit('call_rejected');
     }
   });
 

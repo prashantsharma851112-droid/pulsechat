@@ -39,6 +39,36 @@ module.exports = {
     return updated;
   },
 
+  updatePollVote: async (messageId, optionId, userId) => {
+    const msg = await Message.findOne({ id: messageId });
+    if (!msg || !msg.pollData) return null;
+
+    const pollData = msg.pollData;
+    const isMultiple = pollData.isMultipleChoice;
+
+    pollData.options = pollData.options.map(opt => {
+      let votes = opt.votes || [];
+      if (opt.id === optionId) {
+        if (votes.includes(userId)) {
+          // Unvote
+          votes = votes.filter(u => u !== userId);
+        } else {
+          // Vote
+          votes = [...votes, userId];
+        }
+      } else if (!isMultiple) {
+        // Single choice: remove vote from other options
+        votes = votes.filter(u => u !== userId);
+      }
+      return { ...opt, votes };
+    });
+
+    msg.pollData = pollData;
+    msg.markModified('pollData');
+    await msg.save();
+    return msg;
+  },
+
   // Returns everyone the given user has EVER exchanged a message with,
   // ordered by most recent activity, each with the last message preview
   // and an unread count. This powers the persistent "Chats" list in the

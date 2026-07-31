@@ -7,11 +7,13 @@ const messageSchema = new mongoose.Schema({
   // chats, so no separate "Room" collection is needed (unlike ChatSpace).
   chatId: { type: String, required: true, index: true },
   senderId: { type: String, required: true },
-  receiverId: { type: String, required: true },
+  receiverId: { type: String, default: '' },
+  isGroup: { type: Boolean, default: false },
   content: { type: String, default: '' },
-  type: { type: String, default: 'text' },
+  type: { type: String, default: 'text' }, // 'text' | 'audio' | 'image' | 'poll'
   audioUrl: { type: String, default: null },
   mediaUrl: { type: String, default: null },
+  pollData: { type: Object, default: null }, // { question: String, options: [{ id, text, votes: [userId] }], isMultipleChoice: Boolean }
   status: { type: String, default: 'sent' }, // 'sent' | 'delivered' | 'read'
   timestamp: { type: String, default: () => new Date().toISOString() },
   reactions: { type: Object, default: {} }

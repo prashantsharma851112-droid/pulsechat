@@ -13,6 +13,9 @@ const userSchema = new mongoose.Schema({
   displayName: { type: String, required: true },
   avatar: { type: String, default: '' },
   status: { type: String, default: 'Hey there! I am using PulseChat.' },
+  isEmailVerified: { type: Boolean, default: false },
+  otpCode: { type: String, default: null },
+  otpExpires: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 

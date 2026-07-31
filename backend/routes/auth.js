@@ -109,4 +109,66 @@ router.get('/me', authMiddleware, async (req, res) => {
   res.json({ user: userWithoutPass });
 });
 
+// Request OTP for Email Verification
+router.post('/send-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required.' });
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email address format.' });
+    }
+
+    // Generate random 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Store in User record if user exists
+    const users = await db.getUsers();
+    const existingUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (existingUser) {
+      await db.updateUser(existingUser.id, {
+        otpCode: otp,
+        otpExpires: new Date(Date.now() + 10 * 60 * 1000) // 10 mins
+      });
+    }
+
+    res.json({ success: true, message: 'OTP sent to email.', otp });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to send OTP.' });
+  }
+});
+
+// Verify OTP
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const { email, otp, userId } = req.body;
+    if (!otp) return res.status(400).json({ error: 'OTP code is required.' });
+
+    const users = await db.getUsers();
+    const user = users.find(u => (userId && u.id === userId) || u.email.toLowerCase() === (email || '').toLowerCase());
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    // Check OTP match
+    if (user.otpCode && user.otpCode !== otp) {
+      return res.status(400).json({ error: 'Incorrect OTP code.' });
+    }
+
+    // Mark verified
+    const updated = await db.updateUser(user.id, {
+      isEmailVerified: true,
+      otpCode: null
+    });
+
+    const { passwordHash: _, ...safeUser } = updated;
+    res.json({ success: true, message: 'Email verified successfully!', user: safeUser });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to verify OTP.' });
+  }
+});
+
 module.exports = router;
