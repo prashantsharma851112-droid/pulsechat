@@ -39,6 +39,20 @@ module.exports = {
     return updated;
   },
 
+  deleteMessage: async (msgId) => {
+    const updated = await Message.findOneAndUpdate(
+      { id: msgId },
+      { content: 'This message was deleted', type: 'deleted', audioUrl: null, mediaUrl: null, pollData: null },
+      { new: true }
+    ).lean();
+    return updated;
+  },
+
+  panicWipeChats: async (userId) => {
+    await Message.deleteMany({ $or: [{ senderId: userId }, { receiverId: userId }] });
+    return { success: true };
+  },
+
   updatePollVote: async (messageId, optionId, userId) => {
     const msg = await Message.findOne({ id: messageId });
     if (!msg || !msg.pollData) return null;

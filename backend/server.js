@@ -1,4 +1,5 @@
 const express = require('express');
+
 const http = require('http');
 const cors = require('cors');
 const path = require('path');
@@ -107,6 +108,18 @@ io.on('connection', (socket) => {
     if (updatedMsg) {
       io.to(chatId).emit('poll_updated', { messageId, pollData: updatedMsg.pollData });
     }
+  });
+
+  // Unsend / Delete Message Handler
+  socket.on('delete_message', async ({ messageId, chatId }) => {
+    await db.deleteMessage(messageId);
+    io.to(chatId).emit('message_deleted', { messageId });
+  });
+
+  // Panic Wipe Handler
+  socket.on('panic_wipe', async ({ userId }) => {
+    await db.panicWipeChats(userId);
+    socket.emit('chats_wiped');
   });
 
   // Read Receipt (Blue Double Tick)
