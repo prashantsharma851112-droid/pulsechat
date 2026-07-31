@@ -1,14 +1,16 @@
 import React, { useState, useContext } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
-import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2 } from 'lucide-react';
+import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, Trash2, GitBranch, Sparkles } from 'lucide-react';
+import ThreadModal from './ThreadModal';
 
-export default function MessageItem({ message, isMine, chatId, senderName, senderAvatar }) {
+export default function MessageItem({ message, isMine, chatId, senderName, onDeleteLocal }) {
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioObj, setAudioObj] = useState(null);
-  const [showReactionMenu, setShowReactionMenu] = useState(false);
+  const [showContextMenu, setShowContextMenu] = useState(false);
+  const [showThread, setShowThread] = useState(false);
 
   const toggleAudio = () => {
     if (!message.audioUrl) return;
@@ -28,7 +30,7 @@ export default function MessageItem({ message, isMine, chatId, senderName, sende
     if (socket) {
       socket.emit('add_reaction', { messageId: message.id, chatId, emoji, userId: currentUser.id });
     }
-    setShowReactionMenu(false);
+    setShowContextMenu(false);
   };
 
   const handleVotePoll = (optionId) => {
@@ -42,6 +44,18 @@ export default function MessageItem({ message, isMine, chatId, senderName, sende
     }
   };
 
+  const handleUnsendForEveryone = () => {
+    if (socket) {
+      socket.emit('delete_message', { messageId: message.id, chatId });
+    }
+    setShowContextMenu(false);
+  };
+
+  const handleDeleteForMe = () => {
+    if (onDeleteLocal) onDeleteLocal(message.id);
+    setShowContextMenu(false);
+  };
+
   const timeStr = new Date(message.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   // Calculate total votes for poll
@@ -49,6 +63,25 @@ export default function MessageItem({ message, isMine, chatId, senderName, sende
   const totalVotes = pollData
     ? pollData.options.reduce((acc, opt) => acc + (opt.votes?.length || 0), 0)
     : 0;
+
+  // Emotion Tag helper for Voice Notes
+  const getEmotionTag = (msgId) => {
+    const emotions = [
+      { label: 'Calm', emoji: '😌', color: '#10b981' },
+      { label: 'Excited', emoji: '🔥', color: '#f59e0b' },
+      { label: 'Casual', emoji: '💬', color: '#6366f1' }
+    ];
+    const index = Math.abs(msgId.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % emotions.length;
+    return emotions[index];
+  };
+
+  if (message.type === 'deleted') {
+    return (
+      <div style={{ alignSelf: isMine ? 'flex-end' : 'flex-start', maxWidth: '78%', opacity: 0.65, fontStyle: 'italic', fontSize: '0.82rem', padding: '6px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', color: 'var(--text-muted)' }}>
+        🚫 This message was deleted
+      </div>
+    );
+  }
 
   return (
     <div style={{ alignSelf: isMine ? 'flex-end' : 'flex-start', maxWidth: '78%', minWidth: '160px', position: 'relative' }}>
@@ -60,7 +93,7 @@ export default function MessageItem({ message, isMine, chatId, senderName, sende
       )}
 
       <div
-        onContextMenu={(e) => { e.preventDefault(); setShowReactionMenu(!showReactionMenu); }}
+        onContextMenu={(e) => { e.preventDefault(); setShowContextMenu(!showContextMenu); }}
         style={{
           background: isMine ? 'var(--bubble-sent)' : 'var(--bubble-received)',
           color: 'var(--text-main)',
@@ -71,14 +104,25 @@ export default function MessageItem({ message, isMine, chatId, senderName, sende
       >
         {/* Voice Note Message */}
         {message.type === 'voice' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: '180px' }}>
-            <button onClick={toggleAudio} style={{ background: 'var(--accent)', color: '#fff', border: 'none', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-              {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-            </button>
-            <div style={{ flex: 1, height: '4px', background: 'rgba(255,255,255,0.3)', borderRadius: '2px', overflow: 'hidden' }}>
-              <div style={{ width: isPlaying ? '100%' : '0%', height: '100%', background: '#fff', transition: 'width 3s linear' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '200px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <button onClick={toggleAudio} style={{ background: 'var(--accent)', color: '#fff', border: 'none', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+              </button>
+              <div style={{ flex: 1, height: '4px', background: 'rgba(255,255,255,0.3)', borderRadius: '2px', overflow: 'hidden' }}>
+                <div style={{ width: isPlaying ? '100%' : '0%', height: '100%', background: '#fff', transition: 'width 3s linear' }} />
+              </div>
             </div>
-            <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>Voice</span>
+
+            {/* AI Voice Emotion Tag */}
+            {(() => {
+              const emotion = getEmotionTag(message.id);
+              return (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', background: 'rgba(0,0,0,0.2)', padding: '2px 8px', borderRadius: '10px', width: 'fit-content', color: emotion.color }}>
+                  <Sparkles size={11} /> Tone: {emotion.emoji} {emotion.label}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -123,7 +167,6 @@ export default function MessageItem({ message, isMine, chatId, senderName, sende
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    {/* Background Progress Fill */}
                     <div
                       style={{
                         position: 'absolute',
@@ -174,14 +217,33 @@ export default function MessageItem({ message, isMine, chatId, senderName, sende
         </div>
       </div>
 
-      {/* Quick Reaction Popup */}
-      {showReactionMenu && (
-        <div style={{ position: 'absolute', top: '-36px', [isMine ? 'right' : 'left']: 0, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '4px 8px', display: 'flex', gap: '8px', zIndex: 10 }}>
+      {/* Action Context Menu (Reactions, Thread Reply & Delete/Unsend) */}
+      {showContextMenu && (
+        <div style={{ position: 'absolute', top: '-44px', [isMine ? 'right' : 'left']: 0, background: 'var(--bg-sidebar)', border: '1px solid var(--border)', borderRadius: '14px', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '10px', zIndex: 30, boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
           <span onClick={() => handleReact('👍')} style={{ cursor: 'pointer' }}>👍</span>
           <span onClick={() => handleReact('❤️')} style={{ cursor: 'pointer' }}>❤️</span>
-          <span onClick={() => handleReact('😂')} style={{ cursor: 'pointer' }}>😂</span>
           <span onClick={() => handleReact('🔥')} style={{ cursor: 'pointer' }}>🔥</span>
+
+          <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
+
+          <button onClick={() => { setShowThread(true); setShowContextMenu(false); }} className="icon-btn-ghost" title="Reply in sub-thread" style={{ padding: '2px' }}>
+            <GitBranch size={16} />
+          </button>
+
+          {isMine && (
+            <button onClick={handleUnsendForEveryone} className="icon-btn-ghost" title="Unsend for Everyone" style={{ color: '#ef4444', padding: '2px' }}>
+              <Trash2 size={16} />
+            </button>
+          )}
+
+          <button onClick={handleDeleteForMe} className="icon-btn-ghost" title="Delete for Me" style={{ color: 'var(--text-muted)', padding: '2px' }}>
+            Delete
+          </button>
         </div>
+      )}
+
+      {showThread && (
+        <ThreadModal message={message} onClose={() => setShowThread(false)} currentUser={currentUser} />
       )}
     </div>
   );

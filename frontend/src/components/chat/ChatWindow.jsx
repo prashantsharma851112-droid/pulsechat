@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
 import CreatePollModal from './CreatePollModal';
+import WhiteboardModal from './WhiteboardModal';
 import { playSound } from '../../utils/audio';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
@@ -18,15 +19,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
   const [showRecorder, setShowRecorder] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showCreatePoll, setShowCreatePoll] = useState(false);
+  const [showWhiteboard, setShowWhiteboard] = useState(false);
   const [groupMembersMap, setGroupMembersMap] = useState({});
   const messagesEndRef = useRef(null);
+
+  // Cooldown timer state (10s delayed send option)
+  const [cooldownSecs, setCooldownSecs] = useState(0);
+  const [cooldownMsg, setCooldownMsg] = useState(null);
 
   const isGroup = !!activeChat.isGroup;
   const chatId = isGroup ? activeChat.id : [user.id, activeChat.id].sort().join('_');
   const isOnline = !isGroup && onlineUsers.includes(activeChat.id);
   const isTyping = typingMap[chatId] === activeChat.username;
 
-  // Load message history & group details if applicable
+  // Load message history & group details
   useEffect(() => {
     if (activeChat) {
       fetch(`${BACKEND_URL}/api/messages/${chatId}`, {
@@ -59,7 +65,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
     }
   }, [activeChat, chatId, isGroup, token, socket]);
 
-  // Listen to incoming messages & poll updates
+  // Listen to incoming messages & poll/deletion updates
   useEffect(() => {
     if (!socket) return;
 
@@ -77,17 +83,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, pollData } : m));
     };
 
+    const handleMessageDeleted = ({ messageId }) => {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, type: 'deleted', content: 'This message was deleted' } : m));
+    };
+
     const handleReadUpdate = ({ messageId, status }) => {
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status } : m));
     };
 
     socket.on('new_message', handleNewMessage);
     socket.on('poll_updated', handlePollUpdate);
+    socket.on('message_deleted', handleMessageDeleted);
     socket.on('message_read_update', handleReadUpdate);
 
     return () => {
       socket.off('new_message', handleNewMessage);
       socket.off('poll_updated', handlePollUpdate);
+      socket.off('message_deleted', handleMessageDeleted);
       socket.off('message_read_update', handleReadUpdate);
     };
   }, [socket, chatId, user.id]);
@@ -96,22 +108,60 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSendText = (e) => {
-    e?.preventDefault();
-    if (!text.trim()) return;
+  // Cooldown Send Timer
+  useEffect(() => {
+    let timer;
+    if (cooldownSecs > 0) {
+      timer = setInterval(() => {
+        setCooldownSecs(prev => {
+          if (prev <= 1) {
+            dispatchMessage(cooldownMsg);
+            setCooldownMsg(null);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [cooldownSecs, cooldownMsg]);
 
+  const dispatchMessage = (msgContent) => {
+    if (!msgContent) return;
     socket.emit('send_message', {
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
       isGroup,
-      content: text,
+      content: msgContent,
       type: 'text'
     });
 
     playSound('sent');
+  };
+
+  const handleSendText = (e, forceInstant = false) => {
+    e?.preventDefault();
+    if (!text.trim()) return;
+
+    // Check emotional trigger words for 10s cooldown
+    const isEmotional = /angry|hate|stop|never|shut up|worst|gussa/i.test(text);
+
+    if (isEmotional && !forceInstant) {
+      setCooldownMsg(text);
+      setCooldownSecs(10);
+      setText('');
+      return;
+    }
+
+    dispatchMessage(text);
     setText('');
     socket.emit('typing_stop', { chatId, userId: user.id });
+  };
+
+  const cancelCooldown = () => {
+    setCooldownSecs(0);
+    setCooldownMsg(null);
   };
 
   const handleSendVoice = (audioUrl) => {
@@ -139,6 +189,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
     playSound('sent');
   };
 
+  const handleDeleteLocalMessage = (msgId) => {
+    setMessages(prev => prev.filter(m => m.id !== msgId));
+  };
+
   const handleTextChange = (e) => {
     setText(e.target.value);
     if (socket) {
@@ -149,47 +203,78 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
     }
   };
 
+  // Calculate Mood Timeline sentiment for header
+  const getMoodTimeline = () => {
+    if (messages.length === 0) return { mood: 'Casual', color: '#6366f1', emoji: '😊' };
+    const recentText = messages.slice(-5).map(m => m.content || '').join(' ').toLowerCase();
+    if (/awesome|love|happy|great|cool|haha|lol/i.test(recentText)) {
+      return { mood: 'Joyful', color: '#10b981', emoji: '🎉' };
+    }
+    if (/sorry|sad|bad|wrong|sigh/i.test(recentText)) {
+      return { mood: 'Tense', color: '#f59e0b', emoji: '🟡' };
+    }
+    return { mood: 'Casual', color: '#6366f1', emoji: '💬' };
+  };
+
+  const moodInfo = getMoodTimeline();
+
+  // AI Smart Suggested Replies
+  const smartReplies = ["Sounds great! 👍", "I'll check and reply soon.", "Let's call! 📞", "Thanks! 🔥"];
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-chat)' }}>
       {/* Header Bar */}
-      <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          {/* Mobile Back Button */}
-          {onBack && (
-            <button className="mobile-back-btn icon-btn-ghost" onClick={onBack} title="Back to Chats">
-              <ArrowLeft size={20} />
-            </button>
-          )}
+      <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {onBack && (
+              <button className="mobile-back-btn icon-btn-ghost" onClick={onBack} title="Back to Chats">
+                <ArrowLeft size={20} />
+              </button>
+            )}
 
-          <img
-            src={activeChat.avatar}
-            alt="Avatar"
-            style={{ width: '40px', height: '40px', borderRadius: isGroup ? '12px' : '50%' }}
-          />
+            <img
+              src={activeChat.avatar}
+              alt="Avatar"
+              style={{ width: '40px', height: '40px', borderRadius: isGroup ? '12px' : '50%' }}
+            />
 
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>{activeChat.displayName}</h3>
-              {isGroup && <span className="group-pill-badge"><Users size={12} /> Group</span>}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>{activeChat.displayName}</h3>
+                {isGroup && <span className="group-pill-badge"><Users size={12} /> Group</span>}
+              </div>
+              <p style={{ fontSize: '0.75rem', color: isTyping ? 'var(--accent)' : 'var(--text-muted)', margin: 0 }}>
+                {isGroup
+                  ? `${activeChat.members?.length || 0} members`
+                  : isTyping
+                    ? 'typing...'
+                    : isOnline
+                      ? 'Online'
+                      : 'Offline'}
+              </p>
             </div>
-            <p style={{ fontSize: '0.75rem', color: isTyping ? 'var(--accent)' : 'var(--text-muted)', margin: 0 }}>
-              {isGroup
-                ? `${activeChat.members?.length || 0} members`
-                : isTyping
-                  ? 'typing...'
-                  : isOnline
-                    ? 'Online'
-                    : 'Offline'}
-            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.4rem' }}>
+            <button onClick={() => setShowWhiteboard(true)} className="icon-btn-ghost" title="Shared Whiteboard Canvas"><Paintbrush size={18} /></button>
+            {!isGroup && (
+              <>
+                <button onClick={() => onStartCall(false)} className="icon-btn-ghost" title="Voice Call"><Phone size={18} /></button>
+                <button onClick={() => onStartCall(true)} className="icon-btn-ghost" title="Video Call"><Video size={18} /></button>
+              </>
+            )}
           </div>
         </div>
 
-        {!isGroup && (
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button onClick={() => onStartCall(false)} className="icon-btn-ghost" title="Voice Call"><Phone size={18} /></button>
-            <button onClick={() => onStartCall(true)} className="icon-btn-ghost" title="Video Call"><Video size={18} /></button>
-          </div>
-        )}
+        {/* Conversation Mood Timeline Strip */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+          <span>Mood Timeline:</span>
+          <span style={{ color: moodInfo.color, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+            {moodInfo.emoji} {moodInfo.mood}
+          </span>
+          <div style={{ flex: 1, height: '3px', borderRadius: '2px', background: moodInfo.color, opacity: 0.7 }} />
+        </div>
       </div>
 
       {/* Message Stream */}
@@ -203,11 +288,38 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
               isMine={msg.senderId === user.id}
               chatId={chatId}
               senderName={senderObj?.displayName || senderObj?.username}
-              senderAvatar={senderObj?.avatar}
+              onDeleteLocal={handleDeleteLocalMessage}
             />
           );
         })}
         <div ref={messagesEndRef} />
+      </div>
+
+      {/* Cooldown Timer Notification Banner */}
+      {cooldownSecs > 0 && (
+        <div className="cooldown-banner">
+          <Clock size={16} color="#f59e0b" />
+          <span style={{ fontSize: '0.85rem' }}>
+            Emotional text detected. Sending in <strong>{cooldownSecs}s</strong>...
+          </span>
+          <button className="btn-secondary" style={{ padding: '2px 8px', fontSize: '0.75rem', color: '#ef4444' }} onClick={cancelCooldown}>
+            Cancel Send
+          </button>
+        </div>
+      )}
+
+      {/* AI Smart Suggested Reply Chips */}
+      <div style={{ padding: '0.4rem 1rem', display: 'flex', gap: '6px', overflowX: 'auto', background: 'var(--bg-chat)' }}>
+        {smartReplies.map((replyText, i) => (
+          <button
+            key={i}
+            onClick={() => setText(replyText)}
+            style={{ background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '16px', padding: '4px 10px', fontSize: '0.75rem', whiteSpace: 'nowrap', cursor: 'pointer' }}
+          >
+            <Sparkles size={11} color="var(--accent)" style={{ marginRight: '4px' }} />
+            {replyText}
+          </button>
+        ))}
       </div>
 
       {/* Input Bar */}
@@ -241,6 +353,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
         <CreatePollModal
           onClose={() => setShowCreatePoll(false)}
           onCreatePoll={handleCreatePoll}
+        />
+      )}
+
+      {showWhiteboard && (
+        <WhiteboardModal
+          onClose={() => setShowWhiteboard(false)}
+          chatTitle={activeChat.displayName}
         />
       )}
     </div>

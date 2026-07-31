@@ -1,6 +1,8 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X } from 'lucide-react';
+import { X, Upload, Camera } from 'lucide-react';
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
 const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/bottts/svg?seed=alex',
@@ -15,10 +17,23 @@ export default function ProfileModal({ onClose }) {
   const [displayName, setDisplayName] = useState(user.displayName);
   const [status, setStatus] = useState(user.status || '');
   const [avatar, setAvatar] = useState(user.avatar);
+  const [loading, setLoading] = useState(false);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatar(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSave = async () => {
+    setLoading(true);
     try {
-      const res = await fetch('/api/users/profile', {
+      const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -33,54 +48,122 @@ export default function ProfileModal({ onClose }) {
       }
     } catch (err) {
       alert("Failed to update profile.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: 'var(--bg-sidebar)', padding: '2rem', borderRadius: '16px', border: '1px solid var(--border)', width: '90%', maxWidth: '420px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-          <h3>Profile Settings (DP & Bio)</h3>
-          <button onClick={onClose} style={{ background: 'transparent', color: 'var(--text-muted)' }}><X size={20} /></button>
+    <div className="modal-overlay">
+      <div className="modal-card modal-responsive" style={{ maxWidth: '440px' }}>
+        <div className="modal-header">
+          <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>Profile Settings (DP & Bio)</h3>
+          <button className="icon-btn-ghost" onClick={onClose}><X size={20} /></button>
         </div>
 
-        {/* Current DP Avatar */}
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <img src={avatar} alt="Current DP" style={{ width: '90px', height: '90px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--accent)' }} />
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>Choose an avatar below or paste image URL</p>
-        </div>
+        <div style={{ padding: '1.5rem' }}>
+          {/* Current DP Avatar Preview with Upload Trigger */}
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem', position: 'relative' }}>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <img
+                src={avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}
+                alt="Current DP"
+                style={{ width: '96px', height: '96px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--accent)', boxShadow: '0 8px 20px rgba(0,0,0,0.3)' }}
+              />
+              <label
+                htmlFor="dp-file-input"
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  right: 0,
+                  background: 'var(--accent)',
+                  color: '#fff',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.4)'
+                }}
+                title="Upload Photo (Any Image Size)"
+              >
+                <Camera size={16} />
+              </label>
+              <input
+                id="dp-file-input"
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                style={{ display: 'none' }}
+              />
+            </div>
 
-        {/* Preset Avatars Selection */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '1.5rem' }}>
-          {PRESET_AVATARS.map((avUrl) => (
-            <img 
-              key={avUrl} 
-              src={avUrl} 
-              onClick={() => setAvatar(avUrl)}
-              style={{ width: '42px', height: '42px', borderRadius: '50%', cursor: 'pointer', border: avatar === avUrl ? '2px solid var(--accent)' : '2px solid transparent' }} 
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.6rem' }}>
+              Upload any image size or pick an avatar preset below!
+            </p>
+          </div>
+
+          {/* Preset Avatars Selection */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '1.25rem' }}>
+            {PRESET_AVATARS.map((avUrl) => (
+              <img
+                key={avUrl}
+                src={avUrl}
+                onClick={() => setAvatar(avUrl)}
+                alt="Avatar preset"
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  border: avatar === avUrl ? '2px solid var(--accent)' : '2px solid transparent',
+                  transition: 'transform 0.15s ease'
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Custom Image URL */}
+          <div style={{ marginBottom: '1rem' }}>
+            <label className="form-label">Or Image URL</label>
+            <input
+              type="text"
+              className="form-input"
+              value={avatar}
+              onChange={e => setAvatar(e.target.value)}
+              placeholder="https://..."
             />
-          ))}
-        </div>
+          </div>
 
-        {/* Custom Image URL */}
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Custom DP Image URL</label>
-          <input type="text" value={avatar} onChange={e => setAvatar(e.target.value)} style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-main)', marginTop: '0.3rem' }} />
-        </div>
+          {/* Display Name */}
+          <div style={{ marginBottom: '1rem' }}>
+            <label className="form-label">Display Name</label>
+            <input
+              type="text"
+              className="form-input"
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+            />
+          </div>
 
-        {/* Display Name */}
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Display Name</label>
-          <input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)} style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-main)', marginTop: '0.3rem' }} />
-        </div>
+          {/* Status / Bio */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label className="form-label">Status / Bio</label>
+            <input
+              type="text"
+              className="form-input"
+              value={status}
+              onChange={e => setStatus(e.target.value)}
+              placeholder="Available"
+            />
+          </div>
 
-        {/* Status / Bio */}
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Status / Bio</label>
-          <input type="text" value={status} onChange={e => setStatus(e.target.value)} placeholder="Available" style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-main)', marginTop: '0.3rem' }} />
+          <button onClick={handleSave} className="btn-primary" style={{ width: '100%', padding: '0.8rem' }} disabled={loading}>
+            {loading ? 'Saving Profile...' : 'Save Profile'}
+          </button>
         </div>
-
-        <button onClick={handleSave} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', background: 'var(--accent)', color: '#fff', fontWeight: 600 }}>Save Profile</button>
       </div>
     </div>
   );

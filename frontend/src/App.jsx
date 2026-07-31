@@ -10,6 +10,7 @@ import SettingsModal from './components/profile/SettingsModal';
 import CallModal from './components/chat/CallModal';
 import IncomingCallModal from './components/chat/IncomingCallModal';
 import EntranceAnimation from './components/common/EntranceAnimation';
+import PandaHero from './components/common/PandaHero';
 import Toast from './components/common/Toast';
 import { Zap } from 'lucide-react';
 
@@ -147,13 +148,7 @@ export default function App() {
         />
       ) : (
         <div className="empty-chat-placeholder">
-          <div style={{ background: 'var(--accent)', width: '64px', height: '64px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.25rem', boxShadow: '0 8px 24px rgba(99, 102, 241, 0.3)' }}>
-            <Zap size={36} color="#fff" />
-          </div>
-          <h2 style={{ fontSize: '1.6rem', marginBottom: '0.5rem', color: 'var(--text-main)' }}>Welcome to PulseChat ⚡</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', maxWidth: '400px', textAlign: 'center', lineHeight: 1.5 }}>
-            Select or search a user from the sidebar using @username or join a Group chat to start messaging!
-          </p>
+          <PandaHero />
         </div>
       )}
 

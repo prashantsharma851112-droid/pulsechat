@@ -1,20 +1,24 @@
 import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal }) {
   const { user, logout, token } = useContext(AuthContext);
-  const { onlineUsers, lastNotification } = useContext(SocketContext);
+  const { socket, onlineUsers, lastNotification } = useContext(SocketContext);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [recentChats, setRecentChats] = useState([]);
   const [groups, setGroups] = useState([]);
   const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'groups'
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+
+  // Next-Gen Feature States
+  const [silentMode, setSilentMode] = useState(false);
+  const [showPanicModal, setShowPanicModal] = useState(false);
 
   const loadRecentChats = useCallback(() => {
     fetch(`${BACKEND_URL}/api/users/recent`, {
@@ -83,6 +87,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     setSearchQuery('');
   };
 
+  const handlePanicWipe = () => {
+    if (socket && user) {
+      socket.emit('panic_wipe', { userId: user.id });
+      setRecentChats([]);
+      setActiveChat(null);
+    }
+    setShowPanicModal(false);
+  };
+
   return (
     <div className={`sidebar-container ${activeChat ? 'mobile-hidden' : ''}`}>
       {/* User Profile Header */}
@@ -106,11 +119,27 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.25rem' }}>
-          <button onClick={() => setShowCreateGroupModal(true)} title="New Group" className="icon-btn-ghost"><Plus size={19} /></button>
-          <button onClick={openProfileModal} title="Edit Profile" className="icon-btn-ghost"><User size={19} /></button>
-          <button onClick={openSettingsModal} title="Settings" className="icon-btn-ghost"><Settings size={19} /></button>
-          <button onClick={logout} title="Logout" className="icon-btn-ghost" style={{ color: '#ef4444' }}><LogOut size={19} /></button>
+        <div style={{ display: 'flex', gap: '0.2rem' }}>
+          <button
+            onClick={() => setSilentMode(!silentMode)}
+            title={silentMode ? 'Selective Silent Mode Active (Incognito Online)' : 'Selective Silent Mode (Hide Online Status)'}
+            className="icon-btn-ghost"
+            style={{ color: silentMode ? '#f59e0b' : 'var(--text-muted)' }}
+          >
+            <EyeOff size={18} />
+          </button>
+          <button
+            onClick={() => setShowPanicModal(true)}
+            title="Panic Wipe (Clear Sensitive Chats)"
+            className="icon-btn-ghost"
+            style={{ color: '#ef4444' }}
+          >
+            <ShieldAlert size={18} />
+          </button>
+          <button onClick={() => setShowCreateGroupModal(true)} title="New Group" className="icon-btn-ghost"><Plus size={18} /></button>
+          <button onClick={openProfileModal} title="Edit Profile" className="icon-btn-ghost"><User size={18} /></button>
+          <button onClick={openSettingsModal} title="Settings" className="icon-btn-ghost"><Settings size={18} /></button>
+          <button onClick={logout} title="Logout" className="icon-btn-ghost" style={{ color: '#ef4444' }}><LogOut size={18} /></button>
         </div>
       </div>
 
@@ -158,7 +187,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               >
                 <div style={{ position: 'relative' }}>
                   <img src={u.avatar} alt="Avatar" style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
-                  {onlineUsers.includes(u.id) && <div className="online-indicator-dot" />}
+                  {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" />}
                 </div>
                 <div>
                   <h4 style={{ fontSize: '0.9rem', margin: 0 }}>{u.displayName}</h4>
@@ -213,7 +242,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 >
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     <img src={u.avatar} alt="Avatar" style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
-                    {onlineUsers.includes(u.id) && <div className="online-indicator-dot" />}
+                    {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <h4 style={{ fontSize: '0.9rem', fontWeight: u.unreadCount > 0 ? 700 : 500, margin: 0 }}>{u.displayName}</h4>
@@ -245,6 +274,28 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             handleSelectGroup(newGroup);
           }}
         />
+      )}
+
+      {/* Panic Wipe Modal */}
+      {showPanicModal && (
+        <div className="modal-overlay">
+          <div className="modal-card modal-responsive" style={{ maxWidth: '380px', textAlign: 'center' }}>
+            <div style={{ padding: '1.5rem' }}>
+              <ShieldAlert size={44} color="#ef4444" style={{ marginBottom: '0.75rem' }} />
+              <h3 style={{ fontSize: '1.3rem', fontWeight: 700, margin: '0 0 0.5rem 0', color: 'var(--text-main)' }}>
+                Encrypted Panic Wipe
+              </h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5, marginBottom: '1.5rem' }}>
+                Are you sure you want to trigger a local Panic Wipe? This will immediately clear all active conversations.
+              </p>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setShowPanicModal(false)}>Cancel</button>
+                <button className="btn-primary" style={{ flex: 1, background: '#ef4444' }} onClick={handlePanicWipe}>Wipe All</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
