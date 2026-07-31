@@ -6,9 +6,23 @@ PulseChat is a modern, ultra-responsive WhatsApp & Discord hybrid messaging plat
 
 ## 🌟 Key Features
 
-### 📞 Real-Time WebRTC Calling
-- 📹 **Peer-to-Peer Video & Audio Calls**: Built with WebRTC `RTCPeerConnection` & Socket.io signaling.
-- 📺 **Live Screen Sharing**: Integrated `getDisplayMedia` screen sharing during calls.
+### 📱 Mobile-First Dynamic Viewport (`100dvh`)
+- 📲 **Mobile Chrome & Browser Optimization**: Uses `100dvh` (Dynamic Viewport Height) and `interactive-widget=resizes-content` to prevent screen cropping and bottom toolbar overflow on mobile Chrome and iOS Safari.
+- 📐 **Adaptive Mobile Layout**: Smooth sidebar sliding drawer, responsive touch actions, and mobile back navigation.
+
+### 🎨 Real-Time Collaborative Whiteboard Canvas
+- 🖌️ **Live Multi-User Drawing Sync**: Stroke-by-stroke real-time canvas synchronization over Socket.io across all participants in a chat room.
+- 📐 **Normalized Ratio Scaling**: Canvas drawing uses relative coordinate mapping (`0.0`–`1.0`) so strokes align perfectly regardless of participant screen resolution.
+- 🖼️ **Send Drawing to Chat**: Export whiteboard artwork as an image message directly into the conversation.
+
+### 🎙️ Smart Voice Notes & Audio Messages
+- 🎙️ **Auto-Start Microphone Recorder**: Instant microphone recording initialization with MIME type fallback detection (`audio/webm`, `audio/mp4`, `audio/ogg`, `audio/wav`).
+- 🎧 **Audio Preview & Waveform Player**: Playback preview before sending, with robust audio error catching and live tone emotion tags (`Calm`, `Excited`, `Casual`).
+
+### 📞 Real-Time P2P WebRTC Voice & Video Calling
+- 📹 **Peer-to-Peer Video & Audio Calls**: WebRTC `RTCPeerConnection` with Socket.io signaling and ICE candidate queueing (`pendingCandidatesRef`) to prevent lost connection signals.
+- 🌐 **Expanded STUN Pool**: Cross-network connectivity support using Google & Mozilla STUN servers.
+- 📺 **Live Screen Sharing**: Integrated `getDisplayMedia` screen sharing during video calls.
 - 🔔 **Incoming Call Ringing Overlay**: Animated ring indicator with instant Accept / Decline controls.
 
 ### 👥 Group Chat & Messaging
@@ -39,13 +53,10 @@ PulseChat is a modern, ultra-responsive WhatsApp & Discord hybrid messaging plat
 3. 🧵 **Contextual Reply Threads**: Mini nested thread side panel for branching conversations.
 4. 🕵️ **Selective Silent Mode**: Per-contact online visibility privacy toggle.
 5. 🍂 **Smart Message Decay**: Auto-cleanup logic for inactive dead conversations.
-6. 🎙️ **Voice Note Emotion Tags**: Auto transcription preview & emotion badges (`Calm`, `Excited`, `Urgent`).
-7. 🎨 **Shared Whiteboard Canvas**: Interactive live collaborative doodle board per chat.
+6. 🎙️ **Voice Note Emotion Tags**: Auto transcription preview & emotion badges (`Calm`, `Excited`, `Casual`).
+7. 🎨 **Shared Real-Time Whiteboard**: Interactive live collaborative doodle board per chat.
 8. 🚨 **Panic Wipe Gesture**: Emergency PIN trigger to instantly clear local conversation cache.
 9. 💡 **AI Style-Matched Smart Replies**: Suggested reply chips matching user message tone.
-
-### 📱 Full Mobile & Desktop Responsiveness
-- 📲 **Adaptive Layout**: Mobile split navigation (toggleable sidebar & back button for screens $\le 768\text{px}$).
 
 ---
 
@@ -66,3 +77,4 @@ npm install
 npm run dev
 ```
 *Frontend will run on http://localhost:5173*
+
