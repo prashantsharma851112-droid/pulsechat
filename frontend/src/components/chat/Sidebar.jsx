@@ -1,7 +1,10 @@
 import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, MessageSquare } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus } from 'lucide-react';
+import CreateGroupModal from './CreateGroupModal';
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal }) {
   const { user, logout, token } = useContext(AuthContext);
@@ -9,33 +12,43 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [recentChats, setRecentChats] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'groups'
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
 
-  // Fetches the persistent chat list - anyone you've ever exchanged a
-  // message with, most recent first, WITH unread counts. This is what
-  // makes a message from someone you never searched for still show up.
   const loadRecentChats = useCallback(() => {
-    fetch('/api/users/recent', {
+    fetch(`${BACKEND_URL}/api/users/recent`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
-      .then(data => setRecentChats(data))
+      .then(data => {
+        if (Array.isArray(data)) setRecentChats(data);
+      })
+      .catch(() => {});
+  }, [token]);
+
+  const loadGroups = useCallback(() => {
+    fetch(`${BACKEND_URL}/api/groups`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setGroups(data);
+      })
       .catch(() => {});
   }, [token]);
 
   useEffect(() => {
     loadRecentChats();
-  }, [loadRecentChats]);
+    loadGroups();
+  }, [loadRecentChats, loadGroups]);
 
-  // Whenever a new message notification arrives (from ANY conversation,
-  // whether currently open or not), refresh the list so it reorders and
-  // unread badges update immediately.
   useEffect(() => {
     if (lastNotification) {
       loadRecentChats();
     }
   }, [lastNotification, loadRecentChats]);
 
-  // Also refresh after switching chats (marks read, so the badge should clear)
   useEffect(() => {
     if (activeChat) loadRecentChats();
   }, [activeChat, loadRecentChats]);
@@ -43,11 +56,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   // Search Users
   useEffect(() => {
     if (searchQuery.trim().length > 0) {
-      fetch(`/api/users/search?q=${encodeURIComponent(searchQuery)}`, {
+      fetch(`${BACKEND_URL}/api/users/search?q=${encodeURIComponent(searchQuery)}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => res.json())
-        .then(data => setSearchResults(data));
+        .then(data => {
+          if (Array.isArray(data)) setSearchResults(data);
+        });
     } else {
       setSearchResults([]);
     }
@@ -58,92 +73,179 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     setSearchQuery('');
   };
 
+  const handleSelectGroup = (group) => {
+    setActiveChat({
+      ...group,
+      isGroup: true,
+      displayName: group.name,
+      id: group.id
+    });
+    setSearchQuery('');
+  };
+
   return (
-    <div style={{ width: '340px', background: 'var(--bg-sidebar)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* User Header */}
-      <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }} onClick={openProfileModal}>
-          <img src={user.avatar} alt="Profile" style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)' }} />
-          <div>
-            <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{user.displayName}</h4>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>@{user.username}</p>
+    <div className={`sidebar-container ${activeChat ? 'mobile-hidden' : ''}`}>
+      {/* User Profile Header */}
+      <div className="sidebar-header">
+        <div className="user-profile-badge" onClick={openProfileModal}>
+          <div style={{ position: 'relative' }}>
+            <img src={user?.avatar} alt="Profile" className="user-avatar" />
+            {user?.isEmailVerified && (
+              <CheckCircle2
+                size={14}
+                color="#10b981"
+                style={{ position: 'absolute', bottom: 0, right: 0, background: '#fff', borderRadius: '50%' }}
+              />
+            )}
+          </div>
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 600, margin: 0, whiteSpace: 'nowrap' }}>{user?.displayName}</h4>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>@{user?.username}</p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button onClick={openProfileModal} title="Edit Profile (DP/Status)" style={{ background: 'transparent', color: 'var(--text-muted)', padding: '6px' }}><User size={20} /></button>
-          <button onClick={openSettingsModal} title="Themes & Settings" style={{ background: 'transparent', color: 'var(--text-muted)', padding: '6px' }}><Settings size={20} /></button>
-          <button onClick={logout} title="Logout" style={{ background: 'transparent', color: '#ef4444', padding: '6px' }}><LogOut size={20} /></button>
+        <div style={{ display: 'flex', gap: '0.25rem' }}>
+          <button onClick={() => setShowCreateGroupModal(true)} title="New Group" className="icon-btn-ghost"><Plus size={19} /></button>
+          <button onClick={openProfileModal} title="Edit Profile" className="icon-btn-ghost"><User size={19} /></button>
+          <button onClick={openSettingsModal} title="Settings" className="icon-btn-ghost"><Settings size={19} /></button>
+          <button onClick={logout} title="Logout" className="icon-btn-ghost" style={{ color: '#ef4444' }}><LogOut size={19} /></button>
         </div>
+      </div>
+
+      {/* Tabs: Chats vs Groups */}
+      <div className="sidebar-tabs">
+        <button
+          className={`tab-btn ${activeTab === 'chats' ? 'active' : ''}`}
+          onClick={() => setActiveTab('chats')}
+        >
+          Chats
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'groups' ? 'active' : ''}`}
+          onClick={() => setActiveTab('groups')}
+        >
+          Groups ({groups.length})
+        </button>
       </div>
 
       {/* Search Input */}
       <div style={{ padding: '0.75rem 1rem' }}>
         <div style={{ position: 'relative' }}>
           <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search by name or @username..." style={{ width: '100%', padding: '0.6rem 0.6rem 0.6rem 2.2rem', borderRadius: '20px', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '0.85rem' }} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search by name or @username..."
+            className="form-input"
+            style={{ paddingLeft: '2.2rem', borderRadius: '20px' }}
+          />
         </div>
       </div>
 
-      {/* Chat / Search Results List */}
+      {/* List Area */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem' }}>
         {searchResults.length > 0 ? (
           <div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '0.5rem 0.5rem' }}>SEARCH RESULTS</p>
             {searchResults.map(u => (
-              <div key={u.id} onClick={() => handleSelectUser(u)} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', borderRadius: '10px', cursor: 'pointer', background: activeChat?.id === u.id ? 'var(--bg-card)' : 'transparent' }}>
+              <div
+                key={u.id}
+                onClick={() => handleSelectUser(u)}
+                className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
+              >
                 <div style={{ position: 'relative' }}>
                   <img src={u.avatar} alt="Avatar" style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
-                  {onlineUsers.includes(u.id) && <div style={{ position: 'absolute', right: 0, bottom: 0, width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', border: '2px solid var(--bg-sidebar)' }} />}
+                  {onlineUsers.includes(u.id) && <div className="online-indicator-dot" />}
                 </div>
                 <div>
-                  <h4 style={{ fontSize: '0.9rem' }}>{u.displayName}</h4>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>@{u.username}</p>
+                  <h4 style={{ fontSize: '0.9rem', margin: 0 }}>{u.displayName}</h4>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>@{u.username}</p>
                 </div>
               </div>
             ))}
           </div>
+        ) : activeTab === 'groups' ? (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem' }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>YOUR GROUPS</p>
+              <button
+                onClick={() => setShowCreateGroupModal(true)}
+                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}
+              >
+                + New Group
+              </button>
+            </div>
+
+            {groups.length > 0 ? (
+              groups.map(g => (
+                <div
+                  key={g.id}
+                  onClick={() => handleSelectGroup(g)}
+                  className={`chat-item-row ${activeChat?.id === g.id ? 'active' : ''}`}
+                >
+                  <img src={g.avatar} alt="Group Avatar" style={{ width: '40px', height: '40px', borderRadius: '12px' }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h4 style={{ fontSize: '0.9rem', fontWeight: 600, margin: 0 }}>{g.name}</h4>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {g.description || `${g.members?.length || 0} members`}
+                    </p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                No groups joined yet. Click "+ New Group" to create one!
+              </div>
+            )}
+          </div>
         ) : (
           <div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '0.5rem 0.5rem' }}>CHATS</p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '0.5rem 0.5rem' }}>DIRECT MESSAGES</p>
             {recentChats.length > 0 ? (
               recentChats.map(u => (
                 <div
                   key={u.id}
                   onClick={() => handleSelectUser(u)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', borderRadius: '10px',
-                    cursor: 'pointer',
-                    background: activeChat?.id === u.id ? 'var(--bg-card)' : 'transparent'
-                  }}
+                  className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
                 >
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     <img src={u.avatar} alt="Avatar" style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
-                    {onlineUsers.includes(u.id) && <div style={{ position: 'absolute', right: 0, bottom: 0, width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', border: '2px solid var(--bg-sidebar)' }} />}
+                    {onlineUsers.includes(u.id) && <div className="online-indicator-dot" />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <h4 style={{ fontSize: '0.9rem', fontWeight: u.unreadCount > 0 ? 700 : 500 }}>{u.displayName}</h4>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <h4 style={{ fontSize: '0.9rem', fontWeight: u.unreadCount > 0 ? 700 : 500, margin: 0 }}>{u.displayName}</h4>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {u.lastMessageFromMe ? 'You: ' : ''}{u.lastMessage || `@${u.username}`}
                     </p>
                   </div>
                   {u.unreadCount > 0 && (
-                    <span style={{
-                      background: 'var(--accent)', color: '#fff', fontSize: '0.7rem', fontWeight: 700,
-                      minWidth: '20px', height: '20px', borderRadius: '100px', display: 'flex',
-                      alignItems: 'center', justifyContent: 'center', padding: '0 6px', flexShrink: 0
-                    }}>
+                    <span className="unread-badge">
                       {u.unreadCount}
                     </span>
                   )}
                 </div>
               ))
             ) : (
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>Search @username above to start messaging!</p>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>
+                Search @username above to start messaging!
+              </p>
             )}
           </div>
         )}
       </div>
+
+      {showCreateGroupModal && (
+        <CreateGroupModal
+          onClose={() => setShowCreateGroupModal(false)}
+          onGroupCreated={(newGroup) => {
+            loadGroups();
+            handleSelectGroup(newGroup);
+          }}
+        />
+      )}
     </div>
   );
 }
