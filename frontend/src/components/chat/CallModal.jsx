@@ -30,13 +30,32 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
     return () => clearInterval(timer);
   }, [callStatus]);
 
+  const pendingCandidatesRef = useRef([]);
+
+  const flushPendingCandidates = async () => {
+    if (pcRef.current && pcRef.current.remoteDescription && pendingCandidatesRef.current.length > 0) {
+      for (const candidate of pendingCandidatesRef.current) {
+        try {
+          await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.error("Error adding queued ICE candidate:", err);
+        }
+      }
+      pendingCandidatesRef.current = [];
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
 
     const configuration = {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+        { urls: 'stun:stun.services.mozilla.com' }
       ]
     };
 
@@ -47,6 +66,7 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
     pc.ontrack = (event) => {
       if (remoteVideoRef.current && event.streams[0]) {
         remoteVideoRef.current.srcObject = event.streams[0];
+        remoteVideoRef.current.play().catch(err => console.warn("Remote stream play catch:", err));
         setCallStatus('Connected');
       }
     };
@@ -71,6 +91,7 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
+        localVideoRef.current.play().catch(e => console.warn("Local stream play catch:", e));
       }
 
       stream.getTracks().forEach(track => {
@@ -91,6 +112,7 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
         });
       } else if (incomingSignal) {
         await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal));
+        await flushPendingCandidates();
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
 
@@ -108,18 +130,26 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
     if (socket) {
       socket.on('call_accepted', async (signal) => {
         if (pcRef.current) {
-          await pcRef.current.setRemoteDescription(new RTCSessionDescription(signal));
-          setCallStatus('Connected');
+          try {
+            await pcRef.current.setRemoteDescription(new RTCSessionDescription(signal));
+            await flushPendingCandidates();
+            setCallStatus('Connected');
+          } catch (err) {
+            console.error("Error setting remote description on call_accepted:", err);
+          }
         }
       });
 
       socket.on('ice_candidate', async ({ candidate }) => {
-        if (pcRef.current && candidate) {
+        if (!candidate) return;
+        if (pcRef.current && pcRef.current.remoteDescription) {
           try {
             await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
           } catch (e) {
             console.error('Error adding ICE candidate:', e);
           }
+        } else {
+          pendingCandidatesRef.current.push(candidate);
         }
       });
 

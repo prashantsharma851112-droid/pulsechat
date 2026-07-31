@@ -189,6 +189,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
     playSound('sent');
   };
 
+  const handleSendDrawing = (mediaUrl) => {
+    socket.emit('send_message', {
+      chatId,
+      senderId: user.id,
+      receiverId: isGroup ? '' : activeChat.id,
+      isGroup,
+      mediaUrl,
+      type: 'image'
+    });
+    playSound('sent');
+    setShowWhiteboard(false);
+  };
+
   const handleDeleteLocalMessage = (msgId) => {
     setMessages(prev => prev.filter(m => m.id !== msgId));
   };
@@ -222,7 +235,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
   const smartReplies = ["Sounds great! 👍", "I'll check and reply soon.", "Let's call! 📞", "Thanks! 🔥"];
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-chat)', minWidth: 0 }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-chat)', overflow: 'hidden' }}>
       {/* Header Bar */}
       <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -360,6 +373,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
         <WhiteboardModal
           onClose={() => setShowWhiteboard(false)}
           chatTitle={activeChat.displayName}
+          chatId={chatId}
+          onSendDrawing={handleSendDrawing}
         />
       )}
     </div>

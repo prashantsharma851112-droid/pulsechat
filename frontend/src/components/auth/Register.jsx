@@ -111,7 +111,7 @@ export default function Register({ switchToLogin }) {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100dvh', width: '100vw', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-main)', padding: '1rem' }}>
+    <div style={{ display: 'flex', height: '100vh', width: '100vw', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-main)', padding: '1rem' }}>
       <div className="auth-card">
         {step === 'form' ? (
           <form onSubmit={handleRegisterSubmit}>
