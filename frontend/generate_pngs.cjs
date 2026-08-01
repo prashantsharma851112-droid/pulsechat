@@ -2,32 +2,61 @@ const fs = require('fs');
 const zlib = require('zlib');
 const path = require('path');
 
-function createPng(width, height, outputPath) {
+function createPng(size, outputPath) {
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0);
-  ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 6; // color type 6 (RGBA)
+  ihdr.writeUInt32BE(size, 0);
+  ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
   ihdr[10] = 0;
   ihdr[11] = 0;
   ihdr[12] = 0;
 
   const ihdrChunk = createChunk('IHDR', ihdr);
 
-  const rowLen = 1 + width * 4;
-  const rawData = Buffer.alloc(rowLen * height);
+  const rowLen = 1 + size * 4;
+  const rawData = Buffer.alloc(rowLen * size);
 
-  for (let y = 0; y < height; y++) {
+  const center = size / 2;
+  const outerRadius = size * 0.42;
+
+  for (let y = 0; y < size; y++) {
     const offset = y * rowLen;
     rawData[offset] = 0;
-    for (let x = 0; x < width; x++) {
+    for (let x = 0; x < size; x++) {
       const px = offset + 1 + x * 4;
-      rawData[px] = 0x63;     // R
-      rawData[px + 1] = 0x66; // G
-      rawData[px + 2] = 0xf1; // B
-      rawData[px + 3] = 0xff; // A
+      const dx = x - center;
+      const dy = y - center;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      // Chat bubble & tail symbol
+      const inBubble = (Math.abs(dx) < size * 0.18 && Math.abs(dy + size * 0.02) < size * 0.13) ||
+                       (dx > -size * 0.20 && dx < -size * 0.08 && dy > size * 0.08 && dy < size * 0.20);
+
+      if (dist <= outerRadius) {
+        if (inBubble) {
+          // Glowing White Chat Logo
+          rawData[px] = 0xff;     // R
+          rawData[px + 1] = 0xff; // G
+          rawData[px + 2] = 0xff; // B
+          rawData[px + 3] = 0xff; // A
+        } else {
+          // Vibrant Gradient (#6366f1 to #818cf8)
+          const t = (x + y) / (size * 2);
+          rawData[px] = Math.round(99 + t * 30);    // R
+          rawData[px + 1] = Math.round(102 + t * 38); // G
+          rawData[px + 2] = Math.round(241 + t * 7);  // B
+          rawData[px + 3] = 0xff;
+        }
+      } else {
+        // Sleek Dark Background (#0b0f19)
+        rawData[px] = 0x0b;     // R
+        rawData[px + 1] = 0x0f; // G
+        rawData[px + 2] = 0x19; // B
+        rawData[px + 3] = 0xff; // A
+      }
     }
   }
 
@@ -73,7 +102,7 @@ if (!fs.existsSync(publicDir)) {
   fs.mkdirSync(publicDir, { recursive: true });
 }
 
-createPng(192, 192, path.join(publicDir, 'icon-192.png'));
-createPng(512, 512, path.join(publicDir, 'icon-512.png'));
-createPng(512, 512, path.join(publicDir, 'screenshot.png'));
-console.log('✅ Generated icon-192.png, icon-512.png, screenshot.png');
+createPng(192, path.join(publicDir, 'icon-192.png'));
+createPng(512, path.join(publicDir, 'icon-512.png'));
+createPng(512, path.join(publicDir, 'screenshot.png'));
+console.log('✅ Generated stylish PulseChat PNG App Icons');
