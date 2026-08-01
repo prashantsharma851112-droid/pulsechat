@@ -1,10 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { AuthContext } from './AuthContext';
+import { BACKEND_URL } from '../utils/config';
 
 export const SocketContext = createContext();
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
 export function SocketProvider({ children }) {
   const { user } = useContext(AuthContext);

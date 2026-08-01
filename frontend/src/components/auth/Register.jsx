@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { Check, X, ShieldCheck, Mail, ArrowLeft } from 'lucide-react';
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+import { BACKEND_URL } from '../../utils/config';
 
 export default function Register({ switchToLogin }) {
   const { login } = useContext(AuthContext);

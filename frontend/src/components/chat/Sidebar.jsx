@@ -3,8 +3,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+import { BACKEND_URL } from '../../utils/config';
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal }) {
   const { user, logout, token } = useContext(AuthContext);

@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
+import { BACKEND_URL } from '../utils/config';
 
 export const AuthContext = createContext();
 
@@ -9,7 +10,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (token) {
-      fetch('/api/auth/me', {
+      fetch(`${BACKEND_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => res.json())

@@ -136,9 +136,10 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
 
     // ICE Candidate Handler
     pc.onicecandidate = (event) => {
-      if (event.candidate && socket && targetUser?.id) {
+      const targetUserId = targetUser?.id || targetUser?._id;
+      if (event.candidate && socket && targetUserId) {
         socket.emit('ice_candidate', {
-          to: targetUser.id,
+          to: targetUserId,
           candidate: event.candidate
         });
       }
@@ -161,15 +162,18 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
         pc.addTrack(track, stream);
       });
 
+      const targetUserId = targetUser?.id || targetUser?._id;
+      const currentUserId = currentUser?.id || currentUser?._id;
+
       if (isCaller) {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
         socket.emit('call_user', {
-          userToCall: targetUser.id,
+          userToCall: targetUserId,
           signalData: offer,
-          from: currentUser.id,
-          callerName: currentUser.displayName,
+          from: currentUserId,
+          callerName: currentUser.displayName || currentUser.username,
           callerAvatar: currentUser.avatar,
           isVideo
         });
@@ -181,7 +185,7 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
           await pc.setLocalDescription(answer);
 
           socket.emit('answer_call', {
-            to: targetUser.id,
+            to: targetUserId,
             signal: answer
           });
         } catch (err) {
@@ -255,8 +259,9 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
   };
 
   const handleEndCall = (statusOverride) => {
-    if (socket && targetUser?.id) {
-      socket.emit('end_call', { to: targetUser.id });
+    const targetUserId = targetUser?.id || targetUser?._id;
+    if (socket && targetUserId) {
+      socket.emit('end_call', { to: targetUserId });
     }
     if (isCaller) {
       logCallInChat(statusOverride);

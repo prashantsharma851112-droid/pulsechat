@@ -1,8 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { Zap, Lock, AtSign } from 'lucide-react';
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+import { BACKEND_URL } from '../../utils/config';
 
 export default function Login({ switchToRegister }) {
   const { login } = useContext(AuthContext);

@@ -9,8 +9,7 @@ import CreatePollModal from './CreatePollModal';
 import WhiteboardModal from './WhiteboardModal';
 import MediaUploadModal from './MediaUploadModal';
 import { playSound } from '../../utils/audio';
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+import { BACKEND_URL } from '../../utils/config';
 
 export default function ChatWindow({ activeChat, onBack, onStartCall }) {
   const { user, token } = useContext(AuthContext);
