@@ -1,8 +1,9 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
-import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff } from 'lucide-react';
+import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye } from 'lucide-react';
 import ThreadModal from './ThreadModal';
+import ViewOnceModal from './ViewOnceModal';
 
 export default function MessageItem({ message, isMine, chatId, senderName, onDeleteLocal }) {
   const { socket } = useContext(SocketContext);
@@ -11,6 +12,32 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
   const [audioObj, setAudioObj] = useState(null);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [showThread, setShowThread] = useState(false);
+  const [showViewOnceModal, setShowViewOnceModal] = useState(false);
+  const [viewedByState, setViewedByState] = useState(message.viewedBy || []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleViewOnceUpdate = ({ messageId, viewedBy }) => {
+      if (messageId === message.id) {
+        setViewedByState(viewedBy);
+      }
+    };
+    socket.on('view_once_updated', handleViewOnceUpdate);
+    return () => socket.off('view_once_updated', handleViewOnceUpdate);
+  }, [socket, message.id]);
+
+  const isAlreadyViewed = message.isViewOnce && (viewedByState.length > 0 || message.isViewed);
+
+  const handleOpenViewOnce = () => {
+    if (isAlreadyViewed) return;
+    setShowViewOnceModal(true);
+  };
+
+  const handleMarkViewed = () => {
+    if (socket && currentUser?.id) {
+      socket.emit('view_once_opened', { messageId: message.id, userId: currentUser.id, chatId });
+    }
+  };
 
   const toggleAudio = () => {
     if (!message.audioUrl) return;
@@ -138,10 +165,48 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
           <p style={{ fontSize: '0.92rem', wordBreak: 'break-word', margin: 0, lineHeight: 1.4 }}>{message.content}</p>
         )}
 
-        {/* Media / Image Message */}
-        {message.type === 'image' && message.mediaUrl && (
+        {/* View Once Media Message */}
+        {(message.type === 'image' || message.type === 'video') && message.isViewOnce && (
+          <div style={{ padding: '2px 0' }}>
+            {isAlreadyViewed ? (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 14px', borderRadius: '20px', background: 'rgba(0,0,0,0.25)', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                <span style={{ fontWeight: 700 }}>1️⃣</span>
+                <span>Opened</span>
+              </div>
+            ) : (
+              <button
+                onClick={handleOpenViewOnce}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  borderRadius: '20px',
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <span style={{ fontWeight: 700 }}>1️⃣</span>
+                <Eye size={16} />
+                <span>{message.type === 'video' ? 'View Once Video' : 'View Once Photo'}</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Standard Media / Image / Video Message */}
+        {(message.type === 'image' || message.type === 'video') && !message.isViewOnce && message.mediaUrl && (
           <div style={{ borderRadius: '8px', overflow: 'hidden', marginBottom: '4px' }}>
-            <img src={message.mediaUrl} alt="Attached Media" style={{ maxWidth: '100%', maxHeight: '240px', objectFit: 'cover' }} />
+            {message.type === 'video' ? (
+              <video src={message.mediaUrl} controls style={{ maxWidth: '100%', maxHeight: '240px', objectFit: 'cover' }} />
+            ) : (
+              <img src={message.mediaUrl} alt="Attached Media" style={{ maxWidth: '100%', maxHeight: '240px', objectFit: 'cover' }} />
+            )}
           </div>
         )}
 
@@ -156,7 +221,7 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
               color: message.callData?.status === 'completed' ? '#10b981' : '#ef4444',
               display: 'flex',
               alignItems: 'center',
-              justify-content: 'center',
+              justifyContent: 'center',
               flexShrink: 0
             }}>
               {message.callData?.isVideo ? (
@@ -285,6 +350,14 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
 
       {showThread && (
         <ThreadModal message={message} onClose={() => setShowThread(false)} currentUser={currentUser} />
+      )}
+
+      {showViewOnceModal && (
+        <ViewOnceModal
+          message={message}
+          onMarkViewed={handleMarkViewed}
+          onClose={() => setShowViewOnceModal(false)}
+        />
       )}
     </div>
   );

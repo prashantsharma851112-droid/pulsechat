@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
 import CreatePollModal from './CreatePollModal';
 import WhiteboardModal from './WhiteboardModal';
+import MediaUploadModal from './MediaUploadModal';
 import { playSound } from '../../utils/audio';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
@@ -20,8 +21,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
   const [showEmoji, setShowEmoji] = useState(false);
   const [showCreatePoll, setShowCreatePoll] = useState(false);
   const [showWhiteboard, setShowWhiteboard] = useState(false);
+  const [pendingMedia, setPendingMedia] = useState(null);
   const [groupMembersMap, setGroupMembersMap] = useState({});
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Cooldown timer state (10s delayed send option)
   const [cooldownSecs, setCooldownSecs] = useState(0);
@@ -202,6 +205,35 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
     setShowWhiteboard(false);
   };
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPendingMedia({
+        type: file.type,
+        dataUrl: event.target.result
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleSendMedia = ({ mediaUrl, type, isViewOnce }) => {
+    socket.emit('send_message', {
+      chatId,
+      senderId: user.id,
+      receiverId: isGroup ? '' : activeChat.id,
+      isGroup,
+      mediaUrl,
+      type,
+      isViewOnce
+    });
+    playSound('sent');
+    setPendingMedia(null);
+  };
+
   const handleDeleteLocalMessage = (msgId) => {
     setMessages(prev => prev.filter(m => m.id !== msgId));
   };
@@ -341,6 +373,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
           <EmojiPicker onSelectEmoji={(emoji) => setText(prev => prev + emoji)} onClose={() => setShowEmoji(false)} />
         )}
 
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept="image/*,video/*"
+          onChange={handleFileSelect}
+          style={{ display: 'none' }}
+        />
+
+        <button onClick={() => fileInputRef.current?.click()} className="icon-btn-ghost" title="Send Photo or Video (View Once)"><Paperclip size={20} /></button>
         <button onClick={() => setShowEmoji(!showEmoji)} className="icon-btn-ghost" title="Add Emoji"><Smile size={20} /></button>
         <button onClick={() => setShowCreatePoll(true)} className="icon-btn-ghost" title="Create Poll"><BarChart2 size={20} /></button>
         <button onClick={() => setShowRecorder(!showRecorder)} className={`icon-btn-ghost ${showRecorder ? 'active-mic' : ''}`} title="Voice Note"><Mic size={20} /></button>
@@ -361,6 +402,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
           </form>
         )}
       </div>
+
+      {pendingMedia && (
+        <MediaUploadModal
+          mediaFile={pendingMedia}
+          onSend={handleSendMedia}
+          onClose={() => setPendingMedia(null)}
+        />
+      )}
 
       {showCreatePoll && (
         <CreatePollModal

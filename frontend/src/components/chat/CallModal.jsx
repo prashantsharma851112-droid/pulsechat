@@ -3,7 +3,7 @@ import { PhoneOff, Mic, MicOff, Video, VideoOff, Monitor } from 'lucide-react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
 
-export default function CallModal({ targetUser, isVideo, isCaller, incomingSignal, onClose }) {
+export default function CallModal({ targetUser, isVideo, isCaller, incomingSignal, initialCandidates, onClose }) {
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
 
@@ -12,14 +12,16 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [callStatus, setCallStatus] = useState(isCaller ? 'Calling...' : 'Connecting...');
   const [duration, setDuration] = useState(0);
+  const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
+  const remoteStreamRef = useRef(new MediaStream());
   const screenStreamRef = useRef(null);
-  const pendingCandidatesRef = useRef([]);
+  const pendingCandidatesRef = useRef(initialCandidates ? [...initialCandidates] : []);
   const callLoggedRef = useRef(false);
 
   // Timer counter
@@ -79,8 +81,10 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
         { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'stun:stun3.l.google.com:19302' },
         { urls: 'stun:stun4.l.google.com:19302' },
+        { urls: 'stun:global.stun.twilio.com:3478' },
         { urls: 'stun:stun.services.mozilla.com' }
-      ]
+      ],
+      iceCandidatePoolSize: 10
     };
 
     const pc = new RTCPeerConnection(configuration);
@@ -104,19 +108,27 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
 
     // Remote Track Handler
     pc.ontrack = (event) => {
-      console.log('⚡ Remote track event:', event);
-      const incomingStream = (event.streams && event.streams[0])
-        ? event.streams[0]
-        : new MediaStream([event.track]);
-
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = incomingStream;
-        remoteVideoRef.current.play().catch(err => console.warn("Remote video play catch:", err));
+      console.log('⚡ Remote track event:', event.track.kind, event);
+      if (event.streams && event.streams[0]) {
+        remoteStreamRef.current = event.streams[0];
+      } else {
+        if (!remoteStreamRef.current.getTracks().some(t => t.id === event.track.id)) {
+          remoteStreamRef.current.addTrack(event.track);
+        }
       }
 
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = incomingStream;
-        remoteAudioRef.current.play().catch(err => console.warn("Remote audio play catch:", err));
+      if (event.track.kind === 'video') {
+        setHasRemoteVideo(true);
+      }
+
+      if (remoteVideoRef.current && remoteVideoRef.current.srcObject !== remoteStreamRef.current) {
+        remoteVideoRef.current.srcObject = remoteStreamRef.current;
+        remoteVideoRef.current.play().catch(err => console.warn("Remote video play error:", err));
+      }
+
+      if (remoteAudioRef.current && remoteAudioRef.current.srcObject !== remoteStreamRef.current) {
+        remoteAudioRef.current.srcObject = remoteStreamRef.current;
+        remoteAudioRef.current.play().catch(err => console.warn("Remote audio play error:", err));
       }
 
       setCallStatus('Connected');
@@ -135,7 +147,7 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
     // Get User Media Stream
     navigator.mediaDevices.getUserMedia({
       audio: true,
-      video: isVideo ? { width: { ideal: 640 }, height: { ideal: 480 } } : false
+      video: isVideo ? { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' } : false
     }).then(async (stream) => {
       if (!mounted) return;
       localStreamRef.current = stream;
@@ -355,7 +367,7 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
               playsInline
               className="remote-video-element"
             />
-            {(!remoteVideoRef.current?.srcObject || !isVideo) && (
+            {(!hasRemoteVideo || !isVideo) && (
               <div className="call-audio-avatar-wrapper">
                 <img src={targetUser?.avatar} alt="Avatar" className="call-audio-avatar" />
                 <h4>{targetUser?.displayName}</h4>

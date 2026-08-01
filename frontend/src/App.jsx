@@ -45,18 +45,29 @@ export default function App() {
     }
   }, [user]);
 
-  // Listen for incoming calls
+  const pendingIceCandidatesRef = useRef([]);
+
+  // Listen for incoming calls & buffer early ICE candidates during ringing
   useEffect(() => {
     if (!socket) return;
 
     const handleIncomingCall = (data) => {
+      pendingIceCandidatesRef.current = [];
       setIncomingCallData(data);
     };
 
+    const handleEarlyCandidate = ({ candidate }) => {
+      if (candidate) {
+        pendingIceCandidatesRef.current.push(candidate);
+      }
+    };
+
     socket.on('incoming_call', handleIncomingCall);
+    socket.on('ice_candidate', handleEarlyCandidate);
 
     return () => {
       socket.off('incoming_call', handleIncomingCall);
+      socket.off('ice_candidate', handleEarlyCandidate);
     };
   }, [socket]);
 
@@ -88,8 +99,10 @@ export default function App() {
       },
       isVideo: incomingCallData.isVideo,
       isCaller: false,
-      incomingSignal: incomingCallData.signal
+      incomingSignal: incomingCallData.signal,
+      initialCandidates: [...pendingIceCandidatesRef.current]
     });
+    pendingIceCandidatesRef.current = [];
     setIncomingCallData(null);
   };
 
@@ -186,6 +199,7 @@ export default function App() {
           isVideo={activeCall.isVideo}
           isCaller={activeCall.isCaller}
           incomingSignal={activeCall.incomingSignal}
+          initialCandidates={activeCall.initialCandidates}
           onClose={() => setActiveCall(null)}
         />
       )}
