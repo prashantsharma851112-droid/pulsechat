@@ -26,10 +26,12 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
     return () => socket.off('view_once_updated', handleViewOnceUpdate);
   }, [socket, message.id]);
 
-  const isAlreadyViewed = message.isViewOnce && (viewedByState.length > 0 || message.isViewed);
+  const hasRecipientOpened = message.isViewOnce && viewedByState.length > 0;
+  const isConsumedByMe = !isMine && (viewedByState.includes(currentUser?.id) || message.isViewed);
+  const isAlreadyViewed = isMine ? hasRecipientOpened : isConsumedByMe;
 
   const handleOpenViewOnce = () => {
-    if (isAlreadyViewed) return;
+    if (isConsumedByMe) return;
     setShowViewOnceModal(true);
   };
 

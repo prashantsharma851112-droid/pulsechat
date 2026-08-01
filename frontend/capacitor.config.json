@@ -1,0 +1,9 @@
+{
+  "appId": "com.pulsechat.app",
+  "appName": "PulseChat",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}
