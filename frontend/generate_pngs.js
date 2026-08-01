@@ -46,7 +46,7 @@ function createChunk(type, data) {
   const body = Buffer.concat([typeBuf, data]);
 
   const crc = Buffer.alloc(4);
-  crc.writeInt32BE(crc32(body), 0);
+  crc.writeUInt32BE(crc32(body), 0);
 
   return Buffer.concat([len, body, crc]);
 }
