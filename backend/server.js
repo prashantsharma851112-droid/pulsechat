@@ -71,7 +71,7 @@ io.on('connection', (socket) => {
 
   // Send Real-Time Message
   socket.on('send_message', async (messageData) => {
-    const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, pollData, callData } = messageData;
+    const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, pollData, callData, isViewOnce } = messageData;
 
     const newMsg = {
       id: 'msg_' + Date.now(),
@@ -85,6 +85,8 @@ io.on('connection', (socket) => {
       mediaUrl: mediaUrl || null,
       pollData: pollData || null,
       callData: callData || null,
+      isViewOnce: !!isViewOnce,
+      viewedBy: [],
       status: receiverId && onlineUsers.has(receiverId) ? 'delivered' : 'sent',
       timestamp: new Date().toISOString(),
       reactions: {}
@@ -100,6 +102,14 @@ io.on('connection', (socket) => {
       if (recipientSocketId) {
         io.to(recipientSocketId).emit('message_notification', newMsg);
       }
+    }
+  });
+
+  // View Once Opened Handler
+  socket.on('view_once_opened', async ({ messageId, userId, chatId }) => {
+    const updatedMsg = await db.markViewOnceOpened(messageId, userId);
+    if (updatedMsg) {
+      io.to(chatId).emit('view_once_updated', { messageId, viewedBy: updatedMsg.viewedBy });
     }
   });
 
