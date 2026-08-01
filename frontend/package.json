@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node generate_pngs.js",
+    "prebuild": "node generate_pngs.cjs",
     "build": "vite build",
     "preview": "vite preview",
     "cap:add": "npx cap add android",
