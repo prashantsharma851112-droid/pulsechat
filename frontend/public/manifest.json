@@ -1,16 +1,36 @@
 {
+  "id": "com.pulsechat.app",
   "short_name": "PulseChat",
   "name": "PulseChat - Realtime Chat & Calls",
+  "description": "PulseChat is a next-gen messaging app featuring real-time chat, HD voice & video calls, view-once photos, and collaborative whiteboards.",
+  "categories": ["social", "messaging", "communications"],
   "icons": [
     {
-      "src": "/icon-192.png",
-      "type": "image/png",
-      "sizes": "192x192"
+      "src": "/icon-192.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
-      "src": "/icon-512.png",
-      "type": "image/png",
-      "sizes": "512x512"
+      "src": "/icon-512.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "form_factor": "narrow",
+      "label": "PulseChat Screen"
     }
   ],
   "start_url": "/",

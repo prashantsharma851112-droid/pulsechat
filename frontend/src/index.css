@@ -538,7 +538,7 @@ input, textarea {
   background: rgba(255, 255, 255, 0.08);
   padding: 6px 14px;
   border-radius: 20px;
-  fontSize: 0.82rem;
+  font-size: 0.82rem;
   color: #a5b4fc;
   margin-bottom: 1.5rem;
 }
@@ -559,7 +559,7 @@ input, textarea {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  fontSize: 0.85rem;
+  font-size: 0.85rem;
   color: #e5e7eb;
   opacity: 0;
   transform: translateY(10px);
