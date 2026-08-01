@@ -57,10 +57,13 @@ module.exports = {
     const msg = await Message.findOne({ id: messageId });
     if (!msg || !msg.isViewOnce) return null;
 
-    if (!msg.viewedBy.includes(userId)) {
-      msg.viewedBy.push(userId);
-      msg.markModified('viewedBy');
-      await msg.save();
+    // Only count as viewed if opened by recipient (not sender)
+    if (msg.senderId !== userId) {
+      if (!msg.viewedBy.includes(userId)) {
+        msg.viewedBy.push(userId);
+        msg.markModified('viewedBy');
+        await msg.save();
+      }
     }
     return msg;
   },
