@@ -169,8 +169,20 @@ io.on('connection', (socket) => {
     socket.to(chatId).emit('wb_draw', stroke);
   });
 
+  socket.on('wb_shape', ({ chatId, shape }) => {
+    socket.to(chatId).emit('wb_shape', shape);
+  });
+
+  socket.on('wb_sticker', ({ chatId, sticker }) => {
+    socket.to(chatId).emit('wb_sticker', sticker);
+  });
+
   socket.on('wb_clear', ({ chatId }) => {
     socket.to(chatId).emit('wb_clear');
+  });
+
+  socket.on('wb_restore', ({ chatId, boardDataUrl }) => {
+    socket.to(chatId).emit('wb_restore', { boardDataUrl });
   });
 
   // Audio/Video Call WebRTC Signaling
