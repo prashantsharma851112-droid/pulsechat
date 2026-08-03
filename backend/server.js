@@ -127,6 +127,14 @@ io.on('connection', (socket) => {
     io.to(chatId).emit('message_deleted', { messageId });
   });
 
+  // Restore Message Handler (Undo Delete)
+  socket.on('restore_message', async ({ messageId, chatId }) => {
+    const restoredMsg = await db.restoreMessage(messageId);
+    if (restoredMsg) {
+      io.to(chatId).emit('message_restored', { restoredMsg });
+    }
+  });
+
   // Panic Wipe Handler
   socket.on('panic_wipe', async ({ userId }) => {
     await db.panicWipeChats(userId);
@@ -139,9 +147,17 @@ io.on('connection', (socket) => {
     io.to(chatId).emit('message_read_update', { messageId, status: 'read' });
   });
 
+  socket.on('mark_chat_read', async ({ chatId, userId }) => {
+    await db.markChatAsRead(chatId, userId);
+    io.to(chatId).emit('chat_read_update', { chatId, userId });
+  });
+
   // Emoji Reaction
-  socket.on('add_reaction', ({ messageId, chatId, emoji, userId }) => {
-    io.to(chatId).emit('reaction_updated', { messageId, emoji, userId });
+  socket.on('add_reaction', async ({ messageId, chatId, emoji, userId }) => {
+    const updatedMsg = await db.toggleReaction(messageId, emoji, userId);
+    if (updatedMsg) {
+      io.to(chatId).emit('reaction_updated', { messageId, reactions: updatedMsg.reactions });
+    }
   });
 
   // Real-Time Collaborative Whiteboard

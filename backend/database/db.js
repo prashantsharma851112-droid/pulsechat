@@ -39,13 +39,76 @@ module.exports = {
     return updated;
   },
 
+  markChatAsRead: async (chatId, userId) => {
+    await Message.updateMany(
+      { chatId, receiverId: userId, status: { $ne: 'read' } },
+      { status: 'read' }
+    );
+  },
+
+  toggleReaction: async (messageId, emoji, userId) => {
+    const msg = await Message.findOne({ id: messageId });
+    if (!msg) return null;
+
+    let reactions = msg.reactions || {};
+    if (typeof reactions !== 'object' || Array.isArray(reactions)) {
+      reactions = {};
+    }
+
+    const userList = reactions[emoji] || [];
+    if (userList.includes(userId)) {
+      reactions[emoji] = userList.filter(id => id !== userId);
+      if (reactions[emoji].length === 0) {
+        delete reactions[emoji];
+      }
+    } else {
+      reactions[emoji] = [...userList, userId];
+    }
+
+    msg.reactions = reactions;
+    msg.markModified('reactions');
+    await msg.save();
+    return msg;
+  },
+
   deleteMessage: async (msgId) => {
-    const updated = await Message.findOneAndUpdate(
-      { id: msgId },
-      { content: 'This message was deleted', type: 'deleted', audioUrl: null, mediaUrl: null, pollData: null },
-      { new: true }
-    ).lean();
-    return updated;
+    const msg = await Message.findOne({ id: msgId });
+    if (!msg) return null;
+
+    msg.originalContent = msg.content;
+    msg.originalType = msg.type;
+    msg.originalAudioUrl = msg.audioUrl;
+    msg.originalMediaUrl = msg.mediaUrl;
+    msg.originalPollData = msg.pollData;
+
+    msg.content = 'This message was deleted';
+    msg.type = 'deleted';
+    msg.audioUrl = null;
+    msg.mediaUrl = null;
+    msg.pollData = null;
+
+    await msg.save();
+    return msg.toObject();
+  },
+
+  restoreMessage: async (msgId) => {
+    const msg = await Message.findOne({ id: msgId });
+    if (!msg || msg.type !== 'deleted') return null;
+
+    msg.content = msg.originalContent || '';
+    msg.type = msg.originalType || 'text';
+    msg.audioUrl = msg.originalAudioUrl || null;
+    msg.mediaUrl = msg.originalMediaUrl || null;
+    msg.pollData = msg.originalPollData || null;
+
+    msg.originalContent = null;
+    msg.originalType = null;
+    msg.originalAudioUrl = null;
+    msg.originalMediaUrl = null;
+    msg.originalPollData = null;
+
+    await msg.save();
+    return msg.toObject();
   },
 
   panicWipeChats: async (userId) => {

@@ -19,7 +19,12 @@ const messageSchema = new mongoose.Schema({
   viewedBy: { type: Array, default: [] },
   status: { type: String, default: 'sent' }, // 'sent' | 'delivered' | 'read'
   timestamp: { type: String, default: () => new Date().toISOString() },
-  reactions: { type: Object, default: {} }
+  reactions: { type: Object, default: {} },
+  originalContent: { type: String, default: null },
+  originalType: { type: String, default: null },
+  originalAudioUrl: { type: String, default: null },
+  originalMediaUrl: { type: String, default: null },
+  originalPollData: { type: Object, default: null }
 });
 
 module.exports = mongoose.model('Message', messageSchema);
