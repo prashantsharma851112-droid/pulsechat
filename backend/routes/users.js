@@ -39,4 +39,13 @@ router.put('/profile', authMiddleware, async (req, res) => {
   res.json({ user: userWithoutPass });
 });
 
+// Get User Profile by ID
+router.get('/:id', authMiddleware, async (req, res) => {
+  const users = await db.getUsers();
+  const target = users.find(u => u.id === req.params.id);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  const { passwordHash, ...safeUser } = target;
+  res.json(safeUser);
+});
+
 module.exports = router;
