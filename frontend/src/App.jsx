@@ -11,7 +11,7 @@ import CallModal from './components/chat/CallModal';
 import IncomingCallModal from './components/chat/IncomingCallModal';
 import EntranceAnimation from './components/common/EntranceAnimation';
 import PandaHero from './components/common/PandaHero';
-import Toast from './components/common/Toast';
+import FullDpModal from './components/common/FullDpModal';
 import { Zap } from 'lucide-react';
 
 export default function App() {
@@ -21,6 +21,7 @@ export default function App() {
   const [activeChat, setActiveChat] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [fullDpData, setFullDpData] = useState(null); // { imageUrl, name, username }
 
   // Entrance Animation state
   const [showEntrance, setShowEntrance] = useState(false);
@@ -144,6 +145,12 @@ export default function App() {
     );
   }
 
+  const handleOpenFullDp = (imageUrl, name, username) => {
+    if (imageUrl) {
+      setFullDpData({ imageUrl, name, username });
+    }
+  };
+
   return (
     <div style={{ display: 'flex', height: '100dvh', width: '100dvw', overflow: 'hidden', position: 'relative' }}>
       {/* Master Post-Login Entrance Animation */}
@@ -160,6 +167,7 @@ export default function App() {
         setActiveChat={setActiveChat}
         openProfileModal={() => setShowProfile(true)}
         openSettingsModal={() => setShowSettings(true)}
+        onOpenFullDp={handleOpenFullDp}
       />
 
       {/* Main Chat Area */}
@@ -173,6 +181,7 @@ export default function App() {
             isCaller: true,
             incomingSignal: null
           })}
+          onOpenFullDp={handleOpenFullDp}
         />
       ) : (
         <div className="empty-chat-placeholder">
@@ -182,6 +191,16 @@ export default function App() {
 
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+
+      {/* Full Screen DP Lightbox Modal */}
+      {fullDpData && (
+        <FullDpModal
+          imageUrl={fullDpData.imageUrl}
+          name={fullDpData.name}
+          username={fullDpData.username}
+          onClose={() => setFullDpData(null)}
+        />
+      )}
 
       {/* Incoming Call Popup */}
       {incomingCallData && (

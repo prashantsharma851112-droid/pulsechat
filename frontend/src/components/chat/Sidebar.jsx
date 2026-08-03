@@ -5,7 +5,7 @@ import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, Shie
 import CreateGroupModal from './CreateGroupModal';
 import { BACKEND_URL } from '../../utils/config';
 
-export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal }) {
+export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
   const { user, logout, token } = useContext(AuthContext);
   const { socket, onlineUsers, lastNotification } = useContext(SocketContext);
   const [searchQuery, setSearchQuery] = useState('');
@@ -259,7 +259,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                   className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
                 >
                   <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <img src={u.avatar} alt="Avatar" style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
+                    <img
+                      src={u.avatar}
+                      alt="Avatar"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onOpenFullDp) onOpenFullDp(u.avatar, u.displayName, u.username);
+                      }}
+                      style={{ width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', objectFit: 'cover' }}
+                      title="Click to view full screen DP"
+                    />
                     {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
