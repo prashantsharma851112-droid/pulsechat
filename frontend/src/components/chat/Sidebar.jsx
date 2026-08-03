@@ -25,10 +25,17 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     })
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) setRecentChats(data);
+        if (Array.isArray(data)) {
+          setRecentChats(data.map(item => {
+            if (activeChat && item.id === activeChat.id) {
+              return { ...item, unreadCount: 0 };
+            }
+            return item;
+          }));
+        }
       })
       .catch(() => {});
-  }, [token]);
+  }, [token, activeChat]);
 
   const loadGroups = useCallback(() => {
     fetch(`${BACKEND_URL}/api/groups`, {
@@ -53,8 +60,20 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   }, [lastNotification, loadRecentChats]);
 
   useEffect(() => {
-    if (activeChat) loadRecentChats();
+    if (activeChat) {
+      setRecentChats(prev => prev.map(u => u.id === activeChat.id ? { ...u, unreadCount: 0 } : u));
+      loadRecentChats();
+    }
   }, [activeChat, loadRecentChats]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleChatRead = () => {
+      loadRecentChats();
+    };
+    socket.on('chat_read_update', handleChatRead);
+    return () => socket.off('chat_read_update', handleChatRead);
+  }, [socket, loadRecentChats]);
 
   // Search Users
   useEffect(() => {

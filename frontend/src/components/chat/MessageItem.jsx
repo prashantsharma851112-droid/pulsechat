@@ -5,7 +5,7 @@ import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, Trash2, GitBra
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 
-export default function MessageItem({ message, isMine, chatId, senderName, onDeleteLocal }) {
+export default function MessageItem({ message, isMine, chatId, senderName, onDeleteLocal, onDeleteTrigger }) {
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -84,11 +84,13 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
     if (socket) {
       socket.emit('delete_message', { messageId: message.id, chatId });
     }
+    if (onDeleteTrigger) onDeleteTrigger(message.id);
     setShowContextMenu(false);
   };
 
   const handleDeleteForMe = () => {
     if (onDeleteLocal) onDeleteLocal(message.id);
+    if (onDeleteTrigger) onDeleteTrigger(message.id);
     setShowContextMenu(false);
   };
 
@@ -305,6 +307,39 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
             <div style={{ fontSize: '0.72rem', opacity: 0.7, marginTop: '8px', textAlign: 'right' }}>
               {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'} total • {pollData.isMultipleChoice ? 'Multiple choice' : 'Single choice'}
             </div>
+          </div>
+        )}
+
+        {/* Emoji Reactions display bar */}
+        {message.reactions && Object.keys(message.reactions).length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+            {Object.entries(message.reactions).map(([emoji, userIds]) => {
+              if (!Array.isArray(userIds) || userIds.length === 0) return null;
+              const hasReacted = userIds.includes(currentUser?.id);
+              return (
+                <button
+                  key={emoji}
+                  onClick={(e) => { e.stopPropagation(); handleReact(emoji); }}
+                  style={{
+                    background: hasReacted ? 'var(--accent)' : 'rgba(0,0,0,0.25)',
+                    color: '#fff',
+                    border: hasReacted ? '1px solid #fff' : '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '12px',
+                    padding: '2px 8px',
+                    fontSize: '0.75rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                  title={hasReacted ? 'Click to remove reaction' : 'Click to add reaction'}
+                >
+                  <span>{emoji}</span>
+                  <span style={{ fontWeight: 600, fontSize: '0.7rem' }}>{userIds.length}</span>
+                </button>
+              );
+            })}
           </div>
         )}
 

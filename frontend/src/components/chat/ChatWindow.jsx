@@ -63,9 +63,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
 
       if (socket) {
         socket.emit('join_chat', chatId);
+        socket.emit('mark_chat_read', { chatId, userId: user.id });
       }
     }
-  }, [activeChat, chatId, isGroup, token, socket]);
+  }, [activeChat, chatId, isGroup, token, socket, user.id]);
 
   // Listen to incoming messages & poll/deletion updates
   useEffect(() => {
@@ -93,18 +94,46 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status } : m));
     };
 
+    const handleReactionUpdated = ({ messageId, reactions }) => {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, reactions } : m));
+    };
+
+    const handleMessageRestored = ({ restoredMsg }) => {
+      setMessages(prev => prev.map(m => m.id === restoredMsg.id ? restoredMsg : m));
+    };
+
     socket.on('new_message', handleNewMessage);
     socket.on('poll_updated', handlePollUpdate);
     socket.on('message_deleted', handleMessageDeleted);
     socket.on('message_read_update', handleReadUpdate);
+    socket.on('reaction_updated', handleReactionUpdated);
+    socket.on('message_restored', handleMessageRestored);
 
     return () => {
       socket.off('new_message', handleNewMessage);
       socket.off('poll_updated', handlePollUpdate);
       socket.off('message_deleted', handleMessageDeleted);
       socket.off('message_read_update', handleReadUpdate);
+      socket.off('reaction_updated', handleReactionUpdated);
+      socket.off('message_restored', handleMessageRestored);
     };
   }, [socket, chatId, user.id]);
+
+  const [undoMessageId, setUndoMessageId] = useState(null);
+
+  const handleUndoDelete = () => {
+    if (undoMessageId && socket) {
+      socket.emit('restore_message', { messageId: undoMessageId, chatId });
+      setUndoMessageId(null);
+    }
+  };
+
+  const handleTriggerUndoToast = (msgId) => {
+    setUndoMessageId(msgId);
+    setTimeout(() => {
+      setUndoMessageId(prev => (prev === msgId ? null : prev));
+    }, 6000);
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -333,11 +362,37 @@ export default function ChatWindow({ activeChat, onBack, onStartCall }) {
               chatId={chatId}
               senderName={senderObj?.displayName || senderObj?.username}
               onDeleteLocal={handleDeleteLocalMessage}
+              onDeleteTrigger={handleTriggerUndoToast}
             />
           );
         })}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Undo Delete Banner */}
+      {undoMessageId && (
+        <div className="cooldown-banner" style={{ background: 'rgba(99, 102, 241, 0.95)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', borderRadius: '12px', margin: '0 1rem 0.5rem 1rem', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+          <span style={{ fontSize: '0.88rem', fontWeight: 500 }}>
+            🗑️ Message deleted
+          </span>
+          <button
+            onClick={handleUndoDelete}
+            style={{
+              background: '#fff',
+              color: 'var(--accent)',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '4px 14px',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.15)'
+            }}
+          >
+            ↩ Undo
+          </button>
+        </div>
+      )}
 
       {/* Cooldown Timer Notification Banner */}
       {cooldownSecs > 0 && (

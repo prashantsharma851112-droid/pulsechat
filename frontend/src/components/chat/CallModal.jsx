@@ -54,7 +54,7 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
     if (!socket || !currentUser || !targetUser?.id) return;
 
     const chatId = [currentUser.id, targetUser.id].sort().join('_');
-    const finalStatus = statusOverride || (duration > 0 ? 'completed' : 'missed');
+    const finalStatus = statusOverride || ((duration > 0 || callStatus === 'Connected') ? 'completed' : 'missed');
 
     socket.emit('send_message', {
       chatId,
@@ -94,8 +94,14 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
       console.log('⚡ Connection state:', pc.connectionState);
       if (pc.connectionState === 'connected') {
         setCallStatus('Connected');
-      } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+      } else if (pc.connectionState === 'failed') {
         handleEndCall();
+      } else if (pc.connectionState === 'disconnected') {
+        setTimeout(() => {
+          if (pcRef.current && pcRef.current.connectionState === 'disconnected') {
+            handleEndCall();
+          }
+        }, 5000);
       }
     };
 
@@ -145,15 +151,34 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
       }
     };
 
-    // Get User Media Stream
-    navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: isVideo ? { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' } : false
-    }).then(async (stream) => {
+    const setupStream = async () => {
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: isVideo ? { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' } : false
+        });
+      } catch (err) {
+        console.warn('Full stream failed, trying audio fallback:', err);
+        if (isVideo) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            setVideoOff(true);
+          } catch (err2) {
+            console.error('Audio fallback also failed:', err2);
+          }
+        }
+      }
+
+      if (!stream) {
+        setCallStatus('Device Access Error (No Mic/Cam)');
+        return;
+      }
+
       if (!mounted) return;
       localStreamRef.current = stream;
 
-      if (localVideoRef.current) {
+      if (localVideoRef.current && !videoOff) {
         localVideoRef.current.srcObject = stream;
         localVideoRef.current.play().catch(e => console.warn("Local stream play catch:", e));
       }
@@ -192,10 +217,9 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
           console.error("Error creating answer:", err);
         }
       }
-    }).catch(err => {
-      console.error('Failed to get media devices:', err);
-      setCallStatus('Media Device Error');
-    });
+    };
+
+    setupStream();
 
     // Socket Listeners
     if (socket) {
