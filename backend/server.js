@@ -264,7 +264,8 @@ io.on('connection', (socket) => {
       });
 
       // Save Group Call Started message to DB & emit to group chat
-      const callMsg = await db.createMessage({
+      const callMsg = {
+        id: Date.now().toString() + '_' + Math.random().toString(36).substring(2, 7),
         chatId: groupId,
         senderId: callerId,
         receiverId: '',
@@ -275,8 +276,11 @@ io.on('connection', (socket) => {
           isVideo,
           status: 'ongoing',
           duration: 0
-        }
-      });
+        },
+        status: 'sent',
+        timestamp: new Date().toISOString()
+      };
+      await db.saveMessage(callMsg);
       io.to(groupId).emit('new_message', callMsg);
     } else {
       activeGroupCalls.get(groupId).participants.set(socket.id, participantInfo);
@@ -366,7 +370,8 @@ io.on('connection', (socket) => {
         activeGroupCalls.delete(groupId);
 
         // Save Group Call Ended message to DB & emit to group chat
-        const endedMsg = await db.createMessage({
+        const endedMsg = {
+          id: Date.now().toString() + '_' + Math.random().toString(36).substring(2, 7),
           chatId: groupId,
           senderId: userId,
           receiverId: '',
@@ -377,8 +382,11 @@ io.on('connection', (socket) => {
             isVideo: lastGroupCall.isVideo,
             status: 'completed',
             duration: 0
-          }
-        });
+          },
+          status: 'sent',
+          timestamp: new Date().toISOString()
+        };
+        await db.saveMessage(endedMsg);
         io.to(groupId).emit('new_message', endedMsg);
       } else {
         io.to(callRoomId).emit('group_call_user_left', {
