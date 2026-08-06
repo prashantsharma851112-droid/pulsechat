@@ -209,5 +209,56 @@ module.exports = {
     }
 
     return results;
+  },
+
+  clearChatMessages: async (chatId) => {
+    const messages = await Message.find({ chatId }).lean();
+    await Message.deleteMany({ chatId });
+    return messages;
+  },
+
+  restoreChatMessages: async (messages) => {
+    if (Array.isArray(messages) && messages.length > 0) {
+      await Message.insertMany(messages);
+    }
+    return { success: true };
+  },
+
+  deleteMultipleMessages: async (messageIds) => {
+    const msgs = await Message.find({ id: { $in: messageIds } });
+    for (const msg of msgs) {
+      msg.originalContent = msg.content;
+      msg.originalType = msg.type;
+      msg.originalAudioUrl = msg.audioUrl;
+      msg.originalMediaUrl = msg.mediaUrl;
+      msg.originalPollData = msg.pollData;
+
+      msg.content = 'This message was deleted';
+      msg.type = 'deleted';
+      msg.audioUrl = null;
+      msg.mediaUrl = null;
+      msg.pollData = null;
+      await msg.save();
+    }
+    return msgs;
+  },
+
+  restoreMultipleMessages: async (messageIds) => {
+    const msgs = await Message.find({ id: { $in: messageIds }, type: 'deleted' });
+    for (const msg of msgs) {
+      msg.content = msg.originalContent || '';
+      msg.type = msg.originalType || 'text';
+      msg.audioUrl = msg.originalAudioUrl || null;
+      msg.mediaUrl = msg.originalMediaUrl || null;
+      msg.pollData = msg.originalPollData || null;
+
+      msg.originalContent = null;
+      msg.originalType = null;
+      msg.originalAudioUrl = null;
+      msg.originalMediaUrl = null;
+      msg.originalPollData = null;
+      await msg.save();
+    }
+    return msgs;
   }
 };

@@ -135,6 +135,30 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Clear Specific Chat Handler
+  socket.on('clear_chat', async ({ chatId }) => {
+    await db.clearChatMessages(chatId);
+    io.to(chatId).emit('chat_cleared', { chatId });
+  });
+
+  // Restore Cleared Chat Handler (Undo Clear Chat)
+  socket.on('restore_chat_messages', async ({ chatId, messages }) => {
+    await db.restoreChatMessages(messages);
+    io.to(chatId).emit('chat_restored', { chatId, messages });
+  });
+
+  // Delete Multiple Selected Messages
+  socket.on('delete_multiple_messages', async ({ messageIds, chatId }) => {
+    await db.deleteMultipleMessages(messageIds);
+    io.to(chatId).emit('multiple_messages_deleted', { messageIds, chatId });
+  });
+
+  // Restore Multiple Selected Messages (Undo Delete Selected)
+  socket.on('restore_multiple_messages', async ({ messageIds, chatId }) => {
+    await db.restoreMultipleMessages(messageIds);
+    io.to(chatId).emit('multiple_messages_restored', { messageIds, chatId });
+  });
+
   // Panic Wipe Handler
   socket.on('panic_wipe', async ({ userId }) => {
     await db.panicWipeChats(userId);
