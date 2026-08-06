@@ -9,6 +9,8 @@ import ProfileModal from './components/profile/ProfileModal';
 import SettingsModal from './components/profile/SettingsModal';
 import CallModal from './components/chat/CallModal';
 import IncomingCallModal from './components/chat/IncomingCallModal';
+import GroupCallModal from './components/chat/GroupCallModal';
+import IncomingGroupCallModal from './components/chat/IncomingGroupCallModal';
 import EntranceAnimation from './components/common/EntranceAnimation';
 import PandaHero from './components/common/PandaHero';
 import FullDpModal from './components/common/FullDpModal';
@@ -27,9 +29,11 @@ export default function App() {
   const [showEntrance, setShowEntrance] = useState(false);
   const userLoggedInRef = useRef(false);
 
-  // WebRTC Call States
+  // WebRTC Call States (1-to-1 & Group)
   const [activeCall, setActiveCall] = useState(null); // { targetUser, isVideo, isCaller, incomingSignal }
   const [incomingCallData, setIncomingCallData] = useState(null);
+  const [activeGroupCall, setActiveGroupCall] = useState(null); // { group, isVideo, isCaller }
+  const [incomingGroupCallData, setIncomingGroupCallData] = useState(null);
   const [toasts, setToasts] = useState([]);
 
   const activeChatRef = useRef(activeChat);
@@ -148,6 +152,38 @@ export default function App() {
     setIncomingCallData(null);
   };
 
+  // Group Call Socket Listener
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleIncomingGroupCall = (data) => {
+      setIncomingGroupCallData(data);
+    };
+
+    socket.on('incoming_group_call', handleIncomingGroupCall);
+    return () => socket.off('incoming_group_call', handleIncomingGroupCall);
+  }, [socket]);
+
+  const handleAcceptIncomingGroupCall = () => {
+    if (incomingGroupCallData) {
+      setActiveGroupCall({
+        group: {
+          id: incomingGroupCallData.groupId,
+          name: incomingGroupCallData.groupName,
+          displayName: incomingGroupCallData.groupName,
+          avatar: incomingGroupCallData.callerAvatar
+        },
+        isVideo: incomingGroupCallData.isVideo,
+        isCaller: false
+      });
+      setIncomingGroupCallData(null);
+    }
+  };
+
+  const handleDeclineIncomingGroupCall = () => {
+    setIncomingGroupCallData(null);
+  };
+
   if (loading) {
     return (
       <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-main)', color: 'var(--text-main)' }}>
@@ -199,6 +235,11 @@ export default function App() {
             isCaller: true,
             incomingSignal: null
           })}
+          onStartGroupCall={(group, isVideo) => setActiveGroupCall({
+            group,
+            isVideo,
+            isCaller: true
+          })}
           onOpenFullDp={handleOpenFullDp}
         />
       ) : (
@@ -243,6 +284,25 @@ export default function App() {
           incomingSignal={activeCall.incomingSignal}
           initialCandidates={activeCall.initialCandidates}
           onClose={() => setActiveCall(null)}
+        />
+      )}
+
+      {/* Real-Time Multi-Party Group Call Window */}
+      {activeGroupCall && (
+        <GroupCallModal
+          group={activeGroupCall.group}
+          isVideo={activeGroupCall.isVideo}
+          isCaller={activeGroupCall.isCaller}
+          onClose={() => setActiveGroupCall(null)}
+        />
+      )}
+
+      {/* Incoming Group Call Popup */}
+      {incomingGroupCallData && (
+        <IncomingGroupCallModal
+          callData={incomingGroupCallData}
+          onAccept={handleAcceptIncomingGroupCall}
+          onDecline={handleDeclineIncomingGroupCall}
         />
       )}
 

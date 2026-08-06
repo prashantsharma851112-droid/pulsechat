@@ -12,7 +12,7 @@ import GroupProfileModal from './GroupProfileModal';
 import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 
-export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFullDp }) {
+export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGroupCall, onOpenFullDp }) {
   const { user, token } = useContext(AuthContext);
   const { socket, onlineUsers, typingMap } = useContext(SocketContext);
   const [messages, setMessages] = useState([]);
@@ -462,8 +462,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
               <Trash2 size={18} />
             </button>
             <button onClick={() => setShowWhiteboard(true)} className="icon-btn-ghost" title="Shared Whiteboard Canvas"><Paintbrush size={18} /></button>
-            <button onClick={() => isGroup ? setShowGroupProfileModal(true) : onStartCall(false)} className="icon-btn-ghost" title={isGroup ? 'Call Group Member' : 'Voice Call'}><Phone size={18} /></button>
-            <button onClick={() => isGroup ? setShowGroupProfileModal(true) : onStartCall(true)} className="icon-btn-ghost" title={isGroup ? 'Video Call Group Member' : 'Video Call'}><Video size={18} /></button>
+            <button onClick={() => isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, false)) : onStartCall(false)} className="icon-btn-ghost" title={isGroup ? 'Start Group Voice Call' : 'Voice Call'}><Phone size={18} /></button>
+            <button onClick={() => isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, true)) : onStartCall(true)} className="icon-btn-ghost" title={isGroup ? 'Start Group Video Call' : 'Video Call'}><Video size={18} /></button>
           </div>
         </div>
 

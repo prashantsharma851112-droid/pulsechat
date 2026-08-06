@@ -209,7 +209,7 @@ io.on('connection', (socket) => {
     socket.to(chatId).emit('wb_restore', { boardDataUrl });
   });
 
-  // Audio/Video Call WebRTC Signaling
+  // Audio/Video Call WebRTC Signaling (1-to-1)
   socket.on('call_user', ({ userToCall, signalData, from, callerName, callerAvatar, isVideo }) => {
     const recipientSocket = onlineUsers.get(userToCall);
     if (recipientSocket) {
@@ -242,6 +242,118 @@ io.on('connection', (socket) => {
     const targetSocket = onlineUsers.get(to);
     if (targetSocket) {
       io.to(targetSocket).emit('call_ended');
+    }
+  });
+
+  // --- REAL-TIME MULTI-PARTY GROUP CALL SIGNALING ---
+  const activeGroupCalls = new Map(); // groupId -> { groupName, isVideo, participants: Map(socketId -> { userId, displayName, avatar, socketId }) }
+
+  socket.on('start_group_call', ({ groupId, groupName, isVideo, callerId, callerName, callerAvatar, memberIds }) => {
+    const callRoomId = `group_call_${groupId}`;
+    socket.join(callRoomId);
+
+    const participantInfo = { userId: callerId, displayName: callerName, avatar: callerAvatar, socketId: socket.id };
+
+    if (!activeGroupCalls.has(groupId)) {
+      activeGroupCalls.set(groupId, {
+        groupId,
+        groupName,
+        isVideo,
+        initiatorId: callerId,
+        participants: new Map([[socket.id, participantInfo]])
+      });
+    } else {
+      activeGroupCalls.get(groupId).participants.set(socket.id, participantInfo);
+    }
+
+    // Notify all online group members
+    if (Array.isArray(memberIds)) {
+      memberIds.forEach(mId => {
+        if (mId !== callerId) {
+          const mSocketId = onlineUsers.get(mId);
+          if (mSocketId) {
+            io.to(mSocketId).emit('incoming_group_call', {
+              groupId,
+              groupName,
+              isVideo,
+              callerId,
+              callerName,
+              callerAvatar
+            });
+          }
+        }
+      });
+    }
+
+    socket.emit('group_call_started', {
+      groupId,
+      groupName,
+      isVideo,
+      participants: [participantInfo]
+    });
+  });
+
+  socket.on('join_group_call', ({ groupId, userId, displayName, avatar, isVideo }) => {
+    const callRoomId = `group_call_${groupId}`;
+    socket.join(callRoomId);
+
+    const participantInfo = { userId, displayName, avatar, socketId: socket.id };
+    let groupCall = activeGroupCalls.get(groupId);
+
+    if (!groupCall) {
+      groupCall = {
+        groupId,
+        groupName: 'Group Call',
+        isVideo,
+        participants: new Map()
+      };
+      activeGroupCalls.set(groupId, groupCall);
+    }
+
+    groupCall.participants.set(socket.id, participantInfo);
+    const allParticipants = Array.from(groupCall.participants.values());
+
+    socket.emit('group_call_joined', {
+      groupId,
+      groupName: groupCall.groupName,
+      isVideo: groupCall.isVideo,
+      participants: allParticipants
+    });
+
+    socket.to(callRoomId).emit('group_call_user_joined', {
+      participant: participantInfo,
+      participants: allParticipants
+    });
+  });
+
+  socket.on('group_call_peer_signal', ({ toSocketId, fromSocketId, signal, candidate }) => {
+    if (toSocketId) {
+      io.to(toSocketId).emit('group_call_peer_signal', {
+        fromSocketId,
+        signal,
+        candidate
+      });
+    }
+  });
+
+  socket.on('leave_group_call', ({ groupId, userId }) => {
+    const callRoomId = `group_call_${groupId}`;
+    socket.leave(callRoomId);
+
+    const groupCall = activeGroupCalls.get(groupId);
+    if (groupCall) {
+      groupCall.participants.delete(socket.id);
+      const remaining = Array.from(groupCall.participants.values());
+
+      if (remaining.length === 0) {
+        activeGroupCalls.delete(groupId);
+      } else {
+        io.to(callRoomId).emit('group_call_user_left', {
+          socketId: socket.id,
+          userId,
+          participants: remaining
+        });
+      }
     }
   });
 
