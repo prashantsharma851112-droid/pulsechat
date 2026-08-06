@@ -8,6 +8,7 @@ import EmojiPicker from './EmojiPicker';
 import CreatePollModal from './CreatePollModal';
 import WhiteboardModal from './WhiteboardModal';
 import UserProfileModal from './UserProfileModal';
+import GroupProfileModal from './GroupProfileModal';
 import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 
@@ -21,6 +22,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
   const [showCreatePoll, setShowCreatePoll] = useState(false);
   const [showWhiteboard, setShowWhiteboard] = useState(false);
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
+  const [showGroupProfileModal, setShowGroupProfileModal] = useState(false);
   const [pendingMedia, setPendingMedia] = useState(null);
   const [groupMembersMap, setGroupMembersMap] = useState({});
   const messagesEndRef = useRef(null);
@@ -310,15 +312,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
             <img
               src={activeChat.avatar}
               alt="Avatar"
-              onClick={() => onOpenFullDp && onOpenFullDp(activeChat.avatar, activeChat.displayName, activeChat.username)}
+              onClick={() => isGroup ? setShowGroupProfileModal(true) : (onOpenFullDp && onOpenFullDp(activeChat.avatar, activeChat.displayName, activeChat.username))}
               style={{ width: '40px', height: '40px', borderRadius: isGroup ? '12px' : '50%', cursor: 'pointer', objectFit: 'cover' }}
-              title="Click to view full screen DP"
+              title={isGroup ? 'Click for group details & members' : 'Click to view full screen DP'}
             />
 
             <div
-              onClick={() => !isGroup && setShowUserProfileModal(true)}
-              style={{ cursor: isGroup ? 'default' : 'pointer' }}
-              title={!isGroup ? 'Click to view profile & bio' : ''}
+              onClick={() => isGroup ? setShowGroupProfileModal(true) : setShowUserProfileModal(true)}
+              style={{ cursor: 'pointer' }}
+              title={isGroup ? 'Click to view group bio, members & edit info' : 'Click to view profile & bio'}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>{activeChat.displayName}</h3>
@@ -326,7 +328,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
               </div>
               <p style={{ fontSize: '0.75rem', color: isTyping ? 'var(--accent)' : 'var(--text-muted)', margin: 0 }}>
                 {isGroup
-                  ? `${activeChat.members?.length || 0} members`
+                  ? `${activeChat.members?.length || 0} members • Click for info`
                   : isTyping
                     ? 'typing...'
                     : isOnline
@@ -338,12 +340,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
 
           <div style={{ display: 'flex', gap: '0.4rem' }}>
             <button onClick={() => setShowWhiteboard(true)} className="icon-btn-ghost" title="Shared Whiteboard Canvas"><Paintbrush size={18} /></button>
-            {!isGroup && (
-              <>
-                <button onClick={() => onStartCall(false)} className="icon-btn-ghost" title="Voice Call"><Phone size={18} /></button>
-                <button onClick={() => onStartCall(true)} className="icon-btn-ghost" title="Video Call"><Video size={18} /></button>
-              </>
-            )}
+            <button onClick={() => isGroup ? setShowGroupProfileModal(true) : onStartCall(false)} className="icon-btn-ghost" title={isGroup ? 'Call Group Member' : 'Voice Call'}><Phone size={18} /></button>
+            <button onClick={() => isGroup ? setShowGroupProfileModal(true) : onStartCall(true)} className="icon-btn-ghost" title={isGroup ? 'Video Call Group Member' : 'Video Call'}><Video size={18} /></button>
           </div>
         </div>
 
@@ -492,6 +490,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
         <UserProfileModal
           targetUser={activeChat}
           onClose={() => setShowUserProfileModal(false)}
+          onStartCall={onStartCall}
+          onOpenFullDp={onOpenFullDp}
+        />
+      )}
+
+      {showGroupProfileModal && (
+        <GroupProfileModal
+          group={activeChat}
+          onClose={() => setShowGroupProfileModal(false)}
           onStartCall={onStartCall}
           onOpenFullDp={onOpenFullDp}
         />

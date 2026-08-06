@@ -8,7 +8,14 @@ const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/avataaars/svg?seed=rahul',
   'https://api.dicebear.com/7.x/avataaars/svg?seed=sara',
   'https://api.dicebear.com/7.x/bottts/svg?seed=neon',
-  'https://api.dicebear.com/7.x/adventurer/svg?seed=cyber'
+  'https://api.dicebear.com/7.x/adventurer/svg?seed=cyber',
+  'https://api.dicebear.com/7.x/avataaars/svg?seed=prashant',
+  'https://api.dicebear.com/7.x/adventurer/svg?seed=shadow',
+  'https://api.dicebear.com/7.x/bottts/svg?seed=glitch',
+  'https://api.dicebear.com/7.x/lorelei/svg?seed=luna',
+  'https://api.dicebear.com/7.x/big-smile/svg?seed=happy',
+  'https://api.dicebear.com/7.x/avataaars/svg?seed=sam',
+  'https://api.dicebear.com/7.x/adventurer/svg?seed=blaze'
 ];
 
 export default function ProfileModal({ onClose }) {
@@ -105,7 +112,7 @@ export default function ProfileModal({ onClose }) {
           </div>
 
           {/* Preset Avatars Selection */}
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '1.25rem' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '10px', marginBottom: '1.25rem', maxHeight: '110px', overflowY: 'auto', padding: '4px' }}>
             {PRESET_AVATARS.map((avUrl) => (
               <img
                 key={avUrl}
@@ -113,27 +120,17 @@ export default function ProfileModal({ onClose }) {
                 onClick={() => setAvatar(avUrl)}
                 alt="Avatar preset"
                 style={{
-                  width: '40px',
-                  height: '40px',
+                  width: '42px',
+                  height: '42px',
                   borderRadius: '50%',
                   cursor: 'pointer',
-                  border: avatar === avUrl ? '2px solid var(--accent)' : '2px solid transparent',
-                  transition: 'transform 0.15s ease'
+                  border: avatar === avUrl ? '2.5px solid var(--accent)' : '2px solid transparent',
+                  background: 'var(--bg-card)',
+                  padding: '2px',
+                  transition: 'all 0.15s ease'
                 }}
               />
             ))}
-          </div>
-
-          {/* Custom Image URL */}
-          <div style={{ marginBottom: '1rem' }}>
-            <label className="form-label">Or Image URL</label>
-            <input
-              type="text"
-              className="form-input"
-              value={avatar}
-              onChange={e => setAvatar(e.target.value)}
-              placeholder="https://..."
-            />
           </div>
 
           {/* Display Name */}

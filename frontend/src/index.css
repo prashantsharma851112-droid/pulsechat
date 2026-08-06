@@ -933,3 +933,118 @@ input, textarea {
   gap: 12px;
   color: #fcd34d;
 }
+
+/* --- ANIMATED MODAL & SEARCH BAR ENHANCEMENTS --- */
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-card-animated {
+  animation: modalFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animated-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 0 14px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.animated-search-wrapper:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2), 0 4px 16px rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+.animated-search-icon {
+  color: var(--text-muted);
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.animated-search-wrapper:focus-within .animated-search-icon {
+  color: var(--accent);
+  transform: scale(1.1);
+}
+
+.animated-search-input {
+  width: 100%;
+  padding: 11px 12px 11px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-size: 0.92rem;
+}
+
+.user-select-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.user-select-card:hover {
+  background: var(--hover-bg);
+  border-color: rgba(255, 255, 255, 0.05);
+  transform: translateX(2px);
+}
+
+.user-select-card.selected {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+@keyframes checkPop {
+  0% { transform: scale(0.6); }
+  60% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.check-pop-icon {
+  animation: checkPop 0.22s ease forwards;
+}
+
+.group-avatar-ring {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.group-avatar-ring:hover {
+  transform: scale(1.04);
+}
+
+.group-avatar-ring .edit-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  color: #ffffff;
+}
+
+.group-avatar-ring:hover .edit-overlay {
+  opacity: 1;
+}
+

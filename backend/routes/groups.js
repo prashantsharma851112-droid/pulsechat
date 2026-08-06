@@ -74,6 +74,44 @@ router.post('/:groupId/add-member', authMiddleware, async (req, res) => {
   }
 });
 
+// Edit / Update group details (name, description, avatar DP)
+router.put('/:groupId', authMiddleware, async (req, res) => {
+  try {
+    const { name, description, avatar } = req.body;
+    const group = await Group.findOne({ id: req.params.groupId });
+    if (!group) return res.status(404).json({ error: 'Group not found.' });
+
+    if (name && name.trim()) group.name = name.trim();
+    if (description !== undefined) group.description = description.trim();
+    if (avatar) group.avatar = avatar;
+
+    await group.save();
+
+    const memberUsers = await User.find({ id: { $in: group.members } }, { passwordHash: 0 }).lean();
+    res.json({ ...group.toObject(), memberUsers });
+  } catch (err) {
+    console.error('Error updating group:', err);
+    res.status(500).json({ error: 'Failed to update group.' });
+  }
+});
+
+// Remove member from group
+router.post('/:groupId/remove-member', authMiddleware, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const group = await Group.findOne({ id: req.params.groupId });
+    if (!group) return res.status(404).json({ error: 'Group not found.' });
+
+    group.members = group.members.filter(m => m !== userId);
+    await group.save();
+
+    const memberUsers = await User.find({ id: { $in: group.members } }, { passwordHash: 0 }).lean();
+    res.json({ ...group.toObject(), memberUsers });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to remove member.' });
+  }
+});
+
 // Leave group
 router.post('/:groupId/leave', authMiddleware, async (req, res) => {
   try {

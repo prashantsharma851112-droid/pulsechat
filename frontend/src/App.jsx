@@ -175,8 +175,8 @@ export default function App() {
         <ChatWindow
           activeChat={activeChat}
           onBack={() => setActiveChat(null)}
-          onStartCall={(isVideo) => setActiveCall({
-            targetUser: activeChat,
+          onStartCall={(isVideo, targetMember) => setActiveCall({
+            targetUser: targetMember || activeChat,
             isVideo,
             isCaller: true,
             incomingSignal: null
