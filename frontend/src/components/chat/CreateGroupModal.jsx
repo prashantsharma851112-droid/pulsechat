@@ -24,7 +24,7 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
       });
       const data = await res.json();
       if (Array.isArray(data)) {
-        setAllUsers(data.filter(u => u.id !== currentUser.id));
+        setAllUsers(data.filter(u => u.id !== currentUser?.id));
       }
     } catch (err) {
       console.error('Failed to load users:', err);
@@ -79,10 +79,13 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
     }
   };
 
-  const filteredUsers = allUsers.filter(u =>
-    u.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.username.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredUsers = allUsers.filter(u => {
+    const q = searchQuery.trim().toLowerCase().replace(/^@/, '');
+    if (!q) return true;
+    const nameMatch = u.displayName ? u.displayName.toLowerCase().includes(q) : false;
+    const usernameMatch = u.username ? u.username.toLowerCase().includes(q) : false;
+    return nameMatch || usernameMatch;
+  });
 
   return (
     <div className="modal-overlay">
