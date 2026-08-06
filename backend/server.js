@@ -248,7 +248,7 @@ io.on('connection', (socket) => {
   // --- REAL-TIME MULTI-PARTY GROUP CALL SIGNALING ---
   const activeGroupCalls = new Map(); // groupId -> { groupName, isVideo, participants: Map(socketId -> { userId, displayName, avatar, socketId }) }
 
-  socket.on('start_group_call', ({ groupId, groupName, isVideo, callerId, callerName, callerAvatar, memberIds }) => {
+  socket.on('start_group_call', async ({ groupId, groupName, isVideo, callerId, callerName, callerAvatar, memberIds }) => {
     const callRoomId = `group_call_${groupId}`;
     socket.join(callRoomId);
 
@@ -262,6 +262,22 @@ io.on('connection', (socket) => {
         initiatorId: callerId,
         participants: new Map([[socket.id, participantInfo]])
       });
+
+      // Save Group Call Started message to DB & emit to group chat
+      const callMsg = await db.createMessage({
+        chatId: groupId,
+        senderId: callerId,
+        receiverId: '',
+        isGroup: true,
+        type: 'call',
+        content: isVideo ? 'Group Video Call Started' : 'Group Voice Call Started',
+        callData: {
+          isVideo,
+          status: 'ongoing',
+          duration: 0
+        }
+      });
+      io.to(groupId).emit('new_message', callMsg);
     } else {
       activeGroupCalls.get(groupId).participants.set(socket.id, participantInfo);
     }
@@ -336,7 +352,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('leave_group_call', ({ groupId, userId }) => {
+  socket.on('leave_group_call', async ({ groupId, userId }) => {
     const callRoomId = `group_call_${groupId}`;
     socket.leave(callRoomId);
 
@@ -346,7 +362,24 @@ io.on('connection', (socket) => {
       const remaining = Array.from(groupCall.participants.values());
 
       if (remaining.length === 0) {
+        const lastGroupCall = { ...groupCall };
         activeGroupCalls.delete(groupId);
+
+        // Save Group Call Ended message to DB & emit to group chat
+        const endedMsg = await db.createMessage({
+          chatId: groupId,
+          senderId: userId,
+          receiverId: '',
+          isGroup: true,
+          type: 'call',
+          content: lastGroupCall.isVideo ? 'Group Video Call Ended' : 'Group Voice Call Ended',
+          callData: {
+            isVideo: lastGroupCall.isVideo,
+            status: 'completed',
+            duration: 0
+          }
+        });
+        io.to(groupId).emit('new_message', endedMsg);
       } else {
         io.to(callRoomId).emit('group_call_user_left', {
           socketId: socket.id,

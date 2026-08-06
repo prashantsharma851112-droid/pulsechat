@@ -519,6 +519,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               isMultiSelectMode={isMultiSelectMode}
               isSelected={selectedMsgIds.includes(msg.id)}
               onToggleSelect={handleToggleSelectMsg}
+              onJoinGroupCall={(isVideo) => onStartGroupCall && onStartGroupCall(activeChat, isVideo)}
             />
           );
         })}

@@ -14,7 +14,8 @@ export default function MessageItem({
   onDeleteTrigger,
   isMultiSelectMode,
   isSelected,
-  onToggleSelect
+  onToggleSelect,
+  onJoinGroupCall
 }) {
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
@@ -264,35 +265,49 @@ export default function MessageItem({
 
         {/* Call Log Message */}
         {message.type === 'call' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: '200px', padding: '2px 0' }}>
-            <div style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              background: message.callData?.status === 'completed' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-              color: message.callData?.status === 'completed' ? '#10b981' : '#ef4444',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0
-            }}>
-              {message.callData?.isVideo ? (
-                message.callData?.status === 'completed' ? <Video size={18} /> : <VideoOff size={18} />
-              ) : (
-                message.callData?.status === 'completed' ? <Phone size={18} /> : <PhoneOff size={18} />
-              )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '200px', padding: '2px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                background: message.callData?.status === 'completed' ? 'rgba(16, 185, 129, 0.2)' : (message.callData?.status === 'ongoing' ? 'rgba(99, 102, 241, 0.25)' : 'rgba(239, 68, 68, 0.2)'),
+                color: message.callData?.status === 'completed' ? '#10b981' : (message.callData?.status === 'ongoing' ? 'var(--accent)' : '#ef4444'),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                {message.callData?.isVideo ? (
+                  (message.callData?.status === 'completed' || message.callData?.status === 'ongoing') ? <Video size={18} /> : <VideoOff size={18} />
+                ) : (
+                  (message.callData?.status === 'completed' || message.callData?.status === 'ongoing') ? <Phone size={18} /> : <PhoneOff size={18} />
+                )}
+              </div>
+
+              <div style={{ flex: 1 }}>
+                <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                  {message.isGroup ? (message.callData?.isVideo ? 'Group Video Call' : 'Group Voice Call') : (message.callData?.isVideo ? 'Video Call' : 'Voice Call')}
+                </h4>
+                <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  {message.callData?.status === 'ongoing'
+                    ? 'Group Call Active'
+                    : (message.callData?.status === 'completed'
+                        ? (message.callData?.duration ? `Duration: ${Math.floor(message.callData.duration / 60)}m ${message.callData.duration % 60}s` : 'Call Ended')
+                        : (message.callData?.status === 'declined' ? 'Call Declined' : 'Missed Call'))}
+                </p>
+              </div>
             </div>
 
-            <div style={{ flex: 1 }}>
-              <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                {message.callData?.isVideo ? 'Video Call' : 'Voice Call'}
-              </h4>
-              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                {message.callData?.status === 'completed'
-                  ? `Duration: ${Math.floor((message.callData?.duration || 0) / 60)}m ${((message.callData?.duration || 0) % 60)}s`
-                  : (message.callData?.status === 'declined' ? 'Call Declined' : 'Missed Call')}
-              </p>
-            </div>
+            {message.isGroup && message.callData?.status === 'ongoing' && onJoinGroupCall && (
+              <button
+                className="btn-primary"
+                onClick={() => onJoinGroupCall(message.callData?.isVideo)}
+                style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '10px', marginTop: '2px', background: '#10b981', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}
+              >
+                <Phone size={14} /> Join Group Call
+              </button>
+            )}
           </div>
         )}
 
