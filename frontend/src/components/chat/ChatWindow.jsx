@@ -420,6 +420,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
             />
 
             <div
+              className="chat-header-title-box"
               onClick={() => isGroup ? setShowGroupProfileModal(true) : setShowUserProfileModal(true)}
               style={{ cursor: 'pointer' }}
               title={isGroup ? 'Click to view group bio, members & edit info' : 'Click to view profile & bio'}
@@ -428,7 +429,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
                 <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>{activeChat.displayName}</h3>
                 {isGroup && <span className="group-pill-badge"><Users size={12} /> Group</span>}
               </div>
-              <p style={{ fontSize: '0.75rem', color: isTyping ? 'var(--accent)' : 'var(--text-muted)', margin: 0 }}>
+              <p style={{ fontSize: '0.75rem', color: isTyping ? 'var(--accent)' : 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {isGroup
                   ? `${activeChat.members?.length || 0} members • Click for info`
                   : isTyping
@@ -440,7 +441,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.4rem' }}>
+          <div className="chat-header-actions" style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
             <button
               onClick={() => {
                 setIsMultiSelectMode(!isMultiSelectMode);
