@@ -33,18 +33,37 @@ export default function App() {
   const [toasts, setToasts] = useState([]);
 
   const activeChatRef = useRef(activeChat);
-  activeChatRef.current = activeChat;
-
-  // Trigger entrance animation when user logs in
   useEffect(() => {
-    if (user && !userLoggedInRef.current) {
-      userLoggedInRef.current = true;
-      setShowEntrance(true);
-    } else if (!user) {
-      userLoggedInRef.current = false;
-      setShowEntrance(false);
+    activeChatRef.current = activeChat;
+  }, [activeChat]);
+
+  // Handle Browser Back Button & ESC Key for WhatsApp-style navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveChat(null);
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && activeChatRef.current) {
+        setActiveChat(null);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  const handleSelectActiveChat = (chat) => {
+    setActiveChat(chat);
+    if (chat) {
+      window.history.pushState({ chatOpen: true }, '');
     }
-  }, [user]);
+  };
 
   const pendingIceCandidatesRef = useRef([]);
 
@@ -146,9 +165,8 @@ export default function App() {
   }
 
   const handleOpenFullDp = (imageUrl, name, username) => {
-    if (imageUrl) {
-      setFullDpData({ imageUrl, name, username });
-    }
+    const validUrl = imageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username || 'pulse'}`;
+    setFullDpData({ imageUrl: validUrl, name, username });
   };
 
   return (
@@ -164,7 +182,7 @@ export default function App() {
       {/* Sidebar */}
       <Sidebar
         activeChat={activeChat}
-        setActiveChat={setActiveChat}
+        setActiveChat={handleSelectActiveChat}
         openProfileModal={() => setShowProfile(true)}
         openSettingsModal={() => setShowSettings(true)}
         onOpenFullDp={handleOpenFullDp}
@@ -190,7 +208,12 @@ export default function App() {
       )}
 
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsModal
+          onClose={() => setShowSettings(false)}
+          openProfileModal={() => { setShowSettings(false); setShowProfile(true); }}
+        />
+      )}
 
       {/* Full Screen DP Lightbox Modal */}
       {fullDpData && (

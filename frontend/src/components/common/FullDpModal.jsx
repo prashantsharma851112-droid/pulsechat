@@ -1,8 +1,15 @@
-import React from 'react';
-import { X, ZoomIn } from 'lucide-react';
+import React, { useState } from 'react';
+import { X } from 'lucide-react';
 
 export default function FullDpModal({ imageUrl, name, username, onClose }) {
-  if (!imageUrl) return null;
+  const defaultFallback = `https://api.dicebear.com/7.x/avataaars/svg?seed=${username || 'pulse'}`;
+  const [imgSrc, setImgSrc] = useState(imageUrl || defaultFallback);
+  const [imgLoading, setImgLoading] = useState(true);
+
+  React.useEffect(() => {
+    setImgSrc(imageUrl || defaultFallback);
+    setImgLoading(true);
+  }, [imageUrl, username]);
 
   return (
     <div
@@ -10,9 +17,9 @@ export default function FullDpModal({ imageUrl, name, username, onClose }) {
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.88)',
-        backdropFilter: 'blur(12px)',
-        zIndex: 10000,
+        backgroundColor: 'rgba(0, 0, 0, 0.92)',
+        backdropFilter: 'blur(16px)',
+        zIndex: 20000,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -33,12 +40,12 @@ export default function FullDpModal({ imageUrl, name, username, onClose }) {
           alignItems: 'center',
           justifyContent: 'space-between',
           color: '#fff',
-          zIndex: 10001
+          zIndex: 20001
         }}
       >
         <div>
-          {name && <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>{name}</h4>}
-          {username && <p style={{ margin: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)' }}>@{username}</p>}
+          {name && <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>{name}</h4>}
+          {username && <p style={{ margin: '2px 0 0 0', fontSize: '0.82rem', color: 'rgba(255,255,255,0.7)' }}>@{username}</p>}
         </div>
         <button
           onClick={onClose}
@@ -46,19 +53,19 @@ export default function FullDpModal({ imageUrl, name, username, onClose }) {
             background: 'rgba(255, 255, 255, 0.2)',
             border: 'none',
             color: '#fff',
-            width: '40px',
-            height: '40px',
+            width: '42px',
+            height: '42px',
             borderRadius: '50%',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            backdropFilter: 'blur(4px)',
+            backdropFilter: 'blur(6px)',
             transition: 'background 0.2s ease'
           }}
           title="Close Full Screen"
         >
-          <X size={22} />
+          <X size={24} />
         </button>
       </div>
 
@@ -74,16 +81,34 @@ export default function FullDpModal({ imageUrl, name, username, onClose }) {
           justifyContent: 'center'
         }}
       >
+        {imgLoading && (
+          <div style={{ position: 'absolute', color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem' }}>
+            Loading DP...
+          </div>
+        )}
         <img
-          src={imageUrl}
+          src={imgSrc}
           alt={name || 'Profile Picture'}
+          onLoad={() => setImgLoading(false)}
+          onError={() => {
+            if (imgSrc !== defaultFallback) {
+              setImgSrc(defaultFallback);
+            }
+            setImgLoading(false);
+          }}
           style={{
-            maxWidth: '100%',
-            maxHeight: '80vh',
-            borderRadius: '20px',
+            width: 'auto',
+            height: 'auto',
+            minWidth: '260px',
+            minHeight: '260px',
+            maxWidth: '85vw',
+            maxHeight: '75vh',
+            borderRadius: '24px',
             objectFit: 'contain',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)',
-            border: '2px solid rgba(255, 255, 255, 0.15)'
+            boxShadow: '0 25px 70px rgba(0, 0, 0, 0.8)',
+            border: '2px solid rgba(255, 255, 255, 0.2)',
+            opacity: imgLoading ? 0 : 1,
+            transition: 'opacity 0.25s ease'
           }}
         />
       </div>

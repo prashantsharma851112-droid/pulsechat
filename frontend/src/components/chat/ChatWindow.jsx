@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -27,6 +27,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
   const [groupMembersMap, setGroupMembersMap] = useState({});
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Multi-Select & Clear Chat states
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [selectedMsgIds, setSelectedMsgIds] = useState([]);
+  const [clearedBackup, setClearedBackup] = useState([]);
+  const [clearedUndoSecs, setClearedUndoSecs] = useState(0);
+  const [multiDeleteBackupIds, setMultiDeleteBackupIds] = useState([]);
+  const [multiDeleteUndoSecs, setMultiDeleteUndoSecs] = useState(0);
 
   // Cooldown timer state (10s delayed send option)
   const [cooldownSecs, setCooldownSecs] = useState(0);
@@ -105,12 +113,44 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
       setMessages(prev => prev.map(m => m.id === restoredMsg.id ? restoredMsg : m));
     };
 
+    const handleChatCleared = ({ chatId: targetChatId }) => {
+      if (targetChatId === chatId) setMessages([]);
+    };
+
+    const handleChatRestored = ({ chatId: targetChatId, messages: restoredMsgs }) => {
+      if (targetChatId === chatId && Array.isArray(restoredMsgs)) {
+        setMessages(restoredMsgs);
+      }
+    };
+
+    const handleMultipleDeleted = ({ messageIds: targetIds, chatId: targetChatId }) => {
+      if (targetChatId === chatId) {
+        setMessages(prev => prev.map(m => targetIds.includes(m.id) ? { ...m, type: 'deleted', content: 'This message was deleted' } : m));
+      }
+    };
+
+    const handleMultipleRestored = ({ messageIds: targetIds, chatId: targetChatId }) => {
+      if (targetChatId === chatId) {
+        fetch(`${BACKEND_URL}/api/messages/${chatId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (Array.isArray(data)) setMessages(data);
+          });
+      }
+    };
+
     socket.on('new_message', handleNewMessage);
     socket.on('poll_updated', handlePollUpdate);
     socket.on('message_deleted', handleMessageDeleted);
     socket.on('message_read_update', handleReadUpdate);
     socket.on('reaction_updated', handleReactionUpdated);
     socket.on('message_restored', handleMessageRestored);
+    socket.on('chat_cleared', handleChatCleared);
+    socket.on('chat_restored', handleChatRestored);
+    socket.on('multiple_messages_deleted', handleMultipleDeleted);
+    socket.on('multiple_messages_restored', handleMultipleRestored);
 
     return () => {
       socket.off('new_message', handleNewMessage);
@@ -119,8 +159,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
       socket.off('message_read_update', handleReadUpdate);
       socket.off('reaction_updated', handleReactionUpdated);
       socket.off('message_restored', handleMessageRestored);
+      socket.off('chat_cleared', handleChatCleared);
+      socket.off('chat_restored', handleChatRestored);
+      socket.off('multiple_messages_deleted', handleMultipleDeleted);
+      socket.off('multiple_messages_restored', handleMultipleRestored);
     };
-  }, [socket, chatId, user.id]);
+  }, [socket, chatId, user.id, token]);
 
   const [undoMessageId, setUndoMessageId] = useState(null);
 
@@ -142,23 +186,81 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Cooldown Send Timer
+  // Clear Chat Undo Timer
   useEffect(() => {
     let timer;
-    if (cooldownSecs > 0) {
+    if (clearedUndoSecs > 0) {
       timer = setInterval(() => {
-        setCooldownSecs(prev => {
-          if (prev <= 1) {
-            dispatchMessage(cooldownMsg);
-            setCooldownMsg(null);
-            return 0;
-          }
-          return prev - 1;
-        });
+        setClearedUndoSecs(prev => (prev <= 1 ? 0 : prev - 1));
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [cooldownSecs, cooldownMsg]);
+  }, [clearedUndoSecs]);
+
+  // Multi-Delete Undo Timer
+  useEffect(() => {
+    let timer;
+    if (multiDeleteUndoSecs > 0) {
+      timer = setInterval(() => {
+        setMultiDeleteUndoSecs(prev => (prev <= 1 ? 0 : prev - 1));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [multiDeleteUndoSecs]);
+
+  // Clear Entire Current Chat
+  const handleClearCurrentChat = () => {
+    if (!messages || messages.length === 0) return;
+    if (!window.confirm(`Clear all messages in "${activeChat.displayName}"?`)) return;
+
+    const backup = [...messages];
+    setClearedBackup(backup);
+    setClearedUndoSecs(8);
+
+    if (socket) {
+      socket.emit('clear_chat', { chatId });
+    }
+    setMessages([]);
+  };
+
+  const handleUndoClearChat = () => {
+    if (clearedBackup.length > 0 && socket) {
+      socket.emit('restore_chat_messages', { chatId, messages: clearedBackup });
+      setMessages(clearedBackup);
+      setClearedBackup([]);
+      setClearedUndoSecs(0);
+    }
+  };
+
+  // Multi-Select Message Operations
+  const handleToggleSelectMsg = (msgId) => {
+    setSelectedMsgIds(prev =>
+      prev.includes(msgId) ? prev.filter(id => id !== msgId) : [...prev, msgId]
+    );
+  };
+
+  const handleDeleteSelectedMessages = () => {
+    if (selectedMsgIds.length === 0) return;
+
+    const idsToDelete = [...selectedMsgIds];
+    setMultiDeleteBackupIds(idsToDelete);
+    setMultiDeleteUndoSecs(8);
+
+    if (socket) {
+      socket.emit('delete_multiple_messages', { messageIds: idsToDelete, chatId });
+    }
+    setMessages(prev => prev.map(m => idsToDelete.includes(m.id) ? { ...m, type: 'deleted', content: 'This message was deleted' } : m));
+    setSelectedMsgIds([]);
+    setIsMultiSelectMode(false);
+  };
+
+  const handleUndoMultiDelete = () => {
+    if (multiDeleteBackupIds.length > 0 && socket) {
+      socket.emit('restore_multiple_messages', { messageIds: multiDeleteBackupIds, chatId });
+      setMultiDeleteBackupIds([]);
+      setMultiDeleteUndoSecs(0);
+    }
+  };
 
   const dispatchMessage = (msgContent) => {
     if (!msgContent) return;
@@ -304,7 +406,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             {onBack && (
-              <button className="mobile-back-btn icon-btn-ghost" onClick={onBack} title="Back to Chats">
+              <button className="chat-back-btn icon-btn-ghost" onClick={onBack} title="Back to Home / Chats">
                 <ArrowLeft size={20} />
               </button>
             )}
@@ -339,6 +441,25 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
           </div>
 
           <div style={{ display: 'flex', gap: '0.4rem' }}>
+            <button
+              onClick={() => {
+                setIsMultiSelectMode(!isMultiSelectMode);
+                setSelectedMsgIds([]);
+              }}
+              className={`icon-btn-ghost ${isMultiSelectMode ? 'active-mic' : ''}`}
+              title={isMultiSelectMode ? 'Cancel Select Mode' : 'Select Messages to Delete'}
+              style={{ color: isMultiSelectMode ? '#fff' : 'var(--accent)' }}
+            >
+              <CheckSquare size={18} />
+            </button>
+            <button
+              onClick={handleClearCurrentChat}
+              className="icon-btn-ghost"
+              title={`Clear Chat for ${activeChat.displayName}`}
+              style={{ color: '#ef4444' }}
+            >
+              <Trash2 size={18} />
+            </button>
             <button onClick={() => setShowWhiteboard(true)} className="icon-btn-ghost" title="Shared Whiteboard Canvas"><Paintbrush size={18} /></button>
             <button onClick={() => isGroup ? setShowGroupProfileModal(true) : onStartCall(false)} className="icon-btn-ghost" title={isGroup ? 'Call Group Member' : 'Voice Call'}><Phone size={18} /></button>
             <button onClick={() => isGroup ? setShowGroupProfileModal(true) : onStartCall(true)} className="icon-btn-ghost" title={isGroup ? 'Video Call Group Member' : 'Video Call'}><Video size={18} /></button>
@@ -355,6 +476,32 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
         </div>
       </div>
 
+        {/* Multi-Select Messages Action Bar */}
+        {isMultiSelectMode && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: 'rgba(99, 102, 241, 0.15)', borderTop: '1px solid var(--accent)', fontSize: '0.85rem' }}>
+            <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+              Select Messages ({selectedMsgIds.length} selected)
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                className="btn-secondary"
+                onClick={() => { setIsMultiSelectMode(false); setSelectedMsgIds([]); }}
+                style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleDeleteSelectedMessages}
+                disabled={selectedMsgIds.length === 0}
+                style={{ padding: '4px 12px', fontSize: '0.78rem', background: selectedMsgIds.length > 0 ? '#ef4444' : 'var(--bg-card)' }}
+              >
+                Delete Selected ({selectedMsgIds.length})
+              </button>
+            </div>
+          </div>
+        )}
+
       {/* Message Stream */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {messages.map((msg) => {
@@ -368,13 +515,64 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
               senderName={senderObj?.displayName || senderObj?.username}
               onDeleteLocal={handleDeleteLocalMessage}
               onDeleteTrigger={handleTriggerUndoToast}
+              isMultiSelectMode={isMultiSelectMode}
+              isSelected={selectedMsgIds.includes(msg.id)}
+              onToggleSelect={handleToggleSelectMsg}
             />
           );
         })}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Undo Delete Banner */}
+      {/* Clear Chat Undo Banner */}
+      {clearedUndoSecs > 0 && (
+        <div className="cooldown-banner" style={{ background: 'rgba(239, 68, 68, 0.92)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', borderRadius: '12px', margin: '0 1rem 0.5rem 1rem', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+          <span style={{ fontSize: '0.88rem', fontWeight: 500 }}>
+            🧹 Chat cleared for {activeChat.displayName} ({clearedUndoSecs}s)
+          </span>
+          <button
+            onClick={handleUndoClearChat}
+            style={{
+              background: '#fff',
+              color: '#ef4444',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '4px 14px',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            ↩ Undo
+          </button>
+        </div>
+      )}
+
+      {/* Multi-Select Delete Undo Banner */}
+      {multiDeleteUndoSecs > 0 && (
+        <div className="cooldown-banner" style={{ background: 'rgba(239, 68, 68, 0.92)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', borderRadius: '12px', margin: '0 1rem 0.5rem 1rem', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+          <span style={{ fontSize: '0.88rem', fontWeight: 500 }}>
+            🗑️ {multiDeleteBackupIds.length} messages deleted ({multiDeleteUndoSecs}s)
+          </span>
+          <button
+            onClick={handleUndoMultiDelete}
+            style={{
+              background: '#fff',
+              color: '#ef4444',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '4px 14px',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            ↩ Undo
+          </button>
+        </div>
+      )}
+
+      {/* Single Delete Undo Banner */}
       {undoMessageId && (
         <div className="cooldown-banner" style={{ background: 'rgba(99, 102, 241, 0.95)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', borderRadius: '12px', margin: '0 1rem 0.5rem 1rem', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
           <span style={{ fontSize: '0.88rem', fontWeight: 500 }}>
@@ -390,8 +588,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onOpenFull
               padding: '4px 14px',
               fontSize: '0.82rem',
               fontWeight: 700,
-              cursor: 'pointer',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.15)'
+              cursor: 'pointer'
             }}
           >
             ↩ Undo

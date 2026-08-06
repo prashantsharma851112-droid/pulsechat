@@ -3,6 +3,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
+import SettingsModal from '../profile/SettingsModal';
 import { BACKEND_URL } from '../../utils/config';
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
@@ -18,6 +19,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   // Next-Gen Feature States
   const [silentMode, setSilentMode] = useState(false);
   const [showPanicModal, setShowPanicModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const loadRecentChats = useCallback(() => {
     fetch(`${BACKEND_URL}/api/users/recent`, {
@@ -117,10 +119,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   return (
     <div className={`sidebar-container ${activeChat ? 'mobile-hidden' : ''}`}>
       {/* User Profile Header */}
-      <div className="sidebar-header">
-        <div className="user-profile-badge" onClick={openProfileModal}>
-          <div style={{ position: 'relative' }}>
-            <img src={user?.avatar} alt="Profile" className="user-avatar" />
+      <div className="sidebar-header" style={{ padding: '0.85rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+        <div
+          className="user-profile-badge"
+          onClick={openProfileModal}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0, cursor: 'pointer' }}
+          title="Click to view & edit profile"
+        >
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <img src={user?.avatar} alt="Profile" className="user-avatar" style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)' }} />
             {user?.isEmailVerified && (
               <CheckCircle2
                 size={14}
@@ -129,36 +136,24 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               />
             )}
           </div>
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 600, margin: 0, whiteSpace: 'nowrap' }}>{user?.displayName}</h4>
-            </div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>@{user?.username}</p>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)' }}>
+              {user?.displayName}
+            </h4>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              @{user?.username}
+            </p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.2rem' }}>
-          <button
-            onClick={() => setSilentMode(!silentMode)}
-            title={silentMode ? 'Selective Silent Mode Active (Incognito Online)' : 'Selective Silent Mode (Hide Online Status)'}
-            className="icon-btn-ghost"
-            style={{ color: silentMode ? '#f59e0b' : 'var(--text-muted)' }}
-          >
-            <EyeOff size={18} />
-          </button>
-          <button
-            onClick={() => setShowPanicModal(true)}
-            title="Panic Wipe (Clear Sensitive Chats)"
-            className="icon-btn-ghost"
-            style={{ color: '#ef4444' }}
-          >
-            <ShieldAlert size={18} />
-          </button>
-          <button onClick={() => setShowCreateGroupModal(true)} title="New Group" className="icon-btn-ghost"><Plus size={18} /></button>
-          <button onClick={openProfileModal} title="Edit Profile" className="icon-btn-ghost"><User size={18} /></button>
-          <button onClick={openSettingsModal} title="Settings" className="icon-btn-ghost"><Settings size={18} /></button>
-          <button onClick={logout} title="Logout" className="icon-btn-ghost" style={{ color: '#ef4444' }}><LogOut size={18} /></button>
-        </div>
+        <button
+          onClick={() => setShowSettingsModal(true)}
+          title="App Settings & Options"
+          className="icon-btn-ghost"
+          style={{ flexShrink: 0, background: 'var(--bg-card)', borderRadius: '12px', padding: '8px' }}
+        >
+          <Settings size={20} color="var(--text-main)" />
+        </button>
       </div>
 
       {/* Tabs: Chats vs Groups */}
@@ -300,6 +295,17 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             loadGroups();
             handleSelectGroup(newGroup);
           }}
+        />
+      )}
+
+      {showSettingsModal && (
+        <SettingsModal
+          onClose={() => setShowSettingsModal(false)}
+          openProfileModal={openProfileModal}
+          openCreateGroupModal={() => setShowCreateGroupModal(true)}
+          silentMode={silentMode}
+          setSilentMode={setSilentMode}
+          openPanicModal={() => setShowPanicModal(true)}
         />
       )}
 

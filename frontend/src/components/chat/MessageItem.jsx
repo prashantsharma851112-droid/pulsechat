@@ -5,7 +5,17 @@ import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, Trash2, GitBra
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 
-export default function MessageItem({ message, isMine, chatId, senderName, onDeleteLocal, onDeleteTrigger }) {
+export default function MessageItem({
+  message,
+  isMine,
+  chatId,
+  senderName,
+  onDeleteLocal,
+  onDeleteTrigger,
+  isMultiSelectMode,
+  isSelected,
+  onToggleSelect
+}) {
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -63,7 +73,7 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
   };
 
   const handleReact = (emoji) => {
-    if (socket) {
+    if (socket && currentUser?.id) {
       socket.emit('add_reaction', { messageId: message.id, chatId, emoji, userId: currentUser.id });
     }
     setShowContextMenu(false);
@@ -122,7 +132,38 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
   }
 
   return (
-    <div style={{ alignSelf: isMine ? 'flex-end' : 'flex-start', maxWidth: '78%', minWidth: '160px', position: 'relative' }}>
+    <div
+      onClick={isMultiSelectMode ? () => onToggleSelect && onToggleSelect(message.id) : undefined}
+      style={{
+        alignSelf: isMine ? 'flex-end' : 'flex-start',
+        maxWidth: '78%',
+        minWidth: '160px',
+        position: 'relative',
+        cursor: isMultiSelectMode ? 'pointer' : 'default'
+      }}
+    >
+      {/* Selection Checkbox indicator when in Multi-Select Mode */}
+      {isMultiSelectMode && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          [isMine ? 'left' : 'right']: '-34px',
+          width: '22px',
+          height: '22px',
+          borderRadius: '6px',
+          border: isSelected ? 'none' : '2px solid var(--text-muted)',
+          background: isSelected ? 'var(--accent)' : 'rgba(0,0,0,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'all 0.15s ease',
+          zIndex: 10
+        }}>
+          {isSelected && <Check size={14} color="#fff" className="check-pop-icon" />}
+        </div>
+      )}
+
       {/* Group Chat Sender Name */}
       {!isMine && message.isGroup && (
         <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent)', marginBottom: '3px', marginLeft: '6px' }}>
@@ -131,13 +172,20 @@ export default function MessageItem({ message, isMine, chatId, senderName, onDel
       )}
 
       <div
-        onContextMenu={(e) => { e.preventDefault(); setShowContextMenu(!showContextMenu); }}
+        onContextMenu={(e) => {
+          if (!isMultiSelectMode) {
+            e.preventDefault();
+            setShowContextMenu(!showContextMenu);
+          }
+        }}
         style={{
-          background: isMine ? 'var(--bubble-sent)' : 'var(--bubble-received)',
+          background: isSelected ? 'rgba(99, 102, 241, 0.25)' : (isMine ? 'var(--bubble-sent)' : 'var(--bubble-received)'),
           color: 'var(--text-main)',
           padding: '0.75rem 1rem',
           borderRadius: isMine ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.08)'
+          boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+          border: isSelected ? '1.5px solid var(--accent)' : '1px solid transparent',
+          transition: 'all 0.15s ease'
         }}
       >
         {/* Voice Note Message */}
