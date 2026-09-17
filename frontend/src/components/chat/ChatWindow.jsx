@@ -488,6 +488,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
           <div className="chat-header-actions" style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
             <button
+              onClick={() => setShowWhiteboard(true)}
+              className="icon-btn-ghost"
+              title="Shared Whiteboard Canvas"
+              style={{ width: '38px', height: '38px', borderRadius: '50%' }}
+            >
+              <Paintbrush size={19} color="var(--accent)" />
+            </button>
+            <button
               onClick={() => isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, false)) : onStartCall(false)}
               className="icon-btn-ghost"
               title={isGroup ? 'Start Group Voice Call' : 'Voice Call'}
@@ -575,24 +583,49 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
         )}
 
-      {/* Message Stream */}
+      {/* Message Stream with WhatsApp-Style Date Dividers */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        {messages.map((msg) => {
+        {messages.map((msg, index) => {
           const senderObj = groupMembersMap[msg.senderId];
+          const prevMsg = index > 0 ? messages[index - 1] : null;
+          const showDateHeader = index === 0 || isDifferentDay(prevMsg?.timestamp, msg.timestamp);
+          const dateLabel = formatMessageDateHeader(msg.timestamp);
+
           return (
-            <MessageItem
-              key={msg.id}
-              message={msg}
-              isMine={msg.senderId === user.id}
-              chatId={chatId}
-              senderName={senderObj?.displayName || senderObj?.username}
-              onDeleteLocal={handleDeleteLocalMessage}
-              onDeleteTrigger={handleTriggerUndoToast}
-              isMultiSelectMode={isMultiSelectMode}
-              isSelected={selectedMsgIds.includes(msg.id)}
-              onToggleSelect={handleToggleSelectMsg}
-              onJoinGroupCall={(isVideo) => onStartGroupCall && onStartGroupCall(activeChat, isVideo)}
-            />
+            <React.Fragment key={msg.id}>
+              {showDateHeader && (
+                <div style={{ display: 'flex', justifyContent: 'center', margin: '0.5rem 0' }}>
+                  <div
+                    style={{
+                      background: 'var(--bg-card)',
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                      fontSize: '0.74rem',
+                      fontWeight: 600,
+                      padding: '4px 12px',
+                      borderRadius: '10px',
+                      boxShadow: '0 2px 5px rgba(0,0,0,0.12)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em'
+                    }}
+                  >
+                    {dateLabel}
+                  </div>
+                </div>
+              )}
+              <MessageItem
+                message={msg}
+                isMine={msg.senderId === user.id}
+                chatId={chatId}
+                senderName={senderObj?.displayName || senderObj?.username}
+                onDeleteLocal={handleDeleteLocalMessage}
+                onDeleteTrigger={handleTriggerUndoToast}
+                isMultiSelectMode={isMultiSelectMode}
+                isSelected={selectedMsgIds.includes(msg.id)}
+                onToggleSelect={handleToggleSelectMsg}
+                onJoinGroupCall={(isVideo) => onStartGroupCall && onStartGroupCall(activeChat, isVideo)}
+              />
+            </React.Fragment>
           );
         })}
         <div ref={messagesEndRef} />
