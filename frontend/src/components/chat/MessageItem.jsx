@@ -215,7 +215,7 @@ export default function MessageItem({
 
         {/* Text Message */}
         {message.type === 'text' && (
-          <p style={{ fontSize: '0.92rem', wordBreak: 'break-word', margin: 0, lineHeight: 1.4 }}>{message.content}</p>
+          <p style={{ fontSize: '0.98rem', wordBreak: 'break-word', margin: 0, lineHeight: 1.45 }}>{message.content}</p>
         )}
 
         {/* View Once Media Message */}

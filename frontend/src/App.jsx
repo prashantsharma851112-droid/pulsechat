@@ -41,6 +41,31 @@ export default function App() {
     activeChatRef.current = activeChat;
   }, [activeChat]);
 
+  // Responsive Mobile Detection (screen width, user agent, touch points)
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const isMobileWidth = window.innerWidth <= 1024;
+    const isMobileAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    return isMobileWidth || (isMobileAgent && isTouch);
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      const isMobileWidth = window.innerWidth <= 1024;
+      const isMobileAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+      setIsMobile(isMobileWidth || (isMobileAgent && isTouch));
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
+
   // Handle Browser Back Button & ESC Key for WhatsApp-style navigation
   useEffect(() => {
     const handlePopState = () => {
@@ -206,7 +231,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100dvh', width: '100dvw', overflow: 'hidden', position: 'relative' }}>
+    <div className={`app-root-container ${isMobile ? 'is-mobile' : 'is-desktop'}`} style={{ display: 'flex', height: '100dvh', width: '100dvw', overflow: 'hidden', position: 'relative' }}>
       {/* Master Post-Login Entrance Animation */}
       {showEntrance && (
         <EntranceAnimation
@@ -215,37 +240,68 @@ export default function App() {
         />
       )}
 
-      {/* Sidebar */}
-      <Sidebar
-        activeChat={activeChat}
-        setActiveChat={handleSelectActiveChat}
-        openProfileModal={() => setShowProfile(true)}
-        openSettingsModal={() => setShowSettings(true)}
-        onOpenFullDp={handleOpenFullDp}
-      />
-
-      {/* Main Chat Area */}
-      {activeChat ? (
-        <ChatWindow
-          activeChat={activeChat}
-          onBack={() => setActiveChat(null)}
-          onStartCall={(isVideo, targetMember) => setActiveCall({
-            targetUser: targetMember || activeChat,
-            isVideo,
-            isCaller: true,
-            incomingSignal: null
-          })}
-          onStartGroupCall={(group, isVideo) => setActiveGroupCall({
-            group,
-            isVideo,
-            isCaller: true
-          })}
-          onOpenFullDp={handleOpenFullDp}
-        />
+      {/* WHATSAPP-STYLE RESPONSIVE NAVIGATION: Mobile shows ONLY 1 screen at a time, Desktop shows split view */}
+      {isMobile ? (
+        activeChat ? (
+          <ChatWindow
+            activeChat={activeChat}
+            onBack={() => setActiveChat(null)}
+            onStartCall={(isVideo, targetMember) => setActiveCall({
+              targetUser: targetMember || activeChat,
+              isVideo,
+              isCaller: true,
+              incomingSignal: null
+            })}
+            onStartGroupCall={(group, isVideo) => setActiveGroupCall({
+              group,
+              isVideo,
+              isCaller: true
+            })}
+            onOpenFullDp={handleOpenFullDp}
+          />
+        ) : (
+          <Sidebar
+            activeChat={activeChat}
+            setActiveChat={handleSelectActiveChat}
+            openProfileModal={() => setShowProfile(true)}
+            openSettingsModal={() => setShowSettings(true)}
+            onOpenFullDp={handleOpenFullDp}
+          />
+        )
       ) : (
-        <div className="empty-chat-placeholder">
-          <PandaHero />
-        </div>
+        /* Desktop Split Screen View */
+        <>
+          <Sidebar
+            activeChat={activeChat}
+            setActiveChat={handleSelectActiveChat}
+            openProfileModal={() => setShowProfile(true)}
+            openSettingsModal={() => setShowSettings(true)}
+            onOpenFullDp={handleOpenFullDp}
+          />
+
+          {activeChat ? (
+            <ChatWindow
+              activeChat={activeChat}
+              onBack={() => setActiveChat(null)}
+              onStartCall={(isVideo, targetMember) => setActiveCall({
+                targetUser: targetMember || activeChat,
+                isVideo,
+                isCaller: true,
+                incomingSignal: null
+              })}
+              onStartGroupCall={(group, isVideo) => setActiveGroupCall({
+                group,
+                isVideo,
+                isCaller: true
+              })}
+              onOpenFullDp={handleOpenFullDp}
+            />
+          ) : (
+            <div className="empty-chat-placeholder">
+              <PandaHero />
+            </div>
+          )}
+        </>
       )}
 
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}

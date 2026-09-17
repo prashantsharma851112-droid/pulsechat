@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -23,6 +23,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [showWhiteboard, setShowWhiteboard] = useState(false);
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   const [showGroupProfileModal, setShowGroupProfileModal] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [pendingMedia, setPendingMedia] = useState(null);
   const [groupMembersMap, setGroupMembersMap] = useState({});
   const messagesEndRef = useRef(null);
@@ -44,6 +45,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const chatId = isGroup ? activeChat.id : [user.id, activeChat.id].sort().join('_');
   const isOnline = !isGroup && onlineUsers.includes(activeChat.id);
   const isTyping = typingMap[chatId] === activeChat.username;
+
+  // Close 3-dots more menu on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (!e.target.closest('.chat-header-more-container')) {
+        setShowMoreMenu(false);
+      }
+    };
+    if (showMoreMenu) {
+      document.addEventListener('click', handleOutsideClick);
+      return () => document.removeEventListener('click', handleOutsideClick);
+    }
+  }, [showMoreMenu]);
 
   // Load message history & group details
   useEffect(() => {
@@ -399,15 +413,44 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   // AI Smart Suggested Replies
   const smartReplies = ["Sounds great! 👍", "I'll check and reply soon.", "Let's call! 📞", "Thanks! 🔥"];
 
+  // WhatsApp-style message date grouping helpers
+  const formatMessageDateHeader = (timestamp) => {
+    if (!timestamp) return 'Today';
+    const msgDate = new Date(timestamp);
+    if (isNaN(msgDate.getTime())) return 'Today';
+
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    if (msgDate.toDateString() === today.toDateString()) return 'Today';
+    if (msgDate.toDateString() === yesterday.toDateString()) return 'Yesterday';
+
+    const isCurrentYear = msgDate.getFullYear() === today.getFullYear();
+    return msgDate.toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: isCurrentYear ? undefined : 'numeric'
+    });
+  };
+
+  const isDifferentDay = (ts1, ts2) => {
+    if (!ts1 || !ts2) return true;
+    const d1 = new Date(ts1);
+    const d2 = new Date(ts2);
+    if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return true;
+    return d1.toDateString() !== d2.toDateString();
+  };
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-chat)', overflow: 'hidden' }}>
       {/* Header Bar */}
       <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flex: 1, minWidth: 0 }}>
             {onBack && (
               <button className="chat-back-btn icon-btn-ghost" onClick={onBack} title="Back to Home / Chats">
-                <ArrowLeft size={20} />
+                <ArrowLeft size={22} />
               </button>
             )}
 
@@ -415,21 +458,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               src={activeChat.avatar}
               alt="Avatar"
               onClick={() => isGroup ? setShowGroupProfileModal(true) : (onOpenFullDp && onOpenFullDp(activeChat.avatar, activeChat.displayName, activeChat.username))}
-              style={{ width: '40px', height: '40px', borderRadius: isGroup ? '12px' : '50%', cursor: 'pointer', objectFit: 'cover' }}
+              style={{ width: '42px', height: '42px', borderRadius: isGroup ? '12px' : '50%', cursor: 'pointer', objectFit: 'cover', flexShrink: 0 }}
               title={isGroup ? 'Click for group details & members' : 'Click to view full screen DP'}
             />
 
             <div
               className="chat-header-title-box"
               onClick={() => isGroup ? setShowGroupProfileModal(true) : setShowUserProfileModal(true)}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
               title={isGroup ? 'Click to view group bio, members & edit info' : 'Click to view profile & bio'}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>{activeChat.displayName}</h3>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)' }}>
+                  {activeChat.displayName}
+                </h3>
                 {isGroup && <span className="group-pill-badge"><Users size={12} /> Group</span>}
               </div>
-              <p style={{ fontSize: '0.75rem', color: isTyping ? 'var(--accent)' : 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: '0.8rem', color: isTyping ? 'var(--accent)' : 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {isGroup
                   ? `${activeChat.members?.length || 0} members • Click for info`
                   : isTyping
@@ -441,29 +486,56 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </div>
           </div>
 
-          <div className="chat-header-actions" style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+          <div className="chat-header-actions" style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
             <button
-              onClick={() => {
-                setIsMultiSelectMode(!isMultiSelectMode);
-                setSelectedMsgIds([]);
-              }}
-              className={`icon-btn-ghost ${isMultiSelectMode ? 'active-mic' : ''}`}
-              title={isMultiSelectMode ? 'Cancel Select Mode' : 'Select Messages to Delete'}
-              style={{ color: isMultiSelectMode ? '#fff' : 'var(--accent)' }}
-            >
-              <CheckSquare size={18} />
-            </button>
-            <button
-              onClick={handleClearCurrentChat}
+              onClick={() => isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, false)) : onStartCall(false)}
               className="icon-btn-ghost"
-              title={`Clear Chat for ${activeChat.displayName}`}
-              style={{ color: '#ef4444' }}
+              title={isGroup ? 'Start Group Voice Call' : 'Voice Call'}
+              style={{ width: '38px', height: '38px', borderRadius: '50%' }}
             >
-              <Trash2 size={18} />
+              <Phone size={19} />
             </button>
-            <button onClick={() => setShowWhiteboard(true)} className="icon-btn-ghost" title="Shared Whiteboard Canvas"><Paintbrush size={18} /></button>
-            <button onClick={() => isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, false)) : onStartCall(false)} className="icon-btn-ghost" title={isGroup ? 'Start Group Voice Call' : 'Voice Call'}><Phone size={18} /></button>
-            <button onClick={() => isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, true)) : onStartCall(true)} className="icon-btn-ghost" title={isGroup ? 'Start Group Video Call' : 'Video Call'}><Video size={18} /></button>
+            <button
+              onClick={() => isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, true)) : onStartCall(true)}
+              className="icon-btn-ghost"
+              title={isGroup ? 'Start Group Video Call' : 'Video Call'}
+              style={{ width: '38px', height: '38px', borderRadius: '50%' }}
+            >
+              <Video size={19} />
+            </button>
+
+            {/* 3-Dots More Options Menu */}
+            <div className="chat-header-more-container" style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowMoreMenu(prev => !prev)}
+                className="icon-btn-ghost"
+                title="More Options"
+                style={{ width: '38px', height: '38px', borderRadius: '50%', background: showMoreMenu ? 'var(--hover-bg)' : 'transparent' }}
+              >
+                <MoreVertical size={20} />
+              </button>
+
+              {showMoreMenu && (
+                <div className="chat-header-dropdown-menu">
+                  <button onClick={() => { setShowMoreMenu(false); setShowWhiteboard(true); }}>
+                    <Paintbrush size={16} color="var(--accent)" />
+                    <span>Whiteboard Canvas</span>
+                  </button>
+                  <button onClick={() => { setShowMoreMenu(false); setIsMultiSelectMode(true); setSelectedMsgIds([]); }}>
+                    <CheckSquare size={16} color="var(--accent)" />
+                    <span>Select Messages</span>
+                  </button>
+                  <button onClick={() => { setShowMoreMenu(false); handleClearCurrentChat(); }} style={{ color: '#ef4444' }}>
+                    <Trash2 size={16} color="#ef4444" />
+                    <span>Clear Chat</span>
+                  </button>
+                  <button onClick={() => { setShowMoreMenu(false); isGroup ? setShowGroupProfileModal(true) : setShowUserProfileModal(true); }}>
+                    <Info size={16} color="var(--text-muted)" />
+                    <span>{isGroup ? 'Group Info' : 'Contact Info'}</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
