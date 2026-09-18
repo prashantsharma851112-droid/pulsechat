@@ -1,7 +1,7 @@
 {
   "id": "com.pulsechat.app",
   "short_name": "PulseChat",
-  "name": "PulseChat - Realtime Chat & Calls",
+  "name": "PulseChat",
   "description": "PulseChat is a next-gen messaging app featuring real-time chat, HD voice & video calls, view-once photos, and collaborative whiteboards.",
   "categories": ["social", "messaging", "communications"],
   "icons": [
