@@ -39,26 +39,33 @@ export function SocketProvider({ children }) {
         setTypingMap(prev => ({ ...prev, [chatId]: null }));
       });
 
-      // This fires for EVERY incoming message, regardless of whether the
-      // relevant chat is currently open. We store it as an object (not an
-      // array) that changes on every message, so components can watch it
-      // with useEffect and react (refresh the sidebar list, show a toast).
+      const triggerPushIfBackground = (msg) => {
+        const isHidden = typeof document !== 'undefined' && (document.visibilityState === 'hidden' || document.hidden);
+        if (isHidden) {
+          const senderTitle = msg.isGroup ? (msg.groupName || 'Group') : (msg.senderName || msg.senderId || 'PulseChat');
+          const body = msg.type === 'text'
+            ? (msg.isGroup ? `${msg.senderName || 'Member'}: ${msg.content}` : (msg.content || 'New message'))
+            : `Sent a ${msg.type}`;
+          showPushNotification(
+            `💬 ${senderTitle}`,
+            body,
+            msg.senderAvatar || '/icon-192.png',
+            `pulsechat-${msg.chatId || msg.senderId}`
+          );
+        }
+      };
+
+      // Fires for every incoming notification
       newSocket.on('message_notification', (msg) => {
         const notification = { ...msg, receivedAt: Date.now() };
         setLastNotification(notification);
+        triggerPushIfBackground(msg);
+      });
 
-        // Push notification show karo agar app background mein hai
-        if (document.visibilityState === 'hidden' || document.hidden) {
-          const senderName = msg.senderName || msg.senderId || 'Someone';
-          const body = msg.type === 'text'
-            ? (msg.content || 'New message')
-            : `Sent a ${msg.type}`;
-          showPushNotification(
-            `💬 ${senderName}`,
-            body,
-            msg.senderAvatar || '/icon-192.png',
-            `pulsechat-${msg.senderId}`
-          );
+      // Also listen to direct new_message in active rooms when app is backgrounded
+      newSocket.on('new_message', (msg) => {
+        if (msg.senderId !== user.id) {
+          triggerPushIfBackground(msg);
         }
       });
 

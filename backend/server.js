@@ -50,6 +50,7 @@ io.on('connection', (socket) => {
   // User comes online
   socket.on('setup', (userId) => {
     socket.userId = userId;
+    socket.join(`user_${userId}`); // Join user's personal private room
     onlineUsers.set(userId, socket.id);
     io.emit('user_status', { userId, status: 'online' });
     io.emit('online_users_list', Array.from(onlineUsers.keys()));
@@ -99,20 +100,39 @@ io.on('connection', (socket) => {
     io.to(chatId).emit('new_message', newMsg);
 
     if (receiverId && !isGroup) {
-      const recipientSocketId = onlineUsers.get(receiverId);
-      if (recipientSocketId) {
-        // Sender ka naam fetch karo notification ke liye
-        try {
-          const User = require('./models/User');
-          const sender = await User.findOne({ id: senderId }).select('displayName username avatar');
-          io.to(recipientSocketId).emit('message_notification', {
+      try {
+        const User = require('./models/User');
+        const sender = await User.findOne({ id: senderId }).select('displayName username avatar');
+        io.to(`user_${receiverId}`).emit('message_notification', {
+          ...newMsg,
+          senderName: sender?.displayName || sender?.username || senderId,
+          senderAvatar: sender?.avatar || null
+        });
+      } catch (e) {
+        io.to(`user_${receiverId}`).emit('message_notification', newMsg);
+      }
+    } else if (isGroup) {
+      try {
+        const Group = require('./models/Group');
+        const User = require('./models/User');
+        const group = await Group.findOne({ id: chatId });
+        const sender = await User.findOne({ id: senderId }).select('displayName username avatar');
+        if (group && group.members) {
+          const notifPayload = {
             ...newMsg,
+            isGroup: true,
+            groupName: group.name,
             senderName: sender?.displayName || sender?.username || senderId,
-            senderAvatar: sender?.avatar || null
+            senderAvatar: group.avatar || sender?.avatar || null
+          };
+          group.members.forEach(memberId => {
+            if (memberId !== senderId) {
+              io.to(`user_${memberId}`).emit('message_notification', notifPayload);
+            }
           });
-        } catch (e) {
-          io.to(recipientSocketId).emit('message_notification', newMsg);
         }
+      } catch (e) {
+        console.error('Group notification error:', e);
       }
     }
   });

@@ -1,7 +1,8 @@
 import React, { useContext } from 'react';
 import { ThemeContext } from '../../context/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, Sparkles } from 'lucide-react';
+import { X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, Sparkles, Bell } from 'lucide-react';
+import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
 
 const THEMES = [
   { id: 'dark', name: '🌙 Dark Mode', color: '#6366f1' },
@@ -100,8 +101,48 @@ export default function SettingsModal({
           {/* Privacy & Modes */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Privacy & Security
+              Notifications & Privacy
             </span>
+
+            {/* Push Notifications Toggle / Test */}
+            <div
+              onClick={async () => {
+                const granted = await requestNotificationPermission();
+                if (granted) {
+                  showPushNotification('PulseChat Notifications Active! 🔔', 'Notifications are enabled and working perfectly outside the app.');
+                } else {
+                  alert('Please allow notification permissions in your browser or phone app settings.');
+                }
+              }}
+              className="user-select-card"
+              style={{
+                width: '100%',
+                background: 'var(--bg-card)',
+                padding: '12px 14px',
+                border: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Bell size={18} color="var(--accent)" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>App Notifications (Push)</div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                    {typeof window !== 'undefined' && window.Notification && Notification.permission === 'granted'
+                      ? 'Enabled (Tap to test)'
+                      : 'Tap to enable background alerts'}
+                  </div>
+                </div>
+              </div>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: typeof window !== 'undefined' && window.Notification && Notification.permission === 'granted' ? '#10b981' : 'var(--accent)' }}>
+                {typeof window !== 'undefined' && window.Notification && Notification.permission === 'granted' ? 'Active ✓' : 'Enable'}
+              </span>
+            </div>
 
             {setSilentMode && (
               <div

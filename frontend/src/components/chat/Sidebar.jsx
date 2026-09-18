@@ -1,10 +1,11 @@
 import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
 import SettingsModal from '../profile/SettingsModal';
 import { BACKEND_URL } from '../../utils/config';
+import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
   const { user, logout, token } = useContext(AuthContext);
@@ -15,6 +16,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [groups, setGroups] = useState([]);
   const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'groups'
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+
+  // Notification Permission State
+  const [notifPermission, setNotifPermission] = useState(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return 'granted';
+  });
 
   // Next-Gen Feature States
   const [silentMode, setSilentMode] = useState(false);
@@ -239,6 +248,41 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         </div>
       </div>
 
+      {/* Enable Notification Banner if permission not granted yet */}
+      {notifPermission === 'default' && (
+        <div style={{
+          margin: '0.4rem 0.75rem',
+          padding: '0.65rem 0.85rem',
+          borderRadius: '12px',
+          background: 'rgba(99, 102, 241, 0.12)',
+          border: '1px solid var(--accent)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+            <Bell size={18} color="var(--accent)" style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-main)', lineHeight: 1.25 }}>
+              Enable notifications for background messages
+            </span>
+          </div>
+          <button
+            onClick={async () => {
+              const granted = await requestNotificationPermission();
+              setNotifPermission(granted ? 'granted' : 'denied');
+              if (granted) {
+                showPushNotification('PulseChat Notifications Active! 🔔', 'You will now receive message notifications outside the app.');
+              }
+            }}
+            className="btn-primary"
+            style={{ padding: '4px 12px', fontSize: '0.78rem', borderRadius: '8px', flexShrink: 0 }}
+          >
+            Allow
+          </button>
+        </div>
+      )}
+
       {/* WhatsApp Chat / Group List Area */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0.4rem', position: 'relative' }}>
         {searchResults.length > 0 ? (
@@ -330,26 +374,19 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
-                      <h4 style={{ fontSize: '1rem', fontWeight: u.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <h4 style={{ fontSize: '1.02rem', fontWeight: u.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {u.displayName}
                       </h4>
-                      {u.lastMessageTime && (
-                        <span style={{ fontSize: '0.75rem', color: u.unreadCount > 0 ? 'var(--accent)' : 'var(--text-muted)', flexShrink: 0 }}>
-                          {u.lastMessageTime}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <p style={{ fontSize: '0.85rem', color: u.unreadCount > 0 ? 'var(--text-main)' : 'var(--text-muted)', fontWeight: u.unreadCount > 0 ? 500 : 400, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {u.lastMessageFromMe ? 'You: ' : ''}{u.lastMessage || `@${u.username}`}
-                      </p>
                       {u.unreadCount > 0 && (
                         <span className="unread-badge" style={{ marginLeft: '6px' }}>
                           {u.unreadCount}
                         </span>
                       )}
                     </div>
+                    <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      @{u.username}
+                    </p>
                   </div>
                 </div>
               ))
