@@ -1,6 +1,6 @@
 import React from 'react';
 
-const EMOJIS = ['😊', '😂', '😍', '🔥', '👍', '❤️', '🙌', '🎉', '😎', '🙏', '💯', '🚀', '✨', '💡', '😴', '🥳'];
+const EMOJIS = ['😊','😘','😂', '😍', '🔥', '👍', '❤️', '🙌', '🎉', '😎', '🙏', '💯', '🚀', '✨', '💡', '😴', '🥳'];
 
 export default function EmojiPicker({ onSelectEmoji, onClose }) {
   return (
