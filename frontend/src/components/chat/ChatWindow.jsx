@@ -123,6 +123,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, pollData } : m));
     };
 
+    const handlePollEdit = ({ messageId, pollData }) => {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, pollData } : m));
+    };
+
     const handleMessageDeleted = ({ messageId }) => {
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, type: 'deleted', content: 'This message was deleted' } : m));
     };
@@ -169,6 +173,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     socket.on('new_message', handleNewMessage);
     socket.on('poll_updated', handlePollUpdate);
+    socket.on('poll_edited', handlePollEdit);
     socket.on('message_deleted', handleMessageDeleted);
     socket.on('message_read_update', handleReadUpdate);
     socket.on('reaction_updated', handleReactionUpdated);
@@ -181,6 +186,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     return () => {
       socket.off('new_message', handleNewMessage);
       socket.off('poll_updated', handlePollUpdate);
+      socket.off('poll_edited', handlePollEdit);
       socket.off('message_deleted', handleMessageDeleted);
       socket.off('message_read_update', handleReadUpdate);
       socket.off('reaction_updated', handleReactionUpdated);

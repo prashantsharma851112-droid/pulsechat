@@ -1,69 +1,61 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2, BarChart2, CheckCircle2 } from 'lucide-react';
 
-export default function CreatePollModal({ onClose, onCreatePoll }) {
-  const [question, setQuestion] = useState('');
-  const [options, setOptions] = useState(['', '']);
-  const [isMultipleChoice, setIsMultipleChoice] = useState(false);
-  const [correctAnswerIndex, setCorrectAnswerIndex] = useState(null);
+export default function EditPollModal({ pollData, onClose, onSave }) {
+  const [question, setQuestion] = useState(pollData.question || '');
+  const [options, setOptions] = useState(
+    pollData.options.map(opt => ({ ...opt }))
+  );
+  const [correctAnswerId, setCorrectAnswerId] = useState(pollData.correctAnswerId || null);
   const [error, setError] = useState('');
 
   const handleOptionChange = (index, value) => {
     const updated = [...options];
-    updated[index] = value;
+    updated[index] = { ...updated[index], text: value };
     setOptions(updated);
   };
 
   const addOption = () => {
     if (options.length < 6) {
-      setOptions([...options, '']);
+      setOptions([...options, { id: 'opt_new_' + Date.now(), text: '', votes: [] }]);
     }
   };
 
   const removeOption = (index) => {
     if (options.length > 2) {
+      const removedOpt = options[index];
       // Agar removed option correct tha toh reset karo
-      if (correctAnswerIndex === index) setCorrectAnswerIndex(null);
-      else if (correctAnswerIndex > index) setCorrectAnswerIndex(prev => prev - 1);
+      if (correctAnswerId === removedOpt.id) {
+        setCorrectAnswerId(null);
+      }
       setOptions(options.filter((_, i) => i !== index));
     }
   };
 
-  const toggleCorrectAnswer = (index) => {
-    setCorrectAnswerIndex(prev => prev === index ? null : index);
+  const toggleCorrectAnswer = (optId) => {
+    setCorrectAnswerId(prev => prev === optId ? null : optId);
   };
 
-  const handleSubmit = (e) => {
+  const handleSave = (e) => {
     e.preventDefault();
     if (!question.trim()) {
       setError('Please enter a poll question.');
       return;
     }
-    const validOptions = options.map(o => o.trim()).filter(Boolean);
+    const validOptions = options.map(o => ({ ...o, text: o.text.trim() })).filter(o => o.text);
     if (validOptions.length < 2) {
       setError('Please provide at least 2 non-empty options.');
       return;
     }
 
-    const builtOptions = validOptions.map((optText, i) => ({
-      id: 'opt_' + i + '_' + Date.now(),
-      text: optText,
-      votes: []
-    }));
-
-    // correctAnswerIndex se actual option id nikalo
-    const correctAnswerId = correctAnswerIndex !== null && builtOptions[correctAnswerIndex]
-      ? builtOptions[correctAnswerIndex].id
-      : null;
-
-    const pollData = {
+    const updatedPollData = {
+      ...pollData,
       question: question.trim(),
-      options: builtOptions,
-      isMultipleChoice,
-      correctAnswerId
+      options: validOptions,
+      correctAnswerId: correctAnswerId || null
     };
 
-    onCreatePoll(pollData);
+    onSave(updatedPollData);
     onClose();
   };
 
@@ -73,14 +65,15 @@ export default function CreatePollModal({ onClose, onCreatePoll }) {
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <BarChart2 size={20} color="var(--accent)" />
-            <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>Create Poll</h3>
+            <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>Edit Poll</h3>
           </div>
           <button className="icon-btn-ghost" onClick={onClose}><X size={20} /></button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <form onSubmit={handleSave} style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {error && <div className="error-banner">{error}</div>}
 
+          {/* Question */}
           <div>
             <label className="form-label">Question</label>
             <input
@@ -93,6 +86,7 @@ export default function CreatePollModal({ onClose, onCreatePoll }) {
             />
           </div>
 
+          {/* Options */}
           <div>
             <label className="form-label" style={{ marginBottom: '4px', display: 'block' }}>
               Options
@@ -102,13 +96,13 @@ export default function CreatePollModal({ onClose, onCreatePoll }) {
             </label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {options.map((opt, i) => {
-                const isCorrect = correctAnswerIndex === i;
+                const isCorrect = correctAnswerId === opt.id;
                 return (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {/* Correct Answer Toggle */}
+                  <div key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {/* Correct Answer Toggle Button */}
                     <button
                       type="button"
-                      onClick={() => toggleCorrectAnswer(i)}
+                      onClick={() => toggleCorrectAnswer(opt.id)}
                       title={isCorrect ? 'Remove correct answer mark' : 'Mark as correct answer'}
                       style={{
                         background: isCorrect ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.05)',
@@ -131,7 +125,7 @@ export default function CreatePollModal({ onClose, onCreatePoll }) {
                       type="text"
                       className="form-input"
                       placeholder={`Option ${i + 1}`}
-                      value={opt}
+                      value={opt.text}
                       onChange={(e) => handleOptionChange(i, e.target.value)}
                       style={{
                         flex: 1,
@@ -173,8 +167,8 @@ export default function CreatePollModal({ onClose, onCreatePoll }) {
             )}
           </div>
 
-          {/* Correct Answer Info Banner */}
-          {correctAnswerIndex !== null && options[correctAnswerIndex]?.trim() && (
+          {/* Correct Answer Info */}
+          {correctAnswerId && (
             <div style={{
               background: 'rgba(16, 185, 129, 0.1)',
               border: '1px solid rgba(16, 185, 129, 0.3)',
@@ -187,22 +181,31 @@ export default function CreatePollModal({ onClose, onCreatePoll }) {
               gap: '6px'
             }}>
               <CheckCircle2 size={14} />
-              Correct answer: <strong>{options[correctAnswerIndex]}</strong>
+              Correct answer marked: <strong>{options.find(o => o.id === correctAnswerId)?.text || ''}</strong>
             </div>
           )}
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.88rem', color: 'var(--text-muted)' }}>
-            <input
-              type="checkbox"
-              checked={isMultipleChoice}
-              onChange={(e) => setIsMultipleChoice(e.target.checked)}
-            />
-            Allow multiple choices
-          </label>
-
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
             <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn-primary">Create & Send</button>
+            <button
+              type="submit"
+              style={{
+                background: 'var(--accent)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '8px 20px',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'opacity 0.15s'
+              }}
+            >
+              Save Changes
+            </button>
           </div>
         </form>
       </div>

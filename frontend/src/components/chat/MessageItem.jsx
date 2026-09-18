@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
-import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft } from 'lucide-react';
+import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
+import EditPollModal from './EditPollModal';
 
 export default function MessageItem({
   message,
@@ -25,6 +26,7 @@ export default function MessageItem({
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [showThread, setShowThread] = useState(false);
   const [showViewOnceModal, setShowViewOnceModal] = useState(false);
+  const [showEditPoll, setShowEditPoll] = useState(false);
   const [viewedByState, setViewedByState] = useState(message.viewedBy || []);
 
   // Swipe-to-reply & Double-tap states
@@ -183,6 +185,16 @@ export default function MessageItem({
         optionId,
         userId: currentUser.id,
         chatId
+      });
+    }
+  };
+
+  const handleEditPoll = (updatedPollData) => {
+    if (socket) {
+      socket.emit('edit_poll', {
+        messageId: message.id,
+        chatId,
+        pollData: updatedPollData
       });
     }
   };
@@ -473,9 +485,39 @@ export default function MessageItem({
         {/* Poll Message */}
         {message.type === 'poll' && pollData && (
           <div style={{ minWidth: '220px', maxWidth: '320px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: '6px' }}>
-              <BarChart2 size={18} color="var(--accent)" />
-              <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: '600' }}>{pollData.question}</h4>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: '8px', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <BarChart2 size={18} color="var(--accent)" />
+                <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: '600' }}>{pollData.question}</h4>
+              </div>
+              {/* Edit button — sirf creator ke liye */}
+              {isMine && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowEditPoll(true); }}
+                  title="Edit Poll"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    background: 'var(--accent)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '4px 10px',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    transition: 'opacity 0.15s ease',
+                    boxShadow: '0 2px 6px rgba(99,102,241,0.35)'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.82'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                >
+                  <Pencil size={11} />
+                  Edit
+                </button>
+              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -483,6 +525,7 @@ export default function MessageItem({
                 const votesCount = opt.votes ? opt.votes.length : 0;
                 const pct = totalVotes > 0 ? Math.round((votesCount / totalVotes) * 100) : 0;
                 const hasVoted = opt.votes && opt.votes.includes(currentUser?.id);
+                const isCorrectAnswer = pollData.correctAnswerId && pollData.correctAnswerId === opt.id;
 
                 return (
                   <div
@@ -492,13 +535,19 @@ export default function MessageItem({
                       position: 'relative',
                       padding: '8px 10px',
                       borderRadius: '8px',
-                      border: hasVoted ? '1.5px solid var(--accent)' : '1px solid rgba(255,255,255,0.2)',
-                      background: 'rgba(0,0,0,0.15)',
+                      border: isCorrectAnswer
+                        ? '1.5px solid #10b981'
+                        : hasVoted
+                          ? '1.5px solid var(--accent)'
+                          : '1px solid rgba(255,255,255,0.2)',
+                      background: isCorrectAnswer ? 'rgba(16, 185, 129, 0.08)' : 'rgba(0,0,0,0.15)',
                       cursor: 'pointer',
                       overflow: 'hidden',
-                      transition: 'all 0.2s ease'
+                      transition: 'all 0.2s ease',
+                      boxShadow: isCorrectAnswer ? '0 0 0 2px rgba(16,185,129,0.12)' : undefined
                     }}
                   >
+                    {/* Progress bar fill */}
                     <div
                       style={{
                         position: 'absolute',
@@ -506,7 +555,9 @@ export default function MessageItem({
                         left: 0,
                         bottom: 0,
                         width: `${pct}%`,
-                        background: 'rgba(99, 102, 241, 0.25)',
+                        background: isCorrectAnswer
+                          ? 'rgba(16, 185, 129, 0.22)'
+                          : 'rgba(99, 102, 241, 0.25)',
                         transition: 'width 0.4s ease',
                         pointerEvents: 'none'
                       }}
@@ -515,11 +566,37 @@ export default function MessageItem({
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem' }}>
                         {hasVoted && <CheckCircle2 size={16} color="var(--accent)" />}
-                        <span>{opt.text}</span>
+                        {isCorrectAnswer && (
+                          <span
+                            title="Correct Answer"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '18px',
+                              height: '18px',
+                              borderRadius: '50%',
+                              background: '#10b981',
+                              flexShrink: 0
+                            }}
+                          >
+                            <Check size={11} color="#fff" strokeWidth={3} />
+                          </span>
+                        )}
+                        <span style={{ color: isCorrectAnswer ? '#10b981' : 'inherit', fontWeight: isCorrectAnswer ? 600 : 400 }}>
+                          {opt.text}
+                        </span>
                       </div>
-                      <span style={{ fontSize: '0.78rem', fontWeight: '600', opacity: 0.9 }}>
-                        {pct}% ({votesCount})
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {isCorrectAnswer && (
+                          <span style={{ fontSize: '0.68rem', color: '#10b981', fontWeight: 700, background: 'rgba(16,185,129,0.15)', borderRadius: '6px', padding: '1px 6px' }}>
+                            ✓ Correct
+                          </span>
+                        )}
+                        <span style={{ fontSize: '0.78rem', fontWeight: '600', opacity: 0.9 }}>
+                          {pct}% ({votesCount})
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -531,6 +608,7 @@ export default function MessageItem({
             </div>
           </div>
         )}
+
 
         {/* Emoji Reactions display bar */}
         {message.reactions && Object.keys(message.reactions).length > 0 && (
@@ -629,6 +707,14 @@ export default function MessageItem({
           message={message}
           onMarkViewed={handleMarkViewed}
           onClose={() => setShowViewOnceModal(false)}
+        />
+      )}
+
+      {showEditPoll && pollData && (
+        <EditPollModal
+          pollData={pollData}
+          onClose={() => setShowEditPoll(false)}
+          onSave={handleEditPoll}
         />
       )}
     </div>

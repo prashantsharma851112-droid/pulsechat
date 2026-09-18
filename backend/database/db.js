@@ -161,6 +161,16 @@ module.exports = {
     return msg;
   },
 
+  updatePollData: async (messageId, updatedPollData) => {
+    const msg = await Message.findOne({ id: messageId });
+    if (!msg || !msg.pollData) return null;
+
+    msg.pollData = updatedPollData;
+    msg.markModified('pollData');
+    await msg.save();
+    return msg;
+  },
+
   // Returns everyone the given user has EVER exchanged a message with,
   // ordered by most recent activity, each with the last message preview
   // and an unread count. This powers the persistent "Chats" list in the

@@ -153,6 +153,14 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Poll Edit Handler (Creator can edit question, options, mark correct answer)
+  socket.on('edit_poll', async ({ messageId, chatId, pollData }) => {
+    const updatedMsg = await db.updatePollData(messageId, pollData);
+    if (updatedMsg) {
+      io.to(chatId).emit('poll_edited', { messageId, pollData: updatedMsg.pollData });
+    }
+  });
+
   // Unsend / Delete Message Handler
   socket.on('delete_message', async ({ messageId, chatId }) => {
     await db.deleteMessage(messageId);
