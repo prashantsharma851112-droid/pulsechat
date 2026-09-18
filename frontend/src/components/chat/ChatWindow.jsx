@@ -328,19 +328,47 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     e?.preventDefault();
     if (!text.trim()) return;
 
-    // Check emotional trigger words for 10s cooldown
-    const isEmotional = /angry|hate|stop|never|shut up|worst|gussa/i.test(text);
+    // Check emotional trigger words for 3s cooldown
+    const isEmotional = /angry|hate|worst|gussa|shut up|furious|annoyed|mad|bakwas|pagal/i.test(text);
 
     if (isEmotional && !forceInstant) {
       setCooldownMsg(text);
-      setCooldownSecs(10);
+      setCooldownSecs(3);
       setText('');
+      socket.emit('typing_stop', { chatId, userId: user.id });
       return;
     }
 
     dispatchMessage(text);
     setText('');
     socket.emit('typing_stop', { chatId, userId: user.id });
+  };
+
+  // Emotional Message Countdown Timer (3s -> auto send)
+  useEffect(() => {
+    let timer;
+    if (cooldownSecs > 0) {
+      timer = setInterval(() => {
+        setCooldownSecs(prev => (prev <= 1 ? 0 : prev - 1));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [cooldownSecs]);
+
+  // When cooldown reaches 0, auto-send message so it doesn't get stuck!
+  useEffect(() => {
+    if (cooldownSecs === 0 && cooldownMsg) {
+      dispatchMessage(cooldownMsg);
+      setCooldownMsg(null);
+    }
+  }, [cooldownSecs, cooldownMsg]);
+
+  const sendCooldownNow = () => {
+    if (cooldownMsg) {
+      dispatchMessage(cooldownMsg);
+      setCooldownMsg(null);
+      setCooldownSecs(0);
+    }
   };
 
   const cancelCooldown = () => {
@@ -451,12 +479,22 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   // Calculate Mood Timeline sentiment for header
   const getMoodTimeline = () => {
-    if (messages.length === 0) return { mood: 'Casual', color: '#6366f1', emoji: '😊' };
-    const recentText = messages.slice(-5).map(m => m.content || '').join(' ').toLowerCase();
-    if (/awesome|love|happy|great|cool|haha|lol/i.test(recentText)) {
+    const allRecentText = [
+      ...messages.slice(-5).map(m => m.content || ''),
+      cooldownMsg || ''
+    ].join(' ').toLowerCase();
+
+    if (!allRecentText.trim()) {
+      return { mood: 'Casual', color: '#6366f1', emoji: '😊' };
+    }
+
+    if (/angry|hate|worst|gussa|shut up|furious|annoyed|mad|bakwas|pagal/i.test(allRecentText)) {
+      return { mood: 'Heated', color: '#ef4444', emoji: '🔥' };
+    }
+    if (/awesome|love|happy|great|cool|haha|lol|congrats|mast|badiya/i.test(allRecentText)) {
       return { mood: 'Joyful', color: '#10b981', emoji: '🎉' };
     }
-    if (/sorry|sad|bad|wrong|sigh/i.test(recentText)) {
+    if (/sorry|sad|bad|wrong|sigh|hurt|cry|dukh|dard/i.test(allRecentText)) {
       return { mood: 'Tense', color: '#f59e0b', emoji: '🟡' };
     }
     return { mood: 'Casual', color: '#6366f1', emoji: '💬' };
@@ -770,14 +808,55 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {/* Cooldown Timer Notification Banner */}
       {cooldownSecs > 0 && (
-        <div className="cooldown-banner">
-          <Clock size={16} color="#f59e0b" />
-          <span style={{ fontSize: '0.85rem' }}>
-            Emotional text detected. Sending in <strong>{cooldownSecs}s</strong>...
-          </span>
-          <button className="btn-secondary" style={{ padding: '2px 8px', fontSize: '0.75rem', color: '#ef4444' }} onClick={cancelCooldown}>
-            Cancel Send
-          </button>
+        <div className="cooldown-banner" style={{
+          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(245, 158, 11, 0.95))',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px 16px',
+          borderRadius: '12px',
+          margin: '0 1rem 0.5rem 1rem',
+          boxShadow: '0 4px 14px rgba(239, 68, 68, 0.35)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Clock size={16} color="#fff" />
+            <span style={{ fontSize: '0.85rem' }}>
+              Emotional message detected. Sending in <strong>{cooldownSecs}s</strong>...
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={sendCooldownNow}
+              style={{
+                background: '#fff',
+                color: '#ef4444',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '3px 10px',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Send Now
+            </button>
+            <button
+              onClick={cancelCooldown}
+              style={{
+                background: 'rgba(0, 0, 0, 0.25)',
+                color: '#fff',
+                border: '1px solid rgba(255, 255, 255, 0.35)',
+                borderRadius: '8px',
+                padding: '3px 10px',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
