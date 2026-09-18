@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -9,6 +9,7 @@ import CreatePollModal from './CreatePollModal';
 import WhiteboardModal from './WhiteboardModal';
 import UserProfileModal from './UserProfileModal';
 import GroupProfileModal from './GroupProfileModal';
+import MediaUploadModal from './MediaUploadModal';
 import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 
@@ -383,29 +384,49 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Size check — 10MB limit to prevent browser crash
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File too large! Please select a file under 10MB.');
+      e.target.value = '';
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
+      const isDoc = !file.type.startsWith('image/') && !file.type.startsWith('video/');
       setPendingMedia({
-        type: file.type,
-        dataUrl: event.target.result
+        type: isDoc ? 'document' : file.type,
+        dataUrl: event.target.result,
+        fileName: file.name,
+        fileSize: (file.size / 1024 < 1024)
+          ? `${(file.size / 1024).toFixed(1)} KB`
+          : `${(file.size / (1024 * 1024)).toFixed(2)} MB`
       });
     };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
-  const handleSendMedia = ({ mediaUrl, type, isViewOnce }) => {
+  const handleSendMedia = ({ mediaUrl, type, isViewOnce, fileName, fileSize }) => {
+    const msgType = type === 'document'
+      ? 'document'
+      : (type?.startsWith('video/') ? 'video' : 'image');
+
     socket.emit('send_message', {
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
       isGroup,
       mediaUrl,
-      type,
-      isViewOnce
+      type: msgType,
+      isViewOnce: msgType === 'document' ? false : isViewOnce,
+      fileName: fileName || null,
+      fileSize: fileSize || null,
+      replyTo
     });
     playSound('sent');
     setPendingMedia(null);
+    setReplyTo(null);
   };
 
   const handleDeleteLocalMessage = (msgId) => {
@@ -824,12 +845,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         <input
           type="file"
           ref={fileInputRef}
-          accept="image/*,video/*"
+          accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
           onChange={handleFileSelect}
           style={{ display: 'none' }}
         />
 
-        <button onClick={() => fileInputRef.current?.click()} className="icon-btn-ghost" title="Send Photo or Video (View Once)"><Paperclip size={20} /></button>
+        <button onClick={() => fileInputRef.current?.click()} className="icon-btn-ghost" title="Send Photo, Video or Document"><Paperclip size={20} /></button>
         <button onClick={() => setShowEmoji(!showEmoji)} className="icon-btn-ghost" title="Add Emoji"><Smile size={20} /></button>
         <button onClick={() => setShowCreatePoll(true)} className="icon-btn-ghost" title="Create Poll"><BarChart2 size={20} /></button>
         <button onClick={() => setShowRecorder(!showRecorder)} className={`icon-btn-ghost ${showRecorder ? 'active-mic' : ''}`} title="Voice Note"><Mic size={20} /></button>
