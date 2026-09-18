@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Plus, Trash2, BarChart2, CheckCircle2 } from 'lucide-react';
+import { X, Plus, Trash2, BarChart2, CheckCircle2, Palette, Sparkles, Check } from 'lucide-react';
+import { POLL_THEMES, getPollTheme } from './pollThemes';
 
 export default function EditPollModal({ pollData, onClose, onSave }) {
   const [question, setQuestion] = useState(pollData.question || '');
@@ -7,7 +8,10 @@ export default function EditPollModal({ pollData, onClose, onSave }) {
     pollData.options.map(opt => ({ ...opt }))
   );
   const [correctAnswerId, setCorrectAnswerId] = useState(pollData.correctAnswerId || null);
+  const [theme, setTheme] = useState(pollData.theme || 'purple');
   const [error, setError] = useState('');
+
+  const currentTheme = getPollTheme(theme);
 
   const handleOptionChange = (index, value) => {
     const updated = [...options];
@@ -52,7 +56,8 @@ export default function EditPollModal({ pollData, onClose, onSave }) {
       ...pollData,
       question: question.trim(),
       options: validOptions,
-      correctAnswerId: correctAnswerId || null
+      correctAnswerId: correctAnswerId || null,
+      theme: theme || 'purple'
     };
 
     onSave(updatedPollData);
@@ -61,17 +66,87 @@ export default function EditPollModal({ pollData, onClose, onSave }) {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card modal-responsive">
+      <div className="modal-card modal-responsive" style={{ borderTop: `4px solid ${currentTheme.primary}`, maxWidth: '460px' }}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <BarChart2 size={20} color="var(--accent)" />
-            <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>Edit Poll</h3>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              background: currentTheme.gradient,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <BarChart2 size={18} color="#fff" />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                Edit Poll
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Customize question, answers & theme</span>
+            </div>
           </div>
           <button className="icon-btn-ghost" onClick={onClose}><X size={20} /></button>
         </div>
 
-        <form onSubmit={handleSave} style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <form onSubmit={handleSave} style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.1rem', maxHeight: '80vh', overflowY: 'auto' }}>
           {error && <div className="error-banner">{error}</div>}
+
+          {/* Color Theme Selector */}
+          <div>
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+              <Palette size={15} color={currentTheme.primary} />
+              <span>Poll Color Theme</span>
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+              {POLL_THEMES.map(t => {
+                const isSelected = theme === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setTheme(t.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '7px 10px',
+                      borderRadius: '10px',
+                      border: isSelected ? `2px solid ${t.primary}` : '1.5px solid rgba(255,255,255,0.1)',
+                      background: isSelected ? t.bgLight : 'rgba(0,0,0,0.2)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      textAlign: 'left'
+                    }}
+                  >
+                    <span style={{
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      background: t.gradient,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      {isSelected && <Check size={11} color="#fff" strokeWidth={3} />}
+                    </span>
+                    <span style={{
+                      fontSize: '0.78rem',
+                      fontWeight: isSelected ? 600 : 400,
+                      color: isSelected ? '#fff' : 'var(--text-muted)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {t.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Question */}
           <div>
@@ -82,18 +157,25 @@ export default function EditPollModal({ pollData, onClose, onSave }) {
               placeholder="Ask something..."
               value={question}
               onChange={(e) => { setQuestion(e.target.value); setError(''); }}
+              style={{
+                border: `1.5px solid ${currentTheme.border}`,
+                background: 'rgba(0,0,0,0.2)'
+              }}
               autoFocus
             />
           </div>
 
           {/* Options */}
           <div>
-            <label className="form-label" style={{ marginBottom: '4px', display: 'block' }}>
-              Options
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '8px' }}>
-                (✓ click to mark correct answer)
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <label className="form-label" style={{ margin: 0 }}>
+                Options
+              </label>
+              <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <CheckCircle2 size={13} color="#10b981" /> Click circle to mark correct answer
               </span>
-            </label>
+            </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {options.map((opt, i) => {
                 const isCorrect = correctAnswerId === opt.id;
@@ -103,22 +185,23 @@ export default function EditPollModal({ pollData, onClose, onSave }) {
                     <button
                       type="button"
                       onClick={() => toggleCorrectAnswer(opt.id)}
-                      title={isCorrect ? 'Remove correct answer mark' : 'Mark as correct answer'}
+                      title={isCorrect ? 'Correct Answer selected (click to unmark)' : 'Click to mark as correct answer'}
                       style={{
-                        background: isCorrect ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.05)',
-                        border: isCorrect ? '1.5px solid #10b981' : '1.5px solid rgba(255,255,255,0.15)',
+                        background: isCorrect ? '#10b981' : 'rgba(255,255,255,0.06)',
+                        border: isCorrect ? '2px solid #10b981' : '1.5px solid rgba(255,255,255,0.2)',
                         borderRadius: '50%',
-                        width: '30px',
-                        height: '30px',
+                        width: '32px',
+                        height: '32px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         cursor: 'pointer',
                         flexShrink: 0,
-                        transition: 'all 0.2s ease'
+                        transition: 'all 0.2s ease',
+                        boxShadow: isCorrect ? '0 0 10px rgba(16,185,129,0.45)' : 'none'
                       }}
                     >
-                      <CheckCircle2 size={16} color={isCorrect ? '#10b981' : 'rgba(255,255,255,0.3)'} />
+                      <CheckCircle2 size={18} color={isCorrect ? '#fff' : 'rgba(255,255,255,0.35)'} />
                     </button>
 
                     <input
@@ -130,13 +213,23 @@ export default function EditPollModal({ pollData, onClose, onSave }) {
                       style={{
                         flex: 1,
                         border: isCorrect ? '1.5px solid #10b981' : undefined,
-                        boxShadow: isCorrect ? '0 0 0 2px rgba(16,185,129,0.12)' : undefined
+                        background: isCorrect ? 'rgba(16,185,129,0.06)' : undefined,
+                        boxShadow: isCorrect ? '0 0 0 2px rgba(16,185,129,0.15)' : undefined
                       }}
                     />
 
                     {isCorrect && (
-                      <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                        ✓ Correct
+                      <span style={{
+                        fontSize: '0.72rem',
+                        color: '#10b981',
+                        fontWeight: 700,
+                        background: 'rgba(16,185,129,0.15)',
+                        border: '1px solid rgba(16,185,129,0.3)',
+                        borderRadius: '6px',
+                        padding: '2px 8px',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        ✓ Correct Answer
                       </span>
                     )}
 
@@ -167,40 +260,57 @@ export default function EditPollModal({ pollData, onClose, onSave }) {
             )}
           </div>
 
-          {/* Correct Answer Info */}
-          {correctAnswerId && (
+          {/* Correct Answer Explanation Banner */}
+          {correctAnswerId ? (
             <div style={{
-              background: 'rgba(16, 185, 129, 0.1)',
+              background: 'rgba(16, 185, 129, 0.12)',
               border: '1px solid rgba(16, 185, 129, 0.3)',
               borderRadius: '10px',
-              padding: '8px 12px',
+              padding: '10px 12px',
               fontSize: '0.8rem',
               color: '#10b981',
               display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
+              alignItems: 'flex-start',
+              gap: '8px'
             }}>
-              <CheckCircle2 size={14} />
-              Correct answer marked: <strong>{options.find(o => o.id === correctAnswerId)?.text || ''}</strong>
+              <Sparkles size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <div>Correct answer: <strong>{options.find(o => o.id === correctAnswerId)?.text || ''}</strong></div>
+                <div style={{ fontSize: '0.73rem', opacity: 0.85, marginTop: '2px', color: 'var(--text-muted)' }}>
+                  🔒 Hidden until users vote! Once voted, correct/wrong feedback is revealed.
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px dashed rgba(255, 255, 255, 0.15)',
+              borderRadius: '10px',
+              padding: '8px 12px',
+              fontSize: '0.78rem',
+              color: 'var(--text-muted)'
+            }}>
+              💡 No correct answer marked (standard opinion poll). Click a circle above if you want to make it a quiz!
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
             <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
             <button
               type="submit"
               style={{
-                background: 'var(--accent)',
+                background: currentTheme.gradient,
                 color: '#fff',
                 border: 'none',
                 borderRadius: '10px',
-                padding: '8px 20px',
+                padding: '9px 22px',
                 fontWeight: 700,
                 fontSize: '0.9rem',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
+                boxShadow: `0 4px 12px ${currentTheme.glow}`,
                 transition: 'opacity 0.15s'
               }}
             >

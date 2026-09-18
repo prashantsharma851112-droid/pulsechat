@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
-import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil } from 'lucide-react';
+import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 import EditPollModal from './EditPollModal';
+import { getPollTheme } from './pollThemes';
 
 export default function MessageItem({
   message,
@@ -483,131 +484,242 @@ export default function MessageItem({
         )}
 
         {/* Poll Message */}
-        {message.type === 'poll' && pollData && (
-          <div style={{ minWidth: '220px', maxWidth: '320px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: '8px', gap: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <BarChart2 size={18} color="var(--accent)" />
-                <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: '600' }}>{pollData.question}</h4>
-              </div>
-              {/* Edit button — sirf creator ke liye */}
-              {isMine && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowEditPoll(true); }}
-                  title="Edit Poll"
-                  style={{
+        {message.type === 'poll' && pollData && (() => {
+          const pollTheme = getPollTheme(pollData.theme || 'purple');
+          const isQuiz = Boolean(pollData.correctAnswerId);
+          const hasCurrentUserVoted = pollData.options.some(opt => opt.votes && opt.votes.includes(currentUser?.id));
+          const myVotedOption = pollData.options.find(opt => opt.votes && opt.votes.includes(currentUser?.id));
+          const isMyVoteCorrect = isQuiz && hasCurrentUserVoted && myVotedOption?.id === pollData.correctAnswerId;
+
+          return (
+            <div style={{ minWidth: '230px', maxWidth: '330px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '10px',
+                borderBottom: `1.5px solid ${pollTheme.border}`,
+                paddingBottom: '8px',
+                gap: '8px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    width: '30px',
+                    height: '30px',
+                    borderRadius: '8px',
+                    background: pollTheme.gradient,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px',
-                    background: 'var(--accent)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '4px 10px',
-                    fontSize: '0.72rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
+                    justifyContent: 'center',
                     flexShrink: 0,
-                    transition: 'opacity 0.15s ease',
-                    boxShadow: '0 2px 6px rgba(99,102,241,0.35)'
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.opacity = '0.82'}
-                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-                >
-                  <Pencil size={11} />
-                  Edit
-                </button>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {pollData.options.map((opt) => {
-                const votesCount = opt.votes ? opt.votes.length : 0;
-                const pct = totalVotes > 0 ? Math.round((votesCount / totalVotes) * 100) : 0;
-                const hasVoted = opt.votes && opt.votes.includes(currentUser?.id);
-                const isCorrectAnswer = pollData.correctAnswerId && pollData.correctAnswerId === opt.id;
-
-                return (
-                  <div
-                    key={opt.id}
-                    onClick={() => handleVotePoll(opt.id)}
-                    style={{
-                      position: 'relative',
-                      padding: '8px 10px',
-                      borderRadius: '8px',
-                      border: isCorrectAnswer
-                        ? '1.5px solid #10b981'
-                        : hasVoted
-                          ? '1.5px solid var(--accent)'
-                          : '1px solid rgba(255,255,255,0.2)',
-                      background: isCorrectAnswer ? 'rgba(16, 185, 129, 0.08)' : 'rgba(0,0,0,0.15)',
-                      cursor: 'pointer',
-                      overflow: 'hidden',
-                      transition: 'all 0.2s ease',
-                      boxShadow: isCorrectAnswer ? '0 0 0 2px rgba(16,185,129,0.12)' : undefined
-                    }}
-                  >
-                    {/* Progress bar fill */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        bottom: 0,
-                        width: `${pct}%`,
-                        background: isCorrectAnswer
-                          ? 'rgba(16, 185, 129, 0.22)'
-                          : 'rgba(99, 102, 241, 0.25)',
-                        transition: 'width 0.4s ease',
-                        pointerEvents: 'none'
-                      }}
-                    />
-
-                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem' }}>
-                        {hasVoted && <CheckCircle2 size={16} color="var(--accent)" />}
-                        {isCorrectAnswer && (
-                          <span
-                            title="Correct Answer"
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              width: '18px',
-                              height: '18px',
-                              borderRadius: '50%',
-                              background: '#10b981',
-                              flexShrink: 0
-                            }}
-                          >
-                            <Check size={11} color="#fff" strokeWidth={3} />
-                          </span>
-                        )}
-                        <span style={{ color: isCorrectAnswer ? '#10b981' : 'inherit', fontWeight: isCorrectAnswer ? 600 : 400 }}>
-                          {opt.text}
-                        </span>
+                    marginTop: '2px',
+                    boxShadow: `0 2px 8px ${pollTheme.glow}`
+                  }}>
+                    <BarChart2 size={16} color="#fff" />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {isQuiz && (
+                      <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '0.68rem',
+                        fontWeight: 700,
+                        color: hasCurrentUserVoted ? (isMyVoteCorrect ? '#10b981' : '#ef4444') : pollTheme.color,
+                        background: hasCurrentUserVoted
+                          ? (isMyVoteCorrect ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)')
+                          : pollTheme.bgLight,
+                        padding: '1px 7px',
+                        borderRadius: '6px',
+                        marginBottom: '3px'
+                      }}>
+                        {hasCurrentUserVoted
+                          ? (isMyVoteCorrect ? '🎯 Quiz: Correct! 🎉' : '🎯 Quiz: Wrong answer ❌')
+                          : '🎯 Quiz Question'}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {isCorrectAnswer && (
-                          <span style={{ fontSize: '0.68rem', color: '#10b981', fontWeight: 700, background: 'rgba(16,185,129,0.15)', borderRadius: '6px', padding: '1px 6px' }}>
-                            ✓ Correct
+                    )}
+                    <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: '600', lineHeight: 1.35, wordBreak: 'break-word' }}>
+                      {pollData.question}
+                    </h4>
+                  </div>
+                </div>
+
+                {/* Edit button — sirf creator ke liye */}
+                {isMine && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowEditPoll(true); }}
+                    title="Edit Poll & Theme"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      background: pollTheme.gradient,
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '4px 10px',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      boxShadow: `0 2px 8px ${pollTheme.glow}`,
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                    onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                  >
+                    <Pencil size={11} />
+                    Edit
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {pollData.options.map((opt) => {
+                  const votesCount = opt.votes ? opt.votes.length : 0;
+                  const pct = totalVotes > 0 ? Math.round((votesCount / totalVotes) * 100) : 0;
+                  const hasVotedThis = Boolean(opt.votes && opt.votes.includes(currentUser?.id));
+                  const isThisCorrect = isQuiz && pollData.correctAnswerId === opt.id;
+
+                  // Quiz styling logic
+                  let borderColor = 'rgba(255,255,255,0.18)';
+                  let bgColor = 'rgba(0,0,0,0.18)';
+                  let barColor = pollTheme.barBg;
+                  let showBar = hasCurrentUserVoted || !isQuiz;
+                  let statusBadge = null;
+                  let leadIcon = null;
+
+                  if (isQuiz) {
+                    if (hasCurrentUserVoted) {
+                      // Result is revealed!
+                      if (hasVotedThis) {
+                        if (isThisCorrect) {
+                          borderColor = '#10b981';
+                          bgColor = 'rgba(16, 185, 129, 0.15)';
+                          barColor = 'rgba(16, 185, 129, 0.35)';
+                          leadIcon = <CheckCircle2 size={16} color="#10b981" />;
+                          statusBadge = (
+                            <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 700, background: 'rgba(16,185,129,0.2)', padding: '2px 7px', borderRadius: '6px' }}>
+                              ✓ Correct!
+                            </span>
+                          );
+                        } else {
+                          borderColor = '#ef4444';
+                          bgColor = 'rgba(239, 68, 68, 0.14)';
+                          barColor = 'rgba(239, 68, 68, 0.3)';
+                          leadIcon = <XCircle size={16} color="#ef4444" />;
+                          statusBadge = (
+                            <span style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 700, background: 'rgba(239,68,68,0.2)', padding: '2px 7px', borderRadius: '6px' }}>
+                              ✗ Wrong
+                            </span>
+                          );
+                        }
+                      } else if (isThisCorrect) {
+                        // User picked wrong or didn't pick this, reveal the true correct answer!
+                        borderColor = 'rgba(16, 185, 129, 0.7)';
+                        bgColor = 'rgba(16, 185, 129, 0.08)';
+                        barColor = 'rgba(16, 185, 129, 0.22)';
+                        leadIcon = <CheckCircle2 size={16} color="#10b981" />;
+                        statusBadge = (
+                          <span style={{ fontSize: '0.68rem', color: '#10b981', fontWeight: 600, background: 'rgba(16,185,129,0.15)', padding: '2px 6px', borderRadius: '6px' }}>
+                            ✓ Right Answer
                           </span>
-                        )}
-                        <span style={{ fontSize: '0.78rem', fontWeight: '600', opacity: 0.9 }}>
-                          {pct}% ({votesCount})
-                        </span>
+                        );
+                      }
+                    } else {
+                      // Quiz: current user hasn't voted yet!
+                      // Answer is completely HIDDEN!
+                      borderColor = 'rgba(255,255,255,0.18)';
+                      bgColor = 'rgba(0,0,0,0.15)';
+                      showBar = false; // Don't leak answer through popularity before vote!
+                    }
+                  } else {
+                    // Standard opinion poll
+                    if (hasVotedThis) {
+                      borderColor = pollTheme.primary;
+                      bgColor = pollTheme.bgLight;
+                      leadIcon = <CheckCircle2 size={16} color={pollTheme.primary} />;
+                    }
+                  }
+
+                  return (
+                    <div
+                      key={opt.id}
+                      onClick={() => handleVotePoll(opt.id)}
+                      style={{
+                        position: 'relative',
+                        padding: '9px 12px',
+                        borderRadius: '10px',
+                        border: `1.5px solid ${borderColor}`,
+                        background: bgColor,
+                        cursor: 'pointer',
+                        overflow: 'hidden',
+                        transition: 'all 0.2s ease',
+                        boxShadow: (hasVotedThis && isQuiz && isThisCorrect) ? '0 0 12px rgba(16,185,129,0.25)' : undefined
+                      }}
+                    >
+                      {/* Animated Progress bar */}
+                      {showBar && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            bottom: 0,
+                            width: `${pct}%`,
+                            background: barColor,
+                            transition: 'width 0.45s cubic-bezier(0.4, 0, 0.2, 1)',
+                            pointerEvents: 'none'
+                          }}
+                        />
+                      )}
+
+                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 1, gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', flex: 1, minWidth: 0 }}>
+                          {leadIcon}
+                          <span style={{
+                            color: (isQuiz && hasCurrentUserVoted && isThisCorrect) ? '#10b981' : ((isQuiz && hasCurrentUserVoted && hasVotedThis && !isThisCorrect) ? '#fca5a5' : 'var(--text-main)'),
+                            fontWeight: hasVotedThis ? 600 : 400,
+                            wordBreak: 'break-word'
+                          }}>
+                            {opt.text}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                          {statusBadge}
+                          {showBar ? (
+                            <span style={{ fontSize: '0.78rem', fontWeight: '600', opacity: 0.9 }}>
+                              {pct}% {totalVotes > 0 && `(${votesCount})`}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.72rem', color: pollTheme.color, opacity: 0.85, fontWeight: 500 }}>
+                              Tap to answer
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
 
-            <div style={{ fontSize: '0.72rem', opacity: 0.7, marginTop: '8px', textAlign: 'right' }}>
-              {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'} total • {pollData.isMultipleChoice ? 'Multiple choice' : 'Single choice'}
+              {/* Footer Info */}
+              <div style={{ fontSize: '0.72rem', opacity: 0.75, marginTop: '9px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>
+                  {isQuiz
+                    ? (hasCurrentUserVoted
+                        ? (isMyVoteCorrect ? '🎉 Correct answer submitted!' : '❌ Incorrect answer chosen')
+                        : '🔒 Answer reveals after you vote')
+                    : (pollData.isMultipleChoice ? 'Multiple choice' : 'Single choice')}
+                </span>
+                <span>
+                  {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}
+                </span>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
 
         {/* Emoji Reactions display bar */}
