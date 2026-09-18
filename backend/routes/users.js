@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
+const User = require('../models/User');
+const webpush = require('../utils/webpush');
 const authMiddleware = require('../middleware/authMiddleware');
 
 // Get all registered users (except current user)
@@ -80,6 +82,55 @@ router.put('/change-password', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Password change error:', err);
     res.status(500).json({ error: 'Failed to change password.' });
+  }
+});
+
+// Get VAPID Public Key for Web Push subscription
+router.get('/vapid-public-key', (req, res) => {
+  res.json({ publicKey: webpush.getVapidPublicKey() });
+});
+
+// Save or Update Push Subscription for current user
+router.post('/push-subscription', authMiddleware, async (req, res) => {
+  try {
+    const { endpoint, keys } = req.body;
+    if (!endpoint || !keys || !keys.p256dh || !keys.auth) {
+      return res.status(400).json({ error: 'Invalid push subscription data' });
+    }
+
+    const user = await User.findOne({ id: req.user.id });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    let subscriptions = user.pushSubscriptions || [];
+    // Avoid duplicate endpoints
+    subscriptions = subscriptions.filter(sub => sub.endpoint !== endpoint);
+    subscriptions.push({ endpoint, keys });
+
+    user.pushSubscriptions = subscriptions;
+    user.markModified('pushSubscriptions');
+    await user.save();
+
+    res.json({ success: true, count: subscriptions.length });
+  } catch (err) {
+    console.error('Failed to save push subscription:', err);
+    res.status(500).json({ error: 'Failed to save push subscription' });
+  }
+});
+
+// Unsubscribe from Web Push
+router.delete('/push-subscription', authMiddleware, async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    const user = await User.findOne({ id: req.user.id });
+    if (user && user.pushSubscriptions) {
+      user.pushSubscriptions = user.pushSubscriptions.filter(sub => sub.endpoint !== endpoint);
+      user.markModified('pushSubscriptions');
+      await user.save();
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to remove push subscription:', err);
+    res.status(500).json({ error: 'Failed to remove push subscription' });
   }
 });
 

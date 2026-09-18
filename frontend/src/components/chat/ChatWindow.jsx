@@ -477,26 +477,56 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   };
 
+  // Dynamic Sentiment Analyzer for Mood Timeline
+  const analyzeSentiment = (text) => {
+    if (!text || typeof text !== 'string') return null;
+    const str = text.toLowerCase();
+
+    // 1. Angry
+    if (/angry|gussa|irritat|shut up|bakwas|annoy|furious|hate|mad|pagal|chup kar/i.test(str)) {
+      return { mood: 'Angry', color: '#f43f5e', emoji: '😠' };
+    }
+
+    // 2. Joy / Happy
+    if (/happy|joy|khush|awesome|great|cool|haha|lol|party|congrat|mast|badiya|wah|yay|nice|good|smile/i.test(str)) {
+      return { mood: 'Joy', color: '#10b981', emoji: '😊' };
+    }
+
+    // 3. Sad / Apologetic
+    if (/sad|sorry|cry|crying|hurt|dukh|dard|broken|upset|sigh|tear|depress|maafi|udas/i.test(str)) {
+      return { mood: 'Sad', color: '#3b82f6', emoji: '🥺' };
+    }
+
+    // 4. Love / Caring
+    if (/love|pyaar|pyar|heart|miss you|baby|sweetheart|care|jaan|cutie|lovely|dil/i.test(str)) {
+      return { mood: 'Love', color: '#ec4899', emoji: '❤️' };
+    }
+
+    // 5. Excited / Surprised
+    if (/wow|omg|amaz|shock|surprise|superb|hyped|congrats/i.test(str)) {
+      return { mood: 'Excited', color: '#f59e0b', emoji: '✨' };
+    }
+
+    return null;
+  };
+
   // Calculate Mood Timeline sentiment for header
   const getMoodTimeline = () => {
-    const allRecentText = [
-      ...messages.slice(-5).map(m => m.content || ''),
-      cooldownMsg || ''
-    ].join(' ').toLowerCase();
-
-    if (!allRecentText.trim()) {
-      return { mood: 'Casual', color: '#6366f1', emoji: '😊' };
+    // If user is currently typing/cooling down an emotional message
+    if (cooldownMsg) {
+      const detected = analyzeSentiment(cooldownMsg);
+      if (detected) return detected;
     }
 
-    if (/angry|hate|worst|gussa|shut up|furious|annoyed|mad|bakwas|pagal/i.test(allRecentText)) {
-      return { mood: 'Heated', color: '#ef4444', emoji: '🔥' };
+    // Scan recent messages starting from the most recent to reflect latest sentence mood
+    for (let i = messages.length - 1; i >= 0 && i >= messages.length - 6; i--) {
+      const msg = messages[i];
+      if (msg && msg.type === 'text' && msg.content) {
+        const detected = analyzeSentiment(msg.content);
+        if (detected) return detected;
+      }
     }
-    if (/awesome|love|happy|great|cool|haha|lol|congrats|mast|badiya/i.test(allRecentText)) {
-      return { mood: 'Joyful', color: '#10b981', emoji: '🎉' };
-    }
-    if (/sorry|sad|bad|wrong|sigh|hurt|cry|dukh|dard/i.test(allRecentText)) {
-      return { mood: 'Tense', color: '#f59e0b', emoji: '🟡' };
-    }
+
     return { mood: 'Casual', color: '#6366f1', emoji: '💬' };
   };
 

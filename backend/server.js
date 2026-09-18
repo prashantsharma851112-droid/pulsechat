@@ -7,6 +7,9 @@ const mongoose = require('mongoose');
 const { Server } = require('socket.io');
 const config = require('./config');
 const db = require('./database/db');
+const Message = require('./models/Message');
+const User = require('./models/User');
+const webpush = require('./utils/webpush');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
@@ -42,18 +45,45 @@ const io = new Server(server, {
   }
 });
 
+app.set('io', io);
+
 const onlineUsers = new Map(); // userId -> socketId
 
 io.on('connection', (socket) => {
   console.log('⚡ Socket Connected:', socket.id);
 
-  // User comes online
-  socket.on('setup', (userId) => {
+  // User comes online (mobile data ON / socket connected)
+  socket.on('setup', async (userId) => {
     socket.userId = userId;
     socket.join(`user_${userId}`); // Join user's personal private room
     onlineUsers.set(userId, socket.id);
     io.emit('user_status', { userId, status: 'online' });
     io.emit('online_users_list', Array.from(onlineUsers.keys()));
+
+    // Mobile data on ya user connect hone par pending 'sent' messages ko 'delivered' mark karo
+    try {
+      const pendingMsgs = await Message.find({ receiverId: userId, status: 'sent' }).lean();
+      if (pendingMsgs.length > 0) {
+        await Message.updateMany({ receiverId: userId, status: 'sent' }, { status: 'delivered' });
+
+        // Sender ko notify karo taaki unke screen par Single Tick turant Double Tick bann jaye
+        const senderMap = {};
+        for (const msg of pendingMsgs) {
+          if (!senderMap[msg.senderId]) senderMap[msg.senderId] = {};
+          if (!senderMap[msg.senderId][msg.chatId]) senderMap[msg.senderId][msg.chatId] = [];
+          senderMap[msg.senderId][msg.chatId].push(msg.id);
+        }
+
+        for (const [sId, chats] of Object.entries(senderMap)) {
+          for (const [cId, msgIds] of Object.entries(chats)) {
+            io.to(`user_${sId}`).emit('messages_delivered', { chatId: cId, messageIds: msgIds, status: 'delivered' });
+            io.to(cId).emit('messages_delivered', { chatId: cId, messageIds: msgIds, status: 'delivered' });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error delivering pending messages on setup:', err);
+    }
   });
 
   // Join Chat Room / Group Room
@@ -70,9 +100,32 @@ io.on('connection', (socket) => {
     socket.to(chatId).emit('typing_stop', { chatId, userId });
   });
 
+  // Helper function to dispatch background web push (for closed app)
+  const dispatchWebPush = async (targetUserId, title, body, tag, chatTargetId) => {
+    try {
+      const targetUser = await User.findOne({ id: targetUserId }).select('pushSubscriptions');
+      if (targetUser && targetUser.pushSubscriptions && targetUser.pushSubscriptions.length > 0) {
+        const pushPayload = {
+          title,
+          body,
+          icon: '/icon-192.png',
+          tag,
+          data: { url: '/', chatId: chatTargetId }
+        };
+        for (const sub of targetUser.pushSubscriptions) {
+          webpush.sendPushNotification(sub, pushPayload).catch(() => {});
+        }
+      }
+    } catch (e) {
+      console.warn('Push notification dispatch error:', e.message);
+    }
+  };
+
   // Send Real-Time Message
   socket.on('send_message', async (messageData) => {
     const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, pollData, callData, isViewOnce, replyTo } = messageData;
+
+    const isReceiverOnline = Boolean(receiverId && onlineUsers.has(receiverId));
 
     const newMsg = {
       id: 'msg_' + Date.now(),
@@ -88,7 +141,7 @@ io.on('connection', (socket) => {
       callData: callData || null,
       isViewOnce: !!isViewOnce,
       viewedBy: [],
-      status: receiverId && onlineUsers.has(receiverId) ? 'delivered' : 'sent',
+      status: isReceiverOnline ? 'delivered' : 'sent',
       timestamp: new Date().toISOString(),
       reactions: {},
       replyTo: replyTo || null  // WhatsApp-style reply data
@@ -101,39 +154,66 @@ io.on('connection', (socket) => {
 
     if (receiverId && !isGroup) {
       try {
-        const User = require('./models/User');
         const sender = await User.findOne({ id: senderId }).select('displayName username avatar');
-        io.to(`user_${receiverId}`).emit('message_notification', {
+        const notifPayload = {
           ...newMsg,
           senderName: sender?.displayName || sender?.username || senderId,
           senderAvatar: sender?.avatar || null
-        });
+        };
+        io.to(`user_${receiverId}`).emit('message_notification', notifPayload);
+
+        // Web Push notification bhej taaki app poori band hone par bhi notification aaye
+        const bodyText = newMsg.type === 'text'
+          ? (newMsg.content || 'New message')
+          : `Sent a ${newMsg.type}`;
+        dispatchWebPush(receiverId, `💬 ${notifPayload.senderName}`, bodyText, `pc-${chatId}`, chatId);
       } catch (e) {
         io.to(`user_${receiverId}`).emit('message_notification', newMsg);
       }
     } else if (isGroup) {
       try {
         const Group = require('./models/Group');
-        const User = require('./models/User');
         const group = await Group.findOne({ id: chatId });
         const sender = await User.findOne({ id: senderId }).select('displayName username avatar');
         if (group && group.members) {
+          const senderName = sender?.displayName || sender?.username || senderId;
           const notifPayload = {
             ...newMsg,
             isGroup: true,
             groupName: group.name,
-            senderName: sender?.displayName || sender?.username || senderId,
+            senderName,
             senderAvatar: group.avatar || sender?.avatar || null
           };
+          const bodyText = newMsg.type === 'text'
+            ? `${senderName}: ${newMsg.content}`
+            : `${senderName} sent a ${newMsg.type}`;
+
           group.members.forEach(memberId => {
             if (memberId !== senderId) {
               io.to(`user_${memberId}`).emit('message_notification', notifPayload);
+              dispatchWebPush(memberId, `👥 ${group.name}`, bodyText, `pc-${chatId}`, chatId);
             }
           });
         }
       } catch (e) {
         console.error('Group notification error:', e);
       }
+    }
+  });
+
+  // Message Delivered Acknowledgment from Recipient
+  socket.on('message_delivered', async ({ messageId, chatId, senderId }) => {
+    try {
+      if (!messageId) return;
+      await Message.findOneAndUpdate({ id: messageId, status: 'sent' }, { status: 'delivered' });
+      if (senderId) {
+        io.to(`user_${senderId}`).emit('message_delivered_update', { messageId, chatId, status: 'delivered' });
+      }
+      if (chatId) {
+        io.to(chatId).emit('message_delivered_update', { messageId, chatId, status: 'delivered' });
+      }
+    } catch (err) {
+      console.error('Error handling message_delivered ack:', err);
     }
   });
 
@@ -214,6 +294,13 @@ io.on('connection', (socket) => {
   socket.on('mark_chat_read', async ({ chatId, userId }) => {
     await db.markChatAsRead(chatId, userId);
     io.to(chatId).emit('chat_read_update', { chatId, userId });
+    if (chatId && chatId.includes('_')) {
+      const parts = chatId.split('_');
+      const otherId = parts.find(id => id !== userId);
+      if (otherId) {
+        io.to(`user_${otherId}`).emit('chat_read_update', { chatId, userId });
+      }
+    }
   });
 
   // Emoji Reaction
