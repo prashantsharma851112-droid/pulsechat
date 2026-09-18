@@ -67,14 +67,20 @@ export async function requestNotificationPermission(forcePrompt = false, token =
  * Register Web Push subscription with Service Worker & Backend
  * Taaki app poori band hone par bhi notifications receive ho sakein
  */
-export async function subscribeUserToPush(token) {
+export async function subscribeUserToPush(token = null) {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     return false;
   }
   if (Notification.permission !== 'granted') return false;
 
   try {
-    const reg = await navigator.serviceWorker.ready;
+    let reg = null;
+    try {
+      reg = await navigator.serviceWorker.getRegistration();
+    } catch (e) {}
+    if (!reg) {
+      reg = await navigator.serviceWorker.ready;
+    }
     if (!reg || !reg.pushManager) return false;
 
     // 1. Backend se persistent VAPID public key fetch karo
@@ -102,21 +108,28 @@ export async function subscribeUserToPush(token) {
       localStorage.setItem('pulsechat_vapid_key', publicKey);
     }
 
-    // 3. Subscription backend mein register karo
-    if (subscription && token) {
+    // 3. Subscription backend mein register karo (taaki app band hone par bhi notification aaye)
+    const authToken = token || localStorage.getItem('pulsechat_token');
+    if (subscription && authToken) {
       const subJson = subscription.toJSON();
-      await fetch(`${BACKEND_URL}/api/users/push-subscription`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          endpoint: subJson.endpoint,
-          keys: subJson.keys
-        })
-      });
-      return true;
+      const p256dh = subJson.keys?.p256dh || (subscription.getKey ? btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') : null);
+      const auth = subJson.keys?.auth || (subscription.getKey ? btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth')))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') : null);
+
+      if (subJson.endpoint && p256dh && auth) {
+        await fetch(`${BACKEND_URL}/api/users/push-subscription`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            endpoint: subJson.endpoint,
+            keys: { p256dh, auth }
+          })
+        });
+        console.log('✅ Registered Push Subscription for closed app notifications');
+        return true;
+      }
     }
   } catch (err) {
     console.warn('Push subscription setup failed:', err.message);

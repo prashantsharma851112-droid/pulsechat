@@ -43,20 +43,21 @@ let vapidKeys = {
  * Generate standard P-256 EC Keypair and derive raw 65-byte uncompressed public key
  */
 function generateP256KeyPair() {
-  const ec = crypto.generateKeyPairSync('ec', {
-    namedCurve: 'prime256v1',
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+  const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', {
+    namedCurve: 'prime256v1'
   });
 
-  const ecKey = crypto.createECDH('prime256v1');
-  const der = crypto.createPrivateKey(ec.privateKey).export({ type: 'pkcs8', format: 'der' });
-  ecKey.setPrivateKey(der.slice(-32));
-  const rawPublicKey = ecKey.getPublicKey();
+  const jwk = publicKey.export({ format: 'jwk' });
+  const x = fromBase64Url(jwk.x);
+  const y = fromBase64Url(jwk.y);
+  const rawPublicKey = Buffer.concat([Buffer.from([4]), x, y]);
+
+  const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' });
+  const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' });
 
   return {
-    publicKeyPem: ec.publicKey,
-    privateKeyPem: ec.privateKey,
+    publicKeyPem,
+    privateKeyPem,
     publicKeyBase64Url: toBase64Url(rawPublicKey)
   };
 }

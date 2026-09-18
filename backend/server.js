@@ -309,8 +309,11 @@ io.on('connection', (socket) => {
 
   // Read Receipt (Blue Double Tick)
   socket.on('mark_read', async ({ messageId, chatId }) => {
-    await db.updateMessageStatus(messageId, 'read');
+    const updatedMsg = await db.updateMessageStatus(messageId, 'read');
     io.to(chatId).emit('message_read_update', { messageId, status: 'read' });
+    if (updatedMsg && updatedMsg.senderId) {
+      io.to(`user_${updatedMsg.senderId}`).emit('message_read_update', { messageId, status: 'read' });
+    }
   });
 
   socket.on('mark_chat_read', async ({ chatId, userId }) => {

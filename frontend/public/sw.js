@@ -64,13 +64,16 @@ self.addEventListener('push', (event) => {
 
   // Acknowledge delivery in the background so sender gets Double Tick immediately
   if (messageId) {
-    tasks.push(
-      fetch('/api/messages/delivered-ack', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageId, chatId })
-      }).catch(() => {})
-    );
+    try {
+      const ackUrl = new URL('/api/messages/delivered-ack', self.registration.scope).href;
+      tasks.push(
+        fetch(ackUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messageId, chatId })
+        }).catch(() => {})
+      );
+    } catch (e) {}
   }
 
   event.waitUntil(Promise.all(tasks));

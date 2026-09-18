@@ -18,6 +18,13 @@ export function SocketProvider({ children }) {
     if (user && token) {
       if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
         subscribeUserToPush(token).catch(() => {});
+        const handleFocus = () => {
+          if (document.visibilityState === 'visible') {
+            subscribeUserToPush(token).catch(() => {});
+          }
+        };
+        document.addEventListener('visibilitychange', handleFocus);
+        return () => document.removeEventListener('visibilitychange', handleFocus);
       }
     }
   }, [user, token]);

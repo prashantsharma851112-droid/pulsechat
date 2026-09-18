@@ -761,7 +761,7 @@ export default function MessageItem({
           {isMine && (
             <span>
               {message.status === 'read' ? (
-                <CheckCheck size={14} color="#60a5fa" />
+                <CheckCheck size={14} color="#10b981" />
               ) : message.status === 'delivered' ? (
                 <CheckCheck size={14} color="#9ca3af" />
               ) : (

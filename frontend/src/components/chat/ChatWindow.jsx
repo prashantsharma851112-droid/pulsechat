@@ -172,6 +172,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     };
 
+    const handleChatReadUpdate = ({ chatId: targetChatId, userId }) => {
+      if (targetChatId === chatId && userId !== user.id) {
+        setMessages(prev => prev.map(m => m.senderId === user.id ? { ...m, status: 'read' } : m));
+      }
+    };
+
     const handleMessageDeliveredUpdate = ({ messageId, status }) => {
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) } : m));
     };
@@ -188,6 +194,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     socket.on('poll_edited', handlePollEdit);
     socket.on('message_deleted', handleMessageDeleted);
     socket.on('message_read_update', handleReadUpdate);
+    socket.on('chat_read_update', handleChatReadUpdate);
     socket.on('message_delivered_update', handleMessageDeliveredUpdate);
     socket.on('messages_delivered', handleMessagesDelivered);
     socket.on('reaction_updated', handleReactionUpdated);
@@ -203,6 +210,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.off('poll_edited', handlePollEdit);
       socket.off('message_deleted', handleMessageDeleted);
       socket.off('message_read_update', handleReadUpdate);
+      socket.off('chat_read_update', handleChatReadUpdate);
       socket.off('message_delivered_update', handleMessageDeliveredUpdate);
       socket.off('messages_delivered', handleMessagesDelivered);
       socket.off('reaction_updated', handleReactionUpdated);
