@@ -77,19 +77,29 @@ export async function subscribeUserToPush(token) {
     const reg = await navigator.serviceWorker.ready;
     if (!reg || !reg.pushManager) return false;
 
-    // 1. Backend se VAPID public key fetch karo
+    // 1. Backend se persistent VAPID public key fetch karo
     const res = await fetch(`${BACKEND_URL}/api/users/vapid-public-key`);
     const { publicKey } = await res.json();
     if (!publicKey) return false;
 
-    // 2. Existing subscription check karo
+    // 2. Existing subscription check karo aur key mismatch ho toh renew karo
     let subscription = await reg.pushManager.getSubscription();
+    const storedKey = localStorage.getItem('pulsechat_vapid_key');
+
+    if (subscription && storedKey !== publicKey) {
+      try {
+        await subscription.unsubscribe();
+        subscription = null;
+      } catch (e) {}
+    }
+
     if (!subscription) {
       const convertedKey = urlBase64ToUint8Array(publicKey);
       subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: convertedKey
       });
+      localStorage.setItem('pulsechat_vapid_key', publicKey);
     }
 
     // 3. Subscription backend mein register karo

@@ -27,6 +27,8 @@ self.addEventListener('push', (event) => {
   let icon = '/icon-192.png';
   let tag = 'pulsechat-msg';
   let targetUrl = self.registration.scope;
+  let messageId = null;
+  let chatId = null;
 
   if (event.data) {
     try {
@@ -36,6 +38,8 @@ self.addEventListener('push', (event) => {
       if (data.icon) icon = data.icon;
       if (data.tag) tag = data.tag;
       if (data.data?.url) targetUrl = data.data.url;
+      if (data.data?.messageId) messageId = data.data.messageId;
+      if (data.data?.chatId) chatId = data.data.chatId;
     } catch (e) {
       try {
         const text = event.data.text();
@@ -51,10 +55,25 @@ self.addEventListener('push', (event) => {
     tag: tag || 'pulsechat-notification',
     renotify: true,
     vibrate: [250, 100, 250, 100, 250],
-    data: { url: targetUrl }
+    data: { url: targetUrl, messageId, chatId }
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  const tasks = [
+    self.registration.showNotification(title, options)
+  ];
+
+  // Acknowledge delivery in the background so sender gets Double Tick immediately
+  if (messageId) {
+    tasks.push(
+      fetch('/api/messages/delivered-ack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId, chatId })
+      }).catch(() => {})
+    );
+  }
+
+  event.waitUntil(Promise.all(tasks));
 });
 
 // Notification clicked - open app or focus existing window

@@ -78,6 +78,10 @@ io.on('connection', (socket) => {
           for (const [cId, msgIds] of Object.entries(chats)) {
             io.to(`user_${sId}`).emit('messages_delivered', { chatId: cId, messageIds: msgIds, status: 'delivered' });
             io.to(cId).emit('messages_delivered', { chatId: cId, messageIds: msgIds, status: 'delivered' });
+            for (const mId of msgIds) {
+              io.to(`user_${sId}`).emit('message_delivered_update', { messageId: mId, chatId: cId, status: 'delivered' });
+              io.to(cId).emit('message_delivered_update', { messageId: mId, chatId: cId, status: 'delivered' });
+            }
           }
         }
       }
@@ -101,19 +105,35 @@ io.on('connection', (socket) => {
   });
 
   // Helper function to dispatch background web push (for closed app)
-  const dispatchWebPush = async (targetUserId, title, body, tag, chatTargetId) => {
+  const dispatchWebPush = async (targetUserId, title, body, tag, chatTargetId, messageId = null, senderId = null) => {
     try {
-      const targetUser = await User.findOne({ id: targetUserId }).select('pushSubscriptions');
+      const targetUser = await User.findOne({ id: targetUserId });
       if (targetUser && targetUser.pushSubscriptions && targetUser.pushSubscriptions.length > 0) {
         const pushPayload = {
           title,
           body,
           icon: '/icon-192.png',
+          badge: '/icon-192.png',
           tag,
-          data: { url: '/', chatId: chatTargetId }
+          data: { url: '/', chatId: chatTargetId, messageId, senderId }
         };
+
+        const deadEndpoints = [];
         for (const sub of targetUser.pushSubscriptions) {
-          webpush.sendPushNotification(sub, pushPayload).catch(() => {});
+          try {
+            const res = await webpush.sendPushNotification(sub, pushPayload);
+            if (res && res.expired) {
+              deadEndpoints.push(sub.endpoint);
+            }
+          } catch (err) {}
+        }
+
+        if (deadEndpoints.length > 0) {
+          targetUser.pushSubscriptions = targetUser.pushSubscriptions.filter(
+            s => !deadEndpoints.includes(s.endpoint)
+          );
+          targetUser.markModified('pushSubscriptions');
+          await targetUser.save();
         }
       }
     } catch (e) {
@@ -166,7 +186,7 @@ io.on('connection', (socket) => {
         const bodyText = newMsg.type === 'text'
           ? (newMsg.content || 'New message')
           : `Sent a ${newMsg.type}`;
-        dispatchWebPush(receiverId, `💬 ${notifPayload.senderName}`, bodyText, `pc-${chatId}`, chatId);
+        dispatchWebPush(receiverId, `💬 ${notifPayload.senderName}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId);
       } catch (e) {
         io.to(`user_${receiverId}`).emit('message_notification', newMsg);
       }
@@ -191,7 +211,7 @@ io.on('connection', (socket) => {
           group.members.forEach(memberId => {
             if (memberId !== senderId) {
               io.to(`user_${memberId}`).emit('message_notification', notifPayload);
-              dispatchWebPush(memberId, `👥 ${group.name}`, bodyText, `pc-${chatId}`, chatId);
+              dispatchWebPush(memberId, `👥 ${group.name}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId);
             }
           });
         }
@@ -208,9 +228,11 @@ io.on('connection', (socket) => {
       await Message.findOneAndUpdate({ id: messageId, status: 'sent' }, { status: 'delivered' });
       if (senderId) {
         io.to(`user_${senderId}`).emit('message_delivered_update', { messageId, chatId, status: 'delivered' });
+        io.to(`user_${senderId}`).emit('messages_delivered', { chatId, messageIds: [messageId], status: 'delivered' });
       }
       if (chatId) {
         io.to(chatId).emit('message_delivered_update', { messageId, chatId, status: 'delivered' });
+        io.to(chatId).emit('messages_delivered', { chatId, messageIds: [messageId], status: 'delivered' });
       }
     } catch (err) {
       console.error('Error handling message_delivered ack:', err);
@@ -537,8 +559,14 @@ io.on('connection', (socket) => {
 });
 
 mongoose.connect(config.MONGO_URI)
-  .then(() => {
+  .then(async () => {
     console.log('✅ Connected to MongoDB');
+    try {
+      const VapidKey = require('./models/VapidKey');
+      await webpush.syncWithMongo(VapidKey);
+    } catch (e) {
+      console.warn('VapidKey sync warning:', e.message);
+    }
     server.listen(config.PORT, () => {
       console.log(`🚀 PulseChat Backend running on port ${config.PORT}`);
     });

@@ -5,7 +5,7 @@ import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, Shie
 import CreateGroupModal from './CreateGroupModal';
 import SettingsModal from '../profile/SettingsModal';
 import { BACKEND_URL } from '../../utils/config';
-import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
+import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
   const { user, logout, token } = useContext(AuthContext);
@@ -17,9 +17,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'groups'
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
 
-  // Notification Permission State
+  // Notification Permission State — respect localStorage dismiss flag
   const [notifPermission, setNotifPermission] = useState(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (localStorage.getItem('pulsechat_notif_dismissed') === 'true') return 'dismissed';
       return Notification.permission;
     }
     return 'granted';
@@ -79,11 +80,17 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
   useEffect(() => {
     if (!socket) return;
-    const handleChatRead = () => {
+    const handleRefresh = () => {
       loadRecentChats();
     };
-    socket.on('chat_read_update', handleChatRead);
-    return () => socket.off('chat_read_update', handleChatRead);
+    socket.on('chat_read_update', handleRefresh);
+    socket.on('messages_delivered', handleRefresh);
+    socket.on('message_delivered_update', handleRefresh);
+    return () => {
+      socket.off('chat_read_update', handleRefresh);
+      socket.off('messages_delivered', handleRefresh);
+      socket.off('message_delivered_update', handleRefresh);
+    };
   }, [socket, loadRecentChats]);
 
   // Search Users
@@ -248,7 +255,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         </div>
       </div>
 
-      {/* Enable Notification Banner if permission not granted yet */}
+      {/* Enable Notification Banner — only show if not dismissed & not already granted/denied */}
       {notifPermission === 'default' && (
         <div style={{
           margin: '0.4rem 0.75rem',
@@ -267,19 +274,39 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               Enable notifications for background messages
             </span>
           </div>
-          <button
-            onClick={async () => {
-              const granted = await requestNotificationPermission();
-              setNotifPermission(granted ? 'granted' : 'denied');
-              if (granted) {
-                showPushNotification('PulseChat Notifications Active! 🔔', 'You will now receive message notifications outside the app.');
-              }
-            }}
-            className="btn-primary"
-            style={{ padding: '4px 12px', fontSize: '0.78rem', borderRadius: '8px', flexShrink: 0 }}
-          >
-            Allow
-          </button>
+          <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+            <button
+              onClick={async () => {
+                const granted = await requestNotificationPermission(true, token);
+                setNotifPermission(granted ? 'granted' : 'denied');
+                if (granted) {
+                  showPushNotification('PulseChat Notifications Active! 🔔', 'You will now receive message notifications outside the app.');
+                }
+              }}
+              className="btn-primary"
+              style={{ padding: '4px 12px', fontSize: '0.78rem', borderRadius: '8px' }}
+            >
+              Allow
+            </button>
+            <button
+              onClick={() => {
+                dismissNotificationBanner();
+                setNotifPermission('dismissed');
+              }}
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                padding: '4px 8px',
+                fontSize: '0.78rem',
+                color: 'var(--text-muted)',
+                cursor: 'pointer'
+              }}
+              title="Dismiss — won't ask again"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 

@@ -12,6 +12,7 @@ import GroupProfileModal from './GroupProfileModal';
 import MediaUploadModal from './MediaUploadModal';
 import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
+import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
 
 export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGroupCall, onOpenFullDp }) {
   const { user, token } = useContext(AuthContext);
@@ -171,11 +172,24 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     };
 
+    const handleMessageDeliveredUpdate = ({ messageId, status }) => {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) } : m));
+    };
+
+    const handleMessagesDelivered = ({ messageIds, status }) => {
+      if (Array.isArray(messageIds) && messageIds.length > 0) {
+        const idSet = new Set(messageIds);
+        setMessages(prev => prev.map(m => idSet.has(m.id) ? { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) } : m));
+      }
+    };
+
     socket.on('new_message', handleNewMessage);
     socket.on('poll_updated', handlePollUpdate);
     socket.on('poll_edited', handlePollEdit);
     socket.on('message_deleted', handleMessageDeleted);
     socket.on('message_read_update', handleReadUpdate);
+    socket.on('message_delivered_update', handleMessageDeliveredUpdate);
+    socket.on('messages_delivered', handleMessagesDelivered);
     socket.on('reaction_updated', handleReactionUpdated);
     socket.on('message_restored', handleMessageRestored);
     socket.on('chat_cleared', handleChatCleared);
@@ -189,6 +203,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.off('poll_edited', handlePollEdit);
       socket.off('message_deleted', handleMessageDeleted);
       socket.off('message_read_update', handleReadUpdate);
+      socket.off('message_delivered_update', handleMessageDeliveredUpdate);
+      socket.off('messages_delivered', handleMessagesDelivered);
       socket.off('reaction_updated', handleReactionUpdated);
       socket.off('message_restored', handleMessageRestored);
       socket.off('chat_cleared', handleChatCleared);
@@ -328,10 +344,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     e?.preventDefault();
     if (!text.trim()) return;
 
-    // Check emotional trigger words for 3s cooldown
-    const isEmotional = /angry|hate|worst|gussa|shut up|furious|annoyed|mad|bakwas|pagal/i.test(text);
-
-    if (isEmotional && !forceInstant) {
+    // Check emotional trigger words for 3s cooldown using sentiment utility
+    if (isEmotionalTriggerMessage(text) && !forceInstant) {
       setCooldownMsg(text);
       setCooldownSecs(3);
       setText('');
@@ -372,6 +386,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   const cancelCooldown = () => {
+    // Cancel karne par text wapas input box mein daal do taaki edit kar sake
+    if (cooldownMsg) {
+      setText(cooldownMsg);
+    }
     setCooldownSecs(0);
     setCooldownMsg(null);
   };
@@ -477,60 +495,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   };
 
-  // Dynamic Sentiment Analyzer for Mood Timeline
-  const analyzeSentiment = (text) => {
-    if (!text || typeof text !== 'string') return null;
-    const str = text.toLowerCase();
-
-    // 1. Angry
-    if (/angry|gussa|irritat|shut up|bakwas|annoy|furious|hate|mad|pagal|chup kar/i.test(str)) {
-      return { mood: 'Angry', color: '#f43f5e', emoji: '😠' };
-    }
-
-    // 2. Joy / Happy
-    if (/happy|joy|khush|awesome|great|cool|haha|lol|party|congrat|mast|badiya|wah|yay|nice|good|smile/i.test(str)) {
-      return { mood: 'Joy', color: '#10b981', emoji: '😊' };
-    }
-
-    // 3. Sad / Apologetic
-    if (/sad|sorry|cry|crying|hurt|dukh|dard|broken|upset|sigh|tear|depress|maafi|udas/i.test(str)) {
-      return { mood: 'Sad', color: '#3b82f6', emoji: '🥺' };
-    }
-
-    // 4. Love / Caring
-    if (/love|pyaar|pyar|heart|miss you|baby|sweetheart|care|jaan|cutie|lovely|dil/i.test(str)) {
-      return { mood: 'Love', color: '#ec4899', emoji: '❤️' };
-    }
-
-    // 5. Excited / Surprised
-    if (/wow|omg|amaz|shock|surprise|superb|hyped|congrats/i.test(str)) {
-      return { mood: 'Excited', color: '#f59e0b', emoji: '✨' };
-    }
-
-    return null;
-  };
-
-  // Calculate Mood Timeline sentiment for header
-  const getMoodTimeline = () => {
-    // If user is currently typing/cooling down an emotional message
-    if (cooldownMsg) {
-      const detected = analyzeSentiment(cooldownMsg);
-      if (detected) return detected;
-    }
-
-    // Scan recent messages starting from the most recent to reflect latest sentence mood
-    for (let i = messages.length - 1; i >= 0 && i >= messages.length - 6; i--) {
-      const msg = messages[i];
-      if (msg && msg.type === 'text' && msg.content) {
-        const detected = analyzeSentiment(msg.content);
-        if (detected) return detected;
-      }
-    }
-
-    return { mood: 'Casual', color: '#6366f1', emoji: '💬' };
-  };
-
-  const moodInfo = getMoodTimeline();
+  // Calculate Mood Timeline using sentence + word sentiment from utility
+  const moodTimeline = calculateConversationMoodTimeline(messages, cooldownMsg);
+  const moodInfo = moodTimeline.currentMood;
+  const moodSteps = moodTimeline.timelineSteps;
 
   // AI Smart Suggested Replies
   const smartReplies = ["Sounds great! 👍", "I'll check and reply soon.", "Let's call! 📞", "Thanks! 🔥"];
@@ -669,13 +637,44 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
         </div>
 
-        {/* Conversation Mood Timeline Strip */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-          <span>Mood Timeline:</span>
-          <span style={{ color: moodInfo.color, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-            {moodInfo.emoji} {moodInfo.mood}
-          </span>
-          <div style={{ flex: 1, height: '3px', borderRadius: '2px', background: moodInfo.color, opacity: 0.7 }} />
+        {/* Conversation Mood Timeline Strip — sentence-level progression */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px', overflow: 'hidden' }}>
+          <span style={{ flexShrink: 0 }}>Mood:</span>
+          {moodSteps.length > 0 ? (
+            <>
+              {moodSteps.map((step, idx) => (
+                <React.Fragment key={step.id}>
+                  <span
+                    style={{
+                      color: step.color,
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '2px',
+                      background: step.bg,
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      border: `1px solid ${step.border}`,
+                      whiteSpace: 'nowrap',
+                      fontSize: '0.68rem',
+                      opacity: step.isPending ? 0.6 : 1
+                    }}
+                    title={step.preview}
+                  >
+                    {step.emoji} {step.mood}
+                  </span>
+                  {idx < moodSteps.length - 1 && (
+                    <span style={{ color: 'var(--text-muted)', opacity: 0.4, fontSize: '0.6rem' }}>→</span>
+                  )}
+                </React.Fragment>
+              ))}
+            </>
+          ) : (
+            <span style={{ color: moodInfo.color, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+              {moodInfo.emoji} {moodInfo.mood}
+            </span>
+          )}
+          <div style={{ flex: 1, height: '2px', borderRadius: '2px', background: moodInfo.color, opacity: 0.4 }} />
         </div>
       </div>
 
@@ -836,56 +835,66 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         </div>
       )}
 
-      {/* Cooldown Timer Notification Banner */}
+      {/* Cooldown Timer — elegant countdown bar (no red alert) */}
       {cooldownSecs > 0 && (
-        <div className="cooldown-banner" style={{
-          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(245, 158, 11, 0.95))',
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '8px 16px',
+        <div style={{
+          background: 'rgba(99, 102, 241, 0.12)',
+          border: '1px solid rgba(99, 102, 241, 0.3)',
+          color: 'var(--text-main)',
           borderRadius: '12px',
           margin: '0 1rem 0.5rem 1rem',
-          boxShadow: '0 4px 14px rgba(239, 68, 68, 0.35)'
+          padding: '8px 14px',
+          boxShadow: '0 2px 10px rgba(99, 102, 241, 0.15)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Clock size={16} color="#fff" />
-            <span style={{ fontSize: '0.85rem' }}>
-              Emotional message detected. Sending in <strong>{cooldownSecs}s</strong>...
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock size={15} color="var(--accent)" />
+              <span style={{ fontSize: '0.82rem', color: 'var(--text-main)' }}>
+                ⏳ Sending in <strong style={{ color: 'var(--accent)' }}>{cooldownSecs}s</strong>...
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button
+                onClick={sendCooldownNow}
+                style={{
+                  background: 'var(--accent)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '3px 12px',
+                  fontSize: '0.76rem',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                Send Now
+              </button>
+              <button
+                onClick={cancelCooldown}
+                style={{
+                  background: 'transparent',
+                  color: 'var(--text-muted)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '8px',
+                  padding: '3px 12px',
+                  fontSize: '0.76rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              onClick={sendCooldownNow}
-              style={{
-                background: '#fff',
-                color: '#ef4444',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '3px 10px',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-            >
-              Send Now
-            </button>
-            <button
-              onClick={cancelCooldown}
-              style={{
-                background: 'rgba(0, 0, 0, 0.25)',
-                color: '#fff',
-                border: '1px solid rgba(255, 255, 255, 0.35)',
-                borderRadius: '8px',
-                padding: '3px 10px',
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              Cancel
-            </button>
+          {/* Smooth animated countdown progress bar */}
+          <div style={{ width: '100%', height: '3px', borderRadius: '2px', background: 'rgba(99, 102, 241, 0.15)', overflow: 'hidden' }}>
+            <div style={{
+              width: `${(cooldownSecs / 3) * 100}%`,
+              height: '100%',
+              borderRadius: '2px',
+              background: 'var(--accent)',
+              transition: 'width 1s linear'
+            }} />
           </div>
         </div>
       )}

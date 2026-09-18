@@ -1,12 +1,15 @@
-// Zero-Dependency Native Web Push Utility for Node.js
-// Implements VAPID (RFC 8292) and Push Encryption (RFC 8291 aes128gcm) using Node's crypto & https
+// Standards-Compliant Web Push Utility for Node.js
+// Implements VAPID (RFC 8292) and Push Message Encryption (RFC 8291 aes128gcm) using Node's crypto & https
+// Compatible with Google FCM (Chrome / Android), Apple APNS (Safari / iOS PWA), and Mozilla Autopush (Firefox)
 
 const crypto = require('crypto');
 const https = require('https');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { URL } = require('url');
 
-// Base64URL helper
+// Base64URL helpers
 function toBase64Url(buf) {
   return buf.toString('base64')
     .replace(/\+/g, '-')
@@ -22,30 +25,91 @@ function fromBase64Url(str) {
   return Buffer.from(base64, 'base64');
 }
 
-// Persistent VAPID Keypair
-// Generated on prime256v1 (P-256) curve
-let vapidKeyPair = null;
+// Persistent VAPID Keys Storage
+// We maintain consistent keys across server restarts & Render redeploys
+const VAPID_CACHE_FILE = path.join(__dirname, '../database/vapid-keys.json');
+
+let vapidKeyPair = {
+  publicKey: '',
+  privateKey: ''
+};
+
 let vapidKeys = {
   publicKey: '',
   privateKey: ''
 };
 
+/**
+ * Generate standard P-256 EC Keypair and derive raw 65-byte uncompressed public key
+ */
+function generateP256KeyPair() {
+  const ec = crypto.generateKeyPairSync('ec', {
+    namedCurve: 'prime256v1',
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+  });
+
+  const ecKey = crypto.createECDH('prime256v1');
+  const der = crypto.createPrivateKey(ec.privateKey).export({ type: 'pkcs8', format: 'der' });
+  ecKey.setPrivateKey(der.slice(-32));
+  const rawPublicKey = ecKey.getPublicKey();
+
+  return {
+    publicKeyPem: ec.publicKey,
+    privateKeyPem: ec.privateKey,
+    publicKeyBase64Url: toBase64Url(rawPublicKey)
+  };
+}
+
+/**
+ * Initialize VAPID Keys:
+ * 1. Check process.env (VAPID_PUBLIC_KEY & VAPID_PRIVATE_KEY)
+ * 2. Check local persistent file (database/vapid-keys.json)
+ * 3. Generate and save locally so it persists permanently
+ */
 function initVapidKeys() {
   try {
-    // Generate standard P-256 EC keys
-    vapidKeyPair = crypto.generateKeyPairSync('ec', {
-      namedCurve: 'prime256v1',
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
-    });
+    if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+      vapidKeys.publicKey = process.env.VAPID_PUBLIC_KEY;
+      vapidKeys.privateKey = process.env.VAPID_PRIVATE_KEY;
+      vapidKeyPair.privateKey = process.env.VAPID_PRIVATE_KEY;
+      return;
+    }
 
-    // Extract raw 65-byte uncompressed public key (0x04 + X + Y)
-    const ecKey = crypto.createECDH('prime256v1');
-    ecKey.setPrivateKey(crypto.createPrivateKey(vapidKeyPair.privateKey).export({ type: 'pkcs8', format: 'der' }).slice(-32));
-    const rawPublicKey = ecKey.getPublicKey();
+    if (fs.existsSync(VAPID_CACHE_FILE)) {
+      try {
+        const saved = JSON.parse(fs.readFileSync(VAPID_CACHE_FILE, 'utf8'));
+        if (saved && saved.publicKey && saved.privateKey) {
+          vapidKeys.publicKey = saved.publicKey;
+          vapidKeys.privateKey = saved.privateKey;
+          vapidKeyPair.privateKey = saved.privateKeyPem || saved.privateKey;
+          return;
+        }
+      } catch (e) {
+        console.warn('Could not read cached vapid keys file:', e.message);
+      }
+    }
 
-    vapidKeys.publicKey = toBase64Url(rawPublicKey);
-    vapidKeys.privateKey = vapidKeyPair.privateKey;
+    // Generate fresh permanent keypair
+    const generated = generateP256KeyPair();
+    vapidKeys.publicKey = generated.publicKeyBase64Url;
+    vapidKeys.privateKey = generated.privateKeyPem;
+    vapidKeyPair.privateKey = generated.privateKeyPem;
+
+    // Cache locally
+    try {
+      const dir = path.dirname(VAPID_CACHE_FILE);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(VAPID_CACHE_FILE, JSON.stringify({
+        publicKey: generated.publicKeyBase64Url,
+        privateKey: generated.privateKeyPem,
+        privateKeyPem: generated.privateKeyPem,
+        publicKeyPem: generated.publicKeyPem,
+        createdAt: new Date().toISOString()
+      }, null, 2));
+    } catch (err) {
+      console.warn('Could not cache vapid keys to disk:', err.message);
+    }
   } catch (err) {
     console.error('Failed to initialize VAPID keys:', err);
   }
@@ -53,11 +117,40 @@ function initVapidKeys() {
 
 initVapidKeys();
 
+/**
+ * Sync VAPID keys with MongoDB collection so cloud hosting like Render
+ * preserves the exact same keys across container rebuilds.
+ */
+async function syncWithMongo(VapidKeyModel) {
+  try {
+    if (!VapidKeyModel) return;
+    const existing = await VapidKeyModel.findOne({ keyId: 'default_vapid_key' });
+    if (existing && existing.publicKey && existing.privateKey) {
+      vapidKeys.publicKey = existing.publicKey;
+      vapidKeys.privateKey = existing.privateKey;
+      vapidKeyPair.privateKey = existing.privateKey;
+      console.log('🔑 Loaded persistent VAPID keys from MongoDB');
+    } else {
+      await VapidKeyModel.create({
+        keyId: 'default_vapid_key',
+        publicKey: vapidKeys.publicKey,
+        privateKey: vapidKeys.privateKey
+      });
+      console.log('🔑 Stored new persistent VAPID keys to MongoDB');
+    }
+  } catch (err) {
+    console.warn('MongoDB VAPID sync notice:', err.message);
+  }
+}
+
 function getVapidPublicKey() {
   return vapidKeys.publicKey;
 }
 
-// Create VAPID Authorization JWT
+/**
+ * Create RFC 8292 VAPID Authorization JWT
+ * Uses IEEE P1363 (raw R || S 64-byte) ECDSA signature
+ */
 function createVapidJwt(audience, subject = 'mailto:support@pulsechat.app') {
   const header = { typ: 'JWT', alg: 'ES256' };
   const payload = {
@@ -74,29 +167,18 @@ function createVapidJwt(audience, subject = 'mailto:support@pulsechat.app') {
   signer.update(dataToSign);
   signer.end();
 
-  // Sign with VAPID private key
-  const derSig = signer.sign(vapidKeyPair.privateKey);
+  // Sign using Node's standard IEEE P1363 output for raw 64-byte (R || S)
+  const rawSig = signer.sign({
+    key: vapidKeyPair.privateKey,
+    dsaEncoding: 'ieee-p1363'
+  });
 
-  // Convert DER signature to raw 64-byte IEEE P1363 (R || S) format
-  const rLength = derSig[3];
-  const rOffset = 4;
-  let r = derSig.slice(rOffset, rOffset + rLength);
-  if (r.length === 33 && r[0] === 0) r = r.slice(1);
-
-  const sOffset = rOffset + rLength + 2;
-  const sLength = derSig[sOffset - 1];
-  let s = derSig.slice(sOffset, sOffset + sLength);
-  if (s.length === 33 && s[0] === 0) s = s.slice(1);
-
-  // Pad to 32 bytes each if needed
-  if (r.length < 32) r = Buffer.concat([Buffer.alloc(32 - r.length, 0), r]);
-  if (s.length < 32) s = Buffer.concat([Buffer.alloc(32 - s.length, 0), s]);
-
-  const rawSig = Buffer.concat([r, s]);
   return `${dataToSign}.${toBase64Url(rawSig)}`;
 }
 
-// Encrypt payload according to RFC 8291 (aes128gcm)
+/**
+ * Encrypt payload strictly according to RFC 8291 (aes128gcm)
+ */
 function encryptPayload(subscription, payloadBuffer) {
   const clientPublicKey = fromBase64Url(subscription.keys.p256dh);
   const clientAuthToken = fromBase64Url(subscription.keys.auth);
@@ -104,15 +186,15 @@ function encryptPayload(subscription, payloadBuffer) {
   // Generate 16-byte random salt
   const salt = crypto.randomBytes(16);
 
-  // Generate ephemeral local ECDH key pair
+  // Ephemeral local ECDH key pair
   const localEcdh = crypto.createECDH('prime256v1');
   localEcdh.generateKeys();
   const localPublicKey = localEcdh.getPublicKey();
 
-  // Shared secret
+  // Shared secret via ECDH
   const sharedSecret = localEcdh.computeSecret(clientPublicKey);
 
-  // HKDF derivation helpers
+  // HKDF Helpers
   function hmacSha256(key, data) {
     return crypto.createHmac('sha256', key).update(data).digest();
   }
@@ -130,25 +212,21 @@ function encryptPayload(subscription, payloadBuffer) {
     return okm.slice(0, length);
   }
 
-  // Key derivation for aes128gcm
-  const authInfo = Buffer.from('WebPush: info\0');
-  const context = Buffer.concat([
-    Buffer.from('P-256\0'),
-    Buffer.from([0, 65]),
+  // RFC 8291 Section 3.2:
+  // info = "WebPush: info\0" || clientPublicKey || localPublicKey
+  const info = Buffer.concat([
+    Buffer.from('WebPush: info\0', 'utf8'),
     clientPublicKey,
-    Buffer.from([0, 65]),
     localPublicKey
   ]);
 
-  const ikm = hkdf(clientAuthToken, sharedSecret, Buffer.concat([authInfo, context]), 32);
+  const ikm = hkdf(clientAuthToken, sharedSecret, info, 32);
 
-  const cekInfo = Buffer.concat([Buffer.from('Content-Encoding: aes128gcm\0')]);
-  const nonceInfo = Buffer.concat([Buffer.from('Content-Encoding: nonce\0')]);
+  // RFC 8291 Section 3.3: Derive CEK & Nonce
+  const cek = hkdf(salt, ikm, Buffer.from('Content-Encoding: aes128gcm\0', 'utf8'), 16);
+  const nonce = hkdf(salt, ikm, Buffer.from('Content-Encoding: nonce\0', 'utf8'), 12);
 
-  const cek = hkdf(salt, ikm, cekInfo, 16);
-  const nonce = hkdf(salt, ikm, nonceInfo, 12);
-
-  // Padding delimiter (0x02 for final record)
+  // RFC 8188: Delimiter 0x02 for final record
   const paddedRecord = Buffer.concat([payloadBuffer, Buffer.from([2])]);
 
   // Cipher AES-128-GCM
@@ -175,11 +253,11 @@ function encryptPayload(subscription, payloadBuffer) {
  * Send Web Push notification to a given PushSubscription
  * @param {Object} subscription - { endpoint, keys: { p256dh, auth } }
  * @param {Object|string} payload - JSON or text notification payload
- * @returns {Promise<boolean>}
+ * @returns {Promise<{ success: boolean, expired?: boolean }>}
  */
 async function sendPushNotification(subscription, payload = null) {
   if (!subscription || !subscription.endpoint) {
-    return false;
+    return { success: false, expired: false };
   }
 
   return new Promise((resolve) => {
@@ -192,7 +270,8 @@ async function sendPushNotification(subscription, payload = null) {
       const headers = {
         TTL: '86400',
         Urgency: 'high',
-        Authorization: `vapid t=${jwt}, k=${vapidKeys.publicKey}`
+        Authorization: `vapid t=${jwt}, k=${vapidKeys.publicKey}`,
+        'Crypto-Key': `p256ecdsa=${vapidKeys.publicKey}`
       };
 
       if (payload && subscription.keys && subscription.keys.p256dh && subscription.keys.auth) {
@@ -216,17 +295,20 @@ async function sendPushNotification(subscription, payload = null) {
         res.on('data', chunk => { resData += chunk; });
         res.on('end', () => {
           if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(true);
+            resolve({ success: true, expired: false });
+          } else if (res.statusCode === 404 || res.statusCode === 410) {
+            // Subscription has expired or unsubscribed
+            resolve({ success: false, expired: true });
           } else {
-            // 410 or 404 indicates expired subscription
-            resolve(false);
+            console.warn(`Web Push endpoint responded with status ${res.statusCode}: ${resData}`);
+            resolve({ success: false, expired: false });
           }
         });
       });
 
       req.on('error', (err) => {
         console.warn('Web Push dispatch error:', err.message);
-        resolve(false);
+        resolve({ success: false, expired: false });
       });
 
       if (bodyData) {
@@ -235,12 +317,13 @@ async function sendPushNotification(subscription, payload = null) {
       req.end();
     } catch (err) {
       console.warn('Failed to dispatch Web Push:', err.message);
-      resolve(false);
+      resolve({ success: false, expired: false });
     }
   });
 }
 
 module.exports = {
   getVapidPublicKey,
-  sendPushNotification
+  sendPushNotification,
+  syncWithMongo
 };
