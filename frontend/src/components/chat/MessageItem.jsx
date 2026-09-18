@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
 import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft } from 'lucide-react';
@@ -26,6 +26,18 @@ export default function MessageItem({
   const [showThread, setShowThread] = useState(false);
   const [showViewOnceModal, setShowViewOnceModal] = useState(false);
   const [viewedByState, setViewedByState] = useState(message.viewedBy || []);
+
+  // Swipe-to-reply & Double-tap states
+  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [showHeartBurst, setShowHeartBurst] = useState(false);
+
+  const touchStartXRef = useRef(0);
+  const touchStartYRef = useRef(0);
+  const isSwipingRef = useRef(false);
+  const lastTapRef = useRef(0);
+  const isMouseDownRef = useRef(false);
+  const mouseStartXRef = useRef(0);
 
   useEffect(() => {
     if (!socket) return;
@@ -79,6 +91,89 @@ export default function MessageItem({
       socket.emit('add_reaction', { messageId: message.id, chatId, emoji, userId: currentUser.id });
     }
     setShowContextMenu(false);
+  };
+
+  const handleDoubleTap = () => {
+    handleReact('❤️');
+    setShowHeartBurst(true);
+    setTimeout(() => setShowHeartBurst(false), 750);
+  };
+
+  // Touch Swipe-to-Reply & Double-Tap Detection
+  const handleTouchStart = (e) => {
+    if (isMultiSelectMode) return;
+    const touch = e.touches[0];
+    touchStartXRef.current = touch.clientX;
+    touchStartYRef.current = touch.clientY;
+    isSwipingRef.current = false;
+  };
+
+  const handleTouchMove = (e) => {
+    if (isMultiSelectMode) return;
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - touchStartXRef.current;
+    const deltaY = Math.abs(touch.clientY - touchStartYRef.current);
+
+    // Swipe right to reply (WhatsApp style)
+    if (deltaX > 8 && deltaX > deltaY) {
+      isSwipingRef.current = true;
+      setIsDragging(true);
+      const swipeDistance = Math.min(deltaX * 0.55, 65);
+      setDragX(swipeDistance);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (isMultiSelectMode) return;
+    if (isSwipingRef.current) {
+      if (dragX >= 35 && onReply) {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate(35);
+        }
+        onReply(message);
+      }
+    } else {
+      // Check double tap
+      const now = Date.now();
+      if (now - lastTapRef.current < 320) {
+        handleDoubleTap();
+        lastTapRef.current = 0;
+      } else {
+        lastTapRef.current = now;
+      }
+    }
+
+    isSwipingRef.current = false;
+    setIsDragging(false);
+    setDragX(0);
+  };
+
+  // Desktop Mouse Drag to Swipe
+  const handleMouseDown = (e) => {
+    if (isMultiSelectMode || e.button !== 0) return;
+    isMouseDownRef.current = true;
+    mouseStartXRef.current = e.clientX;
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isMouseDownRef.current || isMultiSelectMode) return;
+    const deltaX = e.clientX - mouseStartXRef.current;
+    if (deltaX > 6) {
+      setIsDragging(true);
+      const swipeDistance = Math.min(deltaX * 0.55, 65);
+      setDragX(swipeDistance);
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (isMouseDownRef.current) {
+      if (dragX >= 35 && onReply) {
+        onReply(message);
+      }
+      isMouseDownRef.current = false;
+      setIsDragging(false);
+      setDragX(0);
+    }
   };
 
   const handleVotePoll = (optionId) => {
@@ -136,14 +231,35 @@ export default function MessageItem({
   return (
     <div
       onClick={isMultiSelectMode ? () => onToggleSelect && onToggleSelect(message.id) : undefined}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
       style={{
         alignSelf: isMine ? 'flex-end' : 'flex-start',
         maxWidth: '78%',
         minWidth: '160px',
         position: 'relative',
-        cursor: isMultiSelectMode ? 'pointer' : 'default'
+        cursor: isMultiSelectMode ? 'pointer' : 'default',
+        touchAction: 'pan-y'
       }}
     >
+      {/* Swipe to Reply Indicator */}
+      {dragX > 6 && (
+        <div
+          className="swipe-reply-indicator"
+          style={{
+            opacity: Math.min(dragX / 35, 1),
+            transform: `translateY(-50%) scale(${Math.min(0.5 + (dragX / 70), 1)})`
+          }}
+        >
+          <CornerUpLeft size={16} />
+        </div>
+      )}
+
       {/* Selection Checkbox indicator when in Multi-Select Mode */}
       {isMultiSelectMode && (
         <div style={{
@@ -174,6 +290,7 @@ export default function MessageItem({
       )}
 
       <div
+        onDoubleClick={!isMultiSelectMode ? handleDoubleTap : undefined}
         onContextMenu={(e) => {
           if (!isMultiSelectMode) {
             e.preventDefault();
@@ -187,9 +304,20 @@ export default function MessageItem({
           borderRadius: isMine ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
           boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
           border: isSelected ? '1.5px solid var(--accent)' : '1px solid transparent',
-          transition: 'all 0.15s ease'
+          transform: `translateX(${dragX}px)`,
+          transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1), background 0.15s ease',
+          userSelect: isDragging ? 'none' : 'auto',
+          position: 'relative'
         }}
       >
+        {/* Double-Tap Heart Burst Animation */}
+        {showHeartBurst && (
+          <div className="heart-burst-overlay">
+            <span style={{ fontSize: '2.8rem', filter: 'drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4))' }}>
+              ❤️
+            </span>
+          </div>
+        )}
         {/* Quoted Reply Preview (WhatsApp Style) */}
         {message.replyTo && (
           <div style={{

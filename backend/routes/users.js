@@ -64,8 +64,8 @@ router.put('/change-password', authMiddleware, async (req, res) => {
     }
 
     const bcrypt = require('bcryptjs');
-    const users = await db.getUsers();
-    const user = users.find(u => u.id === req.user.id);
+    const User = require('../models/User');
+    const user = await User.findOne({ id: req.user.id });
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
     const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
@@ -73,10 +73,12 @@ router.put('/change-password', authMiddleware, async (req, res) => {
 
     const salt = await bcrypt.genSalt(10);
     const newHash = await bcrypt.hash(newPassword, salt);
-    await db.updateUser(req.user.id, { passwordHash: newHash });
+    user.passwordHash = newHash;
+    await user.save();
 
     res.json({ success: true, message: 'Password changed successfully!' });
   } catch (err) {
+    console.error('Password change error:', err);
     res.status(500).json({ error: 'Failed to change password.' });
   }
 });
