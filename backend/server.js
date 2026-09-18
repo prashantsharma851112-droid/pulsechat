@@ -71,7 +71,7 @@ io.on('connection', (socket) => {
 
   // Send Real-Time Message
   socket.on('send_message', async (messageData) => {
-    const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, pollData, callData, isViewOnce } = messageData;
+    const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, pollData, callData, isViewOnce, replyTo } = messageData;
 
     const newMsg = {
       id: 'msg_' + Date.now(),
@@ -89,7 +89,8 @@ io.on('connection', (socket) => {
       viewedBy: [],
       status: receiverId && onlineUsers.has(receiverId) ? 'delivered' : 'sent',
       timestamp: new Date().toISOString(),
-      reactions: {}
+      reactions: {},
+      replyTo: replyTo || null  // WhatsApp-style reply data
     };
 
     await db.saveMessage(newMsg);
@@ -100,7 +101,18 @@ io.on('connection', (socket) => {
     if (receiverId && !isGroup) {
       const recipientSocketId = onlineUsers.get(receiverId);
       if (recipientSocketId) {
-        io.to(recipientSocketId).emit('message_notification', newMsg);
+        // Sender ka naam fetch karo notification ke liye
+        try {
+          const User = require('./models/User');
+          const sender = await User.findOne({ id: senderId }).select('displayName username avatar');
+          io.to(recipientSocketId).emit('message_notification', {
+            ...newMsg,
+            senderName: sender?.displayName || sender?.username || senderId,
+            senderAvatar: sender?.avatar || null
+          });
+        } catch (e) {
+          io.to(recipientSocketId).emit('message_notification', newMsg);
+        }
       }
     }
   });

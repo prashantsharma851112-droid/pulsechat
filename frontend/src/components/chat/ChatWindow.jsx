@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -28,6 +28,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [groupMembersMap, setGroupMembersMap] = useState({});
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Reply state (WhatsApp style)
+  const [replyTo, setReplyTo] = useState(null);
+  const replyInputRef = useRef(null);
+
+  // Track if this is the initial load (to use instant scroll vs smooth scroll)
+  const isInitialLoad = useRef(true);
 
   // Multi-Select & Clear Chat states
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
@@ -61,6 +68,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   // Load message history & group details
   useEffect(() => {
+    // Chat badle toh reply aur initial scroll flag reset karo
+    isInitialLoad.current = true;
+    setReplyTo(null);
+
     if (activeChat) {
       fetch(`${BACKEND_URL}/api/messages/${chatId}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -197,7 +208,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length === 0) return;
+    if (isInitialLoad.current) {
+      // Pehli baar load ho toh instantly last message pe jaao
+      messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+      isInitialLoad.current = false;
+    } else {
+      // Naya message aaye toh smoothly scroll karo
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   // Clear Chat Undo Timer
@@ -284,9 +303,17 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       receiverId: isGroup ? '' : activeChat.id,
       isGroup,
       content: msgContent,
-      type: 'text'
+      type: 'text',
+      replyTo: replyTo ? {
+        id: replyTo.id,
+        content: replyTo.content,
+        type: replyTo.type,
+        senderId: replyTo.senderId,
+        senderName: replyTo.senderName || replyTo.senderId
+      } : null
     });
 
+    setReplyTo(null); // Reply clear karo bhejne ke baad
     playSound('sent');
   };
 
@@ -624,6 +651,17 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 isSelected={selectedMsgIds.includes(msg.id)}
                 onToggleSelect={handleToggleSelectMsg}
                 onJoinGroupCall={(isVideo) => onStartGroupCall && onStartGroupCall(activeChat, isVideo)}
+                onReply={(msg) => {
+                  // Sender ka naam determine karo
+                  const senderInfo = groupMembersMap[msg.senderId];
+                  setReplyTo({
+                    ...msg,
+                    senderName: msg.senderId === user.id
+                      ? 'You'
+                      : (senderInfo?.displayName || senderInfo?.username || activeChat.displayName)
+                  });
+                  replyInputRef.current?.focus();
+                }}
               />
             </React.Fragment>
           );
@@ -730,6 +768,53 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         ))}
       </div>
 
+      {/* WhatsApp-Style Reply Preview Strip */}
+      {replyTo && (
+        <div style={{
+          padding: '8px 16px',
+          background: 'var(--bg-sidebar)',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <div style={{ color: 'var(--accent)', flexShrink: 0 }}>
+            <CornerUpLeft size={16} />
+          </div>
+          <div style={{
+            flex: 1,
+            background: 'rgba(0,0,0,0.15)',
+            borderLeft: '3px solid var(--accent)',
+            borderRadius: '8px',
+            padding: '6px 10px',
+            minWidth: 0
+          }}>
+            <div style={{ fontWeight: 700, fontSize: '0.75rem', color: 'var(--accent)', marginBottom: '2px' }}>
+              {replyTo.senderName || 'Someone'}
+            </div>
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {replyTo.type === 'text'
+                ? (replyTo.content || '')
+                : replyTo.type === 'voice'
+                  ? '🎤 Voice note'
+                  : replyTo.type === 'image'
+                    ? '🖼️ Photo'
+                    : replyTo.type === 'video'
+                      ? '🎥 Video'
+                      : replyTo.type || 'Message'}
+            </div>
+          </div>
+          <button
+            onClick={() => setReplyTo(null)}
+            className="icon-btn-ghost"
+            title="Cancel reply"
+            style={{ flexShrink: 0 }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
+
       {/* Input Bar */}
       <div style={{ padding: '0.75rem 1rem', background: 'var(--bg-sidebar)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
         {showEmoji && (
@@ -759,6 +844,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               onChange={handleTextChange}
               placeholder={isGroup ? 'Message group...' : 'Type a message...'}
               className="form-input"
+              ref={replyInputRef}
               style={{ flex: 1, borderRadius: '24px' }}
             />
             <button type="submit" className="btn-primary-round" title="Send Message"><Send size={18} /></button>

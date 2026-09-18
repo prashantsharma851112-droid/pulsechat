@@ -52,6 +52,35 @@ router.put('/profile', authMiddleware, async (req, res) => {
   res.json({ user: userWithoutPass });
 });
 
+// Change Password
+router.put('/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current and new password are required.' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+    }
+
+    const bcrypt = require('bcryptjs');
+    const users = await db.getUsers();
+    const user = users.find(u => u.id === req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) return res.status(400).json({ error: 'Current password is incorrect.' });
+
+    const salt = await bcrypt.genSalt(10);
+    const newHash = await bcrypt.hash(newPassword, salt);
+    await db.updateUser(req.user.id, { passwordHash: newHash });
+
+    res.json({ success: true, message: 'Password changed successfully!' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to change password.' });
+  }
+});
+
 // Get User Profile by ID
 router.get('/:id', authMiddleware, async (req, res) => {
   const users = await db.getUsers();

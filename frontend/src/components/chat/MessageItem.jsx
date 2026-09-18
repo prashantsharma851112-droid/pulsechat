@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
-import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye } from 'lucide-react';
+import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 
@@ -15,7 +15,8 @@ export default function MessageItem({
   isMultiSelectMode,
   isSelected,
   onToggleSelect,
-  onJoinGroupCall
+  onJoinGroupCall,
+  onReply
 }) {
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
@@ -189,6 +190,36 @@ export default function MessageItem({
           transition: 'all 0.15s ease'
         }}
       >
+        {/* Quoted Reply Preview (WhatsApp Style) */}
+        {message.replyTo && (
+          <div style={{
+            background: 'rgba(0,0,0,0.18)',
+            borderLeft: '3px solid var(--accent)',
+            borderRadius: '8px',
+            padding: '6px 10px',
+            marginBottom: '8px',
+            fontSize: '0.8rem',
+            color: 'var(--text-muted)',
+            maxWidth: '100%',
+            overflow: 'hidden'
+          }}>
+            <div style={{ fontWeight: 700, color: 'var(--accent)', marginBottom: '2px', fontSize: '0.75rem' }}>
+              {message.replyTo.senderName || 'Someone'}
+            </div>
+            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.9 }}>
+              {message.replyTo.type === 'text'
+                ? (message.replyTo.content || '')
+                : message.replyTo.type === 'voice'
+                  ? '🎤 Voice note'
+                  : message.replyTo.type === 'image'
+                    ? '🖼️ Photo'
+                    : message.replyTo.type === 'video'
+                      ? '🎥 Video'
+                      : `${message.replyTo.type || 'Message'}`}
+            </div>
+          </div>
+        )}
+
         {/* Voice Note Message */}
         {message.type === 'voice' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '200px' }}>
@@ -431,6 +462,19 @@ export default function MessageItem({
           <span onClick={() => handleReact('🔥')} style={{ cursor: 'pointer' }}>🔥</span>
 
           <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
+
+          {/* Reply Button */}
+          <button
+            onClick={() => {
+              if (onReply) onReply(message);
+              setShowContextMenu(false);
+            }}
+            className="icon-btn-ghost"
+            title="Reply to message"
+            style={{ padding: '2px', color: 'var(--accent)' }}
+          >
+            <CornerUpLeft size={16} />
+          </button>
 
           <button onClick={() => { setShowThread(true); setShowContextMenu(false); }} className="icon-btn-ghost" title="Reply in sub-thread" style={{ padding: '2px' }}>
             <GitBranch size={16} />

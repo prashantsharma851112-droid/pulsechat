@@ -24,7 +24,9 @@ const messageSchema = new mongoose.Schema({
   originalType: { type: String, default: null },
   originalAudioUrl: { type: String, default: null },
   originalMediaUrl: { type: String, default: null },
-  originalPollData: { type: Object, default: null }
+  originalPollData: { type: Object, default: null },
+  // WhatsApp-style reply: quoted message data
+  replyTo: { type: Object, default: null } // { id, content, type, senderId, senderName }
 });
 
 module.exports = mongoose.model('Message', messageSchema);
