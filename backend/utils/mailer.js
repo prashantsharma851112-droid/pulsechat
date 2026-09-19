@@ -1,180 +1,7 @@
-const tls = require('tls');
-const net = require('net');
+const nodemailer = require('nodemailer');
 
 /**
- * Send an email via SMTP (supports SSL port 465 and STARTTLS port 587)
- * using Node.js standard library (no external npm dependencies required).
- */
-function sendSmtpEmail({ host, port, user, pass, to, subject, html, text }) {
-  return new Promise((resolve, reject) => {
-    const isDirectSsl = Number(port) === 465;
-    let socket;
-    let buffer = '';
-    let step = 0;
-
-    const cleanup = () => {
-      if (socket && !socket.destroyed) {
-        socket.end();
-      }
-    };
-
-    const onData = (data) => {
-      buffer += data.toString();
-      const lines = buffer.split('\r\n');
-      buffer = lines.pop(); // keep last incomplete line
-
-      for (const line of lines) {
-        if (!line) continue;
-        const code = parseInt(line.substring(0, 3), 10);
-        // Multiline responses have '-' after the code (e.g., 250-8BITMIME)
-        const isLastLine = line.charAt(3) === ' ';
-
-        if (!isLastLine && !isNaN(code)) continue;
-
-        handleSmtpStep(code, line);
-      }
-    };
-
-    const sendCmd = (cmd) => {
-      if (socket && !socket.destroyed) {
-        socket.write(cmd + '\r\n');
-      }
-    };
-
-    const handleSmtpStep = (code, line) => {
-      if (code >= 400) {
-        cleanup();
-        return reject(new Error(`SMTP Error [${code}]: ${line}`));
-      }
-
-      switch (step) {
-        case 0: // Server greeting (220)
-          step = 1;
-          sendCmd(`EHLO ${host || 'localhost'}`);
-          break;
-
-        case 1: // Response to EHLO (250)
-          if (isDirectSsl || socket instanceof tls.TLSSocket) {
-            // Already secure, proceed to AUTH LOGIN
-            step = 3;
-            sendCmd('AUTH LOGIN');
-          } else {
-            // Upgrade via STARTTLS
-            step = 2;
-            sendCmd('STARTTLS');
-          }
-          break;
-
-        case 2: // Response to STARTTLS (220)
-          // Upgrade plain socket to TLS
-          socket.removeAllListeners('data');
-          socket = tls.connect({ socket, host, rejectUnauthorized: false }, () => {
-            socket.on('data', onData);
-            step = 1; // Resend EHLO inside TLS
-            sendCmd(`EHLO ${host || 'localhost'}`);
-          });
-          socket.on('error', (err) => {
-            cleanup();
-            reject(err);
-          });
-          break;
-
-        case 3: // Response to AUTH LOGIN (334) -> send Base64 username
-          step = 4;
-          sendCmd(Buffer.from(user).toString('base64'));
-          break;
-
-        case 4: // Response to username (334) -> send Base64 password
-          step = 5;
-          sendCmd(Buffer.from(pass).toString('base64'));
-          break;
-
-        case 5: // Response to password (235 Authentication succeeded)
-          step = 6;
-          sendCmd(`MAIL FROM:<${user}>`);
-          break;
-
-        case 6: // Response to MAIL FROM (250)
-          step = 7;
-          sendCmd(`RCPT TO:<${to}>`);
-          break;
-
-        case 7: // Response to RCPT TO (250)
-          step = 8;
-          sendCmd('DATA');
-          break;
-
-        case 8: // Response to DATA (354) -> send message content
-          step = 9;
-          const mimeBoundary = '====PulseChatBoundary_' + Date.now();
-          const emailData = [
-            `From: "PulseChat Security" <${user}>`,
-            `To: <${to}>`,
-            `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
-            `MIME-Version: 1.0`,
-            `Content-Type: multipart/alternative; boundary="${mimeBoundary}"`,
-            '',
-            `--${mimeBoundary}`,
-            `Content-Type: text/plain; charset=utf-8`,
-            '',
-            text || 'Your PulseChat verification code is inside this email.',
-            '',
-            `--${mimeBoundary}`,
-            `Content-Type: text/html; charset=utf-8`,
-            '',
-            html,
-            '',
-            `--${mimeBoundary}--`,
-            '.',
-            ''
-          ].join('\r\n');
-
-          sendCmd(emailData);
-          break;
-
-        case 9: // Response to message data (250 OK)
-          step = 10;
-          sendCmd('QUIT');
-          cleanup();
-          resolve({ success: true, message: 'Email sent successfully via SMTP' });
-          break;
-      }
-    };
-
-    try {
-      if (isDirectSsl) {
-        socket = tls.connect(
-          { host, port: Number(port), rejectUnauthorized: false },
-          () => {
-            socket.on('data', onData);
-          }
-        );
-      } else {
-        socket = net.connect(
-          { host, port: Number(port || 587) },
-          () => {
-            socket.on('data', onData);
-          }
-        );
-      }
-
-      socket.setTimeout(25000, () => {
-        cleanup();
-        reject(new Error('SMTP Connection Timed Out after 25s'));
-      });
-
-      socket.on('error', (err) => {
-        cleanup();
-        reject(err);
-      });
-    } catch (err) {
-      reject(err);
-    }
-  });
-}
-
-/**
- * Send OTP Verification Email
+ * Send OTP Verification Email using nodemailer (reliable, production-ready)
  */
 async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat User') {
   const host = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
@@ -204,7 +31,7 @@ async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat Us
     <body>
       <div class="card">
         <div class="header">
-          <h1>⚡ PulseChat Security</h1>
+          <h1>&#9889; PulseChat Security</h1>
         </div>
         <div class="content">
           <p class="greeting">Hello ${displayName},</p>
@@ -212,10 +39,10 @@ async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat Us
           <div class="code-box">
             <span class="code">${otpCode}</span>
           </div>
-          <p class="info">⏱️ This code will expire in <strong>10 minutes</strong>.<br>If you didn't request this verification code, please disregard this email.</p>
+          <p class="info">&#9203; This code will expire in <strong>10 minutes</strong>.<br>If you did not request this verification code, please disregard this email.</p>
         </div>
         <div class="footer">
-          &copy; ${new Date().getFullYear()} PulseChat Inc. • End-to-End Encrypted Real-Time Messaging
+          &copy; ${new Date().getFullYear()} PulseChat Inc. &bull; Real-Time Messaging
         </div>
       </div>
     </body>
@@ -224,52 +51,51 @@ async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat Us
 
   const textContent = `Hello ${displayName},\n\nYour PulseChat verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\nIf you did not request this, you can safely ignore this message.`;
 
-  // If SMTP credentials are configured, send real email!
-  if (user && pass) {
+  if (!user || !pass) {
+    console.warn('⚠️ [PulseChat Mailer] SMTP_USER and SMTP_PASS not set in .env! Emails cannot be sent.');
+    console.log(`👉 [DEV NOTICE] Add to backend/.env:\nSMTP_HOST=smtp.gmail.com\nSMTP_PORT=465\nSMTP_USER=your_email@gmail.com\nSMTP_PASS=your_16_char_app_password`);
+    return { success: false, error: 'SMTP credentials not configured', delivered: false };
+  }
+
+  console.log(`📧 [PulseChat Mailer] Sending OTP to: ${recipientEmail} via ${host}:${port}...`);
+
+  // Try configured port first, then fallback
+  const portConfigs = [
+    { port, secure: port === 465 },
+    { port: port === 465 ? 587 : 465, secure: port !== 465 }
+  ];
+
+  let lastErr = null;
+  for (const config of portConfigs) {
     try {
-      console.log(`📧 [PulseChat Mailer] Sending real OTP email to: ${recipientEmail} via ${host}:${port}...`);
-      await sendSmtpEmail({
+      const transporter = nodemailer.createTransport({
         host,
-        port,
-        user,
-        pass,
+        port: config.port,
+        secure: config.secure, // true for 465, false for 587 (STARTTLS)
+        auth: { user, pass },
+        connectionTimeout: 20000,
+        greetingTimeout: 15000,
+        socketTimeout: 20000,
+        tls: { rejectUnauthorized: false }
+      });
+
+      await transporter.sendMail({
+        from: `"PulseChat Security" <${user}>`,
         to: recipientEmail,
         subject: `${otpCode} is your PulseChat verification code`,
-        html: htmlContent,
-        text: textContent
+        text: textContent,
+        html: htmlContent
       });
-      console.log(`✅ [PulseChat Mailer] Real OTP email successfully delivered to: ${recipientEmail}`);
+
+      console.log(`✅ [PulseChat Mailer] Email delivered to: ${recipientEmail} via port ${config.port}`);
       return { success: true, delivered: true };
     } catch (err) {
-      console.error(`❌ [PulseChat Mailer] Port ${port} failed (${err.message}). Retrying via fallback port...`);
-      const fallbackPort = port === 465 ? 587 : 465;
-      try {
-        await sendSmtpEmail({
-          host,
-          port: fallbackPort,
-          user,
-          pass,
-          to: recipientEmail,
-          subject: `${otpCode} is your PulseChat verification code`,
-          html: htmlContent,
-          text: textContent
-        });
-        console.log(`✅ [PulseChat Mailer] Real OTP email successfully delivered via fallback port ${fallbackPort} to: ${recipientEmail}`);
-        return { success: true, delivered: true };
-      } catch (fallbackErr) {
-        console.error(`❌ [PulseChat Mailer] SMTP delivery failed on both ports. Error:`, fallbackErr.message);
-        return { success: false, error: fallbackErr.message, delivered: false };
-      }
+      console.error(`❌ [PulseChat Mailer] Port ${config.port} failed: ${err.message}`);
+      lastErr = err;
     }
-  } else {
-    // If SMTP credentials are not set in .env yet, log clear instructions in console
-    console.warn(`⚠️ [PulseChat Mailer] SMTP_USER and SMTP_PASS not set in backend/.env!`);
-    console.log(`👉 [DEVELOPER NOTICE] To send real emails, add to backend/.env:\nSMTP_USER=your-email@gmail.com\nSMTP_PASS=your-16-char-app-password\n`);
-    return { success: false, error: 'SMTP credentials not configured in backend/.env', delivered: false };
   }
+
+  return { success: false, error: lastErr?.message || 'Email delivery failed', delivered: false };
 }
 
-module.exports = {
-  sendSmtpEmail,
-  sendOtpEmail
-};
+module.exports = { sendOtpEmail };
