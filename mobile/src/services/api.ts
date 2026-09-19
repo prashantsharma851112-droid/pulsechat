@@ -43,6 +43,8 @@ export interface Message {
   type?: 'text' | 'image' | 'audio' | 'poll' | 'call';
   audioUrl?: string | null;
   mediaUrl?: string | null;
+  isViewOnce?: boolean;
+  viewedBy?: string[];
   pollData?: any;
   callData?: any;
   status?: 'sent' | 'delivered' | 'read';

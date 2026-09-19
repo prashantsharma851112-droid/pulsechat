@@ -84,7 +84,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-function MainApp() {
+export default function App() {
   const { user, token, loading } = useContext(AuthContext);
   const { socket, lastNotification } = useContext(SocketContext);
   const [isRegisterView, setIsRegisterView] = useState(false);
@@ -404,7 +404,8 @@ function MainApp() {
   };
 
   return (
-    <div className={`app-root-container ${isMobile ? 'is-mobile' : 'is-desktop'}`} style={{ display: 'flex', height: '100dvh', width: '100dvw', overflow: 'hidden', position: 'relative' }}>
+    <ErrorBoundary>
+      <div className={`app-root-container ${isMobile ? 'is-mobile' : 'is-desktop'}`} style={{ display: 'flex', height: '100dvh', width: '100dvw', overflow: 'hidden', position: 'relative' }}>
       {/* Master Post-Login Entrance Animation */}
       {showEntrance && (
         <EntranceAnimation
@@ -540,13 +541,17 @@ function MainApp() {
         {toasts.map(t => (
           <Toast
             key={t.id}
-            title="New message"
+            title={t.title || "New message"}
             body={t.body}
-            onClick={() => dismissToast(t.id)}
+            onClick={() => {
+              openChatById(t.chatId, t.senderId, t.isGroup);
+              dismissToast(t.id);
+            }}
             onDismiss={() => dismissToast(t.id)}
           />
         ))}
       </div>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }

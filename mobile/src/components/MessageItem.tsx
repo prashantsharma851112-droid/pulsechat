@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Image, Modal, TouchableOpacity } from 'react-native';
 import { Message } from '../services/api';
 
 interface MessageItemProps {
@@ -15,11 +15,40 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message, currentUserId
     minute: '2-digit',
   });
 
+  const [showViewOnce, setShowViewOnce] = useState(false);
+  const [isHolding, setIsHolding] = useState(false);
+  const [hasViewed, setHasViewed] = useState(
+    message.viewedBy?.includes(currentUserId) || false
+  );
+
+  const isViewOnceConsumed = message.isViewOnce && (hasViewed || (!isMe && message.viewedBy?.includes(currentUserId)));
+
   return (
     <View style={[styles.container, isMe ? styles.myContainer : styles.theirContainer]}>
       <View style={[styles.bubble, isMe ? styles.myBubble : styles.theirBubble]}>
-        {message.mediaUrl && (
-          <Image source={{ uri: message.mediaUrl }} style={styles.mediaImage} resizeMode="cover" />
+        {message.isViewOnce ? (
+          <View style={{ paddingVertical: 4 }}>
+            {isViewOnceConsumed ? (
+              <View style={styles.viewOnceOpenedBadge}>
+                <Text style={{ color: '#8696a0', fontSize: 13, fontWeight: '600' }}>1️⃣ Opened</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={() => setShowViewOnce(true)}
+                style={styles.viewOnceBtn}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 14 }}>1️⃣ 🔒</Text>
+                <Text style={styles.viewOnceBtnText}>
+                  {message.type === 'image' ? 'View Once Photo' : 'View Once Media'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          message.mediaUrl && (
+            <Image source={{ uri: message.mediaUrl }} style={styles.mediaImage} resizeMode="cover" />
+          )
         )}
 
         {message.type === 'audio' && (
@@ -44,6 +73,76 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message, currentUserId
           )}
         </View>
       </View>
+
+      {/* View Once Protected Hold-to-View Modal */}
+      {showViewOnce && message.mediaUrl && (
+        <Modal
+          visible={showViewOnce}
+          transparent={false}
+          animationType="fade"
+          onRequestClose={() => {
+            setHasViewed(true);
+            setShowViewOnce(false);
+          }}
+        >
+          <View style={styles.modalBg}>
+            <View style={styles.modalTopBar}>
+              <Text style={styles.modalTitle}>🔒 View Once Protected Photo</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setHasViewed(true);
+                  setShowViewOnce(false);
+                }}
+                style={styles.closeBtn}
+              >
+                <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalMediaBox}>
+              {isHolding ? (
+                <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                  <Image
+                    source={{ uri: message.mediaUrl }}
+                    style={styles.fullMediaImage}
+                    resizeMode="contain"
+                  />
+                  <Text style={styles.watermarkText}>
+                    🔒 PULSECHAT • DO NOT SCREENSHOT • PROTECTED
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.lockedBox}>
+                  <Text style={{ fontSize: 44, marginBottom: 12 }}>🔒</Text>
+                  <Text style={styles.lockedTitle}>Protected View-Once Media</Text>
+                  <Text style={styles.lockedSub}>
+                    Screenshots and recording are blocked. Photo is only visible while pressing the button below.
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.modalBottomBar}>
+              <TouchableOpacity
+                onPressIn={() => {
+                  setIsHolding(true);
+                  setHasViewed(true);
+                }}
+                onPressOut={() => setIsHolding(false)}
+                activeOpacity={0.9}
+                style={[styles.holdButton, isHolding && styles.holdButtonActive]}
+              >
+                <Text style={styles.holdButtonText}>
+                  {isHolding ? '👁️ Viewing... (Keep Pressing)' : '👆 Press & Hold to View'}
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.holdHint}>
+                {isHolding ? 'Release finger to hide photo immediately' : 'Screenshot is strictly blocked • Disappears on release'}
+              </Text>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -128,5 +227,116 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#53bdeb',
     fontWeight: 'bold',
+  },
+  viewOnceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    gap: 6,
+  },
+  viewOnceBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  viewOnceOpenedBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+  },
+  modalBg: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'space-between',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  modalTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalTitle: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalMediaBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullMediaImage: {
+    width: 320,
+    height: 420,
+    borderRadius: 14,
+  },
+  watermarkText: {
+    color: 'rgba(255, 255, 255, 0.25)',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginTop: 8,
+    letterSpacing: 1,
+  },
+  lockedBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 30,
+  },
+  lockedTitle: {
+    color: '#ffffff',
+    fontSize: 17,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  lockedSub: {
+    color: '#8696a0',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  modalBottomBar: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  holdButton: {
+    width: '100%',
+    backgroundColor: '#4f46e5',
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  holdButtonActive: {
+    backgroundColor: '#10b981',
+  },
+  holdButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  holdHint: {
+    color: '#8696a0',
+    fontSize: 11,
+    textAlign: 'center',
   },
 });
