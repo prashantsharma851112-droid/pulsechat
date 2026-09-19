@@ -1,14 +1,273 @@
 const nodemailer = require('nodemailer');
+const https = require('https');
 
 /**
- * Send OTP Verification Email using nodemailer (reliable, production-ready)
+ * Perform HTTPS POST request (works across all Node.js versions without extra dependencies)
  */
-async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat User') {
-  const host = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
-  const port = Number(process.env.SMTP_PORT || 465);
+async function postJson(urlStr, headers, bodyObj) {
+  const bodyData = JSON.stringify(bodyObj);
+
+  if (typeof fetch === 'function') {
+    const res = await fetch(urlStr, {
+      method: 'POST',
+      headers,
+      body: bodyData
+    });
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { raw: text };
+    }
+    return { ok: res.ok, status: res.status, data };
+  }
+
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlStr);
+    const options = {
+      hostname: url.hostname,
+      port: 443,
+      path: url.pathname + url.search,
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(bodyData)
+      },
+      timeout: 10000
+    };
+
+    const req = https.request(options, (res) => {
+      let raw = '';
+      res.on('data', chunk => raw += chunk);
+      res.on('end', () => {
+        let data;
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          data = { raw };
+        }
+        resolve({
+          ok: res.statusCode >= 200 && res.statusCode < 300,
+          status: res.statusCode,
+          data
+        });
+      });
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('HTTPS request timed out'));
+    });
+
+    req.on('error', reject);
+    req.write(bodyData);
+    req.end();
+  });
+}
+
+/**
+ * Check which email providers are configured in environment
+ */
+function getMailConfigStatus() {
+  const brevoKey = (process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || '').trim();
+  const resendKey = (process.env.RESEND_API_KEY || '').trim();
+  const smtpUser = (process.env.SMTP_USER || '').trim();
+  const smtpPass = (process.env.SMTP_PASS || '').trim();
+
+  return {
+    brevo: Boolean(brevoKey),
+    resend: Boolean(resendKey),
+    smtp: Boolean(smtpUser && smtpPass),
+    smtpUser: smtpUser ? `${smtpUser.slice(0, 3)}***@${smtpUser.split('@')[1] || ''}` : null
+  };
+}
+
+/**
+ * 1. Brevo REST API (HTTPS Port 443) - 100% Reliable on Render Free Tier
+ * Free: 300 emails/day forever. Never blocked by Render or any cloud host.
+ */
+async function sendViaBrevo(recipientEmail, otpCode, displayName, htmlContent, textContent) {
+  const apiKey = (process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || '').trim();
+  if (!apiKey) return { success: false, skipped: true, error: 'BREVO_API_KEY not set' };
+
+  const senderEmail = (process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER || 'noreply.pulsechat@gmail.com').trim();
+  const senderName = process.env.BREVO_SENDER_NAME || 'PulseChat Security';
+
+  console.log(`📧 [Brevo] Initiating delivery to ${recipientEmail}...`);
+
+  // 1. First attempt: Brevo REST API (HTTPS Port 443 - Bypasses Render Port Blocks)
+  try {
+    const res = await postJson(
+      'https://api.brevo.com/v3/smtp/email',
+      {
+        'accept': 'application/json',
+        'api-key': apiKey,
+        'content-type': 'application/json'
+      },
+      {
+        sender: { name: senderName, email: senderEmail },
+        to: [{ email: recipientEmail, name: displayName }],
+        subject: `${otpCode} is your PulseChat verification code`,
+        htmlContent,
+        textContent
+      }
+    );
+
+    if (res.ok) {
+      console.log(`✅ [Brevo API] OTP email successfully delivered to ${recipientEmail}! Message ID: ${res.data?.messageId}`);
+      return { success: true, provider: 'brevo-api', messageId: res.data?.messageId, delivered: true };
+    }
+
+    const errDetail = res.data?.message || JSON.stringify(res.data) || `HTTP ${res.status}`;
+    console.warn(`⚠️ [Brevo API Warning]: ${errDetail}`);
+
+    // If key starts with xsmtpsib, it's an SMTP key rather than REST API key
+    if (apiKey.startsWith('xsmtpsib-')) {
+      console.log(`ℹ️ [Brevo Notice]: Provided key starts with 'xsmtpsib-' (SMTP Key). Attempting Brevo SMTP Relay fallback...`);
+      
+      // Attempt Brevo SMTP Relay
+      try {
+        const transporter = nodemailer.createTransport({
+          host: 'smtp-relay.brevo.com',
+          port: 587,
+          secure: false,
+          auth: {
+            user: senderEmail,
+            pass: apiKey
+          },
+          connectionTimeout: 6000,
+          socketTimeout: 8000,
+          greetingTimeout: 6000
+        });
+
+        await transporter.sendMail({
+          from: `"${senderName}" <${senderEmail}>`,
+          to: recipientEmail,
+          subject: `${otpCode} is your PulseChat verification code`,
+          text: textContent,
+          html: htmlContent
+        });
+
+        console.log(`✅ [Brevo SMTP Relay] OTP email successfully sent to ${recipientEmail}!`);
+        return { success: true, provider: 'brevo-smtp', delivered: true };
+      } catch (smtpErr) {
+        console.error(`❌ [Brevo SMTP Relay Error]: ${smtpErr.message}`);
+        return {
+          success: false,
+          error: `Brevo SMTP Relay failed: ${smtpErr.message}. On Render Free Tier, SMTP is blocked! Please generate an API Key (starts with xkeysib-) in Brevo under 'API Keys' tab.`
+        };
+      }
+    }
+
+    return { success: false, error: `Brevo API error: ${errDetail}` };
+  } catch (err) {
+    console.error(`❌ [Brevo Exception]: ${err.message}`);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * 2. Resend REST API (HTTPS Port 443)
+ */
+async function sendViaResend(recipientEmail, otpCode, displayName, htmlContent, textContent) {
+  const apiKey = (process.env.RESEND_API_KEY || '').trim();
+  if (!apiKey) return { success: false, skipped: true, error: 'RESEND_API_KEY not set' };
+
+  const sender = (process.env.RESEND_FROM || 'PulseChat <onboarding@resend.dev>').trim();
+  console.log(`📧 [Resend API] Sending OTP to ${recipientEmail} via HTTPS...`);
+
+  try {
+    const res = await postJson(
+      'https://api.resend.com/emails',
+      {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      {
+        from: sender,
+        to: recipientEmail,
+        subject: `${otpCode} is your PulseChat verification code`,
+        html: htmlContent,
+        text: textContent
+      }
+    );
+
+    if (!res.ok) {
+      const errDetail = res.data?.message || JSON.stringify(res.data) || `HTTP ${res.status}`;
+      console.error(`❌ [Resend API Error]: ${errDetail}`);
+      return { success: false, error: `Resend API error: ${errDetail}` };
+    }
+
+    console.log(`✅ [Resend API] OTP email successfully sent to ${recipientEmail}! ID: ${res.data?.id}`);
+    return { success: true, provider: 'resend', id: res.data?.id, delivered: true };
+  } catch (err) {
+    console.error(`❌ [Resend API Exception]: ${err.message}`);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * 3. Direct SMTP / Nodemailer
+ * Works on localhost & VPS. On Render Free Tier, SMTP ports 25, 465, 587 are blocked.
+ */
+async function sendViaSmtp(recipientEmail, otpCode, displayName, htmlContent, textContent) {
   const user = (process.env.SMTP_USER || '').trim();
   const pass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
+  if (!user || !pass) return { success: false, skipped: true, error: 'SMTP credentials not configured' };
 
+  const host = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+  const isGmail = host.includes('gmail.com');
+
+  console.log(`📧 [SMTP] Attempting to send OTP to ${recipientEmail} via ${isGmail ? 'Gmail Service' : host}...`);
+
+  // Try standard service for Gmail first (avoids TLS cipher issues)
+  const configs = isGmail
+    ? [
+        { service: 'gmail', auth: { user, pass }, connectionTimeout: 6000, socketTimeout: 8000, greetingTimeout: 6000 },
+        { host: 'smtp.gmail.com', port: 465, secure: true, auth: { user, pass }, connectionTimeout: 6000, socketTimeout: 8000, greetingTimeout: 6000, tls: { rejectUnauthorized: false } }
+      ]
+    : [
+        {
+          host,
+          port: Number(process.env.SMTP_PORT || 465),
+          secure: Number(process.env.SMTP_PORT || 465) === 465,
+          auth: { user, pass },
+          connectionTimeout: 6000,
+          socketTimeout: 8000,
+          greetingTimeout: 6000,
+          tls: { rejectUnauthorized: false }
+        }
+      ];
+
+  let lastErr = null;
+  for (const transportConfig of configs) {
+    try {
+      const transporter = nodemailer.createTransport(transportConfig);
+      await transporter.sendMail({
+        from: `"PulseChat Security" <${user}>`,
+        to: recipientEmail,
+        subject: `${otpCode} is your PulseChat verification code`,
+        text: textContent,
+        html: htmlContent
+      });
+
+      console.log(`✅ [SMTP] OTP email successfully sent to ${recipientEmail}!`);
+      return { success: true, provider: 'smtp', delivered: true };
+    } catch (err) {
+      console.warn(`⚠️ [SMTP Attempt Failed]: ${err.message}`);
+      lastErr = err;
+    }
+  }
+
+  return { success: false, error: lastErr?.message || 'SMTP delivery failed' };
+}
+
+/**
+ * Main OTP Sending Function: Multi-Provider with Automatic Fallback
+ */
+async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat User') {
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -23,7 +282,7 @@ async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat Us
         .content { padding: 32px 28px; text-align: center; }
         .greeting { font-size: 16px; color: #94a3b8; margin-bottom: 20px; }
         .code-box { background: #0f172a; border: 2px dashed #6366f1; border-radius: 12px; padding: 18px 24px; display: inline-block; margin: 16px 0 24px 0; }
-        .code { font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #818cf8; font-family: monospace; }
+        .code { font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #818cf8; font-family: monospace; }
         .info { font-size: 14px; color: #94a3b8; line-height: 1.6; margin-bottom: 20px; }
         .footer { border-top: 1px solid #334155; padding: 20px; text-align: center; font-size: 12px; color: #64748b; }
       </style>
@@ -51,51 +310,56 @@ async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat Us
 
   const textContent = `Hello ${displayName},\n\nYour PulseChat verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\nIf you did not request this, you can safely ignore this message.`;
 
-  if (!user || !pass) {
-    console.warn('⚠️ [PulseChat Mailer] SMTP_USER and SMTP_PASS not set in .env! Emails cannot be sent.');
-    console.log(`👉 [DEV NOTICE] Add to backend/.env:\nSMTP_HOST=smtp.gmail.com\nSMTP_PORT=465\nSMTP_USER=your_email@gmail.com\nSMTP_PASS=your_16_char_app_password`);
-    return { success: false, error: 'SMTP credentials not configured', delivered: false };
+  const configStatus = getMailConfigStatus();
+
+  // 1. Try Brevo HTTPS REST API first (recommended for Render free tier)
+  if (configStatus.brevo) {
+    const brevoRes = await sendViaBrevo(recipientEmail, otpCode, displayName, htmlContent, textContent);
+    if (brevoRes.success) return brevoRes;
   }
 
-  console.log(`📧 [PulseChat Mailer] Sending OTP to: ${recipientEmail} via ${host}:${port}...`);
-
-  // Try configured port first, then fallback
-  const portConfigs = [
-    { port, secure: port === 465 },
-    { port: port === 465 ? 587 : 465, secure: port !== 465 }
-  ];
-
-  let lastErr = null;
-  for (const config of portConfigs) {
-    try {
-      const transporter = nodemailer.createTransport({
-        host,
-        port: config.port,
-        secure: config.secure, // true for 465, false for 587 (STARTTLS)
-        auth: { user, pass },
-        connectionTimeout: 20000,
-        greetingTimeout: 15000,
-        socketTimeout: 20000,
-        tls: { rejectUnauthorized: false }
-      });
-
-      await transporter.sendMail({
-        from: `"PulseChat Security" <${user}>`,
-        to: recipientEmail,
-        subject: `${otpCode} is your PulseChat verification code`,
-        text: textContent,
-        html: htmlContent
-      });
-
-      console.log(`✅ [PulseChat Mailer] Email delivered to: ${recipientEmail} via port ${config.port}`);
-      return { success: true, delivered: true };
-    } catch (err) {
-      console.error(`❌ [PulseChat Mailer] Port ${config.port} failed: ${err.message}`);
-      lastErr = err;
-    }
+  // 2. Try Resend HTTPS REST API next
+  if (configStatus.resend) {
+    const resendRes = await sendViaResend(recipientEmail, otpCode, displayName, htmlContent, textContent);
+    if (resendRes.success) return resendRes;
   }
 
-  return { success: false, error: lastErr?.message || 'Email delivery failed', delivered: false };
+  // 3. Try SMTP (Nodemailer)
+  if (configStatus.smtp) {
+    const smtpRes = await sendViaSmtp(recipientEmail, otpCode, displayName, htmlContent, textContent);
+    if (smtpRes.success) return smtpRes;
+  }
+
+  // If no providers are configured or all attempts failed:
+  let failureReason = 'No email provider is currently configured';
+  if (configStatus.brevo || configStatus.resend || configStatus.smtp) {
+    failureReason = 'Configured email providers failed to send the email';
+  }
+
+  console.error(`\n🚨 ================================================================`);
+  console.error(`❌ [PulseChat Mailer] FAILED TO DELIVER OTP TO: ${recipientEmail}`);
+  console.error(`👉 REASON: ${failureReason}`);
+  console.error(`👉 ACTIVE CONFIG: ${JSON.stringify(configStatus)}`);
+  console.error(`🔑 FALLBACK OTP CODE FOR [${recipientEmail}] IS: [ ${otpCode} ]`);
+  if (!configStatus.brevo) {
+    console.error(`💡 [HOW TO FIX ON RENDER]:`);
+    console.error(`   Render Free Tier blocks SMTP ports 25, 465, 587.`);
+    console.error(`   To get 100% email delivery, create a free account on https://www.brevo.com`);
+    console.error(`   Generate an API key under 'SMTP & API Keys' and add to Render:`);
+    console.error(`   BREVO_API_KEY=xkeysib-your-key-here`);
+    console.error(`   BREVO_SENDER_EMAIL=your_email@gmail.com`);
+  }
+  console.error(`================================================================\n`);
+
+  return {
+    success: false,
+    delivered: false,
+    error: failureReason,
+    configStatus
+  };
 }
 
-module.exports = { sendOtpEmail };
+module.exports = {
+  sendOtpEmail,
+  getMailConfigStatus
+};

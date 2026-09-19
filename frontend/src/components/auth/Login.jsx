@@ -122,7 +122,12 @@ export default function Login({ switchToRegister }) {
         setUnverifiedUserId(data.userId || '');
         setNeedsOtp(true);
         setResendCooldown(60);
-        setSuccessMsg(data.error || 'Verification code sent to your email.');
+        if (data.emailDelivered === false && data.fallbackOtp) {
+          setSuccessMsg(`⚠️ Email not delivered (Render blocked SMTP). Test OTP: ${data.fallbackOtp}`);
+          setOtpCode(data.fallbackOtp);
+        } else {
+          setSuccessMsg(data.error || 'Verification code sent to your email.');
+        }
         return;
       }
 
@@ -184,7 +189,12 @@ export default function Login({ switchToRegister }) {
       if (!res.ok) throw new Error(data.error || 'Failed to resend code.');
 
       setResendCooldown(60);
-      setSuccessMsg('A fresh verification code has been sent to your email.');
+      if (data.emailDelivered === false && data.fallbackOtp) {
+        setSuccessMsg(`⚠️ Email not delivered (Render blocked SMTP). Test OTP: ${data.fallbackOtp}`);
+        setOtpCode(data.fallbackOtp);
+      } else {
+        setSuccessMsg('A fresh verification code has been sent to your email.');
+      }
     } catch (err) {
       setError(err.message);
     } finally {

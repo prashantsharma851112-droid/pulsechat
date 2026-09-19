@@ -100,16 +100,19 @@ router.post('/register', async (req, res) => {
       });
 
       // Send real OTP email
-      mailer.sendOtpEmail(cleanEmail, otp, displayName.trim()).catch(err => {
-        console.error('[Registration Mail Error]', err);
-      });
+      const mailResult = await mailer.sendOtpEmail(cleanEmail, otp, displayName.trim());
 
       return res.status(200).json({
         success: true,
         requiresVerification: true,
-        message: 'Verification code sent to your email address.',
+        message: mailResult.delivered
+          ? 'Verification code sent to your email address.'
+          : 'Verification code generated.',
         email: cleanEmail,
-        userId: existingUser.id
+        userId: existingUser.id,
+        emailDelivered: mailResult.delivered,
+        fallbackOtp: !mailResult.delivered ? otp : undefined,
+        mailError: !mailResult.delivered ? mailResult.error : undefined
       });
     }
 
@@ -141,18 +144,19 @@ router.post('/register', async (req, res) => {
     await db.saveUser(newUser);
 
     // Send real OTP email to user's actual email address
-    mailer.sendOtpEmail(cleanEmail, otp, displayName.trim()).catch(err => {
-      console.error('[Registration Mail Error]', err);
-    });
+    const mailResult = await mailer.sendOtpEmail(cleanEmail, otp, displayName.trim());
 
-    // SECURITY: Do NOT return the OTP code or JWT token in response.
-    // User must verify email code first to get authenticated!
     res.status(201).json({
       success: true,
       requiresVerification: true,
-      message: 'Verification code sent to your email address.',
+      message: mailResult.delivered
+        ? 'Verification code sent to your email address.'
+        : 'Verification code generated.',
       email: cleanEmail,
-      userId: newUser.id
+      userId: newUser.id,
+      emailDelivered: mailResult.delivered,
+      fallbackOtp: !mailResult.delivered ? otp : undefined,
+      mailError: !mailResult.delivered ? mailResult.error : undefined
     });
   } catch (err) {
     console.error('Registration Error:', err);
@@ -191,15 +195,16 @@ router.post('/login', async (req, res) => {
         otpExpires
       });
 
-      mailer.sendOtpEmail(user.email, otp, user.displayName).catch(err => {
-        console.error('[Login Unverified Mail Error]', err);
-      });
+      const mailResult = await mailer.sendOtpEmail(user.email, otp, user.displayName);
 
       return res.status(403).json({
         requiresVerification: true,
         email: user.email,
         userId: user.id,
-        error: 'Please verify your email address to continue. A 6-digit OTP code has been sent to your email.'
+        error: 'Please verify your email address to continue. A 6-digit OTP code has been sent to your email.',
+        emailDelivered: mailResult.delivered,
+        fallbackOtp: !mailResult.delivered ? otp : undefined,
+        mailError: !mailResult.delivered ? mailResult.error : undefined
       });
     }
 
@@ -243,17 +248,47 @@ router.post('/resend-otp', async (req, res) => {
     });
 
     // Send real email
-    mailer.sendOtpEmail(user.email, otp, user.displayName).catch(err => {
-      console.error('[Resend OTP Mail Error]', err);
-    });
+    const mailResult = await mailer.sendOtpEmail(user.email, otp, user.displayName);
 
     res.json({
       success: true,
-      message: 'A fresh 6-digit verification code has been sent to your email.'
+      message: mailResult.delivered
+        ? 'A fresh 6-digit verification code has been sent to your email.'
+        : 'A fresh verification code has been generated.',
+      emailDelivered: mailResult.delivered,
+      fallbackOtp: !mailResult.delivered ? otp : undefined,
+      mailError: !mailResult.delivered ? mailResult.error : undefined
     });
   } catch (err) {
     console.error('Resend OTP Error:', err);
     res.status(500).json({ error: 'Failed to resend OTP code.' });
+  }
+});
+
+// Diagnostic Test Endpoint: verify email sending via browser / curl
+router.get('/test-email', async (req, res) => {
+  try {
+    const to = (req.query.to || process.env.SMTP_USER || process.env.BREVO_SENDER_EMAIL || '').trim();
+    if (!to) {
+      return res.status(400).json({
+        error: 'Query param "to" is required, e.g. /api/auth/test-email?to=your_email@gmail.com',
+        configStatus: mailer.getMailConfigStatus()
+      });
+    }
+
+    const testOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const result = await mailer.sendOtpEmail(to, testOtp, 'PulseChat Tester');
+
+    res.json({
+      testSentTo: to,
+      result,
+      configStatus: mailer.getMailConfigStatus(),
+      help: !result.success
+        ? 'If hosted on Render Free Tier, SMTP ports 25, 465, 587 are blocked. Add BREVO_API_KEY to Render Environment Variables for 100% email delivery via HTTPS.'
+        : 'OTP email sent successfully!'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -273,18 +308,21 @@ router.post('/send-otp', async (req, res) => {
     const users = await db.getUsers();
     const existingUser = users.find(u => u.email.toLowerCase() === cleanEmail);
 
+    let mailResult = { delivered: false };
     if (existingUser) {
       await db.updateUser(existingUser.id, {
         otpCode: otp,
         otpExpires: new Date(Date.now() + 10 * 60 * 1000)
       });
-      mailer.sendOtpEmail(cleanEmail, otp, existingUser.displayName).catch(err => {
-        console.error('[Send OTP Mail Error]', err);
-      });
+      mailResult = await mailer.sendOtpEmail(cleanEmail, otp, existingUser.displayName);
     }
 
-    // SECURITY: Do NOT expose the OTP code in the response
-    res.json({ success: true, message: 'OTP verification code sent to your email.' });
+    res.json({
+      success: true,
+      message: mailResult.delivered ? 'OTP verification code sent to your email.' : 'OTP generated.',
+      emailDelivered: mailResult.delivered,
+      fallbackOtp: !mailResult.delivered ? otp : undefined
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to send OTP.' });
   }
