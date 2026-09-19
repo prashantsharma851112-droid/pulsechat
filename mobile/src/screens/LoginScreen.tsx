@@ -49,7 +49,7 @@ export const LoginScreen = ({ navigation }: any) => {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerBox}>
-          <Text style={styles.logoBadge}>⚡</Text>
+          <Text style={styles.logoBadge}>💬</Text>
           <Text style={styles.title}>PulseChat</Text>
           <Text style={styles.subtitle}>Welcome back! Sign in to continue</Text>
         </View>

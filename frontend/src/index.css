@@ -1351,6 +1351,55 @@ input, textarea {
     inset 0 1px 1px rgba(255, 255, 255, 0.25) !important;
 }
 
+/* High-Contrast Typography & Inputs inside 3D Auth Card */
+.auth-card-3d h2 {
+  color: #ffffff !important;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.6) !important;
+}
+
+.auth-card-3d p {
+  color: #cbd5e1 !important;
+}
+
+.auth-card-3d .form-label {
+  color: #f1f5f9 !important;
+  font-weight: 600 !important;
+  font-size: 0.86rem !important;
+  letter-spacing: 0.01em !important;
+}
+
+.auth-card-3d .form-input {
+  background: rgba(15, 23, 42, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+  border-radius: 12px !important;
+  font-size: 0.95rem !important;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s !important;
+}
+
+.auth-card-3d .form-input:focus {
+  background: rgba(15, 23, 42, 0.92) !important;
+  border-color: #818cf8 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35) !important;
+}
+
+.auth-card-3d .form-input::placeholder {
+  color: #94a3b8 !important;
+  opacity: 0.8 !important;
+}
+
+.auth-card-3d .btn-secondary {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  backdrop-filter: blur(10px);
+}
+
+.auth-card-3d .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
 @keyframes waterBlobFloat1 {
   0% {
     transform: translate(0, 0) scale(1) rotate(0deg);

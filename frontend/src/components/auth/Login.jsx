@@ -310,10 +310,10 @@ export default function Login({ switchToRegister }) {
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
               <AppLogo size={58} />
             </div>
-            <h2 style={{ fontSize: '1.65rem', fontWeight: 700, margin: '0 0 0.35rem 0', color: 'var(--text-main)', letterSpacing: '-0.3px' }}>
+            <h2 style={{ fontSize: '1.65rem', fontWeight: 700, margin: '0 0 0.35rem 0', color: '#ffffff', letterSpacing: '-0.3px', textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
               Welcome to PulseChat
             </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: 0 }}>
+            <p style={{ color: '#cbd5e1', fontSize: '0.88rem', margin: 0 }}>
               Sign in with Google or Email
             </p>
           </div>
@@ -369,11 +369,11 @@ export default function Login({ switchToRegister }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', margin: '1rem 0 1.25rem 0' }}>
-            <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
-            <span style={{ padding: '0 10px', fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.15)' }} />
+            <span style={{ padding: '0 10px', fontSize: '0.78rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               or with credentials
             </span>
-            <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
+            <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.15)' }} />
           </div>
 
           {successMsg && (
@@ -392,9 +392,9 @@ export default function Login({ switchToRegister }) {
 
           <form onSubmit={handleLoginSubmit}>
             <div style={{ marginBottom: '1.25rem' }}>
-              <label className="form-label">Email or @Username</label>
+              <label className="form-label" style={{ color: '#f1f5f9' }}>Email or @Username</label>
               <div style={{ position: 'relative' }}>
-                <AtSign size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <AtSign size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                 <input
                   type="text"
                   className="form-input"
@@ -408,9 +408,9 @@ export default function Login({ switchToRegister }) {
             </div>
 
             <div style={{ marginBottom: '0.5rem' }}>
-              <label className="form-label">Password</label>
+              <label className="form-label" style={{ color: '#f1f5f9' }}>Password</label>
               <div style={{ position: 'relative' }}>
-                <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                 <input
                   type="password"
                   className="form-input"
@@ -436,7 +436,7 @@ export default function Login({ switchToRegister }) {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: 'var(--accent)',
+                  color: '#818cf8',
                   fontSize: '0.84rem',
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -452,9 +452,9 @@ export default function Login({ switchToRegister }) {
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
 
-            <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+            <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.88rem', color: '#cbd5e1' }}>
               Don't have an account?{' '}
-              <span onClick={switchToRegister} style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}>
+              <span onClick={switchToRegister} style={{ color: '#818cf8', cursor: 'pointer', fontWeight: 600 }}>
                 Create Account
               </span>
             </p>
@@ -478,10 +478,10 @@ export default function Login({ switchToRegister }) {
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
               <AppLogo size={54} />
             </div>
-            <h2 style={{ fontSize: '1.55rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: 'var(--text-main)' }}>
+            <h2 style={{ fontSize: '1.55rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: '#ffffff', textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
               Reset Password
             </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', margin: 0, lineHeight: 1.5 }}>
+            <p style={{ color: '#cbd5e1', fontSize: '0.86rem', margin: 0, lineHeight: 1.5 }}>
               Enter your registered email address and we will send you a 6-digit recovery OTP code.
             </p>
           </div>
@@ -494,9 +494,9 @@ export default function Login({ switchToRegister }) {
           )}
 
           <div style={{ marginBottom: '1.5rem' }}>
-            <label className="form-label">Your Registered Email</label>
+            <label className="form-label" style={{ color: '#f1f5f9' }}>Your Registered Email</label>
             <div style={{ position: 'relative' }}>
-              <Mail size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <Mail size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
               <input
                 type="email"
                 className="form-input"
@@ -532,12 +532,12 @@ export default function Login({ switchToRegister }) {
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
               <AppLogo size={54} />
             </div>
-            <h2 style={{ fontSize: '1.55rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: 'var(--text-main)' }}>
+            <h2 style={{ fontSize: '1.55rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: '#ffffff', textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
               Set New Password
             </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', margin: 0, lineHeight: 1.5 }}>
+            <p style={{ color: '#cbd5e1', fontSize: '0.86rem', margin: 0, lineHeight: 1.5 }}>
               Enter the 6-digit code sent to:<br />
-              <strong style={{ color: 'var(--text-main)', fontSize: '0.92rem' }}>{forgotEmail}</strong>
+              <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>{forgotEmail}</strong>
             </p>
           </div>
 
@@ -556,7 +556,7 @@ export default function Login({ switchToRegister }) {
 
           {/* 6-Digit OTP */}
           <div style={{ marginBottom: '1.25rem' }}>
-            <label className="form-label" style={{ textAlign: 'center', display: 'block' }}>Enter 6-Digit Code</label>
+            <label className="form-label" style={{ textAlign: 'center', display: 'block', color: '#f1f5f9' }}>Enter 6-Digit Code</label>
             <input
               type="text"
               className="form-input"
@@ -572,9 +572,9 @@ export default function Login({ switchToRegister }) {
 
           {/* New Password */}
           <div style={{ marginBottom: '1rem' }}>
-            <label className="form-label">New Password</label>
+            <label className="form-label" style={{ color: '#f1f5f9' }}>New Password</label>
             <div style={{ position: 'relative' }}>
-              <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
               <input
                 type="password"
                 className="form-input"
@@ -589,9 +589,9 @@ export default function Login({ switchToRegister }) {
 
           {/* Confirm New Password */}
           <div style={{ marginBottom: '1.5rem' }}>
-            <label className="form-label">Confirm New Password</label>
+            <label className="form-label" style={{ color: '#f1f5f9' }}>Confirm New Password</label>
             <div style={{ position: 'relative' }}>
-              <KeyRound size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <KeyRound size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
               <input
                 type="password"
                 className="form-input"
@@ -610,15 +610,15 @@ export default function Login({ switchToRegister }) {
 
           <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
             {resendCooldown > 0 ? (
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                Resend code in <strong style={{ color: 'var(--text-main)' }}>{resendCooldown}s</strong>
+              <span style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>
+                Resend code in <strong style={{ color: '#ffffff' }}>{resendCooldown}s</strong>
               </span>
             ) : (
               <button
                 type="button"
                 onClick={handleSendRecoveryCode}
                 disabled={loading}
-                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                style={{ background: 'none', border: 'none', color: '#818cf8', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
               >
                 <RefreshCw size={14} /> Resend Reset Code
               </button>
@@ -643,12 +643,12 @@ export default function Login({ switchToRegister }) {
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
               <AppLogo size={54} />
             </div>
-            <h2 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: 'var(--text-main)' }}>
+            <h2 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: '#ffffff', textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
               Email Verification Required
             </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0, lineHeight: 1.5 }}>
+            <p style={{ color: '#cbd5e1', fontSize: '0.85rem', margin: 0, lineHeight: 1.5 }}>
               Your account is unverified. We sent a 6-digit verification code to:<br />
-              <strong style={{ color: 'var(--text-main)', fontSize: '0.92rem' }}>{unverifiedEmail}</strong>
+              <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>{unverifiedEmail}</strong>
             </p>
           </div>
 
@@ -666,7 +666,7 @@ export default function Login({ switchToRegister }) {
           )}
 
           <div style={{ marginBottom: '1.5rem' }}>
-            <label className="form-label" style={{ textAlign: 'center', display: 'block' }}>Enter 6-Digit OTP</label>
+            <label className="form-label" style={{ textAlign: 'center', display: 'block', color: '#f1f5f9' }}>Enter 6-Digit OTP</label>
             <input
               type="text"
               className="form-input"
@@ -678,7 +678,7 @@ export default function Login({ switchToRegister }) {
               style={{ textAlign: 'center', fontSize: '1.6rem', letterSpacing: '8px', padding: '0.75rem', fontWeight: 700 }}
               autoFocus
             />
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.5rem' }}>
+            <p style={{ fontSize: '0.78rem', color: '#94a3b8', textAlign: 'center', marginTop: '0.5rem' }}>
               Check your inbox and spam folder for the code.
             </p>
           </div>
@@ -689,15 +689,15 @@ export default function Login({ switchToRegister }) {
 
           <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
             {resendCooldown > 0 ? (
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                Resend code in <strong style={{ color: 'var(--text-main)' }}>{resendCooldown}s</strong>
+              <span style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>
+                Resend code in <strong style={{ color: '#ffffff' }}>{resendCooldown}s</strong>
               </span>
             ) : (
               <button
                 type="button"
                 onClick={handleResendOtp}
                 disabled={loading}
-                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                style={{ background: 'none', border: 'none', color: '#818cf8', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
               >
                 <RefreshCw size={14} /> Resend OTP Code
               </button>
