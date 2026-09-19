@@ -79,7 +79,8 @@ export function SocketProvider({ children }) {
             `💬 ${senderTitle}`,
             body,
             msg.senderAvatar || '/icon-192.png',
-            `pulsechat-${msg.chatId || msg.senderId}`
+            `pulsechat-${msg.chatId || msg.senderId}`,
+            { chatId: msg.chatId, senderId: msg.senderId, isGroup: !!msg.isGroup }
           );
         }
       };

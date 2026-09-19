@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useRef } from 'react';
+import React, { useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { AuthContext } from './context/AuthContext';
 import { SocketContext } from './context/SocketContext';
 import Login from './components/auth/Login';
@@ -14,10 +14,78 @@ import IncomingGroupCallModal from './components/chat/IncomingGroupCallModal';
 import EntranceAnimation from './components/common/EntranceAnimation';
 import PandaHero from './components/common/PandaHero';
 import FullDpModal from './components/common/FullDpModal';
-import { Zap } from 'lucide-react';
+import Toast from './components/common/Toast';
+import { BACKEND_URL } from './utils/config';
+import { Zap, AlertTriangle } from 'lucide-react';
 
-export default function App() {
-  const { user, loading } = useContext(AuthContext);
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("PulseChat ErrorBoundary caught error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          height: '100dvh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '2rem',
+          background: 'var(--bg-main, #f3f4f6)',
+          color: 'var(--text-main, #111827)',
+          textAlign: 'center'
+        }}>
+          <div style={{
+            width: '60px',
+            height: '60px',
+            borderRadius: '50%',
+            background: 'rgba(239, 68, 68, 0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '1rem'
+          }}>
+            <AlertTriangle size={32} color="#ef4444" />
+          </div>
+          <h2 style={{ marginBottom: '0.5rem', fontWeight: 700 }}>PulseChat recovered safely</h2>
+          <p style={{ color: 'var(--text-muted, #6b7280)', marginBottom: '1.5rem', maxWidth: '420px', fontSize: '0.9rem' }}>
+            We protected your session from a blank screen. Click below to continue messaging.
+          </p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false });
+              window.location.href = '/';
+            }}
+            style={{
+              padding: '10px 22px',
+              borderRadius: '12px',
+              background: 'var(--accent, #4f46e5)',
+              color: '#ffffff',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '0.9rem'
+            }}
+          >
+            Reload Chats
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function MainApp() {
+  const { user, token, loading } = useContext(AuthContext);
   const { socket, lastNotification } = useContext(SocketContext);
   const [isRegisterView, setIsRegisterView] = useState(false);
   const [activeChat, setActiveChat] = useState(null);
@@ -94,6 +162,104 @@ export default function App() {
     }
   };
 
+  const openChatById = useCallback(async (targetChatId, targetSenderId, isGroupTarget) => {
+    const authToken = token || localStorage.getItem('pulsechat_token');
+    if (!authToken) return;
+
+    try {
+      // 1. Group chat navigation
+      if (isGroupTarget || (targetChatId && targetChatId.startsWith('group_'))) {
+        const res = await fetch(`${BACKEND_URL}/api/groups/${targetChatId}`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+          const groupData = await res.json();
+          if (groupData && groupData.id) {
+            handleSelectActiveChat({
+              ...groupData,
+              isGroup: true,
+              displayName: groupData.name,
+              id: groupData.id
+            });
+            return;
+          }
+        }
+      }
+
+      // 2. Direct 1-on-1 chat navigation
+      let partnerId = targetSenderId;
+      if (!partnerId && targetChatId) {
+        const parts = targetChatId.split('_');
+        if (user && parts.length === 2) {
+          partnerId = parts.find(p => p !== user.id);
+        } else if (parts.length === 1) {
+          partnerId = parts[0];
+        }
+      }
+
+      if (partnerId && partnerId !== user?.id) {
+        const res = await fetch(`${BACKEND_URL}/api/users/${partnerId}`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+          const userData = await res.json();
+          if (userData && userData.id) {
+            handleSelectActiveChat(userData);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to open chat from notification:', err);
+    }
+  }, [token, user]);
+
+  // Deep-link from notification clicks (when app opens with ?openChat=...)
+  useEffect(() => {
+    if (!user) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const openChat = urlParams.get('openChat');
+    const senderId = urlParams.get('senderId');
+    const isGroup = urlParams.get('isGroup') === '1' || urlParams.get('isGroup') === 'true';
+
+    if (openChat || senderId) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      openChatById(openChat, senderId, isGroup);
+    }
+  }, [user, openChatById]);
+
+  // Handle service worker & desktop notification click events
+  useEffect(() => {
+    if (!user) return;
+
+    const handleServiceWorkerMessage = (event) => {
+      if (event.data?.type === 'OPEN_CHAT') {
+        const { chatId, senderId, isGroup } = event.data;
+        openChatById(chatId, senderId, isGroup);
+      }
+    };
+
+    const handleCustomEvent = (event) => {
+      if (event.detail) {
+        const { chatId, senderId, isGroup } = event.detail;
+        openChatById(chatId, senderId, isGroup);
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    }
+    window.addEventListener('pulsechat_open_chat', handleCustomEvent);
+
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      }
+      window.removeEventListener('pulsechat_open_chat', handleCustomEvent);
+    };
+  }, [user, openChatById]);
+
   const pendingIceCandidatesRef = useRef([]);
 
   // Listen for incoming calls & buffer early ICE candidates during ringing
@@ -127,9 +293,16 @@ export default function App() {
     if (lastNotification.senderId === currentlyOpenId) return;
 
     const toastId = lastNotification.id + '_' + lastNotification.receivedAt;
+    const senderTitle = lastNotification.isGroup
+      ? (lastNotification.groupName || 'Group')
+      : (lastNotification.senderName || lastNotification.senderId || 'New message');
+
     setToasts(prev => [...prev, {
       id: toastId,
+      title: senderTitle,
       senderId: lastNotification.senderId,
+      chatId: lastNotification.chatId,
+      isGroup: !!lastNotification.isGroup,
       body: lastNotification.type === 'text' ? lastNotification.content : `Sent a ${lastNotification.type}`
     }]);
   }, [lastNotification]);

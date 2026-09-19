@@ -3,7 +3,13 @@ import React, { createContext, useState, useEffect } from 'react';
 export const ThemeContext = createContext();
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(localStorage.getItem('pulsechat_theme') || 'dark');
+  const [theme, setTheme] = useState(() => {
+    const isManual = localStorage.getItem('pulsechat_theme_manual') === 'true';
+    if (isManual) {
+      return localStorage.getItem('pulsechat_theme') || 'light';
+    }
+    return 'light';
+  });
   const [wallpaper, setWallpaper] = useState(localStorage.getItem('pulsechat_wallpaper') || 'default');
 
   useEffect(() => {
@@ -12,6 +18,7 @@ export function ThemeProvider({ children }) {
   }, [theme]);
 
   const changeTheme = (newTheme) => {
+    localStorage.setItem('pulsechat_theme_manual', 'true');
     setTheme(newTheme);
   };
 

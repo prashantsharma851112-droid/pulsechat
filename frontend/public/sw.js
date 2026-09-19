@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pulsechat-v3';
+const CACHE_NAME = 'pulsechat-v4';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -29,6 +29,8 @@ self.addEventListener('push', (event) => {
   let targetUrl = self.registration.scope;
   let messageId = null;
   let chatId = null;
+  let senderId = null;
+  let isGroup = false;
 
   if (event.data) {
     try {
@@ -40,6 +42,8 @@ self.addEventListener('push', (event) => {
       if (data.data?.url) targetUrl = data.data.url;
       if (data.data?.messageId) messageId = data.data.messageId;
       if (data.data?.chatId) chatId = data.data.chatId;
+      if (data.data?.senderId) senderId = data.data.senderId;
+      if (data.data?.isGroup) isGroup = !!data.data.isGroup;
     } catch (e) {
       try {
         const text = event.data.text();
@@ -55,7 +59,7 @@ self.addEventListener('push', (event) => {
     tag: tag || 'pulsechat-notification',
     renotify: true,
     vibrate: [250, 100, 250, 100, 250],
-    data: { url: targetUrl, messageId, chatId }
+    data: { url: targetUrl, messageId, chatId, senderId, isGroup }
   };
 
   const tasks = [
@@ -79,20 +83,39 @@ self.addEventListener('push', (event) => {
   event.waitUntil(Promise.all(tasks));
 });
 
-// Notification clicked - open app or focus existing window
+// Notification clicked - open app or focus existing window and open direct chat
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || self.registration.scope;
+  const notifData = event.notification.data || {};
+  const chatId = notifData.chatId || '';
+  const senderId = notifData.senderId || '';
+  const isGroup = !!notifData.isGroup;
+
+  const params = new URLSearchParams();
+  if (chatId) params.set('openChat', chatId);
+  if (senderId) params.set('senderId', senderId);
+  if (isGroup) params.set('isGroup', '1');
+
+  const queryStr = params.toString();
+  const targetUrl = queryStr
+    ? new URL('/?' + queryStr, self.registration.scope).href
+    : (notifData.url || self.registration.scope);
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Agar app already open hai toh usko focus karo
+      // If app is already open in a tab, focus it and tell it to open the chat
       for (const client of clientList) {
         if (client.url.startsWith(self.registration.scope) && 'focus' in client) {
+          client.postMessage({
+            type: 'OPEN_CHAT',
+            chatId,
+            senderId,
+            isGroup
+          });
           return client.focus();
         }
       }
-      // Warna naya window open karo
+      // Otherwise open fresh window with the query params
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }

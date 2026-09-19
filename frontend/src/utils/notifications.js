@@ -149,9 +149,14 @@ export function dismissNotificationBanner() {
 /**
  * Push notification show karo (Service Worker ke through - Android/PWA compatible)
  */
-export async function showPushNotification(title, body, icon = '/icon-192.png', tag = 'pulsechat-msg') {
+export async function showPushNotification(title, body, icon = '/icon-192.png', tag = 'pulsechat-msg', data = {}) {
   if (typeof window === 'undefined' || !('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
+
+  const notifPayloadData = {
+    url: window.location.origin,
+    ...data
+  };
 
   try {
     if ('serviceWorker' in navigator) {
@@ -171,17 +176,27 @@ export async function showPushNotification(title, body, icon = '/icon-192.png', 
           tag: tag || 'pulsechat-notification',
           renotify: true,
           vibrate: [200, 100, 200],
-          data: { url: window.location.origin }
+          data: notifPayloadData
         });
         return;
       }
     }
 
-    new Notification(title, {
+    const notif = new Notification(title, {
       body,
       icon: icon || '/icon-192.png',
-      tag: tag || 'pulsechat-notification'
+      tag: tag || 'pulsechat-notification',
+      data: notifPayloadData
     });
+
+    notif.onclick = (e) => {
+      e.preventDefault();
+      window.focus();
+      if (data && (data.chatId || data.senderId)) {
+        window.dispatchEvent(new CustomEvent('pulsechat_open_chat', { detail: data }));
+      }
+      notif.close();
+    };
   } catch (err) {
     console.warn('showPushNotification failed:', err);
   }

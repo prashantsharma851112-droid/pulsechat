@@ -105,17 +105,28 @@ io.on('connection', (socket) => {
   });
 
   // Helper function to dispatch background web push (for closed app)
-  const dispatchWebPush = async (targetUserId, title, body, tag, chatTargetId, messageId = null, senderId = null) => {
+  const dispatchWebPush = async (targetUserId, title, body, tag, chatTargetId, messageId = null, senderId = null, isGroup = false) => {
     try {
       const targetUser = await User.findOne({ id: targetUserId });
       if (targetUser && targetUser.pushSubscriptions && targetUser.pushSubscriptions.length > 0) {
+        const queryParams = new URLSearchParams();
+        if (chatTargetId) queryParams.set('openChat', chatTargetId);
+        if (senderId) queryParams.set('senderId', senderId);
+        if (isGroup) queryParams.set('isGroup', '1');
+
         const pushPayload = {
           title,
           body,
           icon: '/icon-192.png',
           badge: '/icon-192.png',
           tag,
-          data: { url: '/', chatId: chatTargetId, messageId, senderId }
+          data: {
+            url: `/?${queryParams.toString()}`,
+            chatId: chatTargetId,
+            messageId,
+            senderId,
+            isGroup: !!isGroup
+          }
         };
 
         const deadEndpoints = [];
@@ -207,7 +218,7 @@ io.on('connection', (socket) => {
         const bodyText = newMsg.type === 'text'
           ? (newMsg.content || 'New message')
           : `Sent a ${newMsg.type}`;
-        dispatchWebPush(receiverId, `💬 ${notifPayload.senderName}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId);
+        dispatchWebPush(receiverId, `💬 ${notifPayload.senderName}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, false);
       } catch (e) {
         io.to(`user_${receiverId}`).emit('message_notification', newMsg);
       }
@@ -232,7 +243,7 @@ io.on('connection', (socket) => {
           group.members.forEach(memberId => {
             if (memberId !== senderId) {
               io.to(`user_${memberId}`).emit('message_notification', notifPayload);
-              dispatchWebPush(memberId, `👥 ${group.name}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId);
+              dispatchWebPush(memberId, `👥 ${group.name}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, true);
             }
           });
         }
