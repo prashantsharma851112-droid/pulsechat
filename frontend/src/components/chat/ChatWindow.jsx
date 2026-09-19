@@ -22,6 +22,7 @@ import {
   addToOutbox,
   removeFromOutbox,
   updateRecentChatSnippet,
+  mergeIntoAllUsersCache,
   isDeviceOnline,
   subscribeToNetworkChanges
 } from '../../utils/offlineStorage';
@@ -165,6 +166,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       const combinedInitial = [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))];
       setMessages(combinedInitial);
 
+      // Cache this contact/group into allUsers for future offline searches
+      if (user?.id && !activeChat.isGroup) {
+        mergeIntoAllUsersCache(user.id, [activeChat]);
+      }
+
       // 2. Fetch fresh messages if online
       fetch(`${BACKEND_URL}/api/messages/${chatId}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -256,7 +262,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           removeFromOutbox(user?.id, msg.clientTempId);
         }
 
-        updateRecentChatSnippet(user?.id, chatId, msg);
+        updateRecentChatSnippet(user?.id, chatId, msg, activeChat);
         window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
 
         if (msg.senderId !== user.id) {
@@ -535,7 +541,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     appendCachedMessage(chatId, pendingMsg);
 
     // 2. Update recent chats snippet in localStorage & dispatch event for sidebar
-    updateRecentChatSnippet(user.id, chatId, pendingMsg);
+    // Pass activeChat so newly opened contacts (offline) get added to recentChats
+    updateRecentChatSnippet(user.id, chatId, pendingMsg, activeChat);
     window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
 
     // 3. If offline or socket disconnected, save to outbox

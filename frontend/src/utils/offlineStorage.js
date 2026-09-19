@@ -7,7 +7,8 @@ const STORAGE_KEYS = {
   RECENT_PREFIX: 'pulsechat_recent_',
   GROUPS_PREFIX: 'pulsechat_groups_',
   MESSAGES_PREFIX: 'pulsechat_msgs_',
-  OUTBOX_PREFIX: 'pulsechat_outbox_'
+  OUTBOX_PREFIX: 'pulsechat_outbox_',
+  ALL_USERS_PREFIX: 'pulsechat_allusers_'
 };
 
 // Safe JSON parser
@@ -54,23 +55,41 @@ export function setCachedRecentChats(userId, chats) {
   }
 }
 
-// Update the last message snippet in recent chats when offline message sent/received
-export function updateRecentChatSnippet(userId, chatId, message) {
+// Update the last message snippet in recent chats when offline message sent/received.
+// targetChat is the full user/group object being chatted with (activeChat from state).
+export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
   if (!userId || !chatId || !message) return;
-  const recent = getCachedRecentChats(userId);
-  const updated = recent.map(c => {
-    const isThisChat = c.id === chatId || (c.isGroup && c.id === chatId);
-    if (isThisChat) {
-      return {
-        ...c,
-        lastMessage: message.content || (message.type === 'voice' ? '🎤 Voice note' : 'Sent a file'),
-        lastMessageTime: message.timestamp || new Date().toISOString(),
-        lastMessageType: message.type || 'text'
-      };
-    }
-    return c;
+  let recent = getCachedRecentChats(userId);
+
+  // Check if there's an existing entry for this contact/group
+  // chatId for 1-to-1 is "userId1_userId2" — we match against the other party's id
+  const contactId = targetChat?.id || message.receiverId || null;
+
+  const existingIdx = recent.findIndex(c => {
+    if (c.id === contactId) return true;
+    if (c.id === chatId) return true;
+    return false;
   });
-  setCachedRecentChats(userId, updated);
+
+  const snippet = {
+    lastMessage: message.content || (message.type === 'voice' ? '🎤 Voice note' : 'Sent a file'),
+    lastMessageTime: message.timestamp || new Date().toISOString(),
+    lastMessageType: message.type || 'text'
+  };
+
+  if (existingIdx !== -1) {
+    // Update existing entry and move to top
+    const updated = { ...recent[existingIdx], ...snippet };
+    const newRecent = [updated, ...recent.filter((_, i) => i !== existingIdx)];
+    setCachedRecentChats(userId, newRecent);
+  } else if (targetChat) {
+    // New conversation: prepend the target contact with snippet info
+    const newEntry = {
+      ...targetChat,
+      ...snippet
+    };
+    setCachedRecentChats(userId, [newEntry, ...recent]);
+  }
 }
 
 // Groups Cache (per user)
@@ -86,6 +105,40 @@ export function setCachedGroups(userId, groups) {
   } catch (e) {
     console.warn('LocalStorage quota exceeded setting groups', e);
   }
+}
+
+// All Known Users Cache (per user — everyone the app has fetched from /api/users)
+export function getCachedAllUsers(userId) {
+  if (typeof window === 'undefined' || !userId) return [];
+  return safeParse(localStorage.getItem(`${STORAGE_KEYS.ALL_USERS_PREFIX}${userId}`), []);
+}
+
+export function setCachedAllUsers(userId, users) {
+  if (typeof window === 'undefined' || !userId || !Array.isArray(users)) return;
+  try {
+    localStorage.setItem(`${STORAGE_KEYS.ALL_USERS_PREFIX}${userId}`, JSON.stringify(users));
+  } catch (e) {
+    console.warn('LocalStorage quota exceeded setting all users', e);
+  }
+}
+
+// Merge new users into existing cached all-users list (avoids duplicates)
+export function mergeIntoAllUsersCache(userId, newUsers) {
+  if (!userId || !Array.isArray(newUsers)) return;
+  const existing = getCachedAllUsers(userId);
+  const existingIds = new Set(existing.map(u => u.id));
+  const merged = [...existing];
+  for (const u of newUsers) {
+    if (!existingIds.has(u.id)) {
+      merged.push(u);
+      existingIds.add(u.id);
+    } else {
+      // Update existing entry with fresher data
+      const idx = merged.findIndex(e => e.id === u.id);
+      if (idx !== -1) merged[idx] = { ...merged[idx], ...u };
+    }
+  }
+  setCachedAllUsers(userId, merged);
 }
 
 // Message History Cache (per chatId) - keeps up to 250 latest messages

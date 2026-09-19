@@ -11,6 +11,9 @@ import {
   setCachedRecentChats,
   getCachedGroups,
   setCachedGroups,
+  getCachedAllUsers,
+  setCachedAllUsers,
+  mergeIntoAllUsersCache,
   isDeviceOnline,
   subscribeToNetworkChanges
 } from '../../utils/offlineStorage';
@@ -22,9 +25,22 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [searchResults, setSearchResults] = useState([]);
   const [recentChats, setRecentChats] = useState(() => getCachedRecentChats(user?.id));
   const [groups, setGroups] = useState(() => getCachedGroups(user?.id));
+  const [allUsers, setAllUsers] = useState(() => getCachedAllUsers(user?.id));
   const [isOnline, setIsOnline] = useState(() => isDeviceOnline());
   const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'groups'
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+
+  // When user becomes available (after login / token restore), load data from cache immediately
+  useEffect(() => {
+    if (user?.id) {
+      const cached = getCachedRecentChats(user.id);
+      if (cached.length > 0) setRecentChats(cached);
+      const cachedGroups = getCachedGroups(user.id);
+      if (cachedGroups.length > 0) setGroups(cachedGroups);
+      const cachedUsers = getCachedAllUsers(user.id);
+      if (cachedUsers.length > 0) setAllUsers(cachedUsers);
+    }
+  }, [user?.id]);
 
   // Monitor network online/offline state
   useEffect(() => {
@@ -33,6 +49,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       if (online) {
         loadRecentChats();
         loadGroups();
+        loadAllUsers();
       }
     });
     return unsubscribe;
@@ -69,6 +86,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     try {
       loadRecentChats();
       loadGroups();
+      loadAllUsers();
       if (socket) {
         if (!socket.connected) {
           socket.connect();
@@ -106,7 +124,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         }
       })
       .catch(() => {
-        // Offline: cached recentChats already loaded!
+        // Offline: restore from cache
+        if (user?.id) {
+          const cached = getCachedRecentChats(user.id);
+          if (cached.length > 0) setRecentChats(cached);
+        }
       });
   }, [token, activeChat, user?.id]);
 
@@ -125,14 +147,38 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         }
       })
       .catch(() => {
-        // Offline: cached groups already loaded!
+        // Offline: restore from cache
+        if (user?.id) {
+          const cached = getCachedGroups(user.id);
+          if (cached.length > 0) setGroups(cached);
+        }
+      });
+  }, [token, user?.id]);
+
+  const loadAllUsers = useCallback(() => {
+    if (!token) return;
+    fetch(`${BACKEND_URL}/api/users`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setAllUsers(data);
+          if (user?.id) {
+            setCachedAllUsers(user.id, data);
+          }
+        }
+      })
+      .catch(() => {
+        // Offline: already loaded from cache in state
       });
   }, [token, user?.id]);
 
   useEffect(() => {
     loadRecentChats();
     loadGroups();
-  }, [loadRecentChats, loadGroups]);
+    loadAllUsers();
+  }, [loadRecentChats, loadGroups, loadAllUsers]);
 
   useEffect(() => {
     if (lastNotification) {
@@ -162,24 +208,65 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     };
   }, [socket, loadRecentChats]);
 
-  // Search Users
+  // Search Users — offline-first: always search cache first, then try network
   useEffect(() => {
-    if (searchQuery.trim().length > 0) {
-      fetch(`${BACKEND_URL}/api/users/search?q=${encodeURIComponent(searchQuery)}`, {
+    const q = searchQuery.trim().toLowerCase();
+    if (q.length === 0) {
+      setSearchResults([]);
+      return;
+    }
+
+    // 1. Immediately show local cache results (works offline too)
+    const localUsers = getCachedAllUsers(user?.id) || [];
+    const localRecent = getCachedRecentChats(user?.id) || [];
+
+    // Merge allUsers + recentChats to search across both lists (deduplicate by id)
+    const seenIds = new Set();
+    const combined = [];
+    for (const u of [...localUsers, ...localRecent]) {
+      if (!seenIds.has(u.id)) {
+        seenIds.add(u.id);
+        combined.push(u);
+      }
+    }
+
+    const localMatches = combined.filter(u => {
+      const nameMatch = (u.displayName || '').toLowerCase().includes(q);
+      const usernameMatch = (u.username || '').toLowerCase().includes(q);
+      return nameMatch || usernameMatch;
+    });
+
+    setSearchResults(localMatches);
+
+    // 2. Also try network if online (merge fresh results)
+    if (isOnline) {
+      fetch(`${BACKEND_URL}/api/users/search?q=${encodeURIComponent(searchQuery.trim())}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => res.json())
         .then(data => {
-          if (Array.isArray(data)) setSearchResults(data);
+          if (Array.isArray(data) && data.length > 0) {
+            // Cache the new users we discovered
+            if (user?.id) mergeIntoAllUsersCache(user.id, data);
+            // Merge with local matches (deduplicate)
+            const serverIds = new Set(data.map(u => u.id));
+            const merged = [
+              ...data,
+              ...localMatches.filter(u => !serverIds.has(u.id))
+            ];
+            setSearchResults(merged);
+          }
+        })
+        .catch(() => {
+          // Already showing local results, nothing to do
         });
-    } else {
-      setSearchResults([]);
     }
-  }, [searchQuery, token]);
+  }, [searchQuery, token, user?.id, isOnline]);
 
   const handleSelectUser = (selectedUser) => {
     setActiveChat(selectedUser);
     setSearchQuery('');
+    setSearchResults([]);
   };
 
   const handleSelectGroup = (group) => {
@@ -190,6 +277,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       id: group.id
     });
     setSearchQuery('');
+    setSearchResults([]);
   };
 
   const handlePanicWipe = () => {
@@ -200,6 +288,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     }
     setShowPanicModal(false);
   };
+
+  // Contacts to show when no search query & no recent chats
+  const contactsNotInRecent = allUsers.filter(u => !recentChats.some(r => r.id === u.id));
 
   return (
     <div className={`sidebar-container ${activeChat ? 'mobile-hidden' : ''}`}>
@@ -317,7 +408,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         </button>
       </div>
 
-      {/* WhatsApp-Style Offline Indicator Banner */}
+      {/* Offline Indicator Banner — only shows "Offline mode · Waiting for network" */}
       {!isOnline && (
         <div style={{
           background: 'rgba(234, 179, 8, 0.16)',
@@ -331,7 +422,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           gap: '8px'
         }}>
           <WifiOff size={14} style={{ flexShrink: 0 }} />
-          <span>Offline mode · Chats saved locally · Waiting for network</span>
+          <span>Offline mode · Waiting for network</span>
         </div>
       )}
 
@@ -407,28 +498,50 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
       {/* WhatsApp Chat / Group List Area */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0.4rem', position: 'relative' }}>
-        {searchResults.length > 0 ? (
+
+        {/* SEARCH RESULTS — shown when user types in search box (works offline too) */}
+        {searchQuery.trim().length > 0 ? (
           <div>
-            <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', padding: '0.5rem 0.75rem', letterSpacing: '0.03em' }}>SEARCH RESULTS</p>
-            {searchResults.map(u => (
-              <div
-                key={u.id}
-                onClick={() => handleSelectUser(u)}
-                className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
-                style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
-              >
-                <div style={{ position: 'relative', flexShrink: 0 }}>
-                  <img src={u.avatar} alt="Avatar" style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }} />
-                  {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
+            <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', padding: '0.5rem 0.75rem', letterSpacing: '0.03em' }}>
+              SEARCH RESULTS
+            </p>
+            {searchResults.length > 0 ? (
+              searchResults.map(u => (
+                <div
+                  key={u.id}
+                  onClick={() => u.isGroup ? handleSelectGroup(u) : handleSelectUser(u)}
+                  className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
+                  style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
+                >
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <img
+                      src={u.avatar}
+                      alt="Avatar"
+                      style={{ width: '48px', height: '48px', borderRadius: u.isGroup ? '14px' : '50%', objectFit: 'cover' }}
+                    />
+                    {!u.isGroup && !silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.displayName || u.name}
+                    </h4>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.isGroup ? (u.description || `${u.members?.length || 0} members`) : `@${u.username}`}
+                    </p>
+                  </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: 0, color: 'var(--text-main)' }}>{u.displayName}</h4>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>@{u.username}</p>
-                </div>
+              ))
+            ) : (
+              <div style={{ textAlign: 'center', padding: '2rem 1.5rem', color: 'var(--text-muted)', fontSize: '0.92rem' }}>
+                <Search size={36} style={{ opacity: 0.25, marginBottom: '0.5rem' }} />
+                <p style={{ margin: 0 }}>No contacts found for "{searchQuery}"</p>
+                {!isOnline && <p style={{ fontSize: '0.78rem', marginTop: '0.4rem', color: '#eab308' }}>You are offline — only cached contacts shown</p>}
               </div>
-            ))}
+            )}
           </div>
+
         ) : activeTab === 'groups' ? (
+          /* GROUPS TAB */
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem' }}>
               <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', margin: 0, letterSpacing: '0.03em' }}>GROUPS ({groups.length})</p>
@@ -471,48 +584,95 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               </div>
             )}
           </div>
+
         ) : (
+          /* CHATS TAB */
           <div>
-            <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', padding: '0.5rem 0.75rem', letterSpacing: '0.03em' }}>CHATS</p>
-            {recentChats.length > 0 ? (
-              recentChats.map(u => (
-                <div
-                  key={u.id}
-                  onClick={() => handleSelectUser(u)}
-                  className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
-                  style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
-                >
-                  <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <img
-                      src={u.avatar}
-                      alt="Avatar"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onOpenFullDp) onOpenFullDp(u.avatar, u.displayName, u.username);
-                      }}
-                      style={{ width: '48px', height: '48px', borderRadius: '50%', cursor: 'pointer', objectFit: 'cover' }}
-                      title="Click to view full screen DP"
-                    />
-                    {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
+            {/* Recent Conversations */}
+            {recentChats.length > 0 && (
+              <>
+                <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', padding: '0.5rem 0.75rem', letterSpacing: '0.03em' }}>CHATS</p>
+                {recentChats.map(u => (
+                  <div
+                    key={u.id}
+                    onClick={() => handleSelectUser(u)}
+                    className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
+                    style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
+                  >
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <img
+                        src={u.avatar}
+                        alt="Avatar"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onOpenFullDp) onOpenFullDp(u.avatar, u.displayName, u.username);
+                        }}
+                        style={{ width: '48px', height: '48px', borderRadius: '50%', cursor: 'pointer', objectFit: 'cover' }}
+                        title="Click to view full screen DP"
+                      />
+                      {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <h4 style={{ fontSize: '1.02rem', fontWeight: u.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {u.displayName}
+                        </h4>
+                        {u.unreadCount > 0 && (
+                          <span className="unread-badge" style={{ marginLeft: '6px' }}>
+                            {u.unreadCount}
+                          </span>
+                        )}
+                      </div>
+                      <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {u.lastMessage ? u.lastMessage : `@${u.username}`}
+                      </p>
+                    </div>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <h4 style={{ fontSize: '1.02rem', fontWeight: u.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                ))}
+              </>
+            )}
+
+            {/* Contacts Section — shown when there are cached users to start a new chat */}
+            {contactsNotInRecent.length > 0 && (
+              <>
+                <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', padding: recentChats.length > 0 ? '0.75rem 0.75rem 0.5rem' : '0.5rem 0.75rem', letterSpacing: '0.03em' }}>
+                  {recentChats.length > 0 ? 'MORE CONTACTS' : 'CONTACTS'}
+                </p>
+                {contactsNotInRecent.map(u => (
+                  <div
+                    key={u.id}
+                    onClick={() => handleSelectUser(u)}
+                    className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
+                    style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
+                  >
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <img
+                        src={u.avatar}
+                        alt="Avatar"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onOpenFullDp) onOpenFullDp(u.avatar, u.displayName, u.username);
+                        }}
+                        style={{ width: '48px', height: '48px', borderRadius: '50%', cursor: 'pointer', objectFit: 'cover' }}
+                        title="Click to view full screen DP"
+                      />
+                      {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <h4 style={{ fontSize: '1.02rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {u.displayName}
                       </h4>
-                      {u.unreadCount > 0 && (
-                        <span className="unread-badge" style={{ marginLeft: '6px' }}>
-                          {u.unreadCount}
-                        </span>
-                      )}
+                      <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        @{u.username}
+                      </p>
                     </div>
-                    <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      @{u.username}
-                    </p>
                   </div>
-                </div>
-              ))
-            ) : (
+                ))}
+              </>
+            )}
+
+            {/* Empty state — only if truly no data at all */}
+            {recentChats.length === 0 && contactsNotInRecent.length === 0 && (
               <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: 'var(--text-muted)', fontSize: '0.92rem' }}>
                 <p style={{ margin: 0 }}>No conversations yet.</p>
                 <p style={{ fontSize: '0.82rem', marginTop: '0.4rem' }}>Type @username above to start messaging!</p>
