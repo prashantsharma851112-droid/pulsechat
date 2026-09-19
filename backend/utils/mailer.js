@@ -227,7 +227,7 @@ async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat Us
   // If SMTP credentials are configured, send real email!
   if (user && pass) {
     try {
-      console.log(`📧 [PulseChat Mailer] Sending real OTP email to: ${recipientEmail} via ${host}...`);
+      console.log(`📧 [PulseChat Mailer] Sending real OTP email to: ${recipientEmail} via ${host}:${port}...`);
       await sendSmtpEmail({
         host,
         port,
@@ -241,9 +241,25 @@ async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat Us
       console.log(`✅ [PulseChat Mailer] Real OTP email successfully delivered to: ${recipientEmail}`);
       return { success: true, delivered: true };
     } catch (err) {
-      console.error(`❌ [PulseChat Mailer] Failed to send email via SMTP:`, err.message);
-      // Log notification so developer can check credentials
-      return { success: false, error: err.message, delivered: false };
+      console.error(`❌ [PulseChat Mailer] Port ${port} failed (${err.message}). Retrying via fallback port...`);
+      const fallbackPort = port === 465 ? 587 : 465;
+      try {
+        await sendSmtpEmail({
+          host,
+          port: fallbackPort,
+          user,
+          pass,
+          to: recipientEmail,
+          subject: `${otpCode} is your PulseChat verification code`,
+          html: htmlContent,
+          text: textContent
+        });
+        console.log(`✅ [PulseChat Mailer] Real OTP email successfully delivered via fallback port ${fallbackPort} to: ${recipientEmail}`);
+        return { success: true, delivered: true };
+      } catch (fallbackErr) {
+        console.error(`❌ [PulseChat Mailer] SMTP delivery failed on both ports. Error:`, fallbackErr.message);
+        return { success: false, error: fallbackErr.message, delivered: false };
+      }
     }
   } else {
     // If SMTP credentials are not set in .env yet, log clear instructions in console

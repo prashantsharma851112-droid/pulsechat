@@ -71,9 +71,48 @@ router.post('/register', async (req, res) => {
     }
 
     const users = await db.getUsers();
-    if (users.some(u => u.email.toLowerCase() === cleanEmail)) {
-      return res.status(400).json({ error: 'Email already registered.' });
+    const existingUser = users.find(u => u.email.toLowerCase() === cleanEmail);
+
+    if (existingUser) {
+      if (existingUser.isEmailVerified) {
+        return res.status(400).json({ error: 'This email is already registered. Please Sign In.' });
+      }
+
+      // Email was previously entered but NOT YET VERIFIED!
+      // Allow updating registration details and send a fresh OTP:
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(password, salt);
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+      // Check if username is taken by another verified user
+      const otherUserWithUsername = users.find(u => u.username.toLowerCase() === cleanUsername && u.id !== existingUser.id);
+      if (otherUserWithUsername && otherUserWithUsername.isEmailVerified) {
+        return res.status(400).json({ error: 'Username is already taken by another account.' });
+      }
+
+      await db.updateUser(existingUser.id, {
+        username: cleanUsername,
+        passwordHash,
+        displayName: displayName.trim(),
+        otpCode: otp,
+        otpExpires
+      });
+
+      // Send real OTP email
+      mailer.sendOtpEmail(cleanEmail, otp, displayName.trim()).catch(err => {
+        console.error('[Registration Mail Error]', err);
+      });
+
+      return res.status(200).json({
+        success: true,
+        requiresVerification: true,
+        message: 'Verification code sent to your email address.',
+        email: cleanEmail,
+        userId: existingUser.id
+      });
     }
+
     if (users.some(u => u.username.toLowerCase() === cleanUsername)) {
       return res.status(400).json({ error: 'Username is already taken.' });
     }
