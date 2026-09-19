@@ -11,7 +11,7 @@ router.get('/', authMiddleware, async (req, res) => {
     const users = await db.getUsers();
     const results = users
       .filter(u => u.id !== req.user.id)
-      .map(({ passwordHash, ...u }) => u);
+      .map(({ passwordHash, friends, otpCode, otpExpires, pushSubscriptions, ...u }) => u);
     res.json(results);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -34,7 +34,7 @@ router.get('/search', authMiddleware, async (req, res) => {
 
   const results = users
     .filter(u => u.id !== req.user.id && (u.username.includes(query) || u.displayName.toLowerCase().includes(query)))
-    .map(({ passwordHash, ...u }) => u);
+    .map(({ passwordHash, friends, otpCode, otpExpires, pushSubscriptions, ...u }) => u);
 
   res.json(results);
 });
@@ -204,7 +204,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
   const users = await db.getUsers();
   const target = users.find(u => u.id === req.params.id);
   if (!target) return res.status(404).json({ error: 'User not found' });
-  const { passwordHash, ...safeUser } = target;
+  const { passwordHash, friends, otpCode, otpExpires, pushSubscriptions, ...safeUser } = target;
   res.json(safeUser);
 });
 

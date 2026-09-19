@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { X, CheckCircle2, Phone, Video, Eye, Info, User, ShieldCheck, Clock, Ban, Unlock } from 'lucide-react';
+import { X, CheckCircle2, Phone, Video, Eye, Info, User, ShieldCheck, Clock, Ban, Unlock, UserPlus, UserCheck, Loader2 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
@@ -10,10 +10,27 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
   const [profileData, setProfileData] = useState(targetUser);
   const [loading, setLoading] = useState(false);
   const [disappearingEnabled, setDisappearingEnabled] = useState(false);
+  const [friendStatus, setFriendStatus] = useState({ status: 'none', requestId: null });
+  const [friendLoading, setFriendLoading] = useState(false);
 
   const isOnline = onlineUsers.includes(targetUser.id);
   const isBlocked = Boolean(user?.blockedUsers && user.blockedUsers.includes(targetUser.id));
   const chatId = user?.id && targetUser?.id ? [user.id, targetUser.id].sort().join('_') : null;
+
+  const fetchFriendStatus = async () => {
+    if (!targetUser?.id || targetUser.id === user?.id) return;
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/friends/status/${targetUser.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data && data.status) {
+        setFriendStatus(data);
+      }
+    } catch (err) {
+      console.error("Error fetching friend status:", err);
+    }
+  };
 
   useEffect(() => {
     if (targetUser?.id) {
@@ -30,6 +47,8 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
         .catch(err => console.error("Error fetching user profile:", err))
         .finally(() => setLoading(false));
 
+      fetchFriendStatus();
+
       // Fetch chat settings (disappearing messages)
       if (chatId) {
         fetch(`${BACKEND_URL}/api/messages/settings/${chatId}`, {
@@ -45,6 +64,152 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
       }
     }
   }, [targetUser, token, chatId]);
+
+  // Real-time socket sync for friend status changes
+  useEffect(() => {
+    if (!socket || !targetUser?.id) return;
+
+    const handleReqRecv = (data) => {
+      if (data.senderId === targetUser.id || data.sender?.id === targetUser.id) {
+        setFriendStatus({ status: 'pending_received', requestId: data.requestId || data.id });
+      }
+    };
+
+    const handleReqAccepted = (data) => {
+      if (data.friend?.id === targetUser.id) {
+        setFriendStatus({ status: 'friends' });
+      }
+    };
+
+    const handleReqCancelled = (data) => {
+      if (data.requestId === friendStatus.requestId) {
+        setFriendStatus({ status: 'none', requestId: null });
+      }
+    };
+
+    const handleReqRejected = (data) => {
+      if (data.requestId === friendStatus.requestId) {
+        setFriendStatus({ status: 'none', requestId: null });
+      }
+    };
+
+    const handleFriendRemoved = (data) => {
+      if (data.userId === targetUser.id) {
+        setFriendStatus({ status: 'none', requestId: null });
+      }
+    };
+
+    socket.on('friend_request_received', handleReqRecv);
+    socket.on('friend_request_accepted', handleReqAccepted);
+    socket.on('friend_request_cancelled', handleReqCancelled);
+    socket.on('friend_request_rejected', handleReqRejected);
+    socket.on('friend_removed', handleFriendRemoved);
+
+    return () => {
+      socket.off('friend_request_received', handleReqRecv);
+      socket.off('friend_request_accepted', handleReqAccepted);
+      socket.off('friend_request_cancelled', handleReqCancelled);
+      socket.off('friend_request_rejected', handleReqRejected);
+      socket.off('friend_removed', handleFriendRemoved);
+    };
+  }, [socket, targetUser, friendStatus.requestId]);
+
+  const handleSendFriendRequest = async () => {
+    if (!targetUser?.id || friendLoading) return;
+    setFriendLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/friends/request/${targetUser.id}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.status === 'accepted') {
+          setFriendStatus({ status: 'friends' });
+        } else {
+          setFriendStatus({ status: 'pending_sent', requestId: data.request?.id });
+        }
+      } else {
+        alert(data.error || 'Failed to send friend request');
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFriendLoading(false);
+    }
+  };
+
+  const handleAcceptFriendRequest = async () => {
+    if (!friendStatus.requestId || friendLoading) return;
+    setFriendLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/friends/accept/${friendStatus.requestId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setFriendStatus({ status: 'friends' });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFriendLoading(false);
+    }
+  };
+
+  const handleCancelFriendRequest = async () => {
+    if (!friendStatus.requestId || friendLoading) return;
+    setFriendLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/friends/cancel/${friendStatus.requestId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setFriendStatus({ status: 'none', requestId: null });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFriendLoading(false);
+    }
+  };
+
+  const handleRejectFriendRequest = async () => {
+    if (!friendStatus.requestId || friendLoading) return;
+    setFriendLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/friends/reject/${friendStatus.requestId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setFriendStatus({ status: 'none', requestId: null });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFriendLoading(false);
+    }
+  };
+
+  const handleUnfriend = async () => {
+    if (!window.confirm(`Are you sure you want to remove ${userToDisplay.displayName} from your friends?`)) return;
+    setFriendLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/friends/${targetUser.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setFriendStatus({ status: 'none', requestId: null });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFriendLoading(false);
+    }
+  };
 
   const handleToggleDisappearing = async () => {
     if (!chatId) return;
@@ -140,9 +305,143 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
               <CheckCircle2 size={18} color="#10b981" title="Verified Account" />
             )}
           </div>
-          <p style={{ margin: '2px 0 1rem 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+          <p style={{ margin: '2px 0 0.75rem 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             @{userToDisplay.username}
           </p>
+
+          {/* Friend Status & Action (Friend count is strictly hidden for privacy) */}
+          {user?.id !== userToDisplay?.id && (
+            <div style={{ marginBottom: '1.1rem' }}>
+              {friendLoading ? (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '20px', background: 'var(--bg-chat)', color: 'var(--text-muted)', fontSize: '0.82rem', border: '1px solid var(--border)' }}>
+                  <Loader2 size={14} className="animate-spin" /> Updating...
+                </div>
+              ) : friendStatus.status === 'friends' ? (
+                <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 14px',
+                    borderRadius: '20px',
+                    background: 'rgba(16, 185, 129, 0.12)',
+                    color: '#10b981',
+                    fontWeight: 600,
+                    fontSize: '0.82rem',
+                    border: '1px solid rgba(16, 185, 129, 0.25)'
+                  }}>
+                    <UserCheck size={14} /> Friends
+                  </div>
+                  <button
+                    onClick={handleUnfriend}
+                    title="Remove from Friends"
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: '16px',
+                      background: 'transparent',
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                      fontSize: '0.75rem',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+                  >
+                    Unfriend
+                  </button>
+                </div>
+              ) : friendStatus.status === 'pending_sent' ? (
+                <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 14px',
+                    borderRadius: '20px',
+                    background: 'rgba(245, 158, 11, 0.12)',
+                    color: '#f59e0b',
+                    fontWeight: 600,
+                    fontSize: '0.82rem',
+                    border: '1px solid rgba(245, 158, 11, 0.25)'
+                  }}>
+                    <Clock size={14} /> Request Sent
+                  </div>
+                  <button
+                    onClick={handleCancelFriendRequest}
+                    title="Cancel Friend Request"
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: '16px',
+                      background: 'transparent',
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                      fontSize: '0.75rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : friendStatus.status === 'pending_received' ? (
+                <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                  <button
+                    onClick={handleAcceptFriendRequest}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '6px 14px',
+                      borderRadius: '20px',
+                      background: 'var(--accent)',
+                      color: '#fff',
+                      fontWeight: 600,
+                      fontSize: '0.82rem',
+                      border: 'none',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)'
+                    }}
+                  >
+                    <UserCheck size={14} /> Accept Request
+                  </button>
+                  <button
+                    onClick={handleRejectFriendRequest}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '20px',
+                      background: 'transparent',
+                      color: '#ef4444',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      fontSize: '0.78rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Decline
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleSendFriendRequest}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 16px',
+                    borderRadius: '20px',
+                    background: 'var(--accent)',
+                    color: '#fff',
+                    fontWeight: 600,
+                    fontSize: '0.82rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.25)'
+                  }}
+                >
+                  <UserPlus size={14} /> Add Friend
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Action Quick Buttons */}
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '1.5rem' }}>

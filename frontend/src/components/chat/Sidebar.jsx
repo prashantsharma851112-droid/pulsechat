@@ -1,9 +1,10 @@
 import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
 import SettingsModal from '../profile/SettingsModal';
+import FriendsTab from './FriendsTab';
 import { BACKEND_URL } from '../../utils/config';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
 import {
@@ -27,8 +28,44 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [groups, setGroups] = useState(() => getCachedGroups(user?.id));
   const [allUsers, setAllUsers] = useState(() => getCachedAllUsers(user?.id));
   const [isOnline, setIsOnline] = useState(() => isDeviceOnline());
-  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'groups'
+  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'groups' | 'friends'
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+
+  // Load pending friend requests count
+  const loadPendingRequestsCount = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/friends/requests`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data?.incoming) {
+        setPendingRequestsCount(data.incoming.length);
+      }
+    } catch {}
+  }, [token]);
+
+  useEffect(() => {
+    loadPendingRequestsCount();
+  }, [loadPendingRequestsCount]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleReqUpdate = () => {
+      loadPendingRequestsCount();
+    };
+    socket.on('friend_request_received', handleReqUpdate);
+    socket.on('friend_request_accepted', handleReqUpdate);
+    socket.on('friend_request_rejected', handleReqUpdate);
+    socket.on('friend_request_cancelled', handleReqUpdate);
+    return () => {
+      socket.off('friend_request_received', handleReqUpdate);
+      socket.off('friend_request_accepted', handleReqUpdate);
+      socket.off('friend_request_rejected', handleReqUpdate);
+      socket.off('friend_request_cancelled', handleReqUpdate);
+    };
+  }, [socket, loadPendingRequestsCount]);
 
   // When user becomes available (after login / token restore), load data from cache immediately
   useEffect(() => {
@@ -387,10 +424,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           onClick={() => setActiveTab('groups')}
           style={{
             flex: 1,
-            padding: '0.85rem',
+            padding: '0.85rem 0.5rem',
             background: 'transparent',
             color: activeTab === 'groups' ? 'var(--accent)' : 'var(--text-muted)',
-            fontSize: '0.95rem',
+            fontSize: '0.92rem',
             fontWeight: 700,
             borderBottom: activeTab === 'groups' ? '3px solid var(--accent)' : '3px solid transparent',
             textTransform: 'uppercase',
@@ -398,13 +435,48 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '8px'
+            gap: '6px'
           }}
         >
           <span>GROUPS</span>
           <span style={{ fontSize: '0.75rem', background: 'var(--hover-bg)', padding: '2px 7px', borderRadius: '10px', color: 'var(--text-muted)' }}>
             {groups.length}
           </span>
+        </button>
+
+        <button
+          className={`tab-btn ${activeTab === 'friends' ? 'active' : ''}`}
+          onClick={() => setActiveTab('friends')}
+          style={{
+            flex: 1,
+            padding: '0.85rem 0.5rem',
+            background: 'transparent',
+            color: activeTab === 'friends' ? 'var(--accent)' : 'var(--text-muted)',
+            fontSize: '0.92rem',
+            fontWeight: 700,
+            borderBottom: activeTab === 'friends' ? '3px solid var(--accent)' : '3px solid transparent',
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px'
+          }}
+        >
+          <span>FRIENDS</span>
+          {pendingRequestsCount > 0 && (
+            <span style={{
+              background: '#ef4444',
+              color: '#fff',
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              padding: '1px 6px',
+              borderRadius: '10px',
+              lineHeight: 1.2
+            }}>
+              {pendingRequestsCount}
+            </span>
+          )}
         </button>
       </div>
 
@@ -426,20 +498,22 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         </div>
       )}
 
-      {/* WhatsApp-Style Search Input */}
-      <div style={{ padding: '0.65rem 1rem', background: 'var(--bg-sidebar)' }}>
-        <div style={{ position: 'relative' }}>
-          <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search or start new chat..."
-            className="form-input"
-            style={{ paddingLeft: '2.5rem', borderRadius: '24px', fontSize: '0.92rem', paddingBlock: '0.65rem' }}
-          />
+      {/* WhatsApp-Style Search Input (Hidden on Friends tab as it has its own search) */}
+      {activeTab !== 'friends' && (
+        <div style={{ padding: '0.65rem 1rem', background: 'var(--bg-sidebar)' }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search or start new chat..."
+              className="form-input"
+              style={{ paddingLeft: '2.5rem', borderRadius: '24px', fontSize: '0.92rem', paddingBlock: '0.65rem' }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Enable Notification Banner — only show if not dismissed & not already granted/denied */}
       {notifPermission === 'default' && (
@@ -539,6 +613,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               </div>
             )}
           </div>
+
+        ) : activeTab === 'friends' ? (
+          /* FRIENDS TAB */
+          <FriendsTab
+            setActiveChat={handleSelectUser}
+            onRequestsCountChange={setPendingRequestsCount}
+            onOpenFullDp={onOpenFullDp}
+          />
 
         ) : activeTab === 'groups' ? (
           /* GROUPS TAB */
