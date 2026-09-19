@@ -143,6 +143,8 @@ router.post('/delivered-ack', async (req, res) => {
     console.error('Error in delivered-ack route:', err);
     res.status(500).json({ error: 'Failed to acknowledge delivery' });
   }
+});
+
 // Send message via HTTP (Offline Outbox sync fallback)
 router.post('/send', authMiddleware, async (req, res) => {
   try {
