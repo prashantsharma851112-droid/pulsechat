@@ -226,17 +226,13 @@ input, textarea {
   margin-bottom: 1rem;
 }
 
-.demo-otp-banner {
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px dashed #10b981;
-  color: #34d399;
-  padding: 0.75rem;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.auth-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 2.25rem 2rem;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(12px);
 }
 
 /* Sidebar Responsive Styles */
