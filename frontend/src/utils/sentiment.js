@@ -124,7 +124,7 @@ const WORD_DICTIONARY = {
   calm: 'Calm',
   easy: 'Calm',
   halka: 'Calm',
-  no worries: 'Calm',
+  'no worries': 'Calm',
   sorted: 'Calm',
   agreed: 'Calm',
 
@@ -173,6 +173,7 @@ const WORD_DICTIONARY = {
   angry: 'Angry',
   gussa: 'Angry',
   hate: 'Angry',
+  'hate you': 'Angry',
   irritat: 'Angry',
   irritated: 'Angry',
   irritating: 'Angry',
