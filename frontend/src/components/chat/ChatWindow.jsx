@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -13,11 +13,37 @@ import MediaUploadModal from './MediaUploadModal';
 import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
+import {
+  getCachedMessages,
+  setCachedMessages,
+  appendCachedMessage,
+  updateCachedMessageStatus,
+  getOutbox,
+  addToOutbox,
+  removeFromOutbox,
+  updateRecentChatSnippet,
+  isDeviceOnline,
+  subscribeToNetworkChanges
+} from '../../utils/offlineStorage';
 
 export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGroupCall, onOpenFullDp }) {
   const { user, token, blockUser, unblockUser } = useContext(AuthContext);
   const { socket, onlineUsers, typingMap } = useContext(SocketContext);
-  const [messages, setMessages] = useState([]);
+
+  const isGroup = !!activeChat.isGroup;
+  const chatId = isGroup ? activeChat.id : [user.id, activeChat.id].sort().join('_');
+  const isOnline = !isGroup && onlineUsers.includes(activeChat.id);
+  const isTyping = typingMap[chatId] === activeChat.username;
+
+  const [messages, setMessages] = useState(() => {
+    const cached = getCachedMessages(chatId);
+    const outbox = getOutbox(user?.id);
+    const pendingForThisChat = outbox.filter(m => m.chatId === chatId);
+    const cachedIds = new Set(cached.map(m => m.id));
+    return [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))];
+  });
+  const [isNetConnected, setIsNetConnected] = useState(() => isDeviceOnline());
+
   const [text, setText] = useState('');
   const [showRecorder, setShowRecorder] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
@@ -54,11 +80,60 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [chatSetting, setChatSetting] = useState({ disappearingEnabled: false });
   const [blockStatus, setBlockStatus] = useState({ isBlockedByMe: false, isBlockedByThem: false });
 
-  const isGroup = !!activeChat.isGroup;
-  const chatId = isGroup ? activeChat.id : [user.id, activeChat.id].sort().join('_');
-  const isOnline = !isGroup && onlineUsers.includes(activeChat.id);
-  const isTyping = typingMap[chatId] === activeChat.username;
+  // Automatic Outbox Sync when network or socket reconnects
+  const syncOutbox = useCallback(() => {
+    if (!user?.id || !socket || !socket.connected) return;
+    const outbox = getOutbox(user.id);
+    if (!outbox || outbox.length === 0) return;
 
+    outbox.forEach((pendingMsg) => {
+      socket.emit('send_message', {
+        chatId: pendingMsg.chatId,
+        senderId: pendingMsg.senderId,
+        receiverId: pendingMsg.receiverId,
+        isGroup: pendingMsg.isGroup,
+        content: pendingMsg.content,
+        type: pendingMsg.type || 'text',
+        audioUrl: pendingMsg.audioUrl,
+        mediaUrl: pendingMsg.mediaUrl,
+        pollData: pendingMsg.pollData,
+        replyTo: pendingMsg.replyTo,
+        clientTempId: pendingMsg.clientTempId || pendingMsg.id
+      });
+
+      // Optimistically update message status to 'sent'
+      updateCachedMessageStatus(pendingMsg.chatId, pendingMsg.id, 'sent');
+      setMessages(prev => prev.map(m => (m.id === pendingMsg.id || m.clientTempId === pendingMsg.id) ? { ...m, status: 'sent' } : m));
+      removeFromOutbox(user.id, pendingMsg.id);
+      if (pendingMsg.clientTempId) {
+        removeFromOutbox(user.id, pendingMsg.clientTempId);
+      }
+    });
+  }, [user?.id, socket]);
+
+  useEffect(() => {
+    const unsub = subscribeToNetworkChanges((online) => {
+      setIsNetConnected(online);
+      if (online) {
+        syncOutbox();
+      }
+    });
+    return unsub;
+  }, [syncOutbox]);
+
+  useEffect(() => {
+    if (socket) {
+      const handleConnect = () => {
+        setIsNetConnected(true);
+        syncOutbox();
+      };
+      socket.on('connect', handleConnect);
+      if (socket.connected) {
+        syncOutbox();
+      }
+      return () => socket.off('connect', handleConnect);
+    }
+  }, [socket, syncOutbox]);
 
   // Close 3-dots more menu on outside click
   useEffect(() => {
@@ -82,12 +157,32 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setBlockStatus({ isBlockedByMe: false, isBlockedByThem: false });
 
     if (activeChat) {
+      // 1. Instantly display cached messages from local storage
+      const cached = getCachedMessages(chatId);
+      const outbox = getOutbox(user?.id);
+      const pendingForThisChat = outbox.filter(m => m.chatId === chatId);
+      const cachedIds = new Set(cached.map(m => m.id));
+      const combinedInitial = [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))];
+      setMessages(combinedInitial);
+
+      // 2. Fetch fresh messages if online
       fetch(`${BACKEND_URL}/api/messages/${chatId}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => res.json())
         .then(data => {
-          if (Array.isArray(data)) setMessages(data);
+          if (Array.isArray(data)) {
+            const currentOutbox = getOutbox(user?.id);
+            const pendingForChat = currentOutbox.filter(m => m.chatId === chatId);
+            const serverIds = new Set(data.map(m => m.id));
+            const activePending = pendingForChat.filter(p => !serverIds.has(p.id) && !serverIds.has(p.clientTempId));
+            const merged = [...data, ...activePending];
+            setMessages(merged);
+            setCachedMessages(chatId, merged);
+          }
+        })
+        .catch(() => {
+          // Offline: messages already loaded from cache!
         });
 
       // Fetch disappearing messages setting
@@ -141,7 +236,29 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     const handleNewMessage = (msg) => {
       if (msg.chatId === chatId) {
-        setMessages(prev => [...prev, msg]);
+        setMessages(prev => {
+          const matchIdx = prev.findIndex(m =>
+            (msg.clientTempId && (m.id === msg.clientTempId || m.clientTempId === msg.clientTempId)) ||
+            m.id === msg.id
+          );
+          let updated;
+          if (matchIdx !== -1) {
+            updated = [...prev];
+            updated[matchIdx] = msg;
+          } else {
+            updated = [...prev, msg];
+          }
+          setCachedMessages(chatId, updated);
+          return updated;
+        });
+
+        if (msg.clientTempId) {
+          removeFromOutbox(user?.id, msg.clientTempId);
+        }
+
+        updateRecentChatSnippet(user?.id, chatId, msg);
+        window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+
         if (msg.senderId !== user.id) {
           playSound('received');
           socket.emit('mark_read', { messageId: msg.id, chatId });
@@ -371,13 +488,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const dispatchMessage = (msgContent) => {
     if (!msgContent) return;
-    socket.emit('send_message', {
+
+    const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    const isOnlineNow = isDeviceOnline() && socket?.connected;
+
+    const pendingMsg = {
+      id: tempId,
+      clientTempId: tempId,
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
       isGroup,
       content: msgContent,
       type: 'text',
+      status: isOnlineNow ? 'sent' : 'pending',
+      timestamp: new Date().toISOString(),
+      reactions: {},
+      viewedBy: [],
       replyTo: replyTo ? {
         id: replyTo.id,
         content: replyTo.content,
@@ -385,6 +512,34 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         senderId: replyTo.senderId,
         senderName: replyTo.senderName || replyTo.senderId
       } : null
+    };
+
+    // 1. Optimistic UI update: message appears instantly in chat!
+    setMessages(prev => [...prev, pendingMsg]);
+    appendCachedMessage(chatId, pendingMsg);
+
+    // 2. Update recent chats snippet in localStorage & dispatch event for sidebar
+    updateRecentChatSnippet(user.id, chatId, pendingMsg);
+    window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+
+    // 3. If offline or socket disconnected, save to outbox
+    if (!isOnlineNow) {
+      addToOutbox(user.id, pendingMsg);
+      setReplyTo(null);
+      playSound('sent');
+      return;
+    }
+
+    // 4. Online: emit over socket
+    socket.emit('send_message', {
+      chatId,
+      senderId: user.id,
+      receiverId: isGroup ? '' : activeChat.id,
+      isGroup,
+      content: msgContent,
+      type: 'text',
+      clientTempId: tempId,
+      replyTo: pendingMsg.replyTo
     });
 
     setReplyTo(null); // Reply clear karo bhejne ke baad
@@ -782,6 +937,25 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           <div style={{ flex: 1, height: '2px', borderRadius: '2px', background: moodInfo.color, opacity: 0.4 }} />
         </div>
       </div>
+
+      {/* WhatsApp-Style Offline Indicator */}
+      {!isNetConnected && (
+        <div style={{
+          background: 'rgba(234, 179, 8, 0.16)',
+          borderBottom: '1px solid rgba(234, 179, 8, 0.35)',
+          color: '#eab308',
+          padding: '5px 14px',
+          fontSize: '0.78rem',
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px'
+        }}>
+          <WifiOff size={13} style={{ flexShrink: 0 }} />
+          <span>Waiting for network · Messages will send automatically when online</span>
+        </div>
+      )}
 
         {/* Multi-Select Messages Action Bar */}
         {isMultiSelectMode && (

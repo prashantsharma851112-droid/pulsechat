@@ -22,6 +22,8 @@ import {
 } from '../services/socket';
 import { MessageItem } from '../components/MessageItem';
 import { showInterstitialAd } from '../services/admob';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CONFIG } from '../config';
 
 export const ChatDetailScreen = ({ route, navigation }: any) => {
   const { chatId, partner } = route.params as { chatId: string; partner: User };
@@ -33,14 +35,56 @@ export const ChatDetailScreen = ({ route, navigation }: any) => {
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load existing messages
+  const storageKey = `${CONFIG.STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`;
+
+  // Flush Outbox Queue on Reconnect
+  const flushOutbox = async () => {
+    try {
+      const storedOutbox = await AsyncStorage.getItem(CONFIG.STORAGE_KEYS.OUTBOX);
+      if (!storedOutbox) return;
+      const queue: Message[] = JSON.parse(storedOutbox);
+      if (queue.length === 0) return;
+
+      const remaining: Message[] = [];
+      for (const item of queue) {
+        emitSendMessage({
+          chatId: item.chatId,
+          senderId: item.senderId,
+          receiverId: item.receiverId,
+          content: item.content,
+          type: item.type,
+        });
+
+        // Mark as sent in state if in current chat
+        if (item.chatId === chatId) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === item.id ? { ...m, status: 'sent' } : m))
+          );
+        }
+      }
+      await AsyncStorage.setItem(CONFIG.STORAGE_KEYS.OUTBOX, JSON.stringify(remaining));
+    } catch (e) {
+      console.warn('Error flushing outbox:', e);
+    }
+  };
+
+  // Load existing messages (Offline cache first, then API)
   useEffect(() => {
     const fetchMessages = async () => {
       try {
+        // 1. Load from AsyncStorage cache first
+        const cached = await AsyncStorage.getItem(storageKey);
+        if (cached) {
+          setMessages(JSON.parse(cached));
+          setLoading(false);
+        }
+
+        // 2. Fetch fresh messages from API
         const data = await ApiService.getMessages(chatId);
         setMessages(data);
+        await AsyncStorage.setItem(storageKey, JSON.stringify(data));
       } catch (err) {
-        console.error('Failed to load chat messages:', err);
+        console.warn('Using cached messages offline:', err);
       } finally {
         setLoading(false);
       }
@@ -51,9 +95,19 @@ export const ChatDetailScreen = ({ route, navigation }: any) => {
 
     const socket = getSocket();
     if (socket) {
-      socket.on('new_message', (newMsg: Message) => {
+      if (socket.connected) {
+        flushOutbox();
+      }
+      socket.on('connect', flushOutbox);
+
+      socket.on('new_message', async (newMsg: Message) => {
         if (newMsg.chatId === chatId) {
-          setMessages((prev) => [...prev, newMsg]);
+          setMessages((prev) => {
+            const exists = prev.some((m) => m.id === newMsg.id);
+            const updated = exists ? prev.map((m) => (m.id === newMsg.id ? newMsg : m)) : [...prev, newMsg];
+            AsyncStorage.setItem(storageKey, JSON.stringify(updated)).catch(() => {});
+            return updated;
+          });
         }
       });
 
@@ -72,6 +126,7 @@ export const ChatDetailScreen = ({ route, navigation }: any) => {
 
     return () => {
       if (socket) {
+        socket.off('connect', flushOutbox);
         socket.off('new_message');
         socket.off('typing_start');
         socket.off('typing_stop');
@@ -102,6 +157,9 @@ export const ChatDetailScreen = ({ route, navigation }: any) => {
     setInputText('');
     emitTypingStop(chatId, user.id);
 
+    const socket = getSocket();
+    const isSocketOnline = Boolean(socket && socket.connected);
+
     const tempMsg: Message = {
       id: 'temp_' + Date.now(),
       chatId,
@@ -109,14 +167,31 @@ export const ChatDetailScreen = ({ route, navigation }: any) => {
       receiverId: partner.id,
       content,
       type: 'text',
-      status: 'sent',
+      status: isSocketOnline ? 'sent' : 'pending',
       timestamp: new Date().toISOString(),
     };
 
     // Optimistic UI update
-    setMessages((prev) => [...prev, tempMsg]);
+    setMessages((prev) => {
+      const next = [...prev, tempMsg];
+      AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
 
-    // Emit via Socket.io
+    if (!isSocketOnline) {
+      // Offline: Enqueue in outbox
+      try {
+        const storedOutbox = await AsyncStorage.getItem(CONFIG.STORAGE_KEYS.OUTBOX);
+        const queue = storedOutbox ? JSON.parse(storedOutbox) : [];
+        queue.push(tempMsg);
+        await AsyncStorage.setItem(CONFIG.STORAGE_KEYS.OUTBOX, JSON.stringify(queue));
+      } catch (e) {
+        console.warn('Error saving to outbox:', e);
+      }
+      return;
+    }
+
+    // Online: Emit via Socket.io
     emitSendMessage({
       chatId,
       senderId: user.id,

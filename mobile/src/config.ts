@@ -15,5 +15,8 @@ export const CONFIG = {
   STORAGE_KEYS: {
     AUTH_TOKEN: '@pulsechat_token',
     USER_DATA: '@pulsechat_user',
+    CHAT_USERS: '@pulsechat_cached_users',
+    MESSAGES_PREFIX: '@pulsechat_msgs_',
+    OUTBOX: '@pulsechat_outbox',
   },
 };

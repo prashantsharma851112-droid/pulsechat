@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
-import { Check, CheckCheck, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil } from 'lucide-react';
+import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 import EditPollModal from './EditPollModal';
@@ -783,9 +783,11 @@ export default function MessageItem({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem', marginTop: '0.35rem', fontSize: '0.68rem', opacity: 0.75 }}>
           <span>{timeStr}</span>
           {isMine && (
-            <span>
-              {message.status === 'read' ? (
-                <CheckCheck size={14} color="#10b981" />
+            <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+              {message.status === 'pending' ? (
+                <Clock size={12} color="#9ca3af" title="Waiting for network / Pending" />
+              ) : message.status === 'read' ? (
+                <CheckCheck size={14} color="#53bdeb" />
               ) : message.status === 'delivered' ? (
                 <CheckCheck size={14} color="#9ca3af" />
               ) : (

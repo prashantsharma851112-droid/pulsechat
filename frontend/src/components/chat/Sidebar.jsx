@@ -1,21 +1,53 @@
 import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
 import SettingsModal from '../profile/SettingsModal';
 import { BACKEND_URL } from '../../utils/config';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
+import {
+  getCachedRecentChats,
+  setCachedRecentChats,
+  getCachedGroups,
+  setCachedGroups,
+  isDeviceOnline,
+  subscribeToNetworkChanges
+} from '../../utils/offlineStorage';
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
   const { user, logout, token } = useContext(AuthContext);
   const { socket, onlineUsers, lastNotification } = useContext(SocketContext);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [recentChats, setRecentChats] = useState([]);
-  const [groups, setGroups] = useState([]);
+  const [recentChats, setRecentChats] = useState(() => getCachedRecentChats(user?.id));
+  const [groups, setGroups] = useState(() => getCachedGroups(user?.id));
+  const [isOnline, setIsOnline] = useState(() => isDeviceOnline());
   const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'groups'
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+
+  // Monitor network online/offline state
+  useEffect(() => {
+    const unsubscribe = subscribeToNetworkChanges((online) => {
+      setIsOnline(online);
+      if (online) {
+        loadRecentChats();
+        loadGroups();
+      }
+    });
+    return unsubscribe;
+  }, [user?.id]);
+
+  // Listen for local chat updates (e.g. offline message sent in ChatWindow)
+  useEffect(() => {
+    const handleRecentUpdate = () => {
+      if (user?.id) {
+        setRecentChats(getCachedRecentChats(user.id));
+      }
+    };
+    window.addEventListener('pulsechat_recent_updated', handleRecentUpdate);
+    return () => window.removeEventListener('pulsechat_recent_updated', handleRecentUpdate);
+  }, [user?.id]);
 
   // Notification Permission State — respect localStorage dismiss flag
   const [notifPermission, setNotifPermission] = useState(() => {
@@ -30,35 +62,72 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [silentMode, setSilentMode] = useState(false);
   const [showPanicModal, setShowPanicModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      loadRecentChats();
+      loadGroups();
+      if (socket) {
+        if (!socket.connected) {
+          socket.connect();
+        }
+        if (user?.id) {
+          socket.emit('setup', user.id);
+        }
+      }
+      window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+    } catch (e) {
+      console.warn('Manual refresh error:', e);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 700);
+    }
+  };
 
   const loadRecentChats = useCallback(() => {
+    if (!token) return;
     fetch(`${BACKEND_URL}/api/users/recent`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setRecentChats(data.map(item => {
+          const mapped = data.map(item => {
             if (activeChat && item.id === activeChat.id) {
               return { ...item, unreadCount: 0 };
             }
             return item;
-          }));
+          });
+          setRecentChats(mapped);
+          if (user?.id) {
+            setCachedRecentChats(user.id, mapped);
+          }
         }
       })
-      .catch(() => {});
-  }, [token, activeChat]);
+      .catch(() => {
+        // Offline: cached recentChats already loaded!
+      });
+  }, [token, activeChat, user?.id]);
 
   const loadGroups = useCallback(() => {
+    if (!token) return;
     fetch(`${BACKEND_URL}/api/groups`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) setGroups(data);
+        if (Array.isArray(data)) {
+          setGroups(data);
+          if (user?.id) {
+            setCachedGroups(user.id, data);
+          }
+        }
       })
-      .catch(() => {});
-  }, [token]);
+      .catch(() => {
+        // Offline: cached groups already loaded!
+      });
+  }, [token, user?.id]);
 
   useEffect(() => {
     loadRecentChats();
@@ -155,18 +224,26 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-                PulseChat
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: 'var(--text-main)', letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user?.displayName || user?.username || 'PulseChat'}
               </h3>
             </div>
             <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {user?.displayName} (@{user?.username})
+              @{user?.username}
             </p>
           </div>
         </div>
 
         {/* Header Action Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <button
+            onClick={handleManualRefresh}
+            title="Refresh chats & connection"
+            className="icon-btn-ghost"
+            style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'var(--bg-card)', color: isRefreshing ? 'var(--accent)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <RotateCw size={18} style={{ transform: isRefreshing ? 'rotate(360deg)' : 'none', transition: 'transform 0.6s ease' }} />
+          </button>
           <button
             onClick={() => setShowCreateGroupModal(true)}
             title="Create New Group"
@@ -239,6 +316,24 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           </span>
         </button>
       </div>
+
+      {/* WhatsApp-Style Offline Indicator Banner */}
+      {!isOnline && (
+        <div style={{
+          background: 'rgba(234, 179, 8, 0.16)',
+          borderBottom: '1px solid rgba(234, 179, 8, 0.35)',
+          color: '#eab308',
+          padding: '6px 14px',
+          fontSize: '0.78rem',
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <WifiOff size={14} style={{ flexShrink: 0 }} />
+          <span>Offline mode · Chats saved locally · Waiting for network</span>
+        </div>
+      )}
 
       {/* WhatsApp-Style Search Input */}
       <div style={{ padding: '0.65rem 1rem', background: 'var(--bg-sidebar)' }}>

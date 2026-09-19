@@ -14,6 +14,8 @@ import { ApiService, User } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { getSocket } from '../services/socket';
 import { AdBanner } from '../components/AdBanner';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CONFIG } from '../config';
 
 export const ChatListScreen = ({ navigation }: any) => {
   const { user } = useAuth();
@@ -23,14 +25,29 @@ export const ChatListScreen = ({ navigation }: any) => {
   const [refreshing, setRefreshing] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
 
+  // Load cached chats immediately on mount
+  useEffect(() => {
+    const loadCached = async () => {
+      try {
+        const cached = await AsyncStorage.getItem(CONFIG.STORAGE_KEYS.CHAT_USERS);
+        if (cached) {
+          setUsers(JSON.parse(cached));
+          setLoading(false);
+        }
+      } catch (e) {}
+    };
+    loadCached();
+  }, []);
+
   const loadData = async () => {
     try {
       const data = await ApiService.getUsers();
       // Filter out self
       const otherUsers = data.filter((u) => u.id !== user?.id);
       setUsers(otherUsers);
+      await AsyncStorage.setItem(CONFIG.STORAGE_KEYS.CHAT_USERS, JSON.stringify(otherUsers));
     } catch (err) {
-      console.error('Failed to load users:', err);
+      console.warn('Failed to load users online, using offline cache:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -153,8 +153,8 @@ io.on('connection', (socket) => {
   };
 
   // Send Real-Time Message
-  socket.on('send_message', async (messageData) => {
-    const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, pollData, callData, isViewOnce, replyTo } = messageData;
+  socket.on('send_message', async (messageData, ackCallback) => {
+    const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, pollData, callData, isViewOnce, replyTo, clientTempId } = messageData;
 
     // Check if blocked in 1-to-1 chat
     if (receiverId && !isGroup) {
@@ -167,6 +167,7 @@ io.on('connection', (socket) => {
             ? 'You cannot send messages to this contact because you have been blocked.'
             : 'You have blocked this contact. Unblock to send messages.'
         });
+        if (typeof ackCallback === 'function') ackCallback({ error: 'blocked' });
         return;
       }
     }
@@ -180,6 +181,7 @@ io.on('connection', (socket) => {
 
     const newMsg = {
       id: 'msg_' + Date.now(),
+      clientTempId: clientTempId || null,
       chatId,
       senderId,
       receiverId: receiverId || '',
@@ -200,6 +202,10 @@ io.on('connection', (socket) => {
     };
 
     await db.saveMessage(newMsg);
+
+    if (typeof ackCallback === 'function') {
+      ackCallback({ success: true, message: newMsg });
+    }
 
     // Emit to room & direct recipient
     io.to(chatId).emit('new_message', newMsg);

@@ -143,6 +143,68 @@ router.post('/delivered-ack', async (req, res) => {
     console.error('Error in delivered-ack route:', err);
     res.status(500).json({ error: 'Failed to acknowledge delivery' });
   }
+// Send message via HTTP (Offline Outbox sync fallback)
+router.post('/send', authMiddleware, async (req, res) => {
+  try {
+    const { chatId, receiverId, isGroup, content, type, audioUrl, mediaUrl, pollData, replyTo, clientTempId } = req.body;
+    const senderId = req.user.id;
+
+    if (!chatId) return res.status(400).json({ error: 'chatId is required' });
+
+    // Check if blocked in 1-to-1 chat
+    if (receiverId && !isGroup) {
+      const blockStatus = await db.isUserBlocked(senderId, receiverId);
+      if (blockStatus.isBlocked) {
+        return res.status(403).json({ error: 'Blocked contact' });
+      }
+    }
+
+    const chatSetting = await db.getChatSetting(chatId);
+    const isDisappearing = Boolean(chatSetting && chatSetting.disappearingEnabled);
+    const expiresAt = isDisappearing ? new Date(Date.now() + (chatSetting.disappearingDuration || 86400) * 1000) : null;
+
+    const newMsg = {
+      id: 'msg_' + Date.now(),
+      clientTempId: clientTempId || null,
+      chatId,
+      senderId,
+      receiverId: receiverId || '',
+      isGroup: !!isGroup,
+      content: content || '',
+      type: type || 'text',
+      audioUrl: audioUrl || null,
+      mediaUrl: mediaUrl || null,
+      pollData: pollData || null,
+      callData: null,
+      isViewOnce: false,
+      viewedBy: [],
+      status: 'sent',
+      timestamp: new Date().toISOString(),
+      reactions: {},
+      replyTo: replyTo || null,
+      expiresAt
+    };
+
+    await db.saveMessage(newMsg);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(chatId).emit('new_message', newMsg);
+      if (receiverId && !isGroup) {
+        const sender = await User.findOne({ id: senderId }).select('displayName username avatar');
+        io.to(`user_${receiverId}`).emit('message_notification', {
+          ...newMsg,
+          senderName: sender?.displayName || sender?.username || senderId,
+          senderAvatar: sender?.avatar || null
+        });
+      }
+    }
+
+    res.json({ success: true, message: newMsg });
+  } catch (err) {
+    console.error('Error in /api/messages/send route:', err);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
 });
 
 module.exports = router;

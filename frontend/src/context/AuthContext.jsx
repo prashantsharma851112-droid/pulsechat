@@ -1,27 +1,34 @@
 import React, { createContext, useState, useEffect } from 'react';
 import { BACKEND_URL } from '../utils/config';
+import { getCachedUser, setCachedUser } from '../utils/offlineStorage';
 
 export const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('pulsechat_token'));
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(() => getCachedUser());
+  const [token, setToken] = useState(() => localStorage.getItem('pulsechat_token'));
+  const [loading, setLoading] = useState(() => !getCachedUser() && !!localStorage.getItem('pulsechat_token'));
 
   useEffect(() => {
     if (token) {
       fetch(`${BACKEND_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       })
-        .then(res => res.json())
-        .then(data => {
+        .then(async (res) => {
+          if (res.status === 401) {
+            logout();
+            return;
+          }
+          const data = await res.json();
           if (data.user) {
             setUser(data.user);
-          } else {
-            logout();
+            setCachedUser(data.user);
           }
         })
-        .catch(() => logout())
+        .catch((err) => {
+          // Network error or offline: DO NOT LOGOUT! Keep the cached user session.
+          console.warn('Network offline or backend unreachable, keeping cached user session:', err);
+        })
         .finally(() => setLoading(false));
     } else {
       setLoading(false);
@@ -30,18 +37,21 @@ export function AuthProvider({ children }) {
 
   const login = (data) => {
     localStorage.setItem('pulsechat_token', data.token);
+    setCachedUser(data.user);
     setToken(data.token);
     setUser(data.user);
   };
 
   const logout = () => {
     localStorage.removeItem('pulsechat_token');
+    setCachedUser(null);
     setToken(null);
     setUser(null);
   };
 
   const updateUserProfile = (updatedUser) => {
     setUser(updatedUser);
+    setCachedUser(updatedUser);
   };
 
   const blockUser = async (targetUserId) => {
