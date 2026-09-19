@@ -9,6 +9,7 @@
 
 const User = require('../models/User');
 const Message = require('../models/Message');
+const ChatSetting = require('../models/ChatSetting');
 
 module.exports = {
   getUsers: async () => {
@@ -26,7 +27,13 @@ module.exports = {
   },
 
   getMessages: async (chatId) => {
-    return await Message.find({ chatId }).sort({ timestamp: 1 }).lean();
+    return await Message.find({
+      chatId,
+      $or: [
+        { expiresAt: null },
+        { expiresAt: { $gt: new Date() } }
+      ]
+    }).sort({ timestamp: 1 }).lean();
   },
 
   saveMessage: async (msg) => {
@@ -270,5 +277,66 @@ module.exports = {
       await msg.save();
     }
     return msgs;
+  },
+
+  getChatSetting: async (chatId) => {
+    let setting = await ChatSetting.findOne({ chatId }).lean();
+    if (!setting) {
+      setting = { chatId, disappearingEnabled: false, disappearingDuration: 86400 };
+    }
+    return setting;
+  },
+
+  setDisappearingMessages: async (chatId, enabled, userId) => {
+    const updated = await ChatSetting.findOneAndUpdate(
+      { chatId },
+      { disappearingEnabled: !!enabled, disappearingDuration: 86400, updatedAt: new Date(), updatedBy: userId || '' },
+      { upsert: true, new: true }
+    ).lean();
+    return updated;
+  },
+
+  blockUser: async (userId, targetUserId) => {
+    const user = await User.findOne({ id: userId });
+    if (!user) return null;
+    if (!user.blockedUsers) user.blockedUsers = [];
+    if (!user.blockedUsers.includes(targetUserId)) {
+      user.blockedUsers.push(targetUserId);
+      user.markModified('blockedUsers');
+      await user.save();
+    }
+    return user.blockedUsers;
+  },
+
+  unblockUser: async (userId, targetUserId) => {
+    const user = await User.findOne({ id: userId });
+    if (!user) return null;
+    if (!user.blockedUsers) user.blockedUsers = [];
+    user.blockedUsers = user.blockedUsers.filter(id => id !== targetUserId);
+    user.markModified('blockedUsers');
+    await user.save();
+    return user.blockedUsers;
+  },
+
+  getBlockedUsers: async (userId) => {
+    const user = await User.findOne({ id: userId }).lean();
+    if (!user || !user.blockedUsers || user.blockedUsers.length === 0) return [];
+    const blockedList = await User.find({ id: { $in: user.blockedUsers } })
+      .select('id displayName username avatar status')
+      .lean();
+    return blockedList;
+  },
+
+  isUserBlocked: async (userAId, userBId) => {
+    if (!userAId || !userBId) return { isBlocked: false, aBlockedB: false, bBlockedA: false };
+    const userA = await User.findOne({ id: userAId }).select('blockedUsers').lean();
+    const userB = await User.findOne({ id: userBId }).select('blockedUsers').lean();
+    const aBlockedB = Boolean(userA?.blockedUsers && userA.blockedUsers.includes(userBId));
+    const bBlockedA = Boolean(userB?.blockedUsers && userB.blockedUsers.includes(userAId));
+    return {
+      isBlocked: aBlockedB || bBlockedA,
+      aBlockedB,
+      bBlockedA
+    };
   }
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -15,7 +15,7 @@ import { BACKEND_URL } from '../../utils/config';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
 
 export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGroupCall, onOpenFullDp }) {
-  const { user, token } = useContext(AuthContext);
+  const { user, token, blockUser, unblockUser } = useContext(AuthContext);
   const { socket, onlineUsers, typingMap } = useContext(SocketContext);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
@@ -50,10 +50,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [cooldownSecs, setCooldownSecs] = useState(0);
   const [cooldownMsg, setCooldownMsg] = useState(null);
 
+  // Chat settings & block status
+  const [chatSetting, setChatSetting] = useState({ disappearingEnabled: false });
+  const [blockStatus, setBlockStatus] = useState({ isBlockedByMe: false, isBlockedByThem: false });
+
   const isGroup = !!activeChat.isGroup;
   const chatId = isGroup ? activeChat.id : [user.id, activeChat.id].sort().join('_');
   const isOnline = !isGroup && onlineUsers.includes(activeChat.id);
   const isTyping = typingMap[chatId] === activeChat.username;
+
 
   // Close 3-dots more menu on outside click
   useEffect(() => {
@@ -73,6 +78,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     // Chat badle toh reply aur initial scroll flag reset karo
     isInitialLoad.current = true;
     setReplyTo(null);
+    setChatSetting({ disappearingEnabled: false });
+    setBlockStatus({ isBlockedByMe: false, isBlockedByThem: false });
 
     if (activeChat) {
       fetch(`${BACKEND_URL}/api/messages/${chatId}`, {
@@ -82,6 +89,28 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         .then(data => {
           if (Array.isArray(data)) setMessages(data);
         });
+
+      // Fetch disappearing messages setting
+      fetch(`${BACKEND_URL}/api/messages/settings/${chatId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data?.disappearingEnabled !== undefined) setChatSetting(data);
+        })
+        .catch(() => {});
+
+      // Fetch block status (only for 1-to-1 chats)
+      if (!isGroup) {
+        fetch(`${BACKEND_URL}/api/users/${activeChat.id}/block-status`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data) setBlockStatus(data);
+          })
+          .catch(() => {});
+      }
 
       if (isGroup) {
         fetch(`${BACKEND_URL}/api/groups/${activeChat.id}`, {
@@ -189,6 +218,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     };
 
+    const handleChatSettingUpdated = (setting) => {
+      if (setting && setting.chatId === chatId) {
+        setChatSetting(setting);
+      }
+    };
+
+    const handleMessageBlocked = ({ reason }) => {
+      alert(reason || 'Message blocked: Communication not allowed.');
+    };
+
     socket.on('new_message', handleNewMessage);
     socket.on('poll_updated', handlePollUpdate);
     socket.on('poll_edited', handlePollEdit);
@@ -203,6 +242,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     socket.on('chat_restored', handleChatRestored);
     socket.on('multiple_messages_deleted', handleMultipleDeleted);
     socket.on('multiple_messages_restored', handleMultipleRestored);
+    socket.on('chat_setting_updated', handleChatSettingUpdated);
+    socket.on('message_blocked', handleMessageBlocked);
 
     return () => {
       socket.off('new_message', handleNewMessage);
@@ -219,6 +260,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.off('chat_restored', handleChatRestored);
       socket.off('multiple_messages_deleted', handleMultipleDeleted);
       socket.off('multiple_messages_restored', handleMultipleRestored);
+      socket.off('chat_setting_updated', handleChatSettingUpdated);
+      socket.off('message_blocked', handleMessageBlocked);
     };
   }, [socket, chatId, user.id, token]);
 
@@ -571,6 +614,25 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   {activeChat.displayName}
                 </h3>
                 {isGroup && <span className="group-pill-badge"><Users size={12} /> Group</span>}
+                {chatSetting?.disappearingEnabled && (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      fontSize: '0.7rem',
+                      padding: '2px 7px',
+                      borderRadius: '10px',
+                      background: 'rgba(99, 102, 241, 0.15)',
+                      color: 'var(--accent)',
+                      fontWeight: 600,
+                      flexShrink: 0
+                    }}
+                    title="24h Disappearing Messages are ON"
+                  >
+                    <Clock size={11} /> 24h
+                  </span>
+                )}
               </div>
               <p style={{ fontSize: '0.8rem', color: isTyping ? 'var(--accent)' : 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {isGroup
@@ -631,6 +693,41 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     <CheckSquare size={16} color="var(--accent)" />
                     <span>Select Messages</span>
                   </button>
+                  <button onClick={() => {
+                    setShowMoreMenu(false);
+                    if (isGroup) {
+                      setShowGroupProfileModal(true);
+                    } else {
+                      setShowUserProfileModal(true);
+                    }
+                  }}>
+                    <Clock size={16} color="var(--accent)" />
+                    <span>Disappearing Messages {chatSetting?.disappearingEnabled ? '(On)' : '(Off)'}</span>
+                  </button>
+                  {!isGroup && (
+                    <button
+                      onClick={async () => {
+                        setShowMoreMenu(false);
+                        const willBlock = !blockStatus.isBlockedByMe;
+                        const confirmMsg = willBlock
+                          ? `Are you sure you want to block ${activeChat.displayName}? You will no longer receive their messages or calls.`
+                          : `Unblock ${activeChat.displayName}?`;
+                        if (window.confirm(confirmMsg)) {
+                          if (willBlock) {
+                            await blockUser(activeChat.id);
+                            setBlockStatus(prev => ({ ...prev, isBlockedByMe: true }));
+                          } else {
+                            await unblockUser(activeChat.id);
+                            setBlockStatus(prev => ({ ...prev, isBlockedByMe: false }));
+                          }
+                        }
+                      }}
+                      style={{ color: blockStatus.isBlockedByMe ? 'var(--accent)' : '#ef4444' }}
+                    >
+                      <Ban size={16} color={blockStatus.isBlockedByMe ? 'var(--accent)' : '#ef4444'} />
+                      <span>{blockStatus.isBlockedByMe ? 'Unblock Contact' : 'Block Contact'}</span>
+                    </button>
+                  )}
                   <button onClick={() => { setShowMoreMenu(false); handleClearCurrentChat(); }} style={{ color: '#ef4444' }}>
                     <Trash2 size={16} color="#ef4444" />
                     <span>Clear Chat</span>
@@ -968,42 +1065,88 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         </div>
       )}
 
-      {/* Input Bar */}
-      <div style={{ padding: '0.75rem 1rem', background: 'var(--bg-sidebar)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
-        {showEmoji && (
-          <EmojiPicker onSelectEmoji={(emoji) => setText(prev => prev + emoji)} onClose={() => setShowEmoji(false)} />
-        )}
+      {/* Block Banner or Input Bar */}
+      {blockStatus.isBlockedByMe ? (
+        <div style={{
+          padding: '1.1rem',
+          background: 'var(--bg-sidebar)',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '12px',
+          color: 'var(--text-muted)',
+          fontSize: '0.9rem'
+        }}>
+          <Ban size={18} color="#ef4444" />
+          <span>You have blocked this contact.</span>
+          <button
+            onClick={async () => {
+              await unblockUser(activeChat.id);
+              setBlockStatus(prev => ({ ...prev, isBlockedByMe: false }));
+            }}
+            className="btn-primary"
+            style={{ padding: '5px 16px', fontSize: '0.82rem', borderRadius: '14px' }}
+          >
+            Unblock
+          </button>
+        </div>
+      ) : blockStatus.isBlockedByThem ? (
+        <div style={{
+          padding: '1.1rem',
+          background: 'var(--bg-sidebar)',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          color: 'var(--text-muted)',
+          fontSize: '0.88rem'
+        }}>
+          <ShieldAlert size={18} color="var(--text-muted)" />
+          <span>You cannot reply to this conversation.</span>
+        </div>
+      ) : (
+        <div style={{ padding: '0.75rem 1rem', background: 'var(--bg-sidebar)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
+          {showEmoji && (
+            <EmojiPicker onSelectEmoji={(emoji) => setText(prev => prev + emoji)} onClose={() => setShowEmoji(false)} />
+          )}
 
-        <input
-          type="file"
-          ref={fileInputRef}
-          accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
-          onChange={handleFileSelect}
-          style={{ display: 'none' }}
-        />
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+            onChange={handleFileSelect}
+            style={{ display: 'none' }}
+          />
 
-        <button onClick={() => fileInputRef.current?.click()} className="icon-btn-ghost" title="Send Photo, Video or Document"><Paperclip size={20} /></button>
-        <button onClick={() => setShowEmoji(!showEmoji)} className="icon-btn-ghost" title="Add Emoji"><Smile size={20} /></button>
-        <button onClick={() => setShowCreatePoll(true)} className="icon-btn-ghost" title="Create Poll"><BarChart2 size={20} /></button>
-        <button onClick={() => setShowRecorder(!showRecorder)} className={`icon-btn-ghost ${showRecorder ? 'active-mic' : ''}`} title="Voice Note"><Mic size={20} /></button>
+          {!showRecorder && (
+            <>
+              <button onClick={() => fileInputRef.current?.click()} className="icon-btn-ghost" title="Send Photo, Video or Document"><Paperclip size={20} /></button>
+              <button onClick={() => setShowEmoji(!showEmoji)} className="icon-btn-ghost" title="Add Emoji"><Smile size={20} /></button>
+              <button onClick={() => setShowCreatePoll(true)} className="icon-btn-ghost" title="Create Poll"><BarChart2 size={20} /></button>
+              <button onClick={() => setShowRecorder(true)} className="icon-btn-ghost" title="Voice Note"><Mic size={20} /></button>
+            </>
+          )}
 
-        {showRecorder ? (
-          <VoiceRecorder onSendVoice={handleSendVoice} onCancel={() => setShowRecorder(false)} />
-        ) : (
-          <form onSubmit={handleSendText} style={{ flex: 1, display: 'flex', gap: '0.5rem' }}>
-            <input
-              type="text"
-              value={text}
-              onChange={handleTextChange}
-              placeholder={isGroup ? 'Message group...' : 'Type a message...'}
-              className="form-input"
-              ref={replyInputRef}
-              style={{ flex: 1, borderRadius: '24px' }}
-            />
-            <button type="submit" className="btn-primary-round" title="Send Message"><Send size={18} /></button>
-          </form>
-        )}
-      </div>
+          {showRecorder ? (
+            <VoiceRecorder onSendVoice={handleSendVoice} onCancel={() => setShowRecorder(false)} />
+          ) : (
+            <form onSubmit={handleSendText} style={{ flex: 1, display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="text"
+                value={text}
+                onChange={handleTextChange}
+                placeholder={isGroup ? 'Message group...' : 'Type a message...'}
+                className="form-input"
+                ref={replyInputRef}
+                style={{ flex: 1, borderRadius: '24px' }}
+              />
+              <button type="submit" className="btn-primary-round" title="Send Message"><Send size={18} /></button>
+            </form>
+          )}
+        </div>
+      )}
 
       {pendingMedia && (
         <MediaUploadModal

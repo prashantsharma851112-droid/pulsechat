@@ -44,8 +44,82 @@ export function AuthProvider({ children }) {
     setUser(updatedUser);
   };
 
+  const blockUser = async (targetUserId) => {
+    if (!token) return false;
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/users/block/${targetUserId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setUser(prev => ({
+          ...prev,
+          blockedUsers: data.blockedUsers
+        }));
+        return true;
+      }
+    } catch (e) {
+      console.error('Failed to block user:', e);
+    }
+    return false;
+  };
+
+  const unblockUser = async (targetUserId) => {
+    if (!token) return false;
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/users/unblock/${targetUserId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setUser(prev => ({
+          ...prev,
+          blockedUsers: data.blockedUsers
+        }));
+        return true;
+      }
+    } catch (e) {
+      console.error('Failed to unblock user:', e);
+    }
+    return false;
+  };
+
+  const toggleHideReadReceipts = async (enabled) => {
+    if (!token) return false;
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/users/privacy`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ hideReadReceipts: enabled })
+      });
+      const data = await res.json();
+      if (data.user) {
+        setUser(data.user);
+        return true;
+      }
+    } catch (e) {
+      console.error('Failed to update unseen mode:', e);
+    }
+    return false;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, updateUserProfile }}>
+    <AuthContext.Provider value={{
+      user,
+      token,
+      loading,
+      login,
+      logout,
+      updateUserProfile,
+      blockUser,
+      unblockUser,
+      toggleHideReadReceipts
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -3,33 +3,95 @@ const router = express.Router();
 const db = require('../database/db');
 const authMiddleware = require('../middleware/authMiddleware');
 
+const User = require('../models/User');
+
+// Get Chat Settings (Disappearing Messages) - MUST BE BEFORE /:chatId
+router.get('/settings/:chatId', authMiddleware, async (req, res) => {
+  try {
+    const setting = await db.getChatSetting(req.params.chatId);
+    res.json(setting);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch chat settings' });
+  }
+});
+
+// Toggle Disappearing Messages (24h) - MUST BE BEFORE /:chatId
+router.put('/settings/:chatId/disappearing', authMiddleware, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    const setting = await db.setDisappearingMessages(req.params.chatId, enabled, req.user.id);
+
+    // Announce via system message
+    const sysMsg = {
+      id: 'msg_sys_' + Date.now(),
+      chatId: req.params.chatId,
+      senderId: 'system',
+      receiverId: '',
+      isGroup: !req.params.chatId.includes('_'),
+      type: 'system',
+      content: enabled ? '⏱️ Messages in this chat will disappear 24 hours after being sent.' : '⏱️ Disappearing messages was turned off.',
+      status: 'sent',
+      timestamp: new Date().toISOString()
+    };
+    await db.saveMessage(sysMsg);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(req.params.chatId).emit('chat_setting_updated', setting);
+      io.to(req.params.chatId).emit('new_message', sysMsg);
+      if (req.params.chatId.includes('_')) {
+        const parts = req.params.chatId.split('_');
+        parts.forEach(uId => {
+          io.to(`user_${uId}`).emit('chat_setting_updated', setting);
+          io.to(`user_${uId}`).emit('new_message', sysMsg);
+        });
+      }
+    }
+
+    res.json({ success: true, setting, systemMessage: sysMsg });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update disappearing messages' });
+  }
+});
+
 // Get Chat Message History
 router.get('/:chatId', authMiddleware, async (req, res) => {
-  await db.markChatAsRead(req.params.chatId, req.user.id);
-  const io = req.app.get('io');
-  if (io) {
-    io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-    if (req.params.chatId.includes('_')) {
-      const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
-      if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+  const currentUser = await User.findOne({ id: req.user.id }).select('hideReadReceipts');
+  const isGhostMode = Boolean(currentUser && currentUser.hideReadReceipts);
+
+  if (!isGhostMode) {
+    await db.markChatAsRead(req.params.chatId, req.user.id);
+    const io = req.app.get('io');
+    if (io) {
+      io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+      if (req.params.chatId.includes('_')) {
+        const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
+        if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+      }
     }
   }
+
   const messages = await db.getMessages(req.params.chatId);
   res.json(messages);
 });
 
 // Mark Chat Messages as Read
 router.put('/:chatId/read', authMiddleware, async (req, res) => {
-  await db.markChatAsRead(req.params.chatId, req.user.id);
-  const io = req.app.get('io');
-  if (io) {
-    io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-    if (req.params.chatId.includes('_')) {
-      const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
-      if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+  const currentUser = await User.findOne({ id: req.user.id }).select('hideReadReceipts');
+  const isGhostMode = Boolean(currentUser && currentUser.hideReadReceipts);
+
+  if (!isGhostMode) {
+    await db.markChatAsRead(req.params.chatId, req.user.id);
+    const io = req.app.get('io');
+    if (io) {
+      io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+      if (req.params.chatId.includes('_')) {
+        const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
+        if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+      }
     }
   }
-  res.json({ success: true });
+  res.json({ success: true, ghostMode: isGhostMode });
 });
 
 const Message = require('../models/Message');

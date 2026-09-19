@@ -23,6 +23,8 @@ const userSchema = new mongoose.Schema({
       auth: { type: String, required: true }
     }
   }],
+  blockedUsers: [{ type: String }],
+  hideReadReceipts: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 

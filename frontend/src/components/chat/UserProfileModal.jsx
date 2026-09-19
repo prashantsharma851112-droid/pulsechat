@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { X, CheckCircle2, Phone, Video, Eye, Info, User, ShieldCheck } from 'lucide-react';
+import { X, CheckCircle2, Phone, Video, Eye, Info, User, ShieldCheck, Clock, Ban, Unlock } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
 
 export default function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp }) {
-  const { token } = useContext(AuthContext);
-  const { onlineUsers } = useContext(SocketContext);
+  const { user, token, blockUser, unblockUser } = useContext(AuthContext);
+  const { socket, onlineUsers } = useContext(SocketContext);
   const [profileData, setProfileData] = useState(targetUser);
   const [loading, setLoading] = useState(false);
+  const [disappearingEnabled, setDisappearingEnabled] = useState(false);
 
   const isOnline = onlineUsers.includes(targetUser.id);
+  const isBlocked = Boolean(user?.blockedUsers && user.blockedUsers.includes(targetUser.id));
+  const chatId = user?.id && targetUser?.id ? [user.id, targetUser.id].sort().join('_') : null;
 
   useEffect(() => {
     if (targetUser?.id) {
@@ -26,8 +29,55 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
         })
         .catch(err => console.error("Error fetching user profile:", err))
         .finally(() => setLoading(false));
+
+      // Fetch chat settings (disappearing messages)
+      if (chatId) {
+        fetch(`${BACKEND_URL}/api/messages/settings/${chatId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(setting => {
+            if (setting) {
+              setDisappearingEnabled(Boolean(setting.disappearingEnabled));
+            }
+          })
+          .catch(e => console.error("Error fetching chat setting:", e));
+      }
     }
-  }, [targetUser, token]);
+  }, [targetUser, token, chatId]);
+
+  const handleToggleDisappearing = async () => {
+    if (!chatId) return;
+    const newState = !disappearingEnabled;
+    setDisappearingEnabled(newState);
+    try {
+      if (socket) {
+        socket.emit('toggle_disappearing', { chatId, enabled: newState, userId: user?.id });
+      } else {
+        await fetch(`${BACKEND_URL}/api/messages/settings/${chatId}/disappearing`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ enabled: newState })
+        });
+      }
+    } catch (e) {
+      console.error("Failed to toggle disappearing:", e);
+    }
+  };
+
+  const handleBlockToggle = async () => {
+    if (!targetUser?.id) return;
+    if (isBlocked) {
+      await unblockUser(targetUser.id);
+    } else {
+      if (window.confirm(`Block ${targetUser.displayName || targetUser.username}? You won't receive messages or calls from them.`)) {
+        await blockUser(targetUser.id);
+      }
+    }
+  };
 
   const userToDisplay = profileData || targetUser;
 
@@ -165,6 +215,75 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                 </span>
               </div>
             )}
+
+            <div style={{ height: '1px', background: 'var(--border)' }} />
+
+            {/* Disappearing Messages (24h) Toggle */}
+            <div
+              onClick={handleToggleDisappearing}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '6px 0',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Clock size={16} color="var(--accent)" />
+                <div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Disappearing Messages (24h)</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Auto-delete messages after 24 hours</div>
+                </div>
+              </div>
+
+              <div style={{
+                width: '36px',
+                height: '20px',
+                borderRadius: '10px',
+                background: disappearingEnabled ? 'var(--accent)' : 'var(--border)',
+                position: 'relative',
+                transition: 'all 0.2s ease',
+                flexShrink: 0
+              }}>
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  background: '#fff',
+                  position: 'absolute',
+                  top: '2px',
+                  left: disappearingEnabled ? '18px' : '2px',
+                  transition: 'all 0.2s ease'
+                }} />
+              </div>
+            </div>
+
+            <div style={{ height: '1px', background: 'var(--border)' }} />
+
+            {/* Block / Unblock Contact Button */}
+            <button
+              onClick={handleBlockToggle}
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '10px',
+                background: isBlocked ? 'rgba(99, 102, 241, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                color: isBlocked ? 'var(--accent)' : '#ef4444',
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                border: isBlocked ? '1px solid var(--accent)' : '1px solid rgba(239, 68, 68, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                marginTop: '4px'
+              }}
+            >
+              {isBlocked ? <Unlock size={16} /> : <Ban size={16} />}
+              {isBlocked ? 'Unblock Contact' : 'Block Contact'}
+            </button>
           </div>
         </div>
       </div>

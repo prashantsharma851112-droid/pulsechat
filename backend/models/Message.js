@@ -28,7 +28,9 @@ const messageSchema = new mongoose.Schema({
   originalMediaUrl: { type: String, default: null },
   originalPollData: { type: Object, default: null },
   // WhatsApp-style reply: quoted message data
-  replyTo: { type: Object, default: null } // { id, content, type, senderId, senderName }
+  replyTo: { type: Object, default: null }, // { id, content, type, senderId, senderName }
+  // Auto-decay / disappearing message expiry (MongoDB TTL index)
+  expiresAt: { type: Date, default: null, index: { expires: 0 } }
 });
 
 module.exports = mongoose.model('Message', messageSchema);

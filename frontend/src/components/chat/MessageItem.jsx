@@ -241,6 +241,30 @@ export default function MessageItem({
     );
   }
 
+  if (message.type === 'system') {
+    return (
+      <div style={{
+        alignSelf: 'center',
+        margin: '10px auto',
+        maxWidth: '85%',
+        textAlign: 'center',
+        background: 'rgba(99, 102, 241, 0.12)',
+        border: '1px solid rgba(99, 102, 241, 0.25)',
+        borderRadius: '16px',
+        padding: '6px 14px',
+        fontSize: '0.78rem',
+        color: 'var(--text-muted)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '6px',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.1)'
+      }}>
+        <span>{message.content}</span>
+      </div>
+    );
+  }
+
   return (
     <div
       onClick={isMultiSelectMode ? () => onToggleSelect && onToggleSelect(message.id) : undefined}

@@ -39,19 +39,84 @@ router.get('/search', authMiddleware, async (req, res) => {
   res.json(results);
 });
 
-// Update Profile (DP / Avatar, Display Name, Status/Bio)
+// Update Profile (DP / Avatar, Display Name, Status/Bio, Privacy)
 router.put('/profile', authMiddleware, async (req, res) => {
-  const { displayName, avatar, status } = req.body;
+  const { displayName, avatar, status, hideReadReceipts } = req.body;
   const updates = {};
   if (displayName) updates.displayName = displayName;
   if (avatar) updates.avatar = avatar;
   if (status !== undefined) updates.status = status;
+  if (hideReadReceipts !== undefined) updates.hideReadReceipts = Boolean(hideReadReceipts);
 
   const updatedUser = await db.updateUser(req.user.id, updates);
   if (!updatedUser) return res.status(404).json({ error: 'User not found' });
 
   const { passwordHash, ...userWithoutPass } = updatedUser;
   res.json({ user: userWithoutPass });
+});
+
+// Update Privacy (Hide Read Receipts / Unseen Mode)
+router.put('/privacy', authMiddleware, async (req, res) => {
+  try {
+    const { hideReadReceipts } = req.body;
+    const updates = {};
+    if (hideReadReceipts !== undefined) updates.hideReadReceipts = Boolean(hideReadReceipts);
+
+    const updatedUser = await db.updateUser(req.user.id, updates);
+    if (!updatedUser) return res.status(404).json({ error: 'User not found' });
+
+    const { passwordHash, ...userWithoutPass } = updatedUser;
+    res.json({ user: userWithoutPass });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update privacy settings' });
+  }
+});
+
+// Block User
+router.post('/block/:id', authMiddleware, async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    if (targetId === req.user.id) return res.status(400).json({ error: 'Cannot block yourself' });
+    const blocked = await db.blockUser(req.user.id, targetId);
+    res.json({ success: true, blockedUsers: blocked });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to block user' });
+  }
+});
+
+// Unblock User
+router.post('/unblock/:id', authMiddleware, async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    const blocked = await db.unblockUser(req.user.id, targetId);
+    res.json({ success: true, blockedUsers: blocked });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to unblock user' });
+  }
+});
+
+// Get List of Blocked Users
+router.get('/blocked', authMiddleware, async (req, res) => {
+  try {
+    const list = await db.getBlockedUsers(req.user.id);
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch blocked users' });
+  }
+});
+
+// Check Block Status with Target User
+router.get('/:id/block-status', authMiddleware, async (req, res) => {
+  try {
+    const status = await db.isUserBlocked(req.user.id, req.params.id);
+    res.json({
+      isBlocked: status.isBlocked,
+      isBlockedByMe: status.aBlockedB,
+      isBlockedByThem: status.bBlockedA
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to check block status' });
+  }
 });
 
 // Change Password

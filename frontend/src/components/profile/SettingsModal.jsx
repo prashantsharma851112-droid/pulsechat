@@ -1,8 +1,9 @@
-import React, { useContext } from 'react';
+import React, { useState, useContext } from 'react';
 import { ThemeContext } from '../../context/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, Sparkles, Bell } from 'lucide-react';
+import { X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, Sparkles, Bell, Ban, Unlock } from 'lucide-react';
 import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
+import { BACKEND_URL } from '../../utils/config';
 
 const THEMES = [
   { id: 'dark', name: '🌙 Dark Mode', color: '#6366f1' },
@@ -21,7 +22,31 @@ export default function SettingsModal({
   openPanicModal
 }) {
   const { theme, changeTheme } = useContext(ThemeContext);
-  const { user, logout } = useContext(AuthContext);
+  const { user, logout, toggleHideReadReceipts, unblockUser, token } = useContext(AuthContext);
+  const [showBlockedModal, setShowBlockedModal] = useState(false);
+  const [blockedList, setBlockedList] = useState([]);
+  const [loadingBlocked, setLoadingBlocked] = useState(false);
+
+  const fetchBlockedList = async () => {
+    if (!token) return;
+    setLoadingBlocked(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/users/blocked`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) setBlockedList(data);
+    } catch (e) {
+      console.error("Failed to fetch blocked users:", e);
+    } finally {
+      setLoadingBlocked(false);
+    }
+  };
+
+  const handleUnblock = async (targetId) => {
+    await unblockUser(targetId);
+    setBlockedList(prev => prev.filter(u => u.id !== targetId));
+  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -190,6 +215,83 @@ export default function SettingsModal({
               </div>
             )}
 
+            {/* Unseen Privacy Mode (Ghost Seen) */}
+            <div
+              onClick={() => toggleHideReadReceipts(!user?.hideReadReceipts)}
+              className="user-select-card"
+              style={{
+                width: '100%',
+                background: 'var(--bg-card)',
+                padding: '12px 14px',
+                border: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: user?.hideReadReceipts ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <EyeOff size={18} color={user?.hideReadReceipts ? 'var(--accent)' : 'var(--text-muted)'} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>Unseen Privacy Mode (Ghost Seen)</div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Read messages without sending blue ticks or seen status</div>
+                </div>
+              </div>
+              <div style={{
+                width: '36px',
+                height: '20px',
+                borderRadius: '10px',
+                background: user?.hideReadReceipts ? 'var(--accent)' : 'var(--border)',
+                position: 'relative',
+                transition: 'all 0.2s ease'
+              }}>
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  background: '#fff',
+                  position: 'absolute',
+                  top: '2px',
+                  left: user?.hideReadReceipts ? '18px' : '2px',
+                  transition: 'all 0.2s ease'
+                }} />
+              </div>
+            </div>
+
+            {/* Blocked Contacts Manager Button */}
+            <div
+              onClick={() => {
+                setShowBlockedModal(true);
+                fetchBlockedList();
+              }}
+              className="user-select-card"
+              style={{
+                width: '100%',
+                background: 'var(--bg-card)',
+                padding: '12px 14px',
+                border: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Ban size={18} color="#ef4444" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>Blocked Contacts</div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Manage blocked users and unblock contacts</div>
+                </div>
+              </div>
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--hover-bg)', padding: '2px 8px', borderRadius: '12px' }}>
+                {user?.blockedUsers?.length || 0}
+              </span>
+            </div>
+
             {openPanicModal && (
               <button
                 className="user-select-card"
@@ -265,6 +367,89 @@ export default function SettingsModal({
             </button>
           </div>
         </div>
+
+        {/* Blocked Contacts Sub-Modal Overlay */}
+        {showBlockedModal && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'var(--bg-card)',
+              zIndex: 50,
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            <div className="modal-header" style={{ padding: '1.2rem 1.5rem', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Ban size={20} color="#ef4444" />
+                <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-main)' }}>Blocked Contacts</h3>
+              </div>
+              <button className="icon-btn-ghost" onClick={() => setShowBlockedModal(false)}><X size={20} /></button>
+            </div>
+
+            <div style={{ flex: 1, padding: '1.25rem 1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {loadingBlocked ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem 0', fontSize: '0.9rem' }}>
+                  Loading blocked contacts...
+                </div>
+              ) : blockedList.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '3rem 1rem', fontSize: '0.9rem' }}>
+                  <Ban size={36} color="var(--text-muted)" style={{ margin: '0 auto 10px auto', opacity: 0.5 }} />
+                  <div>No blocked contacts yet.</div>
+                  <div style={{ fontSize: '0.78rem', marginTop: '4px' }}>Contacts you block will appear here.</div>
+                </div>
+              ) : (
+                blockedList.map(contact => (
+                  <div
+                    key={contact.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: 'var(--bg-chat)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '12px',
+                      padding: '10px 14px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                      <img
+                        src={contact.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${contact.username}`}
+                        alt="DP"
+                        style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
+                      />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {contact.displayName}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>@{contact.username}</div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleUnblock(contact.id)}
+                      className="btn-secondary"
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        color: 'var(--accent)',
+                        borderColor: 'var(--accent)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        flexShrink: 0
+                      }}
+                    >
+                      <Unlock size={14} /> Unblock
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

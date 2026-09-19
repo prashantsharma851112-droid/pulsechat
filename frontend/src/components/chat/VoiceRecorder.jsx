@@ -141,32 +141,60 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'var(--bg-card)', padding: '0.5rem 1rem', borderRadius: '24px', border: '1px solid var(--border)' }}>
-      <button onClick={onCancel} style={{ background: 'transparent', color: '#ef4444', display: 'flex', alignItems: 'center' }} title="Cancel">
+    <div style={{
+      width: '100%',
+      maxWidth: '100%',
+      boxSizing: 'border-box',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.5rem',
+      background: 'var(--bg-card)',
+      padding: '0.4rem 0.6rem',
+      borderRadius: '24px',
+      border: '1px solid var(--border)',
+      minWidth: 0
+    }}>
+      <button
+        onClick={onCancel}
+        style={{ background: 'transparent', color: '#ef4444', display: 'flex', alignItems: 'center', flexShrink: 0, padding: '4px', cursor: 'pointer' }}
+        title="Cancel"
+      >
         <X size={20} />
       </button>
 
-      <span style={{ fontSize: '0.85rem', color: recording ? '#ef4444' : 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <span style={{ fontSize: '0.82rem', color: recording ? '#ef4444' : 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
         {recording ? '🔴' : '🎵'} {Math.floor(timer / 60)}:{('0' + (timer % 60)).slice(-2)}
       </span>
 
-      <div style={{ flex: 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-        {recording ? 'Recording voice note...' : 'Recorded! Tap play preview or send'}
+      <div style={{ flex: 1, minWidth: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+        {recording ? 'Recording...' : 'Recorded! Ready to send'}
       </div>
 
       {!recording && audioBlob && (
-        <button onClick={togglePreview} style={{ background: 'var(--hover-bg)', color: 'var(--text-main)', padding: '6px', borderRadius: '50%', border: '1px solid var(--border)', cursor: 'pointer' }} title={isPlayingPreview ? 'Pause Preview' : 'Play Preview'}>
-          {isPlayingPreview ? <Pause size={16} /> : <Play size={16} />}
+        <button
+          onClick={togglePreview}
+          style={{ background: 'var(--hover-bg)', color: 'var(--text-main)', padding: '6px', borderRadius: '50%', border: '1px solid var(--border)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          title={isPlayingPreview ? 'Pause Preview' : 'Play Preview'}
+        >
+          {isPlayingPreview ? <Pause size={15} /> : <Play size={15} />}
         </button>
       )}
 
       {recording ? (
-        <button onClick={stopRecording} style={{ background: '#ef4444', color: '#fff', padding: '8px', borderRadius: '50%', cursor: 'pointer', display: 'flex' }} title="Stop Recording">
-          <Square size={16} />
+        <button
+          onClick={stopRecording}
+          style={{ background: '#ef4444', color: '#fff', width: '34px', height: '34px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: 'none' }}
+          title="Stop Recording"
+        >
+          <Square size={14} />
         </button>
       ) : null}
 
-      <button onClick={handleSend} style={{ background: 'var(--accent)', color: '#fff', padding: '8px', borderRadius: '50%', cursor: 'pointer', display: 'flex' }} title="Send Voice Note">
+      <button
+        onClick={handleSend}
+        style={{ background: 'var(--accent)', color: '#fff', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: 'none', boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)' }}
+        title="Send Voice Note"
+      >
         <Send size={16} />
       </button>
     </div>

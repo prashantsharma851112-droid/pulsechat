@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { X, Users, Camera, Edit2, Check, UserPlus, Trash2, LogOut, Phone, Video, ShieldCheck, Search, Eye } from 'lucide-react';
+import { X, Users, Camera, Edit2, Check, UserPlus, Trash2, LogOut, Phone, Video, ShieldCheck, Search, Eye, Clock } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
 
 export default function GroupProfileModal({ group, onClose, onGroupUpdated, onStartCall, onOpenFullDp }) {
   const { user: currentUser, token } = useContext(AuthContext);
-  const { onlineUsers } = useContext(SocketContext);
+  const { socket, onlineUsers } = useContext(SocketContext);
 
   const [groupData, setGroupData] = useState(group);
   const [memberUsers, setMemberUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [disappearingEnabled, setDisappearingEnabled] = useState(false);
 
   // Edit fields
   const [editName, setEditName] = useState(group.name || group.displayName || '');
@@ -53,6 +54,28 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
       fetchGroupDetails();
     }
   }, [group?.id]);
+
+  // Fetch disappearing messages setting for this group
+  useEffect(() => {
+    if (!group?.id || !token) return;
+    fetch(`${BACKEND_URL}/api/messages/settings/${group.id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data?.disappearingEnabled !== undefined) {
+          setDisappearingEnabled(data.disappearingEnabled);
+        }
+      })
+      .catch(() => {});
+  }, [group?.id, token]);
+
+  const handleToggleDisappearing = () => {
+    if (!socket) return;
+    const newVal = !disappearingEnabled;
+    setDisappearingEnabled(newVal);
+    socket.emit('toggle_disappearing', { chatId: group.id, enabled: newVal });
+  };
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -325,6 +348,39 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
             >
               <LogOut size={15} /> Leave
             </button>
+          </div>
+
+          {/* Disappearing Messages Toggle */}
+          <div
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'var(--bg-chat)', border: '1px solid var(--border)',
+              borderRadius: '12px', padding: '10px 14px', marginBottom: '1rem', cursor: 'pointer'
+            }}
+            onClick={handleToggleDisappearing}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Clock size={16} color={disappearingEnabled ? 'var(--accent)' : 'var(--text-muted)'} />
+              <div>
+                <div style={{ fontSize: '0.83rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                  Disappearing Messages
+                </div>
+                <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>
+                  {disappearingEnabled ? 'Messages delete after 24h' : 'Off — messages are kept'}
+                </div>
+              </div>
+            </div>
+            <div style={{
+              width: '40px', height: '22px', borderRadius: '11px', position: 'relative', flexShrink: 0,
+              background: disappearingEnabled ? 'var(--accent)' : 'var(--border)', transition: 'background 0.2s'
+            }}>
+              <div style={{
+                position: 'absolute', top: '3px',
+                left: disappearingEnabled ? '21px' : '3px',
+                width: '16px', height: '16px', borderRadius: '50%',
+                background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+              }} />
+            </div>
           </div>
 
           {/* Add Member Drawer */}

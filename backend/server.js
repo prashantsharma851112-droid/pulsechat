@@ -145,6 +145,26 @@ io.on('connection', (socket) => {
   socket.on('send_message', async (messageData) => {
     const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, pollData, callData, isViewOnce, replyTo } = messageData;
 
+    // Check if blocked in 1-to-1 chat
+    if (receiverId && !isGroup) {
+      const blockStatus = await db.isUserBlocked(senderId, receiverId);
+      if (blockStatus.isBlocked) {
+        socket.emit('message_blocked', {
+          chatId,
+          receiverId,
+          reason: blockStatus.bBlockedA
+            ? 'You cannot send messages to this contact because you have been blocked.'
+            : 'You have blocked this contact. Unblock to send messages.'
+        });
+        return;
+      }
+    }
+
+    // Check if Disappearing Messages is enabled for this chat
+    const chatSetting = await db.getChatSetting(chatId);
+    const isDisappearing = Boolean(chatSetting && chatSetting.disappearingEnabled);
+    const expiresAt = isDisappearing ? new Date(Date.now() + (chatSetting.disappearingDuration || 86400) * 1000) : null;
+
     const isReceiverOnline = Boolean(receiverId && onlineUsers.has(receiverId));
 
     const newMsg = {
@@ -164,7 +184,8 @@ io.on('connection', (socket) => {
       status: isReceiverOnline ? 'delivered' : 'sent',
       timestamp: new Date().toISOString(),
       reactions: {},
-      replyTo: replyTo || null  // WhatsApp-style reply data
+      replyTo: replyTo || null,  // WhatsApp-style reply data
+      expiresAt
     };
 
     await db.saveMessage(newMsg);
@@ -308,7 +329,14 @@ io.on('connection', (socket) => {
   });
 
   // Read Receipt (Blue Double Tick)
-  socket.on('mark_read', async ({ messageId, chatId }) => {
+  socket.on('mark_read', async ({ messageId, chatId, userId }) => {
+    const readerId = userId || socket.userId;
+    if (readerId) {
+      const reader = await User.findOne({ id: readerId }).select('hideReadReceipts');
+      if (reader && reader.hideReadReceipts) {
+        return; // Ghost Unseen Mode: do not mark read or send blue ticks!
+      }
+    }
     const updatedMsg = await db.updateMessageStatus(messageId, 'read');
     io.to(chatId).emit('message_read_update', { messageId, status: 'read' });
     if (updatedMsg && updatedMsg.senderId) {
@@ -317,14 +345,47 @@ io.on('connection', (socket) => {
   });
 
   socket.on('mark_chat_read', async ({ chatId, userId }) => {
-    await db.markChatAsRead(chatId, userId);
-    io.to(chatId).emit('chat_read_update', { chatId, userId });
+    const readerId = userId || socket.userId;
+    if (readerId) {
+      const reader = await User.findOne({ id: readerId }).select('hideReadReceipts');
+      if (reader && reader.hideReadReceipts) {
+        return; // Ghost Unseen Mode: do not mark chat read!
+      }
+    }
+    await db.markChatAsRead(chatId, readerId);
+    io.to(chatId).emit('chat_read_update', { chatId, userId: readerId });
     if (chatId && chatId.includes('_')) {
       const parts = chatId.split('_');
-      const otherId = parts.find(id => id !== userId);
+      const otherId = parts.find(id => id !== readerId);
       if (otherId) {
-        io.to(`user_${otherId}`).emit('chat_read_update', { chatId, userId });
+        io.to(`user_${otherId}`).emit('chat_read_update', { chatId, userId: readerId });
       }
+    }
+  });
+
+  // Toggle Disappearing Messages via Socket
+  socket.on('toggle_disappearing', async ({ chatId, enabled, userId }) => {
+    const setting = await db.setDisappearingMessages(chatId, enabled, userId);
+    const sysMsg = {
+      id: 'msg_sys_' + Date.now(),
+      chatId,
+      senderId: 'system',
+      receiverId: '',
+      isGroup: !chatId.includes('_'),
+      type: 'system',
+      content: enabled ? '⏱️ Messages in this chat will disappear 24 hours after being sent.' : '⏱️ Disappearing messages was turned off.',
+      status: 'sent',
+      timestamp: new Date().toISOString()
+    };
+    await db.saveMessage(sysMsg);
+    io.to(chatId).emit('chat_setting_updated', setting);
+    io.to(chatId).emit('new_message', sysMsg);
+    if (chatId.includes('_')) {
+      const parts = chatId.split('_');
+      parts.forEach(uId => {
+        io.to(`user_${uId}`).emit('chat_setting_updated', setting);
+        io.to(`user_${uId}`).emit('new_message', sysMsg);
+      });
     }
   });
 
@@ -362,7 +423,18 @@ io.on('connection', (socket) => {
   });
 
   // Audio/Video Call WebRTC Signaling (1-to-1)
-  socket.on('call_user', ({ userToCall, signalData, from, callerName, callerAvatar, isVideo }) => {
+  socket.on('call_user', async ({ userToCall, signalData, from, callerName, callerAvatar, isVideo }) => {
+    // Check if target user has blocked caller or caller has blocked target user
+    const blockStatus = await db.isUserBlocked(from, userToCall);
+    if (blockStatus.isBlocked) {
+      socket.emit('call_rejected', {
+        reason: blockStatus.bBlockedA
+          ? 'Cannot call this contact because you are blocked.'
+          : 'You have blocked this contact. Unblock to call.'
+      });
+      return;
+    }
+
     const recipientSocket = onlineUsers.get(userToCall);
     if (recipientSocket) {
       io.to(recipientSocket).emit('incoming_call', { signal: signalData, from, callerName, callerAvatar, isVideo });
