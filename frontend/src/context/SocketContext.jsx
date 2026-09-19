@@ -46,7 +46,7 @@ export function SocketProvider({ children }) {
         sendSetup();
       }
 
-      // Handle mobile data toggling ON
+      // Handle mobile data toggling ON / OFF
       const handleOnline = () => {
         if (!newSocket.connected) {
           newSocket.connect();
@@ -54,7 +54,19 @@ export function SocketProvider({ children }) {
           sendSetup();
         }
       };
+
+      const handleOffline = () => {
+        if (user?.id) {
+          try {
+            newSocket.emit('user_offline', user.id);
+          } catch (e) {}
+        }
+        newSocket.disconnect();
+      };
+
       window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+      window.addEventListener('pagehide', handleOffline);
 
       newSocket.on('online_users_list', (users) => {
         setOnlineUsers(users);
@@ -105,7 +117,7 @@ export function SocketProvider({ children }) {
       newSocket.on('new_message', (msg) => {
         if (msg.senderId !== user.id) {
           triggerPushIfBackground(msg);
-          if (msg.id && msg.status === 'sent') {
+          if (msg.id && msg.status !== 'read') {
             newSocket.emit('message_delivered', {
               messageId: msg.id,
               chatId: msg.chatId,
@@ -117,6 +129,8 @@ export function SocketProvider({ children }) {
 
       return () => {
         window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+        window.removeEventListener('pagehide', handleOffline);
         newSocket.disconnect();
       };
     }

@@ -67,7 +67,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message, currentUserId
         <View style={styles.metaRow}>
           <Text style={styles.timeText}>{formattedTime}</Text>
           {isMe && (
-            <Text style={styles.statusCheck}>
+            <Text style={[styles.statusCheck, message.status === 'read' && { color: '#53bdeb' }]}>
               {message.status === 'pending' ? '🕒' : message.status === 'read' ? '✓✓' : message.status === 'delivered' ? '✓✓' : '✓'}
             </Text>
           )}

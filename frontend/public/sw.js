@@ -39,7 +39,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigation requests (opening app / refreshing URL while offline)
+  // If user triggered a hard reload (F5 / pull-to-refresh) or in local development with Vite
+  const isDev = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
+  const isReload = event.request.cache === 'reload' || event.request.headers.get('cache-control') === 'no-cache';
+
+  if (isDev && (event.request.url.includes('/@') || event.request.url.includes('/src/'))) {
+    // Never cache Vite dev modules so HMR and code edits refresh instantly
+    return;
+  }
+
+  // Navigation requests (opening app / refreshing page)
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
@@ -51,6 +60,7 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => {
+          // If offline, serve cached index.html
           return caches.match(event.request).then((cached) => {
             return cached || caches.match('/') || caches.match('/index.html');
           });
@@ -59,34 +69,40 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets (JS, CSS, images, fonts): Cache-first with network update
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
-            }
-          })
-          .catch(() => {});
-        return cachedResponse;
-      }
-
-      return fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+  // Static assets: If reload requested, fetch fresh from network
+  if (isReload) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200 && event.request.method === 'GET') {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
           }
-          return networkResponse;
+          return response;
         })
-        .catch(() => {
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Normal static assets: Network-first with cache fallback
+  event.respondWith(
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        return caches.match(event.request).then((cached) => {
+          if (cached) return cached;
           if (event.request.destination === 'image') {
             return caches.match('/icon-192.png');
           }
         });
-    })
+      })
   );
 });
 

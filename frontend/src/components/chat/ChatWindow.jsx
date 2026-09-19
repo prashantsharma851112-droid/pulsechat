@@ -279,7 +279,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     const handleReadUpdate = ({ messageId, status }) => {
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status } : m));
+      setMessages(prev => {
+        const next = prev.map(m => m.id === messageId ? { ...m, status: 'read' } : m);
+        setCachedMessages(chatId, next);
+        return next;
+      });
     };
 
     const handleReactionUpdated = ({ messageId, reactions }) => {
@@ -320,18 +324,30 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     const handleChatReadUpdate = ({ chatId: targetChatId, userId }) => {
       if (targetChatId === chatId && userId !== user.id) {
-        setMessages(prev => prev.map(m => m.senderId === user.id ? { ...m, status: 'read' } : m));
+        setMessages(prev => {
+          const next = prev.map(m => m.senderId === user.id ? { ...m, status: 'read' } : m);
+          setCachedMessages(chatId, next);
+          return next;
+        });
       }
     };
 
     const handleMessageDeliveredUpdate = ({ messageId, status }) => {
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) } : m));
+      setMessages(prev => {
+        const next = prev.map(m => m.id === messageId ? { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) } : m);
+        setCachedMessages(chatId, next);
+        return next;
+      });
     };
 
     const handleMessagesDelivered = ({ messageIds, status }) => {
       if (Array.isArray(messageIds) && messageIds.length > 0) {
         const idSet = new Set(messageIds);
-        setMessages(prev => prev.map(m => idSet.has(m.id) ? { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) } : m));
+        setMessages(prev => {
+          const next = prev.map(m => idSet.has(m.id) ? { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) } : m);
+          setCachedMessages(chatId, next);
+          return next;
+        });
       }
     };
 

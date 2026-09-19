@@ -42,7 +42,9 @@ const io = new Server(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"]
-  }
+  },
+  pingInterval: 5000,
+  pingTimeout: 5000
 });
 
 app.set('io', io);
@@ -51,6 +53,16 @@ const onlineUsers = new Map(); // userId -> socketId
 
 io.on('connection', (socket) => {
   console.log('⚡ Socket Connected:', socket.id);
+
+  // User explicitly signals going offline (data turned off / app hidden)
+  socket.on('user_offline', (userId) => {
+    const id = userId || socket.userId;
+    if (id) {
+      onlineUsers.delete(id);
+      io.emit('user_status', { userId: id, status: 'offline', lastSeen: new Date().toISOString() });
+      io.emit('online_users_list', Array.from(onlineUsers.keys()));
+    }
+  });
 
   // User comes online (mobile data ON / socket connected)
   socket.on('setup', async (userId) => {
@@ -194,7 +206,7 @@ io.on('connection', (socket) => {
       callData: callData || null,
       isViewOnce: !!isViewOnce,
       viewedBy: [],
-      status: isReceiverOnline ? 'delivered' : 'sent',
+      status: 'sent',
       timestamp: new Date().toISOString(),
       reactions: {},
       replyTo: replyTo || null,  // WhatsApp-style reply data
