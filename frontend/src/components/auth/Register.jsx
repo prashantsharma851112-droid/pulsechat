@@ -3,7 +3,6 @@ import { AuthContext } from '../../context/AuthContext';
 import { Check, X, Mail, ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
 import { BACKEND_URL, GOOGLE_CLIENT_ID } from '../../utils/config';
 import AppLogo from '../common/AppLogo';
-import WaterMotionContainer from '../common/WaterMotionContainer';
 
 export default function Register({ switchToLogin }) {
   const { login } = useContext(AuthContext);
@@ -226,16 +225,17 @@ export default function Register({ switchToLogin }) {
   };
 
   return (
-    <WaterMotionContainer maxWidth="440px">
-      {step === 'form' ? (
-        <div>
-          <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
-              <AppLogo size={58} />
+    <div className="auth-page-container">
+      <div className="auth-card">
+        {step === 'form' ? (
+          <div>
+            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
+                <AppLogo size={56} />
+              </div>
+              <h2 style={{ fontSize: '1.65rem', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 0.35rem 0', letterSpacing: '-0.3px' }}>Join PulseChat</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: 0 }}>Register with Verified Email or Google</p>
             </div>
-            <h2 style={{ fontSize: '1.65rem', fontWeight: 700, color: '#ffffff', margin: '0 0 0.35rem 0', letterSpacing: '-0.3px', textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>Join PulseChat</h2>
-            <p style={{ color: '#cbd5e1', fontSize: '0.88rem', margin: 0 }}>Register with Verified Email or Google</p>
-          </div>
 
             {/* Google Sign-In Section - Single Button */}
             <div style={{ width: '100%', marginBottom: '1.25rem', display: 'flex', justifyContent: 'center' }}>
@@ -287,9 +287,9 @@ export default function Register({ switchToLogin }) {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', margin: '1rem 0 1.25rem 0' }}>
-              <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.15)' }}></div>
-              <span style={{ padding: '0 10px', fontSize: '0.78rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>or with email</span>
-              <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.15)' }}></div>
+              <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+              <span style={{ padding: '0 10px', fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>or with email</span>
+              <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
             </div>
 
             {error && (
@@ -301,7 +301,7 @@ export default function Register({ switchToLogin }) {
 
             <form onSubmit={handleRegisterSubmit}>
               <div style={{ marginBottom: '1rem' }}>
-                <label className="form-label" style={{ color: '#f1f5f9' }}>Display Name</label>
+                <label className="form-label">Display Name</label>
                 <input
                   type="text"
                   className="form-input"
@@ -313,7 +313,7 @@ export default function Register({ switchToLogin }) {
               </div>
 
               <div style={{ marginBottom: '1rem' }}>
-                <label className="form-label" style={{ color: '#f1f5f9' }}>Unique @username</label>
+                <label className="form-label">Unique @username</label>
                 <div style={{ position: 'relative' }}>
                   <input
                     type="text"
@@ -332,7 +332,7 @@ export default function Register({ switchToLogin }) {
               </div>
 
               <div style={{ marginBottom: '1rem' }}>
-                <label className="form-label" style={{ color: '#f1f5f9' }}>Real Email Address (for verification)</label>
+                <label className="form-label">Real Email Address (for verification)</label>
                 <div style={{ position: 'relative' }}>
                   <input
                     type="email"
@@ -351,7 +351,7 @@ export default function Register({ switchToLogin }) {
               </div>
 
               <div style={{ marginBottom: '1.25rem' }}>
-                <label className="form-label" style={{ color: '#f1f5f9' }}>Password</label>
+                <label className="form-label">Password</label>
                 <input
                   type="password"
                   className="form-input"
@@ -366,8 +366,8 @@ export default function Register({ switchToLogin }) {
                 {loading ? 'Sending Verification Code...' : 'Send Verification OTP'}
               </button>
 
-              <p style={{ textAlign: 'center', marginTop: '1.4rem', fontSize: '0.88rem', color: '#cbd5e1' }}>
-                Already registered? <span onClick={switchToLogin} style={{ color: '#818cf8', cursor: 'pointer', fontWeight: 600 }}>Sign In</span>
+              <p style={{ textAlign: 'center', marginTop: '1.4rem', fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+                Already registered? <span onClick={switchToLogin} style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}>Sign In</span>
               </p>
             </form>
           </div>
@@ -377,19 +377,19 @@ export default function Register({ switchToLogin }) {
               type="button"
               className="icon-btn-ghost"
               onClick={() => { setStep('form'); setError(''); setSuccessMsg(''); }}
-              style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', color: '#cbd5e1' }}
+              style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem' }}
             >
               <ArrowLeft size={16} /> Back
             </button>
 
             <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
-                <AppLogo size={54} />
+                <AppLogo size={56} />
               </div>
-              <h2 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: '#ffffff', textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>Verify Your Email</h2>
-              <p style={{ color: '#cbd5e1', fontSize: '0.85rem', margin: 0, lineHeight: 1.5 }}>
+              <h2 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: 'var(--text-main)' }}>Verify Your Email</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0, lineHeight: 1.5 }}>
                 Enter the 6-digit code sent to your real inbox:<br />
-                <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>{email}</strong>
+                <strong style={{ color: 'var(--text-main)', fontSize: '0.92rem' }}>{email}</strong>
               </p>
             </div>
 
@@ -407,7 +407,7 @@ export default function Register({ switchToLogin }) {
             )}
 
             <div style={{ marginBottom: '1.5rem' }}>
-              <label className="form-label" style={{ textAlign: 'center', display: 'block', color: '#f1f5f9' }}>Enter 6-Digit OTP</label>
+              <label className="form-label" style={{ textAlign: 'center', display: 'block' }}>Enter 6-Digit OTP</label>
               <input
                 type="text"
                 className="form-input"
@@ -419,7 +419,7 @@ export default function Register({ switchToLogin }) {
                 style={{ textAlign: 'center', fontSize: '1.6rem', letterSpacing: '8px', padding: '0.75rem', fontWeight: 700 }}
                 autoFocus
               />
-              <p style={{ fontSize: '0.78rem', color: '#94a3b8', textAlign: 'center', marginTop: '0.5rem' }}>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.5rem' }}>
                 Didn't see it? Check your Spam / Promotions folder.
               </p>
             </div>
@@ -430,15 +430,15 @@ export default function Register({ switchToLogin }) {
 
             <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
               {resendCooldown > 0 ? (
-                <span style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>
-                  Resend code in <strong style={{ color: '#ffffff' }}>{resendCooldown}s</strong>
+                <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                  Resend code in <strong style={{ color: 'var(--text-main)' }}>{resendCooldown}s</strong>
                 </span>
               ) : (
                 <button
                   type="button"
                   onClick={handleResendOtp}
                   disabled={loading}
-                  style={{ background: 'none', border: 'none', color: '#818cf8', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                  style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
                 >
                   <RefreshCw size={14} /> Resend OTP Code
                 </button>
@@ -446,6 +446,7 @@ export default function Register({ switchToLogin }) {
             </div>
           </form>
         )}
-    </WaterMotionContainer>
+      </div>
+    </div>
   );
 }

@@ -1,25 +1,21 @@
 import React from 'react';
 
-export default function AppLogo({ size = 62, glow = true, className = '' }) {
+export default function AppLogo({ size = 56, className = '' }) {
   return (
     <div
       className={`app-logo-container ${className}`}
       style={{
         width: size,
         height: size,
-        borderRadius: '16px',
+        borderRadius: '14px',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        boxShadow: glow
-          ? '0 10px 25px rgba(99, 102, 241, 0.45), 0 0 20px rgba(99, 102, 241, 0.3)'
-          : 'none',
         overflow: 'hidden',
         flexShrink: 0,
         position: 'relative',
         background: '#ffffff',
-        padding: '3px',
-        border: '2px solid rgba(255, 255, 255, 0.85)'
+        boxShadow: '0 4px 14px rgba(0, 0, 0, 0.08)'
       }}
     >
       <img

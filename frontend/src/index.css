@@ -226,14 +226,6 @@ input, textarea {
   margin-bottom: 1rem;
 }
 
-.auth-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 2.25rem 2rem;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(12px);
-}
 
 /* Sidebar Responsive Styles */
 .sidebar-container {
@@ -356,15 +348,26 @@ input, textarea {
   padding: 2rem;
 }
 
-/* Auth Cards */
+/* Auth Pages & Cards */
+.auth-page-container {
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-main);
+  padding: 1.5rem 1rem;
+}
+
 .auth-card {
-  background: var(--bg-sidebar);
-  padding: 2.5rem;
+  background: var(--bg-card);
+  padding: 2.25rem 2rem;
   border-radius: 20px;
   border: 1px solid var(--border);
   width: 100%;
   max-width: 440px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
 }
 
 /* Modals */
@@ -1219,260 +1222,5 @@ input, textarea {
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
-/* ==============================================================================
-   3D WATER FLUID FLOATING MOTION & GLASSMORPHISM
-   ============================================================================== */
-
-.water-motion-viewport {
-  position: relative;
-  min-height: 100vh;
-  min-height: 100dvh;
-  width: 100vw;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(circle at 50% 20%, #1e1b4b 0%, #0f172a 50%, #080c16 100%);
-  overflow: hidden;
-  padding: 1.5rem 1rem;
-  perspective: 1200px;
-}
-
-/* Fluid morphing water blobs */
-.water-blob-1 {
-  position: absolute;
-  top: -10%;
-  left: -8%;
-  width: 480px;
-  height: 480px;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.45) 0%, rgba(79, 70, 229, 0.15) 60%, transparent 75%);
-  filter: blur(50px);
-  border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%;
-  animation: waterBlobFloat1 18s ease-in-out infinite alternate;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.water-blob-2 {
-  position: absolute;
-  bottom: -15%;
-  right: -8%;
-  width: 540px;
-  height: 540px;
-  background: radial-gradient(circle, rgba(14, 165, 233, 0.4) 0%, rgba(99, 102, 241, 0.18) 60%, transparent 75%);
-  filter: blur(60px);
-  border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
-  animation: waterBlobFloat2 22s ease-in-out infinite alternate;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.water-blob-3 {
-  position: absolute;
-  top: 40%;
-  right: 15%;
-  width: 320px;
-  height: 320px;
-  background: radial-gradient(circle, rgba(168, 85, 247, 0.35) 0%, rgba(99, 102, 241, 0.1) 70%, transparent 80%);
-  filter: blur(45px);
-  border-radius: 50% 50% 60% 40% / 40% 60% 50% 50%;
-  animation: waterBlobFloat3 15s ease-in-out infinite alternate;
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* Floating water bubbles */
-.water-bubble {
-  position: absolute;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.45), rgba(99, 102, 241, 0.15));
-  box-shadow: 0 0 15px rgba(99, 102, 241, 0.3), inset 0 0 8px rgba(255, 255, 255, 0.35);
-  pointer-events: none;
-  z-index: 2;
-}
-
-.water-bubble-1 {
-  width: 18px;
-  height: 18px;
-  left: 15%;
-  animation: waterBubbleRise 12s linear infinite;
-  animation-delay: 0s;
-}
-
-.water-bubble-2 {
-  width: 28px;
-  height: 28px;
-  left: 35%;
-  animation: waterBubbleRise 16s linear infinite;
-  animation-delay: 3s;
-}
-
-.water-bubble-3 {
-  width: 14px;
-  height: 14px;
-  left: 70%;
-  animation: waterBubbleRise 14s linear infinite;
-  animation-delay: 5s;
-}
-
-.water-bubble-4 {
-  width: 22px;
-  height: 22px;
-  left: 85%;
-  animation: waterBubbleRise 18s linear infinite;
-  animation-delay: 2s;
-}
-
-/* 3D Levitating Floating Auth Card */
-.auth-card-3d {
-  position: relative;
-  z-index: 10;
-  max-width: 450px;
-  width: 100%;
-  background: rgba(15, 23, 42, 0.72) !important;
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.22) !important;
-  border-radius: 24px !important;
-  padding: 2.25rem 2rem !important;
-  box-shadow:
-    0 25px 60px -12px rgba(0, 0, 0, 0.65),
-    0 0 45px -10px rgba(99, 102, 241, 0.25),
-    inset 0 1px 1px rgba(255, 255, 255, 0.18) !important;
-  transform-style: preserve-3d;
-  animation: waterCardLevitate 7s ease-in-out infinite;
-  transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.3s ease;
-}
-
-.auth-card-3d:hover {
-  box-shadow:
-    0 30px 70px -12px rgba(0, 0, 0, 0.75),
-    0 0 55px -8px rgba(99, 102, 241, 0.35),
-    inset 0 1px 1px rgba(255, 255, 255, 0.25) !important;
-}
-
-/* High-Contrast Typography & Inputs inside 3D Auth Card */
-.auth-card-3d h2 {
-  color: #ffffff !important;
-  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.6) !important;
-}
-
-.auth-card-3d p {
-  color: #cbd5e1 !important;
-}
-
-.auth-card-3d .form-label {
-  color: #f1f5f9 !important;
-  font-weight: 600 !important;
-  font-size: 0.86rem !important;
-  letter-spacing: 0.01em !important;
-}
-
-.auth-card-3d .form-input {
-  background: rgba(15, 23, 42, 0.75) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  color: #ffffff !important;
-  border-radius: 12px !important;
-  font-size: 0.95rem !important;
-  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s !important;
-}
-
-.auth-card-3d .form-input:focus {
-  background: rgba(15, 23, 42, 0.92) !important;
-  border-color: #818cf8 !important;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35) !important;
-}
-
-.auth-card-3d .form-input::placeholder {
-  color: #94a3b8 !important;
-  opacity: 0.8 !important;
-}
-
-.auth-card-3d .btn-secondary {
-  background: rgba(255, 255, 255, 0.06) !important;
-  color: #ffffff !important;
-  border: 1px solid rgba(255, 255, 255, 0.18) !important;
-  backdrop-filter: blur(10px);
-}
-
-.auth-card-3d .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.12) !important;
-  border-color: rgba(255, 255, 255, 0.3) !important;
-}
-
-@keyframes waterBlobFloat1 {
-  0% {
-    transform: translate(0, 0) scale(1) rotate(0deg);
-    border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%;
-  }
-  50% {
-    transform: translate(45px, 35px) scale(1.12) rotate(140deg);
-    border-radius: 60% 40% 35% 65% / 55% 35% 65% 45%;
-  }
-  100% {
-    transform: translate(-30px, 50px) scale(0.96) rotate(280deg);
-    border-radius: 35% 65% 55% 45% / 40% 60% 40% 60%;
-  }
-}
-
-@keyframes waterBlobFloat2 {
-  0% {
-    transform: translate(0, 0) scale(1) rotate(0deg);
-    border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
-  }
-  50% {
-    transform: translate(-50px, -40px) scale(1.15) rotate(160deg);
-    border-radius: 40% 60% 60% 40% / 45% 55% 45% 55%;
-  }
-  100% {
-    transform: translate(25px, -30px) scale(0.92) rotate(320deg);
-    border-radius: 50% 50% 40% 60% / 55% 45% 55% 45%;
-  }
-}
-
-@keyframes waterBlobFloat3 {
-  0% {
-    transform: translate(0, 0) scale(1);
-    border-radius: 50% 50% 60% 40% / 40% 60% 50% 50%;
-  }
-  50% {
-    transform: translate(-30px, 40px) scale(1.18);
-    border-radius: 65% 35% 45% 55% / 50% 50% 50% 50%;
-  }
-  100% {
-    transform: translate(30px, -20px) scale(0.9);
-    border-radius: 40% 60% 50% 50% / 45% 55% 45% 55%;
-  }
-}
-
-@keyframes waterBubbleRise {
-  0% {
-    transform: translateY(105vh) translateX(0) scale(0.6);
-    opacity: 0;
-  }
-  15% {
-    opacity: 0.65;
-  }
-  50% {
-    transform: translateY(50vh) translateX(18px) scale(0.85);
-    opacity: 0.75;
-  }
-  85% {
-    opacity: 0.65;
-  }
-  100% {
-    transform: translateY(-8vh) translateX(-12px) scale(1.1);
-    opacity: 0;
-  }
-}
-
-@keyframes waterCardLevitate {
-  0%, 100% {
-    transform: translateY(0px) rotateX(0deg) rotateY(0deg);
-  }
-  50% {
-    transform: translateY(-8px) rotateX(1deg) rotateY(-0.8deg);
-  }
-}
 
 

@@ -3,7 +3,6 @@ import { AuthContext } from '../../context/AuthContext';
 import { Lock, AtSign, Mail, ArrowLeft, RefreshCw, AlertCircle, KeyRound, CheckCircle2 } from 'lucide-react';
 import { BACKEND_URL, GOOGLE_CLIENT_ID } from '../../utils/config';
 import AppLogo from '../common/AppLogo';
-import WaterMotionContainer from '../common/WaterMotionContainer';
 
 export default function Login({ switchToRegister }) {
   const { login } = useContext(AuthContext);
@@ -302,115 +301,115 @@ export default function Login({ switchToRegister }) {
   };
 
   return (
-    <WaterMotionContainer maxWidth="440px">
-      {/* 1. Normal Sign In View */}
-      {viewMode === 'login' && (
-        <div>
-          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
-              <AppLogo size={58} />
-            </div>
-            <h2 style={{ fontSize: '1.65rem', fontWeight: 700, margin: '0 0 0.35rem 0', color: '#ffffff', letterSpacing: '-0.3px', textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
-              Welcome to PulseChat
-            </h2>
-            <p style={{ color: '#cbd5e1', fontSize: '0.88rem', margin: 0 }}>
-              Sign in with Google or Email
-            </p>
-          </div>
-
-          {/* Google Sign-In Section */}
-          <div style={{ width: '100%', marginBottom: '1.25rem', display: 'flex', justifyContent: 'center' }}>
-            <div
-              id="googleLoginBtn"
-              style={{
-                minHeight: isGoogleBtnRendered ? '44px' : '0',
-                display: isGoogleBtnRendered ? 'flex' : 'none',
-                width: '100%',
-                justifyContent: 'center'
-              }}
-            />
-
-            {!isGoogleBtnRendered && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!googleClientId || googleClientId.includes('sample')) {
-                    setError('Google Client ID setup required: Please add your GOOGLE_CLIENT_ID in backend/.env to activate 1-click Google login.');
-                  } else if (window.google?.accounts?.id) {
-                    window.google.accounts.id.prompt();
-                  } else {
-                    setError('Google services are initializing. Please try again in a few seconds.');
-                  }
-                }}
-                className="btn-secondary"
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  padding: '0.7rem',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  borderRadius: '24px',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  background: 'rgba(255, 255, 255, 0.04)'
-                }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                </svg>
-                Sign in with Google
-              </button>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', margin: '1rem 0 1.25rem 0' }}>
-            <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.15)' }} />
-            <span style={{ padding: '0 10px', fontSize: '0.78rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              or with credentials
-            </span>
-            <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.15)' }} />
-          </div>
-
-          {successMsg && (
-            <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#10b981', padding: '0.65rem 0.85rem', borderRadius: '12px', fontSize: '0.84rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
-              <span>{successMsg}</span>
-            </div>
-          )}
-
-          {error && (
-            <div className="error-banner" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem', borderRadius: '12px' }}>
-              <AlertCircle size={16} style={{ flexShrink: 0 }} />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleLoginSubmit}>
-            <div style={{ marginBottom: '1.25rem' }}>
-              <label className="form-label" style={{ color: '#f1f5f9' }}>Email or @Username</label>
-              <div style={{ position: 'relative' }}>
-                <AtSign size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                <input
-                  type="text"
-                  className="form-input"
-                  value={identifier}
-                  onChange={e => setIdentifier(e.target.value)}
-                  required
-                  placeholder="alex_dev or alex@gmail.com"
-                  style={{ paddingLeft: '2.6rem' }}
-                />
+    <div className="auth-page-container">
+      <div className="auth-card">
+        {/* 1. Normal Sign In View */}
+        {viewMode === 'login' && (
+          <div>
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
+                <AppLogo size={56} />
               </div>
+              <h2 style={{ fontSize: '1.65rem', fontWeight: 700, margin: '0 0 0.35rem 0', color: 'var(--text-main)', letterSpacing: '-0.3px' }}>
+                Welcome to PulseChat
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: 0 }}>
+                Sign in with Google or Email
+              </p>
             </div>
+
+            {/* Google Sign-In Section */}
+            <div style={{ width: '100%', marginBottom: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+              <div
+                id="googleLoginBtn"
+                style={{
+                  minHeight: isGoogleBtnRendered ? '44px' : '0',
+                  display: isGoogleBtnRendered ? 'flex' : 'none',
+                  width: '100%',
+                  justifyContent: 'center'
+                }}
+              />
+
+              {!isGoogleBtnRendered && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!googleClientId || googleClientId.includes('sample')) {
+                      setError('Google Client ID setup required: Please add your GOOGLE_CLIENT_ID in backend/.env to activate 1-click Google login.');
+                    } else if (window.google?.accounts?.id) {
+                      window.google.accounts.id.prompt();
+                    } else {
+                      setError('Google services are initializing. Please try again in a few seconds.');
+                    }
+                  }}
+                  className="btn-secondary"
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px',
+                    padding: '0.7rem',
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    borderRadius: '24px',
+                    border: '1px solid var(--border)'
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                  </svg>
+                  Sign in with Google
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', margin: '1rem 0 1.25rem 0' }}>
+              <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+              <span style={{ padding: '0 10px', fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                or with credentials
+              </span>
+              <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+            </div>
+
+            {successMsg && (
+              <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#10b981', padding: '0.65rem 0.85rem', borderRadius: '12px', fontSize: '0.84rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+                <span>{successMsg}</span>
+              </div>
+            )}
+
+            {error && (
+              <div className="error-banner" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem', borderRadius: '12px' }}>
+                <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleLoginSubmit}>
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="form-label">Email or @Username</label>
+                <div style={{ position: 'relative' }}>
+                  <AtSign size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={identifier}
+                    onChange={e => setIdentifier(e.target.value)}
+                    required
+                    placeholder="alex_dev or alex@gmail.com"
+                    style={{ paddingLeft: '2.6rem' }}
+                  />
+                </div>
+              </div>
 
             <div style={{ marginBottom: '0.5rem' }}>
-              <label className="form-label" style={{ color: '#f1f5f9' }}>Password</label>
+              <label className="form-label">Password</label>
               <div style={{ position: 'relative' }}>
-                <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 <input
                   type="password"
                   className="form-input"
@@ -436,7 +435,7 @@ export default function Login({ switchToRegister }) {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#818cf8',
+                  color: 'var(--accent)',
                   fontSize: '0.84rem',
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -452,9 +451,9 @@ export default function Login({ switchToRegister }) {
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
 
-            <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.88rem', color: '#cbd5e1' }}>
+            <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.88rem', color: 'var(--text-muted)' }}>
               Don't have an account?{' '}
-              <span onClick={switchToRegister} style={{ color: '#818cf8', cursor: 'pointer', fontWeight: 600 }}>
+              <span onClick={switchToRegister} style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}>
                 Create Account
               </span>
             </p>
@@ -476,12 +475,12 @@ export default function Login({ switchToRegister }) {
 
           <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
-              <AppLogo size={54} />
+              <AppLogo size={56} />
             </div>
-            <h2 style={{ fontSize: '1.55rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: '#ffffff', textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
+            <h2 style={{ fontSize: '1.55rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: 'var(--text-main)' }}>
               Reset Password
             </h2>
-            <p style={{ color: '#cbd5e1', fontSize: '0.86rem', margin: 0, lineHeight: 1.5 }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', margin: 0, lineHeight: 1.5 }}>
               Enter your registered email address and we will send you a 6-digit recovery OTP code.
             </p>
           </div>
@@ -494,9 +493,9 @@ export default function Login({ switchToRegister }) {
           )}
 
           <div style={{ marginBottom: '1.5rem' }}>
-            <label className="form-label" style={{ color: '#f1f5f9' }}>Your Registered Email</label>
+            <label className="form-label">Your Registered Email</label>
             <div style={{ position: 'relative' }}>
-              <Mail size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <Mail size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="email"
                 className="form-input"
@@ -530,14 +529,14 @@ export default function Login({ switchToRegister }) {
 
           <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
-              <AppLogo size={54} />
+              <AppLogo size={56} />
             </div>
-            <h2 style={{ fontSize: '1.55rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: '#ffffff', textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
+            <h2 style={{ fontSize: '1.55rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: 'var(--text-main)' }}>
               Set New Password
             </h2>
-            <p style={{ color: '#cbd5e1', fontSize: '0.86rem', margin: 0, lineHeight: 1.5 }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', margin: 0, lineHeight: 1.5 }}>
               Enter the 6-digit code sent to:<br />
-              <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>{forgotEmail}</strong>
+              <strong style={{ color: 'var(--text-main)', fontSize: '0.92rem' }}>{forgotEmail}</strong>
             </p>
           </div>
 
@@ -556,7 +555,7 @@ export default function Login({ switchToRegister }) {
 
           {/* 6-Digit OTP */}
           <div style={{ marginBottom: '1.25rem' }}>
-            <label className="form-label" style={{ textAlign: 'center', display: 'block', color: '#f1f5f9' }}>Enter 6-Digit Code</label>
+            <label className="form-label" style={{ textAlign: 'center', display: 'block' }}>Enter 6-Digit Code</label>
             <input
               type="text"
               className="form-input"
@@ -572,9 +571,9 @@ export default function Login({ switchToRegister }) {
 
           {/* New Password */}
           <div style={{ marginBottom: '1rem' }}>
-            <label className="form-label" style={{ color: '#f1f5f9' }}>New Password</label>
+            <label className="form-label">New Password</label>
             <div style={{ position: 'relative' }}>
-              <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="password"
                 className="form-input"
@@ -589,9 +588,9 @@ export default function Login({ switchToRegister }) {
 
           {/* Confirm New Password */}
           <div style={{ marginBottom: '1.5rem' }}>
-            <label className="form-label" style={{ color: '#f1f5f9' }}>Confirm New Password</label>
+            <label className="form-label">Confirm New Password</label>
             <div style={{ position: 'relative' }}>
-              <KeyRound size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <KeyRound size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="password"
                 className="form-input"
@@ -610,15 +609,15 @@ export default function Login({ switchToRegister }) {
 
           <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
             {resendCooldown > 0 ? (
-              <span style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>
-                Resend code in <strong style={{ color: '#ffffff' }}>{resendCooldown}s</strong>
+              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                Resend code in <strong style={{ color: 'var(--text-main)' }}>{resendCooldown}s</strong>
               </span>
             ) : (
               <button
                 type="button"
                 onClick={handleSendRecoveryCode}
                 disabled={loading}
-                style={{ background: 'none', border: 'none', color: '#818cf8', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
               >
                 <RefreshCw size={14} /> Resend Reset Code
               </button>
@@ -641,14 +640,14 @@ export default function Login({ switchToRegister }) {
 
           <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
-              <AppLogo size={54} />
+              <AppLogo size={56} />
             </div>
-            <h2 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: '#ffffff', textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
+            <h2 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: 'var(--text-main)' }}>
               Email Verification Required
             </h2>
-            <p style={{ color: '#cbd5e1', fontSize: '0.85rem', margin: 0, lineHeight: 1.5 }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0, lineHeight: 1.5 }}>
               Your account is unverified. We sent a 6-digit verification code to:<br />
-              <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>{unverifiedEmail}</strong>
+              <strong style={{ color: 'var(--text-main)', fontSize: '0.92rem' }}>{unverifiedEmail}</strong>
             </p>
           </div>
 
@@ -666,7 +665,7 @@ export default function Login({ switchToRegister }) {
           )}
 
           <div style={{ marginBottom: '1.5rem' }}>
-            <label className="form-label" style={{ textAlign: 'center', display: 'block', color: '#f1f5f9' }}>Enter 6-Digit OTP</label>
+            <label className="form-label" style={{ textAlign: 'center', display: 'block' }}>Enter 6-Digit OTP</label>
             <input
               type="text"
               className="form-input"
@@ -678,7 +677,7 @@ export default function Login({ switchToRegister }) {
               style={{ textAlign: 'center', fontSize: '1.6rem', letterSpacing: '8px', padding: '0.75rem', fontWeight: 700 }}
               autoFocus
             />
-            <p style={{ fontSize: '0.78rem', color: '#94a3b8', textAlign: 'center', marginTop: '0.5rem' }}>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.5rem' }}>
               Check your inbox and spam folder for the code.
             </p>
           </div>
@@ -689,15 +688,15 @@ export default function Login({ switchToRegister }) {
 
           <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
             {resendCooldown > 0 ? (
-              <span style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>
-                Resend code in <strong style={{ color: '#ffffff' }}>{resendCooldown}s</strong>
+              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                Resend code in <strong style={{ color: 'var(--text-main)' }}>{resendCooldown}s</strong>
               </span>
             ) : (
               <button
                 type="button"
                 onClick={handleResendOtp}
                 disabled={loading}
-                style={{ background: 'none', border: 'none', color: '#818cf8', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
               >
                 <RefreshCw size={14} /> Resend OTP Code
               </button>
@@ -705,6 +704,7 @@ export default function Login({ switchToRegister }) {
           </div>
         </form>
       )}
-    </WaterMotionContainer>
+      </div>
+    </div>
   );
 }
