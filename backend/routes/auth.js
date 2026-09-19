@@ -379,6 +379,97 @@ router.post('/verify-otp', async (req, res) => {
   }
 });
 
+// Request Password Reset OTP
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Please enter your registered email address.' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const users = await db.getUsers();
+    const user = users.find(u => u.email.toLowerCase() === cleanEmail);
+
+    if (!user) {
+      return res.status(404).json({ error: 'No account found with this email address.' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await db.updateUser(user.id, {
+      otpCode: otp,
+      otpExpires
+    });
+
+    const mailResult = await mailer.sendOtpEmail(cleanEmail, otp, user.displayName, 'reset');
+
+    res.json({
+      success: true,
+      message: mailResult.delivered
+        ? 'A 6-digit password reset code has been sent to your email.'
+        : 'Password reset code generated.',
+      email: cleanEmail,
+      userId: user.id,
+      emailDelivered: mailResult.delivered,
+      fallbackOtp: !mailResult.delivered ? otp : undefined,
+      mailError: !mailResult.delivered ? mailResult.error : undefined
+    });
+  } catch (err) {
+    console.error('Forgot Password Error:', err);
+    res.status(500).json({ error: 'Server error while processing password reset request.' });
+  }
+});
+
+// Verify OTP & Reset Password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ error: 'Email, verification code, and new password are required.' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const users = await db.getUsers();
+    const user = users.find(u => u.email.toLowerCase() === cleanEmail);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    if (user.otpExpires && new Date() > new Date(user.otpExpires)) {
+      return res.status(400).json({ error: 'Verification code has expired. Please request a new code.' });
+    }
+
+    if (!user.otpCode || user.otpCode !== otp.trim()) {
+      return res.status(400).json({ error: 'Incorrect verification code. Please check your email.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    await db.updateUser(user.id, {
+      passwordHash,
+      otpCode: null,
+      otpExpires: null,
+      isEmailVerified: true
+    });
+
+    res.json({
+      success: true,
+      message: 'Password reset successfully! You can now log in with your new password.'
+    });
+  } catch (err) {
+    console.error('Reset Password Error:', err);
+    res.status(500).json({ error: 'Server error while resetting password.' });
+  }
+});
+
 // Google Sign-In / OAuth Authentication
 // Directly validates real Google accounts (already verified by Google)
 router.post('/google', async (req, res) => {

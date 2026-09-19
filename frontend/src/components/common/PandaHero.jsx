@@ -94,7 +94,7 @@ export default function PandaHero() {
       </div>
 
       <h2 style={{ fontSize: '1.6rem', marginBottom: '0.4rem', color: 'var(--text-main)', fontWeight: 700 }}>
-        Welcome to PulseChat ⚡
+        Welcome to PulseChat
       </h2>
       <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', maxWidth: '420px', textAlign: 'center', lineHeight: 1.5 }}>
         Select or search a user from the sidebar using @username or join a Group chat to start messaging!

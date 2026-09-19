@@ -88,12 +88,13 @@ function getMailConfigStatus() {
  * 1. Brevo REST API (HTTPS Port 443) - 100% Reliable on Render Free Tier
  * Free: 300 emails/day forever. Never blocked by Render or any cloud host.
  */
-async function sendViaBrevo(recipientEmail, otpCode, displayName, htmlContent, textContent) {
+async function sendViaBrevo(recipientEmail, otpCode, displayName, htmlContent, textContent, subject) {
   const apiKey = (process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || '').trim();
   if (!apiKey) return { success: false, skipped: true, error: 'BREVO_API_KEY not set' };
 
   const senderEmail = (process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER || 'noreply.pulsechat@gmail.com').trim();
   const senderName = process.env.BREVO_SENDER_NAME || 'PulseChat Security';
+  const mailSubject = subject || `${otpCode} is your PulseChat verification code`;
 
   console.log(`📧 [Brevo] Initiating delivery to ${recipientEmail}...`);
 
@@ -109,7 +110,7 @@ async function sendViaBrevo(recipientEmail, otpCode, displayName, htmlContent, t
       {
         sender: { name: senderName, email: senderEmail },
         to: [{ email: recipientEmail, name: displayName }],
-        subject: `${otpCode} is your PulseChat verification code`,
+        subject: mailSubject,
         htmlContent,
         textContent
       }
@@ -171,11 +172,12 @@ async function sendViaBrevo(recipientEmail, otpCode, displayName, htmlContent, t
 /**
  * 2. Resend REST API (HTTPS Port 443)
  */
-async function sendViaResend(recipientEmail, otpCode, displayName, htmlContent, textContent) {
+async function sendViaResend(recipientEmail, otpCode, displayName, htmlContent, textContent, subject) {
   const apiKey = (process.env.RESEND_API_KEY || '').trim();
   if (!apiKey) return { success: false, skipped: true, error: 'RESEND_API_KEY not set' };
 
   const sender = (process.env.RESEND_FROM || 'PulseChat <onboarding@resend.dev>').trim();
+  const mailSubject = subject || `${otpCode} is your PulseChat verification code`;
   console.log(`📧 [Resend API] Sending OTP to ${recipientEmail} via HTTPS...`);
 
   try {
@@ -188,7 +190,7 @@ async function sendViaResend(recipientEmail, otpCode, displayName, htmlContent, 
       {
         from: sender,
         to: recipientEmail,
-        subject: `${otpCode} is your PulseChat verification code`,
+        subject: mailSubject,
         html: htmlContent,
         text: textContent
       }
@@ -212,13 +214,14 @@ async function sendViaResend(recipientEmail, otpCode, displayName, htmlContent, 
  * 3. Direct SMTP / Nodemailer
  * Works on localhost & VPS. On Render Free Tier, SMTP ports 25, 465, 587 are blocked.
  */
-async function sendViaSmtp(recipientEmail, otpCode, displayName, htmlContent, textContent) {
+async function sendViaSmtp(recipientEmail, otpCode, displayName, htmlContent, textContent, subject) {
   const user = (process.env.SMTP_USER || '').trim();
   const pass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
   if (!user || !pass) return { success: false, skipped: true, error: 'SMTP credentials not configured' };
 
   const host = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
   const isGmail = host.includes('gmail.com');
+  const mailSubject = subject || `${otpCode} is your PulseChat verification code`;
 
   console.log(`📧 [SMTP] Attempting to send OTP to ${recipientEmail} via ${isGmail ? 'Gmail Service' : host}...`);
 
@@ -248,7 +251,7 @@ async function sendViaSmtp(recipientEmail, otpCode, displayName, htmlContent, te
       await transporter.sendMail({
         from: `"PulseChat Security" <${user}>`,
         to: recipientEmail,
-        subject: `${otpCode} is your PulseChat verification code`,
+        subject: mailSubject,
         text: textContent,
         html: htmlContent
       });
@@ -267,13 +270,21 @@ async function sendViaSmtp(recipientEmail, otpCode, displayName, htmlContent, te
 /**
  * Main OTP Sending Function: Multi-Provider with Automatic Fallback
  */
-async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat User') {
+async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat User', purpose = 'verification') {
+  const isReset = purpose === 'reset';
+  const subject = isReset
+    ? `${otpCode} is your PulseChat password reset code`
+    : `${otpCode} is your PulseChat verification code`;
+  const actionText = isReset
+    ? 'Use the 6-digit verification code below to reset your PulseChat account password:'
+    : 'Use the 6-digit verification code below to confirm your email address and activate your account:';
+
   const htmlContent = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8">
-      <title>PulseChat Verification Code</title>
+      <title>${subject}</title>
       <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f172a; margin: 0; padding: 24px; color: #f8fafc; }
         .card { max-width: 480px; margin: 0 auto; background: #1e293b; border: 1px solid #334155; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
@@ -290,11 +301,11 @@ async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat Us
     <body>
       <div class="card">
         <div class="header">
-          <h1>&#9889; PulseChat Security</h1>
+          <h1>PulseChat Security</h1>
         </div>
         <div class="content">
           <p class="greeting">Hello ${displayName},</p>
-          <p class="info">Use the 6-digit verification code below to confirm your email address and activate your account:</p>
+          <p class="info">${actionText}</p>
           <div class="code-box">
             <span class="code">${otpCode}</span>
           </div>
@@ -308,25 +319,25 @@ async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat Us
     </html>
   `;
 
-  const textContent = `Hello ${displayName},\n\nYour PulseChat verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\nIf you did not request this, you can safely ignore this message.`;
+  const textContent = `Hello ${displayName},\n\nYour PulseChat verification code is: ${otpCode}\n\n${actionText}\nThis code expires in 10 minutes.\nIf you did not request this, you can safely ignore this message.`;
 
   const configStatus = getMailConfigStatus();
 
   // 1. Try Brevo HTTPS REST API first (recommended for Render free tier)
   if (configStatus.brevo) {
-    const brevoRes = await sendViaBrevo(recipientEmail, otpCode, displayName, htmlContent, textContent);
+    const brevoRes = await sendViaBrevo(recipientEmail, otpCode, displayName, htmlContent, textContent, subject);
     if (brevoRes.success) return brevoRes;
   }
 
   // 2. Try Resend HTTPS REST API next
   if (configStatus.resend) {
-    const resendRes = await sendViaResend(recipientEmail, otpCode, displayName, htmlContent, textContent);
+    const resendRes = await sendViaResend(recipientEmail, otpCode, displayName, htmlContent, textContent, subject);
     if (resendRes.success) return resendRes;
   }
 
   // 3. Try SMTP (Nodemailer)
   if (configStatus.smtp) {
-    const smtpRes = await sendViaSmtp(recipientEmail, otpCode, displayName, htmlContent, textContent);
+    const smtpRes = await sendViaSmtp(recipientEmail, otpCode, displayName, htmlContent, textContent, subject);
     if (smtpRes.success) return smtpRes;
   }
 

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { Check, X, Mail, ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
 import { BACKEND_URL, GOOGLE_CLIENT_ID } from '../../utils/config';
+import AppLogo from '../common/AppLogo';
+import WaterMotionContainer from '../common/WaterMotionContainer';
 
 export default function Register({ switchToLogin }) {
   const { login } = useContext(AuthContext);
@@ -224,14 +226,16 @@ export default function Register({ switchToLogin }) {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-main)', padding: '1rem' }}>
-      <div className="auth-card" style={{ maxWidth: '440px', width: '100%' }}>
-        {step === 'form' ? (
-          <div>
-            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-              <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 0.35rem 0' }}>Join PulseChat ⚡</h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>Register with Verified Email or Google</p>
+    <WaterMotionContainer maxWidth="440px">
+      {step === 'form' ? (
+        <div>
+          <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
+              <AppLogo size={58} />
             </div>
+            <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 0.35rem 0', letterSpacing: '-0.3px' }}>Join PulseChat</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>Register with Verified Email or Google</p>
+          </div>
 
             {/* Google Sign-In Section - Single Button */}
             <div style={{ width: '100%', marginBottom: '1.25rem', display: 'flex', justifyContent: 'center' }}>
@@ -379,10 +383,10 @@ export default function Register({ switchToLogin }) {
             </button>
 
             <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: 'rgba(99, 102, 241, 0.15)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
-                <Mail size={26} color="var(--accent)" />
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
+                <AppLogo size={54} />
               </div>
-              <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: '0 0 0.4rem 0' }}>Verify Your Email</h2>
+              <h2 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: 'var(--text-main)' }}>Verify Your Email</h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0, lineHeight: 1.5 }}>
                 Enter the 6-digit code sent to your real inbox:<br />
                 <strong style={{ color: 'var(--text-main)', fontSize: '0.92rem' }}>{email}</strong>
@@ -442,7 +446,6 @@ export default function Register({ switchToLogin }) {
             </div>
           </form>
         )}
-      </div>
-    </div>
+    </WaterMotionContainer>
   );
 }
