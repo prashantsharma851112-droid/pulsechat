@@ -310,8 +310,6 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
       setActionLoading(prev => ({ ...prev, [targetId]: false }));
     }
   };
-    }
-  };
 
   // Search users in Add Friend tab
   useEffect(() => {
