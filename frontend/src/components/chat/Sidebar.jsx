@@ -30,10 +30,25 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [allUsers, setAllUsers] = useState(() => getCachedAllUsers(user?.id));
   const [isOnline, setIsOnline] = useState(() => isDeviceOnline());
   const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'groups' | 'friends'
+  const [friendsSubTab, setFriendsSubTab] = useState('friends');
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [friendIdsSet, setFriendIdsSet] = useState(new Set());
   const [outgoingPendingIds, setOutgoingPendingIds] = useState(new Set());
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+
+  // Listen to cross-component tab switch requests (e.g. clicking on sync notification toast)
+  useEffect(() => {
+    const handleOpenTab = (e) => {
+      if (e.detail?.tab) {
+        setActiveTab(e.detail.tab);
+        if (e.detail.subTab) {
+          setFriendsSubTab(e.detail.subTab);
+        }
+      }
+    };
+    window.addEventListener('pulsechat_open_tab', handleOpenTab);
+    return () => window.removeEventListener('pulsechat_open_tab', handleOpenTab);
+  }, []);
 
   // Load friendship status and pending friend requests count
   const loadFriendshipInfo = useCallback(async () => {
@@ -65,22 +80,69 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     loadFriendshipInfo();
   }, [loadFriendshipInfo]);
 
+  // Real-time zero-millisecond socket sync for friend requests
   useEffect(() => {
     if (!socket) return;
-    const handleReqUpdate = () => {
+
+    const handleReqReceived = (data) => {
+      // Instant 0ms badge increment
+      setPendingRequestsCount(prev => prev + 1);
       loadFriendshipInfo();
     };
-    socket.on('friend_request_received', handleReqUpdate);
-    socket.on('friend_request_accepted', handleReqUpdate);
-    socket.on('friend_request_rejected', handleReqUpdate);
-    socket.on('friend_request_cancelled', handleReqUpdate);
-    socket.on('friend_removed', handleReqUpdate);
+
+    const handleReqAccepted = (data) => {
+      if (data?.friend?.id) {
+        setFriendIdsSet(prev => new Set([...prev, data.friend.id]));
+        setOutgoingPendingIds(prev => {
+          const next = new Set(prev);
+          next.delete(data.friend.id);
+          return next;
+        });
+      }
+      setPendingRequestsCount(prev => Math.max(0, prev - 1));
+      loadFriendshipInfo();
+    };
+
+    const handleReqRejected = (data) => {
+      if (data?.userId) {
+        setOutgoingPendingIds(prev => {
+          const next = new Set(prev);
+          next.delete(data.userId);
+          return next;
+        });
+      }
+      loadFriendshipInfo();
+    };
+
+    const handleReqCancelled = () => {
+      setPendingRequestsCount(prev => Math.max(0, prev - 1));
+      loadFriendshipInfo();
+    };
+
+    const handleFriendRemoved = (data) => {
+      const removedId = data?.targetId || data?.userId;
+      if (removedId) {
+        setFriendIdsSet(prev => {
+          const next = new Set(prev);
+          next.delete(removedId);
+          return next;
+        });
+      }
+      loadFriendshipInfo();
+    };
+
+    socket.on('friend_request_received', handleReqReceived);
+    socket.on('friend_request_accepted', handleReqAccepted);
+    socket.on('friend_request_rejected', handleReqRejected);
+    socket.on('friend_request_cancelled', handleReqCancelled);
+    socket.on('friend_removed', handleFriendRemoved);
+
     return () => {
-      socket.off('friend_request_received', handleReqUpdate);
-      socket.off('friend_request_accepted', handleReqUpdate);
-      socket.off('friend_request_rejected', handleReqUpdate);
-      socket.off('friend_request_cancelled', handleReqUpdate);
-      socket.off('friend_removed', handleReqUpdate);
+      socket.off('friend_request_received', handleReqReceived);
+      socket.off('friend_request_accepted', handleReqAccepted);
+      socket.off('friend_request_rejected', handleReqRejected);
+      socket.off('friend_request_cancelled', handleReqCancelled);
+      socket.off('friend_removed', handleFriendRemoved);
     };
   }, [socket, loadFriendshipInfo]);
 
@@ -722,6 +784,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           <FriendsTab
             setActiveChat={handleSelectUser}
             onRequestsCountChange={setPendingRequestsCount}
+            initialSubTab={friendsSubTab}
             onOpenFullDp={onOpenFullDp}
           />
 

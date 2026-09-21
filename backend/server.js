@@ -87,6 +87,7 @@ io.on('connection', (socket) => {
   socket.on('setup', async (userId) => {
     socket.userId = userId;
     socket.join(`user_${userId}`); // Join user's personal private room
+    socket.join(userId);           // Also join direct userId room
     onlineUsers.set(userId, socket.id);
     io.emit('user_status', { userId, status: 'online' });
     io.emit('online_users_list', Array.from(onlineUsers.keys()));

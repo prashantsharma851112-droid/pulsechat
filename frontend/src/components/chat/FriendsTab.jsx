@@ -3,13 +3,20 @@ import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { UserPlus, UserCheck, Users, UserX, Check, X, Search, MessageSquare, Clock, CheckCircle2, Sparkles, Zap, Radio } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
+import { parseSafeJson } from '../../utils/imageCompressor';
 
-export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpenFullDp }) {
+export default function FriendsTab({ setActiveChat, onRequestsCountChange, initialSubTab = 'friends', onOpenFullDp }) {
   const { user, token } = useContext(AuthContext);
   const { socket, onlineUsers } = useContext(SocketContext);
 
   // Sub-view: 'friends' | 'requests' | 'add'
-  const [subTab, setSubTab] = useState('friends');
+  const [subTab, setSubTab] = useState(initialSubTab || 'friends');
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
 
   // Data states
   const [friends, setFriends] = useState([]);
@@ -31,7 +38,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
       const res = await fetch(`${BACKEND_URL}/api/friends`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
+      const data = await parseSafeJson(res);
       if (data && data.friends) {
         setFriends(data.friends);
       }
@@ -47,7 +54,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
       const res = await fetch(`${BACKEND_URL}/api/friends/requests`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
+      const data = await parseSafeJson(res);
       if (data) {
         const inc = data.incoming || [];
         const out = data.outgoing || [];
@@ -68,30 +75,76 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
     Promise.all([fetchFriends(), fetchRequests()]).finally(() => setLoading(false));
   }, [fetchFriends, fetchRequests]);
 
-  // Socket real-time event listeners
+  // Socket real-time 0ms instant event listeners
   useEffect(() => {
     if (!socket) return;
 
     const handleReqReceived = (data) => {
+      const newReq = data?.request || (data?.requestId && {
+        id: data.requestId,
+        senderId: data.senderId,
+        receiverId: data.receiverId || user?.id,
+        status: 'pending',
+        vibe: data.vibe || '⚡ Quick Pulse',
+        sender: data.sender,
+        createdAt: data.createdAt || new Date()
+      });
+
+      if (newReq && newReq.id) {
+        setIncomingRequests(prev => {
+          if (prev.some(r => r.id === newReq.id)) return prev;
+          const next = [newReq, ...prev];
+          if (onRequestsCountChange) onRequestsCountChange(next.length);
+          return next;
+        });
+      }
       fetchRequests();
     };
 
     const handleReqAccepted = (data) => {
+      const friendObj = data?.friend;
+      const reqId = data?.requestId;
+
+      if (friendObj && friendObj.id) {
+        setFriends(prev => {
+          if (prev.some(f => f.id === friendObj.id)) return prev;
+          return [friendObj, ...prev];
+        });
+        setIncomingRequests(prev => {
+          const next = prev.filter(r => r.id !== reqId && r.senderId !== friendObj.id);
+          if (onRequestsCountChange) onRequestsCountChange(next.length);
+          return next;
+        });
+        setOutgoingRequests(prev => prev.filter(r => r.id !== reqId && r.receiverId !== friendObj.id));
+      }
       fetchFriends();
       fetchRequests();
     };
 
-    const handleReqRejected = () => {
+    const handleReqRejected = (data) => {
+      const reqId = data?.requestId;
+      const targetId = data?.userId;
+      setOutgoingRequests(prev => prev.filter(r => r.id !== reqId && (!targetId || r.receiverId !== targetId)));
       fetchRequests();
     };
 
-    const handleReqCancelled = () => {
+    const handleReqCancelled = (data) => {
+      const reqId = data?.requestId;
+      const senderId = data?.userId;
+      setIncomingRequests(prev => {
+        const next = prev.filter(r => r.id !== reqId && (!senderId || r.senderId !== senderId));
+        if (onRequestsCountChange) onRequestsCountChange(next.length);
+        return next;
+      });
       fetchRequests();
     };
 
-    const handleFriendRemoved = () => {
+    const handleFriendRemoved = (data) => {
+      const removedId = data?.targetId || data?.userId;
+      if (removedId) {
+        setFriends(prev => prev.filter(f => f.id !== removedId));
+      }
       fetchFriends();
-      fetchRequests();
     };
 
     socket.on('friend_request_received', handleReqReceived);
@@ -107,112 +160,156 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
       socket.off('friend_request_cancelled', handleReqCancelled);
       socket.off('friend_removed', handleFriendRemoved);
     };
-  }, [socket, fetchFriends, fetchRequests]);
+  }, [socket, fetchFriends, fetchRequests, onRequestsCountChange, user?.id]);
 
-  // Accept Friend Request
+  // Accept Friend Request (0ms instant optimistic update)
   const handleAccept = async (requestId) => {
+    const targetReq = incomingRequests.find(r => r.id === requestId);
+    if (targetReq) {
+      setIncomingRequests(prev => {
+        const next = prev.filter(r => r.id !== requestId);
+        if (onRequestsCountChange) onRequestsCountChange(next.length);
+        return next;
+      });
+      if (targetReq.sender) {
+        setFriends(prev => [targetReq.sender, ...prev]);
+      }
+    }
+
     setActionLoading(prev => ({ ...prev, [requestId]: true }));
     try {
       const res = await fetch(`${BACKEND_URL}/api/friends/accept/${requestId}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await parseSafeJson(res);
+      if (!res.ok) {
         fetchFriends();
         fetchRequests();
       }
     } catch (err) {
       console.error('Error accepting friend request:', err);
+      fetchFriends();
+      fetchRequests();
     } finally {
       setActionLoading(prev => ({ ...prev, [requestId]: false }));
     }
   };
 
-  // Reject Friend Request
+  // Reject Friend Request (0ms instant optimistic update)
   const handleReject = async (requestId) => {
+    setIncomingRequests(prev => {
+      const next = prev.filter(r => r.id !== requestId);
+      if (onRequestsCountChange) onRequestsCountChange(next.length);
+      return next;
+    });
+
     setActionLoading(prev => ({ ...prev, [requestId]: true }));
     try {
       const res = await fetch(`${BACKEND_URL}/api/friends/reject/${requestId}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
-      if (data.success) {
+      if (!res.ok) {
         fetchRequests();
       }
     } catch (err) {
       console.error('Error rejecting friend request:', err);
+      fetchRequests();
     } finally {
       setActionLoading(prev => ({ ...prev, [requestId]: false }));
     }
   };
 
-  // Cancel Outgoing Request
+  // Cancel Outgoing Request (0ms instant optimistic update)
   const handleCancel = async (requestId) => {
+    setOutgoingRequests(prev => prev.filter(r => r.id !== requestId));
+
     setActionLoading(prev => ({ ...prev, [requestId]: true }));
     try {
       const res = await fetch(`${BACKEND_URL}/api/friends/cancel/${requestId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
-      if (data.success) {
+      if (!res.ok) {
         fetchRequests();
       }
     } catch (err) {
       console.error('Error cancelling friend request:', err);
+      fetchRequests();
     } finally {
       setActionLoading(prev => ({ ...prev, [requestId]: false }));
     }
   };
 
-  // Unfriend / Unsync
+  // Unfriend / Unsync (0ms instant optimistic update)
   const handleUnfriend = async (friendId, friendName) => {
     if (!window.confirm(`Are you sure you want to unsync pulse with ${friendName}?`)) return;
+    setFriends(prev => prev.filter(f => f.id !== friendId));
+
     setActionLoading(prev => ({ ...prev, [friendId]: true }));
     try {
       const res = await fetch(`${BACKEND_URL}/api/friends/${friendId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
-      if (data.success) {
+      if (!res.ok) {
         fetchFriends();
       }
     } catch (err) {
       console.error('Error unfriending user:', err);
+      fetchFriends();
     } finally {
       setActionLoading(prev => ({ ...prev, [friendId]: false }));
     }
   };
 
-  // Send Friend Request from Add Friend search
-  const handleSendRequest = async (targetId) => {
+  // Send Friend Request (0ms instant optimistic update)
+  const handleSendRequest = async (targetId, vibe = '⚡ Quick Pulse') => {
+    setRequestStatusMap(prev => ({
+      ...prev,
+      [targetId]: { status: 'pending_sent' }
+    }));
+
     setActionLoading(prev => ({ ...prev, [targetId]: true }));
     try {
       const res = await fetch(`${BACKEND_URL}/api/friends/request/${targetId}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ vibe })
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await parseSafeJson(res);
+      if (data?.success) {
+        if (data.status === 'accepted') {
+          setRequestStatusMap(prev => ({
+            ...prev,
+            [targetId]: { status: 'friends' }
+          }));
+          if (data.friend) setFriends(prev => [data.friend, ...prev]);
+        } else if (data.request) {
+          setRequestStatusMap(prev => ({
+            ...prev,
+            [targetId]: { status: 'pending_sent', requestId: data.request.id }
+          }));
+          setOutgoingRequests(prev => [data.request, ...prev]);
+        }
+      } else {
         setRequestStatusMap(prev => ({
           ...prev,
-          [targetId]: {
-            status: data.status === 'accepted' ? 'friends' : 'pending_sent',
-            requestId: data.request?.id
-          }
+          [targetId]: { status: 'none' }
         }));
-        fetchRequests();
-        if (data.status === 'accepted') {
-          fetchFriends();
-        }
+        alert(data?.error || 'Could not send request');
       }
     } catch (err) {
       console.error('Error sending friend request:', err);
+      setRequestStatusMap(prev => ({ ...prev, [targetId]: { status: 'none' } }));
     } finally {
       setActionLoading(prev => ({ ...prev, [targetId]: false }));
+    }
+  };
     }
   };
 
@@ -325,18 +422,18 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
           }}
         >
           <Radio size={14} />
-          <span>Radar</span>
-          {totalRequestsCount > 0 && (
+          <span>Requests</span>
+          {incomingRequests.length > 0 && (
             <span style={{
               background: '#ef4444',
               color: '#fff',
               fontSize: '0.7rem',
               fontWeight: 700,
-              padding: '1px 5px',
+              padding: '1px 6px',
               borderRadius: '10px',
               lineHeight: 1.2
             }}>
-              {totalRequestsCount}
+              {incomingRequests.length}
             </span>
           )}
         </button>
@@ -754,7 +851,10 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
                           </div>
                         ) : statusInfo.status === 'pending_sent' ? (
                           <button
-                            onClick={() => statusInfo.requestId && handleCancel(statusInfo.requestId)}
+                            onClick={() => {
+                              const cancelId = statusInfo.requestId || outgoingRequests.find(r => r.receiverId === target.id || r.receiver?.id === target.id)?.id;
+                              if (cancelId) handleCancel(cancelId);
+                            }}
                             disabled={actionLoading[statusInfo.requestId]}
                             style={{
                               background: 'var(--hover-bg)',
@@ -771,7 +871,10 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
                           </button>
                         ) : statusInfo.status === 'pending_received' ? (
                           <button
-                            onClick={() => statusInfo.requestId && handleAccept(statusInfo.requestId)}
+                            onClick={() => {
+                              const acceptId = statusInfo.requestId || incomingRequests.find(r => r.senderId === target.id || r.sender?.id === target.id)?.id;
+                              if (acceptId) handleAccept(acceptId);
+                            }}
                             disabled={actionLoading[statusInfo.requestId]}
                             style={{
                               background: '#10b981',

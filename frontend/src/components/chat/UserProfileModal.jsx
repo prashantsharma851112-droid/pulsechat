@@ -70,8 +70,9 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
     if (!socket || !targetUser?.id) return;
 
     const handleReqRecv = (data) => {
-      if (data.senderId === targetUser.id || data.sender?.id === targetUser.id) {
-        setFriendStatus({ status: 'pending_received', requestId: data.requestId || data.id });
+      const sId = data?.senderId || data?.sender?.id || data?.request?.senderId || data?.request?.sender?.id;
+      if (sId === targetUser.id) {
+        setFriendStatus({ status: 'pending_received', requestId: data?.requestId || data?.id || data?.request?.id });
       }
     };
 
@@ -141,17 +142,20 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
 
   const handleAcceptFriendRequest = async () => {
     if (!friendStatus.requestId || friendLoading) return;
+    const prevStatus = { ...friendStatus };
+    setFriendStatus({ status: 'friends' }); // 0ms Optimistic update
     setFriendLoading(true);
     try {
       const res = await fetch(`${BACKEND_URL}/api/friends/accept/${friendStatus.requestId}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.ok) {
-        setFriendStatus({ status: 'friends' });
+      if (!res.ok) {
+        setFriendStatus(prevStatus);
       }
     } catch (e) {
       console.error(e);
+      setFriendStatus(prevStatus);
     } finally {
       setFriendLoading(false);
     }

@@ -135,13 +135,19 @@ router.post('/request/:targetId', authMiddleware, async (req, res) => {
 
       const io = req.app.get('io');
       if (io) {
-        io.to(`user_${targetId}`).emit('friend_request_accepted', {
-          requestId: existingIncoming.id,
+        const senderData = { requestId: existingIncoming.id, friend: getSafeUser(currentUser), friendId: currentUser.id };
+        const targetData = { requestId: existingIncoming.id, friend: getSafeUser(targetUser), friendId: targetUser.id };
+        io.to(`user_${targetId}`).to(targetId).emit('friend_request_accepted', senderData);
+        io.to(`user_${req.user.id}`).to(req.user.id).emit('friend_request_accepted', targetData);
+
+        io.to(`user_${targetId}`).to(targetId).emit('friend_notification', {
+          type: 'friend_accepted',
+          senderId: req.user.id,
+          senderName: currentUser.displayName || currentUser.username,
+          senderAvatar: currentUser.avatar,
+          title: 'Pulse Synced! ⚡',
+          body: `${currentUser.displayName || currentUser.username} is now synced with you!`,
           friend: getSafeUser(currentUser)
-        });
-        io.to(`user_${req.user.id}`).emit('friend_request_accepted', {
-          requestId: existingIncoming.id,
-          friend: getSafeUser(targetUser)
         });
       }
 
@@ -149,6 +155,7 @@ router.post('/request/:targetId', authMiddleware, async (req, res) => {
     }
 
     // Create new friend request
+    const vibe = (req.body && req.body.vibe) || '⚡ Quick Pulse';
     const newRequest = await FriendRequest.create({
       id: `freq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       senderId: req.user.id,
@@ -157,29 +164,60 @@ router.post('/request/:targetId', authMiddleware, async (req, res) => {
       createdAt: new Date()
     });
 
+    const populatedRequest = {
+      id: newRequest.id,
+      senderId: req.user.id,
+      receiverId: targetId,
+      status: 'pending',
+      vibe,
+      createdAt: newRequest.createdAt,
+      sender: getSafeUser(currentUser)
+    };
+
     const io = req.app.get('io');
     if (io) {
-      io.to(`user_${targetId}`).emit('friend_request_received', {
-        request: {
-          id: newRequest.id,
-          senderId: req.user.id,
-          receiverId: targetId,
-          status: 'pending',
-          createdAt: newRequest.createdAt,
-          sender: getSafeUser(currentUser)
-        }
+      const eventPayload = {
+        request: populatedRequest,
+        requestId: newRequest.id,
+        id: newRequest.id,
+        senderId: req.user.id,
+        receiverId: targetId,
+        vibe,
+        sender: getSafeUser(currentUser),
+        createdAt: newRequest.createdAt
+      };
+
+      // Emit to both user_{id} and direct {id} rooms
+      io.to(`user_${targetId}`).to(targetId).emit('friend_request_received', eventPayload);
+
+      // In-app alert notification
+      io.to(`user_${targetId}`).to(targetId).emit('friend_notification', {
+        type: 'friend_request',
+        senderId: req.user.id,
+        senderName: currentUser.displayName || currentUser.username,
+        senderAvatar: currentUser.avatar,
+        title: `⚡ Sync Request: ${currentUser.displayName || currentUser.username}`,
+        body: `Wants to sync pulse with you (${vibe})`,
+        requestId: newRequest.id,
+        sender: getSafeUser(currentUser)
       });
     }
 
     // Push notification if subscribed
     if (targetUser.pushSubscriptions?.length > 0) {
+      const pushPayload = {
+        title: 'New Pulse Sync Request ⚡',
+        body: `${currentUser.displayName || currentUser.username} wants to sync pulse with you!`,
+        icon: currentUser.avatar || '/icon-192.png',
+        badge: '/icon-192.png',
+        tag: `freq-${newRequest.id}`,
+        data: {
+          url: '/?tab=friends&subTab=requests',
+          type: 'friend_request'
+        }
+      };
       targetUser.pushSubscriptions.forEach(sub => {
-        webpush.sendNotification(sub, {
-          title: 'New Friend Request 🤝',
-          body: `${currentUser.displayName || currentUser.username} sent you a friend request.`,
-          icon: currentUser.avatar || '/icon-192.png',
-          url: '/'
-        }).catch(() => {});
+        webpush.sendPushNotification(sub, pushPayload).catch(() => {});
       });
     }
 
@@ -190,6 +228,7 @@ router.post('/request/:targetId', authMiddleware, async (req, res) => {
         senderId: req.user.id,
         receiverId: targetId,
         status: 'pending',
+        vibe,
         createdAt: newRequest.createdAt,
         receiver: getSafeUser(targetUser)
       }
@@ -219,13 +258,49 @@ router.post('/accept/:requestId', authMiddleware, async (req, res) => {
 
     const io = req.app.get('io');
     if (io) {
-      io.to(`user_${request.senderId}`).emit('friend_request_accepted', {
+      const senderData = {
         requestId,
+        friend: getSafeUser(receiverUser),
+        friendId: req.user.id,
+        status: 'accepted'
+      };
+      const receiverData = {
+        requestId,
+        friend: getSafeUser(senderUser),
+        friendId: request.senderId,
+        status: 'accepted'
+      };
+
+      io.to(`user_${request.senderId}`).to(request.senderId).emit('friend_request_accepted', senderData);
+      io.to(`user_${req.user.id}`).to(req.user.id).emit('friend_request_accepted', receiverData);
+
+      // In-app alert for the original sender
+      io.to(`user_${request.senderId}`).to(request.senderId).emit('friend_notification', {
+        type: 'friend_accepted',
+        senderId: req.user.id,
+        senderName: receiverUser.displayName || receiverUser.username,
+        senderAvatar: receiverUser.avatar,
+        title: 'Pulse Synced! ⚡',
+        body: `${receiverUser.displayName || receiverUser.username} accepted your sync request!`,
         friend: getSafeUser(receiverUser)
       });
-      io.to(`user_${req.user.id}`).emit('friend_request_accepted', {
-        requestId,
-        friend: getSafeUser(senderUser)
+    }
+
+    // Web push to original sender if subscribed
+    if (senderUser && senderUser.pushSubscriptions?.length > 0) {
+      const pushPayload = {
+        title: 'Pulse Synced! ⚡',
+        body: `${receiverUser.displayName || receiverUser.username} accepted your sync request!`,
+        icon: receiverUser.avatar || '/icon-192.png',
+        badge: '/icon-192.png',
+        tag: `freq-acc-${requestId}`,
+        data: {
+          url: '/?tab=friends',
+          type: 'friend_accepted'
+        }
+      };
+      senderUser.pushSubscriptions.forEach(sub => {
+        webpush.sendPushNotification(sub, pushPayload).catch(() => {});
       });
     }
 
@@ -247,7 +322,10 @@ router.post('/reject/:requestId', authMiddleware, async (req, res) => {
 
     const io = req.app.get('io');
     if (io) {
-      io.to(`user_${request.senderId}`).emit('friend_request_rejected', { requestId });
+      io.to(`user_${request.senderId}`).to(request.senderId).emit('friend_request_rejected', {
+        requestId,
+        userId: req.user.id
+      });
     }
 
     res.json({ success: true });
@@ -268,7 +346,10 @@ router.delete('/cancel/:requestId', authMiddleware, async (req, res) => {
 
     const io = req.app.get('io');
     if (io) {
-      io.to(`user_${request.receiverId}`).emit('friend_request_cancelled', { requestId });
+      io.to(`user_${request.receiverId}`).to(request.receiverId).emit('friend_request_cancelled', {
+        requestId,
+        userId: req.user.id
+      });
     }
 
     res.json({ success: true });
@@ -296,8 +377,8 @@ router.delete('/:targetId', authMiddleware, async (req, res) => {
 
     const io = req.app.get('io');
     if (io) {
-      io.to(`user_${targetId}`).emit('friend_removed', { userId: req.user.id });
-      io.to(`user_${req.user.id}`).emit('friend_removed', { userId: targetId });
+      io.to(`user_${targetId}`).to(targetId).emit('friend_removed', { userId: req.user.id, targetId });
+      io.to(`user_${req.user.id}`).to(req.user.id).emit('friend_removed', { userId: targetId, targetId });
     }
 
     res.json({ success: true });

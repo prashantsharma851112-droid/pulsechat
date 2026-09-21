@@ -137,6 +137,32 @@ export function SocketProvider({ children }) {
         }
       });
 
+      // Listen to real-time friend/sync request and acceptance alerts
+      newSocket.on('friend_notification', (data) => {
+        const notif = {
+          id: `fn_${Date.now()}`,
+          isFriendRequest: data.type === 'friend_request',
+          isFriendAccepted: data.type === 'friend_accepted',
+          title: data.title || '⚡ Pulse Sync Update',
+          senderName: data.senderName || data.title,
+          senderId: data.senderId,
+          content: data.body,
+          type: 'text',
+          receivedAt: Date.now()
+        };
+        setLastNotification(notif);
+        const isHidden = typeof document !== 'undefined' && (document.visibilityState === 'hidden' || document.hidden);
+        if (isHidden) {
+          showPushNotification(
+            data.title || 'Pulse Sync ⚡',
+            data.body || 'You have a new sync notification.',
+            data.senderAvatar || '/icon-192.png',
+            `pulse-sync-${Date.now()}`,
+            { url: '/?tab=friends' }
+          );
+        }
+      });
+
       return () => {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);

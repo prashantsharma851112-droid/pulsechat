@@ -333,19 +333,46 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     const handleReqReceived = (data) => {
-      if (data?.request?.senderId === activeChat?.id) {
+      const sId = data?.senderId || data?.request?.senderId;
+      if (sId === activeChat?.id) {
         setFriendshipStatus('pending_received');
-        if (data.request?.id) setFriendRequestId(data.request.id);
+        const rId = data?.requestId || data?.id || data?.request?.id;
+        if (rId) setFriendRequestId(rId);
+      }
+    };
+
+    const handleReqCancelled = (data) => {
+      if (data?.userId === activeChat?.id || data?.requestId === friendRequestId) {
+        setFriendshipStatus('none');
+      }
+    };
+
+    const handleReqRejected = (data) => {
+      if (data?.userId === activeChat?.id || data?.requestId === friendRequestId) {
+        setFriendshipStatus('none');
+      }
+    };
+
+    const handleFriendRemoved = (data) => {
+      if (data?.userId === activeChat?.id || data?.targetId === activeChat?.id) {
+        setFriendshipStatus('none');
       }
     };
 
     socket.on('friend_request_accepted', handleReqAccepted);
     socket.on('friend_request_received', handleReqReceived);
+    socket.on('friend_request_cancelled', handleReqCancelled);
+    socket.on('friend_request_rejected', handleReqRejected);
+    socket.on('friend_removed', handleFriendRemoved);
+
     return () => {
       socket.off('friend_request_accepted', handleReqAccepted);
       socket.off('friend_request_received', handleReqReceived);
+      socket.off('friend_request_cancelled', handleReqCancelled);
+      socket.off('friend_request_rejected', handleReqRejected);
+      socket.off('friend_removed', handleFriendRemoved);
     };
-  }, [socket, activeChat?.id, isGroup]);
+  }, [socket, activeChat?.id, isGroup, friendRequestId]);
 
   const handleSendFriendRequest = async () => {
     if (!token || !activeChat?.id) return;
@@ -368,16 +395,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleAcceptFriendRequest = async () => {
     if (!token || !friendRequestId) return;
+    setFriendshipStatus('friends'); // 0ms Optimistic update
     try {
       const res = await fetch(`${BACKEND_URL}/api/friends/accept/${friendRequestId}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.ok) {
-        setFriendshipStatus('friends');
+      if (!res.ok) {
+        setFriendshipStatus('pending_received');
       }
     } catch (err) {
       console.error('Failed to accept friend request:', err);
+      setFriendshipStatus('pending_received');
     }
   };
 

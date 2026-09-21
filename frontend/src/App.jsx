@@ -286,16 +286,16 @@ export default function App() {
     };
   }, [socket]);
 
-  // Toast notifications for unviewed chats
+  // Toast notifications for unviewed chats & friend requests
   useEffect(() => {
     if (!lastNotification) return;
     const currentlyOpenId = activeChatRef.current?.id;
-    if (lastNotification.senderId === currentlyOpenId) return;
+    if (lastNotification.senderId === currentlyOpenId && !lastNotification.isFriendRequest && !lastNotification.isFriendAccepted) return;
 
     const toastId = lastNotification.id + '_' + lastNotification.receivedAt;
     const senderTitle = lastNotification.isGroup
       ? (lastNotification.groupName || 'Group')
-      : (lastNotification.senderName || lastNotification.senderId || 'New message');
+      : (lastNotification.title || lastNotification.senderName || lastNotification.senderId || 'New message');
 
     setToasts(prev => [...prev, {
       id: toastId,
@@ -303,7 +303,9 @@ export default function App() {
       senderId: lastNotification.senderId,
       chatId: lastNotification.chatId,
       isGroup: !!lastNotification.isGroup,
-      body: lastNotification.type === 'text' ? lastNotification.content : `Sent a ${lastNotification.type}`
+      isFriendRequest: !!lastNotification.isFriendRequest,
+      isFriendAccepted: !!lastNotification.isFriendAccepted,
+      body: lastNotification.content || (lastNotification.type === 'text' ? lastNotification.content : `Sent a ${lastNotification.type}`)
     }]);
   }, [lastNotification]);
 
@@ -544,7 +546,11 @@ export default function App() {
             title={t.title || "New message"}
             body={t.body}
             onClick={() => {
-              openChatById(t.chatId, t.senderId, t.isGroup);
+              if (t.isFriendRequest || t.isFriendAccepted) {
+                window.dispatchEvent(new CustomEvent('pulsechat_open_tab', { detail: { tab: 'friends', subTab: t.isFriendRequest ? 'requests' : 'friends' } }));
+              } else {
+                openChatById(t.chatId, t.senderId, t.isGroup);
+              }
               dismissToast(t.id);
             }}
             onDismiss={() => dismissToast(t.id)}
