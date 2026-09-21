@@ -233,7 +233,7 @@ export default function Register({ switchToLogin }) {
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
                 <AppLogo size={56} />
               </div>
-              <h2 style={{ fontSize: '1.65rem', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 0.35rem 0', letterSpacing: '-0.3px' }}>Join PulseChat</h2>
+              <h2 style={{ fontSize: '1.65rem', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 0.35rem 0', letterSpacing: '-0.3px' }}>Create Account</h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: 0 }}>Register with Verified Email or Google</p>
             </div>
 
@@ -367,7 +367,10 @@ export default function Register({ switchToLogin }) {
               </button>
 
               <p style={{ textAlign: 'center', marginTop: '1.4rem', fontSize: '0.88rem', color: 'var(--text-muted)' }}>
-                Already registered? <span onClick={switchToLogin} style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}>Sign In</span>
+                Already have an account?{' '}
+                <span onClick={switchToLogin} style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 700 }}>
+                  Sign In / Log In
+                </span>
               </p>
             </form>
           </div>

@@ -87,7 +87,7 @@ class ErrorBoundary extends React.Component {
 export default function App() {
   const { user, token, loading } = useContext(AuthContext);
   const { socket, lastNotification } = useContext(SocketContext);
-  const [isRegisterView, setIsRegisterView] = useState(false);
+  const [isRegisterView, setIsRegisterView] = useState(true);
   const [activeChat, setActiveChat] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
