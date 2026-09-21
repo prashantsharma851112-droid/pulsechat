@@ -4,6 +4,7 @@ const db = require('../database/db');
 const User = require('../models/User');
 const webpush = require('../utils/webpush');
 const authMiddleware = require('../middleware/authMiddleware');
+const { uploadToCloudinary } = require('../utils/cloudinary');
 
 // Get all registered users (newest users first, up to 200)
 router.get('/', authMiddleware, async (req, res) => {
@@ -68,7 +69,13 @@ router.put('/profile', authMiddleware, async (req, res) => {
     const { displayName, avatar, status, hideReadReceipts } = req.body;
     const updates = {};
     if (displayName) updates.displayName = displayName.trim();
-    if (avatar !== undefined) updates.avatar = avatar;
+    if (avatar !== undefined) {
+      if (avatar && typeof avatar === 'string' && avatar.startsWith('data:')) {
+        updates.avatar = await uploadToCloudinary(avatar, 'pulsechat_avatars', 'image');
+      } else {
+        updates.avatar = avatar;
+      }
+    }
     if (status !== undefined) updates.status = status.trim();
     if (hideReadReceipts !== undefined) updates.hideReadReceipts = Boolean(hideReadReceipts);
 

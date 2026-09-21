@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
 const authMiddleware = require('../middleware/authMiddleware');
+const { uploadToCloudinary } = require('../utils/cloudinary');
 
 const User = require('../models/User');
 
@@ -177,6 +178,27 @@ router.post('/send', authMiddleware, async (req, res) => {
     const isDisappearing = Boolean(chatSetting && chatSetting.disappearingEnabled);
     const expiresAt = isDisappearing ? new Date(Date.now() + (chatSetting.disappearingDuration || 86400) * 1000) : null;
 
+    // Cloudinary Auto-Upload for HTTP sync fallback
+    let finalMediaUrl = mediaUrl || null;
+    let finalAudioUrl = audioUrl || null;
+
+    if (finalMediaUrl && typeof finalMediaUrl === 'string' && finalMediaUrl.startsWith('data:')) {
+      try {
+        const resType = type === 'video' ? 'video' : (type === 'audio' || type === 'voice' ? 'video' : 'auto');
+        finalMediaUrl = await uploadToCloudinary(finalMediaUrl, 'pulsechat_media', resType);
+      } catch (e) {
+        console.warn('Cloudinary upload fallback:', e.message);
+      }
+    }
+
+    if (finalAudioUrl && typeof finalAudioUrl === 'string' && finalAudioUrl.startsWith('data:')) {
+      try {
+        finalAudioUrl = await uploadToCloudinary(finalAudioUrl, 'pulsechat_voice', 'video');
+      } catch (e) {
+        console.warn('Cloudinary audio upload fallback:', e.message);
+      }
+    }
+
     const newMsg = {
       id: 'msg_' + Date.now(),
       clientTempId: clientTempId || null,
@@ -186,8 +208,8 @@ router.post('/send', authMiddleware, async (req, res) => {
       isGroup: !!isGroup,
       content: content || '',
       type: type || 'text',
-      audioUrl: audioUrl || null,
-      mediaUrl: mediaUrl || null,
+      audioUrl: finalAudioUrl,
+      mediaUrl: finalMediaUrl,
       fileName: req.body.fileName || null,
       fileSize: req.body.fileSize || null,
       pollData: pollData || null,

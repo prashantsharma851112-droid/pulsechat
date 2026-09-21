@@ -3,6 +3,7 @@ const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
 const Group = require('../models/Group');
 const User = require('../models/User');
+const { uploadToCloudinary } = require('../utils/cloudinary');
 
 // Create a new group
 router.post('/create', authMiddleware, async (req, res) => {
@@ -15,7 +16,10 @@ router.post('/create', authMiddleware, async (req, res) => {
     const members = Array.from(new Set([req.user.id, ...(memberIds || [])]));
 
     const groupId = 'group_' + Date.now();
-    const groupAvatar = avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${groupId}`;
+    let groupAvatar = avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${groupId}`;
+    if (avatar && typeof avatar === 'string' && avatar.startsWith('data:')) {
+      groupAvatar = await uploadToCloudinary(avatar, 'pulsechat_group_avatars', 'image');
+    }
 
     const newGroup = await Group.create({
       id: groupId,
@@ -97,8 +101,13 @@ router.put('/:groupId', authMiddleware, async (req, res) => {
     if (!group) return res.status(404).json({ error: 'Group not found.' });
 
     if (name && name.trim()) group.name = name.trim();
-    if (description !== undefined) group.description = description.trim();
-    if (avatar) group.avatar = avatar;
+    if (avatar) {
+      if (typeof avatar === 'string' && avatar.startsWith('data:')) {
+        group.avatar = await uploadToCloudinary(avatar, 'pulsechat_group_avatars', 'image');
+      } else {
+        group.avatar = avatar;
+      }
+    }
 
     await group.save();
 

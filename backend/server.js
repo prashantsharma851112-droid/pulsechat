@@ -16,6 +16,8 @@ const userRoutes = require('./routes/users');
 const messageRoutes = require('./routes/messages');
 const groupRoutes = require('./routes/groups');
 const friendRoutes = require('./routes/friends');
+const uploadRoutes = require('./routes/upload');
+const { uploadToCloudinary } = require('./utils/cloudinary');
 
 const app = express();
 const server = http.createServer(app);
@@ -41,6 +43,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/friends', friendRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Catch-all for unhandled /api/* requests so they ALWAYS return JSON 404, NEVER HTML
 app.all('/api/*', (req, res) => {
@@ -239,6 +242,28 @@ io.on('connection', (socket) => {
       const isDisappearing = Boolean(chatSetting && chatSetting.disappearingEnabled);
       const expiresAt = isDisappearing ? new Date(Date.now() + (chatSetting.disappearingDuration || 86400) * 1000) : null;
 
+      // Cloudinary Auto-Upload: Offload heavy Base64 media to Cloudinary CDN
+      // to keep MongoDB Atlas free tier storage 100% clean and fast
+      let finalMediaUrl = mediaUrl || null;
+      let finalAudioUrl = audioUrl || null;
+
+      if (finalMediaUrl && typeof finalMediaUrl === 'string' && finalMediaUrl.startsWith('data:')) {
+        try {
+          const resType = type === 'video' ? 'video' : (type === 'audio' || type === 'voice' ? 'video' : 'auto');
+          finalMediaUrl = await uploadToCloudinary(finalMediaUrl, 'pulsechat_media', resType);
+        } catch (e) {
+          console.warn('Cloudinary upload fallback:', e.message);
+        }
+      }
+
+      if (finalAudioUrl && typeof finalAudioUrl === 'string' && finalAudioUrl.startsWith('data:')) {
+        try {
+          finalAudioUrl = await uploadToCloudinary(finalAudioUrl, 'pulsechat_voice', 'video');
+        } catch (e) {
+          console.warn('Cloudinary audio upload fallback:', e.message);
+        }
+      }
+
       const newMsg = {
         id: 'msg_' + Date.now(),
         clientTempId: clientTempId || null,
@@ -248,8 +273,8 @@ io.on('connection', (socket) => {
         isGroup: !!isGroup,
         content: content || '',
         type: type || 'text',
-        audioUrl: audioUrl || null,
-        mediaUrl: mediaUrl || null,
+        audioUrl: finalAudioUrl,
+        mediaUrl: finalMediaUrl,
         fileName: fileName || null,
         fileSize: fileSize || null,
         pollData: pollData || null,
