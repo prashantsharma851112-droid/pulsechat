@@ -180,12 +180,15 @@ module.exports = {
 
   // Returns everyone the given user has EVER exchanged a message with,
   // ordered by most recent activity, each with the last message preview
-  // and an unread count. Batch-optimized to avoid sequential N+1 database queries.
+  // and an unread count. Optimized with parallel index scans for 0ms latency.
   getRecentConversations: async (myId) => {
-    const messages = await Message.find({ $or: [{ senderId: myId }, { receiverId: myId }] })
-      .sort({ timestamp: -1 })
-      .limit(300)
-      .lean();
+    // Parallel index scans utilizing { senderId: 1, timestamp: -1 } and { receiverId: 1, timestamp: -1 }
+    const [sentMsgs, receivedMsgs] = await Promise.all([
+      Message.find({ senderId: myId }).sort({ timestamp: -1 }).limit(150).lean(),
+      Message.find({ receiverId: myId }).sort({ timestamp: -1 }).limit(150).lean()
+    ]);
+
+    const messages = [...sentMsgs, ...receivedMsgs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
     const seen = new Set();
     const ordered = [];
@@ -201,17 +204,17 @@ module.exports = {
 
     const otherIds = Array.from(seen);
 
-    // 1. Single batch query for all interlocutors
-    const usersList = await User.find({ id: { $in: otherIds } })
-      .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
-      .lean();
-    const userMap = new Map(usersList.map(u => [u.id, u]));
-
-    // 2. Single batch aggregation for unread counts
-    const unreadAgg = await Message.aggregate([
-      { $match: { receiverId: myId, status: { $ne: 'read' }, senderId: { $in: otherIds } } },
-      { $group: { _id: '$senderId', count: { $sum: 1 } } }
+    // 1 & 2. Concurrent batch queries for interlocutors and unread counts
+    const [usersList, unreadAgg] = await Promise.all([
+      User.find({ id: { $in: otherIds } })
+        .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
+        .lean(),
+      Message.aggregate([
+        { $match: { receiverId: myId, status: { $ne: 'read' }, senderId: { $in: otherIds } } },
+        { $group: { _id: '$senderId', count: { $sum: 1 } } }
+      ])
     ]);
+    const userMap = new Map(usersList.map(u => [u.id, u]));
     const unreadMap = new Map(unreadAgg.map(u => [u._id, u.count]));
 
     const results = [];

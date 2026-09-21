@@ -24,6 +24,7 @@ import {
   removeFromOutbox,
   updateRecentChatSnippet,
   mergeIntoAllUsersCache,
+  isCachedFriend,
   isDeviceOnline,
   subscribeToNetworkChanges
 } from '../../utils/offlineStorage';
@@ -42,7 +43,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     return localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'default';
   });
   const [selectedVibe, setSelectedVibe] = useState('⚡ Quick Pulse');
-  const [friendshipStatus, setFriendshipStatus] = useState(() => isGroup ? 'friends' : 'checking');
+
+  const isDirectFriend = isGroup ||
+    (activeChat?.lastMessage !== undefined && activeChat?.lastMessage !== null) ||
+    activeChat?.hasHistory ||
+    activeChat?.isFriend ||
+    (getCachedMessages(chatId).length > 0) ||
+    isCachedFriend(user?.id, activeChat?.id);
+
+  const [friendshipStatus, setFriendshipStatus] = useState(() => isDirectFriend ? 'friends' : 'checking');
   const [friendRequestId, setFriendRequestId] = useState(null);
 
   useEffect(() => {
@@ -299,9 +308,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       setFriendshipStatus('friends');
       return;
     }
-    // Existing conversation history allows chatting
-    if (messages.length > 0) {
+    // Existing conversation history allows instant chatting (0ms)
+    const hasHistory = (activeChat?.lastMessage !== undefined && activeChat?.lastMessage !== null) ||
+      activeChat?.hasHistory ||
+      activeChat?.isFriend ||
+      messages.length > 0 ||
+      isCachedFriend(user?.id, activeChat?.id);
+
+    if (hasHistory) {
       setFriendshipStatus('friends');
+      return;
     }
 
     let isMounted = true;
@@ -320,7 +336,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         .catch(() => {});
     }
     return () => { isMounted = false; };
-  }, [activeChat?.id, isGroup, token, messages.length]);
+  }, [activeChat?.id, activeChat?.lastMessage, activeChat?.hasHistory, activeChat?.isFriend, isGroup, token, messages.length, user?.id]);
 
   // Real-time friendship socket events
   useEffect(() => {

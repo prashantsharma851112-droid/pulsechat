@@ -54,25 +54,37 @@ router.put('/settings/:chatId/disappearing', authMiddleware, async (req, res) =>
   }
 });
 
-// Get Chat Message History
+// Get Chat Message History - ultra fast response, non-blocking background read receipts
 router.get('/:chatId', authMiddleware, async (req, res) => {
-  const currentUser = await User.findOne({ id: req.user.id }).select('hideReadReceipts');
-  const isGhostMode = Boolean(currentUser && currentUser.hideReadReceipts);
+  try {
+    const messages = await db.getMessages(req.params.chatId);
+    res.json(messages);
 
-  if (!isGhostMode) {
-    await db.markChatAsRead(req.params.chatId, req.user.id);
-    const io = req.app.get('io');
-    if (io) {
-      io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-      if (req.params.chatId.includes('_')) {
-        const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
-        if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+    // Non-blocking background read mark and socket emission
+    setImmediate(async () => {
+      try {
+        const currentUser = await User.findOne({ id: req.user.id }).select('hideReadReceipts').lean();
+        const isGhostMode = Boolean(currentUser && currentUser.hideReadReceipts);
+
+        if (!isGhostMode) {
+          await db.markChatAsRead(req.params.chatId, req.user.id);
+          const io = req.app.get('io');
+          if (io) {
+            io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+            if (req.params.chatId.includes('_')) {
+              const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
+              if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+            }
+          }
+        }
+      } catch (bgErr) {
+        console.error('Background read mark error:', bgErr);
       }
-    }
+    });
+  } catch (err) {
+    console.error('Error fetching chat messages:', err);
+    res.status(500).json({ error: 'Failed to fetch messages' });
   }
-
-  const messages = await db.getMessages(req.params.chatId);
-  res.json(messages);
 });
 
 // Mark Chat Messages as Read

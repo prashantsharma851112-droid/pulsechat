@@ -4,6 +4,7 @@ import { SocketContext } from '../../context/SocketContext';
 import { UserPlus, UserCheck, Users, UserX, Check, X, Search, MessageSquare, Clock, CheckCircle2, Sparkles, Zap, Radio, RotateCw } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { parseSafeJson } from '../../utils/imageCompressor';
+import { getCachedFriends, setCachedFriends } from '../../utils/offlineStorage';
 
 export default function FriendsTab({ setActiveChat, onRequestsCountChange, initialSubTab = 'friends', onOpenFullDp }) {
   const { user, token } = useContext(AuthContext);
@@ -18,8 +19,8 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
     }
   }, [initialSubTab]);
 
-  // Data states
-  const [friends, setFriends] = useState([]);
+  // Data states - initialize friends instantly from offline cache (0ms)
+  const [friends, setFriends] = useState(() => getCachedFriends(user?.id));
   const [incomingRequests, setIncomingRequests] = useState([]);
   const [outgoingRequests, setOutgoingRequests] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -41,11 +42,14 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
       const data = await parseSafeJson(res);
       if (data && data.friends) {
         setFriends(data.friends);
+        if (user?.id) {
+          setCachedFriends(user.id, data.friends);
+        }
       }
     } catch (err) {
       console.error('Error fetching friends:', err);
     }
-  }, [token]);
+  }, [token, user?.id]);
 
   // 2. Fetch Requests
   const fetchRequests = useCallback(async () => {

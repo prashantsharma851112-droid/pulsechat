@@ -8,12 +8,15 @@ import FriendsTab from './FriendsTab';
 import { BACKEND_URL } from '../../utils/config';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
 import {
+  getCachedUser,
   getCachedRecentChats,
   setCachedRecentChats,
   getCachedGroups,
   setCachedGroups,
   getCachedAllUsers,
   setCachedAllUsers,
+  getCachedFriends,
+  setCachedFriends,
   mergeIntoAllUsersCache,
   isDeviceOnline,
   subscribeToNetworkChanges
@@ -23,16 +26,21 @@ import { parseSafeJson } from '../../utils/imageCompressor';
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
   const { user, logout, token } = useContext(AuthContext);
   const { socket, onlineUsers, lastNotification } = useContext(SocketContext);
+  const currentUid = user?.id || getCachedUser()?.id;
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [recentChats, setRecentChats] = useState(() => getCachedRecentChats(user?.id));
-  const [groups, setGroups] = useState(() => getCachedGroups(user?.id));
-  const [allUsers, setAllUsers] = useState(() => getCachedAllUsers(user?.id));
+  const [recentChats, setRecentChats] = useState(() => getCachedRecentChats(currentUid));
+  const [groups, setGroups] = useState(() => getCachedGroups(currentUid));
+  const [allUsers, setAllUsers] = useState(() => getCachedAllUsers(currentUid));
   const [isOnline, setIsOnline] = useState(() => isDeviceOnline());
   const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'groups' | 'friends'
   const [friendsSubTab, setFriendsSubTab] = useState('friends');
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
-  const [friendIdsSet, setFriendIdsSet] = useState(new Set());
+  const [friendIdsSet, setFriendIdsSet] = useState(() => {
+    const cached = getCachedFriends(currentUid);
+    return new Set(cached.map(f => f.id));
+  });
   const [outgoingPendingIds, setOutgoingPendingIds] = useState(new Set());
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
 
@@ -71,6 +79,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         const fData = await friendsRes.value.json();
         if (fData?.friends) {
           setFriendIdsSet(new Set(fData.friends.map(f => f.id)));
+          if (user?.id) {
+            setCachedFriends(user.id, fData.friends);
+          }
         }
       }
     } catch {}
@@ -328,18 +339,24 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   useEffect(() => {
     if (activeChat) {
       setRecentChats(prev => prev.map(u => u.id === activeChat.id ? { ...u, unreadCount: 0 } : u));
-      loadRecentChats();
     }
-  }, [activeChat, loadRecentChats]);
+  }, [activeChat]);
 
   useEffect(() => {
     if (!socket) return;
-    const handleRefresh = () => {
-      loadRecentChats();
+
+    // Instant local read update (0ms, no network roundtrip needed)
+    const handleChatRead = ({ chatId, userId }) => {
+      if (userId === user?.id) {
+        setRecentChats(prev => prev.map(c => {
+          if (c.id === chatId || (chatId && chatId.includes(c.id))) {
+            return { ...c, unreadCount: 0 };
+          }
+          return c;
+        }));
+      }
     };
-    socket.on('chat_read_update', handleRefresh);
-    socket.on('messages_delivered', handleRefresh);
-    socket.on('message_delivered_update', handleRefresh);
+    socket.on('chat_read_update', handleChatRead);
 
     const handleNewUser = (newUser) => {
       if (!newUser || newUser.id === user?.id) return;
@@ -377,13 +394,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     socket.on('user_profile_updated', handleProfileUpdate);
 
     return () => {
-      socket.off('chat_read_update', handleRefresh);
-      socket.off('messages_delivered', handleRefresh);
-      socket.off('message_delivered_update', handleRefresh);
+      socket.off('chat_read_update', handleChatRead);
       socket.off('new_user_registered', handleNewUser);
       socket.off('user_profile_updated', handleProfileUpdate);
     };
-  }, [socket, loadRecentChats, user?.id]);
+  }, [socket, user?.id]);
 
   // Search Users — instant 0ms local cache display + 150ms debounced server search
   useEffect(() => {

@@ -8,7 +8,8 @@ const STORAGE_KEYS = {
   GROUPS_PREFIX: 'pulsechat_groups_',
   MESSAGES_PREFIX: 'pulsechat_msgs_',
   OUTBOX_PREFIX: 'pulsechat_outbox_',
-  ALL_USERS_PREFIX: 'pulsechat_allusers_'
+  ALL_USERS_PREFIX: 'pulsechat_allusers_',
+  FRIENDS_PREFIX: 'pulsechat_friends_'
 };
 
 // Safe JSON parser
@@ -105,6 +106,27 @@ export function setCachedGroups(userId, groups) {
   } catch (e) {
     console.warn('LocalStorage quota exceeded setting groups', e);
   }
+}
+
+// Friends Cache (per user)
+export function getCachedFriends(userId) {
+  if (typeof window === 'undefined' || !userId) return [];
+  return safeParse(localStorage.getItem(`${STORAGE_KEYS.FRIENDS_PREFIX}${userId}`), []);
+}
+
+export function setCachedFriends(userId, friends) {
+  if (typeof window === 'undefined' || !userId || !Array.isArray(friends)) return;
+  try {
+    localStorage.setItem(`${STORAGE_KEYS.FRIENDS_PREFIX}${userId}`, JSON.stringify(friends));
+  } catch (e) {
+    console.warn('LocalStorage quota exceeded setting friends', e);
+  }
+}
+
+export function isCachedFriend(userId, targetId) {
+  if (!userId || !targetId) return false;
+  const friends = getCachedFriends(userId);
+  return friends.some(f => f.id === targetId || f.username === targetId);
 }
 
 // All Known Users Cache (per user — everyone the app has fetched from /api/users)
