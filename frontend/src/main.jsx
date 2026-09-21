@@ -5,6 +5,10 @@ import './index.css';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { SocketProvider } from './context/SocketContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
+import { initSecurityShield } from './utils/securityShield.js';
+
+// Initialize anti-inspect and code protection shield
+initSecurityShield();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
