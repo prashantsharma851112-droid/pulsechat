@@ -1,7 +1,8 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Upload, Camera, Lock, User as UserIcon, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Upload, Camera, Lock, User as UserIcon, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
+import { compressImage, parseSafeJson } from '../../utils/imageCompressor';
 
 const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/bottts/svg?seed=alex',
@@ -27,6 +28,8 @@ export default function ProfileModal({ onClose }) {
   const [status, setStatus] = useState(user.status || '');
   const [avatar, setAvatar] = useState(user.avatar);
   const [loading, setLoading] = useState(false);
+  const [compressing, setCompressing] = useState(false);
+  const [profileError, setProfileError] = useState('');
 
   // Password Change States
   const [currentPassword, setCurrentPassword] = useState('');
@@ -38,19 +41,27 @@ export default function ProfileModal({ onClose }) {
   const [passError, setPassError] = useState('');
   const [passSuccess, setPassSuccess] = useState('');
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setAvatar(reader.result);
-    };
-    reader.readAsDataURL(file);
+    setProfileError('');
+    setCompressing(true);
+    try {
+      const compressed = await compressImage(file, 360, 360, 0.82);
+      setAvatar(compressed);
+    } catch (err) {
+      console.warn('Image compression failed:', err);
+      setProfileError(err.message || 'Failed to process selected image.');
+    } finally {
+      setCompressing(false);
+      e.target.value = '';
+    }
   };
 
   const handleSaveProfile = async () => {
     setLoading(true);
+    setProfileError('');
     try {
       const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
         method: 'PUT',
@@ -58,17 +69,21 @@ export default function ProfileModal({ onClose }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ displayName, avatar, status })
+        body: JSON.stringify({
+          displayName: (displayName || '').trim(),
+          avatar,
+          status: (status || '').trim()
+        })
       });
-      const data = await res.json();
-      if (res.ok) {
+      const data = await parseSafeJson(res);
+      if (res.ok && data.user) {
         updateUserProfile(data.user);
         onClose();
       } else {
-        alert(data.error || "Failed to update profile.");
+        setProfileError(data.error || 'Failed to update profile.');
       }
     } catch (err) {
-      alert("Failed to update profile.");
+      setProfileError(err.message || 'Failed to update profile.');
     } finally {
       setLoading(false);
     }
@@ -187,6 +202,24 @@ export default function ProfileModal({ onClose }) {
 
         {activeTab === 'profile' ? (
           <div style={{ padding: '1.5rem' }}>
+            {profileError && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid #ef4444',
+                color: '#ef4444',
+                padding: '8px 12px',
+                borderRadius: '10px',
+                fontSize: '0.85rem',
+                marginBottom: '1rem'
+              }}>
+                <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                <span>{profileError}</span>
+              </div>
+            )}
+
             {/* Current DP Avatar Preview with Upload Trigger */}
             <div style={{ textAlign: 'center', marginBottom: '1.5rem', position: 'relative' }}>
               <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -212,9 +245,9 @@ export default function ProfileModal({ onClose }) {
                     cursor: 'pointer',
                     boxShadow: '0 2px 6px rgba(0,0,0,0.4)'
                   }}
-                  title="Upload Photo (Any Image Size)"
+                  title="Upload Photo (Instant Compressed)"
                 >
-                  <Camera size={16} />
+                  {compressing ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
                 </label>
                 <input
                   id="dp-file-input"
@@ -226,7 +259,11 @@ export default function ProfileModal({ onClose }) {
               </div>
 
               <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.6rem' }}>
-                Upload any image size or pick an avatar preset below!
+                {compressing ? (
+                  <span style={{ color: 'var(--accent)', fontWeight: 600 }}>Optimizing & compressing photo...</span>
+                ) : (
+                  'Upload any image or pick an avatar preset below!'
+                )}
               </p>
             </div>
 

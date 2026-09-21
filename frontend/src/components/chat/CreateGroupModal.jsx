@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { X, Users, Check, Search, Camera, Image, Sparkles, Loader2 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
+import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
 import { getCachedAllUsers, mergeIntoAllUsersCache, getCachedRecentChats } from '../../utils/offlineStorage';
+import { compressImage, parseSafeJson } from '../../utils/imageCompressor';
 
 const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/identicon/svg?seed=group1',
@@ -13,19 +15,21 @@ const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/bottts/svg?seed=pulse'
 ];
 
-export default function CreateGroupModal({ onClose, onGroupCreated }) {
+export default function CreateGroupModal({ onClose, onGroupCreated, preloadedUsers = [] }) {
   const { token, user: currentUser } = useContext(AuthContext);
+  const { socket } = useContext(SocketContext) || {};
   const [groupName, setGroupName] = useState('');
   const [description, setDescription] = useState('');
   const [avatar, setAvatar] = useState(PRESET_AVATARS[0]);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Instant offline cache preload so users show with 0ms latency
+  // Instant offline cache + preloaded users preload so members show with 0ms latency
   const [allUsers, setAllUsers] = useState(() => {
+    const passed = Array.isArray(preloadedUsers) ? preloadedUsers : [];
     const cached = getCachedAllUsers(currentUser?.id) || [];
     const recent = getCachedRecentChats(currentUser?.id) || [];
     const map = new Map();
-    [...cached, ...recent].forEach(u => {
+    [...passed, ...cached, ...recent].forEach(u => {
       if (u && u.id && u.id !== currentUser?.id && !u.isGroup) {
         map.set(u.id, u);
       }
@@ -48,6 +52,21 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
     }
   }, [token, currentUser?.id]);
 
+  // Live socket event for any new user registered while modal is open
+  useEffect(() => {
+    if (!socket) return;
+    const handleNewUser = (newUser) => {
+      if (newUser && newUser.id && newUser.id !== currentUser?.id) {
+        setAllUsers(prev => {
+          if (prev.some(u => u.id === newUser.id)) return prev;
+          return [newUser, ...prev];
+        });
+      }
+    };
+    socket.on('new_user_registered', handleNewUser);
+    return () => socket.off('new_user_registered', handleNewUser);
+  }, [socket, currentUser?.id]);
+
   const fetchUsers = async () => {
     try {
       // Fetch both all users and friends in parallel
@@ -58,11 +77,11 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
 
       const loadedList = [];
       if (usersRes.status === 'fulfilled' && usersRes.value.ok) {
-        const uData = await usersRes.value.json();
+        const uData = await parseSafeJson(usersRes.value);
         if (Array.isArray(uData)) loadedList.push(...uData);
       }
       if (friendsRes.status === 'fulfilled' && friendsRes.value.ok) {
-        const fData = await friendsRes.value.json();
+        const fData = await parseSafeJson(friendsRes.value);
         if (fData?.friends && Array.isArray(fData.friends)) loadedList.push(...fData.friends);
       }
 
@@ -99,7 +118,7 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
         const res = await fetch(`${BACKEND_URL}/api/users/search?q=${encodeURIComponent(q)}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        const serverResults = await res.json();
+        const serverResults = await parseSafeJson(res);
         if (Array.isArray(serverResults) && serverResults.length > 0) {
           const cleanServerUsers = serverResults.filter(u => u && u.id && u.id !== currentUser?.id);
           setAllUsers(prev => {
@@ -142,14 +161,17 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
     }
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setAvatar(event.target.result);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImage(file, 360, 360, 0.82);
+        setAvatar(compressed);
+      } catch (err) {
+        setError(err.message || 'Failed to process group avatar');
+      } finally {
+        e.target.value = '';
+      }
     }
   };
 
@@ -182,13 +204,13 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
         })
       });
 
-      const data = await res.json();
+      const data = await parseSafeJson(res);
       if (!res.ok) throw new Error(data.error || 'Failed to create group');
 
       if (onGroupCreated) onGroupCreated(data);
       onClose();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to create group');
     } finally {
       setLoading(false);
     }

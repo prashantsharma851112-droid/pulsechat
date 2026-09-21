@@ -21,7 +21,19 @@ const app = express();
 const server = http.createServer(app);
 
 app.use(cors({ origin: '*' }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+
+// Middleware to catch body parser errors (e.g. 413 Payload Too Large) as JSON instead of HTML
+app.use((err, req, res, next) => {
+  if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+    return res.status(413).json({ error: 'File size too large. Please upload an image under 10MB.' });
+  }
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ error: 'Invalid JSON request payload.' });
+  }
+  next(err);
+});
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -29,6 +41,11 @@ app.use('/api/users', userRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/friends', friendRoutes);
+
+// Catch-all for unhandled /api/* requests so they ALWAYS return JSON 404, NEVER HTML
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ error: `API route ${req.method} ${req.originalUrl} not found.` });
+});
 
 // Serve Frontend static files if built together
 const frontendDist = path.join(__dirname, '../frontend/dist');

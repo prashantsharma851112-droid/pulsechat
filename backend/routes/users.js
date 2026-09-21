@@ -5,15 +5,17 @@ const User = require('../models/User');
 const webpush = require('../utils/webpush');
 const authMiddleware = require('../middleware/authMiddleware');
 
-// Get all registered users (except current user)
+// Get all registered users (newest users first, up to 200)
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const results = await User.find({ id: { $ne: req.user.id } })
-      .select('id username displayName avatar isEmailVerified status email')
-      .limit(100)
+      .sort({ createdAt: -1, _id: -1 })
+      .select('id username displayName avatar isEmailVerified status email createdAt')
+      .limit(200)
       .lean();
     res.json(results);
   } catch (err) {
+    console.error('Fetch users error:', err);
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
@@ -25,44 +27,67 @@ router.get('/recent', authMiddleware, async (req, res) => {
   res.json(conversations);
 });
 
-// Search users by Name, @username, or Email (instant indexed regex lookup)
+// Search users by Name, @username, or Email (instant indexed regex lookup with regex escaping)
 router.get('/search', authMiddleware, async (req, res) => {
   try {
-    const query = (req.query.q || '').toLowerCase().trim().replace(/^@/, '');
+    const rawQuery = (req.query.q || '').trim();
+    const query = rawQuery.toLowerCase().replace(/^@/, '');
     if (!query) return res.json([]);
+
+    // Escape any regex special characters to prevent syntax errors
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
     const results = await User.find({
       id: { $ne: req.user.id },
       $or: [
-        { username: { $regex: query, $options: 'i' } },
-        { displayName: { $regex: query, $options: 'i' } },
-        { email: { $regex: query, $options: 'i' } }
+        { username: { $regex: escapedQuery, $options: 'i' } },
+        { displayName: { $regex: escapedQuery, $options: 'i' } },
+        { email: { $regex: escapedQuery, $options: 'i' } }
       ]
     })
-    .select('id username displayName avatar isEmailVerified status email')
+    .sort({ createdAt: -1, _id: -1 })
+    .select('id username displayName avatar isEmailVerified status email createdAt')
     .limit(50)
     .lean();
 
     res.json(results);
   } catch (err) {
+    console.error('Search users error:', err);
     res.status(500).json({ error: 'Failed to search users' });
   }
 });
 
 // Update Profile (DP / Avatar, Display Name, Status/Bio, Privacy)
 router.put('/profile', authMiddleware, async (req, res) => {
-  const { displayName, avatar, status, hideReadReceipts } = req.body;
-  const updates = {};
-  if (displayName) updates.displayName = displayName;
-  if (avatar) updates.avatar = avatar;
-  if (status !== undefined) updates.status = status;
-  if (hideReadReceipts !== undefined) updates.hideReadReceipts = Boolean(hideReadReceipts);
+  try {
+    const { displayName, avatar, status, hideReadReceipts } = req.body;
+    const updates = {};
+    if (displayName) updates.displayName = displayName.trim();
+    if (avatar) updates.avatar = avatar;
+    if (status !== undefined) updates.status = status.trim();
+    if (hideReadReceipts !== undefined) updates.hideReadReceipts = Boolean(hideReadReceipts);
 
-  const updatedUser = await db.updateUser(req.user.id, updates);
-  if (!updatedUser) return res.status(404).json({ error: 'User not found' });
+    const updatedUser = await db.updateUser(req.user.id, updates);
+    if (!updatedUser) return res.status(404).json({ error: 'User not found' });
 
-  const { passwordHash, ...userWithoutPass } = updatedUser;
-  res.json({ user: userWithoutPass });
+    const { passwordHash, ...userWithoutPass } = updatedUser;
+
+    // Broadcast profile update in real time to all connected users
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('user_profile_updated', {
+        userId: req.user.id,
+        displayName: userWithoutPass.displayName,
+        avatar: userWithoutPass.avatar,
+        status: userWithoutPass.status
+      });
+    }
+
+    res.json({ user: userWithoutPass });
+  } catch (err) {
+    console.error('Profile update error:', err);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
 });
 
 // Update Privacy (Hide Read Receipts / Unseen Mode)

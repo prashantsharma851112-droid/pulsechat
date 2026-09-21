@@ -366,6 +366,22 @@ router.post('/verify-otp', async (req, res) => {
     );
 
     const { passwordHash: _, otpCode: __, ...safeUser } = updated;
+
+    // Broadcast new user to all connected clients in real time
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('new_user_registered', {
+        id: safeUser.id,
+        username: safeUser.username,
+        displayName: safeUser.displayName,
+        avatar: safeUser.avatar,
+        status: safeUser.status,
+        isEmailVerified: safeUser.isEmailVerified,
+        email: safeUser.email,
+        createdAt: safeUser.createdAt
+      });
+    }
+
     res.json({
       success: true,
       message: 'Email verified successfully!',
@@ -525,6 +541,20 @@ router.post('/google', async (req, res) => {
 
       await db.saveUser(newUser);
       user = newUser;
+
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('new_user_registered', {
+          id: newUser.id,
+          username: newUser.username,
+          displayName: newUser.displayName,
+          avatar: newUser.avatar,
+          status: newUser.status,
+          isEmailVerified: newUser.isEmailVerified,
+          email: newUser.email,
+          createdAt: newUser.createdAt
+        });
+      }
     }
 
     // Sign JWT token

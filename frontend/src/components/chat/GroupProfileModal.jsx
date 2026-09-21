@@ -3,6 +3,7 @@ import { X, Users, Camera, Edit2, Check, UserPlus, Trash2, LogOut, Phone, Video,
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
+import { compressImage, parseSafeJson } from '../../utils/imageCompressor';
 
 export default function GroupProfileModal({ group, onClose, onGroupUpdated, onStartCall, onOpenFullDp }) {
   const { user: currentUser, token } = useContext(AuthContext);
@@ -77,15 +78,18 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
     socket.emit('toggle_disappearing', { chatId: group.id, enabled: newVal });
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setEditAvatar(event.target.result);
+      try {
+        const compressed = await compressImage(file, 360, 360, 0.82);
+        setEditAvatar(compressed);
         if (!isEditing) setIsEditing(true);
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        alert(err.message || 'Failed to process image');
+      } finally {
+        e.target.value = '';
+      }
     }
   };
 
@@ -105,7 +109,7 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
         })
       });
 
-      const data = await res.json();
+      const data = await parseSafeJson(res);
       if (!res.ok) throw new Error(data.error || 'Failed to update group');
 
       setGroupData(data);
@@ -126,7 +130,7 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
       const res = await fetch(`${BACKEND_URL}/api/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
+      const data = await parseSafeJson(res);
       if (Array.isArray(data)) {
         const currentMemberIds = groupData.members || [];
         setAvailableUsers(data.filter(u => !currentMemberIds.includes(u.id)));

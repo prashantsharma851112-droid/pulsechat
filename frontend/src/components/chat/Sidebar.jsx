@@ -18,6 +18,7 @@ import {
   isDeviceOnline,
   subscribeToNetworkChanges
 } from '../../utils/offlineStorage';
+import { parseSafeJson } from '../../utils/imageCompressor';
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
   const { user, logout, token } = useContext(AuthContext);
@@ -184,7 +185,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     fetch(`${BACKEND_URL}/api/users/recent`, {
       headers: { Authorization: `Bearer ${token}` }
     })
-      .then(res => res.json())
+      .then(res => parseSafeJson(res))
       .then(data => {
         if (Array.isArray(data)) {
           const mapped = data.map(item => {
@@ -213,7 +214,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     fetch(`${BACKEND_URL}/api/groups`, {
       headers: { Authorization: `Bearer ${token}` }
     })
-      .then(res => res.json())
+      .then(res => parseSafeJson(res))
       .then(data => {
         if (Array.isArray(data)) {
           setGroups(data);
@@ -236,7 +237,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     fetch(`${BACKEND_URL}/api/users`, {
       headers: { Authorization: `Bearer ${token}` }
     })
-      .then(res => res.json())
+      .then(res => parseSafeJson(res))
       .then(data => {
         if (Array.isArray(data)) {
           setAllUsers(data);
@@ -277,12 +278,50 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     socket.on('chat_read_update', handleRefresh);
     socket.on('messages_delivered', handleRefresh);
     socket.on('message_delivered_update', handleRefresh);
+
+    const handleNewUser = (newUser) => {
+      if (!newUser || newUser.id === user?.id) return;
+      setAllUsers(prev => {
+        if (prev.some(u => u.id === newUser.id)) return prev;
+        const next = [newUser, ...prev];
+        if (user?.id) setCachedAllUsers(user.id, next);
+        return next;
+      });
+    };
+
+    const handleProfileUpdate = ({ userId, displayName, avatar, status }) => {
+      setAllUsers(prev => {
+        const next = prev.map(u => u.id === userId ? {
+          ...u,
+          ...(displayName && { displayName }),
+          ...(avatar && { avatar }),
+          ...(status && { status })
+        } : u);
+        if (user?.id) setCachedAllUsers(user.id, next);
+        return next;
+      });
+      setRecentChats(prev => {
+        const next = prev.map(u => u.id === userId ? {
+          ...u,
+          ...(displayName && { displayName }),
+          ...(avatar && { avatar })
+        } : u);
+        if (user?.id) setCachedRecentChats(user.id, next);
+        return next;
+      });
+    };
+
+    socket.on('new_user_registered', handleNewUser);
+    socket.on('user_profile_updated', handleProfileUpdate);
+
     return () => {
       socket.off('chat_read_update', handleRefresh);
       socket.off('messages_delivered', handleRefresh);
       socket.off('message_delivered_update', handleRefresh);
+      socket.off('new_user_registered', handleNewUser);
+      socket.off('user_profile_updated', handleProfileUpdate);
     };
-  }, [socket, loadRecentChats]);
+  }, [socket, loadRecentChats, user?.id]);
 
   // Search Users — instant 0ms local cache display + 150ms debounced server search
   useEffect(() => {
@@ -308,7 +347,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     const localMatches = combined.filter(u => {
       const nameMatch = (u.displayName || '').toLowerCase().includes(q);
       const usernameMatch = (u.username || '').toLowerCase().includes(q);
-      return nameMatch || usernameMatch;
+      const emailMatch = (u.email || '').toLowerCase().includes(q);
+      return nameMatch || usernameMatch || emailMatch;
     });
 
     setSearchResults(localMatches);
@@ -319,17 +359,21 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       fetch(`${BACKEND_URL}/api/users/search?q=${encodeURIComponent(q)}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
-        .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data)) {
-            if (user?.id && data.length > 0) mergeIntoAllUsersCache(user.id, data);
-            const serverIds = new Set(data.map(u => u.id));
-            const merged = [
-              ...data,
-              ...localMatches.filter(u => !serverIds.has(u.id))
-            ];
-            setSearchResults(merged);
-          }
+        .then(async (res) => {
+          if (!res.ok) return;
+          const text = await res.text();
+          try {
+            const data = JSON.parse(text);
+            if (Array.isArray(data)) {
+              if (user?.id && data.length > 0) mergeIntoAllUsersCache(user.id, data);
+              const serverIds = new Set(data.map(u => u.id));
+              const merged = [
+                ...data,
+                ...localMatches.filter(u => !serverIds.has(u.id))
+              ];
+              setSearchResults(merged);
+            }
+          } catch (e) {}
         })
         .catch(() => {});
     }, 150);
@@ -867,6 +911,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       {showCreateGroupModal && (
         <CreateGroupModal
           onClose={() => setShowCreateGroupModal(false)}
+          preloadedUsers={allUsers}
           onGroupCreated={(newGroup) => {
             loadGroups();
             handleSelectGroup(newGroup);

@@ -229,19 +229,35 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
         const res = await fetch(`${BACKEND_URL}/api/users/search?q=${encodeURIComponent(addSearchQuery.trim())}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        const usersList = await res.json();
+        if (!res.ok) return;
+        const text = await res.text();
+        let usersList = [];
+        try {
+          usersList = JSON.parse(text);
+        } catch (e) {
+          return;
+        }
+
         if (Array.isArray(usersList)) {
           setAddSearchResults(usersList);
-          // Check friendship status for each result
-          usersList.forEach(async (u) => {
-            try {
-              const statusRes = await fetch(`${BACKEND_URL}/api/friends/status/${u.id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              const statusData = await statusRes.json();
-              setRequestStatusMap(prev => ({ ...prev, [u.id]: statusData }));
-            } catch {}
+          // Instant local status mapping from existing friends & requests (0ms, no network spam)
+          const friendIds = new Set(friends.map(f => f.id));
+          const outgoingMap = new Map(outgoingRequests.map(r => [r.receiverId || r.receiver?.id, r.id]));
+          const incomingMap = new Map(incomingRequests.map(r => [r.senderId || r.sender?.id, r.id]));
+
+          const newStatusMap = {};
+          usersList.forEach(u => {
+            if (friendIds.has(u.id)) {
+              newStatusMap[u.id] = { status: 'friends' };
+            } else if (outgoingMap.has(u.id)) {
+              newStatusMap[u.id] = { status: 'pending_sent', requestId: outgoingMap.get(u.id) };
+            } else if (incomingMap.has(u.id)) {
+              newStatusMap[u.id] = { status: 'pending_received', requestId: incomingMap.get(u.id) };
+            } else {
+              newStatusMap[u.id] = { status: 'none' };
+            }
           });
+          setRequestStatusMap(prev => ({ ...prev, ...newStatusMap }));
         }
       } catch (err) {
         console.error('Error searching users:', err);
