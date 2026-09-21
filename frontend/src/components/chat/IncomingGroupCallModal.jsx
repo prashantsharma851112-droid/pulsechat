@@ -4,6 +4,17 @@ import { Phone, PhoneOff, Video, Users } from 'lucide-react';
 export default function IncomingGroupCallModal({ callData, onAccept, onDecline }) {
   const isVideo = callData?.isVideo;
 
+  const handleAccept = () => {
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        const ctx = new AudioContextClass();
+        ctx.resume().catch(() => {});
+      }
+    } catch (e) {}
+    onAccept();
+  };
+
   return (
     <div className="incoming-call-overlay" style={{ zIndex: 12500 }}>
       <div className="incoming-call-card" style={{ maxWidth: '400px' }}>
@@ -37,7 +48,7 @@ export default function IncomingGroupCallModal({ callData, onAccept, onDecline }
           </button>
 
           <button
-            onClick={onAccept}
+            onClick={handleAccept}
             className="inc-action-btn inc-accept"
             title="Accept & Join Group Call"
             style={{ width: '54px', height: '54px', borderRadius: '50%', background: '#10b981', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}

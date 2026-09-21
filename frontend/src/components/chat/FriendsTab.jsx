@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { UserPlus, UserCheck, Users, UserX, Check, X, Search, MessageSquare, Clock, CheckCircle2, Sparkles, Zap, Radio } from 'lucide-react';
+import { UserPlus, UserCheck, Users, UserX, Check, X, Search, MessageSquare, Clock, CheckCircle2, Sparkles, Zap, Radio, RotateCw } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { parseSafeJson } from '../../utils/imageCompressor';
 
@@ -74,6 +74,24 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
     setLoading(true);
     Promise.all([fetchFriends(), fetchRequests()]).finally(() => setLoading(false));
   }, [fetchFriends, fetchRequests]);
+
+  // Immediately re-fetch whenever user switches subtabs
+  useEffect(() => {
+    if (subTab === 'requests') {
+      fetchRequests();
+    } else if (subTab === 'friends') {
+      fetchFriends();
+    }
+  }, [subTab, fetchRequests, fetchFriends]);
+
+  // Periodic safety polling every 4s while on the requests subtab to guarantee zero missed requests
+  useEffect(() => {
+    if (subTab !== 'requests') return;
+    const interval = setInterval(() => {
+      fetchRequests();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [subTab, fetchRequests]);
 
   // Socket real-time 0ms instant event listeners
   useEffect(() => {
@@ -591,6 +609,17 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                 <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
                   Incoming Frequencies ({incomingRequests.length})
                 </h4>
+                <button
+                  onClick={() => {
+                    setLoading(true);
+                    Promise.all([fetchFriends(), fetchRequests()]).finally(() => setLoading(false));
+                  }}
+                  className="icon-btn-ghost"
+                  title="Refresh Frequencies"
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: 'var(--accent)', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '8px', cursor: 'pointer', padding: '4px 8px', fontWeight: 600 }}
+                >
+                  <RotateCw size={12} className={loading ? 'spin' : ''} /> Refresh
+                </button>
               </div>
 
               {incomingRequests.length === 0 ? (

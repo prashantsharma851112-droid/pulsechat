@@ -13,6 +13,7 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
   const [callStatus, setCallStatus] = useState(isCaller ? 'Calling...' : 'Connecting...');
   const [duration, setDuration] = useState(0);
   const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
+  const [audioBlocked, setAudioBlocked] = useState(false);
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -82,7 +83,21 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
         { urls: 'stun:stun3.l.google.com:19302' },
         { urls: 'stun:stun4.l.google.com:19302' },
         { urls: 'stun:global.stun.twilio.com:3478' },
-        { urls: 'stun:stun.services.mozilla.com' }
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelay',
+          credential: 'openrelay'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelay',
+          credential: 'openrelay'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+          username: 'openrelay',
+          credential: 'openrelay'
+        }
       ],
       iceCandidatePoolSize: 10
     };
@@ -112,6 +127,31 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
       }
     };
 
+    const attachAndPlayRemoteStreams = () => {
+      // 1. Audio stream playback via dedicated element
+      if (remoteAudioRef.current) {
+        if (remoteAudioRef.current.srcObject !== remoteStreamRef.current) {
+          remoteAudioRef.current.srcObject = remoteStreamRef.current;
+        }
+        remoteAudioRef.current.play().then(() => {
+          setAudioBlocked(false);
+        }).catch(err => {
+          console.warn("Remote audio play error (autoplay blocked):", err);
+          setAudioBlocked(true);
+        });
+      }
+
+      // 2. Video stream playback (video element is muted to prevent echo/blocking)
+      if (remoteVideoRef.current) {
+        if (remoteVideoRef.current.srcObject !== remoteStreamRef.current) {
+          remoteVideoRef.current.srcObject = remoteStreamRef.current;
+        }
+        if (isVideo) {
+          remoteVideoRef.current.play().catch(err => console.warn("Remote video play error:", err));
+        }
+      }
+    };
+
     // Remote Track Handler
     pc.ontrack = (event) => {
       console.log('⚡ Remote track event:', event.track.kind, event);
@@ -127,16 +167,12 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
         setHasRemoteVideo(true);
       }
 
-      if (remoteVideoRef.current && remoteVideoRef.current.srcObject !== remoteStreamRef.current) {
-        remoteVideoRef.current.srcObject = remoteStreamRef.current;
-        remoteVideoRef.current.play().catch(err => console.warn("Remote video play error:", err));
-      }
+      event.track.onunmute = () => {
+        console.log('⚡ Remote track unmuted:', event.track.kind);
+        attachAndPlayRemoteStreams();
+      };
 
-      if (remoteAudioRef.current && remoteAudioRef.current.srcObject !== remoteStreamRef.current) {
-        remoteAudioRef.current.srcObject = remoteStreamRef.current;
-        remoteAudioRef.current.play().catch(err => console.warn("Remote audio play error:", err));
-      }
-
+      attachAndPlayRemoteStreams();
       setCallStatus('Connected');
     };
 
@@ -155,14 +191,24 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
       let stream = null;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          },
           video: isVideo ? { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' } : false
         });
       } catch (err) {
         console.warn('Full stream failed, trying audio fallback:', err);
         if (isVideo) {
           try {
-            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+              }
+            });
             setVideoOff(true);
           } catch (err2) {
             console.error('Audio fallback also failed:', err2);
@@ -191,7 +237,10 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
       const currentUserId = currentUser?.id || currentUser?._id;
 
       if (isCaller) {
-        const offer = await pc.createOffer();
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: Boolean(isVideo)
+        });
         await pc.setLocalDescription(offer);
 
         socket.emit('call_user', {
@@ -206,7 +255,10 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal));
           await flushPendingCandidates();
-          const answer = await pc.createAnswer();
+          const answer = await pc.createAnswer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: Boolean(isVideo)
+          });
           await pc.setLocalDescription(answer);
 
           socket.emit('answer_call', {
@@ -368,9 +420,62 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
   };
 
   return (
-    <div className="call-modal-overlay">
-      {/* Hidden dedicated audio playback element for audio calls */}
-      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
+    <div
+      className="call-modal-overlay"
+      onClick={() => {
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.play().then(() => setAudioBlocked(false)).catch(() => {});
+        }
+      }}
+    >
+      {/* Hidden dedicated off-screen audio playback element (NOT display:none so browser audio engine never suspends) */}
+      <audio
+        ref={remoteAudioRef}
+        autoPlay
+        playsInline
+        controls={false}
+        style={{
+          position: 'fixed',
+          top: '-9999px',
+          left: '-9999px',
+          width: '1px',
+          height: '1px',
+          opacity: 0,
+          pointerEvents: 'none',
+          zIndex: -1
+        }}
+      />
+
+      {audioBlocked && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            if (remoteAudioRef.current) {
+              remoteAudioRef.current.play().then(() => setAudioBlocked(false)).catch(() => {});
+            }
+          }}
+          style={{
+            position: 'absolute',
+            top: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 10001,
+            background: '#ef4444',
+            color: '#fff',
+            padding: '8px 18px',
+            borderRadius: '24px',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            boxShadow: '0 8px 24px rgba(239, 68, 68, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          🔊 Audio Paused by Browser — Tap to Enable Sound
+        </div>
+      )}
 
       <div className="call-modal-container">
         {/* Call Info Header */}
@@ -388,11 +493,12 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
 
         {/* Video Area */}
         <div className="call-video-grid">
-          {/* Remote Video Stream */}
+          {/* Remote Video Stream (muted so remoteAudioRef solely handles audio without interference/autoplay blockage) */}
           <div className="remote-video-container">
             <video
               ref={remoteVideoRef}
               autoPlay
+              muted
               playsInline
               className="remote-video-element"
             />

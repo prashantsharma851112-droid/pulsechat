@@ -41,14 +41,33 @@ export default function GroupCallModal({ group, isVideo, isCaller, onClose }) {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' }
+        { urls: 'stun:stun2.l.google.com:19302' },
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelay',
+          credential: 'openrelay'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelay',
+          credential: 'openrelay'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+          username: 'openrelay',
+          credential: 'openrelay'
+        }
       ]
     };
 
     const setupLocalStream = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          },
           video: isVideo ? { width: { ideal: 640 }, height: { ideal: 480 } } : false
         });
 
@@ -122,6 +141,14 @@ export default function GroupCallModal({ group, isVideo, isCaller, onClose }) {
           mediaElem.srcObject = remoteStream;
           mediaElem.play().catch(e => console.warn(e));
         }
+
+        event.track.onunmute = () => {
+          const el = remoteVideoRefs.current[targetSocketId];
+          if (el) {
+            el.srcObject = remoteStream;
+            el.play().catch(e => console.warn("Group track play on unmute:", e));
+          }
+        };
       };
 
       pc.onicecandidate = (event) => {
@@ -157,7 +184,10 @@ export default function GroupCallModal({ group, isVideo, isCaller, onClose }) {
         if (participant.socketId && participant.socketId !== socket.id) {
           try {
             const pc = createPeerConnection(participant.socketId);
-            const offer = await pc.createOffer();
+            const offer = await pc.createOffer({
+              offerToReceiveAudio: true,
+              offerToReceiveVideo: Boolean(isVideo)
+            });
             await pc.setLocalDescription(offer);
 
             socket.emit('group_call_peer_signal', {
@@ -178,7 +208,10 @@ export default function GroupCallModal({ group, isVideo, isCaller, onClose }) {
           try {
             if (signal.type === 'offer') {
               await pc.setRemoteDescription(new RTCSessionDescription(signal));
-              const answer = await pc.createAnswer();
+              const answer = await pc.createAnswer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: Boolean(isVideo)
+              });
               await pc.setLocalDescription(answer);
 
               socket.emit('group_call_peer_signal', {
@@ -265,7 +298,15 @@ export default function GroupCallModal({ group, isVideo, isCaller, onClose }) {
   };
 
   return (
-    <div className="call-modal-overlay" style={{ zIndex: 12000 }}>
+    <div
+      className="call-modal-overlay"
+      style={{ zIndex: 12000 }}
+      onClick={() => {
+        Object.values(remoteVideoRefs.current).forEach(el => {
+          if (el) el.play().catch(() => {});
+        });
+      }}
+    >
       <div className="call-modal-container" style={{ maxWidth: '1000px', height: '90vh' }}>
         {/* Header Bar */}
         <div className="call-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -364,7 +405,7 @@ export default function GroupCallModal({ group, isVideo, isCaller, onClose }) {
                   }}
                   autoPlay
                   playsInline
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: isVideo ? 'block' : 'none' }}
+                  style={isVideo ? { width: '100%', height: '100%', objectFit: 'cover' } : { position: 'absolute', top: '-9999px', left: '-9999px', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }}
                 />
 
                 {!isVideo && (

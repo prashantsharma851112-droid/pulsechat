@@ -6,6 +6,17 @@ export default function IncomingCallModal({ callData, onAccept, onDecline }) {
 
   const { callerName, callerAvatar, isVideo } = callData;
 
+  const handleAccept = () => {
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        const ctx = new AudioContextClass();
+        ctx.resume().catch(() => {});
+      }
+    } catch (e) {}
+    onAccept();
+  };
+
   return (
     <div className="incoming-call-overlay">
       <div className="incoming-call-card">
@@ -26,7 +37,7 @@ export default function IncomingCallModal({ callData, onAccept, onDecline }) {
           <button className="call-btn btn-decline" onClick={onDecline} title="Decline Call">
             <PhoneOff size={24} />
           </button>
-          <button className="call-btn btn-accept" onClick={onAccept} title="Accept Call">
+          <button className="call-btn btn-accept" onClick={handleAccept} title="Accept Call">
             {isVideo ? <Video size={24} /> : <Phone size={24} />}
           </button>
         </div>

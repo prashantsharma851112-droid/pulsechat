@@ -1,24 +1,51 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const FriendRequest = require('../models/FriendRequest');
 const authMiddleware = require('../middleware/authMiddleware');
 const webpush = require('../utils/webpush');
 
 // Helper to sanitize safe user object (Strictly omit friends array, friend count, and password)
-const getSafeUser = (u) => ({
-  id: u.id,
-  displayName: u.displayName,
-  username: u.username,
-  avatar: u.avatar,
-  status: u.status,
-  isEmailVerified: u.isEmailVerified
-});
+const getSafeUser = (u) => {
+  if (!u) return null;
+  return {
+    id: u.id || (u._id ? u._id.toString() : ''),
+    displayName: u.displayName || u.username || 'PulseChat User',
+    username: u.username || 'user',
+    avatar: u.avatar || '',
+    status: u.status || 'Hey there! I am using PulseChat.',
+    isEmailVerified: Boolean(u.isEmailVerified)
+  };
+};
+
+// Helper to extract all possible identifiers for a user
+const getUserIdentifiers = (user) => {
+  if (!user) return [];
+  const ids = new Set();
+  if (user.id) ids.add(user.id);
+  if (user._id) ids.add(user._id.toString());
+  if (user.username) ids.add(user.username);
+  return Array.from(ids);
+};
+
+// Helper to lookup user by id, _id, or username
+const findUserAnywhere = async (idOrUsername) => {
+  if (!idOrUsername) return null;
+  const isObjectId = mongoose.Types.ObjectId.isValid(idOrUsername);
+  return User.findOne({
+    $or: [
+      { id: idOrUsername },
+      ...(isObjectId ? [{ _id: idOrUsername }] : []),
+      { username: idOrUsername }
+    ]
+  });
+};
 
 // 1. Get Current User's Friends List (Only logged-in user can access their own friends)
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const currentUser = await User.findOne({ id: req.user.id });
+    const currentUser = await findUserAnywhere(req.user.id);
     if (!currentUser) return res.status(404).json({ error: 'User not found' });
 
     const friendIds = currentUser.friends || [];
@@ -26,7 +53,13 @@ router.get('/', authMiddleware, async (req, res) => {
       return res.json({ friends: [] });
     }
 
-    const friends = await User.find({ id: { $in: friendIds } })
+    const friends = await User.find({
+      $or: [
+        { id: { $in: friendIds } },
+        { username: { $in: friendIds } },
+        { _id: { $in: friendIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } }
+      ]
+    })
       .select('id displayName username avatar status isEmailVerified')
       .lean();
 
@@ -40,20 +73,41 @@ router.get('/', authMiddleware, async (req, res) => {
 // 2. Get Pending Friend Requests (Incoming & Outgoing)
 router.get('/requests', authMiddleware, async (req, res) => {
   try {
-    const incomingReqs = await FriendRequest.find({ receiverId: req.user.id, status: 'pending' })
-      .sort({ createdAt: -1 })
-      .lean();
+    const currentUser = await findUserAnywhere(req.user.id);
+    const myIds = Array.from(new Set([
+      ...getUserIdentifiers(currentUser),
+      req.user.id,
+      req.user.username
+    ].filter(Boolean)));
 
-    const outgoingReqs = await FriendRequest.find({ senderId: req.user.id, status: 'pending' })
-      .sort({ createdAt: -1 })
-      .lean();
+    const [incomingReqs, outgoingReqs] = await Promise.all([
+      FriendRequest.find({ receiverId: { $in: myIds }, status: 'pending' })
+        .sort({ createdAt: -1 })
+        .lean(),
+      FriendRequest.find({ senderId: { $in: myIds }, status: 'pending' })
+        .sort({ createdAt: -1 })
+        .lean()
+    ]);
 
     // Populate user details for incoming requests
     const senderIds = incomingReqs.map(r => r.senderId);
-    const senders = await User.find({ id: { $in: senderIds } })
+    const senders = await User.find({
+      $or: [
+        { id: { $in: senderIds } },
+        { username: { $in: senderIds } },
+        { _id: { $in: senderIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } }
+      ]
+    })
       .select('id displayName username avatar status isEmailVerified')
       .lean();
-    const senderMap = new Map(senders.map(s => [s.id, getSafeUser(s)]));
+
+    const senderMap = new Map();
+    senders.forEach(s => {
+      const safe = getSafeUser(s);
+      if (s.id) senderMap.set(s.id, safe);
+      if (s.username) senderMap.set(s.username, safe);
+      if (s._id) senderMap.set(s._id.toString(), safe);
+    });
 
     const populatedIncoming = incomingReqs.map(r => ({
       ...r,
@@ -62,10 +116,23 @@ router.get('/requests', authMiddleware, async (req, res) => {
 
     // Populate user details for outgoing requests
     const receiverIds = outgoingReqs.map(r => r.receiverId);
-    const receivers = await User.find({ id: { $in: receiverIds } })
+    const receivers = await User.find({
+      $or: [
+        { id: { $in: receiverIds } },
+        { username: { $in: receiverIds } },
+        { _id: { $in: receiverIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } }
+      ]
+    })
       .select('id displayName username avatar status isEmailVerified')
       .lean();
-    const receiverMap = new Map(receivers.map(rec => [rec.id, getSafeUser(rec)]));
+
+    const receiverMap = new Map();
+    receivers.forEach(rec => {
+      const safe = getSafeUser(rec);
+      if (rec.id) receiverMap.set(rec.id, safe);
+      if (rec.username) receiverMap.set(rec.username, safe);
+      if (rec._id) receiverMap.set(rec._id.toString(), safe);
+    });
 
     const populatedOutgoing = outgoingReqs.map(r => ({
       ...r,
@@ -91,26 +158,38 @@ router.post('/request/:targetId', authMiddleware, async (req, res) => {
     }
 
     const [currentUser, targetUser] = await Promise.all([
-      User.findOne({ id: req.user.id }),
-      User.findOne({ id: targetId })
+      findUserAnywhere(req.user.id),
+      findUserAnywhere(targetId)
     ]);
 
+    if (!currentUser) return res.status(404).json({ error: 'Current user not found' });
     if (!targetUser) return res.status(404).json({ error: 'User does not exist' });
 
+    const myIds = getUserIdentifiers(currentUser);
+    const targetIds = getUserIdentifiers(targetUser);
+
+    if (myIds.some(id => targetIds.includes(id))) {
+      return res.status(400).json({ error: 'Cannot send friend request to yourself' });
+    }
+
     // Check block list
-    if (currentUser.blockedUsers?.includes(targetId) || targetUser.blockedUsers?.includes(req.user.id)) {
+    const isBlocked = (currentUser.blockedUsers || []).some(id => targetIds.includes(id)) ||
+                      (targetUser.blockedUsers || []).some(id => myIds.includes(id));
+    if (isBlocked) {
       return res.status(400).json({ error: 'Unable to send friend request' });
     }
 
     // Check if already friends
-    if (currentUser.friends?.includes(targetId)) {
+    const isAlreadyFriends = (currentUser.friends || []).some(id => targetIds.includes(id)) ||
+                            (targetUser.friends || []).some(id => myIds.includes(id));
+    if (isAlreadyFriends) {
       return res.status(400).json({ error: 'You are already friends' });
     }
 
     // Check if current user already sent a pending request
     const existingOutgoing = await FriendRequest.findOne({
-      senderId: req.user.id,
-      receiverId: targetId,
+      senderId: { $in: myIds },
+      receiverId: { $in: targetIds },
       status: 'pending'
     });
     if (existingOutgoing) {
@@ -119,36 +198,43 @@ router.post('/request/:targetId', authMiddleware, async (req, res) => {
 
     // Check if target user already sent a pending request -> Auto-accept!
     const existingIncoming = await FriendRequest.findOne({
-      senderId: targetId,
-      receiverId: req.user.id,
+      senderId: { $in: targetIds },
+      receiverId: { $in: myIds },
       status: 'pending'
     });
+
+    const primaryMyId = currentUser.id || req.user.id;
+    const primaryTargetId = targetUser.id || targetId;
 
     if (existingIncoming) {
       existingIncoming.status = 'accepted';
       await existingIncoming.save();
 
       await Promise.all([
-        User.updateOne({ id: req.user.id }, { $addToSet: { friends: targetId } }),
-        User.updateOne({ id: targetId }, { $addToSet: { friends: req.user.id } })
+        User.updateOne({ _id: currentUser._id }, { $addToSet: { friends: primaryTargetId } }),
+        User.updateOne({ _id: targetUser._id }, { $addToSet: { friends: primaryMyId } })
       ]);
 
       const io = req.app.get('io');
       if (io) {
-        const senderData = { requestId: existingIncoming.id, friend: getSafeUser(currentUser), friendId: currentUser.id };
-        const targetData = { requestId: existingIncoming.id, friend: getSafeUser(targetUser), friendId: targetUser.id };
-        io.to(`user_${targetId}`).to(targetId).emit('friend_request_accepted', senderData);
-        io.to(`user_${req.user.id}`).to(req.user.id).emit('friend_request_accepted', targetData);
+        const senderData = { requestId: existingIncoming.id, friend: getSafeUser(currentUser), friendId: primaryMyId };
+        const targetData = { requestId: existingIncoming.id, friend: getSafeUser(targetUser), friendId: primaryTargetId };
 
-        io.to(`user_${targetId}`).to(targetId).emit('friend_notification', {
+        const targetRooms = [`user_${primaryTargetId}`, primaryTargetId, ...targetIds.map(i => `user_${i}`)];
+        const myRooms = [`user_${primaryMyId}`, primaryMyId, ...myIds.map(i => `user_${i}`)];
+
+        targetRooms.forEach(rm => io.to(rm).emit('friend_request_accepted', senderData));
+        myRooms.forEach(rm => io.to(rm).emit('friend_request_accepted', targetData));
+
+        targetRooms.forEach(rm => io.to(rm).emit('friend_notification', {
           type: 'friend_accepted',
-          senderId: req.user.id,
+          senderId: primaryMyId,
           senderName: currentUser.displayName || currentUser.username,
           senderAvatar: currentUser.avatar,
           title: 'Pulse Synced! ⚡',
           body: `${currentUser.displayName || currentUser.username} is now synced with you!`,
           friend: getSafeUser(currentUser)
-        });
+        }));
       }
 
       return res.json({ success: true, status: 'accepted', friend: getSafeUser(targetUser) });
@@ -158,16 +244,16 @@ router.post('/request/:targetId', authMiddleware, async (req, res) => {
     const vibe = (req.body && req.body.vibe) || '⚡ Quick Pulse';
     const newRequest = await FriendRequest.create({
       id: `freq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      senderId: req.user.id,
-      receiverId: targetId,
+      senderId: primaryMyId,
+      receiverId: primaryTargetId,
       status: 'pending',
       createdAt: new Date()
     });
 
     const populatedRequest = {
       id: newRequest.id,
-      senderId: req.user.id,
-      receiverId: targetId,
+      senderId: primaryMyId,
+      receiverId: primaryTargetId,
       status: 'pending',
       vibe,
       createdAt: newRequest.createdAt,
@@ -180,26 +266,34 @@ router.post('/request/:targetId', authMiddleware, async (req, res) => {
         request: populatedRequest,
         requestId: newRequest.id,
         id: newRequest.id,
-        senderId: req.user.id,
-        receiverId: targetId,
+        senderId: primaryMyId,
+        receiverId: primaryTargetId,
         vibe,
         sender: getSafeUser(currentUser),
         createdAt: newRequest.createdAt
       };
 
-      // Emit to both user_{id} and direct {id} rooms
-      io.to(`user_${targetId}`).to(targetId).emit('friend_request_received', eventPayload);
-
-      // In-app alert notification
-      io.to(`user_${targetId}`).to(targetId).emit('friend_notification', {
+      const notifPayload = {
         type: 'friend_request',
-        senderId: req.user.id,
+        senderId: primaryMyId,
         senderName: currentUser.displayName || currentUser.username,
         senderAvatar: currentUser.avatar,
         title: `⚡ Sync Request: ${currentUser.displayName || currentUser.username}`,
         body: `Wants to sync pulse with you (${vibe})`,
         requestId: newRequest.id,
         sender: getSafeUser(currentUser)
+      };
+
+      const targetRooms = Array.from(new Set([
+        `user_${primaryTargetId}`,
+        primaryTargetId,
+        ...targetIds.map(i => `user_${i}`),
+        ...targetIds
+      ]));
+
+      targetRooms.forEach(rm => {
+        io.to(rm).emit('friend_request_received', eventPayload);
+        io.to(rm).emit('friend_notification', notifPayload);
       });
     }
 
@@ -225,8 +319,8 @@ router.post('/request/:targetId', authMiddleware, async (req, res) => {
       success: true,
       request: {
         id: newRequest.id,
-        senderId: req.user.id,
-        receiverId: targetId,
+        senderId: primaryMyId,
+        receiverId: primaryTargetId,
         status: 'pending',
         vibe,
         createdAt: newRequest.createdAt,
@@ -243,47 +337,66 @@ router.post('/request/:targetId', authMiddleware, async (req, res) => {
 router.post('/accept/:requestId', authMiddleware, async (req, res) => {
   try {
     const { requestId } = req.params;
-    const request = await FriendRequest.findOne({ id: requestId, receiverId: req.user.id, status: 'pending' });
+    const currentUser = await findUserAnywhere(req.user.id);
+    const myIds = getUserIdentifiers(currentUser);
+    if (req.user.id && !myIds.includes(req.user.id)) myIds.push(req.user.id);
+
+    const request = await FriendRequest.findOne({
+      id: requestId,
+      receiverId: { $in: myIds },
+      status: 'pending'
+    });
     if (!request) return res.status(404).json({ error: 'Friend request not found or already processed' });
 
     request.status = 'accepted';
     await request.save();
 
     const [senderUser, receiverUser] = await Promise.all([
-      User.findOne({ id: request.senderId }),
-      User.findOne({ id: req.user.id }),
-      User.updateOne({ id: req.user.id }, { $addToSet: { friends: request.senderId } }),
-      User.updateOne({ id: request.senderId }, { $addToSet: { friends: req.user.id } })
+      findUserAnywhere(request.senderId),
+      currentUser
     ]);
+
+    const senderPrimaryId = senderUser?.id || request.senderId;
+    const receiverPrimaryId = receiverUser?.id || req.user.id;
+
+    if (senderUser && receiverUser) {
+      await Promise.all([
+        User.updateOne({ _id: receiverUser._id }, { $addToSet: { friends: senderPrimaryId } }),
+        User.updateOne({ _id: senderUser._id }, { $addToSet: { friends: receiverPrimaryId } })
+      ]);
+    }
 
     const io = req.app.get('io');
     if (io) {
       const senderData = {
         requestId,
         friend: getSafeUser(receiverUser),
-        friendId: req.user.id,
+        friendId: receiverPrimaryId,
         status: 'accepted'
       };
       const receiverData = {
         requestId,
         friend: getSafeUser(senderUser),
-        friendId: request.senderId,
+        friendId: senderPrimaryId,
         status: 'accepted'
       };
 
-      io.to(`user_${request.senderId}`).to(request.senderId).emit('friend_request_accepted', senderData);
-      io.to(`user_${req.user.id}`).to(req.user.id).emit('friend_request_accepted', receiverData);
+      const senderRooms = Array.from(new Set([`user_${senderPrimaryId}`, senderPrimaryId, ...getUserIdentifiers(senderUser).map(i => `user_${i}`)]));
+      const receiverRooms = Array.from(new Set([`user_${receiverPrimaryId}`, receiverPrimaryId, ...myIds.map(i => `user_${i}`)]));
+
+      senderRooms.forEach(rm => io.to(rm).emit('friend_request_accepted', senderData));
+      receiverRooms.forEach(rm => io.to(rm).emit('friend_request_accepted', receiverData));
 
       // In-app alert for the original sender
-      io.to(`user_${request.senderId}`).to(request.senderId).emit('friend_notification', {
+      senderRooms.forEach(rm => io.to(rm).emit('friend_notification', {
         type: 'friend_accepted',
-        senderId: req.user.id,
+        senderId: receiverPrimaryId,
         senderName: receiverUser.displayName || receiverUser.username,
         senderAvatar: receiverUser.avatar,
         title: 'Pulse Synced! ⚡',
         body: `${receiverUser.displayName || receiverUser.username} accepted your sync request!`,
         friend: getSafeUser(receiverUser)
-      });
+      }));
     }
 
     // Web push to original sender if subscribed
@@ -315,17 +428,26 @@ router.post('/accept/:requestId', authMiddleware, async (req, res) => {
 router.post('/reject/:requestId', authMiddleware, async (req, res) => {
   try {
     const { requestId } = req.params;
-    const request = await FriendRequest.findOne({ id: requestId, receiverId: req.user.id, status: 'pending' });
+    const currentUser = await findUserAnywhere(req.user.id);
+    const myIds = getUserIdentifiers(currentUser);
+    if (req.user.id && !myIds.includes(req.user.id)) myIds.push(req.user.id);
+
+    const request = await FriendRequest.findOne({
+      id: requestId,
+      receiverId: { $in: myIds },
+      status: 'pending'
+    });
     if (!request) return res.status(404).json({ error: 'Friend request not found' });
 
     await FriendRequest.deleteOne({ id: requestId });
 
     const io = req.app.get('io');
     if (io) {
-      io.to(`user_${request.senderId}`).to(request.senderId).emit('friend_request_rejected', {
+      const senderRooms = [`user_${request.senderId}`, request.senderId];
+      senderRooms.forEach(rm => io.to(rm).emit('friend_request_rejected', {
         requestId,
-        userId: req.user.id
-      });
+        userId: currentUser?.id || req.user.id
+      }));
     }
 
     res.json({ success: true });
@@ -339,17 +461,26 @@ router.post('/reject/:requestId', authMiddleware, async (req, res) => {
 router.delete('/cancel/:requestId', authMiddleware, async (req, res) => {
   try {
     const { requestId } = req.params;
-    const request = await FriendRequest.findOne({ id: requestId, senderId: req.user.id, status: 'pending' });
+    const currentUser = await findUserAnywhere(req.user.id);
+    const myIds = getUserIdentifiers(currentUser);
+    if (req.user.id && !myIds.includes(req.user.id)) myIds.push(req.user.id);
+
+    const request = await FriendRequest.findOne({
+      id: requestId,
+      senderId: { $in: myIds },
+      status: 'pending'
+    });
     if (!request) return res.status(404).json({ error: 'Friend request not found' });
 
     await FriendRequest.deleteOne({ id: requestId });
 
     const io = req.app.get('io');
     if (io) {
-      io.to(`user_${request.receiverId}`).to(request.receiverId).emit('friend_request_cancelled', {
+      const receiverRooms = [`user_${request.receiverId}`, request.receiverId];
+      receiverRooms.forEach(rm => io.to(rm).emit('friend_request_cancelled', {
         requestId,
-        userId: req.user.id
-      });
+        userId: currentUser?.id || req.user.id
+      }));
     }
 
     res.json({ success: true });
@@ -363,22 +494,34 @@ router.delete('/cancel/:requestId', authMiddleware, async (req, res) => {
 router.delete('/:targetId', authMiddleware, async (req, res) => {
   try {
     const { targetId } = req.params;
+    const [currentUser, targetUser] = await Promise.all([
+      findUserAnywhere(req.user.id),
+      findUserAnywhere(targetId)
+    ]);
+
+    const myIds = getUserIdentifiers(currentUser);
+    const targetIds = getUserIdentifiers(targetUser);
+    if (req.user.id && !myIds.includes(req.user.id)) myIds.push(req.user.id);
+    if (targetId && !targetIds.includes(targetId)) targetIds.push(targetId);
 
     await Promise.all([
-      User.updateOne({ id: req.user.id }, { $pull: { friends: targetId } }),
-      User.updateOne({ id: targetId }, { $pull: { friends: req.user.id } }),
+      User.updateOne({ _id: currentUser?._id }, { $pull: { friends: { $in: targetIds } } }),
+      User.updateOne({ _id: targetUser?._id }, { $pull: { friends: { $in: myIds } } }),
       FriendRequest.deleteMany({
         $or: [
-          { senderId: req.user.id, receiverId: targetId },
-          { senderId: targetId, receiverId: req.user.id }
+          { senderId: { $in: myIds }, receiverId: { $in: targetIds } },
+          { senderId: { $in: targetIds }, receiverId: { $in: myIds } }
         ]
       })
     ]);
 
     const io = req.app.get('io');
     if (io) {
-      io.to(`user_${targetId}`).to(targetId).emit('friend_removed', { userId: req.user.id, targetId });
-      io.to(`user_${req.user.id}`).to(req.user.id).emit('friend_removed', { userId: targetId, targetId });
+      const targetRooms = [`user_${targetId}`, targetId, ...targetIds.map(i => `user_${i}`)];
+      const myRooms = [`user_${req.user.id}`, req.user.id, ...myIds.map(i => `user_${i}`)];
+
+      targetRooms.forEach(rm => io.to(rm).emit('friend_removed', { userId: currentUser?.id || req.user.id, targetId }));
+      myRooms.forEach(rm => io.to(rm).emit('friend_removed', { userId: targetUser?.id || targetId, targetId }));
     }
 
     res.json({ success: true });
@@ -392,16 +535,25 @@ router.delete('/:targetId', authMiddleware, async (req, res) => {
 router.get('/status/:targetId', authMiddleware, async (req, res) => {
   try {
     const { targetId } = req.params;
-    if (targetId === req.user.id) return res.json({ status: 'self' });
+    const [currentUser, targetUser] = await Promise.all([
+      findUserAnywhere(req.user.id),
+      findUserAnywhere(targetId)
+    ]);
 
-    const currentUser = await User.findOne({ id: req.user.id });
-    if (currentUser?.friends?.includes(targetId)) {
+    const myIds = getUserIdentifiers(currentUser);
+    const targetIds = getUserIdentifiers(targetUser);
+    if (req.user.id && !myIds.includes(req.user.id)) myIds.push(req.user.id);
+    if (targetId && !targetIds.includes(targetId)) targetIds.push(targetId);
+
+    if (myIds.some(id => targetIds.includes(id))) return res.json({ status: 'self' });
+
+    if (currentUser?.friends?.some(fId => targetIds.includes(fId))) {
       return res.json({ status: 'friends' });
     }
 
     const sentReq = await FriendRequest.findOne({
-      senderId: req.user.id,
-      receiverId: targetId,
+      senderId: { $in: myIds },
+      receiverId: { $in: targetIds },
       status: 'pending'
     });
     if (sentReq) {
@@ -409,8 +561,8 @@ router.get('/status/:targetId', authMiddleware, async (req, res) => {
     }
 
     const receivedReq = await FriendRequest.findOne({
-      senderId: targetId,
-      receiverId: req.user.id,
+      senderId: { $in: targetIds },
+      receiverId: { $in: myIds },
       status: 'pending'
     });
     if (receivedReq) {

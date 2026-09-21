@@ -527,10 +527,12 @@ io.on('connection', (socket) => {
       return;
     }
 
+    const payload = { signal: signalData, from, callerName, callerAvatar, isVideo };
     const recipientSocket = onlineUsers.get(userToCall);
     if (recipientSocket) {
-      io.to(recipientSocket).emit('incoming_call', { signal: signalData, from, callerName, callerAvatar, isVideo });
+      io.to(recipientSocket).emit('incoming_call', payload);
     }
+    io.to(`user_${userToCall}`).to(userToCall).emit('incoming_call', payload);
   });
 
   socket.on('answer_call', (data) => {
@@ -538,6 +540,7 @@ io.on('connection', (socket) => {
     if (callerSocket) {
       io.to(callerSocket).emit('call_accepted', data.signal);
     }
+    io.to(`user_${data.to}`).to(data.to).emit('call_accepted', data.signal);
   });
 
   socket.on('ice_candidate', ({ to, candidate }) => {
@@ -545,6 +548,7 @@ io.on('connection', (socket) => {
     if (targetSocket) {
       io.to(targetSocket).emit('ice_candidate', { candidate });
     }
+    io.to(`user_${to}`).to(to).emit('ice_candidate', { candidate });
   });
 
   socket.on('reject_call', ({ to }) => {
@@ -552,6 +556,7 @@ io.on('connection', (socket) => {
     if (targetSocket) {
       io.to(targetSocket).emit('call_rejected');
     }
+    io.to(`user_${to}`).to(to).emit('call_rejected');
   });
 
   socket.on('end_call', ({ to }) => {
@@ -559,6 +564,7 @@ io.on('connection', (socket) => {
     if (targetSocket) {
       io.to(targetSocket).emit('call_ended');
     }
+    io.to(`user_${to}`).to(to).emit('call_ended');
   });
 
   // --- REAL-TIME MULTI-PARTY GROUP CALL SIGNALING ---
