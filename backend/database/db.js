@@ -187,77 +187,93 @@ module.exports = {
   // ordered by most recent activity, each with the last message preview
   // and an unread count. Optimized with parallel index scans for 0ms latency.
   getRecentConversations: async (myId) => {
-    // Parallel index scans utilizing { senderId: 1, timestamp: -1 } and { receiverId: 1, timestamp: -1 }
-    const [sentMsgs, receivedMsgs] = await Promise.all([
-      Message.find({ senderId: myId }).sort({ timestamp: -1 }).limit(150).lean(),
-      Message.find({ receiverId: myId }).sort({ timestamp: -1 }).limit(150).lean()
-    ]);
+    try {
+      // Parallel index scans for 1-on-1 chats (excluding group messages)
+      const [sentMsgs, receivedMsgs] = await Promise.all([
+        Message.find({ senderId: myId, isGroup: { $ne: true } }).sort({ timestamp: -1 }).limit(150).lean(),
+        Message.find({ receiverId: myId, isGroup: { $ne: true } }).sort({ timestamp: -1 }).limit(150).lean()
+      ]);
 
-    const messages = [...sentMsgs, ...receivedMsgs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      const messages = [...sentMsgs, ...receivedMsgs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-    const seen = new Set();
-    const ordered = [];
-    for (const msg of messages) {
-      const otherId = msg.senderId === myId ? msg.receiverId : msg.senderId;
-      if (otherId && !seen.has(otherId)) {
-        seen.add(otherId);
-        ordered.push({ otherId, lastMessage: msg });
+      const seen = new Set();
+      const ordered = [];
+      for (const msg of messages) {
+        const otherId = msg.senderId === myId ? msg.receiverId : msg.senderId;
+        if (otherId && otherId !== myId && !seen.has(otherId)) {
+          seen.add(otherId);
+          ordered.push({ otherId, lastMessage: msg });
+        }
       }
+
+      if (ordered.length === 0) return [];
+
+      const otherIds = Array.from(seen).filter(Boolean);
+      const mongoose = require('mongoose');
+      const validObjectIds = otherIds
+        .filter(id => typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id))
+        .map(id => new mongoose.Types.ObjectId(id));
+
+      const [usersList, unreadAgg] = await Promise.all([
+        User.find({
+          $or: [
+            { id: { $in: otherIds } },
+            { username: { $in: otherIds } },
+            ...(validObjectIds.length > 0 ? [{ _id: { $in: validObjectIds } }] : [])
+          ]
+        })
+          .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
+          .lean(),
+        Message.aggregate([
+          { $match: { receiverId: myId, status: { $ne: 'read' }, senderId: { $in: otherIds }, isGroup: { $ne: true } } },
+          { $group: { _id: '$senderId', count: { $sum: 1 } } }
+        ])
+      ]);
+
+      const userMap = new Map();
+      for (const u of usersList) {
+        if (u.id) userMap.set(u.id, u);
+        if (u._id) userMap.set(u._id.toString(), u);
+        if (u.username) userMap.set(u.username, u);
+      }
+      const unreadMap = new Map(unreadAgg.map(u => [u._id, u.count]));
+
+      const results = [];
+      const addedUserIds = new Set();
+      for (const { otherId, lastMessage } of ordered) {
+        const otherUser = userMap.get(otherId);
+        if (!otherUser) continue;
+        if (addedUserIds.has(otherUser.id)) continue;
+        addedUserIds.add(otherUser.id);
+
+        const unreadCount = unreadMap.get(otherUser.id) || unreadMap.get(otherId) || 0;
+
+        const lastMsgText = lastMessage.type === 'text'
+          ? lastMessage.content
+          : (lastMessage.type === 'call'
+              ? (lastMessage.callData?.isVideo ? '📹 Video Call' : '📞 Voice Call')
+              : (lastMessage.type === 'voice'
+                  ? '🎤 Voice note'
+                  : (lastMessage.type === 'image'
+                      ? (lastMessage.content || '🖼️ Photo')
+                      : (lastMessage.type === 'video'
+                          ? '🎥 Video'
+                          : `[${lastMessage.type}]`))));
+
+        results.push({
+          ...otherUser,
+          lastMessage: lastMsgText,
+          lastMessageTime: lastMessage.timestamp,
+          lastMessageFromMe: lastMessage.senderId === myId,
+          unreadCount
+        });
+      }
+
+      return results;
+    } catch (err) {
+      console.error('getRecentConversations error:', err);
+      return [];
     }
-
-    if (ordered.length === 0) return [];
-
-    const otherIds = Array.from(seen);
-
-    // 1 & 2. Concurrent batch queries for interlocutors and unread counts
-    const mongoose = require('mongoose');
-    const validObjectIds = otherIds.filter(id => mongoose.Types.ObjectId.isValid(id));
-    const [usersList, unreadAgg] = await Promise.all([
-      User.find({
-        $or: [
-          { id: { $in: otherIds } },
-          ...(validObjectIds.length > 0 ? [{ _id: { $in: validObjectIds } }] : [])
-        ]
-      })
-        .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
-        .lean(),
-      Message.aggregate([
-        { $match: { receiverId: myId, status: { $ne: 'read' }, senderId: { $in: otherIds } } },
-        { $group: { _id: '$senderId', count: { $sum: 1 } } }
-      ])
-    ]);
-
-    const userMap = new Map();
-    for (const u of usersList) {
-      if (u.id) userMap.set(u.id, u);
-      if (u._id) userMap.set(u._id.toString(), u);
-      if (u.username) userMap.set(u.username, u);
-    }
-    const unreadMap = new Map(unreadAgg.map(u => [u._id, u.count]));
-
-    const results = [];
-    for (const { otherId, lastMessage } of ordered) {
-      const otherUser = userMap.get(otherId);
-      if (!otherUser) continue;
-
-      const unreadCount = unreadMap.get(otherId) || 0;
-
-      const lastMsgText = lastMessage.type === 'text'
-        ? lastMessage.content
-        : (lastMessage.type === 'call'
-            ? (lastMessage.callData?.isVideo ? '📹 Video Call' : '📞 Voice Call')
-            : `[${lastMessage.type}]`);
-
-      results.push({
-        ...otherUser,
-        lastMessage: lastMsgText,
-        lastMessageTime: lastMessage.timestamp,
-        lastMessageFromMe: lastMessage.senderId === myId,
-        unreadCount
-      });
-    }
-
-    return results;
   },
 
   clearChatMessages: async (chatId) => {

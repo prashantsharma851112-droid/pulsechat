@@ -343,3 +343,50 @@ export function updateUserProfileInStorage(targetUserId, updates, currentUserId)
     }));
   }
 }
+
+// Synchronize an updated group (name, avatar, description, members) across ALL caches & dispatch event
+export function updateGroupInStorage(groupId, updates, currentUserId) {
+  if (!groupId || !updates) return;
+
+  const { name, avatar, description, members } = updates;
+
+  const isGroupMatch = (g) => {
+    if (!g) return false;
+    return g.id === groupId || g._id === groupId;
+  };
+
+  const applyGroupUpdates = (g) => {
+    if (!isGroupMatch(g)) return g;
+    return {
+      ...g,
+      ...(name !== undefined && name !== '' && { name, displayName: name }),
+      ...(avatar !== undefined && avatar !== '' && { avatar }),
+      ...(description !== undefined && { description }),
+      ...(members !== undefined && { members })
+    };
+  };
+
+  if (currentUserId) {
+    // 1. Update Groups cache
+    const groups = getCachedGroups(currentUserId);
+    if (groups && groups.length > 0) {
+      const updatedGroups = groups.map(applyGroupUpdates);
+      setCachedGroups(currentUserId, updatedGroups);
+    }
+
+    // 2. Update Recent Chats cache if this group is in recent chats
+    const recent = getCachedRecentChats(currentUserId);
+    if (recent && recent.length > 0) {
+      const updatedRecent = recent.map(applyGroupUpdates);
+      setCachedRecentChats(currentUserId, updatedRecent);
+    }
+  }
+
+  // 3. Dispatch global window event so ChatWindow, Sidebar, and App update immediately (0ms)
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('pulsechat_group_updated', {
+      detail: { groupId, updates }
+    }));
+  }
+}
+

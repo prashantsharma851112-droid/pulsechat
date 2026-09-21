@@ -26,7 +26,8 @@ import {
   mergeIntoAllUsersCache,
   isCachedFriend,
   isDeviceOnline,
-  subscribeToNetworkChanges
+  subscribeToNetworkChanges,
+  updateGroupInStorage
 } from '../../utils/offlineStorage';
 
 export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGroupCall, onOpenFullDp }) {
@@ -45,10 +46,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [selectedVibe, setSelectedVibe] = useState('⚡ Quick Pulse');
 
   const [chatAvatar, setChatAvatar] = useState(() => activeChat?.avatar || '');
+  const [chatDisplayName, setChatDisplayName] = useState(() => activeChat?.displayName || activeChat?.name || '');
 
   useEffect(() => {
     setChatAvatar(activeChat?.avatar || '');
-  }, [activeChat?.id, activeChat?.avatar]);
+    setChatDisplayName(activeChat?.displayName || activeChat?.name || '');
+  }, [activeChat?.id, activeChat?.avatar, activeChat?.displayName, activeChat?.name]);
 
   // Real-time DP / Profile updates in ChatWindow header
   useEffect(() => {
@@ -62,6 +65,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       if (isTarget && data.avatar) {
         setChatAvatar(data.avatar);
       }
+      if (isTarget && data.displayName) {
+        setChatDisplayName(data.displayName);
+      }
     };
 
     if (socket) socket.on('user_profile_updated', handleProfileUpdate);
@@ -72,9 +78,37 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
     window.addEventListener('pulsechat_user_profile_updated', handleWindowEvent);
 
+    // Group updates listener (real-time name and avatar sync)
+    const handleGroupUpdated = (data) => {
+      if (!data || !isGroup) return;
+      const targetId = data.groupId || data.id || data._id;
+      if (targetId === activeChat.id || targetId === activeChat._id) {
+        const updates = data.updates || data;
+        if (updates.name) {
+          setChatDisplayName(updates.name);
+          activeChat.displayName = updates.name;
+          activeChat.name = updates.name;
+        }
+        if (updates.avatar) {
+          setChatAvatar(updates.avatar);
+          activeChat.avatar = updates.avatar;
+        }
+      }
+    };
+
+    if (socket) socket.on('group_updated', handleGroupUpdated);
+    const handleWindowGroupUpdated = (e) => {
+      if (e.detail) {
+        handleGroupUpdated(e.detail);
+      }
+    };
+    window.addEventListener('pulsechat_group_updated', handleWindowGroupUpdated);
+
     return () => {
       if (socket) socket.off('user_profile_updated', handleProfileUpdate);
+      if (socket) socket.off('group_updated', handleGroupUpdated);
       window.removeEventListener('pulsechat_user_profile_updated', handleWindowEvent);
+      window.removeEventListener('pulsechat_group_updated', handleWindowGroupUpdated);
     };
   }, [socket, activeChat, isGroup]);
 
@@ -603,10 +637,41 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     socket.on('message_restored', handleMessageRestored);
     socket.on('chat_cleared', handleChatCleared);
     socket.on('chat_restored', handleChatRestored);
+    const handleGroupUpdated = (data) => {
+      if (!data) return;
+      if (isGroup && (data.id === activeChat?.id || data._id === activeChat?.id)) {
+        if (data.name) {
+          activeChat.displayName = data.name;
+          activeChat.name = data.name;
+        }
+        if (data.avatar) {
+          activeChat.avatar = data.avatar;
+          setChatAvatar(data.avatar);
+        }
+      }
+    };
+
     socket.on('multiple_messages_deleted', handleMultipleDeleted);
     socket.on('multiple_messages_restored', handleMultipleRestored);
     socket.on('chat_setting_updated', handleChatSettingUpdated);
     socket.on('message_blocked', handleMessageBlocked);
+    socket.on('group_updated', handleGroupUpdated);
+
+    const handleGroupWindowEvent = (e) => {
+      if (e.detail?.groupId && e.detail?.updates) {
+        if (isGroup && (activeChat?.id === e.detail.groupId || activeChat?._id === e.detail.groupId)) {
+          if (e.detail.updates.name) {
+            activeChat.displayName = e.detail.updates.name;
+            activeChat.name = e.detail.updates.name;
+          }
+          if (e.detail.updates.avatar) {
+            activeChat.avatar = e.detail.updates.avatar;
+            setChatAvatar(e.detail.updates.avatar);
+          }
+        }
+      }
+    };
+    window.addEventListener('pulsechat_group_updated', handleGroupWindowEvent);
 
     return () => {
       socket.off('new_message', handleNewMessage);
@@ -625,8 +690,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.off('multiple_messages_restored', handleMultipleRestored);
       socket.off('chat_setting_updated', handleChatSettingUpdated);
       socket.off('message_blocked', handleMessageBlocked);
+      socket.off('group_updated', handleGroupUpdated);
+      window.removeEventListener('pulsechat_group_updated', handleGroupWindowEvent);
     };
-  }, [socket, chatId, user.id, token]);
+  }, [socket, chatId, user.id, token, isGroup, activeChat]);
 
   const [undoMessageId, setUndoMessageId] = useState(null);
 
@@ -1006,7 +1073,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             <img
               src={chatAvatar || activeChat.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeChat.username || 'pulse'}`}
               alt="Avatar"
-              onClick={() => isGroup ? setShowGroupProfileModal(true) : (onOpenFullDp && onOpenFullDp(chatAvatar || activeChat.avatar, activeChat.displayName, activeChat.username))}
+              onClick={() => isGroup ? setShowGroupProfileModal(true) : (onOpenFullDp && onOpenFullDp(chatAvatar || activeChat.avatar, chatDisplayName || activeChat.displayName, activeChat.username))}
+              onError={(e) => {
+                e.target.src = isGroup
+                  ? `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(chatDisplayName || activeChat.name || 'Group')}`
+                  : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(activeChat.username || chatDisplayName || 'User')}`;
+              }}
               style={{ width: '42px', height: '42px', borderRadius: isGroup ? '12px' : '50%', cursor: 'pointer', objectFit: 'cover', flexShrink: 0 }}
               title={isGroup ? 'Click for group details & members' : 'Click to view full screen DP'}
             />
@@ -1019,7 +1091,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)' }}>
-                  {activeChat.displayName}
+                  {chatDisplayName || activeChat.displayName}
                 </h3>
                 {isGroup && <span className="group-pill-badge"><Users size={12} /> Group</span>}
                 {chatSetting?.disappearingEnabled && (
@@ -1715,6 +1787,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         <GroupProfileModal
           group={activeChat}
           onClose={() => setShowGroupProfileModal(false)}
+          onGroupUpdated={(updatedGroup) => {
+            if (updatedGroup) {
+              if (updatedGroup.name) {
+                activeChat.displayName = updatedGroup.name;
+                activeChat.name = updatedGroup.name;
+                setChatDisplayName(updatedGroup.name);
+              }
+              if (updatedGroup.avatar) {
+                activeChat.avatar = updatedGroup.avatar;
+                setChatAvatar(updatedGroup.avatar);
+              }
+              updateGroupInStorage(updatedGroup.id || activeChat.id, updatedGroup, user?.id);
+            }
+          }}
           onStartCall={onStartCall}
           onOpenFullDp={onOpenFullDp}
         />

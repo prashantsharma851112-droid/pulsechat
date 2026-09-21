@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, useCallback } from 'react';
+import React, { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles } from 'lucide-react';
@@ -43,6 +43,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   });
   const [outgoingPendingIds, setOutgoingPendingIds] = useState(new Set());
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const activeChatRef = React.useRef(activeChat);
+  useEffect(() => {
+    activeChatRef.current = activeChat;
+  }, [activeChat]);
 
   // Listen to cross-component tab switch requests (e.g. clicking on sync notification toast)
   useEffect(() => {
@@ -261,11 +265,24 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       .then(res => parseSafeJson(res))
       .then(data => {
         if (Array.isArray(data)) {
+          const localUsers = getCachedAllUsers(user?.id) || [];
+          const uMap = new Map();
+          localUsers.forEach(u => {
+            if (u.id) uMap.set(u.id, u);
+            if (u._id) uMap.set(u._id, u);
+            if (u.username) uMap.set(u.username, u);
+          });
+
           const mapped = data.map(item => {
-            if (activeChat && item.id === activeChat.id) {
-              return { ...item, unreadCount: 0 };
+            const fresh = uMap.get(item.id) || (item.username ? uMap.get(item.username) : null);
+            let res = item;
+            if (fresh && fresh.avatar) {
+              res = { ...res, avatar: fresh.avatar, displayName: fresh.displayName || res.displayName };
             }
-            return item;
+            if (activeChatRef.current && res.id === activeChatRef.current.id) {
+              res = { ...res, unreadCount: 0 };
+            }
+            return res;
           });
           setRecentChats(mapped);
           if (user?.id) {
@@ -280,7 +297,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           if (cached.length > 0) setRecentChats(cached);
         }
       });
-  }, [token, activeChat, user?.id]);
+  }, [token, user?.id]);
 
   const loadGroups = useCallback(() => {
     if (!token) return;
@@ -323,6 +340,31 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         // Offline: already loaded from cache in state
       });
   }, [token, user?.id]);
+
+  // Auto-sync fresh avatars from allUsers into recentChats
+  useEffect(() => {
+    if (allUsers.length > 0 && recentChats.length > 0) {
+      const uMap = new Map();
+      allUsers.forEach(u => {
+        if (u.id) uMap.set(u.id, u);
+        if (u._id) uMap.set(u._id, u);
+        if (u.username) uMap.set(u.username, u);
+      });
+      let changed = false;
+      const synced = recentChats.map(item => {
+        const fresh = uMap.get(item.id) || (item.username ? uMap.get(item.username) : null);
+        if (fresh && fresh.avatar && fresh.avatar !== item.avatar) {
+          changed = true;
+          return { ...item, avatar: fresh.avatar, displayName: fresh.displayName || item.displayName };
+        }
+        return item;
+      });
+      if (changed) {
+        setRecentChats(synced);
+        if (user?.id) setCachedRecentChats(user.id, synced);
+      }
+    }
+  }, [allUsers]);
 
   useEffect(() => {
     loadRecentChats();
@@ -412,11 +454,61 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     };
     window.addEventListener('pulsechat_user_profile_updated', handleWindowEvent);
 
+    // Instant Group Updates Sync
+    const handleGroupUpdated = (data) => {
+      if (!data) return;
+      const targetId = data.groupId || data.id || data._id;
+      const updates = data.updates || data;
+      setGroups(prev => {
+        const next = prev.map(g => {
+          if (g.id === targetId || g._id === targetId) {
+            return {
+              ...g,
+              name: updates.name || g.name,
+              avatar: updates.avatar || g.avatar,
+              description: updates.description !== undefined ? updates.description : g.description
+            };
+          }
+          return g;
+        });
+        if (user?.id) setCachedGroups(user.id, next);
+        return next;
+      });
+
+      setRecentChats(prev => {
+        const next = prev.map(c => {
+          if (c.isGroup && (c.id === targetId || c._id === targetId)) {
+            return {
+              ...c,
+              displayName: updates.name || c.displayName || c.name,
+              name: updates.name || c.name,
+              avatar: updates.avatar || c.avatar,
+              description: updates.description !== undefined ? updates.description : c.description
+            };
+          }
+          return c;
+        });
+        if (user?.id) setCachedRecentChats(user.id, next);
+        return next;
+      });
+    };
+
+    socket.on('group_updated', handleGroupUpdated);
+
+    const handleWindowGroupEvent = (e) => {
+      if (e.detail) {
+        handleGroupUpdated(e.detail);
+      }
+    };
+    window.addEventListener('pulsechat_group_updated', handleWindowGroupEvent);
+
     return () => {
       socket.off('chat_read_update', handleChatRead);
       socket.off('new_user_registered', handleNewUser);
       socket.off('user_profile_updated', handleProfileUpdate);
+      socket.off('group_updated', handleGroupUpdated);
       window.removeEventListener('pulsechat_user_profile_updated', handleWindowEvent);
+      window.removeEventListener('pulsechat_group_updated', handleWindowGroupEvent);
     };
   }, [socket, user?.id]);
 
@@ -519,7 +611,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           title="Click to view & edit your profile"
         >
           <div style={{ position: 'relative', flexShrink: 0 }}>
-            <img src={user?.avatar} alt="Profile" className="user-avatar" style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)' }} />
+            <img
+              src={user?.avatar}
+              alt="Profile"
+              className="user-avatar"
+              onError={(e) => {
+                e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user?.username || 'Pulse')}`;
+              }}
+              style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)' }}
+            />
             {user?.isEmailVerified && (
               <CheckCircle2
                 size={14}
@@ -769,6 +869,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     <img
                       src={u.avatar}
                       alt="Avatar"
+                      onError={(e) => {
+                        e.target.src = u.isGroup
+                          ? `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(u.name || 'Group')}`
+                          : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
+                      }}
                       style={{ width: '48px', height: '48px', borderRadius: u.isGroup ? '14px' : '50%', objectFit: 'cover' }}
                     />
                     {!u.isGroup && !silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
@@ -844,7 +949,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                   className={`chat-item-row ${activeChat?.id === g.id ? 'active' : ''}`}
                   style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
                 >
-                  <img src={g.avatar} alt="Group Avatar" style={{ width: '48px', height: '48px', borderRadius: '14px', objectFit: 'cover', flexShrink: 0 }} />
+                  <img
+                    src={g.avatar}
+                    alt="Group Avatar"
+                    onError={(e) => {
+                      e.target.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(g.name || 'Group')}`;
+                    }}
+                    style={{ width: '48px', height: '48px', borderRadius: '14px', objectFit: 'cover', flexShrink: 0 }}
+                  />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</h4>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -889,6 +1001,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                         onClick={(e) => {
                           e.stopPropagation();
                           if (onOpenFullDp) onOpenFullDp(u.avatar, u.displayName, u.username);
+                        }}
+                        onError={(e) => {
+                          e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
                         }}
                         style={{ width: '48px', height: '48px', borderRadius: '50%', cursor: 'pointer', objectFit: 'cover' }}
                         title="Click to view full screen DP"
@@ -940,6 +1055,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                         onClick={(e) => {
                           e.stopPropagation();
                           if (onOpenFullDp) onOpenFullDp(u.avatar, u.displayName, u.username);
+                        }}
+                        onError={(e) => {
+                          e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
                         }}
                         style={{ width: '48px', height: '48px', borderRadius: '50%', cursor: 'pointer', objectFit: 'cover' }}
                         title="Click to view full screen DP"

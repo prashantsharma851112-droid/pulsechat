@@ -23,8 +23,13 @@ router.get('/', authMiddleware, async (req, res) => {
 // Persistent conversation list (shown by default in the sidebar) - includes
 // anyone who has messaged you OR whom you've messaged, even without a search
 router.get('/recent', authMiddleware, async (req, res) => {
-  const conversations = await db.getRecentConversations(req.user.id);
-  res.json(conversations);
+  try {
+    const conversations = await db.getRecentConversations(req.user.id);
+    res.json(conversations);
+  } catch (err) {
+    console.error('Error in /recent route:', err);
+    res.json([]);
+  }
 });
 
 // Search users by Name, @username, or Email (instant indexed regex lookup with regex escaping)

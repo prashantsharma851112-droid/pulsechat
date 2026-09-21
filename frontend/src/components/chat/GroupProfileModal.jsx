@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { X, Users, Camera, Edit2, Check, UserPlus, Trash2, LogOut, Phone, Video, ShieldCheck, Search, Eye, Clock } from 'lucide-react';
+import { X, Users, Camera, Edit2, Check, UserPlus, Trash2, LogOut, Phone, Video, ShieldCheck, Search, Eye, Clock, CheckCircle2 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
 import { compressImage, parseSafeJson } from '../../utils/imageCompressor';
+import { updateGroupInStorage } from '../../utils/offlineStorage';
 
 export default function GroupProfileModal({ group, onClose, onGroupUpdated, onStartCall, onOpenFullDp }) {
   const { user: currentUser, token } = useContext(AuthContext);
@@ -14,6 +15,8 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [disappearingEnabled, setDisappearingEnabled] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   // Edit fields
   const [editName, setEditName] = useState(group.name || group.displayName || '');
@@ -28,14 +31,16 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
 
   const fileInputRef = useRef(null);
   const isAdmin = groupData.adminId === currentUser?.id;
+  const targetGroupId = group?.id || group?._id;
 
   const fetchGroupDetails = async () => {
+    if (!targetGroupId) return;
     try {
       setLoading(true);
-      const res = await fetch(`${BACKEND_URL}/api/groups/${group.id}`, {
+      const res = await fetch(`${BACKEND_URL}/api/groups/${targetGroupId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
+      const data = await parseSafeJson(res);
       if (res.ok && data) {
         setGroupData(data);
         if (data.memberUsers) setMemberUsers(data.memberUsers);
@@ -51,25 +56,25 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
   };
 
   useEffect(() => {
-    if (group?.id) {
+    if (targetGroupId) {
       fetchGroupDetails();
     }
-  }, [group?.id]);
+  }, [targetGroupId]);
 
   // Fetch disappearing messages setting for this group
   useEffect(() => {
-    if (!group?.id || !token) return;
-    fetch(`${BACKEND_URL}/api/messages/settings/${group.id}`, {
+    if (!targetGroupId || !token) return;
+    fetch(`${BACKEND_URL}/api/messages/settings/${targetGroupId}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
-      .then(r => r.json())
+      .then(r => parseSafeJson(r))
       .then(data => {
         if (data?.disappearingEnabled !== undefined) {
           setDisappearingEnabled(data.disappearingEnabled);
         }
       })
       .catch(() => {});
-  }, [group?.id, token]);
+  }, [targetGroupId, token]);
 
   const handleToggleDisappearing = () => {
     if (!socket) return;
@@ -94,9 +99,15 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
   };
 
   const handleSaveGroupEdit = async () => {
+    if (!editName.trim()) {
+      setSaveError('Group name cannot be empty');
+      return;
+    }
     try {
       setLoading(true);
-      const res = await fetch(`${BACKEND_URL}/api/groups/${group.id}`, {
+      setSaveError('');
+      const targetId = group?.id || group?._id;
+      const res = await fetch(`${BACKEND_URL}/api/groups/${targetId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -115,9 +126,15 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
       setGroupData(data);
       if (data.memberUsers) setMemberUsers(data.memberUsers);
       setIsEditing(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+
+      // Instant multi-cache sync across storage, components, and sidebar
+      updateGroupInStorage(data.id || targetId, data, currentUser?.id);
       if (onGroupUpdated) onGroupUpdated(data);
     } catch (err) {
-      alert(err.message);
+      console.error('Error updating group:', err);
+      setSaveError(err.message || 'Failed to update group.');
     } finally {
       setLoading(false);
     }
@@ -142,7 +159,7 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
 
   const handleAddMemberSubmit = async (userId) => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/groups/${group.id}/add-member`, {
+      const res = await fetch(`${BACKEND_URL}/api/groups/${targetGroupId}/add-member`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -164,7 +181,7 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
   const handleRemoveMember = async (userId) => {
     if (!window.confirm('Are you sure you want to remove this member?')) return;
     try {
-      const res = await fetch(`${BACKEND_URL}/api/groups/${group.id}/remove-member`, {
+      const res = await fetch(`${BACKEND_URL}/api/groups/${targetGroupId}/remove-member`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -173,7 +190,7 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
         body: JSON.stringify({ userId })
       });
 
-      const data = await res.json();
+      const data = await parseSafeJson(res);
       if (res.ok) {
         setGroupData(data);
         if (data.memberUsers) setMemberUsers(data.memberUsers);
@@ -187,7 +204,7 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
   const handleLeaveGroup = async () => {
     if (!window.confirm('Are you sure you want to leave this group?')) return;
     try {
-      const res = await fetch(`${BACKEND_URL}/api/groups/${group.id}/leave`, {
+      const res = await fetch(`${BACKEND_URL}/api/groups/${targetGroupId}/leave`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -307,6 +324,11 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
                 onChange={e => setEditDesc(e.target.value)}
                 style={{ textAlign: 'center', fontSize: '0.85rem' }}
               />
+              {saveError && (
+                <div style={{ color: '#ef4444', fontSize: '0.8rem', textAlign: 'center', background: 'rgba(239,68,68,0.12)', padding: '6px 10px', borderRadius: '8px' }}>
+                  ⚠️ {saveError}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                 <button type="button" className="btn-secondary" style={{ padding: '6px 14px', fontSize: '0.8rem' }} onClick={() => setIsEditing(false)}>Cancel</button>
                 <button type="button" className="btn-primary" style={{ padding: '6px 16px', fontSize: '0.8rem' }} onClick={handleSaveGroupEdit} disabled={loading}>
@@ -316,6 +338,11 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
             </div>
           ) : (
             <div style={{ marginBottom: '1.25rem' }}>
+              {saveSuccess && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#10b981', fontSize: '0.8rem', fontWeight: 600, background: 'rgba(16,185,129,0.15)', padding: '4px 12px', borderRadius: '12px', marginBottom: '8px' }}>
+                  <CheckCircle2 size={15} /> Group Info Saved!
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                 <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)' }}>
                   {groupData.name}
