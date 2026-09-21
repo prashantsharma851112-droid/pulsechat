@@ -74,7 +74,13 @@ export default function MediaUploadModal({ mediaFile, onSend, onClose }) {
           </button>
           <button
             className="btn-primary"
-            onClick={() => onSend({ mediaUrl: mediaFile.dataUrl, type: isVideo ? 'video' : 'image', isViewOnce })}
+            onClick={() => onSend({
+              mediaUrl: mediaFile.dataUrl,
+              type: isVideo ? 'video' : 'image',
+              isViewOnce,
+              fileName: mediaFile.fileName,
+              fileSize: mediaFile.fileSize
+            })}
           >
             <Send size={16} /> Send {isViewOnce ? 'View Once' : ''}
           </button>

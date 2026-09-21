@@ -879,7 +879,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       receiverId: isGroup ? '' : activeChat.id,
       isGroup,
       mediaUrl,
-      type: 'image'
+      type: 'image',
+      content: '🎨 Whiteboard Drawing',
+      fileName: `pulsechat_drawing_${Date.now()}.png`
     });
     playSound('sent');
     setShowWhiteboard(false);

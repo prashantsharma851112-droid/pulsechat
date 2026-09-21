@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
-import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil } from 'lucide-react';
+import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 import EditPollModal from './EditPollModal';
@@ -29,6 +29,8 @@ export default function MessageItem({
   const [showViewOnceModal, setShowViewOnceModal] = useState(false);
   const [showEditPoll, setShowEditPoll] = useState(false);
   const [viewedByState, setViewedByState] = useState(message.viewedBy || []);
+  const [downloadState, setDownloadState] = useState(''); // '' | 'Saving...' | 'Saved!'
+  const [showImagePreview, setShowImagePreview] = useState(false);
 
   // Swipe-to-reply & Double-tap states
   const [dragX, setDragX] = useState(0);
@@ -65,6 +67,65 @@ export default function MessageItem({
   const handleMarkViewed = () => {
     if (socket && currentUser?.id) {
       socket.emit('view_once_opened', { messageId: message.id, userId: currentUser.id, chatId });
+    }
+  };
+
+  const handleDownloadMedia = async (e, customUrl, customFileName) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const targetUrl = customUrl || message.mediaUrl;
+    if (!targetUrl || message.isViewOnce) return;
+
+    setDownloadState('Saving...');
+
+    try {
+      let fileName = customFileName || message.fileName;
+      if (!fileName) {
+        const isDrawing = message.content?.includes('drawing') || (message.type === 'image' && !message.fileName);
+        const ext = message.type === 'video' ? 'mp4' : (message.type === 'document' ? 'bin' : 'png');
+        fileName = `${isDrawing ? 'pulsechat_drawing' : (message.type === 'video' ? 'pulsechat_video' : 'pulsechat_image')}_${Date.now()}.${ext}`;
+      }
+
+      if (targetUrl.startsWith('data:') || targetUrl.startsWith('blob:')) {
+        const link = document.createElement('a');
+        link.href = targetUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        try {
+          const res = await fetch(targetUrl, { mode: 'cors' });
+          if (!res.ok) throw new Error('Fetch failed');
+          const blob = await res.blob();
+          const objectUrl = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = objectUrl;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => window.URL.revokeObjectURL(objectUrl), 2000);
+        } catch (fetchErr) {
+          const link = document.createElement('a');
+          link.href = targetUrl;
+          link.download = fileName;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      }
+
+      setDownloadState('Saved!');
+      setTimeout(() => setDownloadState(''), 2000);
+    } catch (err) {
+      console.error('Failed to download media:', err);
+      setDownloadState('Error');
+      setTimeout(() => setDownloadState(''), 2000);
     }
   };
 
@@ -450,12 +511,199 @@ export default function MessageItem({
 
         {/* Standard Media / Image / Video Message */}
         {(message.type === 'image' || message.type === 'video') && !message.isViewOnce && message.mediaUrl && (
-          <div style={{ borderRadius: '8px', overflow: 'hidden', marginBottom: '4px' }}>
+          <div style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', marginBottom: '4px', maxWidth: '100%' }}>
             {message.type === 'video' ? (
-              <video src={message.mediaUrl} controls style={{ maxWidth: '100%', maxHeight: '240px', objectFit: 'cover' }} />
+              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                <video
+                  src={message.mediaUrl}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  style={{ maxWidth: '100%', maxHeight: '280px', objectFit: 'contain', borderRadius: '10px', display: 'block', background: '#000' }}
+                />
+                <button
+                  type="button"
+                  onClick={(e) => handleDownloadMedia(e, message.mediaUrl, message.fileName || `pulsechat_video_${Date.now()}.mp4`)}
+                  style={{
+                    position: 'absolute',
+                    top: '8px',
+                    right: '8px',
+                    background: 'rgba(15, 23, 42, 0.78)',
+                    backdropFilter: 'blur(8px)',
+                    color: '#fff',
+                    border: '1px solid rgba(255, 255, 255, 0.25)',
+                    borderRadius: '20px',
+                    padding: '5px 11px',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
+                    zIndex: 10,
+                    transition: 'all 0.2s ease'
+                  }}
+                  title="Save video to device"
+                >
+                  <Download size={13} />
+                  <span>{downloadState || 'Save Video'}</span>
+                </button>
+              </div>
             ) : (
-              <img src={message.mediaUrl} alt="Attached Media" style={{ maxWidth: '100%', maxHeight: '240px', objectFit: 'cover' }} />
+              <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%' }}>
+                <img
+                  src={message.mediaUrl}
+                  alt={message.fileName || "Attached Media"}
+                  onClick={() => setShowImagePreview(true)}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '280px',
+                    objectFit: 'cover',
+                    borderRadius: '10px',
+                    display: 'block',
+                    cursor: 'pointer'
+                  }}
+                />
+                {/* Floating Download & Fullscreen Controls */}
+                <div style={{
+                  position: 'absolute',
+                  top: '8px',
+                  right: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  zIndex: 10
+                }}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowImagePreview(true);
+                    }}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.78)',
+                      backdropFilter: 'blur(8px)',
+                      color: '#fff',
+                      border: '1px solid rgba(255, 255, 255, 0.25)',
+                      borderRadius: '50%',
+                      width: '28px',
+                      height: '28px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.35)'
+                    }}
+                    title="View Fullscreen"
+                  >
+                    <Maximize2 size={13} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => handleDownloadMedia(
+                      e,
+                      message.mediaUrl,
+                      message.fileName || (message.content?.includes('drawing') ? `pulsechat_drawing_${Date.now()}.png` : `pulsechat_image_${Date.now()}.jpg`)
+                    )}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.78)',
+                      backdropFilter: 'blur(8px)',
+                      color: '#fff',
+                      border: '1px solid rgba(255, 255, 255, 0.25)',
+                      borderRadius: '20px',
+                      padding: '5px 11px',
+                      fontSize: '0.74rem',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
+                      transition: 'all 0.2s ease'
+                    }}
+                    title="Save image to device"
+                  >
+                    <Download size={13} />
+                    <span>{downloadState || 'Save'}</span>
+                  </button>
+                </div>
+              </div>
             )}
+          </div>
+        )}
+
+        {/* Document Attachment Message */}
+        {message.type === 'document' && message.mediaUrl && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            background: 'rgba(0, 0, 0, 0.22)',
+            padding: '10px 14px',
+            borderRadius: '12px',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            minWidth: '220px',
+            maxWidth: '320px',
+            marginBottom: '4px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden', flex: 1 }}>
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '10px',
+                background: 'rgba(99, 102, 241, 0.25)',
+                color: 'var(--accent)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <FileText size={18} />
+              </div>
+              <div style={{ overflow: 'hidden', textAlign: 'left', flex: 1 }}>
+                <div style={{
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  color: 'var(--text-main)'
+                }}>
+                  {message.fileName || 'Attached Document'}
+                </div>
+                {message.fileSize && (
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {message.fileSize}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={(e) => handleDownloadMedia(e, message.mediaUrl, message.fileName || `pulsechat_file_${Date.now()}`)}
+              style={{
+                background: 'var(--accent)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '6px 11px',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                cursor: 'pointer',
+                flexShrink: 0
+              }}
+              title="Download Document"
+            >
+              <Download size={14} />
+              <span>{downloadState || 'Save'}</span>
+            </button>
           </div>
         )}
 
@@ -824,6 +1072,21 @@ export default function MessageItem({
             <GitBranch size={16} />
           </button>
 
+          {/* Save / Download to Device in Context Menu */}
+          {!message.isViewOnce && message.mediaUrl && (
+            <button
+              onClick={(e) => {
+                handleDownloadMedia(e, message.mediaUrl, message.fileName);
+                setShowContextMenu(false);
+              }}
+              className="icon-btn-ghost"
+              title="Save to Device"
+              style={{ color: '#10b981', padding: '2px' }}
+            >
+              <Download size={16} />
+            </button>
+          )}
+
           {isMine && (
             <button onClick={handleUnsendForEveryone} className="icon-btn-ghost" title="Unsend for Everyone" style={{ color: '#ef4444', padding: '2px' }}>
               <Trash2 size={16} />
@@ -833,6 +1096,128 @@ export default function MessageItem({
           <button onClick={handleDeleteForMe} className="icon-btn-ghost" title="Delete for Me" style={{ color: 'var(--text-muted)', padding: '2px' }}>
             Delete
           </button>
+        </div>
+      )}
+
+      {/* Fullscreen Image / Drawing Preview Modal */}
+      {showImagePreview && message.mediaUrl && !message.isViewOnce && (
+        <div
+          onClick={() => setShowImagePreview(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.94)',
+            backdropFilter: 'blur(12px)',
+            zIndex: 99999,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '16px',
+            boxSizing: 'border-box'
+          }}
+        >
+          {/* Top Bar */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '960px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 18px',
+              background: 'rgba(255, 255, 255, 0.08)',
+              borderRadius: '16px',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              boxSizing: 'border-box'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fff', fontSize: '0.92rem', fontWeight: 600 }}>
+              <span>{message.content?.includes('drawing') ? '🎨 Whiteboard Drawing' : '🖼️ Photo Preview'}</span>
+              {message.fileName && <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 400 }}>({message.fileName})</span>}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={(e) => handleDownloadMedia(
+                  e,
+                  message.mediaUrl,
+                  message.fileName || (message.content?.includes('drawing') ? `pulsechat_drawing_${Date.now()}.png` : `pulsechat_image_${Date.now()}.jpg`)
+                )}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'var(--accent)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '8px 16px',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)'
+                }}
+                title="Download this image to your device"
+              >
+                <Download size={15} />
+                <span>{downloadState === 'Saved!' ? 'Saved to Device!' : (downloadState || 'Save to Device')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowImagePreview(false)}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+                title="Close preview"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Centered Image View */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%',
+              maxHeight: 'calc(100vh - 120px)',
+              padding: '16px',
+              overflow: 'hidden',
+              boxSizing: 'border-box'
+            }}
+          >
+            <img
+              src={message.mediaUrl}
+              alt="Fullscreen Preview"
+              style={{
+                maxWidth: '92vw',
+                maxHeight: '82vh',
+                objectFit: 'contain',
+                borderRadius: '12px',
+                boxShadow: '0 16px 48px rgba(0,0,0,0.7)'
+              }}
+            />
+          </div>
         </div>
       )}
 

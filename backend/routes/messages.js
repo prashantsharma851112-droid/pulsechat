@@ -188,6 +188,8 @@ router.post('/send', authMiddleware, async (req, res) => {
       type: type || 'text',
       audioUrl: audioUrl || null,
       mediaUrl: mediaUrl || null,
+      fileName: req.body.fileName || null,
+      fileSize: req.body.fileSize || null,
       pollData: pollData || null,
       callData: null,
       isViewOnce: false,

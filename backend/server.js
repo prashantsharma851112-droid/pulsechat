@@ -186,7 +186,7 @@ io.on('connection', (socket) => {
 
   // Send Real-Time Message (Fast parallel check & instant emission)
   socket.on('send_message', async (messageData, ackCallback) => {
-    const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, pollData, callData, isViewOnce, replyTo, clientTempId } = messageData;
+    const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, fileName, fileSize, pollData, callData, isViewOnce, replyTo, clientTempId } = messageData;
 
     try {
       // Parallelize block status and chat settings check
@@ -250,6 +250,8 @@ io.on('connection', (socket) => {
         type: type || 'text',
         audioUrl: audioUrl || null,
         mediaUrl: mediaUrl || null,
+        fileName: fileName || null,
+        fileSize: fileSize || null,
         pollData: pollData || null,
         callData: callData || null,
         isViewOnce: !!isViewOnce,

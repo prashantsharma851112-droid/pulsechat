@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useContext } from 'react';
 import {
   X, Eraser, RotateCcw, RotateCw, Paintbrush, Send, Sparkles,
-  Square, Circle, Minus, MoveUpRight, Triangle, Smile, Sliders, Undo2
+  Square, Circle, Minus, MoveUpRight, Triangle, Smile, Sliders, Undo2, Download
 } from 'lucide-react';
 import { SocketContext } from '../../context/SocketContext';
 
@@ -38,6 +38,25 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
   const [showStickersMenu, setShowStickersMenu] = useState(false);
   const [showShapesMenu, setShowShapesMenu] = useState(false);
   const [canRestore, setCanRestore] = useState(false);
+  const [savedToDevice, setSavedToDevice] = useState(false);
+
+  const handleSaveToDevice = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `pulsechat_whiteboard_${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setSavedToDevice(true);
+      setTimeout(() => setSavedToDevice(false), 2000);
+    } catch (err) {
+      console.error('Error saving whiteboard drawing to device:', err);
+    }
+  };
 
   // Draw shape onto canvas context
   const drawShapeOnContext = (ctx, shapeType, x0, y0, x1, y1, strokeColor, strokeWidth) => {
@@ -501,6 +520,29 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                   <RotateCw size={14} /> Restore Board
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={handleSaveToDevice}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: savedToDevice ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.12)',
+                  color: savedToDevice ? '#10b981' : '#fff',
+                  border: savedToDevice ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(255, 255, 255, 0.25)',
+                  borderRadius: '10px',
+                  padding: '6px 13px',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                title="Save drawing directly to your device"
+              >
+                <Download size={14} />
+                <span>{savedToDevice ? 'Saved to Device!' : 'Save to Device'}</span>
+              </button>
 
               {onSendDrawing && (
                 <button onClick={handleSendToChat} className="btn-primary" style={{ padding: '6px 14px', fontSize: '0.82rem', borderRadius: '10px' }}>
