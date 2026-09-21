@@ -36,23 +36,38 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [selectedUsersMap, setSelectedUsersMap] = useState({}); // Keep selected users safe across searches
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(() => allUsers.length === 0);
   const [isSearchingServer, setIsSearchingServer] = useState(false);
   const [error, setError] = useState('');
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (token) {
+      fetchUsers();
+    }
+  }, [token, currentUser?.id]);
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/users`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        const cleanList = data.filter(u => u.id !== currentUser?.id);
+      // Fetch both all users and friends in parallel
+      const [usersRes, friendsRes] = await Promise.allSettled([
+        fetch(`${BACKEND_URL}/api/users`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${BACKEND_URL}/api/friends`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+
+      const loadedList = [];
+      if (usersRes.status === 'fulfilled' && usersRes.value.ok) {
+        const uData = await usersRes.value.json();
+        if (Array.isArray(uData)) loadedList.push(...uData);
+      }
+      if (friendsRes.status === 'fulfilled' && friendsRes.value.ok) {
+        const fData = await friendsRes.value.json();
+        if (fData?.friends && Array.isArray(fData.friends)) loadedList.push(...fData.friends);
+      }
+
+      if (loadedList.length > 0) {
+        const cleanList = loadedList.filter(u => u && u.id && u.id !== currentUser?.id);
         setAllUsers(prev => {
           const map = new Map();
           prev.forEach(u => map.set(u.id, u));
@@ -65,6 +80,8 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
       }
     } catch (err) {
       console.error('Failed to load users:', err);
+    } finally {
+      setInitialLoading(false);
     }
   };
 
@@ -84,11 +101,13 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
         });
         const serverResults = await res.json();
         if (Array.isArray(serverResults) && serverResults.length > 0) {
-          const cleanServerUsers = serverResults.filter(u => u.id !== currentUser?.id);
+          const cleanServerUsers = serverResults.filter(u => u && u.id && u.id !== currentUser?.id);
           setAllUsers(prev => {
             const map = new Map();
-            prev.forEach(u => map.set(u.id, u));
             cleanServerUsers.forEach(u => map.set(u.id, u));
+            prev.forEach(u => {
+              if (!map.has(u.id)) map.set(u.id, u);
+            });
             return Array.from(map.values());
           });
           if (currentUser?.id) {
@@ -100,7 +119,7 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
       } finally {
         setIsSearchingServer(false);
       }
-    }, 180);
+    }, 120);
 
     return () => clearTimeout(timer);
   }, [searchQuery, token, currentUser?.id]);
@@ -180,7 +199,8 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
     if (!q) return true;
     const nameMatch = u.displayName ? u.displayName.toLowerCase().includes(q) : false;
     const usernameMatch = u.username ? u.username.toLowerCase().includes(q) : false;
-    return nameMatch || usernameMatch;
+    const emailMatch = u.email ? u.email.toLowerCase().includes(q) : false;
+    return nameMatch || usernameMatch || emailMatch;
   });
 
   return (
@@ -284,7 +304,7 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
               <input
                 type="text"
                 className="animated-search-input"
-                placeholder="Search users by name or @username..."
+                placeholder="Search users by name, @username, or email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -295,9 +315,19 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
 
             {/* User List scroll container */}
             <div style={{ maxHeight: '190px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '14px', padding: '6px', background: 'var(--bg-chat)' }}>
-              {filteredUsers.length === 0 ? (
-                <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                  {isSearchingServer ? 'Searching users...' : (searchQuery.trim() ? `No users found matching "${searchQuery}"` : 'No users available')}
+              {initialLoading && allUsers.length === 0 ? (
+                <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <Loader2 size={16} className="animate-spin" style={{ color: 'var(--accent)' }} />
+                  <span>Loading contacts...</span>
+                </div>
+              ) : filteredUsers.length === 0 ? (
+                <div style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  {isSearchingServer ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <Loader2 size={16} className="animate-spin" style={{ color: 'var(--accent)' }} />
+                      <span>Searching for "{searchQuery}"...</span>
+                    </div>
+                  ) : (searchQuery.trim() ? `No users found matching "${searchQuery}". Check spelling or try @username.` : 'No contacts available yet.')}
                 </div>
               ) : (
                 filteredUsers.map(u => {

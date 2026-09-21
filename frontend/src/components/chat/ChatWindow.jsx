@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -10,6 +10,7 @@ import WhiteboardModal from './WhiteboardModal';
 import UserProfileModal from './UserProfileModal';
 import GroupProfileModal from './GroupProfileModal';
 import MediaUploadModal from './MediaUploadModal';
+import ChatThemeModal from './ChatThemeModal';
 import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
@@ -29,12 +30,16 @@ import {
 
 export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGroupCall, onOpenFullDp }) {
   const { user, token, blockUser, unblockUser } = useContext(AuthContext);
-  const { socket, onlineUsers, typingMap } = useContext(SocketContext);
+  const { socket, onlineUsers, typingMap, lastNotification } = useContext(SocketContext);
 
   const isGroup = !!activeChat.isGroup;
   const chatId = isGroup ? activeChat.id : [user.id, activeChat.id].sort().join('_');
   const isOnline = !isGroup && onlineUsers.includes(activeChat.id);
   const isTyping = typingMap[chatId] === activeChat.username;
+
+  const [showThemeModal, setShowThemeModal] = useState(false);
+  const [friendshipStatus, setFriendshipStatus] = useState(() => isGroup ? 'friends' : 'checking');
+  const [friendRequestId, setFriendRequestId] = useState(null);
 
   const [messages, setMessages] = useState(() => {
     const cached = getCachedMessages(chatId);
@@ -235,6 +240,127 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     }
   }, [activeChat, chatId, isGroup, token, socket, user.id]);
+
+  // Re-join chat room immediately when socket reconnects
+  useEffect(() => {
+    const handleRejoin = () => {
+      if (socket && chatId) {
+        socket.emit('join_chat', chatId);
+      }
+    };
+    window.addEventListener('pulsechat_socket_reconnected', handleRejoin);
+    if (socket) socket.on('connect', handleRejoin);
+    return () => {
+      window.removeEventListener('pulsechat_socket_reconnected', handleRejoin);
+      if (socket) socket.off('connect', handleRejoin);
+    };
+  }, [socket, chatId]);
+
+  // Fail-safe real-time message listener from lastNotification
+  useEffect(() => {
+    if (lastNotification && lastNotification.chatId === chatId) {
+      setMessages(prev => {
+        if (prev.some(m => m.id === lastNotification.id || (m.clientTempId && m.clientTempId === lastNotification.clientTempId))) {
+          return prev;
+        }
+        const updated = [...prev, lastNotification];
+        setCachedMessages(chatId, updated);
+        return updated;
+      });
+      if (lastNotification.senderId !== user.id) {
+        playSound('received');
+        socket?.emit('mark_read', { messageId: lastNotification.id, chatId });
+      }
+    }
+  }, [lastNotification, chatId, user.id, socket]);
+
+  // Fetch Friendship status for 1-to-1 chats
+  useEffect(() => {
+    if (isGroup) {
+      setFriendshipStatus('friends');
+      return;
+    }
+    // Existing conversation history allows chatting
+    if (messages.length > 0) {
+      setFriendshipStatus('friends');
+    }
+
+    let isMounted = true;
+    if (token && activeChat?.id) {
+      fetch(`${BACKEND_URL}/api/friends/status/${activeChat.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (!isMounted) return;
+          if (data?.status) {
+            setFriendshipStatus(data.status);
+            if (data.requestId) setFriendRequestId(data.requestId);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => { isMounted = false; };
+  }, [activeChat?.id, isGroup, token, messages.length]);
+
+  // Real-time friendship socket events
+  useEffect(() => {
+    if (!socket || isGroup) return;
+
+    const handleReqAccepted = (data) => {
+      if (data?.friend?.id === activeChat?.id || data?.friendId === activeChat?.id) {
+        setFriendshipStatus('friends');
+      }
+    };
+
+    const handleReqReceived = (data) => {
+      if (data?.request?.senderId === activeChat?.id) {
+        setFriendshipStatus('pending_received');
+        if (data.request?.id) setFriendRequestId(data.request.id);
+      }
+    };
+
+    socket.on('friend_request_accepted', handleReqAccepted);
+    socket.on('friend_request_received', handleReqReceived);
+    return () => {
+      socket.off('friend_request_accepted', handleReqAccepted);
+      socket.off('friend_request_received', handleReqReceived);
+    };
+  }, [socket, activeChat?.id, isGroup]);
+
+  const handleSendFriendRequest = async () => {
+    if (!token || !activeChat?.id) return;
+    try {
+      setFriendshipStatus('pending_sent');
+      const res = await fetch(`${BACKEND_URL}/api/friends/request/${activeChat.id}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data?.status === 'accepted') {
+        setFriendshipStatus('friends');
+      } else if (data?.request?.id) {
+        setFriendRequestId(data.request.id);
+      }
+    } catch (err) {
+      console.error('Failed to send friend request:', err);
+    }
+  };
+
+  const handleAcceptFriendRequest = async () => {
+    if (!token || !friendRequestId) return;
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/friends/accept/${friendRequestId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setFriendshipStatus('friends');
+      }
+    } catch (err) {
+      console.error('Failed to accept friend request:', err);
+    }
+  };
 
   // Listen to incoming messages & poll/deletion updates
   useEffect(() => {
@@ -850,6 +976,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               <Video size={19} />
             </button>
 
+            {/* Change Theme Palette Button */}
+            <button
+              onClick={() => setShowThemeModal(true)}
+              className="icon-btn-ghost"
+              title="Change Chat Theme"
+              style={{ width: '38px', height: '38px', borderRadius: '50%' }}
+            >
+              <Palette size={19} color="var(--accent)" />
+            </button>
+
             {/* 3-Dots More Options Menu */}
             <div className="chat-header-more-container" style={{ position: 'relative' }}>
               <button
@@ -863,6 +999,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
               {showMoreMenu && (
                 <div className="chat-header-dropdown-menu">
+                  <button onClick={() => { setShowMoreMenu(false); setShowThemeModal(true); }}>
+                    <Palette size={16} color="var(--accent)" />
+                    <span>Change Theme</span>
+                  </button>
                   <button onClick={() => { setShowMoreMenu(false); setShowWhiteboard(true); }}>
                     <Paintbrush size={16} color="var(--accent)" />
                     <span>Whiteboard Canvas</span>
@@ -1008,6 +1148,33 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {/* Message Stream with WhatsApp-Style Date Dividers */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        {!isGroup && friendshipStatus !== 'friends' && (
+          <div className="friend-request-shield">
+            <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
+              <UserPlus size={26} />
+            </div>
+            <h4 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)', fontWeight: 700 }}>
+              Direct Chat Protected
+            </h4>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: '340px' }}>
+              To keep PulseChat safe from spam, direct messaging with <strong>{activeChat.displayName || activeChat.username}</strong> is enabled only after becoming friends.
+            </p>
+            {friendshipStatus === 'pending_sent' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.86rem', fontWeight: 600 }}>
+                <Clock size={16} /> Request sent. Waiting for acceptance.
+              </div>
+            ) : friendshipStatus === 'pending_received' ? (
+              <button type="button" className="btn-primary" onClick={handleAcceptFriendRequest} style={{ padding: '8px 20px', borderRadius: '20px' }}>
+                <Check size={16} /> Accept Friend Request
+              </button>
+            ) : (
+              <button type="button" className="btn-primary" onClick={handleSendFriendRequest} style={{ padding: '8px 20px', borderRadius: '20px' }}>
+                <UserPlus size={16} /> Send Friend Request 🤝
+              </button>
+            )}
+          </div>
+        )}
+
         {messages.map((msg, index) => {
           const senderObj = groupMembersMap[msg.senderId];
           const prevMsg = index > 0 ? messages[index - 1] : null;
@@ -1303,6 +1470,47 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           <ShieldAlert size={18} color="var(--text-muted)" />
           <span>You cannot reply to this conversation.</span>
         </div>
+      ) : (!isGroup && friendshipStatus !== 'friends') ? (
+        <div style={{
+          padding: '1rem',
+          background: 'var(--bg-sidebar)',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          gap: '8px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.86rem' }}>
+            <Clock size={16} />
+            <span>
+              {friendshipStatus === 'pending_sent'
+                ? 'Friend request sent. Messaging will unlock when accepted.'
+                : friendshipStatus === 'pending_received'
+                ? `${activeChat.displayName || activeChat.username} sent you a friend request!`
+                : 'Direct messaging requires an accepted friend request.'}
+            </span>
+          </div>
+          {friendshipStatus === 'pending_received' ? (
+            <button
+              type="button"
+              onClick={handleAcceptFriendRequest}
+              className="btn-primary"
+              style={{ padding: '6px 20px', fontSize: '0.84rem', borderRadius: '16px' }}
+            >
+              <Check size={14} /> Accept Friend Request & Start Chat
+            </button>
+          ) : friendshipStatus === 'none' ? (
+            <button
+              type="button"
+              onClick={handleSendFriendRequest}
+              className="btn-primary"
+              style={{ padding: '6px 20px', fontSize: '0.84rem', borderRadius: '16px' }}
+            >
+              <UserPlus size={14} /> Send Friend Request
+            </button>
+          ) : null}
+        </div>
       ) : (
         <div style={{ padding: '0.75rem 1rem', background: 'var(--bg-sidebar)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
           {showEmoji && (
@@ -1385,6 +1593,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           onStartCall={onStartCall}
           onOpenFullDp={onOpenFullDp}
         />
+      )}
+
+      {showThemeModal && (
+        <ChatThemeModal onClose={() => setShowThemeModal(false)} />
       )}
     </div>
   );

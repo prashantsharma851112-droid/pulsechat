@@ -31,12 +31,22 @@ export function SocketProvider({ children }) {
 
   useEffect(() => {
     if (user) {
-      const newSocket = io(BACKEND_URL);
+      const newSocket = io(BACKEND_URL, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 400,
+        reconnectionDelayMax: 1500,
+        timeout: 10000
+      });
       setSocket(newSocket);
 
       const sendSetup = () => {
         if (user?.id) {
           newSocket.emit('setup', user.id);
+          try {
+            window.dispatchEvent(new Event('pulsechat_socket_reconnected'));
+          } catch (e) {}
         }
       };
 

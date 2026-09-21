@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
 import SettingsModal from '../profile/SettingsModal';
 import FriendsTab from './FriendsTab';
@@ -30,42 +30,81 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [isOnline, setIsOnline] = useState(() => isDeviceOnline());
   const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'groups' | 'friends'
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const [friendIdsSet, setFriendIdsSet] = useState(new Set());
+  const [outgoingPendingIds, setOutgoingPendingIds] = useState(new Set());
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
 
-  // Load pending friend requests count
-  const loadPendingRequestsCount = useCallback(async () => {
+  // Load friendship status and pending friend requests count
+  const loadFriendshipInfo = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await fetch(`${BACKEND_URL}/api/friends/requests`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data?.incoming) {
-        setPendingRequestsCount(data.incoming.length);
+      const [reqRes, friendsRes] = await Promise.allSettled([
+        fetch(`${BACKEND_URL}/api/friends/requests`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${BACKEND_URL}/api/friends`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+
+      if (reqRes.status === 'fulfilled' && reqRes.value.ok) {
+        const data = await reqRes.value.json();
+        if (data?.incoming) setPendingRequestsCount(data.incoming.length);
+        if (data?.outgoing) {
+          setOutgoingPendingIds(new Set(data.outgoing.map(r => r.receiverId)));
+        }
+      }
+
+      if (friendsRes.status === 'fulfilled' && friendsRes.value.ok) {
+        const fData = await friendsRes.value.json();
+        if (fData?.friends) {
+          setFriendIdsSet(new Set(fData.friends.map(f => f.id)));
+        }
       }
     } catch {}
   }, [token]);
 
   useEffect(() => {
-    loadPendingRequestsCount();
-  }, [loadPendingRequestsCount]);
+    loadFriendshipInfo();
+  }, [loadFriendshipInfo]);
 
   useEffect(() => {
     if (!socket) return;
     const handleReqUpdate = () => {
-      loadPendingRequestsCount();
+      loadFriendshipInfo();
     };
     socket.on('friend_request_received', handleReqUpdate);
     socket.on('friend_request_accepted', handleReqUpdate);
     socket.on('friend_request_rejected', handleReqUpdate);
     socket.on('friend_request_cancelled', handleReqUpdate);
+    socket.on('friend_removed', handleReqUpdate);
     return () => {
       socket.off('friend_request_received', handleReqUpdate);
       socket.off('friend_request_accepted', handleReqUpdate);
       socket.off('friend_request_rejected', handleReqUpdate);
       socket.off('friend_request_cancelled', handleReqUpdate);
+      socket.off('friend_removed', handleReqUpdate);
     };
-  }, [socket, loadPendingRequestsCount]);
+  }, [socket, loadFriendshipInfo]);
+
+  const handleSendFriendRequest = async (e, targetUserId) => {
+    e.stopPropagation();
+    if (!token || !targetUserId) return;
+    try {
+      setOutgoingPendingIds(prev => new Set([...prev, targetUserId]));
+      const res = await fetch(`${BACKEND_URL}/api/friends/request/${targetUserId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data?.status === 'accepted') {
+        setFriendIdsSet(prev => new Set([...prev, targetUserId]));
+        setOutgoingPendingIds(prev => {
+          const next = new Set(prev);
+          next.delete(targetUserId);
+          return next;
+        });
+      }
+    } catch (err) {
+      console.error('Failed to send friend request:', err);
+    }
+  };
 
   // When user becomes available (after login / token restore), load data from cache immediately
   useEffect(() => {
@@ -594,9 +633,31 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     {!u.isGroup && !silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {u.displayName || u.name}
-                    </h4>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {u.displayName || u.name}
+                      </h4>
+                      {!u.isGroup && (
+                        friendIdsSet.has(u.id) ? (
+                          <span className="friend-action-badge-btn friends" title="Confirmed Friend">
+                            <Check size={12} strokeWidth={2.5} /> Friend
+                          </span>
+                        ) : outgoingPendingIds.has(u.id) ? (
+                          <span className="friend-action-badge-btn pending" title="Friend Request Pending">
+                            <Clock size={12} /> Requested
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="friend-action-badge-btn add"
+                            onClick={(e) => handleSendFriendRequest(e, u.id)}
+                            title="Send Friend Request"
+                          >
+                            <UserPlus size={12} /> Add Friend
+                          </button>
+                        )
+                      )}
+                    </div>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {u.isGroup ? (u.description || `${u.members?.length || 0} members`) : `@${u.username}`}
                     </p>
@@ -715,9 +776,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             {/* Contacts Section — shown when there are cached users to start a new chat */}
             {contactsNotInRecent.length > 0 && (
               <>
-                <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', padding: recentChats.length > 0 ? '0.75rem 0.75rem 0.5rem' : '0.5rem 0.75rem', letterSpacing: '0.03em' }}>
-                  {recentChats.length > 0 ? 'MORE CONTACTS' : 'CONTACTS'}
-                </p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: recentChats.length > 0 ? '0.75rem 0.75rem 0.5rem' : '0.5rem 0.75rem' }}>
+                  <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.03em', margin: 0 }}>
+                    {recentChats.length > 0 ? 'MORE CONTACTS' : 'CONTACTS'}
+                  </p>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    🤝 Friend request required
+                  </span>
+                </div>
                 {contactsNotInRecent.map(u => (
                   <div
                     key={u.id}
@@ -739,9 +805,29 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                       {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <h4 style={{ fontSize: '1.02rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {u.displayName}
-                      </h4>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h4 style={{ fontSize: '1.02rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {u.displayName}
+                        </h4>
+                        {friendIdsSet.has(u.id) ? (
+                          <span className="friend-action-badge-btn friends" title="Confirmed Friend">
+                            <Check size={12} strokeWidth={2.5} /> Friend
+                          </span>
+                        ) : outgoingPendingIds.has(u.id) ? (
+                          <span className="friend-action-badge-btn pending" title="Friend Request Pending">
+                            <Clock size={12} /> Requested
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="friend-action-badge-btn add"
+                            onClick={(e) => handleSendFriendRequest(e, u.id)}
+                            title="Send Friend Request to start chatting"
+                          >
+                            <UserPlus size={12} /> Add Friend
+                          </button>
+                        )}
+                      </div>
                       <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         @{u.username}
                       </p>

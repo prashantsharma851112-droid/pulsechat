@@ -83,6 +83,21 @@
   --border: #4c1d3e;
 }
 
+[data-theme="ocean"] {
+  --bg-main: #061325;
+  --bg-sidebar: #0b1d3a;
+  --bg-chat: #040c18;
+  --bg-card: #132a4e;
+  --hover-bg: #1c3b6d;
+  --text-main: #f0f7ff;
+  --text-muted: #7ba3d8;
+  --accent: #0ea5e9;
+  --accent-hover: #0284c7;
+  --bubble-sent: #0284c7;
+  --bubble-received: #132a4e;
+  --border: #1a365d;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -1221,6 +1236,102 @@ input, textarea {
   pointer-events: none;
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
+
+/* Chat Theme Selector Modal */
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.theme-card {
+  padding: 12px;
+  border-radius: 14px;
+  border: 2px solid var(--border);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.theme-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+
+.theme-card.active {
+  border-color: var(--accent);
+  background: var(--hover-bg);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.theme-preview-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.theme-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Friend Request Chat Shield */
+.friend-request-shield {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  text-align: center;
+  margin: 16px auto;
+  max-width: 440px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.friend-action-badge-btn {
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 20px;
+  cursor: pointer;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.18s ease;
+}
+
+.friend-action-badge-btn.add {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.friend-action-badge-btn.add:hover {
+  background: var(--accent-hover);
+  transform: scale(1.04);
+}
+
+.friend-action-badge-btn.pending {
+  background: var(--hover-bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.friend-action-badge-btn.friends {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
 
 
 

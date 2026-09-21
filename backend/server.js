@@ -190,6 +190,34 @@ io.on('connection', (socket) => {
         return;
       }
 
+      // Strict Friendship Check for 1-to-1 chats:
+      // Users must be confirmed friends (or have existing chat history) to send messages
+      if (receiverId && !isGroup && receiverId !== senderId) {
+        const [senderDoc, receiverDoc] = await Promise.all([
+          User.findOne({ id: senderId }).select('friends').lean(),
+          User.findOne({ id: receiverId }).select('friends').lean()
+        ]);
+        const areFriends = Boolean(senderDoc?.friends?.includes(receiverId) && receiverDoc?.friends?.includes(senderId));
+        if (!areFriends) {
+          const Message = require('./models/Message');
+          const hasHistory = await Message.exists({ chatId });
+          if (!hasHistory) {
+            socket.emit('message_blocked', {
+              chatId,
+              receiverId,
+              reason: 'Friend request required. You must be friends to exchange direct messages.'
+            });
+            if (typeof ackCallback === 'function') {
+              ackCallback({
+                error: 'not_friends',
+                message: 'You must send and have an accepted Friend Request to message this user.'
+              });
+            }
+            return;
+          }
+        }
+      }
+
       const isDisappearing = Boolean(chatSetting && chatSetting.disappearingEnabled);
       const expiresAt = isDisappearing ? new Date(Date.now() + (chatSetting.disappearingDuration || 86400) * 1000) : null;
 
@@ -215,19 +243,27 @@ io.on('connection', (socket) => {
         expiresAt
       };
 
-      // Save to database & emit immediately
-      await db.saveMessage(newMsg);
-
+      // 1. Instant Ack to sender
       if (typeof ackCallback === 'function') {
         ackCallback({ success: true, message: newMsg });
       }
 
-      // Emit to chat room immediately
+      // 2. Immediate zero-latency emission to chat room AND direct user channels
       io.to(chatId).emit('new_message', newMsg);
+      io.to(`user_${senderId}`).emit('new_message', newMsg);
+      if (receiverId && !isGroup) {
+        io.to(`user_${receiverId}`).emit('new_message', newMsg);
+      }
+
+      // 3. Concurrently save to MongoDB (zero blocking on emission)
+      const savePromise = db.saveMessage(newMsg).catch(err => {
+        console.error('Error saving message to DB:', err);
+      });
 
       // Background notifications (non-blocking)
       setImmediate(async () => {
         try {
+          await savePromise;
           if (receiverId && !isGroup) {
             const sender = await User.findOne({ id: senderId }).select('displayName username avatar').lean();
             const notifPayload = {
@@ -263,6 +299,7 @@ io.on('connection', (socket) => {
 
               group.members.forEach(memberId => {
                 if (memberId !== senderId) {
+                  io.to(`user_${memberId}`).emit('new_message', newMsg);
                   io.to(`user_${memberId}`).emit('message_notification', notifPayload);
                   dispatchWebPush(memberId, `👥 ${group.name}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, true);
                 }

@@ -9,7 +9,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const results = await User.find({ id: { $ne: req.user.id } })
-      .select('id username displayName avatar isEmailVerified status')
+      .select('id username displayName avatar isEmailVerified status email')
       .limit(100)
       .lean();
     res.json(results);
@@ -25,7 +25,7 @@ router.get('/recent', authMiddleware, async (req, res) => {
   res.json(conversations);
 });
 
-// Search users by Name or @username (instant indexed regex lookup)
+// Search users by Name, @username, or Email (instant indexed regex lookup)
 router.get('/search', authMiddleware, async (req, res) => {
   try {
     const query = (req.query.q || '').toLowerCase().trim().replace(/^@/, '');
@@ -35,11 +35,12 @@ router.get('/search', authMiddleware, async (req, res) => {
       id: { $ne: req.user.id },
       $or: [
         { username: { $regex: query, $options: 'i' } },
-        { displayName: { $regex: query, $options: 'i' } }
+        { displayName: { $regex: query, $options: 'i' } },
+        { email: { $regex: query, $options: 'i' } }
       ]
     })
-    .select('id username displayName avatar isEmailVerified status')
-    .limit(30)
+    .select('id username displayName avatar isEmailVerified status email')
+    .limit(50)
     .lean();
 
     res.json(results);
