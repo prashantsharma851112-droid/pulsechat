@@ -245,23 +245,22 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     };
   }, [socket, loadRecentChats]);
 
-  // Search Users — offline-first: always search cache first, then try network
+  // Search Users — instant 0ms local cache display + 150ms debounced server search
   useEffect(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = searchQuery.trim().toLowerCase().replace(/^@/, '');
     if (q.length === 0) {
       setSearchResults([]);
       return;
     }
 
-    // 1. Immediately show local cache results (works offline too)
+    // 1. Immediately show local cache results (0ms instant response)
     const localUsers = getCachedAllUsers(user?.id) || [];
     const localRecent = getCachedRecentChats(user?.id) || [];
 
-    // Merge allUsers + recentChats to search across both lists (deduplicate by id)
     const seenIds = new Set();
     const combined = [];
     for (const u of [...localUsers, ...localRecent]) {
-      if (!seenIds.has(u.id)) {
+      if (u && u.id && !seenIds.has(u.id)) {
         seenIds.add(u.id);
         combined.push(u);
       }
@@ -275,17 +274,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
     setSearchResults(localMatches);
 
-    // 2. Also try network if online (merge fresh results)
-    if (isOnline) {
-      fetch(`${BACKEND_URL}/api/users/search?q=${encodeURIComponent(searchQuery.trim())}`, {
+    // 2. Debounced network search (150ms) to avoid server lag & fetch any new users
+    if (!token) return;
+    const timer = setTimeout(() => {
+      fetch(`${BACKEND_URL}/api/users/search?q=${encodeURIComponent(q)}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => res.json())
         .then(data => {
-          if (Array.isArray(data) && data.length > 0) {
-            // Cache the new users we discovered
-            if (user?.id) mergeIntoAllUsersCache(user.id, data);
-            // Merge with local matches (deduplicate)
+          if (Array.isArray(data)) {
+            if (user?.id && data.length > 0) mergeIntoAllUsersCache(user.id, data);
             const serverIds = new Set(data.map(u => u.id));
             const merged = [
               ...data,
@@ -294,11 +292,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             setSearchResults(merged);
           }
         })
-        .catch(() => {
-          // Already showing local results, nothing to do
-        });
-    }
-  }, [searchQuery, token, user?.id, isOnline]);
+        .catch(() => {});
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, token, user?.id]);
 
   const handleSelectUser = (selectedUser) => {
     setActiveChat(selectedUser);

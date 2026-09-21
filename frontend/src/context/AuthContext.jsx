@@ -11,10 +11,15 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (token) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
       fetch(`${BACKEND_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal
       })
         .then(async (res) => {
+          clearTimeout(timeoutId);
           if (res.status === 401) {
             logout();
             return;
@@ -26,10 +31,12 @@ export function AuthProvider({ children }) {
           }
         })
         .catch((err) => {
-          // Network error or offline: DO NOT LOGOUT! Keep the cached user session.
+          // Network error, timeout, or offline: DO NOT LOGOUT! Keep the cached user session.
           console.warn('Network offline or backend unreachable, keeping cached user session:', err);
         })
         .finally(() => setLoading(false));
+
+      return () => clearTimeout(timeoutId);
     } else {
       setLoading(false);
     }

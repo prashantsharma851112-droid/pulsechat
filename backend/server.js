@@ -166,13 +166,18 @@ io.on('connection', (socket) => {
     }
   };
 
-  // Send Real-Time Message
+  // Send Real-Time Message (Fast parallel check & instant emission)
   socket.on('send_message', async (messageData, ackCallback) => {
     const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, pollData, callData, isViewOnce, replyTo, clientTempId } = messageData;
 
-    // Check if blocked in 1-to-1 chat
-    if (receiverId && !isGroup) {
-      const blockStatus = await db.isUserBlocked(senderId, receiverId);
+    try {
+      // Parallelize block status and chat settings check
+      const [blockStatus, chatSetting] = await Promise.all([
+        (receiverId && !isGroup) ? db.isUserBlocked(senderId, receiverId) : Promise.resolve({ isBlocked: false }),
+        db.getChatSetting(chatId)
+      ]);
+
+      // Check if blocked in 1-to-1 chat
       if (blockStatus.isBlocked) {
         socket.emit('message_blocked', {
           chatId,
@@ -184,92 +189,93 @@ io.on('connection', (socket) => {
         if (typeof ackCallback === 'function') ackCallback({ error: 'blocked' });
         return;
       }
-    }
 
-    // Check if Disappearing Messages is enabled for this chat
-    const chatSetting = await db.getChatSetting(chatId);
-    const isDisappearing = Boolean(chatSetting && chatSetting.disappearingEnabled);
-    const expiresAt = isDisappearing ? new Date(Date.now() + (chatSetting.disappearingDuration || 86400) * 1000) : null;
+      const isDisappearing = Boolean(chatSetting && chatSetting.disappearingEnabled);
+      const expiresAt = isDisappearing ? new Date(Date.now() + (chatSetting.disappearingDuration || 86400) * 1000) : null;
 
-    const isReceiverOnline = Boolean(receiverId && onlineUsers.has(receiverId));
+      const newMsg = {
+        id: 'msg_' + Date.now(),
+        clientTempId: clientTempId || null,
+        chatId,
+        senderId,
+        receiverId: receiverId || '',
+        isGroup: !!isGroup,
+        content: content || '',
+        type: type || 'text',
+        audioUrl: audioUrl || null,
+        mediaUrl: mediaUrl || null,
+        pollData: pollData || null,
+        callData: callData || null,
+        isViewOnce: !!isViewOnce,
+        viewedBy: [],
+        status: 'sent',
+        timestamp: new Date().toISOString(),
+        reactions: {},
+        replyTo: replyTo || null,
+        expiresAt
+      };
 
-    const newMsg = {
-      id: 'msg_' + Date.now(),
-      clientTempId: clientTempId || null,
-      chatId,
-      senderId,
-      receiverId: receiverId || '',
-      isGroup: !!isGroup,
-      content: content || '',
-      type: type || 'text',
-      audioUrl: audioUrl || null,
-      mediaUrl: mediaUrl || null,
-      pollData: pollData || null,
-      callData: callData || null,
-      isViewOnce: !!isViewOnce,
-      viewedBy: [],
-      status: 'sent',
-      timestamp: new Date().toISOString(),
-      reactions: {},
-      replyTo: replyTo || null,  // WhatsApp-style reply data
-      expiresAt
-    };
+      // Save to database & emit immediately
+      await db.saveMessage(newMsg);
 
-    await db.saveMessage(newMsg);
-
-    if (typeof ackCallback === 'function') {
-      ackCallback({ success: true, message: newMsg });
-    }
-
-    // Emit to room & direct recipient
-    io.to(chatId).emit('new_message', newMsg);
-
-    if (receiverId && !isGroup) {
-      try {
-        const sender = await User.findOne({ id: senderId }).select('displayName username avatar');
-        const notifPayload = {
-          ...newMsg,
-          senderName: sender?.displayName || sender?.username || senderId,
-          senderAvatar: sender?.avatar || null
-        };
-        io.to(`user_${receiverId}`).emit('message_notification', notifPayload);
-
-        // Web Push notification bhej taaki app poori band hone par bhi notification aaye
-        const bodyText = newMsg.type === 'text'
-          ? (newMsg.content || 'New message')
-          : `Sent a ${newMsg.type}`;
-        dispatchWebPush(receiverId, `💬 ${notifPayload.senderName}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, false);
-      } catch (e) {
-        io.to(`user_${receiverId}`).emit('message_notification', newMsg);
+      if (typeof ackCallback === 'function') {
+        ackCallback({ success: true, message: newMsg });
       }
-    } else if (isGroup) {
-      try {
-        const Group = require('./models/Group');
-        const group = await Group.findOne({ id: chatId });
-        const sender = await User.findOne({ id: senderId }).select('displayName username avatar');
-        if (group && group.members) {
-          const senderName = sender?.displayName || sender?.username || senderId;
-          const notifPayload = {
-            ...newMsg,
-            isGroup: true,
-            groupName: group.name,
-            senderName,
-            senderAvatar: group.avatar || sender?.avatar || null
-          };
-          const bodyText = newMsg.type === 'text'
-            ? `${senderName}: ${newMsg.content}`
-            : `${senderName} sent a ${newMsg.type}`;
 
-          group.members.forEach(memberId => {
-            if (memberId !== senderId) {
-              io.to(`user_${memberId}`).emit('message_notification', notifPayload);
-              dispatchWebPush(memberId, `👥 ${group.name}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, true);
+      // Emit to chat room immediately
+      io.to(chatId).emit('new_message', newMsg);
+
+      // Background notifications (non-blocking)
+      setImmediate(async () => {
+        try {
+          if (receiverId && !isGroup) {
+            const sender = await User.findOne({ id: senderId }).select('displayName username avatar').lean();
+            const notifPayload = {
+              ...newMsg,
+              senderName: sender?.displayName || sender?.username || senderId,
+              senderAvatar: sender?.avatar || null
+            };
+            io.to(`user_${receiverId}`).emit('message_notification', notifPayload);
+
+            const bodyText = newMsg.type === 'text'
+              ? (newMsg.content || 'New message')
+              : `Sent a ${newMsg.type}`;
+            dispatchWebPush(receiverId, `💬 ${notifPayload.senderName}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, false);
+          } else if (isGroup) {
+            const Group = require('./models/Group');
+            const [group, sender] = await Promise.all([
+              Group.findOne({ id: chatId }).lean(),
+              User.findOne({ id: senderId }).select('displayName username avatar').lean()
+            ]);
+
+            if (group && group.members) {
+              const senderName = sender?.displayName || sender?.username || senderId;
+              const notifPayload = {
+                ...newMsg,
+                isGroup: true,
+                groupName: group.name,
+                senderName,
+                senderAvatar: group.avatar || sender?.avatar || null
+              };
+              const bodyText = newMsg.type === 'text'
+                ? `${senderName}: ${newMsg.content}`
+                : `${senderName} sent a ${newMsg.type}`;
+
+              group.members.forEach(memberId => {
+                if (memberId !== senderId) {
+                  io.to(`user_${memberId}`).emit('message_notification', notifPayload);
+                  dispatchWebPush(memberId, `👥 ${group.name}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, true);
+                }
+              });
             }
-          });
+          }
+        } catch (bgErr) {
+          console.error('Background notification dispatch error:', bgErr);
         }
-      } catch (e) {
-        console.error('Group notification error:', e);
-      }
+      });
+    } catch (sendErr) {
+      console.error('send_message error:', sendErr);
+      if (typeof ackCallback === 'function') ackCallback({ error: 'Failed to send message' });
     }
   });
 

@@ -33,4 +33,9 @@ const messageSchema = new mongoose.Schema({
   expiresAt: { type: Date, default: null, index: { expires: 0 } }
 });
 
+messageSchema.index({ senderId: 1, receiverId: 1 });
+messageSchema.index({ receiverId: 1, status: 1 });
+messageSchema.index({ chatId: 1, timestamp: -1 });
+
 module.exports = mongoose.model('Message', messageSchema);
+

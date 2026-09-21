@@ -6,11 +6,11 @@ const mongoose = require('mongoose');
 // user.id / message.id as plain strings, so keeping that shape means we
 // don't have to rewrite that logic, only how it's stored.
 const userSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true },
-  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-  username: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  id: { type: String, required: true, unique: true, index: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
+  username: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
   passwordHash: { type: String, required: true },
-  displayName: { type: String, required: true },
+  displayName: { type: String, required: true, index: true },
   avatar: { type: String, default: '' },
   status: { type: String, default: 'Hey there! I am using PulseChat.' },
   isEmailVerified: { type: Boolean, default: false },
@@ -29,4 +29,7 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+userSchema.index({ username: 1, displayName: 1 });
+
 module.exports = mongoose.model('User', userSchema);
+

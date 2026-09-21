@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const config = require('../config');
 const db = require('../database/db');
+const User = require('../models/User');
 const authMiddleware = require('../middleware/authMiddleware');
 const mailer = require('../utils/mailer');
 
@@ -37,11 +38,10 @@ async function verifyGoogleIdToken(idToken) {
   });
 }
 
-// Live Username Availability Check
+// Live Username Availability Check (instant index lookup)
 router.get('/check-username/:username', async (req, res) => {
   const username = req.params.username.toLowerCase().trim();
-  const users = await db.getUsers();
-  const exists = users.some(u => u.username.toLowerCase() === username);
+  const exists = await User.exists({ username });
   res.json({ available: !exists });
 });
 
@@ -70,8 +70,8 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Username must be at least 3 characters.' });
     }
 
-    const users = await db.getUsers();
-    const existingUser = users.find(u => u.email.toLowerCase() === cleanEmail);
+    // Direct indexed query instead of full collection dump
+    const existingUser = await User.findOne({ email: cleanEmail });
 
     if (existingUser) {
       if (existingUser.isEmailVerified) {
@@ -86,8 +86,8 @@ router.post('/register', async (req, res) => {
       const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
       // Check if username is taken by another verified user
-      const otherUserWithUsername = users.find(u => u.username.toLowerCase() === cleanUsername && u.id !== existingUser.id);
-      if (otherUserWithUsername && otherUserWithUsername.isEmailVerified) {
+      const otherUserWithUsername = await User.findOne({ username: cleanUsername, id: { $ne: existingUser.id }, isEmailVerified: true });
+      if (otherUserWithUsername) {
         return res.status(400).json({ error: 'Username is already taken by another account.' });
       }
 
@@ -116,7 +116,8 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    if (users.some(u => u.username.toLowerCase() === cleanUsername)) {
+    const usernameTaken = await User.exists({ username: cleanUsername });
+    if (usernameTaken) {
       return res.status(400).json({ error: 'Username is already taken.' });
     }
 
@@ -172,9 +173,10 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Please enter Email/Username and Password.' });
     }
 
-    const users = await db.getUsers();
     const cleanId = identifier.toLowerCase().trim().replace(/^@/, '');
-    const user = users.find(u => u.email.toLowerCase() === cleanId || u.username.toLowerCase() === cleanId);
+    const user = await User.findOne({
+      $or: [{ email: cleanId }, { username: cleanId }]
+    });
 
     if (!user) {
       return res.status(400).json({ error: 'Invalid credentials.' });
@@ -214,7 +216,7 @@ router.post('/login', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    const { passwordHash: _, otpCode: __, ...userWithoutPass } = user;
+    const { passwordHash: _, otpCode: __, ...userWithoutPass } = user.toObject ? user.toObject() : user;
     res.json({ token, user: userWithoutPass });
   } catch (err) {
     console.error('Login Error:', err);
@@ -230,9 +232,8 @@ router.post('/resend-otp', async (req, res) => {
       return res.status(400).json({ error: 'Email or User ID is required.' });
     }
 
-    const users = await db.getUsers();
     const cleanEmail = (email || '').toLowerCase().trim();
-    const user = users.find(u => (userId && u.id === userId) || u.email.toLowerCase() === cleanEmail);
+    const user = await User.findOne(userId ? { id: userId } : { email: cleanEmail });
 
     if (!user) {
       return res.status(404).json({ error: 'Account not found with this email.' });
@@ -305,8 +306,7 @@ router.post('/send-otp', async (req, res) => {
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const users = await db.getUsers();
-    const existingUser = users.find(u => u.email.toLowerCase() === cleanEmail);
+    const existingUser = await User.findOne({ email: cleanEmail });
 
     let mailResult = { delivered: false };
     if (existingUser) {
@@ -334,9 +334,8 @@ router.post('/verify-otp', async (req, res) => {
     const { email, otp, userId } = req.body;
     if (!otp) return res.status(400).json({ error: 'OTP code is required.' });
 
-    const users = await db.getUsers();
     const cleanEmail = (email || '').toLowerCase().trim();
-    const user = users.find(u => (userId && u.id === userId) || u.email.toLowerCase() === cleanEmail);
+    const user = await User.findOne(userId ? { id: userId } : { email: cleanEmail });
 
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
@@ -388,8 +387,7 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    const users = await db.getUsers();
-    const user = users.find(u => u.email.toLowerCase() === cleanEmail);
+    const user = await User.findOne({ email: cleanEmail });
 
     if (!user) {
       return res.status(404).json({ error: 'No account found with this email address.' });
@@ -435,8 +433,7 @@ router.post('/reset-password', async (req, res) => {
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    const users = await db.getUsers();
-    const user = users.find(u => u.email.toLowerCase() === cleanEmail);
+    const user = await User.findOne({ email: cleanEmail });
 
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
@@ -489,8 +486,7 @@ router.post('/google', async (req, res) => {
       return res.status(400).json({ error: 'Google account does not have a verified email address.' });
     }
 
-    const users = await db.getUsers();
-    let user = users.find(u => u.email.toLowerCase() === googleEmail);
+    let user = await User.findOne({ email: googleEmail });
 
     if (user) {
       // Existing user: ensure marked verified and avatar updated if empty
@@ -506,7 +502,7 @@ router.post('/google', async (req, res) => {
       const cleanBase = (googleEmail.split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '');
       let candidateUsername = cleanBase;
       let counter = 1;
-      while (users.some(u => u.username.toLowerCase() === candidateUsername)) {
+      while (await User.exists({ username: candidateUsername })) {
         candidateUsername = `${cleanBase}${counter++}`;
       }
 
@@ -538,7 +534,7 @@ router.post('/google', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    const { passwordHash: _, otpCode: __, ...safeUser } = user;
+    const { passwordHash: _, otpCode: __, ...safeUser } = user.toObject ? user.toObject() : user;
     res.json({
       success: true,
       token,
@@ -550,14 +546,15 @@ router.post('/google', async (req, res) => {
   }
 });
 
-// Verify Current Session
+// Verify Current Session (instant index lookup)
 router.get('/me', authMiddleware, async (req, res) => {
-  const users = await db.getUsers();
-  const user = users.find(u => u.id === req.user.id);
+  const user = await User.findOne({ id: req.user.id })
+    .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
+    .lean();
   if (!user) return res.status(404).json({ error: 'User not found.' });
 
-  const { passwordHash: _, otpCode: __, ...userWithoutPass } = user;
-  res.json({ user: userWithoutPass });
+  res.json({ user });
 });
 
 module.exports = router;
+

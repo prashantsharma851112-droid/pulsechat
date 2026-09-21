@@ -8,10 +8,10 @@ const authMiddleware = require('../middleware/authMiddleware');
 // Get all registered users (except current user)
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const users = await db.getUsers();
-    const results = users
-      .filter(u => u.id !== req.user.id)
-      .map(({ passwordHash, friends, otpCode, otpExpires, pushSubscriptions, ...u }) => u);
+    const results = await User.find({ id: { $ne: req.user.id } })
+      .select('id username displayName avatar isEmailVerified status')
+      .limit(100)
+      .lean();
     res.json(results);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -25,18 +25,27 @@ router.get('/recent', authMiddleware, async (req, res) => {
   res.json(conversations);
 });
 
-// Search users by Name or @username
+// Search users by Name or @username (instant indexed regex lookup)
 router.get('/search', authMiddleware, async (req, res) => {
-  const query = (req.query.q || '').toLowerCase().trim().replace(/^@/, '');
-  if (!query) return res.json([]); // don't list everyone when there's no search term
+  try {
+    const query = (req.query.q || '').toLowerCase().trim().replace(/^@/, '');
+    if (!query) return res.json([]);
 
-  const users = await db.getUsers();
+    const results = await User.find({
+      id: { $ne: req.user.id },
+      $or: [
+        { username: { $regex: query, $options: 'i' } },
+        { displayName: { $regex: query, $options: 'i' } }
+      ]
+    })
+    .select('id username displayName avatar isEmailVerified status')
+    .limit(30)
+    .lean();
 
-  const results = users
-    .filter(u => u.id !== req.user.id && (u.username.includes(query) || u.displayName.toLowerCase().includes(query)))
-    .map(({ passwordHash, friends, otpCode, otpExpires, pushSubscriptions, ...u }) => u);
-
-  res.json(results);
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to search users' });
+  }
 });
 
 // Update Profile (DP / Avatar, Display Name, Status/Bio, Privacy)
@@ -199,13 +208,17 @@ router.delete('/push-subscription', authMiddleware, async (req, res) => {
   }
 });
 
-// Get User Profile by ID
+// Get User Profile by ID (instant index lookup)
 router.get('/:id', authMiddleware, async (req, res) => {
-  const users = await db.getUsers();
-  const target = users.find(u => u.id === req.params.id);
-  if (!target) return res.status(404).json({ error: 'User not found' });
-  const { passwordHash, friends, otpCode, otpExpires, pushSubscriptions, ...safeUser } = target;
-  res.json(safeUser);
+  try {
+    const target = await User.findOne({ id: req.params.id })
+      .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
+      .lean();
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    res.json(target);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
 });
 
 module.exports = router;

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { X, Users, Check, Search, Camera, Image, Sparkles } from 'lucide-react';
+import { X, Users, Check, Search, Camera, Image, Sparkles, Loader2 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { BACKEND_URL } from '../../utils/config';
+import { getCachedAllUsers, mergeIntoAllUsersCache, getCachedRecentChats } from '../../utils/offlineStorage';
 
 const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/identicon/svg?seed=group1',
@@ -18,9 +19,24 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
   const [description, setDescription] = useState('');
   const [avatar, setAvatar] = useState(PRESET_AVATARS[0]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [allUsers, setAllUsers] = useState([]);
+  
+  // Instant offline cache preload so users show with 0ms latency
+  const [allUsers, setAllUsers] = useState(() => {
+    const cached = getCachedAllUsers(currentUser?.id) || [];
+    const recent = getCachedRecentChats(currentUser?.id) || [];
+    const map = new Map();
+    [...cached, ...recent].forEach(u => {
+      if (u && u.id && u.id !== currentUser?.id && !u.isGroup) {
+        map.set(u.id, u);
+      }
+    });
+    return Array.from(map.values());
+  });
+
   const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [selectedUsersMap, setSelectedUsersMap] = useState({}); // Keep selected users safe across searches
   const [loading, setLoading] = useState(false);
+  const [isSearchingServer, setIsSearchingServer] = useState(false);
   const [error, setError] = useState('');
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const fileInputRef = useRef(null);
@@ -36,18 +52,74 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
       });
       const data = await res.json();
       if (Array.isArray(data)) {
-        setAllUsers(data.filter(u => u.id !== currentUser?.id));
+        const cleanList = data.filter(u => u.id !== currentUser?.id);
+        setAllUsers(prev => {
+          const map = new Map();
+          prev.forEach(u => map.set(u.id, u));
+          cleanList.forEach(u => map.set(u.id, u));
+          return Array.from(map.values());
+        });
+        if (currentUser?.id) {
+          mergeIntoAllUsersCache(currentUser.id, cleanList);
+        }
       }
     } catch (err) {
       console.error('Failed to load users:', err);
     }
   };
 
-  const toggleUserSelection = (userId) => {
+  // Live dynamic debounced search to find ANY user in database
+  useEffect(() => {
+    const q = searchQuery.trim().toLowerCase().replace(/^@/, '');
+    if (!q) {
+      setIsSearchingServer(false);
+      return;
+    }
+
+    setIsSearchingServer(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/users/search?q=${encodeURIComponent(q)}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const serverResults = await res.json();
+        if (Array.isArray(serverResults) && serverResults.length > 0) {
+          const cleanServerUsers = serverResults.filter(u => u.id !== currentUser?.id);
+          setAllUsers(prev => {
+            const map = new Map();
+            prev.forEach(u => map.set(u.id, u));
+            cleanServerUsers.forEach(u => map.set(u.id, u));
+            return Array.from(map.values());
+          });
+          if (currentUser?.id) {
+            mergeIntoAllUsersCache(currentUser.id, cleanServerUsers);
+          }
+        }
+      } catch (e) {
+        console.warn('Live search error:', e);
+      } finally {
+        setIsSearchingServer(false);
+      }
+    }, 180);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, token, currentUser?.id]);
+
+  const toggleUserSelection = (targetUser) => {
+    const userId = targetUser.id;
     if (selectedUserIds.includes(userId)) {
       setSelectedUserIds(selectedUserIds.filter(id => id !== userId));
+      setSelectedUsersMap(prev => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
     } else {
       setSelectedUserIds([...selectedUserIds, userId]);
+      setSelectedUsersMap(prev => ({
+        ...prev,
+        [userId]: targetUser
+      }));
     }
   };
 
@@ -207,7 +279,7 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
             </div>
 
             {/* Glowing Animated Search Bar */}
-            <div className="animated-search-wrapper" style={{ marginBottom: '10px' }}>
+            <div className="animated-search-wrapper" style={{ marginBottom: '10px', position: 'relative' }}>
               <Search size={18} className="animated-search-icon" />
               <input
                 type="text"
@@ -216,19 +288,24 @@ export default function CreateGroupModal({ onClose, onGroupCreated }) {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+              {isSearchingServer && (
+                <Loader2 size={16} className="animate-spin" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--accent)' }} />
+              )}
             </div>
 
             {/* User List scroll container */}
             <div style={{ maxHeight: '190px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '14px', padding: '6px', background: 'var(--bg-chat)' }}>
               {filteredUsers.length === 0 ? (
-                <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>No users found</div>
+                <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  {isSearchingServer ? 'Searching users...' : (searchQuery.trim() ? `No users found matching "${searchQuery}"` : 'No users available')}
+                </div>
               ) : (
                 filteredUsers.map(u => {
                   const isSelected = selectedUserIds.includes(u.id);
                   return (
                     <div
                       key={u.id}
-                      onClick={() => toggleUserSelection(u.id)}
+                      onClick={() => toggleUserSelection(u)}
                       className={`user-select-card ${isSelected ? 'selected' : ''}`}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

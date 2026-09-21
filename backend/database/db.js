@@ -180,12 +180,11 @@ module.exports = {
 
   // Returns everyone the given user has EVER exchanged a message with,
   // ordered by most recent activity, each with the last message preview
-  // and an unread count. This powers the persistent "Chats" list in the
-  // sidebar - it does NOT depend on the user having searched for anyone,
-  // so if someone messages you first, you'll see them here automatically.
+  // and an unread count. Batch-optimized to avoid sequential N+1 database queries.
   getRecentConversations: async (myId) => {
     const messages = await Message.find({ $or: [{ senderId: myId }, { receiverId: myId }] })
       .sort({ timestamp: -1 })
+      .limit(300)
       .lean();
 
     const seen = new Set();
@@ -198,16 +197,29 @@ module.exports = {
       }
     }
 
+    if (ordered.length === 0) return [];
+
+    const otherIds = Array.from(seen);
+
+    // 1. Single batch query for all interlocutors
+    const usersList = await User.find({ id: { $in: otherIds } })
+      .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
+      .lean();
+    const userMap = new Map(usersList.map(u => [u.id, u]));
+
+    // 2. Single batch aggregation for unread counts
+    const unreadAgg = await Message.aggregate([
+      { $match: { receiverId: myId, status: { $ne: 'read' }, senderId: { $in: otherIds } } },
+      { $group: { _id: '$senderId', count: { $sum: 1 } } }
+    ]);
+    const unreadMap = new Map(unreadAgg.map(u => [u._id, u.count]));
+
     const results = [];
     for (const { otherId, lastMessage } of ordered) {
-      const otherUser = await User.findOne({ id: otherId }).lean();
+      const otherUser = userMap.get(otherId);
       if (!otherUser) continue;
 
-      const unreadCount = await Message.countDocuments({
-        senderId: otherId,
-        receiverId: myId,
-        status: { $ne: 'read' }
-      });
+      const unreadCount = unreadMap.get(otherId) || 0;
 
       const lastMsgText = lastMessage.type === 'text'
         ? lastMessage.content
@@ -215,9 +227,8 @@ module.exports = {
             ? (lastMessage.callData?.isVideo ? '📹 Video Call' : '📞 Voice Call')
             : `[${lastMessage.type}]`);
 
-      const { passwordHash, ...safeUser } = otherUser;
       results.push({
-        ...safeUser,
+        ...otherUser,
         lastMessage: lastMsgText,
         lastMessageTime: lastMessage.timestamp,
         lastMessageFromMe: lastMessage.senderId === myId,
@@ -329,8 +340,9 @@ module.exports = {
 
   isUserBlocked: async (userAId, userBId) => {
     if (!userAId || !userBId) return { isBlocked: false, aBlockedB: false, bBlockedA: false };
-    const userA = await User.findOne({ id: userAId }).select('blockedUsers').lean();
-    const userB = await User.findOne({ id: userBId }).select('blockedUsers').lean();
+    const users = await User.find({ id: { $in: [userAId, userBId] } }).select('id blockedUsers').lean();
+    const userA = users.find(u => u.id === userAId);
+    const userB = users.find(u => u.id === userBId);
     const aBlockedB = Boolean(userA?.blockedUsers && userA.blockedUsers.includes(userBId));
     const bBlockedA = Boolean(userB?.blockedUsers && userB.blockedUsers.includes(userAId));
     return {
