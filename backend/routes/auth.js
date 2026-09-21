@@ -578,7 +578,9 @@ router.post('/google', async (req, res) => {
 
 // Verify Current Session (instant index lookup)
 router.get('/me', authMiddleware, async (req, res) => {
-  const user = await User.findOne({ id: req.user.id })
+  const mongoose = require('mongoose');
+  const isObjectId = mongoose.Types.ObjectId.isValid(req.user.id);
+  const user = await User.findOne(isObjectId ? { $or: [{ id: req.user.id }, { _id: req.user.id }] } : { id: req.user.id })
     .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
     .lean();
   if (!user) return res.status(404).json({ error: 'User not found.' });

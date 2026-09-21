@@ -60,10 +60,43 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
               setDisappearingEnabled(Boolean(setting.disappearingEnabled));
             }
           })
-          .catch(e => console.error("Error fetching chat setting:", e));
+          .catch(() => {});
       }
     }
-  }, [targetUser, token, chatId]);
+  }, [targetUser?.id, token, chatId]);
+
+  // Real-time DP / Profile sync
+  useEffect(() => {
+    const handleProfileUpdate = (data) => {
+      if (!data) return;
+      const isTarget = targetUser && (
+        targetUser.id === data.userId ||
+        (data.userMongoId && (targetUser.id === data.userMongoId || targetUser._id === data.userMongoId)) ||
+        (data.username && targetUser.username === data.username)
+      );
+      if (isTarget) {
+        setProfileData(prev => ({
+          ...prev,
+          ...(data.displayName !== undefined && data.displayName !== '' && { displayName: data.displayName }),
+          ...(data.avatar !== undefined && data.avatar !== '' && { avatar: data.avatar }),
+          ...(data.status !== undefined && { status: data.status })
+        }));
+      }
+    };
+
+    if (socket) socket.on('user_profile_updated', handleProfileUpdate);
+    const handleWindowEvent = (e) => {
+      if (e.detail?.updates) {
+        handleProfileUpdate({ userId: e.detail.targetUserId, ...e.detail.updates });
+      }
+    };
+    window.addEventListener('pulsechat_user_profile_updated', handleWindowEvent);
+
+    return () => {
+      if (socket) socket.off('user_profile_updated', handleProfileUpdate);
+      window.removeEventListener('pulsechat_user_profile_updated', handleWindowEvent);
+    };
+  }, [socket, targetUser]);
 
   // Real-time socket sync for friend status changes
   useEffect(() => {
@@ -249,6 +282,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
   };
 
   const userToDisplay = profileData || targetUser;
+  const validAvatar = userToDisplay?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userToDisplay?.username || 'user'}`;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -276,9 +310,9 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
           {/* Avatar with Clickable Full DP trigger */}
           <div style={{ position: 'relative', display: 'inline-block', marginBottom: '0.75rem' }}>
             <img
-              src={userToDisplay.avatar}
+              src={validAvatar}
               alt={userToDisplay.displayName}
-              onClick={() => onOpenFullDp(userToDisplay.avatar, userToDisplay.displayName, userToDisplay.username)}
+              onClick={() => onOpenFullDp(validAvatar, userToDisplay.displayName, userToDisplay.username)}
               style={{
                 width: '100px',
                 height: '100px',
@@ -451,7 +485,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '1.5rem' }}>
             <button
               className="btn-secondary"
-              onClick={() => onOpenFullDp(userToDisplay.avatar, userToDisplay.displayName, userToDisplay.username)}
+              onClick={() => onOpenFullDp(validAvatar, userToDisplay.displayName, userToDisplay.username)}
               style={{ flex: 1, padding: '8px 12px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
             >
               <Eye size={16} /> View DP

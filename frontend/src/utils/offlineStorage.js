@@ -79,8 +79,14 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
   };
 
   if (existingIdx !== -1) {
-    // Update existing entry and move to top
-    const updated = { ...recent[existingIdx], ...snippet };
+    // Update existing entry and move to top (preserve and update avatar if fresher non-empty avatar provided)
+    const existingAvatar = recent[existingIdx].avatar;
+    const incomingAvatar = targetChat?.avatar;
+    const updated = {
+      ...recent[existingIdx],
+      ...snippet,
+      avatar: incomingAvatar || existingAvatar || ''
+    };
     const newRecent = [updated, ...recent.filter((_, i) => i !== existingIdx)];
     setCachedRecentChats(userId, newRecent);
   } else if (targetChat) {
@@ -157,7 +163,14 @@ export function mergeIntoAllUsersCache(userId, newUsers) {
     } else {
       // Update existing entry with fresher data
       const idx = merged.findIndex(e => e.id === u.id);
-      if (idx !== -1) merged[idx] = { ...merged[idx], ...u };
+      if (idx !== -1) {
+        const existingAvatar = merged[idx].avatar;
+        merged[idx] = {
+          ...merged[idx],
+          ...u,
+          avatar: u.avatar || existingAvatar || ''
+        };
+      }
     }
   }
   setCachedAllUsers(userId, merged);
@@ -267,4 +280,66 @@ export function subscribeToNetworkChanges(callback) {
     window.removeEventListener('online', handleOnline);
     window.removeEventListener('offline', handleOffline);
   };
+}
+
+// Synchronize a user's updated profile (DP, displayName, status) across ALL caches & dispatch event
+export function updateUserProfileInStorage(targetUserId, updates, currentUserId) {
+  if (!targetUserId || !updates) return;
+
+  const { displayName, avatar, status, username, userMongoId } = updates;
+
+  const isMatch = (u) => {
+    if (!u) return false;
+    if (u.id && (u.id === targetUserId || (userMongoId && u.id === userMongoId))) return true;
+    if (u._id && (u._id === targetUserId || (userMongoId && u._id === userMongoId))) return true;
+    if (username && u.username === username) return true;
+    return false;
+  };
+
+  const applyUpdates = (u) => {
+    if (!isMatch(u)) return u;
+    return {
+      ...u,
+      ...(displayName !== undefined && displayName !== '' && { displayName }),
+      ...(avatar !== undefined && avatar !== '' && { avatar }),
+      ...(status !== undefined && { status })
+    };
+  };
+
+  // 1. Update Recent Chats cache
+  if (currentUserId) {
+    const recent = getCachedRecentChats(currentUserId);
+    if (recent && recent.length > 0) {
+      const updatedRecent = recent.map(applyUpdates);
+      setCachedRecentChats(currentUserId, updatedRecent);
+    }
+
+    // 2. Update All Users cache
+    const allUsers = getCachedAllUsers(currentUserId);
+    if (allUsers && allUsers.length > 0) {
+      const updatedAllUsers = allUsers.map(applyUpdates);
+      setCachedAllUsers(currentUserId, updatedAllUsers);
+    }
+
+    // 3. Update Friends cache
+    const friends = getCachedFriends(currentUserId);
+    if (friends && friends.length > 0) {
+      const updatedFriends = friends.map(applyUpdates);
+      setCachedFriends(currentUserId, updatedFriends);
+    }
+  }
+
+  // 4. Update own profile if the current logged-in user changed their DP
+  const currentUser = getCachedUser();
+  if (currentUser && isMatch(currentUser)) {
+    const updatedMe = applyUpdates(currentUser);
+    setCachedUser(updatedMe);
+  }
+
+  // 5. Dispatch global window event so activeChat, ChatWindow, and FriendsTab update immediately
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+      detail: { targetUserId, updates }
+    }));
+  }
 }

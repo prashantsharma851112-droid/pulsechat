@@ -184,6 +184,70 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
     };
   }, [socket, fetchFriends, fetchRequests, onRequestsCountChange, user?.id]);
 
+  // Real-time DP / Profile updates in Friends & Requests lists
+  useEffect(() => {
+    const handleProfileUpdate = (data) => {
+      if (!data) return;
+      const { userId, userMongoId, username, displayName, avatar, status } = data;
+
+      const isMatch = (u) => {
+        if (!u) return false;
+        if (u.id && (u.id === userId || (userMongoId && u.id === userMongoId))) return true;
+        if (u._id && (u._id === userId || (userMongoId && u._id === userMongoId))) return true;
+        if (username && u.username === username) return true;
+        return false;
+      };
+
+      setFriends(prev => prev.map(f => isMatch(f) ? {
+        ...f,
+        ...(displayName !== undefined && displayName !== '' && { displayName }),
+        ...(avatar !== undefined && avatar !== '' && { avatar }),
+        ...(status !== undefined && { status })
+      } : f));
+
+      setIncomingRequests(prev => prev.map(r => {
+        if (r.sender && isMatch(r.sender)) {
+          return {
+            ...r,
+            sender: {
+              ...r.sender,
+              ...(displayName !== undefined && displayName !== '' && { displayName }),
+              ...(avatar !== undefined && avatar !== '' && { avatar })
+            }
+          };
+        }
+        return r;
+      }));
+
+      setOutgoingRequests(prev => prev.map(r => {
+        if (r.receiver && isMatch(r.receiver)) {
+          return {
+            ...r,
+            receiver: {
+              ...r.receiver,
+              ...(displayName !== undefined && displayName !== '' && { displayName }),
+              ...(avatar !== undefined && avatar !== '' && { avatar })
+            }
+          };
+        }
+        return r;
+      }));
+    };
+
+    if (socket) socket.on('user_profile_updated', handleProfileUpdate);
+    const handleWindowEvent = (e) => {
+      if (e.detail?.updates) {
+        handleProfileUpdate({ userId: e.detail.targetUserId, ...e.detail.updates });
+      }
+    };
+    window.addEventListener('pulsechat_user_profile_updated', handleWindowEvent);
+
+    return () => {
+      if (socket) socket.off('user_profile_updated', handleProfileUpdate);
+      window.removeEventListener('pulsechat_user_profile_updated', handleWindowEvent);
+    };
+  }, [socket]);
+
   // Accept Friend Request (0ms instant optimistic update)
   const handleAccept = async (requestId) => {
     const targetReq = incomingRequests.find(r => r.id === requestId);

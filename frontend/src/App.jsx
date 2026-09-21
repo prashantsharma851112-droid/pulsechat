@@ -16,6 +16,7 @@ import PandaHero from './components/common/PandaHero';
 import FullDpModal from './components/common/FullDpModal';
 import Toast from './components/common/Toast';
 import { BACKEND_URL } from './utils/config';
+import { updateUserProfileInStorage } from './utils/offlineStorage';
 import { Zap, AlertTriangle } from 'lucide-react';
 
 class ErrorBoundary extends React.Component {
@@ -108,6 +109,38 @@ export default function App() {
   useEffect(() => {
     activeChatRef.current = activeChat;
   }, [activeChat]);
+
+  // Real-time DP & Profile sync across activeChat and local caches
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleProfileUpdate = (data) => {
+      if (!data) return;
+      const targetUserId = data.userId;
+      updateUserProfileInStorage(targetUserId, data, user?.id);
+
+      // Instantly update activeChat if it's the user whose DP changed
+      setActiveChat(prev => {
+        if (!prev) return null;
+        const isTarget = prev.id === targetUserId ||
+          (data.userMongoId && (prev.id === data.userMongoId || prev._id === data.userMongoId)) ||
+          (data.username && prev.username === data.username);
+
+        if (isTarget) {
+          return {
+            ...prev,
+            ...(data.displayName !== undefined && data.displayName !== '' && { displayName: data.displayName }),
+            ...(data.avatar !== undefined && data.avatar !== '' && { avatar: data.avatar }),
+            ...(data.status !== undefined && { status: data.status })
+          };
+        }
+        return prev;
+      });
+    };
+
+    socket.on('user_profile_updated', handleProfileUpdate);
+    return () => socket.off('user_profile_updated', handleProfileUpdate);
+  }, [socket, user?.id]);
 
   // Responsive Mobile Detection (screen width, user agent, touch points)
   const [isMobile, setIsMobile] = useState(() => {

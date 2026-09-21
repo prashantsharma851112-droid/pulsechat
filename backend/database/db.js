@@ -22,7 +22,12 @@ module.exports = {
   },
 
   updateUser: async (id, updates) => {
-    const updated = await User.findOneAndUpdate({ id }, updates, { new: true }).lean();
+    const mongoose = require('mongoose');
+    const isObjectId = mongoose.Types.ObjectId.isValid(id);
+    const query = isObjectId
+      ? { $or: [{ id }, { _id: id }] }
+      : { id };
+    const updated = await User.findOneAndUpdate(query, updates, { new: true }).lean();
     return updated;
   },
 
@@ -205,8 +210,15 @@ module.exports = {
     const otherIds = Array.from(seen);
 
     // 1 & 2. Concurrent batch queries for interlocutors and unread counts
+    const mongoose = require('mongoose');
+    const validObjectIds = otherIds.filter(id => mongoose.Types.ObjectId.isValid(id));
     const [usersList, unreadAgg] = await Promise.all([
-      User.find({ id: { $in: otherIds } })
+      User.find({
+        $or: [
+          { id: { $in: otherIds } },
+          ...(validObjectIds.length > 0 ? [{ _id: { $in: validObjectIds } }] : [])
+        ]
+      })
         .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
         .lean(),
       Message.aggregate([
@@ -214,7 +226,13 @@ module.exports = {
         { $group: { _id: '$senderId', count: { $sum: 1 } } }
       ])
     ]);
-    const userMap = new Map(usersList.map(u => [u.id, u]));
+
+    const userMap = new Map();
+    for (const u of usersList) {
+      if (u.id) userMap.set(u.id, u);
+      if (u._id) userMap.set(u._id.toString(), u);
+      if (u.username) userMap.set(u.username, u);
+    }
     const unreadMap = new Map(unreadAgg.map(u => [u._id, u.count]));
 
     const results = [];

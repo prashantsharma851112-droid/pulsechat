@@ -63,7 +63,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
     const { displayName, avatar, status, hideReadReceipts } = req.body;
     const updates = {};
     if (displayName) updates.displayName = displayName.trim();
-    if (avatar) updates.avatar = avatar;
+    if (avatar !== undefined) updates.avatar = avatar;
     if (status !== undefined) updates.status = status.trim();
     if (hideReadReceipts !== undefined) updates.hideReadReceipts = Boolean(hideReadReceipts);
 
@@ -76,7 +76,9 @@ router.put('/profile', authMiddleware, async (req, res) => {
     const io = req.app.get('io');
     if (io) {
       io.emit('user_profile_updated', {
-        userId: req.user.id,
+        userId: userWithoutPass.id,
+        userMongoId: userWithoutPass._id ? userWithoutPass._id.toString() : null,
+        username: userWithoutPass.username,
         displayName: userWithoutPass.displayName,
         avatar: userWithoutPass.avatar,
         status: userWithoutPass.status
@@ -151,6 +153,30 @@ router.get('/:id/block-status', authMiddleware, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to check block status' });
+  }
+});
+
+// Get Specific User Profile by ID or username
+router.get('/:id', authMiddleware, async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    const mongoose = require('mongoose');
+    const isObjectId = mongoose.Types.ObjectId.isValid(targetId);
+    const targetUser = await User.findOne({
+      $or: [
+        { id: targetId },
+        ...(isObjectId ? [{ _id: targetId }] : []),
+        { username: targetId }
+      ]
+    }).select('id username displayName avatar isEmailVerified status createdAt').lean();
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(targetUser);
+  } catch (err) {
+    console.error('Fetch user by ID error:', err);
+    res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
 

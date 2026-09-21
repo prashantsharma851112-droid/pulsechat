@@ -44,6 +44,40 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   });
   const [selectedVibe, setSelectedVibe] = useState('⚡ Quick Pulse');
 
+  const [chatAvatar, setChatAvatar] = useState(() => activeChat?.avatar || '');
+
+  useEffect(() => {
+    setChatAvatar(activeChat?.avatar || '');
+  }, [activeChat?.id, activeChat?.avatar]);
+
+  // Real-time DP / Profile updates in ChatWindow header
+  useEffect(() => {
+    const handleProfileUpdate = (data) => {
+      if (!data || isGroup) return;
+      const isTarget = activeChat && (
+        activeChat.id === data.userId ||
+        (data.userMongoId && (activeChat.id === data.userMongoId || activeChat._id === data.userMongoId)) ||
+        (data.username && activeChat.username === data.username)
+      );
+      if (isTarget && data.avatar) {
+        setChatAvatar(data.avatar);
+      }
+    };
+
+    if (socket) socket.on('user_profile_updated', handleProfileUpdate);
+    const handleWindowEvent = (e) => {
+      if (e.detail?.updates) {
+        handleProfileUpdate({ userId: e.detail.targetUserId, ...e.detail.updates });
+      }
+    };
+    window.addEventListener('pulsechat_user_profile_updated', handleWindowEvent);
+
+    return () => {
+      if (socket) socket.off('user_profile_updated', handleProfileUpdate);
+      window.removeEventListener('pulsechat_user_profile_updated', handleWindowEvent);
+    };
+  }, [socket, activeChat, isGroup]);
+
   const isDirectFriend = isGroup ||
     (activeChat?.lastMessage !== undefined && activeChat?.lastMessage !== null) ||
     activeChat?.hasHistory ||
@@ -201,7 +235,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       // Cache this contact/group into allUsers for future offline searches
       if (user?.id && !activeChat.isGroup) {
-        mergeIntoAllUsersCache(user.id, [activeChat]);
+        mergeIntoAllUsersCache(user.id, [{ ...activeChat, avatar: chatAvatar || activeChat.avatar }]);
       }
 
       // 2. Fetch fresh messages if online
@@ -732,7 +766,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     // 2. Update recent chats snippet in localStorage & dispatch event for sidebar
     // Pass activeChat so newly opened contacts (offline) get added to recentChats
-    updateRecentChatSnippet(user.id, chatId, pendingMsg, activeChat);
+    updateRecentChatSnippet(user.id, chatId, pendingMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
     window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
 
     // 3. If offline or socket disconnected, save to outbox
@@ -968,9 +1002,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             )}
 
             <img
-              src={activeChat.avatar}
+              src={chatAvatar || activeChat.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeChat.username || 'pulse'}`}
               alt="Avatar"
-              onClick={() => isGroup ? setShowGroupProfileModal(true) : (onOpenFullDp && onOpenFullDp(activeChat.avatar, activeChat.displayName, activeChat.username))}
+              onClick={() => isGroup ? setShowGroupProfileModal(true) : (onOpenFullDp && onOpenFullDp(chatAvatar || activeChat.avatar, activeChat.displayName, activeChat.username))}
               style={{ width: '42px', height: '42px', borderRadius: isGroup ? '12px' : '50%', cursor: 'pointer', objectFit: 'cover', flexShrink: 0 }}
               title={isGroup ? 'Click for group details & members' : 'Click to view full screen DP'}
             />
@@ -1668,7 +1702,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {showUserProfileModal && (
         <UserProfileModal
-          targetUser={activeChat}
+          targetUser={{ ...activeChat, avatar: chatAvatar || activeChat.avatar }}
           onClose={() => setShowUserProfileModal(false)}
           onStartCall={onStartCall}
           onOpenFullDp={onOpenFullDp}

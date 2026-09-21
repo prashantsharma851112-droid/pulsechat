@@ -368,22 +368,34 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       });
     };
 
-    const handleProfileUpdate = ({ userId, displayName, avatar, status }) => {
+    const handleProfileUpdate = (data) => {
+      if (!data) return;
+      const { userId, userMongoId, username, displayName, avatar, status } = data;
+
+      const isMatch = (u) => {
+        if (!u) return false;
+        if (u.id && (u.id === userId || (userMongoId && u.id === userMongoId))) return true;
+        if (u._id && (u._id === userId || (userMongoId && u._id === userMongoId))) return true;
+        if (username && u.username === username) return true;
+        return false;
+      };
+
       setAllUsers(prev => {
-        const next = prev.map(u => u.id === userId ? {
+        const next = prev.map(u => isMatch(u) ? {
           ...u,
-          ...(displayName && { displayName }),
-          ...(avatar && { avatar }),
-          ...(status && { status })
+          ...(displayName !== undefined && displayName !== '' && { displayName }),
+          ...(avatar !== undefined && avatar !== '' && { avatar }),
+          ...(status !== undefined && { status })
         } : u);
         if (user?.id) setCachedAllUsers(user.id, next);
         return next;
       });
+
       setRecentChats(prev => {
-        const next = prev.map(u => u.id === userId ? {
+        const next = prev.map(u => isMatch(u) ? {
           ...u,
-          ...(displayName && { displayName }),
-          ...(avatar && { avatar })
+          ...(displayName !== undefined && displayName !== '' && { displayName }),
+          ...(avatar !== undefined && avatar !== '' && { avatar })
         } : u);
         if (user?.id) setCachedRecentChats(user.id, next);
         return next;
@@ -393,10 +405,18 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     socket.on('new_user_registered', handleNewUser);
     socket.on('user_profile_updated', handleProfileUpdate);
 
+    const handleWindowEvent = (e) => {
+      if (e.detail?.updates) {
+        handleProfileUpdate({ userId: e.detail.targetUserId, ...e.detail.updates });
+      }
+    };
+    window.addEventListener('pulsechat_user_profile_updated', handleWindowEvent);
+
     return () => {
       socket.off('chat_read_update', handleChatRead);
       socket.off('new_user_registered', handleNewUser);
       socket.off('user_profile_updated', handleProfileUpdate);
+      window.removeEventListener('pulsechat_user_profile_updated', handleWindowEvent);
     };
   }, [socket, user?.id]);
 
