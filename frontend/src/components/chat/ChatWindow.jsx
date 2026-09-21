@@ -38,8 +38,27 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const isTyping = typingMap[chatId] === activeChat.username;
 
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [chatTheme, setChatTheme] = useState(() => {
+    return localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'default';
+  });
+  const [selectedVibe, setSelectedVibe] = useState('⚡ Quick Pulse');
   const [friendshipStatus, setFriendshipStatus] = useState(() => isGroup ? 'friends' : 'checking');
   const [friendRequestId, setFriendRequestId] = useState(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'default';
+    setChatTheme(saved);
+  }, [chatId]);
+
+  const handleSelectChatTheme = (newTheme) => {
+    setChatTheme(newTheme);
+    if (newTheme === 'default') {
+      localStorage.removeItem(`pulsechat_chat_theme_${chatId}`);
+    } else {
+      localStorage.setItem(`pulsechat_chat_theme_${chatId}`, newTheme);
+      localStorage.setItem('pulsechat_chat_default_theme', newTheme);
+    }
+  };
 
   const [messages, setMessages] = useState(() => {
     const cached = getCachedMessages(chatId);
@@ -888,7 +907,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-chat)', overflow: 'hidden' }}>
+    <div
+      className="chat-window-container"
+      data-chat-theme={chatTheme !== 'default' ? chatTheme : undefined}
+      style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-chat)', overflow: 'hidden' }}
+    >
       {/* Header Bar */}
       <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
@@ -974,16 +997,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               style={{ width: '38px', height: '38px', borderRadius: '50%' }}
             >
               <Video size={19} />
-            </button>
-
-            {/* Change Theme Palette Button */}
-            <button
-              onClick={() => setShowThemeModal(true)}
-              className="icon-btn-ghost"
-              title="Change Chat Theme"
-              style={{ width: '38px', height: '38px', borderRadius: '50%' }}
-            >
-              <Palette size={19} color="var(--accent)" />
             </button>
 
             {/* 3-Dots More Options Menu */}
@@ -1149,27 +1162,58 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {/* Message Stream with WhatsApp-Style Date Dividers */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {!isGroup && friendshipStatus !== 'friends' && (
-          <div className="friend-request-shield">
-            <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-              <UserPlus size={26} />
+          <div className="pulse-sync-card">
+            <div className="pulse-orb-icon">
+              <Sparkles size={28} />
             </div>
-            <h4 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)', fontWeight: 700 }}>
-              Direct Chat Protected
+            <h4 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-main)', fontWeight: 800 }}>
+              ⚡ Pulse Frequency Sync
             </h4>
-            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: '340px' }}>
-              To keep PulseChat safe from spam, direct messaging with <strong>{activeChat.displayName || activeChat.username}</strong> is enabled only after becoming friends.
+            <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: '340px' }}>
+              Before transmitting direct messages, synchronize frequencies with <strong>{activeChat.displayName || activeChat.username}</strong>.
             </p>
+
+            {friendshipStatus === 'none' && (
+              <>
+                <div style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Pick Your Vibe:
+                </div>
+                <div className="pulse-vibes-row">
+                  {['⚡ Quick Pulse', '🚀 Collab & Code', '🎮 Gaming', '☕ Coffee Chat', '🎵 Music Vibe'].map((vibe) => (
+                    <button
+                      key={vibe}
+                      type="button"
+                      className={`pulse-vibe-pill ${selectedVibe === vibe ? 'active' : ''}`}
+                      onClick={() => setSelectedVibe(vibe)}
+                    >
+                      {vibe}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
             {friendshipStatus === 'pending_sent' ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.86rem', fontWeight: 600 }}>
-                <Clock size={16} /> Request sent. Waiting for acceptance.
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.86rem', fontWeight: 600, padding: '8px 16px', background: 'var(--hover-bg)', borderRadius: '20px', border: '1px solid var(--border)' }}>
+                <Clock size={16} /> 📡 Frequency Beaming... (Sync Pending)
               </div>
             ) : friendshipStatus === 'pending_received' ? (
-              <button type="button" className="btn-primary" onClick={handleAcceptFriendRequest} style={{ padding: '8px 20px', borderRadius: '20px' }}>
-                <Check size={16} /> Accept Friend Request
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleAcceptFriendRequest}
+                style={{ padding: '9px 24px', borderRadius: '24px', fontSize: '0.9rem', fontWeight: 700, boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)' }}
+              >
+                <Sparkles size={17} /> ⚡ Accept & Sync Pulse
               </button>
             ) : (
-              <button type="button" className="btn-primary" onClick={handleSendFriendRequest} style={{ padding: '8px 20px', borderRadius: '20px' }}>
-                <UserPlus size={16} /> Send Friend Request 🤝
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleSendFriendRequest}
+                style={{ padding: '9px 24px', borderRadius: '24px', fontSize: '0.9rem', fontWeight: 700, boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)' }}
+              >
+                <Sparkles size={17} /> ⚡ Sync Pulse ({selectedVibe})
               </button>
             )}
           </div>
@@ -1472,7 +1516,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         </div>
       ) : (!isGroup && friendshipStatus !== 'friends') ? (
         <div style={{
-          padding: '1rem',
+          padding: '1.1rem',
           background: 'var(--bg-sidebar)',
           borderTop: '1px solid var(--border)',
           display: 'flex',
@@ -1482,13 +1526,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           gap: '8px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.86rem' }}>
-            <Clock size={16} />
+            <Sparkles size={16} color="var(--accent)" />
             <span>
               {friendshipStatus === 'pending_sent'
-                ? 'Friend request sent. Messaging will unlock when accepted.'
+                ? '📡 Frequency beaming... Chat unlocks when pulse sync is accepted.'
                 : friendshipStatus === 'pending_received'
-                ? `${activeChat.displayName || activeChat.username} sent you a friend request!`
-                : 'Direct messaging requires an accepted friend request.'}
+                ? `⚡ ${activeChat.displayName || activeChat.username} beamed you a Pulse Sync!`
+                : 'Direct messaging unlocks once your frequencies are synced.'}
             </span>
           </div>
           {friendshipStatus === 'pending_received' ? (
@@ -1496,18 +1540,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               type="button"
               onClick={handleAcceptFriendRequest}
               className="btn-primary"
-              style={{ padding: '6px 20px', fontSize: '0.84rem', borderRadius: '16px' }}
+              style={{ padding: '7px 22px', fontSize: '0.84rem', borderRadius: '20px', fontWeight: 700 }}
             >
-              <Check size={14} /> Accept Friend Request & Start Chat
+              <Sparkles size={14} /> ⚡ Accept & Sync Frequencies
             </button>
           ) : friendshipStatus === 'none' ? (
             <button
               type="button"
               onClick={handleSendFriendRequest}
               className="btn-primary"
-              style={{ padding: '6px 20px', fontSize: '0.84rem', borderRadius: '16px' }}
+              style={{ padding: '7px 22px', fontSize: '0.84rem', borderRadius: '20px', fontWeight: 700 }}
             >
-              <UserPlus size={14} /> Send Friend Request
+              <Sparkles size={14} /> ⚡ Sync Pulse ({selectedVibe})
             </button>
           ) : null}
         </div>
@@ -1596,7 +1640,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       )}
 
       {showThemeModal && (
-        <ChatThemeModal onClose={() => setShowThemeModal(false)} />
+        <ChatThemeModal
+          currentTheme={chatTheme}
+          onSelectTheme={handleSelectChatTheme}
+          onClose={() => setShowThemeModal(false)}
+        />
       )}
     </div>
   );

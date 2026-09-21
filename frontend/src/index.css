@@ -6,7 +6,8 @@
 }
 
 /* --- THEME VARIATION VARIABLES --- */
-[data-theme="dark"] {
+[data-theme="dark"],
+[data-chat-theme="dark"] {
   color-scheme: dark;
   --bg-main: #0b0f19;
   --bg-sidebar: #111827;
@@ -22,7 +23,8 @@
   --border: #1f2937;
 }
 
-[data-theme="emerald"] {
+[data-theme="emerald"],
+[data-chat-theme="emerald"] {
   --bg-main: #071e16;
   --bg-sidebar: #0f2d24;
   --bg-chat: #05140e;
@@ -37,7 +39,8 @@
   --border: #1a4d3e;
 }
 
-[data-theme="neon"] {
+[data-theme="neon"],
+[data-chat-theme="neon"] {
   --bg-main: #05050d;
   --bg-sidebar: #0b0c1b;
   --bg-chat: #030308;
@@ -52,7 +55,8 @@
   --border: #2e1065;
 }
 
-[data-theme="light"] {
+[data-theme="light"],
+[data-chat-theme="light"] {
   color-scheme: light;
   --bg-main: #f3f4f6;
   --bg-sidebar: #ffffff;
@@ -68,7 +72,8 @@
   --border: #e5e7eb;
 }
 
-[data-theme="sunset"] {
+[data-theme="sunset"],
+[data-chat-theme="sunset"] {
   --bg-main: #1c0a14;
   --bg-sidebar: #2a101f;
   --bg-chat: #15060f;
@@ -83,7 +88,8 @@
   --border: #4c1d3e;
 }
 
-[data-theme="ocean"] {
+[data-theme="ocean"],
+[data-chat-theme="ocean"] {
   --bg-main: #061325;
   --bg-sidebar: #0b1d3a;
   --bg-chat: #040c18;
@@ -1281,56 +1287,121 @@ input, textarea {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Friend Request Chat Shield */
-.friend-request-shield {
+/* Pulse Sync Frequency System (Unique to PulseChat) */
+.pulse-sync-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 20px;
+  border-radius: 20px;
+  padding: 24px 20px;
   text-align: center;
   margin: 16px auto;
   max-width: 440px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  position: relative;
+  overflow: hidden;
 }
 
-.friend-action-badge-btn {
-  padding: 5px 12px;
-  font-size: 0.78rem;
+.pulse-sync-card::before {
+  content: '';
+  position: absolute;
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140px;
+  height: 140px;
+  background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.pulse-orb-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.15);
+  border: 2px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  position: relative;
+  animation: pulseGlow 2.5s infinite ease-in-out;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+  50% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+}
+
+.pulse-vibes-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 4px 0;
+}
+
+.pulse-vibe-pill {
+  padding: 4px 10px;
+  font-size: 0.74rem;
   font-weight: 600;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--hover-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.pulse-vibe-pill:hover,
+.pulse-vibe-pill.active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+  transform: scale(1.04);
+}
+
+.pulse-sync-btn {
+  padding: 5px 12px;
+  font-size: 0.76rem;
+  font-weight: 700;
   border-radius: 20px;
   cursor: pointer;
   border: none;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  transition: all 0.18s ease;
+  transition: all 0.2s ease;
+  letter-spacing: 0.02em;
 }
 
-.friend-action-badge-btn.add {
-  background: var(--accent);
+.pulse-sync-btn.sync {
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
   color: #ffffff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 
-.friend-action-badge-btn.add:hover {
-  background: var(--accent-hover);
-  transform: scale(1.04);
+.pulse-sync-btn.sync:hover {
+  transform: translateY(-1px) scale(1.03);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.45);
 }
 
-.friend-action-badge-btn.pending {
+.pulse-sync-btn.pending {
   background: var(--hover-bg);
   color: var(--text-muted);
   border: 1px solid var(--border);
 }
 
-.friend-action-badge-btn.friends {
-  background: rgba(16, 185, 129, 0.15);
+.pulse-sync-btn.synced {
+  background: rgba(16, 185, 129, 0.14);
   color: #10b981;
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
+
 
 
 

@@ -1,6 +1,5 @@
-import React, { useContext } from 'react';
-import { X, Palette, Check, Sparkles } from 'lucide-react';
-import { ThemeContext } from '../../context/ThemeContext';
+import React from 'react';
+import { X, Palette, Check, RotateCcw } from 'lucide-react';
 
 const THEMES = [
   {
@@ -10,7 +9,7 @@ const THEMES = [
     bg: '#f3f4f6',
     card: '#ffffff',
     accent: '#4f46e5',
-    tag: '☀️ Default Light'
+    tag: '☀️ Clean White'
   },
   {
     id: 'dark',
@@ -59,11 +58,9 @@ const THEMES = [
   }
 ];
 
-export default function ChatThemeModal({ onClose }) {
-  const { theme, changeTheme } = useContext(ThemeContext);
-
+export default function ChatThemeModal({ currentTheme, onSelectTheme, onClose }) {
   const handleSelectTheme = (themeId) => {
-    changeTheme(themeId);
+    if (onSelectTheme) onSelectTheme(themeId);
   };
 
   return (
@@ -77,7 +74,7 @@ export default function ChatThemeModal({ onClose }) {
         <div className="modal-header" style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Palette size={20} color="var(--accent)" />
-            <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-main)' }}>Chat Theme</h3>
+            <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-main)' }}>Chat Window Theme</h3>
           </div>
           <button className="icon-btn-ghost" onClick={onClose}>
             <X size={20} />
@@ -86,13 +83,13 @@ export default function ChatThemeModal({ onClose }) {
 
         {/* Theme Content */}
         <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
-            Choose your preferred color theme. Changes apply instantly across PulseChat.
+          <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+            Customize the look of <strong>only this chat</strong>. The sidebar and the rest of the app will stay in your main theme.
           </div>
 
           <div className="theme-grid">
             {THEMES.map((t) => {
-              const isCurrent = theme === t.id;
+              const isCurrent = currentTheme === t.id;
               return (
                 <div
                   key={t.id}
@@ -140,11 +137,19 @@ export default function ChatThemeModal({ onClose }) {
             })}
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '0.5rem' }}>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ flex: 1, justifyContent: 'center', fontSize: '0.82rem' }}
+              onClick={() => handleSelectTheme('default')}
+            >
+              <RotateCcw size={14} /> App Default
+            </button>
             <button
               type="button"
               className="btn-primary"
-              style={{ width: '100%', justifyContent: 'center' }}
+              style={{ flex: 1, justifyContent: 'center' }}
               onClick={onClose}
             >
               Done

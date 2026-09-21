@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { UserPlus, UserCheck, Users, UserX, Check, X, Search, MessageSquare, Clock, CheckCircle2 } from 'lucide-react';
+import { UserPlus, UserCheck, Users, UserX, Check, X, Search, MessageSquare, Clock, CheckCircle2, Sparkles, Zap, Radio } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 
 export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpenFullDp }) {
@@ -167,9 +167,9 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
     }
   };
 
-  // Unfriend
+  // Unfriend / Unsync
   const handleUnfriend = async (friendId, friendName) => {
-    if (!window.confirm(`Are you sure you want to unfriend ${friendName}?`)) return;
+    if (!window.confirm(`Are you sure you want to unsync pulse with ${friendName}?`)) return;
     setActionLoading(prev => ({ ...prev, [friendId]: true }));
     try {
       const res = await fetch(`${BACKEND_URL}/api/friends/${friendId}`, {
@@ -257,7 +257,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Sub-Tabs: Friends | Requests | Add Friend */}
+      {/* Sub-Tabs: Synced | Radar | Sync Pulse */}
       <div style={{
         display: 'flex',
         borderBottom: '1px solid var(--border)',
@@ -284,8 +284,8 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
             transition: 'all 0.2s ease'
           }}
         >
-          <Users size={15} />
-          <span>Friends ({friends.length})</span>
+          <Sparkles size={14} />
+          <span>Synced ({friends.length})</span>
         </button>
 
         <button
@@ -308,8 +308,8 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
             transition: 'all 0.2s ease'
           }}
         >
-          <Clock size={15} />
-          <span>Requests</span>
+          <Radio size={14} />
+          <span>Radar</span>
           {totalRequestsCount > 0 && (
             <span style={{
               background: '#ef4444',
@@ -344,14 +344,14 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
             transition: 'all 0.2s ease'
           }}
         >
-          <UserPlus size={15} />
-          <span>Add</span>
+          <Zap size={14} />
+          <span>Sync Pulse</span>
         </button>
       </div>
 
       {/* Main Content Area */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem' }}>
-        {/* 1. FRIENDS LIST */}
+        {/* 1. SYNCD PULSES LIST */}
         {subTab === 'friends' && (
           <div>
             {friends.length === 0 ? (
@@ -367,18 +367,18 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
                   margin: '0 auto 1rem auto',
                   color: 'var(--accent)'
                 }}>
-                  <Users size={28} />
+                  <Sparkles size={26} />
                 </div>
-                <h4 style={{ color: 'var(--text-main)', margin: '0 0 0.35rem 0', fontSize: '1rem', fontWeight: 600 }}>No friends yet</h4>
+                <h4 style={{ color: 'var(--text-main)', margin: '0 0 0.35rem 0', fontSize: '1rem', fontWeight: 600 }}>No Synced Pulses Yet</h4>
                 <p style={{ fontSize: '0.84rem', margin: '0 0 1rem 0', lineHeight: 1.4 }}>
-                  Connect with friends to chat and stay in touch!
+                  Tune into member frequencies and sync up to chat and vibe together!
                 </p>
                 <button
                   onClick={() => setSubTab('add')}
                   className="btn-primary"
-                  style={{ fontSize: '0.84rem', padding: '0.55rem 1rem', borderRadius: '18px' }}
+                  style={{ fontSize: '0.84rem', padding: '0.55rem 1.1rem', borderRadius: '18px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                 >
-                  <UserPlus size={16} /> Add Friends
+                  <Zap size={15} /> Discover & Sync
                 </button>
               </div>
             ) : (
@@ -457,7 +457,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
                           onClick={() => handleUnfriend(friend.id, friend.displayName || friend.username)}
                           disabled={actionLoading[friend.id]}
                           className="icon-btn-ghost"
-                          title="Unfriend"
+                          title="Unsync Pulse"
                           style={{ color: 'var(--text-muted)', padding: '6px' }}
                         >
                           <UserX size={17} />
@@ -478,13 +478,13 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
             <div style={{ marginBottom: '1.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
                 <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
-                  Incoming Requests ({incomingRequests.length})
+                  Incoming Frequencies ({incomingRequests.length})
                 </h4>
               </div>
 
               {incomingRequests.length === 0 ? (
                 <div style={{ padding: '1rem', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border)', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.84rem' }}>
-                  No pending received requests.
+                  No pending incoming frequency requests.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -539,7 +539,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
                               gap: '4px'
                             }}
                           >
-                            <Check size={14} /> Accept
+                            <Zap size={13} /> Sync Back
                           </button>
                           <button
                             onClick={() => handleReject(req.id)}
@@ -571,12 +571,12 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
             {/* Outgoing Requests */}
             <div>
               <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 0.65rem 0' }}>
-                Sent Requests ({outgoingRequests.length})
+                Outgoing Frequency Beams ({outgoingRequests.length})
               </h4>
 
               {outgoingRequests.length === 0 ? (
                 <div style={{ padding: '1rem', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border)', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.84rem' }}>
-                  No pending outgoing requests.
+                  No active frequency beams.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -614,7 +614,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                           <span style={{ fontSize: '0.75rem', color: 'var(--accent)', background: 'var(--hover-bg)', padding: '3px 8px', borderRadius: '8px', fontWeight: 600 }}>
-                            Pending
+                            📡 Beaming...
                           </span>
                           <button
                             onClick={() => handleCancel(req.id)}
@@ -641,7 +641,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
           </div>
         )}
 
-        {/* 3. ADD FRIEND / SEARCH */}
+        {/* 3. SYNC PULSE / DISCOVER */}
         {subTab === 'add' && (
           <div>
             <div style={{ position: 'relative', marginBottom: '1rem' }}>
@@ -650,7 +650,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
                 type="text"
                 value={addSearchQuery}
                 onChange={e => setAddSearchQuery(e.target.value)}
-                placeholder="Search by @username or name to add..."
+                placeholder="Tune into @username or name..."
                 className="form-input"
                 style={{ paddingLeft: '2.4rem', borderRadius: '20px', fontSize: '0.88rem' }}
                 autoFocus
@@ -659,16 +659,16 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
 
             {isSearching ? (
               <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                Searching users...
+                Scanning frequencies...
               </div>
             ) : addSearchQuery.trim() === '' ? (
               <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                <UserPlus size={32} style={{ margin: '0 auto 0.5rem auto', color: 'var(--accent)', display: 'block' }} />
-                Type a username or display name above to find and add new friends!
+                <Zap size={32} style={{ margin: '0 auto 0.5rem auto', color: 'var(--accent)', display: 'block' }} />
+                Type a username or display name above to tune into member frequencies!
               </div>
             ) : addSearchResults.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                No users found matching "{addSearchQuery}".
+                No pulse signals found matching "{addSearchQuery}".
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -726,7 +726,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
                         {statusInfo.status === 'friends' ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span style={{ fontSize: '0.78rem', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
-                              <UserCheck size={14} /> Friends
+                              <Sparkles size={14} /> Synced
                             </span>
                             <button
                               onClick={() => setActiveChat(target)}
@@ -751,7 +751,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
                               cursor: 'pointer'
                             }}
                           >
-                            Cancel Request
+                            Cancel Beam
                           </button>
                         ) : statusInfo.status === 'pending_received' ? (
                           <button
@@ -765,10 +765,13 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
                               padding: '5px 10px',
                               fontSize: '0.78rem',
                               fontWeight: 600,
-                              cursor: 'pointer'
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
                             }}
                           >
-                            Accept Request
+                            <Zap size={13} /> Sync Back
                           </button>
                         ) : (
                           <button
@@ -779,10 +782,13 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, onOpe
                               padding: '5px 12px',
                               fontSize: '0.78rem',
                               borderRadius: '8px',
-                              fontWeight: 600
+                              fontWeight: 600,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
                             }}
                           >
-                            <UserPlus size={14} /> Add Friend
+                            <Zap size={13} /> Sync Frequency
                           </button>
                         )}
                       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { X, CheckCircle2, Phone, Video, Eye, Info, User, ShieldCheck, Clock, Ban, Unlock, UserPlus, UserCheck, Loader2 } from 'lucide-react';
+import { X, CheckCircle2, Phone, Video, Eye, Info, User, ShieldCheck, Clock, Ban, Unlock, UserPlus, UserCheck, Loader2, Sparkles, Zap } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
@@ -330,11 +330,11 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                     fontSize: '0.82rem',
                     border: '1px solid rgba(16, 185, 129, 0.25)'
                   }}>
-                    <UserCheck size={14} /> Friends
+                    <Sparkles size={14} /> Synced
                   </div>
                   <button
                     onClick={handleUnfriend}
-                    title="Remove from Friends"
+                    title="Unsync Pulse Frequency"
                     style={{
                       padding: '5px 10px',
                       borderRadius: '16px',
@@ -348,7 +348,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                     onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444'; }}
                     onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
                   >
-                    Unfriend
+                    Unsync
                   </button>
                 </div>
               ) : friendStatus.status === 'pending_sent' ? (
@@ -365,11 +365,11 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                     fontSize: '0.82rem',
                     border: '1px solid rgba(245, 158, 11, 0.25)'
                   }}>
-                    <Clock size={14} /> Request Sent
+                    📡 Beaming Pulse...
                   </div>
                   <button
                     onClick={handleCancelFriendRequest}
-                    title="Cancel Friend Request"
+                    title="Cancel Pulse Beam"
                     style={{
                       padding: '5px 10px',
                       borderRadius: '16px',
@@ -402,7 +402,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                       boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)'
                     }}
                   >
-                    <UserCheck size={14} /> Accept Request
+                    <Zap size={14} /> Sync Frequency
                   </button>
                   <button
                     onClick={handleRejectFriendRequest}
@@ -437,7 +437,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                     boxShadow: '0 2px 8px rgba(99, 102, 241, 0.25)'
                   }}
                 >
-                  <UserPlus size={14} /> Add Friend
+                  <Zap size={14} /> Sync Frequency
                 </button>
               )}
             </div>

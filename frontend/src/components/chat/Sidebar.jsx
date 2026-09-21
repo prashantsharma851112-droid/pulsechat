@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
 import SettingsModal from '../profile/SettingsModal';
 import FriendsTab from './FriendsTab';
@@ -500,7 +500,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             gap: '6px'
           }}
         >
-          <span>FRIENDS</span>
+          <span>SYNC</span>
           {pendingRequestsCount > 0 && (
             <span style={{
               background: '#ef4444',
@@ -639,21 +639,21 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                       </h4>
                       {!u.isGroup && (
                         friendIdsSet.has(u.id) ? (
-                          <span className="friend-action-badge-btn friends" title="Confirmed Friend">
-                            <Check size={12} strokeWidth={2.5} /> Friend
+                          <span className="pulse-sync-btn synced" title="Pulse Frequency Synced">
+                            <Sparkles size={12} /> Synced
                           </span>
                         ) : outgoingPendingIds.has(u.id) ? (
-                          <span className="friend-action-badge-btn pending" title="Friend Request Pending">
-                            <Clock size={12} /> Requested
+                          <span className="pulse-sync-btn pending" title="Pulse Sync Pending">
+                            <Clock size={12} /> Beaming...
                           </span>
                         ) : (
                           <button
                             type="button"
-                            className="friend-action-badge-btn add"
+                            className="pulse-sync-btn sync"
                             onClick={(e) => handleSendFriendRequest(e, u.id)}
-                            title="Send Friend Request"
+                            title="Sync Pulse Frequency to connect"
                           >
-                            <UserPlus size={12} /> Add Friend
+                            <Sparkles size={12} /> ⚡ Sync
                           </button>
                         )
                       )}
@@ -778,10 +778,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: recentChats.length > 0 ? '0.75rem 0.75rem 0.5rem' : '0.5rem 0.75rem' }}>
                   <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.03em', margin: 0 }}>
-                    {recentChats.length > 0 ? 'MORE CONTACTS' : 'CONTACTS'}
+                    {recentChats.length > 0 ? 'DISCOVER PULSES' : 'PULSES'}
                   </p>
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    🤝 Friend request required
+                    ⚡ Sync to connect
                   </span>
                 </div>
                 {contactsNotInRecent.map(u => (
@@ -810,21 +810,21 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                           {u.displayName}
                         </h4>
                         {friendIdsSet.has(u.id) ? (
-                          <span className="friend-action-badge-btn friends" title="Confirmed Friend">
-                            <Check size={12} strokeWidth={2.5} /> Friend
+                          <span className="pulse-sync-btn synced" title="Pulse Frequency Synced">
+                            <Sparkles size={12} /> Synced
                           </span>
                         ) : outgoingPendingIds.has(u.id) ? (
-                          <span className="friend-action-badge-btn pending" title="Friend Request Pending">
-                            <Clock size={12} /> Requested
+                          <span className="pulse-sync-btn pending" title="Pulse Sync Pending">
+                            <Clock size={12} /> Beaming...
                           </span>
                         ) : (
                           <button
                             type="button"
-                            className="friend-action-badge-btn add"
+                            className="pulse-sync-btn sync"
                             onClick={(e) => handleSendFriendRequest(e, u.id)}
-                            title="Send Friend Request to start chatting"
+                            title="Sync Pulse Frequency to connect"
                           >
-                            <UserPlus size={12} /> Add Friend
+                            <Sparkles size={12} /> ⚡ Sync
                           </button>
                         )}
                       </div>
