@@ -142,7 +142,7 @@ io.on('connection', (socket) => {
   });
 
   // Helper function to dispatch background web push (for closed app)
-  const dispatchWebPush = async (targetUserId, title, body, tag, chatTargetId, messageId = null, senderId = null, isGroup = false) => {
+  const dispatchWebPush = async (targetUserId, title, body, tag, chatTargetId, messageId = null, senderId = null, isGroup = false, iconUrl = null) => {
     try {
       const targetUser = await User.findOne({ id: targetUserId });
       if (targetUser && targetUser.pushSubscriptions && targetUser.pushSubscriptions.length > 0) {
@@ -151,10 +151,12 @@ io.on('connection', (socket) => {
         if (senderId) queryParams.set('senderId', senderId);
         if (isGroup) queryParams.set('isGroup', '1');
 
+        const resolvedIcon = iconUrl || '/icon-192.png';
+
         const pushPayload = {
           title,
           body,
-          icon: '/icon-192.png',
+          icon: resolvedIcon,
           badge: '/icon-192.png',
           tag,
           data: {
@@ -162,7 +164,8 @@ io.on('connection', (socket) => {
             chatId: chatTargetId,
             messageId,
             senderId,
-            isGroup: !!isGroup
+            isGroup: !!isGroup,
+            icon: resolvedIcon
           }
         };
 
@@ -215,9 +218,11 @@ io.on('connection', (socket) => {
 
       // Strict Friendship Check for 1-to-1 chats:
       // Users must be confirmed friends (or have existing chat history) to send messages
+      let senderDoc = null;
       if (receiverId && !isGroup && receiverId !== senderId) {
-        const [senderDoc, receiverDoc] = await Promise.all([
-          User.findOne({ id: senderId }).select('friends').lean(),
+        let receiverDoc = null;
+        [senderDoc, receiverDoc] = await Promise.all([
+          User.findOne({ id: senderId }).select('displayName username avatar friends').lean(),
           User.findOne({ id: receiverId }).select('friends').lean()
         ]);
         const areFriends = Boolean(senderDoc?.friends?.includes(receiverId) && receiverDoc?.friends?.includes(senderId));
@@ -240,6 +245,12 @@ io.on('connection', (socket) => {
           }
         }
       }
+
+      if (!senderDoc) {
+        senderDoc = await User.findOne({ id: senderId }).select('displayName username avatar').lean();
+      }
+      const resolvedSenderName = senderDoc?.displayName || senderDoc?.username || senderId;
+      const resolvedSenderAvatar = senderDoc?.avatar || null;
 
       const isDisappearing = Boolean(chatSetting && chatSetting.disappearingEnabled);
       const expiresAt = isDisappearing ? new Date(Date.now() + (chatSetting.disappearingDuration || 86400) * 1000) : null;
@@ -266,11 +277,17 @@ io.on('connection', (socket) => {
         }
       }
 
+      // Check if recipient is currently online (mobile data ON & active socket)
+      const isReceiverOnline = Boolean(receiverId && !isGroup && onlineUsers.has(receiverId));
+      const initialStatus = isReceiverOnline ? 'delivered' : 'sent';
+
       const newMsg = {
         id: 'msg_' + Date.now(),
         clientTempId: clientTempId || null,
         chatId,
         senderId,
+        senderName: resolvedSenderName,
+        senderAvatar: resolvedSenderAvatar,
         receiverId: receiverId || '',
         isGroup: !!isGroup,
         content: content || '',
@@ -284,7 +301,7 @@ io.on('connection', (socket) => {
         callData: callData || null,
         isViewOnce: !!isViewOnce,
         viewedBy: [],
-        status: 'sent',
+        status: initialStatus,
         timestamp: new Date().toISOString(),
         reactions: {},
         replyTo: replyTo || null,
@@ -313,43 +330,38 @@ io.on('connection', (socket) => {
         try {
           await savePromise;
           if (receiverId && !isGroup) {
-            const sender = await User.findOne({ id: senderId }).select('displayName username avatar').lean();
             const notifPayload = {
               ...newMsg,
-              senderName: sender?.displayName || sender?.username || senderId,
-              senderAvatar: sender?.avatar || null
+              senderName: resolvedSenderName,
+              senderAvatar: resolvedSenderAvatar
             };
             io.to(`user_${receiverId}`).emit('message_notification', notifPayload);
 
             const bodyText = newMsg.type === 'text'
               ? (newMsg.content || 'New message')
               : `Sent a ${newMsg.type}`;
-            dispatchWebPush(receiverId, `💬 ${notifPayload.senderName}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, false);
+            dispatchWebPush(receiverId, `💬 ${resolvedSenderName}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, false, resolvedSenderAvatar);
           } else if (isGroup) {
             const Group = require('./models/Group');
-            const [group, sender] = await Promise.all([
-              Group.findOne({ id: chatId }).lean(),
-              User.findOne({ id: senderId }).select('displayName username avatar').lean()
-            ]);
+            const group = await Group.findOne({ id: chatId }).lean();
 
             if (group && group.members) {
-              const senderName = sender?.displayName || sender?.username || senderId;
               const notifPayload = {
                 ...newMsg,
                 isGroup: true,
                 groupName: group.name,
-                senderName,
-                senderAvatar: group.avatar || sender?.avatar || null
+                senderName: resolvedSenderName,
+                senderAvatar: group.avatar || resolvedSenderAvatar || null
               };
               const bodyText = newMsg.type === 'text'
-                ? `${senderName}: ${newMsg.content}`
-                : `${senderName} sent a ${newMsg.type}`;
+                ? `${resolvedSenderName}: ${newMsg.content}`
+                : `${resolvedSenderName} sent a ${newMsg.type}`;
 
               group.members.forEach(memberId => {
                 if (memberId !== senderId) {
                   io.to(`user_${memberId}`).emit('new_message', newMsg);
                   io.to(`user_${memberId}`).emit('message_notification', notifPayload);
-                  dispatchWebPush(memberId, `👥 ${group.name}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, true);
+                  dispatchWebPush(memberId, `👥 ${group.name}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, true, notifPayload.senderAvatar);
                 }
               });
             }
@@ -563,6 +575,19 @@ io.on('connection', (socket) => {
       io.to(recipientSocket).emit('incoming_call', payload);
     }
     io.to(`user_${userToCall}`).to(userToCall).emit('incoming_call', payload);
+
+    // Also dispatch background web push so recipient gets ringing notification even if browser/app is backgrounded
+    dispatchWebPush(
+      userToCall,
+      `📞 Incoming ${isVideo ? 'Video' : 'Voice'} Call`,
+      `${callerName || 'Someone'} is calling you...`,
+      `pc-call-${from}`,
+      from,
+      null,
+      from,
+      false,
+      callerAvatar || null
+    );
   });
 
   socket.on('answer_call', (data) => {
@@ -638,7 +663,7 @@ io.on('connection', (socket) => {
       activeGroupCalls.get(groupId).participants.set(socket.id, participantInfo);
     }
 
-    // Notify all online group members
+    // Notify all online group members & send web push
     if (Array.isArray(memberIds)) {
       memberIds.forEach(mId => {
         if (mId !== callerId) {
@@ -653,6 +678,17 @@ io.on('connection', (socket) => {
               callerAvatar
             });
           }
+          dispatchWebPush(
+            mId,
+            `📞 Group ${isVideo ? 'Video' : 'Voice'} Call`,
+            `${callerName || 'Someone'} started a group call in ${groupName}`,
+            `pc-call-${groupId}`,
+            groupId,
+            null,
+            callerId,
+            true,
+            callerAvatar || null
+          );
         }
       });
     }

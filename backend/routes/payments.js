@@ -6,6 +6,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 const User = require('../models/User');
 const Message = require('../models/Message');
 const db = require('../database/db');
+const webpush = require('../utils/webpush');
 
 // Supported Plans & Catalog
 const PLANS = {
@@ -264,11 +265,16 @@ router.post('/send-gift', authMiddleware, async (req, res) => {
       await User.updateOne({ id: receiverId }, { $inc: { pulseSparks: gift.sparks } });
     }
 
+    const senderName = sender.displayName || sender.username || 'PulseChat User';
+    const senderAvatar = sender.avatar || null;
+
     // Construct Gift Message
     const giftMessage = {
       id: 'msg_gift_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       chatId,
       senderId: req.user.id,
+      senderName,
+      senderAvatar,
       receiverId: receiverId || '',
       isGroup: Boolean(isGroup),
       content: `${gift.icon} Sent a ${gift.name} (${gift.sparks} Sparks)`,
@@ -294,7 +300,40 @@ router.post('/send-gift', authMiddleware, async (req, res) => {
       io.to(`user_${req.user.id}`).emit('new_message', giftMessage);
       if (receiverId && !isGroup) {
         io.to(`user_${receiverId}`).emit('new_message', giftMessage);
+        io.to(`user_${receiverId}`).emit('message_notification', {
+          ...giftMessage,
+          title: `🎁 Gift from ${senderName}`,
+          senderName,
+          senderAvatar
+        });
       }
+    }
+
+    // Background push notification if recipient is subscribed
+    if (receiverId && !isGroup) {
+      setImmediate(async () => {
+        try {
+          const recipientUser = await User.findOne({ id: receiverId }).select('pushSubscriptions');
+          if (recipientUser?.pushSubscriptions?.length > 0) {
+            const pushPayload = {
+              title: `🎁 Gift from ${senderName}`,
+              body: `Sent you a ${gift.name}! (${gift.icon})`,
+              icon: senderAvatar || '/icon-192.png',
+              badge: '/icon-192.png',
+              tag: `gift-${giftMessage.id}`,
+              data: {
+                url: `/?openChat=${chatId}&senderId=${req.user.id}`,
+                chatId,
+                messageId: giftMessage.id,
+                senderId: req.user.id
+              }
+            };
+            recipientUser.pushSubscriptions.forEach(sub => {
+              webpush.sendPushNotification(sub, pushPayload).catch(() => {});
+            });
+          }
+        } catch (pushErr) {}
+      });
     }
 
     res.json({

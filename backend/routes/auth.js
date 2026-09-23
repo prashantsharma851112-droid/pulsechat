@@ -70,36 +70,28 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Username must be at least 3 characters.' });
     }
 
-    // Direct indexed query instead of full collection dump
-    const existingUser = await User.findOne({ email: cleanEmail });
+    // Check if username is already taken (username must be unique across all accounts)
+    const existingUsername = await User.findOne({ username: cleanUsername });
 
-    if (existingUser) {
-      if (existingUser.isEmailVerified) {
-        return res.status(400).json({ error: 'This email is already registered. Please Sign In.' });
+    if (existingUsername) {
+      if (existingUsername.isEmailVerified) {
+        return res.status(400).json({ error: 'This username is already taken. Please choose another username.' });
       }
 
-      // Email was previously entered but NOT YET VERIFIED!
-      // Allow updating registration details and send a fresh OTP:
+      // Username was previously entered but not yet verified — allow updating registration with fresh OTP
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(password, salt);
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
-      // Check if username is taken by another verified user
-      const otherUserWithUsername = await User.findOne({ username: cleanUsername, id: { $ne: existingUser.id }, isEmailVerified: true });
-      if (otherUserWithUsername) {
-        return res.status(400).json({ error: 'Username is already taken by another account.' });
-      }
-
-      await db.updateUser(existingUser.id, {
-        username: cleanUsername,
+      await db.updateUser(existingUsername.id, {
+        email: cleanEmail,
         passwordHash,
         displayName: displayName.trim(),
         otpCode: otp,
         otpExpires
       });
 
-      // Send real OTP email
       const mailResult = await mailer.sendOtpEmail(cleanEmail, otp, displayName.trim());
 
       return res.status(200).json({
@@ -109,16 +101,11 @@ router.post('/register', async (req, res) => {
           ? 'Verification code sent to your email address.'
           : 'Verification code generated.',
         email: cleanEmail,
-        userId: existingUser.id,
+        userId: existingUsername.id,
         emailDelivered: mailResult.delivered,
         fallbackOtp: !mailResult.delivered ? otp : undefined,
         mailError: !mailResult.delivered ? mailResult.error : undefined
       });
-    }
-
-    const usernameTaken = await User.exists({ username: cleanUsername });
-    if (usernameTaken) {
-      return res.status(400).json({ error: 'Username is already taken.' });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -174,16 +161,24 @@ router.post('/login', async (req, res) => {
     }
 
     const cleanId = identifier.toLowerCase().trim().replace(/^@/, '');
-    const user = await User.findOne({
+    const candidates = await User.find({
       $or: [{ email: cleanId }, { username: cleanId }]
     });
 
-    if (!user) {
+    if (!candidates || candidates.length === 0) {
       return res.status(400).json({ error: 'Invalid credentials.' });
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
-    if (!isMatch) {
+    let user = null;
+    for (const cand of candidates) {
+      const match = await bcrypt.compare(password, cand.passwordHash);
+      if (match) {
+        user = cand;
+        break;
+      }
+    }
+
+    if (!user) {
       return res.status(400).json({ error: 'Invalid credentials.' });
     }
 

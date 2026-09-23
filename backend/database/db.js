@@ -264,7 +264,10 @@ module.exports = {
           ...otherUser,
           lastMessage: lastMsgText,
           lastMessageTime: lastMessage.timestamp,
+          lastMessageTimestamp: lastMessage.timestamp,
           lastMessageFromMe: lastMessage.senderId === myId,
+          lastMessageStatus: lastMessage.status || 'sent',
+          lastMessageType: lastMessage.type || 'text',
           unreadCount
         });
       }

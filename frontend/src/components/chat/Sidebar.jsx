@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
 import SettingsModal from '../profile/SettingsModal';
 import FriendsTab from './FriendsTab';
@@ -26,7 +26,7 @@ import {
 import { parseSafeJson } from '../../utils/imageCompressor';
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
-  const { user, logout, token } = useContext(AuthContext);
+  const { user, logout, token, savedAccounts, switchAccount } = useContext(AuthContext);
   const { socket, onlineUsers, lastNotification } = useContext(SocketContext);
   const currentUid = user?.id || getCachedUser()?.id;
 
@@ -53,6 +53,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   useEffect(() => {
     activeChatRef.current = activeChat;
   }, [activeChat]);
+
+  const groupsRef = useRef(groups);
+  useEffect(() => { groupsRef.current = groups; }, [groups]);
+  const allUsersRef = useRef(allUsers);
+  useEffect(() => { allUsersRef.current = allUsers; }, [allUsers]);
 
   // Listen to cross-component tab switch requests (e.g. clicking on sync notification toast)
   useEffect(() => {
@@ -400,6 +405,17 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     }
   }, [lastNotification, loadRecentChats]);
 
+  // Instant local recent chat update listener (from ChatWindow dispatch)
+  useEffect(() => {
+    const handleRecentUpdated = () => {
+      if (user?.id) {
+        setRecentChats(getCachedRecentChats(user.id));
+      }
+    };
+    window.addEventListener('pulsechat_recent_updated', handleRecentUpdated);
+    return () => window.removeEventListener('pulsechat_recent_updated', handleRecentUpdated);
+  }, [user?.id]);
+
   useEffect(() => {
     if (activeChat) {
       setRecentChats(prev => prev.map(u => u.id === activeChat.id ? { ...u, unreadCount: 0 } : u));
@@ -408,6 +424,104 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
   useEffect(() => {
     if (!socket) return;
+
+    // Instant zero-latency chat list reordering on message send or receive (0ms)
+    const handleSidebarNewMessage = (msg) => {
+      if (!msg) return;
+      const isMyMsg = msg.senderId === user?.id;
+      const targetId = isMyMsg ? msg.receiverId : (msg.isGroup ? msg.chatId : msg.senderId);
+      if (!targetId && !msg.chatId) return;
+
+      const contentSnippet = msg.type === 'text'
+        ? (msg.content || '')
+        : (msg.type === 'image' ? '📷 Photo'
+        : msg.type === 'video' ? '🎥 Video'
+        : msg.type === 'audio' || msg.type === 'voice' ? '🎤 Voice message'
+        : msg.type === 'gift' ? '🎁 Gift'
+        : msg.type === 'poll' ? '📊 Poll'
+        : msg.type === 'call' ? '📞 Call'
+        : 'File attachment');
+
+      setRecentChats(prevChats => {
+        const existingIdx = prevChats.findIndex(c =>
+          c.id === targetId ||
+          c.id === msg.chatId ||
+          (msg.chatId && typeof msg.chatId === 'string' && msg.chatId.includes(c.id))
+        );
+
+        let targetChat;
+        if (existingIdx !== -1) {
+          targetChat = { ...prevChats[existingIdx] };
+        } else {
+          if (msg.isGroup) {
+            const foundGroup = (groupsRef.current || []).find(g => g.id === msg.chatId || g.id === targetId);
+            targetChat = foundGroup ? { ...foundGroup, isGroup: true } : {
+              id: msg.chatId || targetId,
+              name: msg.groupName || 'Group',
+              avatar: msg.senderAvatar || null,
+              isGroup: true
+            };
+          } else {
+            const foundUser = (allUsersRef.current || []).find(u => u.id === targetId);
+            targetChat = foundUser ? { ...foundUser, isGroup: false } : {
+              id: targetId,
+              displayName: msg.senderName || 'PulseChat User',
+              username: targetId,
+              avatar: msg.senderAvatar || null,
+              isGroup: false
+            };
+          }
+        }
+
+        const isCurrentlyViewing = activeChatRef.current && (
+          activeChatRef.current.id === targetChat.id ||
+          activeChatRef.current.id === msg.chatId
+        );
+
+        const currentUnread = targetChat.unreadCount || 0;
+        const newUnread = (isMyMsg || isCurrentlyViewing) ? 0 : currentUnread + 1;
+
+        const updatedChat = {
+          ...targetChat,
+          lastMessage: contentSnippet,
+          lastMessageTime: msg.timestamp || new Date().toISOString(),
+          lastMessageTimestamp: msg.timestamp || new Date().toISOString(),
+          lastMessageFromMe: isMyMsg,
+          lastMessageStatus: msg.status || 'sent',
+          lastMessageType: msg.type || 'text',
+          unreadCount: newUnread
+        };
+
+        const remaining = prevChats.filter((_, idx) => idx !== existingIdx);
+        const reordered = [updatedChat, ...remaining];
+
+        if (user?.id) {
+          setCachedRecentChats(user.id, reordered);
+        }
+        return reordered;
+      });
+    };
+
+    socket.on('new_message', handleSidebarNewMessage);
+
+    // Instant delivery tick update in chat list
+    const handleDeliveryUpdate = ({ messageId, chatId: cId, status }) => {
+      setRecentChats(prev => prev.map(c => {
+        if (c.id === cId || (cId && typeof cId === 'string' && cId.includes(c.id))) {
+          return { ...c, lastMessageStatus: status || 'delivered' };
+        }
+        return c;
+      }));
+    };
+    socket.on('message_delivered_update', handleDeliveryUpdate);
+    socket.on('messages_delivered', ({ chatId: cId, status }) => {
+      setRecentChats(prev => prev.map(c => {
+        if (c.id === cId || (cId && typeof cId === 'string' && cId.includes(c.id))) {
+          return { ...c, lastMessageStatus: status || 'delivered' };
+        }
+        return c;
+      }));
+    });
 
     // Instant local read update (0ms, no network roundtrip needed)
     const handleChatRead = ({ chatId, userId }) => {
@@ -525,6 +639,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     window.addEventListener('pulsechat_group_updated', handleWindowGroupEvent);
 
     return () => {
+      socket.off('new_message', handleSidebarNewMessage);
+      socket.off('message_delivered_update', handleDeliveryUpdate);
+      socket.off('messages_delivered');
       socket.off('chat_read_update', handleChatRead);
       socket.off('new_user_registered', handleNewUser);
       socket.off('user_profile_updated', handleProfileUpdate);
@@ -632,7 +749,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0, cursor: 'pointer' }}
           title="Click to view & edit your profile"
         >
-          <div style={{ position: 'relative', flexShrink: 0 }}>
+          <div
+            style={{ position: 'relative', flexShrink: 0 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenFullDp && onOpenFullDp(user?.avatar, user?.displayName || user?.username, user?.username);
+            }}
+            title="Click to view full photo"
+          >
             <img
               src={user?.avatar}
               alt="Profile"
@@ -640,7 +764,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               onError={(e) => {
                 e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user?.username || 'Pulse')}`;
               }}
-              style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)' }}
+              style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)', cursor: 'pointer' }}
             />
             {user?.isEmailVerified && (
               <CheckCircle2
@@ -857,13 +981,49 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 <span>Create New Group</span>
               </button>
 
+              {/* Switch Account */}
+              <button
+                onClick={() => {
+                  setShowTopMenu(false);
+                  openSettingsModal && openSettingsModal();
+                }}
+                className="dropdown-menu-item"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '10px',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text-main)',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  width: '100%',
+                  transition: 'background 0.15s ease'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <ArrowRightLeft size={17} color="var(--accent)" />
+                  <span>Switch Account</span>
+                </div>
+                {savedAccounts?.length > 1 && (
+                  <span style={{ fontSize: '0.72rem', background: 'var(--accent)', color: '#fff', padding: '1px 6px', borderRadius: '10px', fontWeight: 700 }}>
+                    {savedAccounts.length}
+                  </span>
+                )}
+              </button>
+
               <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
 
               {/* Settings & Profile */}
               <button
                 onClick={() => {
-                  setShowSettingsModal(true);
                   setShowTopMenu(false);
+                  openSettingsModal && openSettingsModal();
                 }}
                 className="dropdown-menu-item"
                 style={{

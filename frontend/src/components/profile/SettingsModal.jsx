@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { ThemeContext } from '../../context/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, Sparkles, Bell, Ban, Unlock } from 'lucide-react';
+import { X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, Sparkles, Bell, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2 } from 'lucide-react';
 import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
 import { BACKEND_URL } from '../../utils/config';
 
@@ -19,10 +19,11 @@ export default function SettingsModal({
   openCreateGroupModal,
   silentMode,
   setSilentMode,
-  openPanicModal
+  openPanicModal,
+  onOpenFullDp
 }) {
   const { theme, changeTheme } = useContext(ThemeContext);
-  const { user, logout, toggleHideReadReceipts, unblockUser, token } = useContext(AuthContext);
+  const { user, logout, toggleHideReadReceipts, unblockUser, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
   const [showBlockedModal, setShowBlockedModal] = useState(false);
   const [blockedList, setBlockedList] = useState([]);
   const [loadingBlocked, setLoadingBlocked] = useState(false);
@@ -80,7 +81,12 @@ export default function SettingsModal({
               <img
                 src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.username}`}
                 alt="DP"
-                style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenFullDp && onOpenFullDp(user?.avatar, user?.displayName || user?.username, user?.username);
+                }}
+                style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)', cursor: 'pointer' }}
+                title="Click to view full profile photo"
               />
               <div style={{ minWidth: 0 }}>
                 <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -341,6 +347,128 @@ export default function SettingsModal({
                   {theme === t.id && <Check size={16} color="var(--accent)" />}
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Account Switcher Section */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Users size={16} color="var(--accent)" />
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Switch Account
+                </span>
+              </div>
+              <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                {savedAccounts?.length || 1} saved
+              </span>
+            </div>
+
+            {/* List of saved accounts */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {(savedAccounts && savedAccounts.length > 0 ? savedAccounts : [{
+                id: user?.id,
+                username: user?.username,
+                displayName: user?.displayName || user?.username,
+                avatar: user?.avatar || ''
+              }]).map(acc => {
+                const isActive = acc.id === user?.id || acc.username === user?.username;
+                return (
+                  <div
+                    key={acc.id || acc.username}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      borderRadius: '12px',
+                      background: isActive ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-card)',
+                      border: isActive ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                      gap: '10px'
+                    }}
+                  >
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1, cursor: isActive ? 'default' : 'pointer' }}
+                      onClick={() => {
+                        if (!isActive) {
+                          switchAccount(acc.id);
+                          onClose();
+                        }
+                      }}
+                    >
+                      <img
+                        src={acc.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${acc.username}`}
+                        alt={acc.displayName}
+                        style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', border: isActive ? '2px solid var(--accent)' : '1px solid var(--border)' }}
+                      />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {acc.displayName || acc.username}
+                        </div>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          @{acc.username}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                      {isActive ? (
+                        <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--accent)', background: 'var(--bg-card)', padding: '3px 8px', borderRadius: '8px', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Check size={12} /> Active
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            switchAccount(acc.id);
+                            onClose();
+                          }}
+                          className="btn-primary"
+                          style={{ padding: '4px 10px', fontSize: '0.76rem', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                          <ArrowRightLeft size={12} /> Switch
+                        </button>
+                      )}
+
+                      {!isActive && savedAccounts?.length > 1 && (
+                        <button
+                          onClick={() => removeSavedAccount(acc.id)}
+                          title="Remove saved account"
+                          className="icon-btn-ghost"
+                          style={{ padding: '4px', color: 'var(--text-muted)', borderRadius: '6px' }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Add Another Account Button */}
+              <button
+                onClick={() => {
+                  onClose();
+                  addAccount();
+                }}
+                className="user-select-card"
+                style={{
+                  width: '100%',
+                  background: 'var(--bg-card)',
+                  padding: '10px 12px',
+                  border: '1px dashed var(--accent)',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  color: 'var(--accent)',
+                  fontWeight: 600,
+                  fontSize: '0.84rem',
+                  cursor: 'pointer'
+                }}
+              >
+                <Plus size={16} /> Add / Log in Another Account
+              </button>
             </div>
           </div>
 

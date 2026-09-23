@@ -146,6 +146,7 @@ export function SocketProvider({ children }) {
           title: data.title || '⚡ Pulse Sync Update',
           senderName: data.senderName || data.title,
           senderId: data.senderId,
+          senderAvatar: data.senderAvatar || null,
           content: data.body,
           type: 'text',
           receivedAt: Date.now()

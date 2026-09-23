@@ -476,14 +476,24 @@ router.delete('/cancel/:requestId', authMiddleware, async (req, res) => {
 
     const io = req.app.get('io');
     if (io) {
-      const receiverRooms = [`user_${request.receiverId}`, request.receiverId];
-      receiverRooms.forEach(rm => io.to(rm).emit('friend_request_cancelled', {
+      const cancelPayload = {
         requestId,
-        userId: currentUser?.id || req.user.id
-      }));
+        userId: currentUser?.id || req.user.id,
+        senderId: request.senderId,
+        receiverId: request.receiverId,
+        targetId: request.receiverId
+      };
+      const allRooms = Array.from(new Set([
+        `user_${request.receiverId}`,
+        request.receiverId,
+        `user_${currentUser?.id || req.user.id}`,
+        currentUser?.id || req.user.id,
+        ...myIds.map(i => `user_${i}`)
+      ]));
+      allRooms.forEach(rm => io.to(rm).emit('friend_request_cancelled', cancelPayload));
     }
 
-    res.json({ success: true });
+    res.json({ success: true, requestId, targetId: request.receiverId });
   } catch (err) {
     console.error('Error cancelling friend request:', err);
     res.status(500).json({ error: 'Failed to cancel friend request' });

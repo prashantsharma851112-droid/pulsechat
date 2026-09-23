@@ -153,12 +153,20 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
 
     const handleReqCancelled = (data) => {
       const reqId = data?.requestId;
-      const senderId = data?.userId;
+      const senderId = data?.userId || data?.senderId;
+      const targetId = data?.targetId || data?.receiverId;
       setIncomingRequests(prev => {
         const next = prev.filter(r => r.id !== reqId && (!senderId || r.senderId !== senderId));
         if (onRequestsCountChange) onRequestsCountChange(next.length);
         return next;
       });
+      setOutgoingRequests(prev => prev.filter(r => r.id !== reqId));
+      if (targetId) {
+        setRequestStatusMap(prev => ({ ...prev, [targetId]: { status: 'none' } }));
+      }
+      if (senderId) {
+        setRequestStatusMap(prev => ({ ...prev, [senderId]: { status: 'none' } }));
+      }
       fetchRequests();
     };
 
@@ -309,8 +317,20 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
   };
 
   // Cancel Outgoing Request (0ms instant optimistic update)
-  const handleCancel = async (requestId) => {
+  const handleCancel = async (requestId, targetUserId = null) => {
+    let targetId = targetUserId;
+    if (!targetId) {
+      const targetReq = outgoingRequests.find(r => r.id === requestId);
+      targetId = targetReq?.receiverId || targetReq?.receiver?.id;
+    }
+
     setOutgoingRequests(prev => prev.filter(r => r.id !== requestId));
+    if (targetId) {
+      setRequestStatusMap(prev => ({
+        ...prev,
+        [targetId]: { status: 'none' }
+      }));
+    }
 
     setActionLoading(prev => ({ ...prev, [requestId]: true }));
     try {
@@ -318,6 +338,13 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
+      const data = await parseSafeJson(res);
+      if (data?.targetId) {
+        setRequestStatusMap(prev => ({
+          ...prev,
+          [data.targetId]: { status: 'none' }
+        }));
+      }
       if (!res.ok) {
         fetchRequests();
       }
@@ -720,7 +747,14 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                           <img
                             src={sender.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${sender.username}`}
                             alt={sender.displayName}
-                            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                            onClick={(e) => {
+                              if (onOpenFullDp) {
+                                e.stopPropagation();
+                                onOpenFullDp(sender.avatar, sender.displayName, sender.username);
+                              }
+                            }}
+                            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, cursor: 'pointer' }}
+                            title="Click to view full photo"
                           />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -813,7 +847,14 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                           <img
                             src={receiver.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${receiver.username}`}
                             alt={receiver.displayName}
-                            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                            onClick={(e) => {
+                              if (onOpenFullDp) {
+                                e.stopPropagation();
+                                onOpenFullDp(receiver.avatar, receiver.displayName, receiver.username);
+                              }
+                            }}
+                            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, cursor: 'pointer' }}
+                            title="Click to view full photo"
                           />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -908,7 +949,14 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                           <img
                             src={target.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${target.username}`}
                             alt={target.displayName}
-                            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
+                            onClick={(e) => {
+                              if (onOpenFullDp) {
+                                e.stopPropagation();
+                                onOpenFullDp(target.avatar, target.displayName, target.username);
+                              }
+                            }}
+                            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', cursor: 'pointer' }}
+                            title="Click to view full photo"
                           />
                           {isTargetOnline && (
                             <span style={{
@@ -954,7 +1002,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                           <button
                             onClick={() => {
                               const cancelId = statusInfo.requestId || outgoingRequests.find(r => r.receiverId === target.id || r.receiver?.id === target.id)?.id;
-                              if (cancelId) handleCancel(cancelId);
+                              if (cancelId) handleCancel(cancelId, target.id);
                             }}
                             disabled={actionLoading[statusInfo.requestId]}
                             style={{

@@ -333,6 +333,7 @@ export default function App() {
     setToasts(prev => [...prev, {
       id: toastId,
       title: senderTitle,
+      avatar: lastNotification.senderAvatar || lastNotification.avatar || null,
       senderId: lastNotification.senderId,
       chatId: lastNotification.chatId,
       isGroup: !!lastNotification.isGroup,
@@ -513,11 +514,17 @@ export default function App() {
         </>
       )}
 
-      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+      {showProfile && (
+        <ProfileModal
+          onClose={() => setShowProfile(false)}
+          onOpenFullDp={handleOpenFullDp}
+        />
+      )}
       {showSettings && (
         <SettingsModal
           onClose={() => setShowSettings(false)}
           openProfileModal={() => { setShowSettings(false); setShowProfile(true); }}
+          onOpenFullDp={handleOpenFullDp}
         />
       )}
 
@@ -578,6 +585,7 @@ export default function App() {
             key={t.id}
             title={t.title || "New message"}
             body={t.body}
+            avatar={t.avatar}
             onClick={() => {
               if (t.isFriendRequest || t.isFriendAccepted) {
                 window.dispatchEvent(new CustomEvent('pulsechat_open_tab', { detail: { tab: 'friends', subTab: t.isFriendRequest ? 'requests' : 'friends' } }));

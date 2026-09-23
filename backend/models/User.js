@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
 // don't have to rewrite that logic, only how it's stored.
 const userSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
-  email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
+  email: { type: String, required: true, lowercase: true, trim: true, index: true },
   username: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
   passwordHash: { type: String, required: true },
   displayName: { type: String, required: true, index: true },

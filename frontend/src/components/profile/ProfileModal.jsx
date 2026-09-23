@@ -19,7 +19,7 @@ const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/adventurer/svg?seed=blaze'
 ];
 
-export default function ProfileModal({ onClose }) {
+export default function ProfileModal({ onClose, onOpenFullDp }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'password'
 
@@ -226,7 +226,9 @@ export default function ProfileModal({ onClose }) {
                 <img
                   src={avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}
                   alt="Current DP"
-                  style={{ width: '96px', height: '96px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--accent)', boxShadow: '0 8px 20px rgba(0,0,0,0.3)' }}
+                  onClick={() => onOpenFullDp && onOpenFullDp(avatar || user.avatar, displayName || user.displayName || user.username, user.username)}
+                  style={{ width: '96px', height: '96px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--accent)', boxShadow: '0 8px 20px rgba(0,0,0,0.3)', cursor: 'pointer' }}
+                  title="Click to view full photo"
                 />
                 <label
                   htmlFor="dp-file-input"

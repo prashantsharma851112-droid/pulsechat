@@ -8,6 +8,43 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => getCachedUser());
   const [token, setToken] = useState(() => localStorage.getItem('pulsechat_token'));
   const [loading, setLoading] = useState(() => !getCachedUser() && !!localStorage.getItem('pulsechat_token'));
+  const [savedAccounts, setSavedAccounts] = useState(() => {
+    try {
+      const stored = localStorage.getItem('pulsechat_saved_accounts');
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const updateSavedAccountsList = (accountData, accountToken) => {
+    if (!accountData || !accountToken) return;
+    setSavedAccounts(prev => {
+      const existingIdx = prev.findIndex(a => a.id === accountData.id || a.username === accountData.username);
+      const entry = {
+        id: accountData.id,
+        username: accountData.username,
+        displayName: accountData.displayName || accountData.username,
+        avatar: accountData.avatar || '',
+        email: accountData.email || '',
+        isPro: Boolean(accountData.isPro),
+        customBadge: accountData.customBadge || null,
+        token: accountToken,
+        lastActive: Date.now()
+      };
+      let next;
+      if (existingIdx >= 0) {
+        next = [...prev];
+        next[existingIdx] = { ...prev[existingIdx], ...entry };
+      } else {
+        next = [entry, ...prev];
+      }
+      try {
+        localStorage.setItem('pulsechat_saved_accounts', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (token) {
@@ -28,6 +65,7 @@ export function AuthProvider({ children }) {
           if (data.user) {
             setUser(data.user);
             setCachedUser(data.user);
+            updateSavedAccountsList(data.user, token);
           }
         })
         .catch((err) => {
@@ -47,6 +85,7 @@ export function AuthProvider({ children }) {
     setCachedUser(data.user);
     setToken(data.token);
     setUser(data.user);
+    updateSavedAccountsList(data.user, data.token);
   };
 
   const logout = () => {
@@ -56,9 +95,57 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const switchAccount = (accountId) => {
+    const target = savedAccounts.find(a => a.id === accountId || a.username === accountId);
+    if (!target || !target.token) return;
+
+    localStorage.setItem('pulsechat_token', target.token);
+    const minimalUser = {
+      id: target.id,
+      username: target.username,
+      displayName: target.displayName,
+      avatar: target.avatar,
+      email: target.email,
+      isPro: target.isPro,
+      customBadge: target.customBadge
+    };
+    setCachedUser(minimalUser);
+    setToken(target.token);
+    setUser(minimalUser);
+  };
+
+  const addAccount = () => {
+    localStorage.removeItem('pulsechat_token');
+    setCachedUser(null);
+    setToken(null);
+    setUser(null);
+  };
+
+  const removeSavedAccount = (accountId) => {
+    setSavedAccounts(prev => {
+      const next = prev.filter(a => a.id !== accountId && a.username !== accountId);
+      try {
+        localStorage.setItem('pulsechat_saved_accounts', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+
+    if (user?.id === accountId || user?.username === accountId) {
+      const remaining = savedAccounts.filter(a => a.id !== accountId && a.username !== accountId);
+      if (remaining.length > 0) {
+        switchAccount(remaining[0].id);
+      } else {
+        logout();
+      }
+    }
+  };
+
   const updateUserProfile = (updatedUser) => {
     setUser(updatedUser);
     setCachedUser(updatedUser);
+    if (token) {
+      updateSavedAccountsList(updatedUser, token);
+    }
   };
 
   const blockUser = async (targetUserId) => {
@@ -132,6 +219,10 @@ export function AuthProvider({ children }) {
       loading,
       login,
       logout,
+      savedAccounts,
+      switchAccount,
+      addAccount,
+      removeSavedAccount,
       updateUserProfile,
       blockUser,
       unblockUser,
