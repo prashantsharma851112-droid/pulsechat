@@ -407,7 +407,7 @@ export default function MessageItem({
           background: (message.type === 'gift' || message.type === '3d_text')
             ? (isSelected ? 'rgba(99, 102, 241, 0.25)' : 'transparent')
             : (isSelected ? 'rgba(99, 102, 241, 0.25)' : (isMine ? 'var(--bubble-sent)' : 'var(--bubble-received)')),
-          color: 'var(--text-main)',
+          color: isMine ? '#ffffff' : 'var(--text-main)',
           padding: (message.type === 'gift' || message.type === '3d_text') ? '2px 4px' : '0.75rem 1rem',
           borderRadius: isMine ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
           boxShadow: (message.type === 'gift' || message.type === '3d_text') ? 'none' : '0 2px 6px rgba(0,0,0,0.08)',

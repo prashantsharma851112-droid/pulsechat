@@ -7,9 +7,9 @@ import { BACKEND_URL } from '../../utils/config';
 import PulseProModal from '../chat/PulseProModal';
 
 const THEMES = [
-  { id: 'light', name: '☀️ Light Mode (Brightness)', color: '#4f46e5' },
+  { id: 'midnight_amoled', name: '🖤 Midnight AMOLED (Default)', color: '#000000', isPro: false },
   { id: 'dark', name: '🌙 Midnight Dark', color: '#6366f1' },
-  { id: 'midnight_amoled', name: '🖤 Midnight AMOLED', color: '#e2e8f0', isPro: true },
+  { id: 'light', name: '☀️ Light Mode (Brightness)', color: '#4f46e5' },
   { id: 'aurora_borealis', name: '🌌 Aurora Borealis', color: '#00f2fe', isPro: true },
   { id: 'blood_moon', name: '🩸 Blood Moon', color: '#ff1744', isPro: true },
   { id: 'tokyo_synth', name: '🌆 Tokyo Synthwave', color: '#f72585', isPro: true },

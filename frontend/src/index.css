@@ -2,7 +2,19 @@
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color-scheme: light;
+  color-scheme: dark;
+  --bg-main: #000000;
+  --bg-sidebar: #050505;
+  --bg-chat: #000000;
+  --bg-card: #0d0d0d;
+  --hover-bg: #18181b;
+  --text-main: #ffffff;
+  --text-muted: #a1a1aa;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --bubble-sent: #27272a;
+  --bubble-received: #141416;
+  --border: #222225;
 }
 
 /* --- THEME VARIATION VARIABLES --- */
@@ -115,7 +127,7 @@
   --bg-card: #241a06;
   --hover-bg: #322508;
   --text-main: #fef3c7;
-  --text-muted: #d97706;
+  --text-muted: #fbbf24;
   --accent: #f59e0b;
   --accent-hover: #d97706;
   --bubble-sent: #b45309;
@@ -155,7 +167,7 @@
   --border: #155e75;
 }
 
-/* --- NEW VIP PRO THEMES --- */
+/* --- DEFAULT AMOLED THEME --- */
 [data-theme="midnight_amoled"],
 [data-chat-theme="midnight_amoled"] {
   color-scheme: dark;
@@ -163,13 +175,13 @@
   --bg-sidebar: #050505;
   --bg-chat: #000000;
   --bg-card: #0d0d0d;
-  --hover-bg: #171717;
+  --hover-bg: #18181b;
   --text-main: #ffffff;
-  --text-muted: #8e8e93;
-  --accent: #e2e8f0;
-  --accent-hover: #ffffff;
+  --text-muted: #a1a1aa;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
   --bubble-sent: #27272a;
-  --bubble-received: #121214;
+  --bubble-received: #141416;
   --border: #222225;
 }
 
@@ -1500,14 +1512,25 @@ input, textarea {
 }
 
 .pulse-sync-btn.sync {
-  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.18);
+  color: #a5b4fc;
+  border: 1px solid rgba(129, 140, 248, 0.45);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.15);
 }
 
 .pulse-sync-btn.sync:hover {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #ffffff;
+  border-color: #6366f1;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.45);
   transform: translateY(-1px) scale(1.03);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.45);
+}
+
+[data-theme="light"] .pulse-sync-btn.sync {
+  background: #4f46e5;
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
 }
 
 .pulse-sync-btn.pending {

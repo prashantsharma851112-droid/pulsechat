@@ -5,13 +5,14 @@ import PulseProModal from './PulseProModal';
 
 const THEMES = [
   {
-    id: 'light',
-    name: 'Daylight Clean',
-    category: 'Light Mode',
-    bg: '#f3f4f6',
-    card: '#ffffff',
-    accent: '#4f46e5',
-    tag: '☀️ Clean White'
+    id: 'midnight_amoled',
+    name: 'Midnight AMOLED',
+    category: 'Dark Mode',
+    bg: '#000000',
+    card: '#0d0d0d',
+    accent: '#6366f1',
+    tag: '🖤 Pure AMOLED (Default)',
+    isPro: false
   },
   {
     id: 'dark',
@@ -21,6 +22,15 @@ const THEMES = [
     card: '#1f293d',
     accent: '#6366f1',
     tag: '🌙 Classic Dark'
+  },
+  {
+    id: 'light',
+    name: 'Daylight Clean',
+    category: 'Light Mode',
+    bg: '#f3f4f6',
+    card: '#ffffff',
+    accent: '#4f46e5',
+    tag: '☀️ Clean White'
   },
   {
     id: 'gold_nitro',
@@ -50,16 +60,6 @@ const THEMES = [
     card: '#082531',
     accent: '#06b6d4',
     tag: '⚡ VIP Cyber',
-    isPro: true
-  },
-  {
-    id: 'midnight_amoled',
-    name: 'Midnight AMOLED',
-    category: 'VIP Exclusive',
-    bg: '#000000',
-    card: '#0d0d0d',
-    accent: '#e2e8f0',
-    tag: '⚡ VIP Pure OLED',
     isPro: true
   },
   {

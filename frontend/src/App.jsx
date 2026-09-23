@@ -40,8 +40,8 @@ class ErrorBoundary extends React.Component {
           alignItems: 'center',
           justifyContent: 'center',
           padding: '2rem',
-          background: 'var(--bg-main, #f3f4f6)',
-          color: 'var(--text-main, #111827)',
+          background: 'var(--bg-main, #000000)',
+          color: 'var(--text-main, #ffffff)',
           textAlign: 'center'
         }}>
           <div style={{
@@ -57,7 +57,7 @@ class ErrorBoundary extends React.Component {
             <AlertTriangle size={32} color="#ef4444" />
           </div>
           <h2 style={{ marginBottom: '0.5rem', fontWeight: 700 }}>PulseChat recovered safely</h2>
-          <p style={{ color: 'var(--text-muted, #6b7280)', marginBottom: '1.5rem', maxWidth: '420px', fontSize: '0.9rem' }}>
+          <p style={{ color: 'var(--text-muted, #a1a1aa)', marginBottom: '1.5rem', maxWidth: '420px', fontSize: '0.9rem' }}>
             We protected your session from a blank screen. Click below to continue messaging.
           </p>
           <button
