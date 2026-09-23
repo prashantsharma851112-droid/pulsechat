@@ -227,8 +227,8 @@ export default function CreateGroupModal({ onClose, onGroupCreated, preloadedUse
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card modal-responsive modal-card-animated" style={{ maxWidth: '440px' }}>
-        <div className="modal-header">
+      <div className="modal-card modal-responsive modal-card-animated" style={{ maxWidth: '440px', width: '100%', maxHeight: '90dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="modal-header" style={{ flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Users size={20} color="var(--accent)" />
             <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-main)' }}>Create New Group</h3>
@@ -236,7 +236,7 @@ export default function CreateGroupModal({ onClose, onGroupCreated, preloadedUse
           <button className="icon-btn-ghost" onClick={onClose}><X size={20} /></button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <form onSubmit={handleSubmit} style={{ padding: '1.25rem 1.25rem 2rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {error && <div className="error-banner">{error}</div>}
 
           {/* Group Avatar DP Selector */}

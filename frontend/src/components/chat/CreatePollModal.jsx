@@ -74,8 +74,8 @@ export default function CreatePollModal({ onClose, onCreatePoll }) {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card modal-responsive" style={{ borderTop: `4px solid ${currentTheme.primary}`, maxWidth: '460px' }}>
-        <div className="modal-header">
+      <div className="modal-card modal-responsive" style={{ borderTop: `4px solid ${currentTheme.primary}`, maxWidth: '460px', width: '100%', maxHeight: '90dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="modal-header" style={{ flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{
               width: '32px',
@@ -96,7 +96,7 @@ export default function CreatePollModal({ onClose, onCreatePoll }) {
           <button className="icon-btn-ghost" onClick={onClose}><X size={20} /></button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.1rem', maxHeight: '80vh', overflowY: 'auto' }}>
+        <form onSubmit={handleSubmit} style={{ padding: '1.25rem 1.25rem 2.5rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '1.1rem', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {error && <div className="error-banner">{error}</div>}
 
           {/* Color Theme Selector */}

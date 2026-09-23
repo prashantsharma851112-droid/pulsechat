@@ -83,6 +83,10 @@ export default function GiftPickerModal({
         onClick={(e) => e.stopPropagation()}
         style={{
           maxWidth: '440px',
+          width: '100%',
+          maxHeight: '90dvh',
+          display: 'flex',
+          flexDirection: 'column',
           padding: 0,
           borderRadius: '22px',
           overflow: 'hidden',
@@ -98,7 +102,8 @@ export default function GiftPickerModal({
           borderBottom: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between'
+          justifyContent: 'space-between',
+          flexShrink: 0
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '1.4rem' }}>🎁</span>
@@ -149,14 +154,15 @@ export default function GiftPickerModal({
             background: 'rgba(239, 68, 68, 0.15)',
             color: '#ef4444',
             fontSize: '0.8rem',
-            textAlign: 'center'
+            textAlign: 'center',
+            flexShrink: 0
           }}>
             {errorMsg}
           </div>
         )}
 
         {/* Gift Grid */}
-        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div style={{ padding: '16px 16px 28px 16px', display: 'flex', flexDirection: 'column', gap: '14px', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(3, 1fr)',

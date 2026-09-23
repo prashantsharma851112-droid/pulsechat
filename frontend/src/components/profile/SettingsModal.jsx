@@ -83,10 +83,10 @@ export default function SettingsModal({
       <div
         className="modal-card modal-responsive modal-card-animated"
         onClick={e => e.stopPropagation()}
-        style={{ maxWidth: '420px', padding: 0, overflow: 'hidden' }}
+        style={{ maxWidth: '420px', width: '100%', maxHeight: '90dvh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
       >
         {/* Header Bar */}
-        <div className="modal-header" style={{ padding: '1.2rem 1.5rem', borderBottom: '1px solid var(--border)' }}>
+        <div className="modal-header" style={{ padding: '1.2rem 1.5rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <SettingsIcon size={20} color="var(--accent)" />
             <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-main)' }}>Settings & Options</h3>
@@ -94,7 +94,7 @@ export default function SettingsModal({
           <button className="icon-btn-ghost" onClick={onClose}><X size={20} /></button>
         </div>
 
-        <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', maxHeight: '80vh', overflowY: 'auto' }}>
+        <div style={{ padding: '1.25rem 1.5rem 2.5rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {/* User Profile Summary Card */}
           <div style={{
             background: 'var(--bg-card)',

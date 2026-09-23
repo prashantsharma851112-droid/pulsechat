@@ -287,7 +287,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card modal-responsive" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px', overflow: 'hidden' }}>
+      <div className="modal-card modal-responsive" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px', width: '100%', maxHeight: '90dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Header Cover Banner */}
         <div style={{
           height: '110px',
@@ -295,7 +295,8 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
           position: 'relative',
           display: 'flex',
           justifyContent: 'flex-end',
-          padding: '12px'
+          padding: '12px',
+          flexShrink: 0
         }}>
           <button
             className="icon-btn-ghost"
@@ -307,7 +308,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
         </div>
 
         {/* Profile Avatar & Details */}
-        <div style={{ padding: '0 1.5rem 1.5rem 1.5rem', marginTop: '-50px', textAlign: 'center' }}>
+        <div style={{ padding: '0 1.5rem 2.5rem 1.5rem', marginTop: '-50px', textAlign: 'center', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {/* Avatar with Clickable Full DP trigger */}
           <div
             className={userToDisplay?.isPro ? 'pro-neon-avatar pro-neon-avatar-lg' : ''}

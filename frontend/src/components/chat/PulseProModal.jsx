@@ -231,6 +231,10 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
         onClick={(e) => e.stopPropagation()}
         style={{
           maxWidth: '520px',
+          width: '100%',
+          maxHeight: '90dvh',
+          display: 'flex',
+          flexDirection: 'column',
           padding: 0,
           overflow: 'hidden',
           borderRadius: '24px',
@@ -246,7 +250,8 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
           background: 'linear-gradient(135deg, #1e1b4b 0%, #311042 50%, #451a03 100%)',
           borderBottom: '1px solid rgba(255, 215, 0, 0.2)',
           color: '#fff',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          flexShrink: 0
         }}>
           {/* Subtle background glow */}
           <div style={{
@@ -399,14 +404,21 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
             color: statusMsg.type === 'success' ? '#10b981' : '#ef4444',
             fontSize: '0.85rem',
             fontWeight: 600,
-            textAlign: 'center'
+            textAlign: 'center',
+            flexShrink: 0
           }}>
             {statusMsg.text}
           </div>
         )}
 
         {/* Body Content */}
-        <div style={{ padding: '20px', maxHeight: '68vh', overflowY: 'auto' }}>
+        <div style={{
+          padding: '18px 18px 48px 18px',
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch'
+        }}>
           {activeTab === 'pro' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               {/* Feature Grid */}

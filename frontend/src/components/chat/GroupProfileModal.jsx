@@ -231,7 +231,7 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
       <div
         className="modal-card modal-responsive modal-card-animated"
         onClick={e => e.stopPropagation()}
-        style={{ maxWidth: '440px', overflow: 'hidden' }}
+        style={{ maxWidth: '440px', width: '100%', maxHeight: '90dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       >
         {/* Banner Cover */}
         <div style={{
@@ -241,7 +241,8 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-start',
-          padding: '12px'
+          padding: '12px',
+          flexShrink: 0
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fff', fontSize: '0.85rem', fontWeight: 600, background: 'rgba(0,0,0,0.3)', padding: '4px 10px', borderRadius: '12px' }}>
             <Users size={14} /> Group Info
@@ -256,7 +257,7 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
         </div>
 
         {/* Profile Content */}
-        <div style={{ padding: '0 1.5rem 1.5rem 1.5rem', marginTop: '-45px', textAlign: 'center' }}>
+        <div style={{ padding: '0 1.5rem 2.5rem 1.5rem', marginTop: '-45px', textAlign: 'center', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {/* Avatar with DP Edit Trigger */}
           <div style={{ position: 'relative', display: 'inline-block', marginBottom: '0.75rem' }}>
             <img
