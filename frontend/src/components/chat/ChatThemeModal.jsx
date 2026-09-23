@@ -150,10 +150,25 @@ export default function ChatThemeModal({ currentTheme, onSelectTheme, onClose })
         <div
           className="modal-card modal-responsive modal-card-animated"
           onClick={(e) => e.stopPropagation()}
-          style={{ maxWidth: '460px', padding: 0, overflow: 'hidden' }}
+          style={{
+            maxWidth: '460px',
+            maxHeight: '90dvh',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: 0,
+            overflow: 'hidden',
+            borderRadius: '24px'
+          }}
         >
           {/* Header */}
-          <div className="modal-header" style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
+          <div
+            className="modal-header"
+            style={{
+              padding: '1rem 1.25rem',
+              borderBottom: '1px solid var(--border)',
+              flexShrink: 0
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Palette size={20} color="var(--accent)" />
               <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-main)' }}>Chat Window Theme</h3>
@@ -164,7 +179,18 @@ export default function ChatThemeModal({ currentTheme, onSelectTheme, onClose })
           </div>
 
           {/* Theme Content */}
-          <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div
+            style={{
+              padding: '1.25rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              flex: 1,
+              minHeight: 0
+            }}
+          >
             <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
               Personalize this conversation. VIP exclusive themes include ambient frequency glows.
             </div>

@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { ThemeContext } from '../../context/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, Sparkles, Bell, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2, Crown, Lock } from 'lucide-react';
+import { X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, Sparkles, Bell, BellOff, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2, Crown, Lock } from 'lucide-react';
 import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
 import { BACKEND_URL } from '../../utils/config';
 import PulseProModal from '../chat/PulseProModal';
@@ -36,6 +36,26 @@ export default function SettingsModal({
   const [blockedList, setBlockedList] = useState([]);
   const [loadingBlocked, setLoadingBlocked] = useState(false);
   const [showProModal, setShowProModal] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    return localStorage.getItem('pulsechat_notifications_enabled') !== 'false';
+  });
+
+  const handleToggleNotifications = async () => {
+    const nextState = !notificationsEnabled;
+    setNotificationsEnabled(nextState);
+    localStorage.setItem('pulsechat_notifications_enabled', String(nextState));
+
+    if (nextState) {
+      const granted = await requestNotificationPermission(true, token);
+      if (granted) {
+        showPushNotification('Notifications Enabled 🔔', 'You will now receive message sounds and alerts.');
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechat_notifications_toggled', { detail: { enabled: nextState } }));
+    }
+  };
 
   const fetchBlockedList = async () => {
     if (!token) return;
@@ -156,16 +176,9 @@ export default function SettingsModal({
               Notifications & Privacy
             </span>
 
-            {/* Push Notifications Toggle / Test */}
+            {/* Notification ON / OFF Toggle Switch */}
             <div
-              onClick={async () => {
-                const granted = await requestNotificationPermission();
-                if (granted) {
-                  showPushNotification('PulseChat Notifications Active! 🔔', 'Notifications are enabled and working perfectly outside the app.');
-                } else {
-                  alert('Please allow notification permissions in your browser or phone app settings.');
-                }
-              }}
+              onClick={handleToggleNotifications}
               className="user-select-card"
               style={{
                 width: '100%',
@@ -179,21 +192,61 @@ export default function SettingsModal({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Bell size={18} color="var(--accent)" />
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  background: notificationsEnabled ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {notificationsEnabled ? (
+                    <Bell size={18} color="#10b981" />
+                  ) : (
+                    <BellOff size={18} color="#ef4444" />
+                  )}
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>App Notifications (Push)</div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>Message Notifications</span>
+                    <span style={{
+                      fontSize: '0.68rem',
+                      fontWeight: 800,
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      background: notificationsEnabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                      color: notificationsEnabled ? '#10b981' : '#ef4444'
+                    }}>
+                      {notificationsEnabled ? 'ON' : 'OFF'}
+                    </span>
+                  </div>
                   <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                    {typeof window !== 'undefined' && window.Notification && Notification.permission === 'granted'
-                      ? 'Enabled (Tap to test)'
-                      : 'Tap to enable background alerts'}
+                    {notificationsEnabled
+                      ? 'Alerts, push notifications & audio enabled'
+                      : 'All notification alerts & sounds are disabled (Muted)'}
                   </div>
                 </div>
               </div>
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: typeof window !== 'undefined' && window.Notification && Notification.permission === 'granted' ? '#10b981' : 'var(--accent)' }}>
-                {typeof window !== 'undefined' && window.Notification && Notification.permission === 'granted' ? 'Active ✓' : 'Enable'}
-              </span>
+              <div style={{
+                width: '36px',
+                height: '20px',
+                borderRadius: '10px',
+                background: notificationsEnabled ? '#10b981' : 'var(--border)',
+                position: 'relative',
+                transition: 'all 0.2s ease'
+              }}>
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  background: '#fff',
+                  position: 'absolute',
+                  top: '2px',
+                  left: notificationsEnabled ? '18px' : '2px',
+                  transition: 'all 0.2s ease'
+                }} />
+              </div>
             </div>
 
             {setSilentMode && (

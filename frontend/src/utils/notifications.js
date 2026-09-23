@@ -151,6 +151,7 @@ export function dismissNotificationBanner() {
  */
 export async function showPushNotification(title, body, icon = '/icon-192.png', tag = 'pulsechat-msg', data = {}) {
   if (typeof window === 'undefined' || !('Notification' in window)) return;
+  if (localStorage.getItem('pulsechat_notifications_enabled') === 'false') return;
   if (Notification.permission !== 'granted') return;
 
   const notifPayloadData = {

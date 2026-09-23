@@ -1,4 +1,7 @@
 export function playSound(type = 'received') {
+  if (typeof window !== 'undefined' && localStorage.getItem('pulsechat_notifications_enabled') === 'false') {
+    return;
+  }
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();

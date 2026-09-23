@@ -160,6 +160,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [showProModal, setShowProModal] = useState(false);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [show3DTextModal, setShow3DTextModal] = useState(false);
+  const [showActionGrid, setShowActionGrid] = useState(false);
+  const actionGridRef = useRef(null);
   const [proModalTab, setProModalTab] = useState('pro');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [pendingMedia, setPendingMedia] = useState(null);
@@ -189,6 +191,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   // Chat settings & block status
   const [chatSetting, setChatSetting] = useState({ disappearingEnabled: false });
   const [blockStatus, setBlockStatus] = useState({ isBlockedByMe: false, isBlockedByThem: false });
+
+  // Close 4-dot action grid on click outside
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (actionGridRef.current && !actionGridRef.current.contains(e.target)) {
+        setShowActionGrid(false);
+      }
+    };
+    if (showActionGrid) {
+      document.addEventListener('mousedown', handleOutsideClick);
+      document.addEventListener('touchstart', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, [showActionGrid]);
 
   // Automatic Outbox Sync when network or socket reconnects
   const syncOutbox = useCallback(() => {
@@ -1216,7 +1235,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </div>
           </div>
 
-          <div className="chat-header-actions" style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
+          <div className="chat-header-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+            {/* Drawboard (Shared Whiteboard) */}
             <button
               onClick={() => setShowWhiteboard(true)}
               className="icon-btn-ghost"
@@ -1224,22 +1244,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               style={{ width: '38px', height: '38px', borderRadius: '50%' }}
             >
               <Presentation size={19} color="var(--accent)" />
-            </button>
-            <button
-              onClick={() => isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, false)) : onStartCall(false)}
-              className="icon-btn-ghost"
-              title={isGroup ? 'Start Group Voice Call' : 'Voice Call'}
-              style={{ width: '38px', height: '38px', borderRadius: '50%' }}
-            >
-              <Phone size={19} />
-            </button>
-            <button
-              onClick={() => isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, true)) : onStartCall(true)}
-              className="icon-btn-ghost"
-              title={isGroup ? 'Start Group Video Call' : 'Video Call'}
-              style={{ width: '38px', height: '38px', borderRadius: '50%' }}
-            >
-              <Video size={19} />
             </button>
 
             {/* 3-Dots More Options Menu */}
@@ -1255,6 +1259,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
               {showMoreMenu && (
                 <div className="chat-header-dropdown-menu">
+                  {/* Voice & Video Calls moved inside 3-dots menu */}
+                  <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, false)) : onStartCall(false); }}>
+                    <Phone size={16} color="var(--accent)" />
+                    <span>{isGroup ? 'Group Voice Call' : 'Voice Call'}</span>
+                  </button>
+                  <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, true)) : onStartCall(true); }}>
+                    <Video size={16} color="var(--accent)" />
+                    <span>{isGroup ? 'Group Video Call' : 'Video Call'}</span>
+                  </button>
+                  <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
                   <button onClick={() => { setShowMoreMenu(false); setShowThemeModal(true); }}>
                     <Palette size={16} color="var(--accent)" />
                     <span>Change Theme</span>
@@ -1317,7 +1331,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         </div>
 
         {/* Conversation Mood Timeline Strip — sentence-level progression */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px', overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
           <span style={{ flexShrink: 0 }}>Mood:</span>
           {moodSteps.length > 0 ? (
             <>
@@ -1774,36 +1788,293 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             style={{ display: 'none' }}
           />
 
-          {!showRecorder && (
-            <>
-              <button onClick={() => fileInputRef.current?.click()} className="icon-btn-ghost" title="Send Photo, Video or Document"><Paperclip size={20} /></button>
-              <button onClick={() => setShowEmoji(!showEmoji)} className="icon-btn-ghost" title="Add Emoji"><Smile size={20} /></button>
-              <button onClick={() => setShowCreatePoll(true)} className="icon-btn-ghost" title="Create Poll"><BarChart2 size={20} /></button>
-              <button onClick={() => setShowGiftPicker(true)} className="icon-btn-ghost" title="Beam Virtual Gift (Pulse Sparks)"><span style={{ fontSize: '1.2rem' }}>🎁</span></button>
+          {/* 4-Dot Quick Action Drawer */}
+          {showActionGrid && (
+            <div
+              ref={actionGridRef}
+              style={{
+                position: 'absolute',
+                bottom: 'calc(100% + 10px)',
+                left: '12px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: '20px',
+                padding: '14px',
+                boxShadow: '0 16px 40px rgba(0,0,0,0.5), 0 0 25px rgba(99, 102, 241, 0.2)',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '12px',
+                zIndex: 1100,
+                width: 'min(330px, 92vw)',
+                animation: 'pulseModalPop 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
+              }}
+            >
+              {/* 1. Media & Files */}
               <button
-                onClick={() => setShow3DTextModal(true)}
-                className="icon-btn-ghost"
-                title="3D Animated Typography (VIP Pro)"
-                style={{ position: 'relative' }}
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  fileInputRef.current?.click();
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
               >
-                <span style={{
-                  fontSize: '0.72rem',
-                  fontWeight: 900,
-                  background: 'linear-gradient(135deg, #06b6d4, #a855f7)',
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   color: '#fff',
-                  padding: '2px 5px',
-                  borderRadius: '6px',
-                  letterSpacing: '0.04em'
-                }}>3D</span>
+                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.35)'
+                }}>
+                  <Paperclip size={20} />
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Files & Media</span>
               </button>
-              <button onClick={() => setShowRecorder(true)} className="icon-btn-ghost" title="Voice Note"><Mic size={20} /></button>
-            </>
+
+              {/* 2. 3D Typography (VIP Pro) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  setShow3DTextModal(true);
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #06b6d4, #a855f7)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontWeight: 900,
+                  fontSize: '0.92rem',
+                  boxShadow: '0 4px 14px rgba(6, 182, 212, 0.4)'
+                }}>
+                  3D
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#06b6d4' }}>3D Text</span>
+              </button>
+
+              {/* 3. Virtual Gift */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  setShowGiftPicker(true);
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(236, 72, 153, 0.35)',
+                  fontSize: '1.25rem'
+                }}>
+                  🎁
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Send Gift</span>
+              </button>
+
+              {/* 4. Create Poll */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  setShowCreatePoll(true);
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(139, 92, 246, 0.35)'
+                }}>
+                  <BarChart2 size={20} />
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Create Poll</span>
+              </button>
+
+              {/* 5. Emoji & Stickers */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  setShowEmoji(prev => !prev);
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.35)'
+                }}>
+                  <Smile size={20} />
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Emojis</span>
+              </button>
+
+              {/* 6. Voice Note */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  setShowRecorder(true);
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)'
+                }}>
+                  <Mic size={20} />
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Voice Note</span>
+              </button>
+            </div>
+          )}
+
+          {/* 4-Dot Button Beside Typing Input Box */}
+          {!showRecorder && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowActionGrid(prev => !prev);
+                setShowEmoji(false);
+              }}
+              className="icon-btn-ghost"
+              title="Features & Attachments (4 Dots)"
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                background: showActionGrid ? 'var(--accent)' : 'var(--bg-card)',
+                color: showActionGrid ? '#fff' : 'var(--accent)',
+                border: showActionGrid ? '1px solid var(--accent)' : '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                transition: 'all 0.15s ease',
+                cursor: 'pointer',
+                boxShadow: showActionGrid ? '0 0 12px rgba(99, 102, 241, 0.4)' : 'none'
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="7" cy="7" r="2.5" />
+                <circle cx="17" cy="7" r="2.5" />
+                <circle cx="7" cy="17" r="2.5" />
+                <circle cx="17" cy="17" r="2.5" />
+              </svg>
+            </button>
           )}
 
           {showRecorder ? (
             <VoiceRecorder onSendVoice={handleSendVoice} onCancel={() => setShowRecorder(false)} />
           ) : (
-            <form onSubmit={handleSendText} style={{ flex: 1, display: 'flex', gap: '0.5rem' }}>
+            <form onSubmit={handleSendText} style={{ flex: 1, display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <input
                 type="text"
                 value={text}
@@ -1811,9 +2082,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 placeholder={isGroup ? 'Message group...' : 'Type a message...'}
                 className="form-input"
                 ref={replyInputRef}
-                style={{ flex: 1, borderRadius: '24px' }}
+                style={{ flex: 1, minWidth: 0, borderRadius: '24px', padding: '10px 16px', fontSize: '0.94rem' }}
               />
-              <button type="submit" className="btn-primary-round" title="Send Message"><Send size={18} /></button>
+              <button
+                type="submit"
+                className="btn-primary-round"
+                title="Send Message"
+                style={{ flexShrink: 0 }}
+              >
+                <Send size={18} />
+              </button>
             </form>
           )}
         </div>

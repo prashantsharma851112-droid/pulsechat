@@ -1210,42 +1210,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 <span>Create New Group</span>
               </button>
 
-              {/* Switch Account */}
-              <button
-                onClick={() => {
-                  setShowTopMenu(false);
-                  openSettingsModal && openSettingsModal();
-                }}
-                className="dropdown-menu-item"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '10px',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: 'transparent',
-                  color: 'var(--text-main)',
-                  fontSize: '0.88rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  width: '100%',
-                  transition: 'background 0.15s ease'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <ArrowRightLeft size={17} color="var(--accent)" />
-                  <span>Switch Account</span>
-                </div>
-                {savedAccounts?.length > 1 && (
-                  <span style={{ fontSize: '0.72rem', background: 'var(--accent)', color: '#fff', padding: '1px 6px', borderRadius: '10px', fontWeight: 700 }}>
-                    {savedAccounts.length}
-                  </span>
-                )}
-              </button>
-
               <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
 
               {/* Settings & Profile */}
