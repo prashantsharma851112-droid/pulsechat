@@ -112,11 +112,40 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    canvas.width = canvas.parentElement.clientWidth || 640;
-    canvas.height = 420;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const updateCanvasDimensions = () => {
+      const c = canvasRef.current;
+      if (!c || !c.parentElement) return;
+      const parentWidth = c.parentElement.clientWidth || 640;
+      const isMobile = window.innerWidth < 640;
+      const targetHeight = isMobile
+        ? Math.max(250, Math.min(340, Math.floor(window.innerHeight * 0.40)))
+        : 420;
+
+      // If canvas already has drawings, preserve them during resize
+      if (c.width > 0 && c.height > 0) {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = c.width;
+        tempCanvas.height = c.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(c, 0, 0);
+
+        c.width = parentWidth;
+        c.height = targetHeight;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(tempCanvas, 0, 0, c.width, c.height);
+      } else {
+        c.width = parentWidth;
+        c.height = targetHeight;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, c.width, c.height);
+      }
+    };
+
+    updateCanvasDimensions();
+    window.addEventListener('resize', updateCanvasDimensions);
 
     if (socket && chatId) {
       socket.emit('wb_join', { chatId });
@@ -195,6 +224,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
       socket.on('wb_restore', handleRemoteRestore);
 
       return () => {
+        window.removeEventListener('resize', updateCanvasDimensions);
         socket.off('wb_draw', handleRemoteDraw);
         socket.off('wb_shape', handleRemoteShape);
         socket.off('wb_sticker', handleRemoteSticker);
@@ -202,6 +232,10 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
         socket.off('wb_restore', handleRemoteRestore);
       };
     }
+
+    return () => {
+      window.removeEventListener('resize', updateCanvasDimensions);
+    };
   }, [socket, chatId]);
 
   const drawLineLocallyAndEmit = (x0Ratio, y0Ratio, x1Ratio, y1Ratio, strokeTool, strokeColor, strokeWidth) => {
@@ -242,17 +276,23 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0, xRatio: 0, yRatio: 0 };
     const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const touch = (e.touches && e.touches.length > 0)
+      ? e.touches[0]
+      : (e.changedTouches && e.changedTouches.length > 0 ? e.changedTouches[0] : null);
+    const clientX = touch ? touch.clientX : (e.clientX ?? 0);
+    const clientY = touch ? touch.clientY : (e.clientY ?? 0);
 
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
+    const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
+    const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
+
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
 
     return {
       x,
       y,
-      xRatio: Math.max(0, Math.min(1, x / canvas.width)),
-      yRatio: Math.max(0, Math.min(1, y / canvas.height))
+      xRatio: rect.width > 0 ? Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) : 0,
+      yRatio: rect.height > 0 ? Math.max(0, Math.min(1, (clientY - rect.top) / rect.height)) : 0
     };
   };
 
@@ -411,16 +451,16 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card modal-responsive" style={{ maxWidth: '760px' }}>
+      <div className="modal-card modal-responsive" style={{ maxWidth: '760px', width: '96vw', maxHeight: '94dvh', display: 'flex', flexDirection: 'column', margin: 'auto' }}>
         {/* Modal Header */}
-        <div className="modal-header">
+        <div className="modal-header" style={{ padding: '0.75rem 1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Presentation size={20} color="var(--accent)" />
             <div>
-              <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-main)' }}>
+              <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-main)' }}>
                 Whiteboard Drawing Board — {chatTitle || 'Board'}
               </h3>
-              <span style={{ fontSize: '0.72rem', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ fontSize: '0.7rem', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                 <Sparkles size={11} /> Real-Time Multi-User Drawing, Shapes & Stickers
               </span>
             </div>
@@ -428,134 +468,186 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
           <button className="icon-btn-ghost" onClick={onClose}><X size={20} /></button>
         </div>
 
-        <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ padding: '0.65rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, overflowY: 'auto' }}>
           {/* Main Toolbar */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', background: 'var(--bg-card)', padding: '10px 14px', borderRadius: '14px', flexWrap: 'wrap', border: '1px solid var(--border)' }}>
-            {/* Tool Selector Buttons */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <button
-                className={`icon-btn-ghost ${tool === 'pen' ? 'active-mic' : ''}`}
-                onClick={() => { setTool('pen'); setShowShapesMenu(false); setShowStickersMenu(false); }}
-                title="Pen Tool"
-                style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-              >
-                <Paintbrush size={16} /> Pen
-              </button>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            background: 'var(--bg-card)',
+            padding: '8px 10px',
+            borderRadius: '12px',
+            border: '1px solid var(--border)'
+          }}>
+            {/* Row 1: Tools (Pen, Eraser, Shapes, Stickers) */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '6px',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', width: '100%' }}>
+                <button
+                  type="button"
+                  className={`icon-btn-ghost ${tool === 'pen' ? 'active-mic' : ''}`}
+                  onClick={() => { setTool('pen'); setShowShapesMenu(false); setShowStickersMenu(false); }}
+                  title="Pen Tool"
+                  style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center' }}
+                >
+                  <Paintbrush size={15} /> <span>Pen</span>
+                </button>
 
-              <button
-                className={`icon-btn-ghost ${tool === 'eraser' ? 'active-mic' : ''}`}
-                onClick={() => { setTool('eraser'); setShowShapesMenu(false); setShowStickersMenu(false); }}
-                title="Eraser Tool"
-                style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-              >
-                <Eraser size={16} /> Eraser
-              </button>
+                <button
+                  type="button"
+                  className={`icon-btn-ghost ${tool === 'eraser' ? 'active-mic' : ''}`}
+                  onClick={() => { setTool('eraser'); setShowShapesMenu(false); setShowStickersMenu(false); }}
+                  title="Eraser Tool"
+                  style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center' }}
+                >
+                  <Eraser size={15} /> <span>Eraser</span>
+                </button>
 
-              {/* Shapes Tool Button */}
-              <button
-                className={`icon-btn-ghost ${tool === 'shape' ? 'active-mic' : ''}`}
-                onClick={() => {
-                  setTool('shape');
-                  setShowShapesMenu(!showShapesMenu);
-                  setShowStickersMenu(false);
-                }}
-                title="Shapes Tool"
-                style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-              >
-                <Square size={16} /> Shapes
-              </button>
+                <button
+                  type="button"
+                  className={`icon-btn-ghost ${tool === 'shape' ? 'active-mic' : ''}`}
+                  onClick={() => {
+                    setTool('shape');
+                    setShowShapesMenu(!showShapesMenu);
+                    setShowStickersMenu(false);
+                  }}
+                  title="Shapes Tool"
+                  style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center' }}
+                >
+                  <Square size={15} /> <span>Shapes</span>
+                </button>
 
-              {/* Stickers Tool Button */}
-              <button
-                className={`icon-btn-ghost ${tool === 'sticker' ? 'active-mic' : ''}`}
-                onClick={() => {
-                  setTool('sticker');
-                  setShowStickersMenu(!showStickersMenu);
-                  setShowShapesMenu(false);
-                }}
-                title="Sticker Stamp Tool"
-                style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-              >
-                <Smile size={16} /> Stickers ({selectedSticker})
-              </button>
+                <button
+                  type="button"
+                  className={`icon-btn-ghost ${tool === 'sticker' ? 'active-mic' : ''}`}
+                  onClick={() => {
+                    setTool('sticker');
+                    setShowStickersMenu(!showStickersMenu);
+                    setShowShapesMenu(false);
+                  }}
+                  title="Sticker Stamp Tool"
+                  style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center', whiteSpace: 'nowrap' }}
+                >
+                  <Smile size={15} /> <span>Stickers</span> <span style={{ fontSize: '1rem', lineHeight: 1 }}>{selectedSticker}</span>
+                </button>
+              </div>
             </div>
 
-            {/* Stroke Width Slider & Clear / Send Action Buttons */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                <Sliders size={14} /> Size:
-                <input
-                  type="range"
-                  min="1"
-                  max="20"
-                  value={lineWidth}
-                  onChange={e => setLineWidth(Number(e.target.value))}
-                  style={{ width: '60px', accentColor: 'var(--accent)', cursor: 'pointer' }}
-                />
-                <span style={{ fontWeight: 600, color: 'var(--text-main)', minWidth: '16px' }}>{lineWidth}px</span>
+            {/* Row 2: Stroke Width Slider, Clear, Save, Send */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '6px',
+              flexWrap: 'wrap'
+            }}>
+              {/* Left Group: Size Slider & Clear / Restore */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  <Sliders size={13} />
+                  <span>Size:</span>
+                  <input
+                    type="range"
+                    min="1"
+                    max="20"
+                    value={lineWidth}
+                    onChange={e => setLineWidth(Number(e.target.value))}
+                    style={{ width: '48px', accentColor: 'var(--accent)', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontWeight: 600, color: 'var(--text-main)', minWidth: '14px', fontSize: '0.75rem' }}>{lineWidth}px</span>
+                </div>
+
+                <button
+                  type="button"
+                  className="icon-btn-ghost"
+                  onClick={clearCanvas}
+                  title="Clear Board"
+                  style={{ color: '#ef4444', padding: '5px' }}
+                >
+                  <RotateCcw size={16} />
+                </button>
+
+                {canRestore && (
+                  <button
+                    type="button"
+                    onClick={restoreCanvas}
+                    style={{
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      color: '#10b981',
+                      border: '1px solid rgba(16, 185, 129, 0.4)',
+                      borderRadius: '8px',
+                      padding: '4px 8px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      cursor: 'pointer'
+                    }}
+                    title="Undo Clear"
+                  >
+                    <RotateCw size={12} /> Undo
+                  </button>
+                )}
               </div>
 
-              <button className="icon-btn-ghost" onClick={clearCanvas} title="Clear Board (Wipe Canvas)" style={{ color: '#ef4444' }}>
-                <RotateCcw size={18} />
-              </button>
-
-              {canRestore && (
+              {/* Right Group: Save to Device & Send to Chat */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                 <button
-                  onClick={restoreCanvas}
+                  type="button"
+                  onClick={handleSaveToDevice}
                   style={{
-                    background: 'rgba(16, 185, 129, 0.15)',
-                    color: '#10b981',
-                    border: '1px solid rgba(16, 185, 129, 0.4)',
-                    borderRadius: '8px',
-                    padding: '5px 11px',
-                    fontSize: '0.78rem',
-                    fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
-                    cursor: 'pointer'
+                    background: savedToDevice ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.08)',
+                    color: savedToDevice ? '#10b981' : 'var(--text-main)',
+                    border: savedToDevice ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '5px 9px',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
                   }}
-                  title="Undo Clear / Restore Accidental Reset"
+                  title="Save drawing directly to device"
                 >
-                  <RotateCw size={14} /> Restore Board
+                  <Download size={13} />
+                  <span>{savedToDevice ? 'Saved!' : 'Save'}</span>
                 </button>
-              )}
 
-              <button
-                type="button"
-                onClick={handleSaveToDevice}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: savedToDevice ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.12)',
-                  color: savedToDevice ? '#10b981' : '#fff',
-                  border: savedToDevice ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(255, 255, 255, 0.25)',
-                  borderRadius: '10px',
-                  padding: '6px 13px',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
-                title="Save drawing directly to your device"
-              >
-                <Download size={14} />
-                <span>{savedToDevice ? 'Saved to Device!' : 'Save to Device'}</span>
-              </button>
-
-              {onSendDrawing && (
-                <button onClick={handleSendToChat} className="btn-primary" style={{ padding: '6px 14px', fontSize: '0.82rem', borderRadius: '10px' }}>
-                  <Send size={14} /> Send to Chat
-                </button>
-              )}
+                {onSendDrawing && (
+                  <button
+                    type="button"
+                    onClick={handleSendToChat}
+                    className="btn-primary"
+                    style={{
+                      padding: '5px 12px',
+                      fontSize: '0.8rem',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0
+                    }}
+                  >
+                    <Send size={13} /> Send to Chat
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Shapes Selection Sub-Bar */}
           {showShapesMenu && (
-            <div style={{ display: 'flex', gap: '8px', background: 'var(--bg-sidebar)', padding: '8px 12px', borderRadius: '12px', border: '1px solid var(--border)', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)' }}>Choose Shape:</span>
+            <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-sidebar)', padding: '6px 10px', borderRadius: '10px', border: '1px solid var(--border)', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Choose Shape:</span>
               {SHAPES.map(s => {
                 const IconComp = s.icon;
                 return (
