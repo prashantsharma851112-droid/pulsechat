@@ -4,6 +4,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
 import PulseVipBadge from '../common/PulseVipBadge';
+import { getCachedAllUsers } from '../../utils/offlineStorage';
 
 export default function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp }) {
   const { user, token, blockUser, unblockUser } = useContext(AuthContext);
@@ -78,6 +79,9 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
       if (isTarget) {
         setProfileData(prev => ({
           ...prev,
+          ...(data.isPro !== undefined && { isPro: Boolean(data.isPro) }),
+          ...(data.proTier !== undefined && { proTier: data.proTier }),
+          ...(data.customBadge !== undefined && { customBadge: data.customBadge }),
           ...(data.displayName !== undefined && data.displayName !== '' && { displayName: data.displayName }),
           ...(data.avatar !== undefined && data.avatar !== '' && { avatar: data.avatar }),
           ...(data.status !== undefined && { status: data.status })
@@ -282,7 +286,15 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
     }
   };
 
-  const userToDisplay = profileData || targetUser;
+  const cachedMatch = user?.id ? getCachedAllUsers(user.id)?.find(u =>
+    u.id === targetUser?.id || u.id === targetUser?._id || (targetUser?.username && u.username === targetUser.username)
+  ) : null;
+  const userToDisplay = {
+    ...cachedMatch,
+    ...targetUser,
+    ...profileData,
+    isPro: Boolean(profileData?.isPro ?? targetUser?.isPro ?? cachedMatch?.isPro)
+  };
   const validAvatar = userToDisplay?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userToDisplay?.username || 'user'}`;
 
   return (

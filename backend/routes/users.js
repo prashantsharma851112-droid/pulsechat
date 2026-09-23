@@ -180,7 +180,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
         ...(isObjectId ? [{ _id: targetId }] : []),
         { username: targetId }
       ]
-    }).select('id username displayName avatar isEmailVerified status createdAt').lean();
+    }).select('id username displayName avatar isEmailVerified status createdAt isPro proTier customBadge pulseSparks').lean();
 
     if (!targetUser) {
       return res.status(404).json({ error: 'User not found' });
@@ -269,19 +269,6 @@ router.delete('/push-subscription', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Failed to remove push subscription:', err);
     res.status(500).json({ error: 'Failed to remove push subscription' });
-  }
-});
-
-// Get User Profile by ID (instant index lookup)
-router.get('/:id', authMiddleware, async (req, res) => {
-  try {
-    const target = await User.findOne({ id: req.params.id })
-      .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
-      .lean();
-    if (!target) return res.status(404).json({ error: 'User not found' });
-    res.json(target);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
 

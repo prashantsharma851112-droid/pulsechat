@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Sparkles, Check, Crown, Zap, ShieldCheck, Flame, Coffee, Heart, Rocket, Diamond, Award, ArrowRight, Loader2 } from 'lucide-react';
+import { X, Sparkles, Check, Crown, Zap, ShieldCheck, Flame, Coffee, Heart, Rocket, Diamond, Award, ArrowRight, Loader2, Clock } from 'lucide-react';
 import PulseVipBadge from '../common/PulseVipBadge';
 import { BACKEND_URL } from '../../utils/config';
 
@@ -56,6 +56,26 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
         year: 'numeric'
       })
     : null;
+
+  // 24-hour single-claim cooldown calculation per sparks bundle
+  const getPackCooldownInfo = (packId) => {
+    const lastClaimed = user?.claimedFreeSparks?.[packId];
+    if (!lastClaimed) return null;
+    const lastTime = new Date(lastClaimed).getTime();
+    if (isNaN(lastTime)) return null;
+    const diffMs = Date.now() - lastTime;
+    const cooldownMs = 24 * 60 * 60 * 1000;
+    if (diffMs >= cooldownMs) return null; // 24 hours passed, reset!
+    const remMs = cooldownMs - diffMs;
+    const remHours = Math.floor(remMs / (1000 * 60 * 60));
+    const remMins = Math.floor((remMs % (1000 * 60 * 60)) / (1000 * 60));
+    return {
+      isCoolingDown: true,
+      remHours,
+      remMins,
+      text: `${remHours}h ${remMins}m`
+    };
+  };
 
   const initiateRazorpay = async (planId) => {
     setLoading(true);
@@ -151,6 +171,17 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
     }
 
     // Sparks Pack
+    if (planId.startsWith('sparks_')) {
+      const cooldown = getPackCooldownInfo(planId);
+      if (cooldown) {
+        setStatusMsg({
+          type: 'error',
+          text: `Aapne ye pack pehle hi claim kar liya hai. 24 ghante baad (${cooldown.text} baki) dubara free claim kar sakte hain.`
+        });
+        return;
+      }
+    }
+
     if (razorpayConfig.isLive) {
       await initiateRazorpay(planId);
     } else {
@@ -706,6 +737,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   { id: 'sparks_1000', amount: 1000, price: 149, tag: 'Best Value' }
                 ].map((pack) => {
                   const isSelected = selectedSparksPack === pack.id;
+                  const cooldown = getPackCooldownInfo(pack.id);
                   return (
                     <div
                       key={pack.id}
@@ -719,7 +751,8 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        transition: 'all 0.2s'
+                        transition: 'all 0.2s',
+                        opacity: cooldown ? 0.75 : 1
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -727,27 +760,54 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                           width: '36px',
                           height: '36px',
                           borderRadius: '10px',
-                          background: 'rgba(245, 158, 11, 0.2)',
+                          background: cooldown ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.2)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           color: '#f59e0b'
                         }}>
-                          <Zap size={18} fill="#f59e0b" />
+                          {cooldown ? <Clock size={18} /> : <Zap size={18} fill="#f59e0b" />}
                         </div>
                         <div>
-                          <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-main)' }}>
-                            {pack.amount} Pulse Sparks
+                          <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span>{pack.amount} Pulse Sparks</span>
+                            {cooldown ? (
+                              <span style={{
+                                fontSize: '0.66rem',
+                                fontWeight: 800,
+                                padding: '2px 8px',
+                                borderRadius: '8px',
+                                background: 'rgba(245, 158, 11, 0.18)',
+                                color: '#f59e0b',
+                                border: '1px solid rgba(245, 158, 11, 0.3)'
+                              }}>
+                                ⏳ Resets in {cooldown.text}
+                              </span>
+                            ) : (
+                              <span style={{
+                                fontSize: '0.66rem',
+                                fontWeight: 800,
+                                padding: '2px 8px',
+                                borderRadius: '8px',
+                                background: 'rgba(16, 185, 129, 0.18)',
+                                color: '#10b981',
+                                border: '1px solid rgba(16, 185, 129, 0.3)'
+                              }}>
+                                ✓ 1x / 24h Free
+                              </span>
+                            )}
                           </div>
                           <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                            {pack.tag}
+                            {cooldown ? 'Aapne aaj claim kar liya hai. 24h baad reset ho jayega.' : pack.tag}
                           </div>
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
                           <span style={{ fontSize: '0.88rem', textDecoration: 'line-through', opacity: 0.5, color: 'var(--text-muted)' }}>₹{pack.price}</span>
-                          <span style={{ fontWeight: 900, fontSize: '1.05rem', color: '#10b981' }}>FREE</span>
+                          <span style={{ fontWeight: 900, fontSize: '1.05rem', color: cooldown ? 'var(--text-muted)' : '#10b981' }}>
+                            {cooldown ? 'CLAIMED' : 'FREE'}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -755,30 +815,57 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                 })}
               </div>
 
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => handleCheckout(selectedSparksPack)}
-                className="btn-primary"
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  borderRadius: '16px',
-                  fontWeight: 800,
-                  fontSize: '0.96rem',
-                  background: 'linear-gradient(90deg, #10b981 0%, #f59e0b 100%)',
-                  boxShadow: '0 4px 18px rgba(16, 185, 129, 0.35)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  border: 'none',
-                  cursor: loading ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {loading ? <Loader2 size={18} className="spin" /> : <Zap size={18} fill="#fff" />}
-                ⚡ Claim Sparks Pack — 100% FREE
-              </button>
+              {(() => {
+                const selectedCooldown = getPackCooldownInfo(selectedSparksPack);
+                const selectedPackData = [
+                  { id: 'sparks_100', amount: 100 },
+                  { id: 'sparks_300', amount: 300 },
+                  { id: 'sparks_1000', amount: 1000 }
+                ].find(p => p.id === selectedSparksPack);
+
+                return (
+                  <button
+                    type="button"
+                    disabled={loading || !!selectedCooldown}
+                    onClick={() => handleCheckout(selectedSparksPack)}
+                    className="btn-primary"
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: '16px',
+                      fontWeight: 800,
+                      fontSize: '0.96rem',
+                      background: selectedCooldown
+                        ? 'rgba(255, 255, 255, 0.08)'
+                        : 'linear-gradient(90deg, #10b981 0%, #f59e0b 100%)',
+                      boxShadow: selectedCooldown
+                        ? 'none'
+                        : '0 4px 18px rgba(16, 185, 129, 0.35)',
+                      color: selectedCooldown ? 'var(--text-muted)' : '#fff',
+                      border: selectedCooldown ? '1px solid rgba(255, 255, 255, 0.15)' : 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      cursor: (loading || !!selectedCooldown) ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {loading ? (
+                      <Loader2 size={18} className="spin" />
+                    ) : selectedCooldown ? (
+                      <>
+                        <Clock size={18} />
+                        Claimed (Resets in {selectedCooldown.text})
+                      </>
+                    ) : (
+                      <>
+                        <Zap size={18} fill="#fff" />
+                        ⚡ Claim {selectedPackData?.amount || ''} Sparks — 100% FREE
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
             </div>
           )}
         </div>

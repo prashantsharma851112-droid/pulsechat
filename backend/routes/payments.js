@@ -268,6 +268,25 @@ router.post('/demo-activate', authMiddleware, async (req, res) => {
       userDoc.proExpiresAt = new Date(Date.now() + durationMs);
       userDoc.customBadge = '⚡ VIP';
     } else if (plan.type === 'sparks') {
+      const now = Date.now();
+      const cooldownMs = 24 * 60 * 60 * 1000;
+      const lastClaimedStr = userDoc.claimedFreeSparks?.[planId];
+      if (lastClaimedStr) {
+        const lastClaimedTime = new Date(lastClaimedStr).getTime();
+        const diff = now - lastClaimedTime;
+        if (diff < cooldownMs) {
+          const remainingMs = cooldownMs - diff;
+          const remainingHours = Math.floor(remainingMs / (60 * 60 * 1000));
+          const remainingMins = Math.ceil((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+          return res.status(400).json({
+            error: `Aapne ye ${plan.name} pehle hi claim kar liya hai. 24 ghante baad (${remainingHours}h ${remainingMins}m baki) dubara free claim kar sakte hain.`
+          });
+        }
+      }
+
+      if (!userDoc.claimedFreeSparks) userDoc.claimedFreeSparks = {};
+      userDoc.claimedFreeSparks[planId] = new Date().toISOString();
+      userDoc.markModified('claimedFreeSparks');
       userDoc.pulseSparks = (userDoc.pulseSparks || 0) + (plan.sparks || 100);
     }
 

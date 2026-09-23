@@ -16,7 +16,7 @@ import PandaHero from './components/common/PandaHero';
 import FullDpModal from './components/common/FullDpModal';
 import Toast from './components/common/Toast';
 import { BACKEND_URL } from './utils/config';
-import { updateUserProfileInStorage, clearUnreadCount } from './utils/offlineStorage';
+import { updateUserProfileInStorage, clearUnreadCount, getCachedAllUsers } from './utils/offlineStorage';
 import { Zap, AlertTriangle } from 'lucide-react';
 
 class ErrorBoundary extends React.Component {
@@ -86,7 +86,7 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
-  const { user, token, loading } = useContext(AuthContext);
+  const { user, token, loading, updateUserProfile } = useContext(AuthContext);
   const { socket, lastNotification } = useContext(SocketContext);
   const [isRegisterView, setIsRegisterView] = useState(true);
   const [activeChat, setActiveChat] = useState(null);
@@ -119,7 +119,7 @@ export default function App() {
       const targetUserId = data.userId;
       updateUserProfileInStorage(targetUserId, data, user?.id);
 
-      // Instantly update activeChat if it's the user whose DP changed
+      // Instantly update activeChat if it's the user whose profile changed
       setActiveChat(prev => {
         if (!prev) return null;
         const isTarget = prev.id === targetUserId ||
@@ -131,16 +131,44 @@ export default function App() {
             ...prev,
             ...(data.displayName !== undefined && data.displayName !== '' && { displayName: data.displayName }),
             ...(data.avatar !== undefined && data.avatar !== '' && { avatar: data.avatar }),
-            ...(data.status !== undefined && { status: data.status })
+            ...(data.status !== undefined && { status: data.status }),
+            ...(data.isPro !== undefined && { isPro: data.isPro }),
+            ...(data.proTier !== undefined && { proTier: data.proTier }),
+            ...(data.customBadge !== undefined && { customBadge: data.customBadge })
           };
         }
         return prev;
       });
     };
 
+    const handleSparksUpdated = ({ pulseSparks }) => {
+      if (pulseSparks !== undefined && user) {
+        if (typeof updateUserProfile === 'function') {
+          updateUserProfile({ ...user, pulseSparks });
+        }
+        updateUserProfileInStorage(user.id, { pulseSparks }, user.id);
+      }
+    };
+
+    const handleTrialUsed = ({ hasUsed3DTrial }) => {
+      if (user) {
+        if (typeof updateUserProfile === 'function') {
+          updateUserProfile({ ...user, hasUsed3DTrial });
+        }
+        updateUserProfileInStorage(user.id, { hasUsed3DTrial }, user.id);
+      }
+    };
+
     socket.on('user_profile_updated', handleProfileUpdate);
-    return () => socket.off('user_profile_updated', handleProfileUpdate);
-  }, [socket, user?.id]);
+    socket.on('sparks_updated', handleSparksUpdated);
+    socket.on('3d_trial_used', handleTrialUsed);
+
+    return () => {
+      socket.off('user_profile_updated', handleProfileUpdate);
+      socket.off('sparks_updated', handleSparksUpdated);
+      socket.off('3d_trial_used', handleTrialUsed);
+    };
+  }, [socket, user]);
 
   // Responsive Mobile Detection (screen width, user agent, touch points)
   const [isMobile, setIsMobile] = useState(() => {

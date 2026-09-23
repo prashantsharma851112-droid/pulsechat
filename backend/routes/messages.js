@@ -185,6 +185,38 @@ router.post('/send', authMiddleware, async (req, res) => {
       }
     }
 
+    if (type === '3d_text') {
+      const senderUser = await User.findOne({ id: senderId });
+      if (senderUser) {
+        const isPro = Boolean(senderUser.isPro && senderUser.proExpiresAt && new Date(senderUser.proExpiresAt) > new Date());
+        const hasUsedTrial = Boolean(senderUser.hasUsed3DTrial);
+
+        if (!hasUsedTrial) {
+          senderUser.hasUsed3DTrial = true;
+          await senderUser.save();
+        } else {
+          if (!isPro) {
+            return res.status(403).json({
+              error: 'subscription_required',
+              message: 'Aapka 3D Free Trial khatam ho chuka hai. 3D text stickers bhejne ke liye Pulse VIP subscription activate karein.'
+            });
+          }
+
+          const SPARKS_COST = 10;
+          const currentSparks = senderUser.pulseSparks || 0;
+          if (currentSparks < SPARKS_COST) {
+            return res.status(400).json({
+              error: 'insufficient_sparks',
+              message: `Sparks kam hain! 3D text bhejne ke liye 10 Sparks lagte hain, aapke paas sirf ${currentSparks} Sparks hain. VIP Store se free claim karein.`
+            });
+          }
+
+          senderUser.pulseSparks = currentSparks - SPARKS_COST;
+          await senderUser.save();
+        }
+      }
+    }
+
     const chatSetting = await db.getChatSetting(chatId);
     const isDisappearing = Boolean(chatSetting && chatSetting.disappearingEnabled);
     const expiresAt = isDisappearing ? new Date(Date.now() + (chatSetting.disappearingDuration || 86400) * 1000) : null;

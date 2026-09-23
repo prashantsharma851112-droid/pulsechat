@@ -277,6 +277,58 @@ io.on('connection', (socket) => {
         }
       }
 
+      // 3D Animated Text / Emoji Validation & Sparks Cost Engine:
+      // - 1st send is 100% Free Trial for everyone (no VIP/Sparks needed)
+      // - Subsequent sends require active VIP subscription AND cost 10 Sparks per 3D message
+      if (type === '3d_text') {
+        const senderUser = await User.findOne({ id: senderId });
+        if (senderUser) {
+          const isPro = Boolean(senderUser.isPro && senderUser.proExpiresAt && new Date(senderUser.proExpiresAt) > new Date());
+          const hasUsedTrial = Boolean(senderUser.hasUsed3DTrial);
+
+          if (!hasUsedTrial) {
+            senderUser.hasUsed3DTrial = true;
+            await senderUser.save();
+            socket.emit('user_profile_updated', {
+              userId: senderId,
+              hasUsed3DTrial: true
+            });
+            socket.emit('3d_trial_used', { hasUsed3DTrial: true });
+          } else {
+            if (!isPro) {
+              socket.emit('message_blocked', {
+                chatId,
+                receiverId,
+                reason: 'Aapka 3D Free Trial khatam ho chuka hai. 3D text stickers bhejne ke liye Pulse VIP subscription activate karein.'
+              });
+              if (typeof ackCallback === 'function') ackCallback({ error: 'subscription_required' });
+              return;
+            }
+
+            const SPARKS_COST = 10;
+            const currentSparks = senderUser.pulseSparks || 0;
+            if (currentSparks < SPARKS_COST) {
+              socket.emit('message_blocked', {
+                chatId,
+                receiverId,
+                reason: `Sparks kam hain! 3D text bhejne ke liye 10 Sparks lagte hain, aapke paas sirf ${currentSparks} Sparks hain. VIP Store se free claim karein.`
+              });
+              if (typeof ackCallback === 'function') ackCallback({ error: 'insufficient_sparks' });
+              return;
+            }
+
+            senderUser.pulseSparks = currentSparks - SPARKS_COST;
+            await senderUser.save();
+
+            socket.emit('sparks_updated', { pulseSparks: senderUser.pulseSparks });
+            socket.emit('user_profile_updated', {
+              userId: senderId,
+              pulseSparks: senderUser.pulseSparks
+            });
+          }
+        }
+      }
+
       // Check if recipient is currently online (mobile data ON & active socket)
       const isReceiverOnline = Boolean(receiverId && !isGroup && onlineUsers.has(receiverId));
       const initialStatus = isReceiverOnline ? 'delivered' : 'sent';

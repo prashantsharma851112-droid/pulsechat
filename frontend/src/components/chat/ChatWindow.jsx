@@ -28,6 +28,7 @@ import {
   removeFromOutbox,
   updateRecentChatSnippet,
   mergeIntoAllUsersCache,
+  getCachedAllUsers,
   isCachedFriend,
   isDeviceOnline,
   subscribeToNetworkChanges,
@@ -36,7 +37,7 @@ import {
 } from '../../utils/offlineStorage';
 
 export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGroupCall, onOpenFullDp }) {
-  const { user, token, blockUser, unblockUser } = useContext(AuthContext);
+  const { user, token, blockUser, unblockUser, updateUserProfile } = useContext(AuthContext);
   const { socket, onlineUsers, typingMap, lastNotification } = useContext(SocketContext);
 
   const isGroup = !!activeChat.isGroup;
@@ -52,11 +53,56 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const [chatAvatar, setChatAvatar] = useState(() => activeChat?.avatar || '');
   const [chatDisplayName, setChatDisplayName] = useState(() => activeChat?.displayName || activeChat?.name || '');
+  const [chatIsPro, setChatIsPro] = useState(() => {
+    if (activeChat?.isPro !== undefined) return Boolean(activeChat.isPro);
+    if (user?.id) {
+      const cached = getCachedAllUsers(user.id)?.find(u =>
+        u.id === activeChat?.id || u.id === activeChat?._id || (activeChat?.username && u.username === activeChat.username)
+      );
+      if (cached?.isPro !== undefined) return Boolean(cached.isPro);
+    }
+    return false;
+  });
 
   useEffect(() => {
     setChatAvatar(activeChat?.avatar || '');
     setChatDisplayName(activeChat?.displayName || activeChat?.name || '');
-  }, [activeChat?.id, activeChat?.avatar, activeChat?.displayName, activeChat?.name]);
+    let isProVal = activeChat?.isPro;
+    if (isProVal === undefined && user?.id) {
+      const cached = getCachedAllUsers(user.id)?.find(u =>
+        u.id === activeChat?.id || u.id === activeChat?._id || (activeChat?.username && u.username === activeChat.username)
+      );
+      if (cached?.isPro !== undefined) isProVal = cached.isPro;
+    }
+    setChatIsPro(Boolean(isProVal));
+  }, [activeChat?.id, activeChat?.avatar, activeChat?.displayName, activeChat?.name, activeChat?.isPro, user?.id]);
+
+  // Fetch fresh profile on mount to guarantee VIP/Pro aura & badge are always up-to-date
+  useEffect(() => {
+    if (!isGroup && activeChat?.id && token) {
+      fetch(`${BACKEND_URL}/api/users/${activeChat.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(userData => {
+          if (userData && !userData.error) {
+            if (userData.isPro !== undefined) {
+              setChatIsPro(Boolean(userData.isPro));
+              if (activeChat) activeChat.isPro = Boolean(userData.isPro);
+            }
+            if (userData.avatar) {
+              setChatAvatar(userData.avatar);
+              if (activeChat) activeChat.avatar = userData.avatar;
+            }
+            if (userData.displayName) {
+              setChatDisplayName(userData.displayName);
+              if (activeChat) activeChat.displayName = userData.displayName;
+            }
+          }
+        })
+        .catch(err => console.warn('Could not fetch activeChat profile:', err));
+    }
+  }, [activeChat?.id, isGroup, token]);
 
   // Real-time DP / Profile updates in ChatWindow header
   useEffect(() => {
@@ -67,11 +113,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         (data.userMongoId && (activeChat.id === data.userMongoId || activeChat._id === data.userMongoId)) ||
         (data.username && activeChat.username === data.username)
       );
-      if (isTarget && data.avatar) {
-        setChatAvatar(data.avatar);
-      }
-      if (isTarget && data.displayName) {
-        setChatDisplayName(data.displayName);
+      if (isTarget) {
+        if (data.isPro !== undefined) {
+          setChatIsPro(Boolean(data.isPro));
+          if (activeChat) activeChat.isPro = Boolean(data.isPro);
+        }
+        if (data.avatar) {
+          setChatAvatar(data.avatar);
+          if (activeChat) activeChat.avatar = data.avatar;
+        }
+        if (data.displayName) {
+          setChatDisplayName(data.displayName);
+          if (activeChat) activeChat.displayName = data.displayName;
+        }
       }
     };
 
@@ -910,6 +964,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     const isOnlineNow = isDeviceOnline() && socket?.connected;
 
+    // Optimistically update trial flag and sparks in user state
+    if (!user?.hasUsed3DTrial) {
+      if (typeof updateUserProfile === 'function') {
+        updateUserProfile({ ...user, hasUsed3DTrial: true });
+      }
+    } else {
+      const currentSparks = user?.pulseSparks ?? 0;
+      if (typeof updateUserProfile === 'function') {
+        updateUserProfile({ ...user, pulseSparks: Math.max(0, currentSparks - 10) });
+      }
+    }
+
     const pendingMsg = {
       id: tempId,
       clientTempId: tempId,
@@ -1191,7 +1257,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             )}
 
             <div
-              className={!isGroup && activeChat?.isPro ? 'pro-neon-avatar' : ''}
+              className={!isGroup && chatIsPro ? 'pro-neon-avatar' : ''}
               style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
             >
               <img
@@ -1210,7 +1276,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   cursor: 'pointer',
                   objectFit: 'cover',
                   flexShrink: 0,
-                  border: (!isGroup && activeChat?.isPro) ? 'none' : 'none'
+                  border: (!isGroup && chatIsPro) ? 'none' : 'none'
                 }}
                 title={isGroup ? 'Click for group details & members' : 'Click to view full screen DP'}
               />
@@ -1226,7 +1292,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)' }}>
                   {chatDisplayName || activeChat.displayName}
                 </h3>
-                {!isGroup && activeChat?.isPro && (
+                {!isGroup && chatIsPro && (
                   <PulseVipBadge size={16} showLabel={false} />
                 )}
                 {isGroup && <span className="group-pill-badge"><Users size={12} /> Group</span>}
@@ -1536,7 +1602,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 isMine={msg.senderId === user.id}
                 chatId={chatId}
                 senderName={senderObj?.displayName || senderObj?.username}
-                senderIsPro={msg.senderId === user.id ? user?.isPro : (isGroup ? senderObj?.isPro : activeChat?.isPro)}
+                senderIsPro={msg.senderId === user.id ? user?.isPro : (isGroup ? senderObj?.isPro : chatIsPro)}
                 onDeleteLocal={handleDeleteLocalMessage}
                 onDeleteTrigger={handleTriggerUndoToast}
                 isMultiSelectMode={isMultiSelectMode}
@@ -2140,7 +2206,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {showUserProfileModal && (
         <UserProfileModal
-          targetUser={{ ...activeChat, avatar: chatAvatar || activeChat.avatar }}
+          targetUser={{ ...activeChat, avatar: chatAvatar || activeChat.avatar, isPro: chatIsPro }}
           onClose={() => setShowUserProfileModal(false)}
           onStartCall={onStartCall}
           onOpenFullDp={onOpenFullDp}
@@ -2204,6 +2270,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         <Animated3DTextModal
           onClose={() => setShow3DTextModal(false)}
           onSend3D={handleSend3DText}
+          onOpenProModal={(tab = 'pro') => {
+            setShow3DTextModal(false);
+            setProModalTab(tab);
+            setShowProModal(true);
+          }}
         />
       )}
     </div>

@@ -333,7 +333,13 @@ export function updateUserProfileInStorage(targetUserId, updates, currentUserId)
       ...u,
       ...(displayName !== undefined && displayName !== '' && { displayName }),
       ...(avatar !== undefined && avatar !== '' && { avatar }),
-      ...(status !== undefined && { status })
+      ...(status !== undefined && { status }),
+      ...(updates.isPro !== undefined && { isPro: updates.isPro }),
+      ...(updates.proTier !== undefined && { proTier: updates.proTier }),
+      ...(updates.customBadge !== undefined && { customBadge: updates.customBadge }),
+      ...(updates.pulseSparks !== undefined && { pulseSparks: updates.pulseSparks }),
+      ...(updates.hasUsed3DTrial !== undefined && { hasUsed3DTrial: updates.hasUsed3DTrial }),
+      ...(updates.claimedFreeSparks !== undefined && { claimedFreeSparks: updates.claimedFreeSparks })
     };
   };
 
