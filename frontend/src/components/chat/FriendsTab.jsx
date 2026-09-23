@@ -45,6 +45,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
   const [incomingRequests, setIncomingRequests] = useState([]);
   const [outgoingRequests, setOutgoingRequests] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState({}); // { [id]: boolean }
 
   // Search in Add Friend
@@ -112,6 +113,18 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
       console.error('Error fetching requests:', err);
     }
   }, [token, onRequestsCountChange]);
+
+  // Manual Refresh Handler
+  const handleManualRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([fetchFriends(), fetchRequests()]);
+    } catch (e) {
+      console.error('Manual refresh error:', e);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 400);
+    }
+  }, [fetchFriends, fetchRequests]);
 
   // Initial load
   useEffect(() => {
@@ -757,15 +770,14 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                   Incoming Frequencies ({incomingRequests.length})
                 </h4>
                 <button
-                  onClick={() => {
-                    setLoading(true);
-                    Promise.all([fetchFriends(), fetchRequests()]).finally(() => setLoading(false));
-                  }}
+                  onClick={handleManualRefresh}
+                  disabled={isRefreshing}
                   className="icon-btn-ghost"
                   title="Refresh Frequencies"
-                  style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: 'var(--accent)', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '8px', cursor: 'pointer', padding: '4px 8px', fontWeight: 600 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', color: 'var(--accent)', background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: '8px', cursor: 'pointer', padding: '4px 9px', fontWeight: 600, transition: 'all 0.2s ease' }}
                 >
-                  <RotateCw size={12} className={loading ? 'spin' : ''} /> Refresh
+                  <RotateCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+                  <span>{isRefreshing ? 'Updating...' : 'Refresh'}</span>
                 </button>
               </div>
 

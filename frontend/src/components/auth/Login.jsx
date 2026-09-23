@@ -68,29 +68,46 @@ export default function Login({ switchToRegister }) {
     }
   }, [googleClientId]);
 
-  // Google Sign-In initialization
+  // Google Sign-In initialization (with resilient polling for async CDN script)
   useEffect(() => {
-    if (viewMode === 'login' && googleClientId && !googleClientId.includes('sample') && window.google?.accounts?.id) {
-      try {
-        window.google.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: handleGoogleCallback
-        });
-        const btnEl = document.getElementById('googleLoginBtn');
-        if (btnEl) {
-          btnEl.innerHTML = '';
-          window.google.accounts.id.renderButton(btnEl, {
-            theme: 'outline',
-            size: 'large',
-            width: 320,
-            text: 'signin_with',
-            shape: 'pill'
+    if (viewMode !== 'login' || !googleClientId || googleClientId.includes('sample')) return;
+
+    let attempts = 0;
+    const initGoogle = () => {
+      if (window.google?.accounts?.id) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: googleClientId,
+            callback: handleGoogleCallback
           });
-          setIsGoogleBtnRendered(true);
+          const btnEl = document.getElementById('googleLoginBtn');
+          if (btnEl) {
+            btnEl.innerHTML = '';
+            window.google.accounts.id.renderButton(btnEl, {
+              theme: 'outline',
+              size: 'large',
+              width: 320,
+              text: 'signin_with',
+              shape: 'pill'
+            });
+            setIsGoogleBtnRendered(true);
+          }
+        } catch (e) {
+          console.warn('Google Identity initialization error:', e);
         }
-      } catch (e) {
-        console.warn('Google Identity initialization error:', e);
+        return true;
       }
+      return false;
+    };
+
+    if (!initGoogle()) {
+      const interval = setInterval(() => {
+        attempts++;
+        if (initGoogle() || attempts > 20) {
+          clearInterval(interval);
+        }
+      }, 250);
+      return () => clearInterval(interval);
     }
   }, [viewMode, googleClientId]);
 

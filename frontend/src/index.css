@@ -2000,10 +2000,19 @@ input, textarea {
           drop-shadow(0 0 18px rgba(244, 114, 182, 0.7));
 }
 
+/* Spin utility animations */
+.spin, .animate-spin {
+  animation: pulsechat-spin 1s linear infinite;
+}
 
-
-
-
+@keyframes pulsechat-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 
 

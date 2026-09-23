@@ -1,9 +1,23 @@
-const isLocalhost = typeof window !== 'undefined' && (
-  window.location.hostname === 'localhost' ||
-  window.location.hostname === '127.0.0.1' ||
-  window.location.hostname.startsWith('192.168.') ||
-  window.location.hostname.startsWith('10.')
-);
+const getBackendUrl = () => {
+  if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL;
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // Local PC development
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:5000';
+    }
+    // Mobile / LAN Wi-Fi testing (e.g. 192.168.x.x, 10.x.x, 172.16-31.x.x)
+    if (hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
+      return `${window.location.protocol}//${hostname}:5000`;
+    }
+    // Hosted on Render / Cloud (frontend & backend served from same origin or custom domain)
+    if (hostname.includes('onrender.com')) {
+      return window.location.origin;
+    }
+  }
+  return 'https://pulsechat-xzul.onrender.com';
+};
 
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (isLocalhost ? 'http://localhost:5000' : 'https://pulsechat-xzul.onrender.com');
+export const BACKEND_URL = getBackendUrl();
 export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '954329116717-ig5j0hpo8jmp4chvhqrub840dpb8lhf0.apps.googleusercontent.com';
+
