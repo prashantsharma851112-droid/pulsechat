@@ -45,6 +45,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const isOnline = !isGroup && onlineUsers.includes(activeChat.id);
   const isTyping = typingMap[chatId] === activeChat.username;
 
+  const getSenderPayload = () => ({
+    senderName: user?.displayName || user?.username || 'User',
+    senderUsername: user?.username || '',
+    senderAvatar: user?.avatar || null,
+    senderIsPro: Boolean(user?.isPro),
+    senderProTier: user?.proTier || 'none',
+    senderCustomBadge: user?.customBadge || ''
+  });
+
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [chatTheme, setChatTheme] = useState(() => {
     return localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'default';
@@ -318,6 +327,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     outbox.forEach((pendingMsg) => {
       socket.emit('send_message', {
+        ...getSenderPayload(),
         chatId: pendingMsg.chatId,
         senderId: pendingMsg.senderId,
         receiverId: pendingMsg.receiverId,
@@ -643,7 +653,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (!socket) return;
 
     const handleNewMessage = (msg) => {
-      if (msg.chatId === chatId) {
+      const isThisChat = Boolean(
+        msg && (
+          msg.chatId === chatId ||
+          (!isGroup && (
+            (msg.senderId === activeChat?.id && (msg.receiverId === user?.id || !msg.receiverId)) ||
+            (msg.senderId === user?.id && msg.receiverId === activeChat?.id) ||
+            (activeChat?._id && (msg.senderId === activeChat._id || msg.receiverId === activeChat._id)) ||
+            (activeChat?.username && (msg.senderName === activeChat.username || msg.senderUsername === activeChat.username))
+          )) ||
+          (isGroup && activeChat?.id && (msg.chatId === activeChat.id || msg.chatId === activeChat._id))
+        )
+      );
+
+      if (isThisChat) {
         setMessages(prev => {
           const matchIdx = prev.findIndex(m =>
             (msg.clientTempId && (m.id === msg.clientTempId || m.clientTempId === msg.clientTempId)) ||
@@ -1024,6 +1047,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     // 4. Online: emit over socket
     socket.emit('send_message', {
+      ...getSenderPayload(),
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
@@ -1094,6 +1118,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
 
     socket.emit('send_message', {
+      ...getSenderPayload(),
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
@@ -1165,6 +1190,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleSendVoice = (audioUrl) => {
     socket.emit('send_message', {
+      ...getSenderPayload(),
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
@@ -1178,6 +1204,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleCreatePoll = (pollData) => {
     socket.emit('send_message', {
+      ...getSenderPayload(),
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
@@ -1190,6 +1217,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleSendDrawing = (mediaUrl) => {
     socket.emit('send_message', {
+      ...getSenderPayload(),
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
@@ -1243,6 +1271,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       : (type?.startsWith('video/') ? 'video' : 'image');
 
     socket.emit('send_message', {
+      ...getSenderPayload(),
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,

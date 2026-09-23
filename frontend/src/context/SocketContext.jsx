@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { AuthContext } from './AuthContext';
 import { BACKEND_URL } from '../utils/config';
@@ -13,9 +13,14 @@ export function SocketProvider({ children }) {
   const [typingMap, setTypingMap] = useState({});
   const [lastNotification, setLastNotification] = useState(null);
 
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
   // Silently register Web Push subscription if permission already granted (no prompt)
   useEffect(() => {
-    if (user && token) {
+    if (user?.id && token) {
       if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
         subscribeUserToPush(token).catch(() => {});
         const handleFocus = () => {
@@ -27,10 +32,10 @@ export function SocketProvider({ children }) {
         return () => document.removeEventListener('visibilitychange', handleFocus);
       }
     }
-  }, [user, token]);
+  }, [user?.id, token]);
 
   useEffect(() => {
-    if (user) {
+    if (user?.id) {
       const newSocket = io(BACKEND_URL, {
         transports: ['websocket', 'polling'],
         reconnection: true,
@@ -42,8 +47,9 @@ export function SocketProvider({ children }) {
       setSocket(newSocket);
 
       const sendSetup = () => {
-        if (user?.id) {
-          newSocket.emit('setup', user.id);
+        const curId = userRef.current?.id || user?.id;
+        if (curId) {
+          newSocket.emit('setup', curId);
           try {
             window.dispatchEvent(new Event('pulsechat_socket_reconnected'));
           } catch (e) {}
@@ -66,17 +72,16 @@ export function SocketProvider({ children }) {
       };
 
       const handleOffline = () => {
-        if (user?.id) {
+        const curId = userRef.current?.id || user?.id;
+        if (curId) {
           try {
-            newSocket.emit('user_offline', user.id);
+            newSocket.emit('user_offline', curId);
           } catch (e) {}
         }
-        newSocket.disconnect();
       };
 
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
-      window.addEventListener('pagehide', handleOffline);
 
       newSocket.on('online_users_list', (users) => {
         setOnlineUsers(users);
@@ -114,7 +119,8 @@ export function SocketProvider({ children }) {
         triggerPushIfBackground(msg);
 
         // Delivery ack bhejo taaki sender ko double tick dikhe
-        if (msg.id && msg.senderId && msg.senderId !== user.id) {
+        const curId = userRef.current?.id || user?.id;
+        if (msg.id && msg.senderId && msg.senderId !== curId) {
           newSocket.emit('message_delivered', {
             messageId: msg.id,
             chatId: msg.chatId,
@@ -125,7 +131,8 @@ export function SocketProvider({ children }) {
 
       // Also listen to direct new_message in active rooms
       newSocket.on('new_message', (msg) => {
-        if (msg.senderId !== user.id) {
+        const curId = userRef.current?.id || user?.id;
+        if (msg.senderId !== curId) {
           triggerPushIfBackground(msg);
           if (msg.id && msg.status !== 'read') {
             newSocket.emit('message_delivered', {
@@ -167,11 +174,12 @@ export function SocketProvider({ children }) {
       return () => {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
-        window.removeEventListener('pagehide', handleOffline);
         newSocket.disconnect();
       };
+    } else {
+      setSocket(null);
     }
-  }, [user]);
+  }, [user?.id]);
 
   return (
     <SocketContext.Provider value={{ socket, onlineUsers, typingMap, lastNotification }}>

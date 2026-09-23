@@ -271,106 +271,69 @@ io.on('connection', (socket) => {
     }
   };
 
-  // Send Real-Time Message (Fast parallel check & instant emission)
+  // Send Real-Time Message (Instant 0ms emission & parallel background save)
   socket.on('send_message', async (messageData, ackCallback) => {
-    const { chatId, senderId, receiverId, isGroup, content, type, textStyle, audioUrl, mediaUrl, fileName, fileSize, pollData, giftData, callData, isViewOnce, replyTo, clientTempId } = messageData;
+    const {
+      chatId, senderId, receiverId, isGroup, content, type, textStyle,
+      audioUrl, mediaUrl, fileName, fileSize, pollData, giftData, callData,
+      isViewOnce, replyTo, clientTempId,
+      senderName, senderUsername, senderAvatar, senderIsPro, senderProTier, senderCustomBadge
+    } = messageData;
 
     try {
-      // Parallelize block status and chat settings check
-      const [blockStatus, chatSetting] = await Promise.all([
-        (receiverId && !isGroup) ? db.isUserBlocked(senderId, receiverId) : Promise.resolve({ isBlocked: false }),
-        db.getChatSetting(chatId)
-      ]);
-
-      // Check if blocked in 1-to-1 chat
-      if (blockStatus.isBlocked) {
-        socket.emit('message_blocked', {
-          chatId,
-          receiverId,
-          reason: blockStatus.bBlockedA
-            ? 'You cannot send messages to this contact because you have been blocked.'
-            : 'You have blocked this contact. Unblock to send messages.'
-        });
-        if (typeof ackCallback === 'function') ackCallback({ error: 'blocked' });
-        return;
+      // 1. Instant fast block status check
+      if (receiverId && !isGroup) {
+        const blockStatus = await db.isUserBlocked(senderId, receiverId);
+        if (blockStatus.isBlocked) {
+          socket.emit('message_blocked', {
+            chatId,
+            receiverId,
+            reason: blockStatus.bBlockedA
+              ? 'You cannot send messages to this contact because you have been blocked.'
+              : 'You have blocked this contact. Unblock to send messages.'
+          });
+          if (typeof ackCallback === 'function') ackCallback({ error: 'blocked' });
+          return;
+        }
       }
 
-      // Strict Friendship Check for 1-to-1 chats:
-      // Users must be confirmed friends (or have existing chat history) to send messages
-      let senderDoc = null;
-      let receiverDoc = null;
-      if (receiverId && !isGroup && receiverId !== senderId) {
-        const isSenderObj = mongoose.Types.ObjectId.isValid(senderId);
-        const isReceiverObj = mongoose.Types.ObjectId.isValid(receiverId);
-        [senderDoc, receiverDoc] = await Promise.all([
-          User.findOne({
+      // Fast resolution of sender details (from payload if available, else DB fallback)
+      let resolvedSenderName = senderName || senderUsername || senderId;
+      let resolvedSenderAvatar = senderAvatar || null;
+      let resolvedSenderIsPro = Boolean(senderIsPro);
+      let resolvedSenderProTier = senderProTier || 'none';
+      let resolvedSenderCustomBadge = senderCustomBadge || '';
+
+      if (!senderName) {
+        try {
+          const isSenderObj = mongoose.Types.ObjectId.isValid(senderId);
+          const senderDoc = await User.findOne({
             $or: [
               { id: senderId },
               ...(isSenderObj ? [{ _id: senderId }] : []),
               { username: senderId }
             ]
-          }).select('id _id displayName username avatar friends').lean(),
-          User.findOne({
-            $or: [
-              { id: receiverId },
-              ...(isReceiverObj ? [{ _id: receiverId }] : []),
-              { username: receiverId }
-            ]
-          }).select('id _id displayName username avatar friends').lean()
-        ]);
-
-        const senderFriends = senderDoc?.friends || [];
-        const receiverFriends = receiverDoc?.friends || [];
-        const receiverMatches = [receiverId, receiverDoc?.id, receiverDoc?._id?.toString(), receiverDoc?.username].filter(Boolean);
-        const senderMatches = [senderId, senderDoc?.id, senderDoc?._id?.toString(), senderDoc?.username].filter(Boolean);
-
-        const areFriends = senderMatches.some(s => receiverFriends.includes(s)) ||
-                           receiverMatches.some(r => senderFriends.includes(r));
-
-        if (!areFriends) {
-          const Message = require('./models/Message');
-          const hasHistory = await Message.exists({
-            $or: [
-              { chatId },
-              { senderId: { $in: senderMatches }, receiverId: { $in: receiverMatches } },
-              { senderId: { $in: receiverMatches }, receiverId: { $in: senderMatches } }
-            ]
-          });
-          if (!hasHistory) {
-            socket.emit('message_blocked', {
-              chatId,
-              receiverId,
-              reason: 'Friend request required. You must be friends to exchange direct messages.'
-            });
-            if (typeof ackCallback === 'function') {
-              ackCallback({
-                error: 'not_friends',
-                message: 'You must send and have an accepted Friend Request to message this user.'
-              });
-            }
-            return;
+          }).select('id _id displayName username avatar isPro proTier customBadge').lean();
+          if (senderDoc) {
+            resolvedSenderName = senderDoc.displayName || senderDoc.username || senderId;
+            resolvedSenderAvatar = senderDoc.avatar || null;
+            resolvedSenderIsPro = Boolean(senderDoc.isPro);
+            resolvedSenderProTier = senderDoc.proTier || 'none';
+            resolvedSenderCustomBadge = senderDoc.customBadge || '';
           }
-        }
+        } catch (e) {}
       }
 
-      if (!senderDoc) {
-        const isSenderObj = mongoose.Types.ObjectId.isValid(senderId);
-        senderDoc = await User.findOne({
-          $or: [
-            { id: senderId },
-            ...(isSenderObj ? [{ _id: senderId }] : []),
-            { username: senderId }
-          ]
-        }).select('id _id displayName username avatar').lean();
-      }
-      const resolvedSenderName = senderDoc?.displayName || senderDoc?.username || senderId;
-      const resolvedSenderAvatar = senderDoc?.avatar || null;
+      // Fast check for disappearing messages setting (cached or default)
+      let chatSetting = null;
+      try {
+        chatSetting = await db.getChatSetting(chatId);
+      } catch (e) {}
 
       const isDisappearing = Boolean(chatSetting && chatSetting.disappearingEnabled);
       const expiresAt = isDisappearing ? new Date(Date.now() + (chatSetting.disappearingDuration || 86400) * 1000) : null;
 
       // Cloudinary Auto-Upload: Offload heavy Base64 media to Cloudinary CDN
-      // to keep MongoDB Atlas free tier storage 100% clean and fast
       let finalMediaUrl = mediaUrl || null;
       let finalAudioUrl = audioUrl || null;
 
@@ -392,8 +355,6 @@ io.on('connection', (socket) => {
       }
 
       // 3D Animated Text / Emoji Validation & Sparks Cost Engine:
-      // - 1st send is 100% Free Trial for everyone (no VIP/Sparks needed)
-      // - Subsequent sends require active VIP subscription AND cost 10 Sparks per 3D message
       if (type === '3d_text') {
         const senderUser = await User.findOne({ id: senderId });
         if (senderUser) {
@@ -443,17 +404,21 @@ io.on('connection', (socket) => {
         }
       }
 
-      // Check if recipient is currently online (mobile data ON & active socket)
+      // Check if recipient is currently online
       const isReceiverOnline = Boolean(receiverId && !isGroup && onlineUsers.has(receiverId));
       const initialStatus = isReceiverOnline ? 'delivered' : 'sent';
 
       const newMsg = {
-        id: 'msg_' + Date.now(),
+        id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
         clientTempId: clientTempId || null,
         chatId,
         senderId,
         senderName: resolvedSenderName,
+        senderUsername: senderUsername || '',
         senderAvatar: resolvedSenderAvatar,
+        senderIsPro: resolvedSenderIsPro,
+        senderProTier: resolvedSenderProTier,
+        senderCustomBadge: resolvedSenderCustomBadge,
         receiverId: receiverId || '',
         isGroup: !!isGroup,
         content: content || '',
@@ -484,30 +449,14 @@ io.on('connection', (socket) => {
       io.to(chatId).emit('new_message', newMsg);
 
       const senderRooms = new Set([`user_${senderId}`, senderId]);
-      if (senderDoc) {
-        if (senderDoc.id) { senderRooms.add(`user_${senderDoc.id}`); senderRooms.add(senderDoc.id); }
-        if (senderDoc._id) { senderRooms.add(`user_${senderDoc._id.toString()}`); senderRooms.add(senderDoc._id.toString()); }
-        if (senderDoc.username) { senderRooms.add(`user_${senderDoc.username}`); senderRooms.add(senderDoc.username); }
-      }
       senderRooms.forEach(room => io.to(room).emit('new_message', newMsg));
 
-      const receiverRooms = new Set();
       if (receiverId && !isGroup) {
-        receiverRooms.add(`user_${receiverId}`);
-        receiverRooms.add(receiverId);
-        if (receiverDoc) {
-          if (receiverDoc.id) { receiverRooms.add(`user_${receiverDoc.id}`); receiverRooms.add(receiverDoc.id); }
-          if (receiverDoc._id) { receiverRooms.add(`user_${receiverDoc._id.toString()}`); receiverRooms.add(receiverDoc._id.toString()); }
-          if (receiverDoc.username) { receiverRooms.add(`user_${receiverDoc.username}`); receiverRooms.add(receiverDoc.username); }
-        }
-        receiverRooms.forEach(room => io.to(room).emit('new_message', newMsg));
-
-        const notifPayload = {
-          ...newMsg,
-          senderName: resolvedSenderName,
-          senderAvatar: resolvedSenderAvatar
-        };
-        receiverRooms.forEach(room => io.to(room).emit('message_notification', notifPayload));
+        const receiverRooms = new Set([`user_${receiverId}`, receiverId]);
+        receiverRooms.forEach(room => {
+          io.to(room).emit('new_message', newMsg);
+          io.to(room).emit('message_notification', newMsg);
+        });
       }
 
       // 3. Concurrently save to MongoDB (zero blocking on emission)

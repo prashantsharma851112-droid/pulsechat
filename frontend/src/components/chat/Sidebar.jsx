@@ -62,6 +62,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   useEffect(() => { groupsRef.current = groups; }, [groups]);
   const allUsersRef = useRef(allUsers);
   useEffect(() => { allUsersRef.current = allUsers; }, [allUsers]);
+  const processedMsgIdsRef = useRef(new Set());
 
   // Listen to cross-component tab switch requests (e.g. clicking on sync notification toast)
   useEffect(() => {
@@ -560,11 +561,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     loadAllUsers();
   }, [loadRecentChats, loadGroups, loadAllUsers]);
 
-  useEffect(() => {
-    if (lastNotification) {
-      loadRecentChats();
-    }
-  }, [lastNotification, loadRecentChats]);
 
   // Instant local recent chat update listener (from ChatWindow dispatch)
   useEffect(() => {
@@ -594,6 +590,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     // Instant zero-latency chat list reordering on message send or receive (0ms)
     const handleSidebarNewMessage = (msg) => {
       if (!msg) return;
+      if (msg.id) {
+        if (processedMsgIdsRef.current.has(msg.id)) return;
+        processedMsgIdsRef.current.add(msg.id);
+        if (processedMsgIdsRef.current.size > 200) {
+          const arr = Array.from(processedMsgIdsRef.current);
+          processedMsgIdsRef.current = new Set(arr.slice(arr.length - 100));
+        }
+      }
+
       const isMyMsg = Boolean(
         user?.id && (
           msg.senderId === user.id ||
@@ -619,7 +624,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         const existingIdx = prevChats.findIndex(c =>
           c.id === targetId ||
           c._id === targetId ||
-          (c.username && (c.username === targetId || (msg.senderName && c.username === msg.senderName))) ||
+          (c.username && (c.username === targetId || (msg.senderUsername && c.username === msg.senderUsername) || (msg.senderName && c.username === msg.senderName))) ||
           c.id === msg.chatId ||
           c._id === msg.chatId ||
           (msg.chatId && typeof msg.chatId === 'string' && (
@@ -632,13 +637,20 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         let targetChat;
         if (existingIdx !== -1) {
           targetChat = { ...prevChats[existingIdx] };
+          if (!isMyMsg) {
+            if (msg.senderAvatar) targetChat.avatar = msg.senderAvatar;
+            if (msg.senderName) targetChat.displayName = msg.senderName;
+            if (msg.senderIsPro !== undefined) targetChat.isPro = Boolean(msg.senderIsPro);
+            if (msg.senderProTier) targetChat.proTier = msg.senderProTier;
+            if (msg.senderCustomBadge !== undefined) targetChat.customBadge = msg.senderCustomBadge;
+          }
         } else {
           if (msg.isGroup) {
             const foundGroup = (groupsRef.current || []).find(g => g.id === msg.chatId || g.id === targetId);
             targetChat = foundGroup ? { ...foundGroup, isGroup: true } : {
               id: msg.chatId || targetId,
               name: msg.groupName || 'Group',
-              avatar: foundGroup?.avatar || null,
+              avatar: foundGroup?.avatar || msg.senderAvatar || null,
               isGroup: true
             };
           } else {
@@ -646,13 +658,25 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               u.id === targetId ||
               u._id === targetId ||
               u.username === targetId ||
+              (msg.senderUsername && u.username === msg.senderUsername) ||
               (msg.senderName && u.username === msg.senderName)
             );
-            targetChat = foundUser ? { ...foundUser, isGroup: false } : {
+            targetChat = foundUser ? {
+              ...foundUser,
+              avatar: (!isMyMsg && msg.senderAvatar) ? msg.senderAvatar : foundUser.avatar,
+              displayName: (!isMyMsg && (msg.senderName || msg.senderUsername)) ? (msg.senderName || msg.senderUsername) : foundUser.displayName,
+              isPro: (!isMyMsg && msg.senderIsPro !== undefined) ? Boolean(msg.senderIsPro) : Boolean(foundUser.isPro),
+              proTier: (!isMyMsg && msg.senderProTier) ? msg.senderProTier : (foundUser.proTier || 'none'),
+              customBadge: (!isMyMsg && msg.senderCustomBadge !== undefined) ? msg.senderCustomBadge : (foundUser.customBadge || ''),
+              isGroup: false
+            } : {
               id: targetId,
-              displayName: (!isMyMsg && msg.senderName) ? msg.senderName : 'PulseChat User',
-              username: targetId,
+              displayName: (!isMyMsg && (msg.senderName || msg.senderUsername)) ? (msg.senderName || msg.senderUsername) : 'PulseChat User',
+              username: (!isMyMsg && msg.senderUsername) ? msg.senderUsername : targetId,
               avatar: (!isMyMsg && msg.senderAvatar) ? msg.senderAvatar : null,
+              isPro: (!isMyMsg && msg.senderIsPro !== undefined) ? Boolean(msg.senderIsPro) : false,
+              proTier: (!isMyMsg && msg.senderProTier) ? msg.senderProTier : 'none',
+              customBadge: (!isMyMsg && msg.senderCustomBadge) ? msg.senderCustomBadge : '',
               isGroup: false
             };
           }
@@ -664,7 +688,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             activeChatRef.current._id === targetChat.id ||
             activeChatRef.current.id === msg.chatId ||
             activeChatRef.current.chatId === msg.chatId ||
-            (activeChatRef.current.username && (activeChatRef.current.username === targetChat.username || activeChatRef.current.username === msg.senderName)) ||
+            (activeChatRef.current.username && (activeChatRef.current.username === targetChat.username || activeChatRef.current.username === msg.senderName || activeChatRef.current.username === msg.senderUsername)) ||
             (msg.chatId && typeof msg.chatId === 'string' && (
               (activeChatRef.current.id && msg.chatId.includes(activeChatRef.current.id)) ||
               (activeChatRef.current._id && msg.chatId.includes(activeChatRef.current._id)) ||
@@ -702,6 +726,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     };
 
     socket.on('new_message', handleSidebarNewMessage);
+    socket.on('message_notification', handleSidebarNewMessage);
 
     // Instant delivery tick update in chat list
     const handleDeliveryUpdate = ({ messageId, chatId: cId, status }) => {
@@ -859,6 +884,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
     return () => {
       socket.off('new_message', handleSidebarNewMessage);
+      socket.off('message_notification', handleSidebarNewMessage);
       socket.off('message_delivered_update', handleDeliveryUpdate);
       socket.off('messages_delivered');
       socket.off('chat_read_update', handleChatRead);
