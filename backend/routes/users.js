@@ -135,6 +135,16 @@ router.put('/privacy', authMiddleware, async (req, res) => {
     if (!updatedUser) return res.status(404).json({ error: 'User not found' });
 
     const { passwordHash, ...userWithoutPass } = updatedUser;
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user_${req.user.id}`).emit('user_profile_updated', {
+        userId: userWithoutPass.id,
+        userMongoId: userWithoutPass._id?.toString(),
+        hideReadReceipts: userWithoutPass.hideReadReceipts
+      });
+    }
+
     res.json({ user: userWithoutPass });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update privacy settings' });

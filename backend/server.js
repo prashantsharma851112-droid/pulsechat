@@ -103,6 +103,23 @@ const io = new Server(server, {
 
 app.set('io', io);
 
+const resolveGhostMode = async (userId) => {
+  if (!userId) return false;
+  try {
+    const isObjectId = mongoose.Types.ObjectId.isValid(userId);
+    const u = await User.findOne({
+      $or: [
+        { id: userId },
+        ...(isObjectId ? [{ _id: userId }] : []),
+        { username: userId }
+      ]
+    }).select('hideReadReceipts').lean();
+    return Boolean(u && u.hideReadReceipts);
+  } catch {
+    return false;
+  }
+};
+
 const onlineUsers = new Map(); // userId -> socketId
 
 io.on('connection', (socket) => {
@@ -281,16 +298,44 @@ io.on('connection', (socket) => {
       // Strict Friendship Check for 1-to-1 chats:
       // Users must be confirmed friends (or have existing chat history) to send messages
       let senderDoc = null;
+      let receiverDoc = null;
       if (receiverId && !isGroup && receiverId !== senderId) {
-        let receiverDoc = null;
+        const isSenderObj = mongoose.Types.ObjectId.isValid(senderId);
+        const isReceiverObj = mongoose.Types.ObjectId.isValid(receiverId);
         [senderDoc, receiverDoc] = await Promise.all([
-          User.findOne({ id: senderId }).select('displayName username avatar friends').lean(),
-          User.findOne({ id: receiverId }).select('friends').lean()
+          User.findOne({
+            $or: [
+              { id: senderId },
+              ...(isSenderObj ? [{ _id: senderId }] : []),
+              { username: senderId }
+            ]
+          }).select('id _id displayName username avatar friends').lean(),
+          User.findOne({
+            $or: [
+              { id: receiverId },
+              ...(isReceiverObj ? [{ _id: receiverId }] : []),
+              { username: receiverId }
+            ]
+          }).select('id _id displayName username avatar friends').lean()
         ]);
-        const areFriends = Boolean(senderDoc?.friends?.includes(receiverId) && receiverDoc?.friends?.includes(senderId));
+
+        const senderFriends = senderDoc?.friends || [];
+        const receiverFriends = receiverDoc?.friends || [];
+        const receiverMatches = [receiverId, receiverDoc?.id, receiverDoc?._id?.toString(), receiverDoc?.username].filter(Boolean);
+        const senderMatches = [senderId, senderDoc?.id, senderDoc?._id?.toString(), senderDoc?.username].filter(Boolean);
+
+        const areFriends = senderMatches.some(s => receiverFriends.includes(s)) ||
+                           receiverMatches.some(r => senderFriends.includes(r));
+
         if (!areFriends) {
           const Message = require('./models/Message');
-          const hasHistory = await Message.exists({ chatId });
+          const hasHistory = await Message.exists({
+            $or: [
+              { chatId },
+              { senderId: { $in: senderMatches }, receiverId: { $in: receiverMatches } },
+              { senderId: { $in: receiverMatches }, receiverId: { $in: senderMatches } }
+            ]
+          });
           if (!hasHistory) {
             socket.emit('message_blocked', {
               chatId,
@@ -309,7 +354,14 @@ io.on('connection', (socket) => {
       }
 
       if (!senderDoc) {
-        senderDoc = await User.findOne({ id: senderId }).select('displayName username avatar').lean();
+        const isSenderObj = mongoose.Types.ObjectId.isValid(senderId);
+        senderDoc = await User.findOne({
+          $or: [
+            { id: senderId },
+            ...(isSenderObj ? [{ _id: senderId }] : []),
+            { username: senderId }
+          ]
+        }).select('id _id displayName username avatar').lean();
       }
       const resolvedSenderName = senderDoc?.displayName || senderDoc?.username || senderId;
       const resolvedSenderAvatar = senderDoc?.avatar || null;
@@ -428,11 +480,34 @@ io.on('connection', (socket) => {
         ackCallback({ success: true, message: newMsg });
       }
 
-      // 2. Immediate zero-latency emission to chat room AND direct user channels
+      // 2. Immediate zero-latency emission to chat room AND all recipient rooms
       io.to(chatId).emit('new_message', newMsg);
-      io.to(`user_${senderId}`).emit('new_message', newMsg);
+
+      const senderRooms = new Set([`user_${senderId}`, senderId]);
+      if (senderDoc) {
+        if (senderDoc.id) { senderRooms.add(`user_${senderDoc.id}`); senderRooms.add(senderDoc.id); }
+        if (senderDoc._id) { senderRooms.add(`user_${senderDoc._id.toString()}`); senderRooms.add(senderDoc._id.toString()); }
+        if (senderDoc.username) { senderRooms.add(`user_${senderDoc.username}`); senderRooms.add(senderDoc.username); }
+      }
+      senderRooms.forEach(room => io.to(room).emit('new_message', newMsg));
+
+      const receiverRooms = new Set();
       if (receiverId && !isGroup) {
-        io.to(`user_${receiverId}`).emit('new_message', newMsg);
+        receiverRooms.add(`user_${receiverId}`);
+        receiverRooms.add(receiverId);
+        if (receiverDoc) {
+          if (receiverDoc.id) { receiverRooms.add(`user_${receiverDoc.id}`); receiverRooms.add(receiverDoc.id); }
+          if (receiverDoc._id) { receiverRooms.add(`user_${receiverDoc._id.toString()}`); receiverRooms.add(receiverDoc._id.toString()); }
+          if (receiverDoc.username) { receiverRooms.add(`user_${receiverDoc.username}`); receiverRooms.add(receiverDoc.username); }
+        }
+        receiverRooms.forEach(room => io.to(room).emit('new_message', newMsg));
+
+        const notifPayload = {
+          ...newMsg,
+          senderName: resolvedSenderName,
+          senderAvatar: resolvedSenderAvatar
+        };
+        receiverRooms.forEach(room => io.to(room).emit('message_notification', notifPayload));
       }
 
       // 3. Concurrently save to MongoDB (zero blocking on emission)
@@ -440,18 +515,11 @@ io.on('connection', (socket) => {
         console.error('Error saving message to DB:', err);
       });
 
-      // Background notifications (non-blocking)
+      // Background notifications & Push (non-blocking)
       setImmediate(async () => {
         try {
           await savePromise;
           if (receiverId && !isGroup) {
-            const notifPayload = {
-              ...newMsg,
-              senderName: resolvedSenderName,
-              senderAvatar: resolvedSenderAvatar
-            };
-            io.to(`user_${receiverId}`).emit('message_notification', notifPayload);
-
             const bodyText = newMsg.type === 'text'
               ? (newMsg.content || 'New message')
               : (newMsg.type === '3d_text'
@@ -584,13 +652,7 @@ io.on('connection', (socket) => {
   // Read Receipt (Blue Double Tick)
   socket.on('mark_read', async ({ messageId, chatId, userId }) => {
     const readerId = userId || socket.userId;
-    let isGhostMode = false;
-    if (readerId) {
-      const reader = await User.findOne({ id: readerId }).select('hideReadReceipts');
-      if (reader && reader.hideReadReceipts) {
-        isGhostMode = true; // Ghost Unseen Mode: reader clears badge but no blue ticks to sender!
-      }
-    }
+    const isGhostMode = await resolveGhostMode(readerId);
     const updateDoc = { $addToSet: { readBy: readerId } };
     if (!isGhostMode) updateDoc.status = 'read';
     const updatedMsg = await Message.findOneAndUpdate({ id: messageId }, updateDoc, { new: true }).lean();
@@ -599,28 +661,25 @@ io.on('connection', (socket) => {
       io.to(chatId).emit('message_read_update', { messageId, status: 'read' });
       if (updatedMsg && updatedMsg.senderId) {
         io.to(`user_${updatedMsg.senderId}`).emit('message_read_update', { messageId, status: 'read' });
+        io.to(updatedMsg.senderId).emit('message_read_update', { messageId, status: 'read' });
       }
     }
     if (readerId) {
       io.to(`user_${readerId}`).emit('chat_read_update', { chatId, userId: readerId });
+      io.to(readerId).emit('chat_read_update', { chatId, userId: readerId });
     }
     socket.emit('chat_read_update', { chatId, userId: readerId });
   });
 
   socket.on('mark_chat_read', async ({ chatId, userId }) => {
     const readerId = userId || socket.userId;
-    let isGhostMode = false;
-    if (readerId) {
-      const reader = await User.findOne({ id: readerId }).select('hideReadReceipts');
-      if (reader && reader.hideReadReceipts) {
-        isGhostMode = true; // Ghost Unseen Mode: reader unread badge clears, but suppress blue ticks to sender
-      }
-    }
+    const isGhostMode = await resolveGhostMode(readerId);
     await db.markChatAsRead(chatId, readerId, isGhostMode);
 
     // ALWAYS emit to reader so their sidebar/tab unread badge immediately clears!
     if (readerId) {
       io.to(`user_${readerId}`).emit('chat_read_update', { chatId, userId: readerId });
+      io.to(readerId).emit('chat_read_update', { chatId, userId: readerId });
     }
     socket.emit('chat_read_update', { chatId, userId: readerId });
 
@@ -631,6 +690,7 @@ io.on('connection', (socket) => {
         const otherId = parts.find(id => id !== readerId);
         if (otherId) {
           io.to(`user_${otherId}`).emit('chat_read_update', { chatId, userId: readerId });
+          io.to(otherId).emit('chat_read_update', { chatId, userId: readerId });
         }
       }
     }

@@ -6,6 +6,23 @@ const { uploadToCloudinary } = require('../utils/cloudinary');
 
 const User = require('../models/User');
 
+const resolveGhostMode = async (userId) => {
+  if (!userId) return false;
+  try {
+    const mongoose = require('mongoose');
+    const u = await User.findOne({
+      $or: [
+        { id: userId },
+        ...(mongoose.Types.ObjectId.isValid(userId) ? [{ _id: userId }] : []),
+        { username: userId }
+      ]
+    }).select('hideReadReceipts').lean();
+    return Boolean(u && u.hideReadReceipts);
+  } catch {
+    return false;
+  }
+};
+
 // Get Chat Settings (Disappearing Messages) - MUST BE BEFORE /:chatId
 router.get('/settings/:chatId', authMiddleware, async (req, res) => {
   try {
@@ -71,8 +88,7 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
           // Non-blocking background read mark and socket emission
           setImmediate(async () => {
             try {
-              const currentUser = await User.findOne({ id: req.user.id }).select('hideReadReceipts').lean();
-              const isGhostMode = Boolean(currentUser && currentUser.hideReadReceipts);
+              const isGhostMode = await resolveGhostMode(req.user.id);
 
               await db.markChatAsRead(req.params.chatId, req.user.id, isGhostMode);
               const io = req.app.get('io');
@@ -104,8 +120,7 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
     // Non-blocking background read mark and socket emission
     setImmediate(async () => {
       try {
-        const currentUser = await User.findOne({ id: req.user.id }).select('hideReadReceipts').lean();
-        const isGhostMode = Boolean(currentUser && currentUser.hideReadReceipts);
+        const isGhostMode = await resolveGhostMode(req.user.id);
 
         await db.markChatAsRead(req.params.chatId, req.user.id, isGhostMode);
         const io = req.app.get('io');
@@ -134,8 +149,7 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
 // Mark Chat Messages as Read
 router.put('/:chatId/read', authMiddleware, async (req, res) => {
   try {
-    const currentUser = await User.findOne({ id: req.user.id }).select('hideReadReceipts');
-    const isGhostMode = Boolean(currentUser && currentUser.hideReadReceipts);
+    const isGhostMode = await resolveGhostMode(req.user.id);
 
     await db.markChatAsRead(req.params.chatId, req.user.id, isGhostMode);
     const io = req.app.get('io');

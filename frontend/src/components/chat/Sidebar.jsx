@@ -25,6 +25,7 @@ import {
   clearUnreadCount
 } from '../../utils/offlineStorage';
 import { parseSafeJson } from '../../utils/imageCompressor';
+import { playSound } from '../../utils/audio';
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
   const { user, logout, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
@@ -339,8 +340,18 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               if (fresh.proTier) res.proTier = fresh.proTier;
               if (fresh.customBadge !== undefined) res.customBadge = fresh.customBadge;
             }
-            if (activeChatRef.current && (res.id === activeChatRef.current.id || (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username))) {
+            if (activeChatRef.current && (
+              res.id === activeChatRef.current.id ||
+              res._id === activeChatRef.current.id ||
+              (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username)
+            )) {
               res.unreadCount = 0;
+            } else if (user?.id) {
+              const cachedList = getCachedRecentChats(user.id) || [];
+              const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
+              if (cachedMatch && cachedMatch.unreadCount) {
+                res.unreadCount = Math.max(res.unreadCount || 0, cachedMatch.unreadCount);
+              }
             }
             return res;
           });
@@ -360,7 +371,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     } finally {
       clearTimeout(fetchTimeout);
       clearTimeout(hardSafetyTimer);
-      setTimeout(() => setIsRefreshing(false), 300);
+      setIsRefreshing(false);
     }
   };
 
@@ -392,13 +403,26 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               if (fresh.proTier) res.proTier = fresh.proTier;
               if (fresh.customBadge !== undefined) res.customBadge = fresh.customBadge;
             }
-            if (activeChatRef.current && (res.id === activeChatRef.current.id || (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username))) {
+            if (activeChatRef.current && (
+              res.id === activeChatRef.current.id ||
+              res._id === activeChatRef.current.id ||
+              (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username)
+            )) {
               res.unreadCount = 0;
             } else if (user?.id) {
               const cachedList = getCachedRecentChats(user.id) || [];
-              const cachedMatch = cachedList.find(c => c.id === res.id || (res.username && c.username === res.username));
-              if (cachedMatch && cachedMatch.unreadCount === 0 && res.unreadCount > 0) {
-                res.unreadCount = 0;
+              const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
+              if (cachedMatch && cachedMatch.unreadCount) {
+                res.unreadCount = Math.max(res.unreadCount || 0, cachedMatch.unreadCount);
+              }
+              if (cachedMatch && cachedMatch.lastMessageTimestamp && res.lastMessageTimestamp) {
+                if (new Date(cachedMatch.lastMessageTimestamp) > new Date(res.lastMessageTimestamp)) {
+                  res.lastMessage = cachedMatch.lastMessage;
+                  res.lastMessageTime = cachedMatch.lastMessageTime;
+                  res.lastMessageTimestamp = cachedMatch.lastMessageTimestamp;
+                  res.lastMessageFromMe = cachedMatch.lastMessageFromMe;
+                  res.lastMessageStatus = cachedMatch.lastMessageStatus;
+                }
               }
             }
             return res;
@@ -570,7 +594,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     // Instant zero-latency chat list reordering on message send or receive (0ms)
     const handleSidebarNewMessage = (msg) => {
       if (!msg) return;
-      const isMyMsg = msg.senderId === user?.id;
+      const isMyMsg = Boolean(
+        user?.id && (
+          msg.senderId === user.id ||
+          (user._id && msg.senderId === user._id) ||
+          (user.username && msg.senderId === user.username)
+        )
+      );
       const targetId = isMyMsg ? msg.receiverId : (msg.isGroup ? msg.chatId : msg.senderId);
       if (!targetId && !msg.chatId) return;
 
@@ -588,8 +618,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       setRecentChats(prevChats => {
         const existingIdx = prevChats.findIndex(c =>
           c.id === targetId ||
+          c._id === targetId ||
+          (c.username && (c.username === targetId || (msg.senderName && c.username === msg.senderName))) ||
           c.id === msg.chatId ||
-          (msg.chatId && typeof msg.chatId === 'string' && msg.chatId.includes(c.id))
+          c._id === msg.chatId ||
+          (msg.chatId && typeof msg.chatId === 'string' && (
+            (c.id && msg.chatId.includes(c.id)) ||
+            (c._id && msg.chatId.includes(c._id)) ||
+            (c.username && msg.chatId.includes(c.username))
+          ))
         );
 
         let targetChat;
@@ -605,7 +642,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               isGroup: true
             };
           } else {
-            const foundUser = (allUsersRef.current || []).find(u => u.id === targetId || u.username === targetId);
+            const foundUser = (allUsersRef.current || []).find(u =>
+              u.id === targetId ||
+              u._id === targetId ||
+              u.username === targetId ||
+              (msg.senderName && u.username === msg.senderName)
+            );
             targetChat = foundUser ? { ...foundUser, isGroup: false } : {
               id: targetId,
               displayName: (!isMyMsg && msg.senderName) ? msg.senderName : 'PulseChat User',
@@ -616,13 +658,27 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           }
         }
 
-        const isCurrentlyViewing = activeChatRef.current && (
-          activeChatRef.current.id === targetChat.id ||
-          activeChatRef.current.id === msg.chatId
+        const isCurrentlyViewing = Boolean(
+          activeChatRef.current && (
+            activeChatRef.current.id === targetChat.id ||
+            activeChatRef.current._id === targetChat.id ||
+            activeChatRef.current.id === msg.chatId ||
+            activeChatRef.current.chatId === msg.chatId ||
+            (activeChatRef.current.username && (activeChatRef.current.username === targetChat.username || activeChatRef.current.username === msg.senderName)) ||
+            (msg.chatId && typeof msg.chatId === 'string' && (
+              (activeChatRef.current.id && msg.chatId.includes(activeChatRef.current.id)) ||
+              (activeChatRef.current._id && msg.chatId.includes(activeChatRef.current._id)) ||
+              (activeChatRef.current.username && msg.chatId.includes(activeChatRef.current.username))
+            ))
+          )
         );
 
         const currentUnread = targetChat.unreadCount || 0;
         const newUnread = (isMyMsg || isCurrentlyViewing) ? 0 : currentUnread + 1;
+
+        if (!isMyMsg && !isCurrentlyViewing) {
+          try { playSound('received'); } catch {}
+        }
 
         const updatedChat = {
           ...targetChat,

@@ -226,6 +226,14 @@ export function AuthProvider({ children }) {
 
   const toggleHideReadReceipts = async (enabled) => {
     if (!token) return false;
+    const prevSetting = Boolean(user?.hideReadReceipts);
+    const nextUser = { ...user, hideReadReceipts: Boolean(enabled) };
+    
+    // 0ms Optimistic UI update & offline storage sync
+    setUser(nextUser);
+    setCachedUser(nextUser);
+    updateSavedAccountsList(nextUser, token);
+
     try {
       const res = await fetch(`${BACKEND_URL}/api/users/privacy`, {
         method: 'PUT',
@@ -233,15 +241,22 @@ export function AuthProvider({ children }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ hideReadReceipts: enabled })
+        body: JSON.stringify({ hideReadReceipts: Boolean(enabled) })
       });
       const data = await res.json();
       if (data.user) {
-        setUser(data.user);
+        const confirmed = { ...nextUser, ...data.user };
+        setUser(confirmed);
+        setCachedUser(confirmed);
+        updateSavedAccountsList(confirmed, token);
         return true;
       }
     } catch (e) {
-      console.error('Failed to update unseen mode:', e);
+      console.error('Failed to update unseen mode on backend, rolling back:', e);
+      const rollbackUser = { ...user, hideReadReceipts: prevSetting };
+      setUser(rollbackUser);
+      setCachedUser(rollbackUser);
+      updateSavedAccountsList(rollbackUser, token);
     }
     return false;
   };
