@@ -35,9 +35,9 @@ export function SocketProvider({ children }) {
         transports: ['websocket', 'polling'],
         reconnection: true,
         reconnectionAttempts: Infinity,
-        reconnectionDelay: 400,
-        reconnectionDelayMax: 1500,
-        timeout: 10000
+        reconnectionDelay: 200,
+        reconnectionDelayMax: 1000,
+        timeout: 8000
       });
       setSocket(newSocket);
 

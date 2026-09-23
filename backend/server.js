@@ -47,6 +47,20 @@ app.use('/api/friends', friendRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/payments', paymentRoutes);
 
+// Health check endpoint for uptime monitoring & 0ms keep-alive
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
+});
+
+app.get('/api/ping', (req, res) => {
+  res.json({ pong: true, time: Date.now() });
+});
+
 // Catch-all for unhandled /api/* requests so they ALWAYS return JSON 404, NEVER HTML
 app.all('/api/*', (req, res) => {
   res.status(404).json({ error: `API route ${req.method} ${req.originalUrl} not found.` });
@@ -885,6 +899,22 @@ mongoose.connect(config.MONGO_URI)
     }
     server.listen(config.PORT, () => {
       console.log(`🚀 PulseChat Backend running on port ${config.PORT}`);
+
+      // Automated Keep-Alive Ping Engine to prevent Render / free tier cold starts
+      const renderUrl = process.env.RENDER_EXTERNAL_URL || process.env.SELF_PING_URL;
+      if (renderUrl) {
+        console.log(`📡 Keep-Alive Engine activated for: ${renderUrl}`);
+        setInterval(() => {
+          try {
+            const https = renderUrl.startsWith('https') ? require('https') : require('http');
+            https.get(`${renderUrl}/api/health`, (res) => {
+              // Pulse kept active
+            }).on('error', (err) => {
+              console.warn('Keep-alive ping error:', err.message);
+            });
+          } catch (pingErr) {}
+        }, 10 * 60 * 1000); // Ping every 10 minutes (well before the 15-minute idle limit)
+      }
     });
   })
   .catch((err) => {

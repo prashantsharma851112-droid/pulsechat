@@ -247,6 +247,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [chatSetting, setChatSetting] = useState({ disappearingEnabled: false });
   const [blockStatus, setBlockStatus] = useState({ isBlockedByMe: false, isBlockedByThem: false });
 
+  // Pagination for infinite fast scroll
+  const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState(false);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+
   // Close 4-dot action grid on click outside
   useEffect(() => {
     const handleOutsideClick = (e) => {
@@ -354,13 +358,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         mergeIntoAllUsersCache(user.id, [{ ...activeChat, avatar: chatAvatar || activeChat.avatar }]);
       }
 
-      // 2. Fetch fresh messages if online
-      fetch(`${BACKEND_URL}/api/messages/${chatId}`, {
+      // 2. Fetch fresh messages if online (fast 50 latest limit)
+      fetch(`${BACKEND_URL}/api/messages/${chatId}?limit=50`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
+            setHasMoreOlderMessages(data.length >= 50);
             const currentOutbox = getOutbox(user?.id);
             const pendingForChat = currentOutbox.filter(m => m.chatId === chatId);
             const serverIds = new Set(data.map(m => m.id));
@@ -893,6 +898,40 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.emit('restore_multiple_messages', { messageIds: multiDeleteBackupIds, chatId });
       setMultiDeleteBackupIds([]);
       setMultiDeleteUndoSecs(0);
+    }
+  };
+
+  const handleLoadOlderMessages = async () => {
+    if (isLoadingOlder || messages.length === 0 || !token) return;
+    const oldestMsg = messages.find(m => m.timestamp && !m.id?.startsWith('temp_'));
+    if (!oldestMsg || !oldestMsg.timestamp) return;
+
+    setIsLoadingOlder(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/messages/${chatId}?limit=50&before=${encodeURIComponent(oldestMsg.timestamp)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        if (data.length < 50) {
+          setHasMoreOlderMessages(false);
+        } else {
+          setHasMoreOlderMessages(true);
+        }
+        if (data.length > 0) {
+          setMessages(prev => {
+            const currentIds = new Set(prev.map(m => m.id));
+            const newOldMsgs = data.filter(m => !currentIds.has(m.id));
+            const merged = [...newOldMsgs, ...prev];
+            setCachedMessages(chatId, merged);
+            return merged;
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load older messages:', err);
+    } finally {
+      setIsLoadingOlder(false);
     }
   };
 
@@ -1511,6 +1550,31 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {/* Message Stream with WhatsApp-Style Date Dividers */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        {/* Load Earlier Messages Button (Pagination) */}
+        {hasMoreOlderMessages && (
+          <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 8px 0' }}>
+            <button
+              onClick={handleLoadOlderMessages}
+              disabled={isLoadingOlder}
+              style={{
+                background: 'var(--bg-card)',
+                color: 'var(--accent)',
+                border: '1px solid var(--border)',
+                borderRadius: '16px',
+                padding: '5px 14px',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                cursor: isLoadingOlder ? 'wait' : 'pointer',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}
+            >
+              {isLoadingOlder ? '⏳ Loading earlier history...' : '↑ Load older messages'}
+            </button>
+          </div>
+        )}
         {!isGroup && friendshipStatus !== 'friends' && (
           <div className="pulse-sync-card" style={{ margin: 'auto' }}>
             <div className="pulse-orb-icon">

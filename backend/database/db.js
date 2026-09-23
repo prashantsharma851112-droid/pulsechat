@@ -31,14 +31,23 @@ module.exports = {
     return updated;
   },
 
-  getMessages: async (chatId) => {
-    return await Message.find({
+  getMessages: async (chatId, limit = 50, before = null) => {
+    const query = {
       chatId,
       $or: [
         { expiresAt: null },
         { expiresAt: { $gt: new Date() } }
       ]
-    }).sort({ timestamp: 1 }).lean();
+    };
+    if (before) {
+      query.timestamp = { $lt: before };
+    }
+    const limitNum = Math.min(parseInt(limit, 10) || 50, 200);
+    const msgs = await Message.find(query)
+      .sort({ timestamp: -1 })
+      .limit(limitNum)
+      .lean();
+    return msgs.reverse();
   },
 
   saveMessage: async (msg) => {

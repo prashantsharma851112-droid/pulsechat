@@ -58,7 +58,8 @@ router.put('/settings/:chatId/disappearing', authMiddleware, async (req, res) =>
 // Get Chat Message History - ultra fast response, non-blocking background read receipts
 router.get('/:chatId', authMiddleware, async (req, res) => {
   try {
-    const messages = await db.getMessages(req.params.chatId);
+    const { limit, before } = req.query;
+    const messages = await db.getMessages(req.params.chatId, limit, before);
     res.json(messages);
 
     // Non-blocking background read mark and socket emission
