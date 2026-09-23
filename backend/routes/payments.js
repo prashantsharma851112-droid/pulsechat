@@ -93,6 +93,25 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Invalid plan selected' });
     }
 
+    const userDoc = await User.findOne({ id: req.user.id });
+    if (!userDoc) return res.status(404).json({ error: 'User not found' });
+
+    if (plan.type === 'pro') {
+      const now = new Date();
+      const isCurrentlyActive = Boolean(userDoc.isPro && userDoc.proExpiresAt && new Date(userDoc.proExpiresAt) > now);
+
+      if (isCurrentlyActive && userDoc.proTier === plan.tier) {
+        const expiryFormatted = new Date(userDoc.proExpiresAt).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        });
+        return res.status(400).json({
+          error: `Aapka ${plan.tier === 'yearly' ? 'Annual' : 'Monthly'} VIP plan pehle se active hai (${expiryFormatted} tak). Expire hone se pehle dubara nahi liya ja sakta.`
+        });
+      }
+    }
+
     const keyId = process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
@@ -160,15 +179,24 @@ router.post('/verify', authMiddleware, async (req, res) => {
     if (!userDoc) return res.status(404).json({ error: 'User not found' });
 
     if (plan.type === 'pro') {
-      const isUpgradeToYearly = userDoc.isPro && userDoc.proTier === 'monthly' && plan.tier === 'yearly';
-      const durationMs = (plan.durationDays || 30) * 24 * 60 * 60 * 1000;
-      const baseTime = (userDoc.proExpiresAt && userDoc.proExpiresAt > new Date() && !isUpgradeToYearly)
-        ? userDoc.proExpiresAt.getTime()
-        : Date.now();
+      const now = new Date();
+      const isCurrentlyActive = Boolean(userDoc.isPro && userDoc.proExpiresAt && new Date(userDoc.proExpiresAt) > now);
 
+      if (isCurrentlyActive && userDoc.proTier === plan.tier) {
+        const expiryFormatted = new Date(userDoc.proExpiresAt).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        });
+        return res.status(400).json({
+          error: `Aapka ${plan.tier === 'yearly' ? 'Annual' : 'Monthly'} VIP plan pehle se active hai (${expiryFormatted} tak). Expire hone se pehle dubara nahi liya ja sakta.`
+        });
+      }
+
+      const durationMs = (plan.durationDays || 30) * 24 * 60 * 60 * 1000;
       userDoc.isPro = true;
       userDoc.proTier = plan.tier || 'monthly';
-      userDoc.proExpiresAt = new Date(baseTime + durationMs);
+      userDoc.proExpiresAt = new Date(Date.now() + durationMs);
       userDoc.customBadge = '⚡ VIP';
     } else if (plan.type === 'sparks') {
       userDoc.pulseSparks = (userDoc.pulseSparks || 0) + (plan.sparks || 0);
@@ -201,15 +229,43 @@ router.post('/demo-activate', authMiddleware, async (req, res) => {
     if (!userDoc) return res.status(404).json({ error: 'User not found' });
 
     if (plan.type === 'pro') {
-      const isUpgradeToYearly = userDoc.isPro && userDoc.proTier === 'monthly' && plan.tier === 'yearly';
-      const durationMs = (plan.durationDays || 30) * 24 * 60 * 60 * 1000;
-      const baseTime = (userDoc.proExpiresAt && userDoc.proExpiresAt > new Date() && !isUpgradeToYearly)
-        ? userDoc.proExpiresAt.getTime()
-        : Date.now();
+      // Annual plan is NOT free! Only Monthly VIP is free beta access
+      if (plan.tier === 'yearly' || planId === 'pro_yearly') {
+        return res.status(400).json({
+          error: 'Annual VIP is a paid membership (₹499/year). Only Monthly VIP is currently available for free access.'
+        });
+      }
 
+      const now = new Date();
+      const isCurrentlyActive = Boolean(userDoc.isPro && userDoc.proExpiresAt && new Date(userDoc.proExpiresAt) > now);
+
+      // Cannot activate same plan if already active
+      if (isCurrentlyActive && userDoc.proTier === plan.tier) {
+        const expiryFormatted = new Date(userDoc.proExpiresAt).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        });
+        return res.status(400).json({
+          error: `Aapka Monthly VIP plan pehle se active hai (${expiryFormatted} tak). Expire hone se pehle dubara activate nahi kiya ja sakta.`
+        });
+      }
+
+      if (isCurrentlyActive && userDoc.proTier === 'yearly') {
+        const expiryFormatted = new Date(userDoc.proExpiresAt).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        });
+        return res.status(400).json({
+          error: `Aapke paas pehle se Annual VIP active hai (${expiryFormatted} tak).`
+        });
+      }
+
+      const durationMs = (plan.durationDays || 30) * 24 * 60 * 60 * 1000;
       userDoc.isPro = true;
-      userDoc.proTier = plan.tier || 'monthly';
-      userDoc.proExpiresAt = new Date(baseTime + durationMs);
+      userDoc.proTier = 'monthly';
+      userDoc.proExpiresAt = new Date(Date.now() + durationMs);
       userDoc.customBadge = '⚡ VIP';
     } else if (plan.type === 'sparks') {
       userDoc.pulseSparks = (userDoc.pulseSparks || 0) + (plan.sparks || 100);

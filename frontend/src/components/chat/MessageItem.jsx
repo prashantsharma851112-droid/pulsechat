@@ -8,6 +8,7 @@ import EditPollModal from './EditPollModal';
 import { getPollTheme } from './pollThemes';
 import PulseVipBadge from '../common/PulseVipBadge';
 import Sticker3D from '../common/Sticker3D';
+import Animated3DText from '../common/Animated3DText';
 
 
 export default function MessageItem({
@@ -403,14 +404,14 @@ export default function MessageItem({
           }
         }}
         style={{
-          background: message.type === 'gift'
+          background: (message.type === 'gift' || message.type === '3d_text')
             ? (isSelected ? 'rgba(99, 102, 241, 0.25)' : 'transparent')
             : (isSelected ? 'rgba(99, 102, 241, 0.25)' : (isMine ? 'var(--bubble-sent)' : 'var(--bubble-received)')),
           color: 'var(--text-main)',
-          padding: message.type === 'gift' ? '2px 4px' : '0.75rem 1rem',
+          padding: (message.type === 'gift' || message.type === '3d_text') ? '2px 4px' : '0.75rem 1rem',
           borderRadius: isMine ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
-          boxShadow: message.type === 'gift' ? 'none' : '0 2px 6px rgba(0,0,0,0.08)',
-          border: isSelected ? '1.5px solid var(--accent)' : (message.type === 'gift' ? 'none' : '1px solid transparent'),
+          boxShadow: (message.type === 'gift' || message.type === '3d_text') ? 'none' : '0 2px 6px rgba(0,0,0,0.08)',
+          border: isSelected ? '1.5px solid var(--accent)' : ((message.type === 'gift' || message.type === '3d_text') ? 'none' : '1px solid transparent'),
           transform: `translateX(${dragX}px)`,
           transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1), background 0.15s ease',
           userSelect: isDragging ? 'none' : 'auto',
@@ -775,6 +776,17 @@ export default function MessageItem({
           />
         )}
 
+        {/* 3D Animated Typography Message (VIP Pro Feature) */}
+        {message.type === '3d_text' && (
+          <Animated3DText
+            text={message.content}
+            styleType={message.textStyle || 'cyber-neon'}
+            isMine={isMine}
+            timeStr={timeStr}
+            status={message.status}
+          />
+        )}
+
         {/* Poll Message */}
         {message.type === 'poll' && pollData && (() => {
           const pollTheme = getPollTheme(pollData.theme || 'purple');
@@ -1047,8 +1059,8 @@ export default function MessageItem({
           </div>
         )}
 
-        {/* Timestamp & Ticks (hidden for gift stickers as Sticker3D displays it natively) */}
-        {message.type !== 'gift' && (
+        {/* Timestamp & Ticks (hidden for gift stickers and 3D text as they display it natively) */}
+        {message.type !== 'gift' && message.type !== '3d_text' && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem', marginTop: '0.35rem', fontSize: '0.68rem', opacity: 0.75 }}>
             <span>{timeStr}</span>
             {isMine && (

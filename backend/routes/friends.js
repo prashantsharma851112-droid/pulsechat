@@ -15,7 +15,11 @@ const getSafeUser = (u) => {
     username: u.username || 'user',
     avatar: u.avatar || '',
     status: u.status || 'Hey there! I am using PulseChat.',
-    isEmailVerified: Boolean(u.isEmailVerified)
+    isEmailVerified: Boolean(u.isEmailVerified),
+    isPro: Boolean(u.isPro),
+    proTier: u.proTier || null,
+    customBadge: u.customBadge || null,
+    pulseSparks: u.pulseSparks || 0
   };
 };
 
@@ -60,7 +64,7 @@ router.get('/', authMiddleware, async (req, res) => {
         { _id: { $in: friendIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } }
       ]
     })
-      .select('id displayName username avatar status isEmailVerified')
+      .select('id displayName username avatar status isEmailVerified isPro proTier customBadge pulseSparks')
       .lean();
 
     res.json({ friends: friends.map(getSafeUser) });
@@ -98,7 +102,7 @@ router.get('/requests', authMiddleware, async (req, res) => {
         { _id: { $in: senderIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } }
       ]
     })
-      .select('id displayName username avatar status isEmailVerified')
+      .select('id displayName username avatar status isEmailVerified isPro proTier customBadge pulseSparks')
       .lean();
 
     const senderMap = new Map();
@@ -123,7 +127,7 @@ router.get('/requests', authMiddleware, async (req, res) => {
         { _id: { $in: receiverIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } }
       ]
     })
-      .select('id displayName username avatar status isEmailVerified')
+      .select('id displayName username avatar status isEmailVerified isPro proTier customBadge pulseSparks')
       .lean();
 
     const receiverMap = new Map();

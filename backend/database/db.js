@@ -250,15 +250,21 @@ module.exports = {
 
         const lastMsgText = lastMessage.type === 'text'
           ? lastMessage.content
-          : (lastMessage.type === 'call'
-              ? (lastMessage.callData?.isVideo ? '📹 Video Call' : '📞 Voice Call')
-              : (lastMessage.type === 'voice'
-                  ? '🎤 Voice note'
-                  : (lastMessage.type === 'image'
-                      ? (lastMessage.content || '🖼️ Photo')
-                      : (lastMessage.type === 'video'
-                          ? '🎥 Video'
-                          : `[${lastMessage.type}]`))));
+          : (lastMessage.type === '3d_text'
+              ? `✨ 3D: ${lastMessage.content}`
+              : (lastMessage.type === 'gift'
+                  ? '🎁 Virtual Gift'
+                  : (lastMessage.type === 'call'
+                      ? (lastMessage.callData?.isVideo ? '📹 Video Call' : '📞 Voice Call')
+                      : (lastMessage.type === 'voice'
+                          ? '🎤 Voice note'
+                          : (lastMessage.type === 'image'
+                              ? (lastMessage.content || '🖼️ Photo')
+                              : (lastMessage.type === 'video'
+                                  ? '🎥 Video'
+                                  : (lastMessage.type === 'poll'
+                                      ? '📊 Poll'
+                                      : `[${lastMessage.type}]`)))))));
 
         results.push({
           ...otherUser,

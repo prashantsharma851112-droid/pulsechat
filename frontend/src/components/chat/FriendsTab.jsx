@@ -4,7 +4,7 @@ import { SocketContext } from '../../context/SocketContext';
 import { UserPlus, UserCheck, Users, UserX, Check, X, Search, MessageSquare, Clock, CheckCircle2, Sparkles, Zap, Radio, RotateCw } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { parseSafeJson } from '../../utils/imageCompressor';
-import { getCachedFriends, setCachedFriends } from '../../utils/offlineStorage';
+import { getCachedFriends, setCachedFriends, getCachedAllUsers } from '../../utils/offlineStorage';
 import PulseVipBadge from '../common/PulseVipBadge';
 
 export default function FriendsTab({ setActiveChat, onRequestsCountChange, initialSubTab = 'friends', onOpenFullDp }) {
@@ -21,7 +21,27 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
   }, [initialSubTab]);
 
   // Data states - initialize friends instantly from offline cache (0ms)
-  const [friends, setFriends] = useState(() => getCachedFriends(user?.id));
+  const [friends, setFriends] = useState(() => {
+    const cached = getCachedFriends(user?.id) || [];
+    const localUsers = getCachedAllUsers(user?.id) || [];
+    if (!localUsers.length) return cached;
+    const uMap = new Map();
+    localUsers.forEach(u => {
+      if (u.id) uMap.set(u.id, u);
+      if (u._id) uMap.set(u._id, u);
+      if (u.username) uMap.set(u.username, u);
+    });
+    return cached.map(f => {
+      const match = uMap.get(f.id) || (f.username ? uMap.get(f.username) : null);
+      return {
+        ...f,
+        isPro: Boolean(f.isPro || match?.isPro),
+        proTier: f.proTier || match?.proTier || null,
+        customBadge: f.customBadge || match?.customBadge || null,
+        avatar: f.avatar || match?.avatar || ''
+      };
+    });
+  });
   const [incomingRequests, setIncomingRequests] = useState([]);
   const [outgoingRequests, setOutgoingRequests] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -42,9 +62,28 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
       });
       const data = await parseSafeJson(res);
       if (data && data.friends) {
-        setFriends(data.friends);
+        const localUsers = getCachedAllUsers(user?.id) || [];
+        const uMap = new Map();
+        localUsers.forEach(u => {
+          if (u.id) uMap.set(u.id, u);
+          if (u._id) uMap.set(u._id, u);
+          if (u.username) uMap.set(u.username, u);
+        });
+
+        const enriched = data.friends.map(f => {
+          const match = uMap.get(f.id) || (f.username ? uMap.get(f.username) : null);
+          return {
+            ...f,
+            isPro: Boolean(f.isPro || match?.isPro),
+            proTier: f.proTier || match?.proTier || null,
+            customBadge: f.customBadge || match?.customBadge || null,
+            avatar: f.avatar || match?.avatar || ''
+          };
+        });
+
+        setFriends(enriched);
         if (user?.id) {
-          setCachedFriends(user.id, data.friends);
+          setCachedFriends(user.id, enriched);
         }
       }
     } catch (err) {

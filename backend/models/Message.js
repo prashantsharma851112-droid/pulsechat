@@ -10,7 +10,8 @@ const messageSchema = new mongoose.Schema({
   receiverId: { type: String, default: '' },
   isGroup: { type: Boolean, default: false },
   content: { type: String, default: '' },
-  type: { type: String, default: 'text' }, // 'text' | 'voice' | 'image' | 'video' | 'document' | 'poll' | 'call' | 'gift'
+  type: { type: String, default: 'text' }, // 'text' | '3d_text' | 'voice' | 'image' | 'video' | 'document' | 'poll' | 'call' | 'gift'
+  textStyle: { type: String, default: null },
   audioUrl: { type: String, default: null },
   mediaUrl: { type: String, default: null },
   fileName: { type: String, default: null },

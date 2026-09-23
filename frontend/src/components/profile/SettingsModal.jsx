@@ -1,13 +1,21 @@
 import React, { useState, useContext } from 'react';
 import { ThemeContext } from '../../context/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, Sparkles, Bell, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2 } from 'lucide-react';
+import { X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, Sparkles, Bell, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2, Crown, Lock } from 'lucide-react';
 import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
 import { BACKEND_URL } from '../../utils/config';
+import PulseProModal from '../chat/PulseProModal';
 
 const THEMES = [
   { id: 'light', name: '☀️ Light Mode (Brightness)', color: '#4f46e5' },
-  { id: 'dark', name: '🌙 Dark Mode', color: '#6366f1' },
+  { id: 'dark', name: '🌙 Midnight Dark', color: '#6366f1' },
+  { id: 'midnight_amoled', name: '🖤 Midnight AMOLED', color: '#e2e8f0', isPro: true },
+  { id: 'aurora_borealis', name: '🌌 Aurora Borealis', color: '#00f2fe', isPro: true },
+  { id: 'blood_moon', name: '🩸 Blood Moon', color: '#ff1744', isPro: true },
+  { id: 'tokyo_synth', name: '🌆 Tokyo Synthwave', color: '#f72585', isPro: true },
+  { id: 'royal_gold', name: '👑 Royal Gold Aura', color: '#f59e0b', isPro: true },
+  { id: 'nebula', name: '🔮 Cosmic Nebula', color: '#a855f7', isPro: true },
+  { id: 'cyber_glow', name: '⚡ Cyber Pulse', color: '#06b6d4', isPro: true },
   { id: 'emerald', name: '🌿 Emerald Pulse', color: '#10b981' },
   { id: 'neon', name: '⚡ Cyberpunk Neon', color: '#ec4899' },
   { id: 'sunset', name: '🌅 Sunset Rose', color: '#f43f5e' }
@@ -27,6 +35,7 @@ export default function SettingsModal({
   const [showBlockedModal, setShowBlockedModal] = useState(false);
   const [blockedList, setBlockedList] = useState([]);
   const [loadingBlocked, setLoadingBlocked] = useState(false);
+  const [showProModal, setShowProModal] = useState(false);
 
   const fetchBlockedList = async () => {
     if (!token) return;
@@ -336,29 +345,46 @@ export default function SettingsModal({
             </span>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {THEMES.map(t => (
-                <div
-                  key={t.id}
-                  onClick={() => changeTheme(t.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 12px',
-                    borderRadius: '10px',
-                    background: 'var(--bg-card)',
-                    border: theme === t.id ? '2px solid var(--accent)' : '1px solid var(--border)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: t.color, border: '2px solid rgba(255,255,255,0.2)' }} />
-                    <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-main)' }}>{t.name}</span>
+              {THEMES.map(t => {
+                const isUserProActive = Boolean(user?.isPro && user?.proExpiresAt && new Date(user.proExpiresAt) > new Date());
+                const isLocked = t.isPro && !isUserProActive;
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => {
+                      if (isLocked) {
+                        setShowProModal(true);
+                        return;
+                      }
+                      changeTheme(t.id);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      background: 'var(--bg-card)',
+                      border: theme === t.id ? '2px solid var(--accent)' : (t.isPro ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border)'),
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: t.color, border: '2px solid rgba(255,255,255,0.2)' }} />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {t.name}
+                        {t.isPro && <Crown size={12} color="#f59e0b" />}
+                      </span>
+                    </div>
+                    {theme === t.id ? (
+                      <Check size={16} color="var(--accent)" />
+                    ) : isLocked ? (
+                      <Lock size={14} color="#f59e0b" />
+                    ) : null}
                   </div>
-                  {theme === t.id && <Check size={16} color="var(--accent)" />}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -602,6 +628,13 @@ export default function SettingsModal({
           </div>
         )}
       </div>
+
+      {showProModal && (
+        <PulseProModal
+          initialTab="pro"
+          onClose={() => setShowProModal(false)}
+        />
+      )}
     </div>
   );
 }

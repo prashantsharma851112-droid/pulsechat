@@ -194,7 +194,7 @@ io.on('connection', (socket) => {
 
   // Send Real-Time Message (Fast parallel check & instant emission)
   socket.on('send_message', async (messageData, ackCallback) => {
-    const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, fileName, fileSize, pollData, giftData, callData, isViewOnce, replyTo, clientTempId } = messageData;
+    const { chatId, senderId, receiverId, isGroup, content, type, textStyle, audioUrl, mediaUrl, fileName, fileSize, pollData, giftData, callData, isViewOnce, replyTo, clientTempId } = messageData;
 
     try {
       // Parallelize block status and chat settings check
@@ -292,6 +292,7 @@ io.on('connection', (socket) => {
         isGroup: !!isGroup,
         content: content || '',
         type: type || 'text',
+        textStyle: textStyle || (type === '3d_text' ? 'cyber-neon' : null),
         audioUrl: finalAudioUrl,
         mediaUrl: finalMediaUrl,
         fileName: fileName || null,
@@ -339,7 +340,9 @@ io.on('connection', (socket) => {
 
             const bodyText = newMsg.type === 'text'
               ? (newMsg.content || 'New message')
-              : `Sent a ${newMsg.type}`;
+              : (newMsg.type === '3d_text'
+                  ? `✨ 3D Text: "${newMsg.content}"`
+                  : `Sent a ${newMsg.type}`);
             dispatchWebPush(receiverId, `💬 ${resolvedSenderName}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, false, resolvedSenderAvatar);
           } else if (isGroup) {
             const Group = require('./models/Group');
@@ -355,7 +358,9 @@ io.on('connection', (socket) => {
               };
               const bodyText = newMsg.type === 'text'
                 ? `${resolvedSenderName}: ${newMsg.content}`
-                : `${resolvedSenderName} sent a ${newMsg.type}`;
+                : (newMsg.type === '3d_text'
+                    ? `${resolvedSenderName} sent 3D text: "${newMsg.content}" ✨`
+                    : `${resolvedSenderName} sent a ${newMsg.type}`);
 
               group.members.forEach(memberId => {
                 if (memberId !== senderId) {

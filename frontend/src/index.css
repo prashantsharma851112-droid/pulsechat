@@ -155,6 +155,75 @@
   --border: #155e75;
 }
 
+/* --- NEW VIP PRO THEMES --- */
+[data-theme="midnight_amoled"],
+[data-chat-theme="midnight_amoled"] {
+  color-scheme: dark;
+  --bg-main: #000000;
+  --bg-sidebar: #050505;
+  --bg-chat: #000000;
+  --bg-card: #0d0d0d;
+  --hover-bg: #171717;
+  --text-main: #ffffff;
+  --text-muted: #8e8e93;
+  --accent: #e2e8f0;
+  --accent-hover: #ffffff;
+  --bubble-sent: #27272a;
+  --bubble-received: #121214;
+  --border: #222225;
+}
+
+[data-theme="aurora_borealis"],
+[data-chat-theme="aurora_borealis"] {
+  color-scheme: dark;
+  --bg-main: #02121c;
+  --bg-sidebar: #061c2a;
+  --bg-chat: #010c13;
+  --bg-card: #0a2638;
+  --hover-bg: #0f354d;
+  --text-main: #e6fffa;
+  --text-muted: #5eead4;
+  --accent: #00f2fe;
+  --accent-hover: #10b981;
+  --bubble-sent: #0f766e;
+  --bubble-received: #0a2638;
+  --border: #134e4a;
+}
+
+[data-theme="blood_moon"],
+[data-chat-theme="blood_moon"] {
+  color-scheme: dark;
+  --bg-main: #0d0205;
+  --bg-sidebar: #170409;
+  --bg-chat: #080103;
+  --bg-card: #260710;
+  --hover-bg: #380a18;
+  --text-main: #ffe4e6;
+  --text-muted: #fb7185;
+  --accent: #ff1744;
+  --accent-hover: #e11d48;
+  --bubble-sent: #9f1239;
+  --bubble-received: #260710;
+  --border: #4c0519;
+}
+
+[data-theme="tokyo_synth"],
+[data-chat-theme="tokyo_synth"] {
+  color-scheme: dark;
+  --bg-main: #0d061f;
+  --bg-sidebar: #150933;
+  --bg-chat: #080314;
+  --bg-card: #200e4a;
+  --hover-bg: #2d1366;
+  --text-main: #fdf4ff;
+  --text-muted: #f472b6;
+  --accent: #f72585;
+  --accent-hover: #b5179e;
+  --bubble-sent: #7209b7;
+  --bubble-received: #200e4a;
+  --border: #3f156d;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -1721,6 +1790,193 @@ input, textarea {
   0% { transform: translate(0, 0) scale(1.1); opacity: 1; }
   100% { transform: translate(-3px, -6px) scale(0.85); opacity: 0.5; }
 }
+
+/* ==========================================================================
+   HYPER-REALISTIC 3D ANIMATED TYPOGRAPHY STICKERS (VIP PRO FEATURE)
+   ========================================================================== */
+
+.animated-3d-text-container {
+  display: inline-flex;
+  flex-direction: column;
+  position: relative;
+  padding: 6px 10px;
+}
+
+.animated-3d-stage {
+  perspective: 750px;
+  perspective-origin: 50% 60%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.animated-3d-card {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+  animation: float3d 3.5s ease-in-out infinite alternate;
+  padding: 8px 16px 14px 16px;
+  cursor: default;
+  transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.animated-3d-card:hover {
+  transform: rotateX(6deg) rotateY(-4deg) translateY(-8px) scale(1.05);
+}
+
+@keyframes float3d {
+  0% {
+    transform: rotateX(12deg) rotateY(-8deg) translateY(0px);
+  }
+  50% {
+    transform: rotateX(7deg) rotateY(-3deg) translateY(-8px);
+  }
+  100% {
+    transform: rotateX(13deg) rotateY(-10deg) translateY(-2px);
+  }
+}
+
+.text-3d-content {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-size: 2.1rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  line-height: 1.15;
+  position: relative;
+  display: inline-block;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 320px;
+  text-align: center;
+}
+
+.text-3d-shadow {
+  width: 80%;
+  height: 12px;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0) 75%);
+  border-radius: 50%;
+  position: absolute;
+  bottom: 0px;
+  left: 10%;
+  filter: blur(4px);
+  animation: shadowScale3d 3.5s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes shadowScale3d {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(0.82);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.65;
+  }
+}
+
+/* 1. CYBER NEON */
+.text-3d-neon .text-3d-content {
+  color: #00f0ff;
+  text-shadow:
+    0 1px 0 #00b4d8,
+    0 2px 0 #0096c7,
+    0 3px 0 #0077b6,
+    0 4px 0 #023e8a,
+    0 5px 0 #03045e,
+    0 6px 1px rgba(0, 0, 0, 0.5),
+    0 0 16px rgba(0, 240, 255, 0.8),
+    0 0 35px rgba(255, 0, 127, 0.6);
+  animation: neonGlowPulse 2.5s ease-in-out infinite alternate;
+}
+
+@keyframes neonGlowPulse {
+  0% {
+    text-shadow:
+      0 1px 0 #00b4d8, 0 2px 0 #0096c7, 0 3px 0 #0077b6, 0 4px 0 #023e8a, 0 5px 0 #03045e,
+      0 6px 1px rgba(0, 0, 0, 0.5), 0 0 16px rgba(0, 240, 255, 0.8), 0 0 35px rgba(255, 0, 127, 0.6);
+  }
+  100% {
+    text-shadow:
+      0 1px 0 #00b4d8, 0 2px 0 #0096c7, 0 3px 0 #0077b6, 0 4px 0 #023e8a, 0 5px 0 #03045e,
+      0 6px 1px rgba(0, 0, 0, 0.5), 0 0 24px rgba(0, 240, 255, 1), 0 0 48px rgba(255, 0, 127, 0.85);
+  }
+}
+
+/* 2. GOLD DELUXE */
+.text-3d-gold .text-3d-content {
+  background: linear-gradient(180deg, #fffbeb 0%, #fef08a 25%, #f59e0b 55%, #b45309 85%, #78350f 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 0 #b45309)
+          drop-shadow(0 4px 0 #92400e)
+          drop-shadow(0 6px 2px rgba(0,0,0,0.6))
+          drop-shadow(0 0 18px rgba(245, 158, 11, 0.7));
+  animation: goldShimmer 3s ease-in-out infinite alternate;
+}
+
+@keyframes goldShimmer {
+  0% { filter: drop-shadow(0 2px 0 #b45309) drop-shadow(0 4px 0 #92400e) drop-shadow(0 6px 2px rgba(0,0,0,0.6)) drop-shadow(0 0 16px rgba(245, 158, 11, 0.6)); }
+  100% { filter: drop-shadow(0 2px 0 #b45309) drop-shadow(0 4px 0 #92400e) drop-shadow(0 6px 2px rgba(0,0,0,0.6)) drop-shadow(0 0 26px rgba(254, 240, 138, 0.9)); }
+}
+
+/* 3. FLAME INFERNO */
+.text-3d-flame .text-3d-content {
+  background: linear-gradient(180deg, #ffffff 0%, #fef08a 25%, #f97316 65%, #dc2626 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 0 #ea580c)
+          drop-shadow(0 4px 0 #c2410c)
+          drop-shadow(0 6px 2px rgba(0,0,0,0.6))
+          drop-shadow(0 0 20px rgba(249, 115, 22, 0.85));
+  animation: flameHeat 0.35s ease-in-out infinite alternate;
+}
+
+@keyframes flameHeat {
+  0% { transform: scale(0.99) skewX(-1deg); }
+  100% { transform: scale(1.02) skewX(1deg); }
+}
+
+/* 4. COSMIC NEBULA */
+.text-3d-cosmic .text-3d-content {
+  background: linear-gradient(180deg, #ffffff 0%, #e9d5ff 25%, #c084fc 60%, #9333ea 90%, #581c87 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 0 #9333ea)
+          drop-shadow(0 4px 0 #7e22ce)
+          drop-shadow(0 6px 2px rgba(0,0,0,0.6))
+          drop-shadow(0 0 22px rgba(168, 85, 247, 0.85));
+}
+
+/* 5. DIAMOND CRYSTAL */
+.text-3d-diamond .text-3d-content {
+  background: linear-gradient(180deg, #ffffff 0%, #e0f2fe 30%, #7dd3fc 65%, #0284c7 95%, #0369a1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 0 #38bdf8)
+          drop-shadow(0 4px 0 #0284c7)
+          drop-shadow(0 6px 2px rgba(0,0,0,0.5))
+          drop-shadow(0 0 18px rgba(56, 189, 248, 0.8));
+}
+
+/* 6. BUBBLE CANDY */
+.text-3d-candy .text-3d-content {
+  background: linear-gradient(180deg, #ffffff 0%, #fbcfe8 25%, #f472b6 60%, #db2777 90%, #9d174d 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 0 #db2777)
+          drop-shadow(0 4px 0 #be185d)
+          drop-shadow(0 6px 2px rgba(0,0,0,0.4))
+          drop-shadow(0 0 18px rgba(244, 114, 182, 0.7));
+}
+
 
 
 

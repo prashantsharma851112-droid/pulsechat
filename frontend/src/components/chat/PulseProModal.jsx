@@ -46,9 +46,116 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
     });
   };
 
+  const now = new Date();
+  const isUserPro = Boolean(user?.isPro && user?.proExpiresAt && new Date(user.proExpiresAt) > now);
+  const activeTier = isUserPro ? user?.proTier : null;
+  const expiryDateFormatted = user?.proExpiresAt
+    ? new Date(user.proExpiresAt).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      })
+    : null;
+
+  const initiateRazorpay = async (planId) => {
+    setLoading(true);
+    setStatusMsg({ type: '', text: '' });
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/payments/create-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ planId })
+      });
+      const orderData = await res.json();
+      if (!res.ok || orderData.error) {
+        throw new Error(orderData.error || 'Failed to create payment order');
+      }
+
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        throw new Error('Payment gateway load nahi ho paya. Kripya apna internet connection check karein.');
+      }
+
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: 'PulseChat',
+        description: planId === 'pro_yearly' ? 'Annual VIP Membership (1 Year)' : 'Pulse Sparks Pack',
+        order_id: orderData.orderId,
+        handler: async (response) => {
+          await verifyPayment(response, planId, orderData.isSandbox);
+        },
+        prefill: {
+          name: user?.name || '',
+          email: user?.email || '',
+          contact: user?.phone || ''
+        },
+        theme: {
+          color: '#10b981'
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', (response) => {
+        setStatusMsg({ type: 'error', text: response.error?.description || 'Payment cancelled or failed' });
+        setLoading(false);
+      });
+      rzp.open();
+    } catch (err) {
+      setStatusMsg({ type: 'error', text: err.message });
+      setLoading(false);
+    }
+  };
+
   const handleCheckout = async (planId) => {
-    // Online payment integration is pending, activate 100% FREE!
-    await executeDemoActivation(planId);
+    if (planId === 'pro_monthly') {
+      if (isUserPro && activeTier === 'monthly') {
+        setStatusMsg({
+          type: 'error',
+          text: `Aapka Monthly VIP plan pehle se active hai (${expiryDateFormatted} tak). Expire hone se pehle dubara nahi liya ja sakta.`
+        });
+        return;
+      }
+      if (isUserPro && activeTier === 'yearly') {
+        setStatusMsg({
+          type: 'error',
+          text: `Aapka Annual VIP plan pehle se active hai (${expiryDateFormatted} tak).`
+        });
+        return;
+      }
+      await executeDemoActivation(planId);
+      return;
+    }
+
+    if (planId === 'pro_yearly') {
+      if (isUserPro && activeTier === 'yearly') {
+        setStatusMsg({
+          type: 'error',
+          text: `Aapka Annual VIP plan pehle se active hai (${expiryDateFormatted} tak). Expire hone se pehle dubara nahi liya ja sakta.`
+        });
+        return;
+      }
+      if (!razorpayConfig.isLive) {
+        setStatusMsg({
+          type: 'error',
+          text: 'Annual VIP (₹499/year) ke liye online payment gateway integrate ho raha hai. Abhi ke liye aap Monthly VIP 100% FREE le sakte hain!'
+        });
+        return;
+      }
+      await initiateRazorpay(planId);
+      return;
+    }
+
+    // Sparks Pack
+    if (razorpayConfig.isLive) {
+      await initiateRazorpay(planId);
+    } else {
+      await executeDemoActivation(planId);
+    }
   };
 
   const verifyPayment = async (razorpayResponse, planId, isSandbox) => {
@@ -100,7 +207,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
         updateUserProfile(data.user);
         setStatusMsg({
           type: 'success',
-          text: planId.startsWith('pro') ? '🎉 Pulse VIP Activated for 100% FREE! Enjoy VIP perks!' : '⚡ Pulse Sparks Credited for FREE!'
+          text: planId.startsWith('pro') ? '🎉 Monthly VIP Activated for 100% FREE! Enjoy VIP perks!' : '⚡ Pulse Sparks Credited for FREE!'
         });
         setTimeout(() => {
           onClose();
@@ -115,7 +222,6 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
     }
   };
 
-  const isUserPro = Boolean(user?.isPro);
   const currentSparks = user?.pulseSparks ?? 50;
 
   return (
@@ -366,25 +472,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                 </div>
               </div>
 
-              {/* Free Access Notice Banner */}
-              <div style={{
-                background: 'rgba(16, 185, 129, 0.12)',
-                border: '1px solid rgba(16, 185, 129, 0.35)',
-                borderRadius: '14px',
-                padding: '10px 14px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                color: '#10b981',
-                fontSize: '0.82rem'
-              }}>
-                <Sparkles size={18} style={{ flexShrink: 0 }} />
-                <div>
-                  <strong>Limited Time Free Access</strong>: Online payment abhi integrate nahi hua hai, isliye VIP membership abhi sabhi users ke liye <strong>100% FREE</strong> hai!
-                </div>
-              </div>
-
-              {/* Pricing Cards Selector with Strikethrough & FREE */}
+              {/* Pricing Cards Selector */}
               <div style={{ display: 'flex', gap: '10px' }}>
                 <div
                   onClick={() => setBillingCycle('monthly')}
@@ -404,21 +492,23 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                     position: 'absolute',
                     top: '-9px',
                     right: '12px',
-                    background: '#10b981',
+                    background: activeTier === 'monthly' ? '#3b82f6' : '#10b981',
                     color: '#fff',
                     fontSize: '0.65rem',
                     fontWeight: 800,
                     padding: '1px 8px',
                     borderRadius: '10px'
                   }}>
-                    100% FREE
+                    {activeTier === 'monthly' ? '✓ ACTIVE' : '100% FREE'}
                   </span>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Monthly VIP</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', margin: '4px 0' }}>
                     <span style={{ fontSize: '1.15rem', textDecoration: 'line-through', opacity: 0.5, color: 'var(--text-muted)' }}>₹49</span>
                     <span style={{ fontSize: '1.45rem', fontWeight: 900, color: '#10b981' }}>FREE</span>
                   </div>
-                  <div style={{ fontSize: '0.74rem', color: '#10b981', fontWeight: 600 }}>Free Beta Access (₹0)</div>
+                  <div style={{ fontSize: '0.74rem', color: activeTier === 'monthly' ? 'var(--text-main)' : '#10b981', fontWeight: 600 }}>
+                    {activeTier === 'monthly' ? `Expires ${expiryDateFormatted}` : 'Free Beta Access (₹0)'}
+                  </div>
                 </div>
 
                 <div
@@ -439,68 +529,135 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                     position: 'absolute',
                     top: '-9px',
                     right: '12px',
-                    background: '#f59e0b',
-                    color: '#000',
+                    background: activeTier === 'yearly' ? '#10b981' : '#f59e0b',
+                    color: activeTier === 'yearly' ? '#fff' : '#000',
                     fontSize: '0.65rem',
                     fontWeight: 800,
                     padding: '1px 8px',
                     borderRadius: '10px'
                   }}>
-                    100% FREE
+                    {activeTier === 'yearly' ? '✓ ACTIVE' : 'SAVE 16%'}
                   </span>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Annual VIP</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', margin: '4px 0' }}>
-                    <span style={{ fontSize: '1.15rem', textDecoration: 'line-through', opacity: 0.5, color: 'var(--text-muted)' }}>₹499</span>
-                    <span style={{ fontSize: '1.45rem', fontWeight: 900, color: '#10b981' }}>FREE</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', margin: '4px 0' }}>
+                    <span style={{ fontSize: '1.45rem', fontWeight: 900, color: 'var(--text-main)' }}>₹499</span>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>/ year</span>
                   </div>
-                  <div style={{ fontSize: '0.74rem', color: '#10b981', fontWeight: 600 }}>Full 1 Year Free (₹0)</div>
+                  <div style={{ fontSize: '0.74rem', color: activeTier === 'yearly' ? '#10b981' : 'var(--text-muted)', fontWeight: 600 }}>
+                    {activeTier === 'yearly' ? `Expires ${expiryDateFormatted}` : '12 Months Full VIP Access'}
+                  </div>
                 </div>
               </div>
 
               {/* Action Buttons */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => handleCheckout(billingCycle === 'monthly' ? 'pro_monthly' : 'pro_yearly')}
-                  className="btn-primary"
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: '16px',
-                    fontWeight: 800,
-                    fontSize: '0.96rem',
-                    background: 'linear-gradient(90deg, #10b981 0%, #6366f1 100%)',
-                    boxShadow: '0 4px 18px rgba(16, 185, 129, 0.35)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    border: 'none',
-                    cursor: loading ? 'not-allowed' : 'pointer'
-                  }}
-                >
-                  {loading ? <Loader2 size={18} className="spin" /> : <Zap size={18} fill="#fff" />}
-                  {(() => {
-                    const isMonthly = user?.proTier === 'monthly';
-                    const isYearly = user?.proTier === 'yearly';
-
-                    if (!isUserPro) {
-                      return billingCycle === 'monthly' ? '⚡ Activate Monthly VIP — 100% FREE' : '⚡ Activate Annual VIP — 100% FREE';
-                    }
-
-                    if (billingCycle === 'yearly' && isMonthly) {
-                      return '🚀 Upgrade to Annual VIP — 100% FREE';
-                    }
-                    if (billingCycle === 'yearly' && isYearly) {
-                      return '🔄 Extend Annual VIP for 1 Year — 100% FREE';
-                    }
-                    if (billingCycle === 'monthly' && isMonthly) {
-                      return '🔄 Extend Monthly VIP for 1 Month — 100% FREE';
-                    }
-                    return '⚡ Extend VIP Membership — 100% FREE';
-                  })()}
-                </button>
+                {billingCycle === 'monthly' && activeTier === 'monthly' ? (
+                  <button
+                    type="button"
+                    disabled={true}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: '16px',
+                      fontWeight: 800,
+                      fontSize: '0.92rem',
+                      background: 'rgba(16, 185, 129, 0.12)',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      color: '#10b981',
+                      cursor: 'not-allowed',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <Check size={18} />
+                    Monthly VIP Already Active (Expires {expiryDateFormatted})
+                  </button>
+                ) : billingCycle === 'monthly' && activeTier === 'yearly' ? (
+                  <button
+                    type="button"
+                    disabled={true}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: '16px',
+                      fontWeight: 800,
+                      fontSize: '0.92rem',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      color: 'var(--text-muted)',
+                      cursor: 'not-allowed',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <Check size={18} color="#10b981" />
+                    Higher Tier (Annual VIP) Active (Expires {expiryDateFormatted})
+                  </button>
+                ) : billingCycle === 'yearly' && activeTier === 'yearly' ? (
+                  <button
+                    type="button"
+                    disabled={true}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: '16px',
+                      fontWeight: 800,
+                      fontSize: '0.92rem',
+                      background: 'rgba(245, 158, 11, 0.12)',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      color: '#f59e0b',
+                      cursor: 'not-allowed',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <Check size={18} />
+                    Annual VIP Already Active (Expires {expiryDateFormatted})
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => handleCheckout(billingCycle === 'monthly' ? 'pro_monthly' : 'pro_yearly')}
+                    className="btn-primary"
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: '16px',
+                      fontWeight: 800,
+                      fontSize: '0.96rem',
+                      background: billingCycle === 'monthly'
+                        ? 'linear-gradient(90deg, #10b981 0%, #6366f1 100%)'
+                        : 'linear-gradient(90deg, #f59e0b 0%, #ef4444 100%)',
+                      boxShadow: billingCycle === 'monthly'
+                        ? '0 4px 18px rgba(16, 185, 129, 0.35)'
+                        : '0 4px 18px rgba(245, 158, 11, 0.35)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      border: 'none',
+                      cursor: loading ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {loading ? (
+                      <Loader2 size={18} className="spin" />
+                    ) : billingCycle === 'monthly' ? (
+                      <Zap size={18} fill="#fff" />
+                    ) : (
+                      <Crown size={18} fill="#fff" />
+                    )}
+                    {billingCycle === 'monthly'
+                      ? '⚡ Activate Monthly VIP — 100% FREE'
+                      : '👑 Get Annual VIP — ₹499/year'}
+                  </button>
+                )}
               </div>
             </div>
           ) : (

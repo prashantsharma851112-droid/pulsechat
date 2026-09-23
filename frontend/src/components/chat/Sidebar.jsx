@@ -307,12 +307,17 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
           const mapped = data.map(item => {
             const fresh = uMap.get(item.id) || (item.username ? uMap.get(item.username) : null);
-            let res = item;
-            if (fresh && fresh.avatar) {
-              res = { ...res, avatar: fresh.avatar, displayName: fresh.displayName || res.displayName };
+            let res = { ...item };
+            if (!res.avatar && fresh?.avatar) {
+              res.avatar = fresh.avatar;
+            }
+            if (fresh?.isPro && !res.isPro) {
+              res.isPro = fresh.isPro;
+              res.proTier = fresh.proTier;
+              res.customBadge = fresh.customBadge;
             }
             if (activeChatRef.current && res.id === activeChatRef.current.id) {
-              res = { ...res, unreadCount: 0 };
+              res.unreadCount = 0;
             }
             return res;
           });
@@ -439,7 +444,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
       const contentSnippet = msg.type === 'text'
         ? (msg.content || '')
-        : (msg.type === 'image' ? '📷 Photo'
+        : (msg.type === '3d_text' ? `✨ 3D: ${msg.content}`
+        : msg.type === 'image' ? '📷 Photo'
         : msg.type === 'video' ? '🎥 Video'
         : msg.type === 'audio' || msg.type === 'voice' ? '🎤 Voice message'
         : msg.type === 'gift' ? '🎁 Gift'
@@ -463,16 +469,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             targetChat = foundGroup ? { ...foundGroup, isGroup: true } : {
               id: msg.chatId || targetId,
               name: msg.groupName || 'Group',
-              avatar: msg.senderAvatar || null,
+              avatar: foundGroup?.avatar || null,
               isGroup: true
             };
           } else {
-            const foundUser = (allUsersRef.current || []).find(u => u.id === targetId);
+            const foundUser = (allUsersRef.current || []).find(u => u.id === targetId || u.username === targetId);
             targetChat = foundUser ? { ...foundUser, isGroup: false } : {
               id: targetId,
-              displayName: msg.senderName || 'PulseChat User',
+              displayName: (!isMyMsg && msg.senderName) ? msg.senderName : 'PulseChat User',
               username: targetId,
-              avatar: msg.senderAvatar || null,
+              avatar: (!isMyMsg && msg.senderAvatar) ? msg.senderAvatar : null,
               isGroup: false
             };
           }
@@ -764,11 +770,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             title="Click to view full photo"
           >
             <img
-              src={user?.avatar}
+              src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.username || 'Pulse')}`}
               alt="Profile"
               className="user-avatar"
               onError={(e) => {
-                e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user?.username || 'Pulse')}`;
+                e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.username || 'Pulse')}`;
               }}
               style={{
                 width: '44px',
@@ -1476,12 +1482,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     style={{ position: 'relative', flexShrink: 0 }}
                   >
                     <img
-                      src={u.avatar}
+                      src={u.avatar || (u.isGroup
+                        ? `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(u.name || 'Group')}`
+                        : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`)}
                       alt="Avatar"
                       onError={(e) => {
                         e.target.src = u.isGroup
                           ? `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(u.name || 'Group')}`
-                          : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
+                          : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
                       }}
                       style={{ width: '48px', height: '48px', borderRadius: u.isGroup ? '14px' : '50%', objectFit: 'cover' }}
                     />
@@ -1611,14 +1619,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                       style={{ position: 'relative', flexShrink: 0 }}
                     >
                       <img
-                        src={u.avatar}
+                        src={u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`}
                         alt="Avatar"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (onOpenFullDp) onOpenFullDp(u.avatar, u.displayName, u.username);
                         }}
                         onError={(e) => {
-                          e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
+                          e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
                         }}
                         style={{ width: '48px', height: '48px', borderRadius: '50%', cursor: 'pointer', objectFit: 'cover' }}
                         title="Click to view full screen DP"
@@ -1671,14 +1679,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                       style={{ position: 'relative', flexShrink: 0 }}
                     >
                       <img
-                        src={u.avatar}
+                        src={u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`}
                         alt="Avatar"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (onOpenFullDp) onOpenFullDp(u.avatar, u.displayName, u.username);
                         }}
                         onError={(e) => {
-                          e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
+                          e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
                         }}
                         style={{ width: '48px', height: '48px', borderRadius: '50%', cursor: 'pointer', objectFit: 'cover' }}
                         title="Click to view full screen DP"

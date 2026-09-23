@@ -73,7 +73,9 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
   });
 
   const snippet = {
-    lastMessage: message.content || (message.type === 'voice' ? '🎤 Voice note' : 'Sent a file'),
+    lastMessage: message.type === '3d_text'
+      ? `✨ 3D: ${message.content}`
+      : (message.content || (message.type === 'voice' ? '🎤 Voice note' : 'Sent a file')),
     lastMessageTime: message.timestamp || new Date().toISOString(),
     lastMessageType: message.type || 'text'
   };

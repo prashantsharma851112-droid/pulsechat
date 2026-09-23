@@ -13,6 +13,7 @@ import MediaUploadModal from './MediaUploadModal';
 import ChatThemeModal from './ChatThemeModal';
 import PulseProModal from './PulseProModal';
 import GiftPickerModal from './GiftPickerModal';
+import Animated3DTextModal from './Animated3DTextModal';
 import PulseVipBadge from '../common/PulseVipBadge';
 import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
@@ -158,6 +159,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [showGroupProfileModal, setShowGroupProfileModal] = useState(false);
   const [showProModal, setShowProModal] = useState(false);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
+  const [show3DTextModal, setShow3DTextModal] = useState(false);
   const [proModalTab, setProModalTab] = useState('pro');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [pendingMedia, setPendingMedia] = useState(null);
@@ -866,6 +868,65 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     playSound('sent');
   };
 
+  const handleSend3DText = (textContent, styleType) => {
+    if (!textContent || !textContent.trim()) return;
+
+    const trimmed = textContent.trim();
+    const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    const isOnlineNow = isDeviceOnline() && socket?.connected;
+
+    const pendingMsg = {
+      id: tempId,
+      clientTempId: tempId,
+      chatId,
+      senderId: user.id,
+      receiverId: isGroup ? '' : activeChat.id,
+      isGroup,
+      content: trimmed,
+      type: '3d_text',
+      textStyle: styleType || 'cyber-neon',
+      status: isOnlineNow ? 'sent' : 'pending',
+      timestamp: new Date().toISOString(),
+      reactions: {},
+      viewedBy: [],
+      replyTo: replyTo ? {
+        id: replyTo.id,
+        content: replyTo.content,
+        type: replyTo.type,
+        senderId: replyTo.senderId,
+        senderName: replyTo.senderName || replyTo.senderId
+      } : null
+    };
+
+    setMessages(prev => [...prev, pendingMsg]);
+    appendCachedMessage(chatId, pendingMsg);
+
+    updateRecentChatSnippet(user.id, chatId, pendingMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
+    window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+
+    if (!isOnlineNow) {
+      addToOutbox(user.id, pendingMsg);
+      setReplyTo(null);
+      playSound('sent');
+      return;
+    }
+
+    socket.emit('send_message', {
+      chatId,
+      senderId: user.id,
+      receiverId: isGroup ? '' : activeChat.id,
+      isGroup,
+      content: trimmed,
+      type: '3d_text',
+      textStyle: styleType || 'cyber-neon',
+      clientTempId: tempId,
+      replyTo: pendingMsg.replyTo
+    });
+
+    setReplyTo(null);
+    playSound('sent');
+  };
+
   const handleSendText = (e, forceInstant = false) => {
     e?.preventDefault();
     if (!text.trim()) return;
@@ -1094,7 +1155,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 onError={(e) => {
                   e.target.src = isGroup
                     ? `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(chatDisplayName || activeChat.name || 'Group')}`
-                    : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(activeChat.username || chatDisplayName || 'User')}`;
+                    : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(activeChat.username || chatDisplayName || 'User')}`;
                 }}
                 style={{
                   width: '42px',
@@ -1719,6 +1780,22 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               <button onClick={() => setShowEmoji(!showEmoji)} className="icon-btn-ghost" title="Add Emoji"><Smile size={20} /></button>
               <button onClick={() => setShowCreatePoll(true)} className="icon-btn-ghost" title="Create Poll"><BarChart2 size={20} /></button>
               <button onClick={() => setShowGiftPicker(true)} className="icon-btn-ghost" title="Beam Virtual Gift (Pulse Sparks)"><span style={{ fontSize: '1.2rem' }}>🎁</span></button>
+              <button
+                onClick={() => setShow3DTextModal(true)}
+                className="icon-btn-ghost"
+                title="3D Animated Typography (VIP Pro)"
+                style={{ position: 'relative' }}
+              >
+                <span style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 900,
+                  background: 'linear-gradient(135deg, #06b6d4, #a855f7)',
+                  color: '#fff',
+                  padding: '2px 5px',
+                  borderRadius: '6px',
+                  letterSpacing: '0.04em'
+                }}>3D</span>
+              </button>
               <button onClick={() => setShowRecorder(true)} className="icon-btn-ghost" title="Voice Note"><Mic size={20} /></button>
             </>
           )}
@@ -1825,6 +1902,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         <PulseProModal
           initialTab={proModalTab}
           onClose={() => setShowProModal(false)}
+        />
+      )}
+
+      {show3DTextModal && (
+        <Animated3DTextModal
+          onClose={() => setShow3DTextModal(false)}
+          onSend3D={handleSend3DText}
         />
       )}
     </div>

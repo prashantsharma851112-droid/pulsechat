@@ -53,6 +53,46 @@ const THEMES = [
     isPro: true
   },
   {
+    id: 'midnight_amoled',
+    name: 'Midnight AMOLED',
+    category: 'VIP Exclusive',
+    bg: '#000000',
+    card: '#0d0d0d',
+    accent: '#e2e8f0',
+    tag: '⚡ VIP Pure OLED',
+    isPro: true
+  },
+  {
+    id: 'aurora_borealis',
+    name: 'Aurora Borealis',
+    category: 'VIP Exclusive',
+    bg: '#02121c',
+    card: '#0a2638',
+    accent: '#00f2fe',
+    tag: '⚡ VIP Polar Lights',
+    isPro: true
+  },
+  {
+    id: 'blood_moon',
+    name: 'Blood Moon',
+    category: 'VIP Exclusive',
+    bg: '#0d0205',
+    card: '#260710',
+    accent: '#ff1744',
+    tag: '⚡ VIP Crimson Abyss',
+    isPro: true
+  },
+  {
+    id: 'tokyo_synth',
+    name: 'Tokyo Synthwave',
+    category: 'VIP Exclusive',
+    bg: '#0d061f',
+    card: '#200e4a',
+    accent: '#f72585',
+    tag: '⚡ VIP Neon 80s',
+    isPro: true
+  },
+  {
     id: 'ocean',
     name: 'Deep Ocean',
     category: 'Cool & Vibrant',
@@ -94,7 +134,7 @@ export default function ChatThemeModal({ currentTheme, onSelectTheme, onClose })
   const { user } = useContext(AuthContext);
   const [showProModal, setShowProModal] = useState(false);
 
-  const isUserPro = Boolean(user?.isPro);
+  const isUserPro = Boolean(user?.isPro && user?.proExpiresAt && new Date(user.proExpiresAt) > new Date());
 
   const handleSelectTheme = (theme) => {
     if (theme.isPro && !isUserPro) {
