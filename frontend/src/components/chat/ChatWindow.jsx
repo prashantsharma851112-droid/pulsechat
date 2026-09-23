@@ -31,7 +31,8 @@ import {
   isCachedFriend,
   isDeviceOnline,
   subscribeToNetworkChanges,
-  updateGroupInStorage
+  updateGroupInStorage,
+  clearUnreadCount
 } from '../../utils/offlineStorage';
 
 export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGroupCall, onOpenFullDp }) {
@@ -355,6 +356,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               setGroupMembersMap(map);
             }
           });
+      }
+
+      // Zero out unread count immediately in cache and notify other components (0ms)
+      if (user?.id && activeChat?.id) {
+        clearUnreadCount(user.id, activeChat.id);
+        if (chatId) clearUnreadCount(user.id, chatId);
+        window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+      }
+
+      // Explicitly mark read via REST endpoint to guarantee DB update
+      if (token && chatId) {
+        fetch(`${BACKEND_URL}/api/messages/${chatId}/read`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => {});
       }
 
       if (socket) {
@@ -1158,7 +1174,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flex: 1, minWidth: 0 }}>
             {onBack && (
-              <button className="chat-back-btn icon-btn-ghost" onClick={onBack} title="Back to Home / Chats">
+              <button
+                className="chat-back-btn icon-btn-ghost"
+                onClick={() => {
+                  if (user?.id && activeChat?.id) {
+                    clearUnreadCount(user.id, activeChat.id);
+                    if (chatId) clearUnreadCount(user.id, chatId);
+                    window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+                  }
+                  if (onBack) onBack();
+                }}
+                title="Back to Home / Chats"
+              >
                 <ArrowLeft size={22} />
               </button>
             )}

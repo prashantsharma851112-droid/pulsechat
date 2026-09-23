@@ -21,7 +21,8 @@ import {
   setCachedFriends,
   mergeIntoAllUsersCache,
   isDeviceOnline,
-  subscribeToNetworkChanges
+  subscribeToNetworkChanges,
+  clearUnreadCount
 } from '../../utils/offlineStorage';
 import { parseSafeJson } from '../../utils/imageCompressor';
 
@@ -316,8 +317,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               res.proTier = fresh.proTier;
               res.customBadge = fresh.customBadge;
             }
-            if (activeChatRef.current && res.id === activeChatRef.current.id) {
+            if (activeChatRef.current && (res.id === activeChatRef.current.id || (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username))) {
               res.unreadCount = 0;
+            } else if (user?.id) {
+              const cachedList = getCachedRecentChats(user.id) || [];
+              const cachedMatch = cachedList.find(c => c.id === res.id || (res.username && c.username === res.username));
+              if (cachedMatch && cachedMatch.unreadCount === 0 && res.unreadCount > 0) {
+                res.unreadCount = 0;
+              }
             }
             return res;
           });
@@ -427,10 +434,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   }, [user?.id]);
 
   useEffect(() => {
-    if (activeChat) {
-      setRecentChats(prev => prev.map(u => u.id === activeChat.id ? { ...u, unreadCount: 0 } : u));
+    if (activeChat && user?.id) {
+      clearUnreadCount(user.id, activeChat.id);
+      setRecentChats(prev => prev.map(u => (
+        u.id === activeChat.id ||
+        (u.username && activeChat.username && u.username === activeChat.username) ||
+        (activeChat.chatId && activeChat.chatId.includes(u.id))
+      ) ? { ...u, unreadCount: 0 } : u));
     }
-  }, [activeChat]);
+  }, [activeChat, user?.id]);
 
   useEffect(() => {
     if (!socket) return;
@@ -535,10 +547,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     });
 
     // Instant local read update (0ms, no network roundtrip needed)
-    const handleChatRead = ({ chatId, userId }) => {
-      if (userId === user?.id) {
+    const handleChatRead = ({ chatId: cId, userId }) => {
+      if (userId === user?.id && user?.id) {
+        clearUnreadCount(user.id, cId);
         setRecentChats(prev => prev.map(c => {
-          if (c.id === chatId || (chatId && chatId.includes(c.id))) {
+          if (c.id === cId || (cId && typeof cId === 'string' && (cId.includes(c.id) || (c.username && cId.includes(c.username))))) {
             return { ...c, unreadCount: 0 };
           }
           return c;
@@ -721,12 +734,23 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   }, [searchQuery, token, user?.id]);
 
   const handleSelectUser = (selectedUser) => {
+    if (selectedUser?.id && user?.id) {
+      clearUnreadCount(user.id, selectedUser.id);
+      setRecentChats(prev => prev.map(c => (
+        c.id === selectedUser.id ||
+        (c.username && selectedUser.username && c.username === selectedUser.username)
+      ) ? { ...c, unreadCount: 0 } : c));
+    }
     setActiveChat(selectedUser);
     setSearchQuery('');
     setSearchResults([]);
   };
 
   const handleSelectGroup = (group) => {
+    if (group?.id && user?.id) {
+      clearUnreadCount(user.id, group.id);
+      setRecentChats(prev => prev.map(c => c.id === group.id ? { ...c, unreadCount: 0 } : c));
+    }
     setActiveChat({
       ...group,
       isGroup: true,

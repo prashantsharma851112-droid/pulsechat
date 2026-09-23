@@ -16,7 +16,7 @@ import PandaHero from './components/common/PandaHero';
 import FullDpModal from './components/common/FullDpModal';
 import Toast from './components/common/Toast';
 import { BACKEND_URL } from './utils/config';
-import { updateUserProfileInStorage } from './utils/offlineStorage';
+import { updateUserProfileInStorage, clearUnreadCount } from './utils/offlineStorage';
 import { Zap, AlertTriangle } from 'lucide-react';
 
 class ErrorBoundary extends React.Component {
@@ -168,14 +168,22 @@ export default function App() {
   }, []);
 
   // Handle Browser Back Button & ESC Key for WhatsApp-style navigation
+  const handleCloseChat = useCallback(() => {
+    if (activeChatRef.current?.id && user?.id) {
+      clearUnreadCount(user.id, activeChatRef.current.id);
+      window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+    }
+    setActiveChat(null);
+  }, [user?.id]);
+
   useEffect(() => {
     const handlePopState = () => {
-      setActiveChat(null);
+      handleCloseChat();
     };
 
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && activeChatRef.current) {
-        setActiveChat(null);
+        handleCloseChat();
       }
     };
 
@@ -186,9 +194,13 @@ export default function App() {
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [handleCloseChat]);
 
   const handleSelectActiveChat = (chat) => {
+    if (chat?.id && user?.id) {
+      clearUnreadCount(user.id, chat.id);
+      window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+    }
     setActiveChat(chat);
     if (chat) {
       window.history.pushState({ chatOpen: true }, '');
@@ -455,7 +467,7 @@ export default function App() {
         activeChat ? (
           <ChatWindow
             activeChat={activeChat}
-            onBack={() => setActiveChat(null)}
+            onBack={handleCloseChat}
             onStartCall={(isVideo, targetMember) => setActiveCall({
               targetUser: targetMember || activeChat,
               isVideo,
@@ -492,7 +504,7 @@ export default function App() {
           {activeChat ? (
             <ChatWindow
               activeChat={activeChat}
-              onBack={() => setActiveChat(null)}
+              onBack={handleCloseChat}
               onStartCall={(isVideo, targetMember) => setActiveCall({
                 targetUser: targetMember || activeChat,
                 isVideo,

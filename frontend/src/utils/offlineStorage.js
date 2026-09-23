@@ -101,6 +101,35 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
   }
 }
 
+// Clear unread count for a specific contact or group across cached recent chats
+export function clearUnreadCount(userId, targetIdOrChatId) {
+  if (!userId || !targetIdOrChatId) return [];
+  const recent = getCachedRecentChats(userId);
+  if (!recent || recent.length === 0) return [];
+
+  let changed = false;
+  const updated = recent.map(c => {
+    const isMatch =
+      c.id === targetIdOrChatId ||
+      c._id === targetIdOrChatId ||
+      c.username === targetIdOrChatId ||
+      (typeof targetIdOrChatId === 'string' && (
+        targetIdOrChatId.includes(c.id) ||
+        (c.username && targetIdOrChatId.includes(c.username))
+      ));
+    if (isMatch && (c.unreadCount || 0) > 0) {
+      changed = true;
+      return { ...c, unreadCount: 0 };
+    }
+    return c;
+  });
+
+  if (changed) {
+    setCachedRecentChats(userId, updated);
+  }
+  return updated;
+}
+
 // Groups Cache (per user)
 export function getCachedGroups(userId) {
   if (typeof window === 'undefined' || !userId) return [];

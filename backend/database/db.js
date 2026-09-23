@@ -51,11 +51,56 @@ module.exports = {
     return updated;
   },
 
-  markChatAsRead: async (chatId, userId) => {
-    await Message.updateMany(
-      { chatId, receiverId: userId, status: { $ne: 'read' } },
-      { status: 'read' }
-    );
+  markChatAsRead: async (chatOrContactId, userId, isGhostMode = false) => {
+    if (!chatOrContactId || !userId) return;
+
+    let myVariants = [userId];
+    try {
+      const mongoose = require('mongoose');
+      const me = await User.findOne({
+        $or: [
+          { id: userId },
+          { username: userId },
+          ...(mongoose.Types.ObjectId.isValid(userId) ? [{ _id: userId }] : [])
+        ]
+      }).select('id username _id').lean();
+      if (me) {
+        if (me.id) myVariants.push(me.id);
+        if (me.username) myVariants.push(me.username);
+        if (me._id) myVariants.push(me._id.toString());
+      }
+    } catch (e) {}
+    myVariants = Array.from(new Set(myVariants.filter(Boolean)));
+
+    const chatConditions = [{ chatId: chatOrContactId }];
+    if (typeof chatOrContactId === 'string' && chatOrContactId.includes('_')) {
+      const parts = chatOrContactId.split('_');
+      const otherId = parts.find(id => !myVariants.includes(id)) || parts[0];
+      chatConditions.push(
+        { senderId: otherId, receiverId: { $in: myVariants } },
+        { chatId: [userId, otherId].sort().join('_') }
+      );
+    } else if (typeof chatOrContactId === 'string') {
+      chatConditions.push(
+        { chatId: [userId, chatOrContactId].sort().join('_') },
+        { senderId: chatOrContactId, receiverId: { $in: myVariants } }
+      );
+    }
+
+    const filter = {
+      $or: chatConditions,
+      senderId: { $nin: myVariants }
+    };
+
+    const updateDoc = {
+      $addToSet: { readBy: { $each: myVariants } }
+    };
+
+    if (!isGhostMode) {
+      updateDoc.$set = { status: 'read' };
+    }
+
+    await Message.updateMany(filter, updateDoc);
   },
 
   toggleReaction: async (messageId, emoji, userId) => {
@@ -188,10 +233,30 @@ module.exports = {
   // and an unread count. Optimized with parallel index scans for 0ms latency.
   getRecentConversations: async (myId) => {
     try {
+      const mongoose = require('mongoose');
+
+      // Resolve all ID representations for myId
+      let myVariants = [myId];
+      try {
+        const me = await User.findOne({
+          $or: [
+            { id: myId },
+            { username: myId },
+            ...(mongoose.Types.ObjectId.isValid(myId) ? [{ _id: myId }] : [])
+          ]
+        }).select('id username _id').lean();
+        if (me) {
+          if (me.id) myVariants.push(me.id);
+          if (me.username) myVariants.push(me.username);
+          if (me._id) myVariants.push(me._id.toString());
+        }
+      } catch (e) {}
+      myVariants = Array.from(new Set(myVariants.filter(Boolean)));
+
       // Parallel index scans for 1-on-1 chats (excluding group messages)
       const [sentMsgs, receivedMsgs] = await Promise.all([
-        Message.find({ senderId: myId, isGroup: { $ne: true } }).sort({ timestamp: -1 }).limit(150).lean(),
-        Message.find({ receiverId: myId, isGroup: { $ne: true } }).sort({ timestamp: -1 }).limit(150).lean()
+        Message.find({ senderId: { $in: myVariants }, isGroup: { $ne: true } }).sort({ timestamp: -1 }).limit(150).lean(),
+        Message.find({ receiverId: { $in: myVariants }, isGroup: { $ne: true } }).sort({ timestamp: -1 }).limit(150).lean()
       ]);
 
       const messages = [...sentMsgs, ...receivedMsgs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -199,8 +264,8 @@ module.exports = {
       const seen = new Set();
       const ordered = [];
       for (const msg of messages) {
-        const otherId = msg.senderId === myId ? msg.receiverId : msg.senderId;
-        if (otherId && otherId !== myId && !seen.has(otherId)) {
+        const otherId = myVariants.includes(msg.senderId) ? msg.receiverId : msg.senderId;
+        if (otherId && !myVariants.includes(otherId) && !seen.has(otherId)) {
           seen.add(otherId);
           ordered.push({ otherId, lastMessage: msg });
         }
@@ -209,7 +274,6 @@ module.exports = {
       if (ordered.length === 0) return [];
 
       const otherIds = Array.from(seen).filter(Boolean);
-      const mongoose = require('mongoose');
       const validObjectIds = otherIds
         .filter(id => typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id))
         .map(id => new mongoose.Types.ObjectId(id));
@@ -225,7 +289,15 @@ module.exports = {
           .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
           .lean(),
         Message.aggregate([
-          { $match: { receiverId: myId, status: { $ne: 'read' }, senderId: { $in: otherIds }, isGroup: { $ne: true } } },
+          {
+            $match: {
+              receiverId: { $in: myVariants },
+              status: { $ne: 'read' },
+              readBy: { $nin: myVariants },
+              senderId: { $in: otherIds },
+              isGroup: { $ne: true }
+            }
+          },
           { $group: { _id: '$senderId', count: { $sum: 1 } } }
         ])
       ]);
@@ -246,7 +318,10 @@ module.exports = {
         if (addedUserIds.has(otherUser.id)) continue;
         addedUserIds.add(otherUser.id);
 
-        const unreadCount = unreadMap.get(otherUser.id) || unreadMap.get(otherId) || 0;
+        const unreadCount = unreadMap.get(otherUser.id) ||
+                            (otherUser.username && unreadMap.get(otherUser.username)) ||
+                            (otherUser._id && unreadMap.get(otherUser._id.toString())) ||
+                            unreadMap.get(otherId) || 0;
 
         const lastMsgText = lastMessage.type === 'text'
           ? lastMessage.content

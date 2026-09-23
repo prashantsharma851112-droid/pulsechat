@@ -22,6 +22,7 @@ const messageSchema = new mongoose.Schema({
   isViewOnce: { type: Boolean, default: false },
   viewedBy: { type: Array, default: [] },
   status: { type: String, default: 'sent' }, // 'sent' | 'delivered' | 'read'
+  readBy: { type: [String], default: [] }, // User IDs who have read this message
   timestamp: { type: String, default: () => new Date().toISOString() },
   reactions: { type: Object, default: {} },
   originalContent: { type: String, default: null },
@@ -39,9 +40,11 @@ messageSchema.index({ senderId: 1, receiverId: 1 });
 messageSchema.index({ receiverId: 1, status: 1 });
 messageSchema.index({ chatId: 1, timestamp: -1 });
 messageSchema.index({ chatId: 1, timestamp: 1 });
+messageSchema.index({ chatId: 1, readBy: 1 });
 messageSchema.index({ senderId: 1, timestamp: -1 });
 messageSchema.index({ receiverId: 1, timestamp: -1 });
 messageSchema.index({ receiverId: 1, status: 1, senderId: 1 });
+messageSchema.index({ receiverId: 1, status: 1, readBy: 1 });
 
 module.exports = mongoose.model('Message', messageSchema);
 

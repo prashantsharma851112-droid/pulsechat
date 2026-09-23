@@ -470,34 +470,54 @@ io.on('connection', (socket) => {
   // Read Receipt (Blue Double Tick)
   socket.on('mark_read', async ({ messageId, chatId, userId }) => {
     const readerId = userId || socket.userId;
+    let isGhostMode = false;
     if (readerId) {
       const reader = await User.findOne({ id: readerId }).select('hideReadReceipts');
       if (reader && reader.hideReadReceipts) {
-        return; // Ghost Unseen Mode: do not mark read or send blue ticks!
+        isGhostMode = true; // Ghost Unseen Mode: reader clears badge but no blue ticks to sender!
       }
     }
-    const updatedMsg = await db.updateMessageStatus(messageId, 'read');
-    io.to(chatId).emit('message_read_update', { messageId, status: 'read' });
-    if (updatedMsg && updatedMsg.senderId) {
-      io.to(`user_${updatedMsg.senderId}`).emit('message_read_update', { messageId, status: 'read' });
+    const updateDoc = { $addToSet: { readBy: readerId } };
+    if (!isGhostMode) updateDoc.status = 'read';
+    const updatedMsg = await Message.findOneAndUpdate({ id: messageId }, updateDoc, { new: true }).lean();
+
+    if (!isGhostMode) {
+      io.to(chatId).emit('message_read_update', { messageId, status: 'read' });
+      if (updatedMsg && updatedMsg.senderId) {
+        io.to(`user_${updatedMsg.senderId}`).emit('message_read_update', { messageId, status: 'read' });
+      }
     }
+    if (readerId) {
+      io.to(`user_${readerId}`).emit('chat_read_update', { chatId, userId: readerId });
+    }
+    socket.emit('chat_read_update', { chatId, userId: readerId });
   });
 
   socket.on('mark_chat_read', async ({ chatId, userId }) => {
     const readerId = userId || socket.userId;
+    let isGhostMode = false;
     if (readerId) {
       const reader = await User.findOne({ id: readerId }).select('hideReadReceipts');
       if (reader && reader.hideReadReceipts) {
-        return; // Ghost Unseen Mode: do not mark chat read!
+        isGhostMode = true; // Ghost Unseen Mode: reader unread badge clears, but suppress blue ticks to sender
       }
     }
-    await db.markChatAsRead(chatId, readerId);
-    io.to(chatId).emit('chat_read_update', { chatId, userId: readerId });
-    if (chatId && chatId.includes('_')) {
-      const parts = chatId.split('_');
-      const otherId = parts.find(id => id !== readerId);
-      if (otherId) {
-        io.to(`user_${otherId}`).emit('chat_read_update', { chatId, userId: readerId });
+    await db.markChatAsRead(chatId, readerId, isGhostMode);
+
+    // ALWAYS emit to reader so their sidebar/tab unread badge immediately clears!
+    if (readerId) {
+      io.to(`user_${readerId}`).emit('chat_read_update', { chatId, userId: readerId });
+    }
+    socket.emit('chat_read_update', { chatId, userId: readerId });
+
+    if (!isGhostMode) {
+      io.to(chatId).emit('chat_read_update', { chatId, userId: readerId });
+      if (chatId && chatId.includes('_')) {
+        const parts = chatId.split('_');
+        const otherId = parts.find(id => id !== readerId);
+        if (otherId) {
+          io.to(`user_${otherId}`).emit('chat_read_update', { chatId, userId: readerId });
+        }
       }
     }
   });
