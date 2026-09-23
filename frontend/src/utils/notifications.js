@@ -21,7 +21,7 @@ function urlBase64ToUint8Array(base64String) {
  * @param {boolean} forcePrompt - Whether user manually tapped Allow / Enable
  * @param {string|null} token - Auth JWT token to register Web Push
  * @returns {Promise<boolean>} true if granted
- */
+ *git push origin main
 export async function requestNotificationPermission(forcePrompt = false, token = null) {
   if (typeof window === 'undefined' || !('Notification' in window)) return false;
 
