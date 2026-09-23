@@ -665,8 +665,37 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           </div>
         </div>
 
-        {/* Topbar Single 3-Dot More Menu */}
-        <div style={{ position: 'relative' }} ref={topMenuRef}>
+        {/* Topbar Actions: Direct Refresh + 3-Dot More Menu */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button
+            onClick={handleManualRefresh}
+            title="Refresh & Sync Chats"
+            className="icon-btn-ghost"
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: 'var(--bg-card)',
+              color: isRefreshing ? 'var(--accent)' : 'var(--text-muted)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px solid var(--border)',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <RotateCw
+              size={18}
+              style={{
+                transform: isRefreshing ? 'rotate(360deg)' : 'none',
+                transition: 'transform 0.6s ease'
+              }}
+              className={isRefreshing ? 'animate-spin' : ''}
+            />
+          </button>
+
+          {/* Topbar Single 3-Dot More Menu */}
+          <div style={{ position: 'relative' }} ref={topMenuRef}>
           <button
             onClick={() => setShowTopMenu(prev => !prev)}
             title="Menu & Pulse Sparks"
@@ -828,34 +857,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 <span>Create New Group</span>
               </button>
 
-              {/* Sync & Refresh Chats */}
-              <button
-                onClick={() => {
-                  handleManualRefresh();
-                  setShowTopMenu(false);
-                }}
-                className="dropdown-menu-item"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: 'transparent',
-                  color: 'var(--text-main)',
-                  fontSize: '0.88rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  width: '100%',
-                  transition: 'background 0.15s ease'
-                }}
-              >
-                <RotateCw size={17} color={isRefreshing ? 'var(--accent)' : 'var(--text-muted)'} className={isRefreshing ? 'animate-spin' : ''} />
-                <span>Sync & Refresh Chats</span>
-              </button>
-
               <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
 
               {/* Settings & Profile */}
@@ -889,6 +890,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           )}
         </div>
       </div>
+    </div>
 
       {/* WhatsApp-Style Navigation Tabs: Chats vs Groups */}
       <div className="sidebar-tabs" style={{ display: 'flex', borderBottom: '2px solid var(--border)', background: 'var(--bg-sidebar)' }}>
