@@ -96,25 +96,28 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   }, [showTopMenu, showSwitchAccountMenu]);
 
   // Load friendship status and pending friend requests count
-  const loadFriendshipInfo = useCallback(async () => {
+  const loadFriendshipInfo = useCallback(async (externalSignal) => {
     const curToken = token || localStorage.getItem('pulsechat_token');
     if (!curToken) return;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const activeSignal = externalSignal || controller.signal;
     try {
       const [reqRes, friendsRes] = await Promise.allSettled([
-        fetch(`${BACKEND_URL}/api/friends/requests?t=${Date.now()}`, { cache: 'no-store', headers: { Authorization: `Bearer ${curToken}` } }),
-        fetch(`${BACKEND_URL}/api/friends?t=${Date.now()}`, { cache: 'no-store', headers: { Authorization: `Bearer ${curToken}` } })
+        fetch(`${BACKEND_URL}/api/friends/requests?t=${Date.now()}`, { cache: 'no-store', headers: { Authorization: `Bearer ${curToken}` }, signal: activeSignal }),
+        fetch(`${BACKEND_URL}/api/friends?t=${Date.now()}`, { cache: 'no-store', headers: { Authorization: `Bearer ${curToken}` }, signal: activeSignal })
       ]);
 
-      if (reqRes.status === 'fulfilled' && reqRes.value.ok) {
-        const data = await reqRes.value.json();
+      if (reqRes.status === 'fulfilled' && reqRes.value?.ok) {
+        const data = await parseSafeJson(reqRes.value);
         if (data?.incoming) setPendingRequestsCount(data.incoming.length);
         if (data?.outgoing) {
           setOutgoingPendingIds(new Set(data.outgoing.map(r => r.receiverId)));
         }
       }
 
-      if (friendsRes.status === 'fulfilled' && friendsRes.value.ok) {
-        const fData = await friendsRes.value.json();
+      if (friendsRes.status === 'fulfilled' && friendsRes.value?.ok) {
+        const fData = await parseSafeJson(friendsRes.value);
         if (fData?.friends) {
           setFriendIdsSet(new Set(fData.friends.map(f => f.id)));
           if (user?.id) {
@@ -122,7 +125,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           }
         }
       }
-    } catch {}
+    } catch {} finally {
+      clearTimeout(timeoutId);
+    }
   }, [token, user?.id]);
 
   useEffect(() => {
@@ -270,19 +275,35 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleManualRefresh = async () => {
-    if (!token) return;
+    if (isRefreshing) return;
     setIsRefreshing(true);
+
+    // Hard safety guarantee: refresh spinner NEVER spins longer than 1.2 seconds!
+    const hardSafetyTimer = setTimeout(() => {
+      setIsRefreshing(false);
+    }, 1200);
+
+    const curToken = token || localStorage.getItem('pulsechat_token');
+    if (!curToken) {
+      clearTimeout(hardSafetyTimer);
+      setIsRefreshing(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const fetchTimeout = setTimeout(() => controller.abort(), 3500);
+
     try {
       // 1. Fetch fresh users, recent conversations, groups, and friendship info in parallel
       const [usersRes, recentRes, groupsRes] = await Promise.allSettled([
-        fetch(`${BACKEND_URL}/api/users`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${BACKEND_URL}/api/users/recent`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${BACKEND_URL}/api/groups`, { headers: { Authorization: `Bearer ${token}` } }),
-        loadFriendshipInfo()
+        fetch(`${BACKEND_URL}/api/users?t=${Date.now()}`, { cache: 'no-store', headers: { Authorization: `Bearer ${curToken}` }, signal: controller.signal }),
+        fetch(`${BACKEND_URL}/api/users/recent?t=${Date.now()}`, { cache: 'no-store', headers: { Authorization: `Bearer ${curToken}` }, signal: controller.signal }),
+        fetch(`${BACKEND_URL}/api/groups?t=${Date.now()}`, { cache: 'no-store', headers: { Authorization: `Bearer ${curToken}` }, signal: controller.signal }),
+        loadFriendshipInfo(controller.signal)
       ]);
 
       let freshUsers = [];
-      if (usersRes.status === 'fulfilled' && usersRes.value.ok) {
+      if (usersRes.status === 'fulfilled' && usersRes.value?.ok) {
         freshUsers = await parseSafeJson(usersRes.value);
         if (Array.isArray(freshUsers)) {
           setAllUsers(freshUsers);
@@ -290,7 +311,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         }
       }
 
-      if (groupsRes.status === 'fulfilled' && groupsRes.value.ok) {
+      if (groupsRes.status === 'fulfilled' && groupsRes.value?.ok) {
         const groupsData = await parseSafeJson(groupsRes.value);
         if (Array.isArray(groupsData)) {
           setGroups(groupsData);
@@ -298,7 +319,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         }
       }
 
-      if (recentRes.status === 'fulfilled' && recentRes.value.ok) {
+      if (recentRes.status === 'fulfilled' && recentRes.value?.ok) {
         const recentData = await parseSafeJson(recentRes.value);
         if (Array.isArray(recentData)) {
           const uMap = new Map();
@@ -337,7 +358,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     } catch (e) {
       console.warn('Manual refresh error:', e);
     } finally {
-      setTimeout(() => setIsRefreshing(false), 600);
+      clearTimeout(fetchTimeout);
+      clearTimeout(hardSafetyTimer);
+      setTimeout(() => setIsRefreshing(false), 300);
     }
   };
 
@@ -979,6 +1002,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <button
             onClick={handleManualRefresh}
+            disabled={isRefreshing}
             title="Refresh & Sync Chats"
             className="icon-btn-ghost"
             style={{
@@ -991,15 +1015,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               alignItems: 'center',
               justifyContent: 'center',
               border: '1px solid var(--border)',
-              transition: 'all 0.2s ease'
+              transition: 'all 0.2s ease',
+              cursor: isRefreshing ? 'not-allowed' : 'pointer',
+              opacity: isRefreshing ? 0.7 : 1
             }}
           >
             <RotateCw
               size={18}
-              style={{
-                transform: isRefreshing ? 'rotate(360deg)' : 'none',
-                transition: 'transform 0.6s ease'
-              }}
               className={isRefreshing ? 'animate-spin' : ''}
             />
           </button>

@@ -155,9 +155,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
       console.warn('Manual refresh notice:', e);
     } finally {
       clearTimeout(hardTimer);
-      setTimeout(() => {
-        setIsRefreshing(false);
-      }, 300);
+      setIsRefreshing(false);
     }
   }, [isRefreshing, fetchFriends, fetchRequests]);
 
@@ -717,8 +715,24 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {friends.map(friend => {
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem', padding: '0 4px' }}>
+                  <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
+                    Synced Pulses ({friends.length})
+                  </h4>
+                  <button
+                    onClick={handleManualRefresh}
+                    disabled={isRefreshing}
+                    className="icon-btn-ghost"
+                    title="Refresh Synced Pulses"
+                    style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', color: 'var(--accent)', background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: '8px', cursor: isRefreshing ? 'not-allowed' : 'pointer', padding: '4px 9px', fontWeight: 600, transition: 'all 0.2s ease' }}
+                  >
+                    <RotateCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+                    <span>{isRefreshing ? 'Updating...' : 'Refresh'}</span>
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {friends.map(friend => {
                   const isFriendOnline = onlineUsers.includes(friend.id);
                   return (
                     <div
@@ -813,6 +827,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                     </div>
                   );
                 })}
+                </div>
               </div>
             )}
           </div>
