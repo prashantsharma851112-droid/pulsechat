@@ -4,7 +4,7 @@
   "description": "PulseChat Real-Time Backend API Server",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node --max-old-space-size=400 server.js",
     "dev": "node --watch server.js",
     "build": "cd ../frontend && npm install && npm run build"
   },
