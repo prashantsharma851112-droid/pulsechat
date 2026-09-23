@@ -13,3 +13,4 @@ backend/database/vapid-keys.json
 build/
 android/.gradle/
 android/app/build/
+AUTH_EMAIL_VERIFICATION_MASTERCLASS.html
