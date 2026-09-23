@@ -309,7 +309,10 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
         {/* Profile Avatar & Details */}
         <div style={{ padding: '0 1.5rem 1.5rem 1.5rem', marginTop: '-50px', textAlign: 'center' }}>
           {/* Avatar with Clickable Full DP trigger */}
-          <div style={{ position: 'relative', display: 'inline-block', marginBottom: '0.75rem' }}>
+          <div
+            className={userToDisplay?.isPro ? 'pro-neon-avatar pro-neon-avatar-lg' : ''}
+            style={{ position: 'relative', display: 'inline-block', marginBottom: '0.75rem' }}
+          >
             <img
               src={validAvatar}
               alt={userToDisplay.displayName}
@@ -319,8 +322,8 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                 height: '100px',
                 borderRadius: '50%',
                 objectFit: 'cover',
-                border: userToDisplay?.isPro ? '4px solid #f59e0b' : '4px solid var(--bg-card)',
-                boxShadow: userToDisplay?.isPro ? '0 0 25px rgba(245, 158, 11, 0.5)' : '0 8px 24px rgba(0,0,0,0.3)',
+                border: userToDisplay?.isPro ? 'none' : '4px solid var(--bg-card)',
+                boxShadow: userToDisplay?.isPro ? 'none' : '0 8px 24px rgba(0,0,0,0.3)',
                 cursor: 'pointer',
                 transition: 'transform 0.2s ease'
               }}

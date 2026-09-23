@@ -2,6 +2,8 @@ import React, { useState, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { X, Zap, Sparkles, Send, Plus, Loader2 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
+import Sticker3D from '../common/Sticker3D';
+
 
 const GIFTS = [
   { id: 'coffee', name: 'Coffee Chat', sparks: 10, icon: '☕', desc: 'A casual caffeine pulse' },
@@ -211,10 +213,12 @@ export default function GiftPickerModal({
             justifyContent: 'space-between',
             border: '1px solid var(--border)'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '1.3rem' }}>{selectedGift.icon}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'visible', flexShrink: 0, transform: 'scale(0.42)', transformOrigin: 'center center' }}>
+                <Sticker3D giftId={selectedGift.id} sparkAmount={selectedGift.sparks} showFooter={false} />
+              </div>
               <div>
-                <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>{selectedGift.name}</div>
+                <div style={{ fontWeight: 800, fontSize: '0.86rem', color: 'var(--text-main)' }}>{selectedGift.name}</div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{selectedGift.desc}</div>
               </div>
             </div>

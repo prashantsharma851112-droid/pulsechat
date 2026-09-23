@@ -1497,9 +1497,231 @@ input, textarea {
 }
 
 .pulse-vip-emblem:hover {
-  transform: scale(1.1);
-  filter: drop-shadow(0 2px 8px rgba(245, 158, 11, 0.7));
+  transform: scale(1.12);
+  filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.85)) !important;
 }
+
+/* --- PRO USER NEON DP CIRCLE (AUTOMATIC FOR ALL PRO USERS) --- */
+.pro-neon-avatar {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 50% !important;
+  padding: 3px !important;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+.pro-neon-avatar::before {
+  content: '';
+  position: absolute;
+  inset: -1.5px;
+  border-radius: 50%;
+  background: conic-gradient(
+    #00f2fe,
+    #3b82f6,
+    #8b5cf6,
+    #ec4899,
+    #f59e0b,
+    #10b981,
+    #00f2fe
+  );
+  animation: proNeonSpin 3.5s linear infinite;
+  z-index: -1;
+}
+
+.pro-neon-avatar::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: conic-gradient(
+    #00f2fe,
+    #3b82f6,
+    #8b5cf6,
+    #ec4899,
+    #f59e0b,
+    #10b981,
+    #00f2fe
+  );
+  filter: blur(6px);
+  opacity: 0.85;
+  animation: proNeonSpin 3.5s linear infinite;
+  z-index: -2;
+}
+
+@keyframes proNeonSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.pro-neon-avatar > img {
+  position: relative;
+  z-index: 1;
+  border-radius: 50% !important;
+  background: var(--bg-card, #111827);
+  border: 2px solid var(--bg-sidebar, #0b0f19) !important;
+  display: block;
+}
+
+/* For larger profile modal avatar */
+.pro-neon-avatar-lg {
+  padding: 5px !important;
+}
+.pro-neon-avatar-lg::before {
+  inset: -2.5px;
+}
+.pro-neon-avatar-lg::after {
+  inset: -4.5px;
+  filter: blur(12px);
+  opacity: 0.95;
+}
+
+/* Ensure online indicators / badges stay above neon ring */
+.pro-neon-avatar .online-indicator-dot,
+.pro-neon-avatar svg {
+  z-index: 3 !important;
+}
+
+/* --- 3D ANIMATED STICKERS STYLES --- */
+.sticker-3d-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  perspective: 900px;
+  margin: 4px 0;
+}
+
+.sticker-3d-hover-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform-style: preserve-3d;
+  animation: sticker3dFloat 3.2s ease-in-out infinite;
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  cursor: pointer;
+}
+
+.sticker-3d-hover-card:hover {
+  transform: scale(1.12) rotateY(12deg) rotateX(-8deg) !important;
+}
+
+.sticker-3d-graphic {
+  display: block;
+  filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.45));
+  transform-origin: center bottom;
+  animation: stickerGentleSway 4s ease-in-out infinite;
+}
+
+/* Realistic Ground Contact Shadow */
+.sticker-3d-shadow {
+  width: 70px;
+  height: 12px;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.15) 55%, transparent 75%);
+  border-radius: 50%;
+  margin-top: -6px;
+  animation: stickerShadowPulse 3.2s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+/* Floating Physics */
+@keyframes sticker3dFloat {
+  0% {
+    transform: translateY(0px) rotateX(4deg) rotateY(-5deg) scale(1);
+  }
+  50% {
+    transform: translateY(-12px) rotateX(-6deg) rotateY(6deg) scale(1.05);
+  }
+  100% {
+    transform: translateY(0px) rotateX(4deg) rotateY(-5deg) scale(1);
+  }
+}
+
+@keyframes stickerShadowPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(0.68);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+}
+
+@keyframes stickerGentleSway {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-3deg); }
+  75% { transform: rotate(3deg); }
+}
+
+/* Sticker Micro-Pill for Spark Count */
+.sticker-spark-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2.5px 9px;
+  border-radius: 14px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(239, 68, 68, 0.15));
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  color: #fbbf24;
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.25);
+  letter-spacing: 0.02em;
+}
+
+/* Sub-animations for 3D elements */
+.sticker-flame-tail {
+  animation: flameFlicker 0.4s ease-in-out infinite alternate;
+  transform-origin: 55px 110px;
+}
+.sticker-flame-core {
+  animation: flameFlicker 0.25s ease-in-out infinite alternate;
+  transform-origin: 52px 110px;
+}
+@keyframes flameFlicker {
+  0% { transform: scaleY(0.92) scaleX(0.95); opacity: 0.85; }
+  100% { transform: scaleY(1.15) scaleX(1.05); opacity: 1; }
+}
+
+.sticker-steam-left {
+  animation: steamRiseLeft 2.4s ease-in-out infinite;
+}
+.sticker-steam-right {
+  animation: steamRiseRight 2.8s ease-in-out infinite 0.6s;
+}
+@keyframes steamRiseLeft {
+  0% { transform: translateY(4px) scaleX(0.85); opacity: 0.2; }
+  50% { opacity: 0.85; }
+  100% { transform: translateY(-8px) scaleX(1.15); opacity: 0; }
+}
+@keyframes steamRiseRight {
+  0% { transform: translateY(4px) scaleX(0.85); opacity: 0.2; }
+  50% { opacity: 0.85; }
+  100% { transform: translateY(-9px) scaleX(1.2); opacity: 0; }
+}
+
+.sticker-particle-p1 {
+  animation: particleFloatA 2s ease-in-out infinite alternate;
+}
+.sticker-particle-p2 {
+  animation: particleFloatB 2.4s ease-in-out infinite alternate;
+}
+@keyframes particleFloatA {
+  0% { transform: translate(0, 0) scale(0.9); opacity: 0.6; }
+  100% { transform: translate(2px, -5px) scale(1.15); opacity: 1; }
+}
+@keyframes particleFloatB {
+  0% { transform: translate(0, 0) scale(1.1); opacity: 1; }
+  100% { transform: translate(-3px, -6px) scale(0.85); opacity: 0.5; }
+}
+
 
 
 

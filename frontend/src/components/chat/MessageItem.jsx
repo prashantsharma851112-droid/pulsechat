@@ -7,6 +7,8 @@ import ViewOnceModal from './ViewOnceModal';
 import EditPollModal from './EditPollModal';
 import { getPollTheme } from './pollThemes';
 import PulseVipBadge from '../common/PulseVipBadge';
+import Sticker3D from '../common/Sticker3D';
+
 
 export default function MessageItem({
   message,
@@ -401,12 +403,14 @@ export default function MessageItem({
           }
         }}
         style={{
-          background: isSelected ? 'rgba(99, 102, 241, 0.25)' : (isMine ? 'var(--bubble-sent)' : 'var(--bubble-received)'),
+          background: message.type === 'gift'
+            ? (isSelected ? 'rgba(99, 102, 241, 0.25)' : 'transparent')
+            : (isSelected ? 'rgba(99, 102, 241, 0.25)' : (isMine ? 'var(--bubble-sent)' : 'var(--bubble-received)')),
           color: 'var(--text-main)',
-          padding: '0.75rem 1rem',
+          padding: message.type === 'gift' ? '2px 4px' : '0.75rem 1rem',
           borderRadius: isMine ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
-          border: isSelected ? '1.5px solid var(--accent)' : '1px solid transparent',
+          boxShadow: message.type === 'gift' ? 'none' : '0 2px 6px rgba(0,0,0,0.08)',
+          border: isSelected ? '1.5px solid var(--accent)' : (message.type === 'gift' ? 'none' : '1px solid transparent'),
           transform: `translateX(${dragX}px)`,
           transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1), background 0.15s ease',
           userSelect: isDragging ? 'none' : 'auto',
@@ -760,58 +764,15 @@ export default function MessageItem({
           </div>
         )}
 
-        {/* Virtual Gift Message */}
+        {/* Virtual Gift 3D Animated Sticker (Realistic 3D motion graphic + spark count pill) */}
         {message.type === 'gift' && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            minWidth: '220px',
-            padding: '4px 2px'
-          }}>
-            <div style={{
-              width: '46px',
-              height: '46px',
-              borderRadius: '14px',
-              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(239, 68, 68, 0.2))',
-              border: '1.5px solid rgba(245, 158, 11, 0.5)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '1.8rem',
-              boxShadow: '0 4px 15px rgba(245, 158, 11, 0.3)',
-              flexShrink: 0
-            }}>
-              {message.giftData?.icon || '🎁'}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{
-                fontSize: '0.92rem',
-                fontWeight: 800,
-                color: 'var(--text-main)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}>
-                <span>{message.giftData?.giftName || 'Virtual Gift'}</span>
-                <span style={{
-                  fontSize: '0.68rem',
-                  fontWeight: 800,
-                  background: 'linear-gradient(90deg, #f59e0b, #ef4444)',
-                  color: '#fff',
-                  padding: '1px 6px',
-                  borderRadius: '10px'
-                }}>
-                  ⚡ {message.giftData?.sparkAmount || 10} Sparks
-                </span>
-              </div>
-              <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                {isMine
-                  ? (message.giftData?.receiverName ? `Beamed to ${message.giftData.receiverName}` : 'You beamed this gift')
-                  : `${senderName || 'Someone'} beamed this gift to you!`}
-              </div>
-            </div>
-          </div>
+          <Sticker3D
+            giftId={message.giftData?.giftId || 'rocket'}
+            sparkAmount={message.giftData?.sparkAmount || 10}
+            isMine={isMine}
+            timeStr={timeStr}
+            status={message.status}
+          />
         )}
 
         {/* Poll Message */}
@@ -1086,23 +1047,25 @@ export default function MessageItem({
           </div>
         )}
 
-        {/* Timestamp & Ticks */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem', marginTop: '0.35rem', fontSize: '0.68rem', opacity: 0.75 }}>
-          <span>{timeStr}</span>
-          {isMine && (
-            <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-              {message.status === 'pending' ? (
-                <Clock size={12} color="#9ca3af" title="Waiting for network / Pending" />
-              ) : message.status === 'read' ? (
-                <CheckCheck size={14} color="#53bdeb" />
-              ) : message.status === 'delivered' ? (
-                <CheckCheck size={14} color="#9ca3af" />
-              ) : (
-                <Check size={14} color="#9ca3af" />
-              )}
-            </span>
-          )}
-        </div>
+        {/* Timestamp & Ticks (hidden for gift stickers as Sticker3D displays it natively) */}
+        {message.type !== 'gift' && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem', marginTop: '0.35rem', fontSize: '0.68rem', opacity: 0.75 }}>
+            <span>{timeStr}</span>
+            {isMine && (
+              <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                {message.status === 'pending' ? (
+                  <Clock size={12} color="#9ca3af" title="Waiting for network / Pending" />
+                ) : message.status === 'read' ? (
+                  <CheckCheck size={14} color="#53bdeb" />
+                ) : message.status === 'delivered' ? (
+                  <CheckCheck size={14} color="#9ca3af" />
+                ) : (
+                  <Check size={14} color="#9ca3af" />
+                )}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Action Context Menu (Reactions, Thread Reply & Delete/Unsend) */}

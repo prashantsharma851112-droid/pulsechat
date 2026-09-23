@@ -750,6 +750,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           title="Click to view & edit your profile"
         >
           <div
+            className={user?.isPro ? 'pro-neon-avatar' : ''}
             style={{ position: 'relative', flexShrink: 0 }}
             onClick={(e) => {
               e.stopPropagation();
@@ -764,13 +765,20 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               onError={(e) => {
                 e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user?.username || 'Pulse')}`;
               }}
-              style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)', cursor: 'pointer' }}
+              style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '50%',
+                objectFit: 'cover',
+                border: user?.isPro ? 'none' : '2px solid var(--accent)',
+                cursor: 'pointer'
+              }}
             />
             {user?.isEmailVerified && (
               <CheckCircle2
                 size={14}
                 color="#10b981"
-                style={{ position: 'absolute', bottom: 0, right: 0, background: '#fff', borderRadius: '50%' }}
+                style={{ position: 'absolute', bottom: 0, right: 0, background: '#fff', borderRadius: '50%', zIndex: 4 }}
               />
             )}
           </div>
@@ -1248,7 +1256,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                   className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
                   style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
                 >
-                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <div
+                    className={!u.isGroup && u.isPro ? 'pro-neon-avatar' : ''}
+                    style={{ position: 'relative', flexShrink: 0 }}
+                  >
                     <img
                       src={u.avatar}
                       alt="Avatar"
@@ -1380,7 +1391,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
                     style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
                   >
-                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <div
+                      className={u.isPro ? 'pro-neon-avatar' : ''}
+                      style={{ position: 'relative', flexShrink: 0 }}
+                    >
                       <img
                         src={u.avatar}
                         alt="Avatar"
@@ -1437,7 +1451,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
                     style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
                   >
-                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <div
+                      className={u.isPro ? 'pro-neon-avatar' : ''}
+                      style={{ position: 'relative', flexShrink: 0 }}
+                    >
                       <img
                         src={u.avatar}
                         alt="Avatar"

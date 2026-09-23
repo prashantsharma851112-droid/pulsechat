@@ -1083,18 +1083,31 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               </button>
             )}
 
-            <img
-              src={chatAvatar || activeChat.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeChat.username || 'pulse'}`}
-              alt="Avatar"
-              onClick={() => isGroup ? setShowGroupProfileModal(true) : (onOpenFullDp && onOpenFullDp(chatAvatar || activeChat.avatar, chatDisplayName || activeChat.displayName, activeChat.username))}
-              onError={(e) => {
-                e.target.src = isGroup
-                  ? `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(chatDisplayName || activeChat.name || 'Group')}`
-                  : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(activeChat.username || chatDisplayName || 'User')}`;
-              }}
-              style={{ width: '42px', height: '42px', borderRadius: isGroup ? '12px' : '50%', cursor: 'pointer', objectFit: 'cover', flexShrink: 0 }}
-              title={isGroup ? 'Click for group details & members' : 'Click to view full screen DP'}
-            />
+            <div
+              className={!isGroup && activeChat?.isPro ? 'pro-neon-avatar' : ''}
+              style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
+            >
+              <img
+                src={chatAvatar || activeChat.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeChat.username || 'pulse'}`}
+                alt="Avatar"
+                onClick={() => isGroup ? setShowGroupProfileModal(true) : (onOpenFullDp && onOpenFullDp(chatAvatar || activeChat.avatar, chatDisplayName || activeChat.displayName, activeChat.username))}
+                onError={(e) => {
+                  e.target.src = isGroup
+                    ? `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(chatDisplayName || activeChat.name || 'Group')}`
+                    : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(activeChat.username || chatDisplayName || 'User')}`;
+                }}
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: isGroup ? '12px' : '50%',
+                  cursor: 'pointer',
+                  objectFit: 'cover',
+                  flexShrink: 0,
+                  border: (!isGroup && activeChat?.isPro) ? 'none' : 'none'
+                }}
+                title={isGroup ? 'Click for group details & members' : 'Click to view full screen DP'}
+              />
+            </div>
 
             <div
               className="chat-header-title-box"

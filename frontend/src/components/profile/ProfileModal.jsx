@@ -222,12 +222,23 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
 
             {/* Current DP Avatar Preview with Upload Trigger */}
             <div style={{ textAlign: 'center', marginBottom: '1.5rem', position: 'relative' }}>
-              <div style={{ position: 'relative', display: 'inline-block' }}>
+              <div
+                className={user?.isPro ? 'pro-neon-avatar pro-neon-avatar-lg' : ''}
+                style={{ position: 'relative', display: 'inline-block' }}
+              >
                 <img
                   src={avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}
                   alt="Current DP"
                   onClick={() => onOpenFullDp && onOpenFullDp(avatar || user.avatar, displayName || user.displayName || user.username, user.username)}
-                  style={{ width: '96px', height: '96px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--accent)', boxShadow: '0 8px 20px rgba(0,0,0,0.3)', cursor: 'pointer' }}
+                  style={{
+                    width: '96px',
+                    height: '96px',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: user?.isPro ? 'none' : '3px solid var(--accent)',
+                    boxShadow: user?.isPro ? 'none' : '0 8px 20px rgba(0,0,0,0.3)',
+                    cursor: 'pointer'
+                  }}
                   title="Click to view full photo"
                 />
                 <label

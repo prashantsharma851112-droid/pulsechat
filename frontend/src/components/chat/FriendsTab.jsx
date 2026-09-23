@@ -628,11 +628,20 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                         style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0, cursor: 'pointer' }}
                         onClick={() => setActiveChat(friend)}
                       >
-                        <div style={{ position: 'relative', flexShrink: 0 }}>
+                        <div
+                          className={friend.isPro ? 'pro-neon-avatar' : ''}
+                          style={{ position: 'relative', flexShrink: 0 }}
+                        >
                           <img
                             src={friend.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.username}`}
                             alt={friend.displayName}
-                            style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover' }}
+                            style={{
+                              width: '42px',
+                              height: '42px',
+                              borderRadius: '50%',
+                              objectFit: 'cover',
+                              border: friend.isPro ? 'none' : 'none'
+                            }}
                             onClick={(e) => {
                               if (onOpenFullDp) {
                                 e.stopPropagation();
@@ -744,18 +753,23 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                          <img
-                            src={sender.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${sender.username}`}
-                            alt={sender.displayName}
-                            onClick={(e) => {
-                              if (onOpenFullDp) {
-                                e.stopPropagation();
-                                onOpenFullDp(sender.avatar, sender.displayName, sender.username);
-                              }
-                            }}
-                            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, cursor: 'pointer' }}
-                            title="Click to view full photo"
-                          />
+                          <div
+                            className={sender.isPro ? 'pro-neon-avatar' : ''}
+                            style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
+                          >
+                            <img
+                              src={sender.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${sender.username}`}
+                              alt={sender.displayName}
+                              onClick={(e) => {
+                                if (onOpenFullDp) {
+                                  e.stopPropagation();
+                                  onOpenFullDp(sender.avatar, sender.displayName, sender.username);
+                                }
+                              }}
+                              style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, cursor: 'pointer' }}
+                              title="Click to view full photo"
+                            />
+                          </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -844,18 +858,23 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                          <img
-                            src={receiver.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${receiver.username}`}
-                            alt={receiver.displayName}
-                            onClick={(e) => {
-                              if (onOpenFullDp) {
-                                e.stopPropagation();
-                                onOpenFullDp(receiver.avatar, receiver.displayName, receiver.username);
-                              }
-                            }}
-                            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, cursor: 'pointer' }}
-                            title="Click to view full photo"
-                          />
+                          <div
+                            className={receiver.isPro ? 'pro-neon-avatar' : ''}
+                            style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
+                          >
+                            <img
+                              src={receiver.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${receiver.username}`}
+                              alt={receiver.displayName}
+                              onClick={(e) => {
+                                if (onOpenFullDp) {
+                                  e.stopPropagation();
+                                  onOpenFullDp(receiver.avatar, receiver.displayName, receiver.username);
+                                }
+                              }}
+                              style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, cursor: 'pointer' }}
+                              title="Click to view full photo"
+                            />
+                          </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -945,7 +964,10 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                        <div style={{ position: 'relative', flexShrink: 0 }}>
+                        <div
+                          className={target.isPro ? 'pro-neon-avatar' : ''}
+                          style={{ position: 'relative', flexShrink: 0 }}
+                        >
                           <img
                             src={target.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${target.username}`}
                             alt={target.displayName}

@@ -78,16 +78,28 @@ export default function SettingsModal({
             gap: '12px'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-              <img
-                src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.username}`}
-                alt="DP"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenFullDp && onOpenFullDp(user?.avatar, user?.displayName || user?.username, user?.username);
-                }}
-                style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)', cursor: 'pointer' }}
-                title="Click to view full profile photo"
-              />
+              <div
+                className={user?.isPro ? 'pro-neon-avatar' : ''}
+                style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
+              >
+                <img
+                  src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.username}`}
+                  alt="DP"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenFullDp && onOpenFullDp(user?.avatar, user?.displayName || user?.username, user?.username);
+                  }}
+                  style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: user?.isPro ? 'none' : '2px solid var(--accent)',
+                    cursor: 'pointer'
+                  }}
+                  title="Click to view full profile photo"
+                />
+              </div>
               <div style={{ minWidth: 0 }}>
                 <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {user?.displayName}
@@ -396,11 +408,22 @@ export default function SettingsModal({
                         }
                       }}
                     >
-                      <img
-                        src={acc.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${acc.username}`}
-                        alt={acc.displayName}
-                        style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', border: isActive ? '2px solid var(--accent)' : '1px solid var(--border)' }}
-                      />
+                      <div
+                        className={acc.isPro ? 'pro-neon-avatar' : ''}
+                        style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
+                      >
+                        <img
+                          src={acc.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${acc.username}`}
+                          alt={acc.displayName}
+                          style={{
+                            width: '38px',
+                            height: '38px',
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                            border: acc.isPro ? 'none' : (isActive ? '2px solid var(--accent)' : '1px solid var(--border)')
+                          }}
+                        />
+                      </div>
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {acc.displayName || acc.username}
