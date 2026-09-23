@@ -40,7 +40,15 @@ export default function Animated3DTextModal({ initialText = '', onSend3D, onClos
         <div
           className="modal-card modal-responsive modal-card-animated"
           onClick={(e) => e.stopPropagation()}
-          style={{ maxWidth: '480px', padding: 0, overflow: 'hidden' }}
+          style={{
+            maxWidth: '480px',
+            maxHeight: '90dvh',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: 0,
+            overflow: 'hidden',
+            borderRadius: '24px'
+          }}
         >
           {/* Header */}
           <div
@@ -48,7 +56,8 @@ export default function Animated3DTextModal({ initialText = '', onSend3D, onClos
             style={{
               padding: '1rem 1.25rem',
               borderBottom: '1px solid var(--border)',
-              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(99, 102, 241, 0.12))'
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(99, 102, 241, 0.12))',
+              flexShrink: 0
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -86,7 +95,18 @@ export default function Animated3DTextModal({ initialText = '', onSend3D, onClos
             </button>
           </div>
 
-          <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div
+            style={{
+              padding: '1.25rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              flex: 1,
+              minHeight: 0
+            }}
+          >
             {/* Live 3D Interactive Stage Preview */}
             <div
               style={{
@@ -201,40 +221,47 @@ export default function Animated3DTextModal({ initialText = '', onSend3D, onClos
                 })}
               </div>
             </div>
+          </div>
 
-            {/* Action Bar */}
-            <div style={{ display: 'flex', gap: '10px', marginTop: '0.5rem' }}>
-              <button
-                type="button"
-                className="btn-secondary"
-                style={{ flex: 1, justifyContent: 'center' }}
-                onClick={onClose}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                style={{
-                  flex: 1.5,
-                  justifyContent: 'center',
-                  background: isUserPro ? 'linear-gradient(135deg, #f59e0b, #ec4899)' : undefined,
-                  border: 'none',
-                  boxShadow: isUserPro ? '0 4px 14px rgba(245, 158, 11, 0.4)' : undefined
-                }}
-                onClick={handleSend}
-              >
-                {!isUserPro ? (
-                  <>
-                    <Lock size={15} /> Unlock 3D with VIP
-                  </>
-                ) : (
-                  <>
-                    <Send size={15} /> Send 3D Text
-                  </>
-                )}
-              </button>
-            </div>
+          {/* Sticky Action Bar */}
+          <div style={{
+            display: 'flex',
+            gap: '10px',
+            padding: '12px 1.25rem',
+            borderTop: '1px solid var(--border)',
+            background: 'var(--bg-card)',
+            flexShrink: 0
+          }}>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ flex: 1, justifyContent: 'center' }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              style={{
+                flex: 1.5,
+                justifyContent: 'center',
+                background: isUserPro ? 'linear-gradient(135deg, #f59e0b, #ec4899)' : undefined,
+                border: 'none',
+                boxShadow: isUserPro ? '0 4px 14px rgba(245, 158, 11, 0.4)' : undefined
+              }}
+              onClick={handleSend}
+            >
+              {!isUserPro ? (
+                <>
+                  <Lock size={15} /> Unlock 3D with VIP
+                </>
+              ) : (
+                <>
+                  <Send size={15} /> Send 3D Text
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
