@@ -18,7 +18,8 @@ export default function MessageItem({
   isSelected,
   onToggleSelect,
   onJoinGroupCall,
-  onReply
+  onReply,
+  senderIsPro
 }) {
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
@@ -382,8 +383,21 @@ export default function MessageItem({
 
       {/* Group Chat Sender Name */}
       {!isMine && message.isGroup && (
-        <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent)', marginBottom: '3px', marginLeft: '6px' }}>
-          {senderName || 'Group Member'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent)', marginBottom: '3px', marginLeft: '6px' }}>
+          <span>{senderName || 'Group Member'}</span>
+          {senderIsPro && (
+            <span style={{
+              fontSize: '0.65rem',
+              fontWeight: 800,
+              background: 'linear-gradient(90deg, #f59e0b, #eab308)',
+              color: '#000',
+              padding: '1px 6px',
+              borderRadius: '8px',
+              boxShadow: '0 2px 6px rgba(245, 158, 11, 0.3)'
+            }}>
+              👑 PRO
+            </span>
+          )}
         </div>
       )}
 
@@ -752,6 +766,60 @@ export default function MessageItem({
                 <Phone size={14} /> Join Group Call
               </button>
             )}
+          </div>
+        )}
+
+        {/* Virtual Gift Message */}
+        {message.type === 'gift' && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            minWidth: '220px',
+            padding: '4px 2px'
+          }}>
+            <div style={{
+              width: '46px',
+              height: '46px',
+              borderRadius: '14px',
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(239, 68, 68, 0.2))',
+              border: '1.5px solid rgba(245, 158, 11, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.8rem',
+              boxShadow: '0 4px 15px rgba(245, 158, 11, 0.3)',
+              flexShrink: 0
+            }}>
+              {message.giftData?.icon || '🎁'}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{
+                fontSize: '0.92rem',
+                fontWeight: 800,
+                color: 'var(--text-main)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <span>{message.giftData?.giftName || 'Virtual Gift'}</span>
+                <span style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 800,
+                  background: 'linear-gradient(90deg, #f59e0b, #ef4444)',
+                  color: '#fff',
+                  padding: '1px 6px',
+                  borderRadius: '10px'
+                }}>
+                  ⚡ {message.giftData?.sparkAmount || 10} Sparks
+                </span>
+              </div>
+              <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                {isMine
+                  ? (message.giftData?.receiverName ? `Beamed to ${message.giftData.receiverName}` : 'You beamed this gift')
+                  : `${senderName || 'Someone'} beamed this gift to you!`}
+              </div>
+            </div>
           </div>
         )}
 

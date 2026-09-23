@@ -1,0 +1,627 @@
+import React, { useState, useContext, useEffect } from 'react';
+import { AuthContext } from '../../context/AuthContext';
+import { X, Sparkles, Check, Crown, Zap, ShieldCheck, Flame, Coffee, Heart, Rocket, Diamond, Award, ArrowRight, Loader2 } from 'lucide-react';
+import { BACKEND_URL } from '../../utils/config';
+
+export default function PulseProModal({ onClose, initialTab = 'pro' }) {
+  const { user, token, updateUserProfile } = useContext(AuthContext);
+  const [activeTab, setActiveTab] = useState(initialTab); // 'pro' | 'sparks'
+  const [billingCycle, setBillingCycle] = useState('monthly'); // 'monthly' | 'yearly'
+  const [selectedSparksPack, setSelectedSparksPack] = useState('sparks_300');
+  const [loading, setLoading] = useState(false);
+  const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
+  const [razorpayConfig, setRazorpayConfig] = useState({ keyId: '', isLive: false });
+
+  useEffect(() => {
+    // Fetch Razorpay config
+    fetch(`${BACKEND_URL}/api/payments/config`)
+      .then(res => res.json())
+      .then(data => {
+        if (data) {
+          setRazorpayConfig({
+            keyId: data.razorpayKeyId,
+            isLive: data.isLiveConfigured
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Helper to dynamically load Razorpay script
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if (window.Razorpay) return resolve(true);
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  const handleCheckout = async (planId) => {
+    setLoading(true);
+    setStatusMsg({ type: '', text: '' });
+
+    try {
+      // 1. Create Order
+      const res = await fetch(`${BACKEND_URL}/api/payments/create-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ planId })
+      });
+
+      const orderData = await res.json();
+      if (!res.ok) throw new Error(orderData.error || 'Failed to create order');
+
+      // If Razorpay is not configured or in Sandbox, trigger instant verification
+      if (orderData.isSandbox || !razorpayConfig.isLive) {
+        await executeDemoActivation(planId);
+        return;
+      }
+
+      // 2. Open Live Razorpay Checkout
+      const isLoaded = await loadRazorpayScript();
+      if (!isLoaded) {
+        throw new Error('Razorpay SDK failed to load. Falling back to sandbox demo.');
+      }
+
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: 'PulseChat',
+        description: planId.startsWith('pro') ? 'PulseChat Pro Subscription' : 'Pulse Sparks Pack',
+        image: 'https://api.dicebear.com/7.x/bottts/svg?seed=pulsechat',
+        order_id: orderData.orderId,
+        handler: async function (response) {
+          await verifyPayment(response, planId, false);
+        },
+        prefill: {
+          name: user.displayName || user.username,
+          email: user.email || ''
+        },
+        theme: {
+          color: '#6366f1'
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response) {
+        setStatusMsg({ type: 'error', text: response.error?.description || 'Payment cancelled or failed.' });
+        setLoading(false);
+      });
+      rzp.open();
+    } catch (err) {
+      console.warn('Payment failed, attempting demo sandbox upgrade:', err);
+      await executeDemoActivation(planId);
+    }
+  };
+
+  const verifyPayment = async (razorpayResponse, planId, isSandbox) => {
+    try {
+      const vRes = await fetch(`${BACKEND_URL}/api/payments/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          ...razorpayResponse,
+          planId,
+          isSandbox
+        })
+      });
+
+      const vData = await vRes.json();
+      if (vData.success && vData.user) {
+        updateUserProfile(vData.user);
+        setStatusMsg({ type: 'success', text: vData.message || 'Payment successful!' });
+        setTimeout(() => {
+          onClose();
+        }, 1500);
+      } else {
+        throw new Error(vData.error || 'Verification failed');
+      }
+    } catch (err) {
+      setStatusMsg({ type: 'error', text: err.message || 'Payment verification failed' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const executeDemoActivation = async (planId) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/payments/demo-activate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ planId })
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        updateUserProfile(data.user);
+        setStatusMsg({ type: 'success', text: data.message || 'Demo Sandbox Activated!' });
+        setTimeout(() => {
+          onClose();
+        }, 1400);
+      } else {
+        throw new Error(data.error || 'Demo activation failed');
+      }
+    } catch (err) {
+      setStatusMsg({ type: 'error', text: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isUserPro = Boolean(user?.isPro);
+  const currentSparks = user?.pulseSparks ?? 50;
+
+  return (
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1300 }}>
+      <div
+        className="modal-card modal-responsive modal-card-animated"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: '520px',
+          padding: 0,
+          overflow: 'hidden',
+          borderRadius: '24px',
+          background: 'var(--bg-card)',
+          border: '1px solid rgba(255, 215, 0, 0.3)',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 215, 0, 0.15)'
+        }}
+      >
+        {/* Hero Header Banner */}
+        <div style={{
+          position: 'relative',
+          padding: '24px 20px 20px 20px',
+          background: 'linear-gradient(135deg, #1e1b4b 0%, #311042 50%, #451a03 100%)',
+          borderBottom: '1px solid rgba(255, 215, 0, 0.2)',
+          color: '#fff',
+          overflow: 'hidden'
+        }}>
+          {/* Subtle background glow */}
+          <div style={{
+            position: 'absolute',
+            top: -40,
+            right: -40,
+            width: '160px',
+            height: '160px',
+            background: 'radial-gradient(circle, rgba(255, 215, 0, 0.3) 0%, transparent 70%)',
+            borderRadius: '50%',
+            pointerEvents: 'none'
+          }} />
+
+          <button
+            onClick={onClose}
+            className="icon-btn-ghost"
+            style={{
+              position: 'absolute',
+              top: 14,
+              right: 14,
+              color: '#fff',
+              background: 'rgba(0,0,0,0.3)',
+              borderRadius: '50%'
+            }}
+          >
+            <X size={18} />
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <div style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 15px rgba(245, 158, 11, 0.5)'
+            }}>
+              <Crown size={24} color="#fff" />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h2 style={{ margin: 0, fontSize: '1.45rem', fontWeight: 900, letterSpacing: '-0.02em' }}>
+                  PulseChat <span style={{ color: '#fbbf24' }}>PRO</span>
+                </h2>
+                {isUserPro && (
+                  <span style={{
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    background: 'linear-gradient(90deg, #f59e0b, #eab308)',
+                    color: '#000',
+                    padding: '2px 8px',
+                    borderRadius: '12px'
+                  }}>
+                    ACTIVE MEMBER
+                  </span>
+                )}
+              </div>
+              <p style={{ margin: 0, fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.75)' }}>
+                Elevate your pulse: Discord Nitro style perks & virtual gifts
+              </p>
+            </div>
+          </div>
+
+          {/* Navigation Tabs */}
+          <div style={{
+            display: 'flex',
+            gap: '8px',
+            marginTop: '16px',
+            background: 'rgba(0, 0, 0, 0.35)',
+            padding: '4px',
+            borderRadius: '14px'
+          }}>
+            <button
+              onClick={() => setActiveTab('pro')}
+              style={{
+                flex: 1,
+                padding: '7px 12px',
+                borderRadius: '10px',
+                border: 'none',
+                background: activeTab === 'pro' ? 'linear-gradient(90deg, #6366f1, #a855f7)' : 'transparent',
+                color: activeTab === 'pro' ? '#fff' : 'rgba(255,255,255,0.7)',
+                fontWeight: 700,
+                fontSize: '0.84rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                transition: 'all 0.2s'
+              }}
+            >
+              <Crown size={15} /> 👑 Pulse Pro Perks
+            </button>
+            <button
+              onClick={() => setActiveTab('sparks')}
+              style={{
+                flex: 1,
+                padding: '7px 12px',
+                borderRadius: '10px',
+                border: 'none',
+                background: activeTab === 'sparks' ? 'linear-gradient(90deg, #f59e0b, #ef4444)' : 'transparent',
+                color: activeTab === 'sparks' ? '#fff' : 'rgba(255,255,255,0.7)',
+                fontWeight: 700,
+                fontSize: '0.84rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                transition: 'all 0.2s'
+              }}
+            >
+              <Zap size={15} /> ⚡ Sparks Store ({currentSparks})
+            </button>
+          </div>
+        </div>
+
+        {/* Status notification banner if any */}
+        {statusMsg.text && (
+          <div style={{
+            padding: '10px 16px',
+            background: statusMsg.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+            borderBottom: `1px solid ${statusMsg.type === 'success' ? '#10b981' : '#ef4444'}`,
+            color: statusMsg.type === 'success' ? '#10b981' : '#ef4444',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+            textAlign: 'center'
+          }}>
+            {statusMsg.text}
+          </div>
+        )}
+
+        {/* Body Content */}
+        <div style={{ padding: '20px', maxHeight: '68vh', overflowY: 'auto' }}>
+          {activeTab === 'pro' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              {/* Feature Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px'
+                }}>
+                  <div style={{ color: '#f59e0b', flexShrink: 0 }}><Crown size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Gold Badge</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Verified 👑 PRO glow badge across all chats & profile.</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px'
+                }}>
+                  <div style={{ color: '#0ea5e9', flexShrink: 0 }}><Rocket size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>500 MB Files</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Upload massive video & files (Free is 25 MB).</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px'
+                }}>
+                  <div style={{ color: '#a855f7', flexShrink: 0 }}><Sparkles size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Exclusive Themes</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Unlock Royal Gold Nitro, Nebula & Cyber Glow.</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px'
+                }}>
+                  <div style={{ color: '#10b981', flexShrink: 0 }}><ShieldCheck size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>100% Ad-Free</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Zero ads, zero interruptions, pure high speed.</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pricing Cards Selector */}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <div
+                  onClick={() => setBillingCycle('monthly')}
+                  style={{
+                    flex: 1,
+                    padding: '14px',
+                    borderRadius: '16px',
+                    border: billingCycle === 'monthly' ? '2px solid var(--accent)' : '1px solid var(--border)',
+                    background: billingCycle === 'monthly' ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-card)',
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Monthly</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-main)', margin: '4px 0' }}>₹49</div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Billed monthly</div>
+                </div>
+
+                <div
+                  onClick={() => setBillingCycle('yearly')}
+                  style={{
+                    flex: 1,
+                    padding: '14px',
+                    borderRadius: '16px',
+                    border: billingCycle === 'yearly' ? '2px solid #f59e0b' : '1px solid var(--border)',
+                    background: billingCycle === 'yearly' ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-card)',
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    position: 'relative',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute',
+                    top: '-9px',
+                    right: '12px',
+                    background: '#f59e0b',
+                    color: '#000',
+                    fontSize: '0.65rem',
+                    fontWeight: 800,
+                    padding: '1px 8px',
+                    borderRadius: '10px'
+                  }}>
+                    SAVE 15%
+                  </span>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Annual VIP</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#f59e0b', margin: '4px 0' }}>₹499</div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>₹41.5 / month</div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => handleCheckout(billingCycle === 'monthly' ? 'pro_monthly' : 'pro_yearly')}
+                  className="btn-primary"
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '16px',
+                    fontWeight: 800,
+                    fontSize: '0.96rem',
+                    background: 'linear-gradient(90deg, #6366f1 0%, #ec4899 100%)',
+                    boxShadow: '0 4px 18px rgba(99, 102, 241, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    border: 'none',
+                    cursor: loading ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {loading ? <Loader2 size={18} className="spin" /> : <Crown size={18} />}
+                  {isUserPro ? 'Extend Pro Membership' : `Upgrade to Pro — ₹${billingCycle === 'monthly' ? '49' : '499'}`}
+                </button>
+
+                {/* Instant Sandbox Button */}
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => executeDemoActivation(billingCycle === 'monthly' ? 'pro_monthly' : 'pro_yearly')}
+                  style={{
+                    background: 'transparent',
+                    border: '1px dashed var(--border)',
+                    borderRadius: '12px',
+                    padding: '8px',
+                    fontSize: '0.78rem',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                  title="Test sandbox mode without UPI/Card"
+                >
+                  <Zap size={13} color="#f59e0b" /> Instant Test Sandbox Mode (One-Click Activate)
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Sparks Store Tab */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(239, 68, 68, 0.08))',
+                padding: '14px',
+                borderRadius: '16px',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Your Sparks Balance</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Zap size={22} fill="#f59e0b" /> {currentSparks} <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>Sparks</span>
+                  </div>
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', maxWidth: '180px', textAlign: 'right' }}>
+                  Use sparks to beam animated gifts and appreciations in any chat!
+                </div>
+              </div>
+
+              <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                Select a Sparks Bundle:
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {[
+                  { id: 'sparks_100', amount: 100, price: 19, tag: 'Starter' },
+                  { id: 'sparks_300', amount: 300, price: 49, tag: 'Most Popular', highlight: true },
+                  { id: 'sparks_1000', amount: 1000, price: 149, tag: 'Best Value' }
+                ].map((pack) => {
+                  const isSelected = selectedSparksPack === pack.id;
+                  return (
+                    <div
+                      key={pack.id}
+                      onClick={() => setSelectedSparksPack(pack.id)}
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: '14px',
+                        border: isSelected ? '2px solid #f59e0b' : '1px solid var(--border)',
+                        background: isSelected ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-card)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          background: 'rgba(245, 158, 11, 0.2)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#f59e0b'
+                        }}>
+                          <Zap size={18} fill="#f59e0b" />
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-main)' }}>
+                            {pack.amount} Pulse Sparks
+                          </div>
+                          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                            {pack.tag}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: 900, fontSize: '1.05rem', color: '#f59e0b' }}>
+                          ₹{pack.price}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handleCheckout(selectedSparksPack)}
+                className="btn-primary"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '16px',
+                  fontWeight: 800,
+                  fontSize: '0.96rem',
+                  background: 'linear-gradient(90deg, #f59e0b 0%, #ef4444 100%)',
+                  boxShadow: '0 4px 18px rgba(245, 158, 11, 0.4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  border: 'none',
+                  cursor: loading ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {loading ? <Loader2 size={18} className="spin" /> : <Zap size={18} fill="#fff" />}
+                Purchase Sparks Pack
+              </button>
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => executeDemoActivation(selectedSparksPack)}
+                style={{
+                  background: 'transparent',
+                  border: '1px dashed var(--border)',
+                  borderRadius: '12px',
+                  padding: '8px',
+                  fontSize: '0.78rem',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Zap size={13} color="#f59e0b" /> Instant Test Sandbox Credit
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

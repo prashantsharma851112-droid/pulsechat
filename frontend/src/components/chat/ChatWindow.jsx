@@ -11,6 +11,8 @@ import UserProfileModal from './UserProfileModal';
 import GroupProfileModal from './GroupProfileModal';
 import MediaUploadModal from './MediaUploadModal';
 import ChatThemeModal from './ChatThemeModal';
+import PulseProModal from './PulseProModal';
+import GiftPickerModal from './GiftPickerModal';
 import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
@@ -153,6 +155,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [showWhiteboard, setShowWhiteboard] = useState(false);
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   const [showGroupProfileModal, setShowGroupProfileModal] = useState(false);
+  const [showProModal, setShowProModal] = useState(false);
+  const [showGiftPicker, setShowGiftPicker] = useState(false);
+  const [proModalTab, setProModalTab] = useState('pro');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [pendingMedia, setPendingMedia] = useState(null);
   const [groupMembersMap, setGroupMembersMap] = useState({});
@@ -958,9 +963,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Size check — 10MB limit to prevent browser crash
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File too large! Please select a file under 10MB.');
+    // Dynamic File Limit: 25MB Free vs 500MB Pro
+    const isPro = Boolean(user?.isPro);
+    const maxLimitBytes = isPro ? 500 * 1024 * 1024 : 25 * 1024 * 1024;
+    if (file.size > maxLimitBytes) {
+      if (!isPro) {
+        setProModalTab('pro');
+        setShowProModal(true);
+      } else {
+        alert('File size exceeds the 500MB Pulse Pro limit.');
+      }
       e.target.value = '';
       return;
     }
@@ -1405,6 +1417,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 isMine={msg.senderId === user.id}
                 chatId={chatId}
                 senderName={senderObj?.displayName || senderObj?.username}
+                senderIsPro={msg.senderId === user.id ? user?.isPro : (isGroup ? senderObj?.isPro : activeChat?.isPro)}
                 onDeleteLocal={handleDeleteLocalMessage}
                 onDeleteTrigger={handleTriggerUndoToast}
                 isMultiSelectMode={isMultiSelectMode}
@@ -1688,6 +1701,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               <button onClick={() => fileInputRef.current?.click()} className="icon-btn-ghost" title="Send Photo, Video or Document"><Paperclip size={20} /></button>
               <button onClick={() => setShowEmoji(!showEmoji)} className="icon-btn-ghost" title="Add Emoji"><Smile size={20} /></button>
               <button onClick={() => setShowCreatePoll(true)} className="icon-btn-ghost" title="Create Poll"><BarChart2 size={20} /></button>
+              <button onClick={() => setShowGiftPicker(true)} className="icon-btn-ghost" title="Beam Virtual Gift (Pulse Sparks)"><span style={{ fontSize: '1.2rem' }}>🎁</span></button>
               <button onClick={() => setShowRecorder(true)} className="icon-btn-ghost" title="Voice Note"><Mic size={20} /></button>
             </>
           )}
@@ -1772,6 +1786,28 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           currentTheme={chatTheme}
           onSelectTheme={handleSelectChatTheme}
           onClose={() => setShowThemeModal(false)}
+        />
+      )}
+
+      {showGiftPicker && (
+        <GiftPickerModal
+          chatId={chatId}
+          receiverId={activeChat?.id}
+          receiverName={activeChat?.displayName || activeChat?.username}
+          isGroup={isGroup}
+          onClose={() => setShowGiftPicker(false)}
+          onOpenSparksStore={() => {
+            setShowGiftPicker(false);
+            setProModalTab('sparks');
+            setShowProModal(true);
+          }}
+        />
+      )}
+
+      {showProModal && (
+        <PulseProModal
+          initialTab={proModalTab}
+          onClose={() => setShowProModal(false)}
         />
       )}
     </div>

@@ -26,6 +26,11 @@ const userSchema = new mongoose.Schema({
   blockedUsers: [{ type: String }],
   friends: [{ type: String }],
   hideReadReceipts: { type: Boolean, default: false },
+  isPro: { type: Boolean, default: false },
+  proExpiresAt: { type: Date, default: null },
+  proTier: { type: String, default: 'none' }, // 'none' | 'monthly' | 'yearly'
+  customBadge: { type: String, default: '' },
+  pulseSparks: { type: Number, default: 50 }, // 50 Free Sparks on signup
   createdAt: { type: Date, default: Date.now }
 });
 

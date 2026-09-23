@@ -10,12 +10,13 @@ const messageSchema = new mongoose.Schema({
   receiverId: { type: String, default: '' },
   isGroup: { type: Boolean, default: false },
   content: { type: String, default: '' },
-  type: { type: String, default: 'text' }, // 'text' | 'voice' | 'image' | 'video' | 'document' | 'poll' | 'call'
+  type: { type: String, default: 'text' }, // 'text' | 'voice' | 'image' | 'video' | 'document' | 'poll' | 'call' | 'gift'
   audioUrl: { type: String, default: null },
   mediaUrl: { type: String, default: null },
   fileName: { type: String, default: null },
   fileSize: { type: String, default: null },
   pollData: { type: Object, default: null },
+  giftData: { type: Object, default: null }, // { giftId, giftName, sparkAmount, icon, message, receiverName }
   callData: { type: Object, default: null }, // { isVideo: Boolean, status: String, duration: Number }
   isViewOnce: { type: Boolean, default: false },
   viewedBy: { type: Array, default: [] },

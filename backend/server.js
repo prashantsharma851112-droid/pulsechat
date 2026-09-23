@@ -17,6 +17,7 @@ const messageRoutes = require('./routes/messages');
 const groupRoutes = require('./routes/groups');
 const friendRoutes = require('./routes/friends');
 const uploadRoutes = require('./routes/upload');
+const paymentRoutes = require('./routes/payments');
 const { uploadToCloudinary } = require('./utils/cloudinary');
 
 const app = express();
@@ -44,6 +45,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // Catch-all for unhandled /api/* requests so they ALWAYS return JSON 404, NEVER HTML
 app.all('/api/*', (req, res) => {
@@ -189,7 +191,7 @@ io.on('connection', (socket) => {
 
   // Send Real-Time Message (Fast parallel check & instant emission)
   socket.on('send_message', async (messageData, ackCallback) => {
-    const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, fileName, fileSize, pollData, callData, isViewOnce, replyTo, clientTempId } = messageData;
+    const { chatId, senderId, receiverId, isGroup, content, type, audioUrl, mediaUrl, fileName, fileSize, pollData, giftData, callData, isViewOnce, replyTo, clientTempId } = messageData;
 
     try {
       // Parallelize block status and chat settings check
@@ -278,6 +280,7 @@ io.on('connection', (socket) => {
         fileName: fileName || null,
         fileSize: fileSize || null,
         pollData: pollData || null,
+        giftData: giftData || null,
         callData: callData || null,
         isViewOnce: !!isViewOnce,
         viewedBy: [],

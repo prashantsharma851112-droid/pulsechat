@@ -11,7 +11,7 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     const results = await User.find({ id: { $ne: req.user.id } })
       .sort({ createdAt: -1, _id: -1 })
-      .select('id username displayName avatar isEmailVerified status email createdAt')
+      .select('id username displayName avatar isEmailVerified status email createdAt isPro proTier customBadge pulseSparks')
       .limit(200)
       .lean();
     res.json(results);
@@ -52,7 +52,7 @@ router.get('/search', authMiddleware, async (req, res) => {
       ]
     })
     .sort({ createdAt: -1, _id: -1 })
-    .select('id username displayName avatar isEmailVerified status email createdAt')
+    .select('id username displayName avatar isEmailVerified status email createdAt isPro proTier customBadge pulseSparks')
     .limit(50)
     .lean();
 

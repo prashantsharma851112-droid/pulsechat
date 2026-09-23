@@ -318,8 +318,8 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                 height: '100px',
                 borderRadius: '50%',
                 objectFit: 'cover',
-                border: '4px solid var(--bg-card)',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                border: userToDisplay?.isPro ? '4px solid #f59e0b' : '4px solid var(--bg-card)',
+                boxShadow: userToDisplay?.isPro ? '0 0 25px rgba(245, 158, 11, 0.5)' : '0 8px 24px rgba(0,0,0,0.3)',
                 cursor: 'pointer',
                 transition: 'transform 0.2s ease'
               }}
@@ -341,6 +341,19 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
             </h3>
             {userToDisplay.isEmailVerified && (
               <CheckCircle2 size={18} color="#10b981" title="Verified Account" />
+            )}
+            {userToDisplay?.isPro && (
+              <span style={{
+                fontSize: '0.68rem',
+                fontWeight: 800,
+                background: 'linear-gradient(90deg, #f59e0b, #eab308)',
+                color: '#000',
+                padding: '2px 8px',
+                borderRadius: '8px',
+                boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)'
+              }}>
+                👑 PRO
+              </span>
             )}
           </div>
           <p style={{ margin: '2px 0 0.75rem 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>

@@ -1,10 +1,11 @@
 import React, { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
 import SettingsModal from '../profile/SettingsModal';
 import FriendsTab from './FriendsTab';
+import PulseProModal from './PulseProModal';
 import { BACKEND_URL } from '../../utils/config';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
 import {
@@ -43,6 +44,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   });
   const [outgoingPendingIds, setOutgoingPendingIds] = useState(new Set());
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [showProModal, setShowProModal] = useState(false);
   const activeChatRef = React.useRef(activeChat);
   useEffect(() => {
     activeChatRef.current = activeChat;
@@ -633,15 +635,67 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: 'var(--text-main)', letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user?.displayName || user?.username || 'PulseChat'}
               </h3>
+              {user?.isPro && (
+                <span style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 800,
+                  background: 'linear-gradient(90deg, #f59e0b, #eab308)',
+                  color: '#000',
+                  padding: '1px 6px',
+                  borderRadius: '6px',
+                  flexShrink: 0,
+                  boxShadow: '0 2px 6px rgba(245, 158, 11, 0.3)'
+                }}>
+                  👑 PRO
+                </span>
+              )}
             </div>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              @{user?.username}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                @{user?.username}
+              </p>
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowProModal(true);
+                }}
+                style={{
+                  fontSize: '0.72rem',
+                  color: '#f59e0b',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '2px',
+                  cursor: 'pointer'
+                }}
+                title="Your Pulse Sparks Balance. Click to open Sparks store!"
+              >
+                <Zap size={11} fill="#f59e0b" /> {user?.pulseSparks ?? 50}
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Header Action Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <button
+            onClick={() => setShowProModal(true)}
+            title="PulseChat Pro & Sparks Store"
+            className="icon-btn-ghost"
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: user?.isPro ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(239, 68, 68, 0.2))' : 'var(--bg-card)',
+              color: '#f59e0b',
+              border: user?.isPro ? '1px solid rgba(245, 158, 11, 0.4)' : 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <Crown size={19} />
+          </button>
           <button
             onClick={handleManualRefresh}
             title="Refresh chats & connection"
@@ -1012,8 +1066,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <h4 style={{ fontSize: '1.02rem', fontWeight: u.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {u.displayName}
+                        <h4 style={{ fontSize: '1.02rem', fontWeight: u.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <span>{u.displayName}</span>
+                          {u.isPro && (
+                            <span style={{ fontSize: '0.62rem', fontWeight: 800, background: 'linear-gradient(90deg, #f59e0b, #eab308)', color: '#000', padding: '0px 5px', borderRadius: '6px' }}>
+                              👑 PRO
+                            </span>
+                          )}
                         </h4>
                         {u.unreadCount > 0 && (
                           <span className="unread-badge" style={{ marginLeft: '6px' }}>
@@ -1166,6 +1225,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             </div>
           </div>
         </div>
+      )}
+
+      {showProModal && (
+        <PulseProModal
+          initialTab="pro"
+          onClose={() => setShowProModal(false)}
+        />
       )}
     </div>
   );

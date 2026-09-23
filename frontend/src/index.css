@@ -104,6 +104,55 @@
   --border: #1a365d;
 }
 
+/* --- PRO EXCLUSIVE THEMES --- */
+[data-theme="gold_nitro"],
+[data-chat-theme="gold_nitro"] {
+  --bg-main: #0c0903;
+  --bg-sidebar: #171206;
+  --bg-chat: #090702;
+  --bg-card: #241a06;
+  --hover-bg: #322508;
+  --text-main: #fef3c7;
+  --text-muted: #d97706;
+  --accent: #f59e0b;
+  --accent-hover: #d97706;
+  --bubble-sent: #b45309;
+  --bubble-received: #281c06;
+  --border: #451a03;
+}
+
+[data-theme="nebula"],
+[data-chat-theme="nebula"] {
+  --bg-main: #0c071e;
+  --bg-sidebar: #150c33;
+  --bg-chat: #080414;
+  --bg-card: #211342;
+  --hover-bg: #2d1a59;
+  --text-main: #f5f3ff;
+  --text-muted: #c084fc;
+  --accent: #a855f7;
+  --accent-hover: #9333ea;
+  --bubble-sent: #7e22ce;
+  --bubble-received: #281650;
+  --border: #3b1b6e;
+}
+
+[data-theme="cyber_glow"],
+[data-chat-theme="cyber_glow"] {
+  --bg-main: #030d12;
+  --bg-sidebar: #061821;
+  --bg-chat: #02090c;
+  --bg-card: #082531;
+  --hover-bg: #0c3647;
+  --text-main: #ecfeff;
+  --text-muted: #67e8f9;
+  --accent: #06b6d4;
+  --accent-hover: #0891b2;
+  --bubble-sent: #0e7490;
+  --bubble-received: #0a2d3b;
+  --border: #155e75;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -1401,6 +1450,36 @@ input, textarea {
   color: #10b981;
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
+
+/* --- PULSE PRO & SPARKS STYLES --- */
+.pro-glow-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: linear-gradient(90deg, #f59e0b, #eab308);
+  color: #000;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+  animation: proPulse 3s infinite ease-in-out;
+}
+
+@keyframes proPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(245, 158, 11, 0.3); }
+  50% { box-shadow: 0 0 18px rgba(245, 158, 11, 0.6); }
+}
+
+.gift-spark-glow {
+  animation: giftBounce 0.6s ease-out;
+}
+
+@keyframes giftBounce {
+  0% { transform: scale(0.6) rotate(-10deg); opacity: 0; }
+  50% { transform: scale(1.15) rotate(5deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
 
 
 
