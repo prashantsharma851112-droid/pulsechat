@@ -101,16 +101,20 @@ router.get('/requests', authMiddleware, async (req, res) => {
     ]);
 
     // Populate user details for incoming requests
-    const senderIds = incomingReqs.map(r => r.senderId);
-    const senders = await User.find({
-      $or: [
-        { id: { $in: senderIds } },
-        { username: { $in: senderIds } },
-        { _id: { $in: senderIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } }
-      ]
-    })
-      .select('id displayName username avatar status isEmailVerified isPro proTier customBadge pulseSparks')
-      .lean();
+    const senderIds = incomingReqs.map(r => r.senderId).filter(Boolean);
+    let senders = [];
+    if (senderIds.length > 0) {
+      const validObjIds = senderIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+      senders = await User.find({
+        $or: [
+          { id: { $in: senderIds } },
+          { username: { $in: senderIds } },
+          ...(validObjIds.length > 0 ? [{ _id: { $in: validObjIds } }] : [])
+        ]
+      })
+        .select('id displayName username avatar status isEmailVerified isPro proTier customBadge pulseSparks')
+        .lean();
+    }
 
     const senderMap = new Map();
     senders.forEach(s => {
@@ -126,16 +130,20 @@ router.get('/requests', authMiddleware, async (req, res) => {
     }));
 
     // Populate user details for outgoing requests
-    const receiverIds = outgoingReqs.map(r => r.receiverId);
-    const receivers = await User.find({
-      $or: [
-        { id: { $in: receiverIds } },
-        { username: { $in: receiverIds } },
-        { _id: { $in: receiverIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } }
-      ]
-    })
-      .select('id displayName username avatar status isEmailVerified isPro proTier customBadge pulseSparks')
-      .lean();
+    const receiverIds = outgoingReqs.map(r => r.receiverId).filter(Boolean);
+    let receivers = [];
+    if (receiverIds.length > 0) {
+      const validObjIds = receiverIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+      receivers = await User.find({
+        $or: [
+          { id: { $in: receiverIds } },
+          { username: { $in: receiverIds } },
+          ...(validObjIds.length > 0 ? [{ _id: { $in: validObjIds } }] : [])
+        ]
+      })
+        .select('id displayName username avatar status isEmailVerified isPro proTier customBadge pulseSparks')
+        .lean();
+    }
 
     const receiverMap = new Map();
     receivers.forEach(rec => {

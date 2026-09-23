@@ -58,10 +58,13 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
   const fetchFriends = useCallback(async () => {
     const curToken = token || localStorage.getItem('pulsechat_token');
     if (!curToken) return;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     try {
       const res = await fetch(`${BACKEND_URL}/api/friends?t=${Date.now()}`, {
         cache: 'no-store',
-        headers: { Authorization: `Bearer ${curToken}` }
+        headers: { Authorization: `Bearer ${curToken}` },
+        signal: controller.signal
       });
       const data = await parseSafeJson(res);
       if (data && data.friends) {
@@ -90,7 +93,9 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
         }
       }
     } catch (err) {
-      console.error('Error fetching friends:', err);
+      console.warn('Friends fetch notice:', err?.message);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }, [token, user?.id]);
 
@@ -98,10 +103,13 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
   const fetchRequests = useCallback(async () => {
     const curToken = token || localStorage.getItem('pulsechat_token');
     if (!curToken) return;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     try {
       const res = await fetch(`${BACKEND_URL}/api/friends/requests?t=${Date.now()}`, {
         cache: 'no-store',
-        headers: { Authorization: `Bearer ${curToken}` }
+        headers: { Authorization: `Bearer ${curToken}` },
+        signal: controller.signal
       });
       const data = await parseSafeJson(res);
       if (data) {
@@ -125,21 +133,33 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
         setRequestStatusMap(prev => ({ ...prev, ...statusMap }));
       }
     } catch (err) {
-      console.error('Error fetching requests:', err);
+      console.warn('Requests fetch notice:', err?.message);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }, [token, onRequestsCountChange]);
 
   // Manual Refresh Handler
   const handleManualRefresh = useCallback(async () => {
+    if (isRefreshing) return;
     setIsRefreshing(true);
+
+    // Hard safety guarantee: refresh spinner NEVER spins longer than 1.2s!
+    const hardTimer = setTimeout(() => {
+      setIsRefreshing(false);
+    }, 1200);
+
     try {
-      await Promise.all([fetchFriends(), fetchRequests()]);
+      await Promise.allSettled([fetchFriends(), fetchRequests()]);
     } catch (e) {
-      console.error('Manual refresh error:', e);
+      console.warn('Manual refresh notice:', e);
     } finally {
-      setTimeout(() => setIsRefreshing(false), 400);
+      clearTimeout(hardTimer);
+      setTimeout(() => {
+        setIsRefreshing(false);
+      }, 300);
     }
-  }, [fetchFriends, fetchRequests]);
+  }, [isRefreshing, fetchFriends, fetchRequests]);
 
   // Initial load
   useEffect(() => {
