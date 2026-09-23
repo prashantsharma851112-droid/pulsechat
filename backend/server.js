@@ -19,6 +19,7 @@ const friendRoutes = require('./routes/friends');
 const uploadRoutes = require('./routes/upload');
 const paymentRoutes = require('./routes/payments');
 const { uploadToCloudinary } = require('./utils/cloudinary');
+const redis = require('./utils/redis');
 
 const app = express();
 const server = http.createServer(app);
@@ -58,7 +59,8 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
-    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    redis: redis.isConnected() ? 'connected (In-Memory RAM)' : 'standby (fallback mode)'
   });
 });
 

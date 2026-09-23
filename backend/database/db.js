@@ -52,6 +52,15 @@ module.exports = {
 
   saveMessage: async (msg) => {
     await Message.create(msg);
+    // Invalidate Redis RAM cache so fresh messages load instantly
+    if (msg.chatId) {
+      try {
+        const redis = require('../utils/redis');
+        redis.invalidateChat(msg.chatId).catch(() => {});
+        if (msg.senderId) redis.invalidateRecent(msg.senderId).catch(() => {});
+        if (msg.receiverId) redis.invalidateRecent(msg.receiverId).catch(() => {});
+      } catch {}
+    }
     return msg;
   },
 
@@ -242,6 +251,15 @@ module.exports = {
   // and an unread count. Optimized with parallel index scans for 0ms latency.
   getRecentConversations: async (myId) => {
     try {
+      // 0. Check Redis In-Memory RAM Cache (0.5ms ultra-low latency)
+      try {
+        const redis = require('../utils/redis');
+        const cached = await redis.getCachedRecent(myId);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+          return cached;
+        }
+      } catch {}
+
       const mongoose = require('mongoose');
 
       // Resolve all ID representations for myId
@@ -363,6 +381,13 @@ module.exports = {
           lastMessageType: lastMessage.type || 'text',
           unreadCount
         });
+      }
+
+      if (results.length > 0) {
+        try {
+          const redis = require('../utils/redis');
+          redis.setCachedRecent(myId, results, 90).catch(() => {});
+        } catch {}
       }
 
       return results;

@@ -55,12 +55,51 @@ router.put('/settings/:chatId/disappearing', authMiddleware, async (req, res) =>
   }
 });
 
-// Get Chat Message History - ultra fast response, non-blocking background read receipts
+// Get Chat Message History - ultra fast response with Redis RAM cache, non-blocking background read receipts
 router.get('/:chatId', authMiddleware, async (req, res) => {
   try {
     const { limit, before } = req.query;
+    const redis = require('../utils/redis');
+
+    // 0. Instant RAM Cache Check for initial chat opening (0.5ms response time)
+    if (!before) {
+      try {
+        const cached = await redis.getCachedMessages(req.params.chatId);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+          res.json(cached);
+
+          // Non-blocking background read mark and socket emission
+          setImmediate(async () => {
+            try {
+              const currentUser = await User.findOne({ id: req.user.id }).select('hideReadReceipts').lean();
+              const isGhostMode = Boolean(currentUser && currentUser.hideReadReceipts);
+
+              await db.markChatAsRead(req.params.chatId, req.user.id, isGhostMode);
+              const io = req.app.get('io');
+              if (io) {
+                io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+                if (!isGhostMode) {
+                  io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+                  if (req.params.chatId.includes('_')) {
+                    const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
+                    if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+                  }
+                }
+              }
+            } catch (bgErr) {}
+          });
+          return;
+        }
+      } catch {}
+    }
+
     const messages = await db.getMessages(req.params.chatId, limit, before);
     res.json(messages);
+
+    // Save to Redis RAM Cache for next instant open
+    if (!before && Array.isArray(messages) && messages.length > 0) {
+      redis.setCachedMessages(req.params.chatId, messages, 1800).catch(() => {});
+    }
 
     // Non-blocking background read mark and socket emission
     setImmediate(async () => {
