@@ -1315,7 +1315,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {/* Message Stream with WhatsApp-Style Date Dividers */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {!isGroup && friendshipStatus !== 'friends' && (
-          <div className="pulse-sync-card">
+          <div className="pulse-sync-card" style={{ margin: 'auto' }}>
             <div className="pulse-orb-icon">
               <Sparkles size={28} />
             </div>
@@ -1566,18 +1566,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       )}
 
       {/* AI Smart Suggested Reply Chips */}
-      <div style={{ padding: '0.4rem 1rem', display: 'flex', gap: '6px', overflowX: 'auto', background: 'var(--bg-chat)' }}>
-        {smartReplies.map((replyText, i) => (
-          <button
-            key={i}
-            onClick={() => setText(replyText)}
-            style={{ background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '16px', padding: '4px 10px', fontSize: '0.75rem', whiteSpace: 'nowrap', cursor: 'pointer' }}
-          >
-            <Sparkles size={11} color="var(--accent)" style={{ marginRight: '4px' }} />
-            {replyText}
-          </button>
-        ))}
-      </div>
+      {(isGroup || friendshipStatus === 'friends') && !blockStatus.isBlockedByMe && !blockStatus.isBlockedByThem && (
+        <div style={{ padding: '0.4rem 1rem', display: 'flex', gap: '6px', overflowX: 'auto', background: 'var(--bg-chat)' }}>
+          {smartReplies.map((replyText, i) => (
+            <button
+              key={i}
+              onClick={() => setText(replyText)}
+              style={{ background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '16px', padding: '4px 10px', fontSize: '0.75rem', whiteSpace: 'nowrap', cursor: 'pointer' }}
+            >
+              <Sparkles size={11} color="var(--accent)" style={{ marginRight: '4px' }} />
+              {replyText}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* WhatsApp-Style Reply Preview Strip */}
       {replyTo && (
@@ -1667,48 +1669,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           <ShieldAlert size={18} color="var(--text-muted)" />
           <span>You cannot reply to this conversation.</span>
         </div>
-      ) : (!isGroup && friendshipStatus !== 'friends') ? (
-        <div style={{
-          padding: '1.1rem',
-          background: 'var(--bg-sidebar)',
-          borderTop: '1px solid var(--border)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'column',
-          gap: '8px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.86rem' }}>
-            <Sparkles size={16} color="var(--accent)" />
-            <span>
-              {friendshipStatus === 'pending_sent'
-                ? '📡 Frequency beaming... Chat unlocks when pulse sync is accepted.'
-                : friendshipStatus === 'pending_received'
-                ? `⚡ ${activeChat.displayName || activeChat.username} beamed you a Pulse Sync!`
-                : 'Direct messaging unlocks once your frequencies are synced.'}
-            </span>
-          </div>
-          {friendshipStatus === 'pending_received' ? (
-            <button
-              type="button"
-              onClick={handleAcceptFriendRequest}
-              className="btn-primary"
-              style={{ padding: '7px 22px', fontSize: '0.84rem', borderRadius: '20px', fontWeight: 700 }}
-            >
-              <Sparkles size={14} /> ⚡ Accept & Sync Frequencies
-            </button>
-          ) : friendshipStatus === 'none' ? (
-            <button
-              type="button"
-              onClick={handleSendFriendRequest}
-              className="btn-primary"
-              style={{ padding: '7px 22px', fontSize: '0.84rem', borderRadius: '20px', fontWeight: 700 }}
-            >
-              <Sparkles size={14} /> ⚡ Sync Pulse ({selectedVibe})
-            </button>
-          ) : null}
-        </div>
-      ) : (
+      ) : (!isGroup && friendshipStatus !== 'friends') ? null : (
         <div style={{ padding: '0.75rem 1rem', background: 'var(--bg-sidebar)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
           {showEmoji && (
             <EmojiPicker onSelectEmoji={(emoji) => setText(prev => prev + emoji)} onClose={() => setShowEmoji(false)} />
