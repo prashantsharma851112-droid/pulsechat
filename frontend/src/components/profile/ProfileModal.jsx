@@ -78,6 +78,20 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
       const data = await parseSafeJson(res);
       if (res.ok && data.user) {
         updateUserProfile(data.user);
+        window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+          detail: {
+            targetUserId: data.user.id,
+            updates: {
+              avatar: data.user.avatar,
+              displayName: data.user.displayName,
+              status: data.user.status,
+              isPro: data.user.isPro,
+              proTier: data.user.proTier,
+              customBadge: data.user.customBadge,
+              pulseSparks: data.user.pulseSparks
+            }
+          }
+        }));
         onClose();
       } else {
         setProfileError(data.error || 'Failed to update profile.');

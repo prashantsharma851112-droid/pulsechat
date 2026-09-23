@@ -208,6 +208,23 @@ router.post('/verify', authMiddleware, async (req, res) => {
       .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
       .lean();
 
+    // Broadcast VIP Pro / Profile update in real time to all connected users
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('user_profile_updated', {
+        userId: sanitizedUser.id,
+        userMongoId: sanitizedUser._id ? sanitizedUser._id.toString() : null,
+        username: sanitizedUser.username,
+        displayName: sanitizedUser.displayName,
+        avatar: sanitizedUser.avatar,
+        status: sanitizedUser.status,
+        isPro: Boolean(sanitizedUser.isPro),
+        proTier: sanitizedUser.proTier,
+        customBadge: sanitizedUser.customBadge,
+        pulseSparks: sanitizedUser.pulseSparks
+      });
+    }
+
     res.json({
       success: true,
       message: plan.type === 'pro' ? '🎉 Welcome to PulseChat Pro!' : `⚡ Added ${plan.sparks} Pulse Sparks!`,
@@ -295,6 +312,23 @@ router.post('/demo-activate', authMiddleware, async (req, res) => {
     const sanitizedUser = await User.findOne({ id: req.user.id })
       .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
       .lean();
+
+    // Broadcast VIP Pro / Profile update in real time to all connected users
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('user_profile_updated', {
+        userId: sanitizedUser.id,
+        userMongoId: sanitizedUser._id ? sanitizedUser._id.toString() : null,
+        username: sanitizedUser.username,
+        displayName: sanitizedUser.displayName,
+        avatar: sanitizedUser.avatar,
+        status: sanitizedUser.status,
+        isPro: Boolean(sanitizedUser.isPro),
+        proTier: sanitizedUser.proTier,
+        customBadge: sanitizedUser.customBadge,
+        pulseSparks: sanitizedUser.pulseSparks
+      });
+    }
 
     const returnMsg = plan.type === 'pro'
       ? (plan.tier === 'yearly' ? '👑 Pulse VIP Annual Plan Activated!' : '⚡ Pulse VIP Monthly Plan Activated!')

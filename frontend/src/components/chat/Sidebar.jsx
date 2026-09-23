@@ -572,7 +572,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
     const handleProfileUpdate = (data) => {
       if (!data) return;
-      const { userId, userMongoId, username, displayName, avatar, status } = data;
+      const { userId, userMongoId, username, displayName, avatar, status, isPro, proTier, customBadge, pulseSparks } = data;
 
       const isMatch = (u) => {
         if (!u) return false;
@@ -587,7 +587,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           ...u,
           ...(displayName !== undefined && displayName !== '' && { displayName }),
           ...(avatar !== undefined && avatar !== '' && { avatar }),
-          ...(status !== undefined && { status })
+          ...(status !== undefined && { status }),
+          ...(isPro !== undefined && { isPro }),
+          ...(proTier !== undefined && { proTier }),
+          ...(customBadge !== undefined && { customBadge }),
+          ...(pulseSparks !== undefined && { pulseSparks })
         } : u);
         if (user?.id) setCachedAllUsers(user.id, next);
         return next;
@@ -597,7 +601,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         const next = prev.map(u => isMatch(u) ? {
           ...u,
           ...(displayName !== undefined && displayName !== '' && { displayName }),
-          ...(avatar !== undefined && avatar !== '' && { avatar })
+          ...(avatar !== undefined && avatar !== '' && { avatar }),
+          ...(isPro !== undefined && { isPro }),
+          ...(proTier !== undefined && { proTier }),
+          ...(customBadge !== undefined && { customBadge })
         } : u);
         if (user?.id) setCachedRecentChats(user.id, next);
         return next;

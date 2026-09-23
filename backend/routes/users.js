@@ -93,7 +93,11 @@ router.put('/profile', authMiddleware, async (req, res) => {
         username: userWithoutPass.username,
         displayName: userWithoutPass.displayName,
         avatar: userWithoutPass.avatar,
-        status: userWithoutPass.status
+        status: userWithoutPass.status,
+        isPro: Boolean(userWithoutPass.isPro),
+        proTier: userWithoutPass.proTier,
+        customBadge: userWithoutPass.customBadge,
+        pulseSparks: userWithoutPass.pulseSparks
       });
     }
 

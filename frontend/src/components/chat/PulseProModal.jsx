@@ -207,6 +207,18 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
       const vData = await vRes.json();
       if (vData.success && vData.user) {
         updateUserProfile(vData.user);
+        window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+          detail: {
+            targetUserId: vData.user.id,
+            updates: {
+              isPro: vData.user.isPro,
+              proTier: vData.user.proTier,
+              customBadge: vData.user.customBadge,
+              pulseSparks: vData.user.pulseSparks,
+              claimedFreeSparks: vData.user.claimedFreeSparks
+            }
+          }
+        }));
         setStatusMsg({ type: 'success', text: vData.message || 'Payment successful!' });
         setTimeout(() => {
           onClose();
@@ -236,6 +248,18 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
       const data = await res.json();
       if (data.success && data.user) {
         updateUserProfile(data.user);
+        window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+          detail: {
+            targetUserId: data.user.id,
+            updates: {
+              isPro: data.user.isPro,
+              proTier: data.user.proTier,
+              customBadge: data.user.customBadge,
+              pulseSparks: data.user.pulseSparks,
+              claimedFreeSparks: data.user.claimedFreeSparks
+            }
+          }
+        }));
         setStatusMsg({
           type: 'success',
           text: planId.startsWith('pro') ? '🎉 Monthly VIP Activated for 100% FREE! Enjoy VIP perks!' : '⚡ Pulse Sparks Credited for FREE!'
