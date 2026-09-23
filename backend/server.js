@@ -66,12 +66,21 @@ app.all('/api/*', (req, res) => {
   res.status(404).json({ error: `API route ${req.method} ${req.originalUrl} not found.` });
 });
 
-// Serve Frontend static files if built together
+// Serve Frontend static files if built together, or 200 OK API status for root
 const frontendDist = path.join(__dirname, '../frontend/dist');
 if (require('fs').existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   app.get('*', (req, res) => {
     res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+} else {
+  app.get('/', (req, res) => {
+    res.status(200).json({
+      status: 'ok',
+      message: '🚀 PulseChat API Server is live and running!',
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString()
+    });
   });
 }
 
