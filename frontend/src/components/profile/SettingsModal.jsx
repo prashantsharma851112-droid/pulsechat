@@ -8,7 +8,7 @@ import { BACKEND_URL } from '../../utils/config';
 const THEMES = [
   { id: 'light', name: '☀️ Light Mode (Brightness)', color: '#4f46e5' },
   { id: 'dark', name: '🌙 Dark Mode', color: '#6366f1' },
-  { id: 'emerald', name: '💬 Emerald Green (WhatsApp)', color: '#10b981' },
+  { id: 'emerald', name: '🌿 Emerald Pulse', color: '#10b981' },
   { id: 'neon', name: '⚡ Cyberpunk Neon', color: '#ec4899' },
   { id: 'sunset', name: '🌅 Sunset Rose', color: '#f43f5e' }
 ];

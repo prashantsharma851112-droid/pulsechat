@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Full-Stack Auth & Email Verification Masterclass Guide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- html2pdf.js for client-side direct PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-dark: #3730a3;
+      --primary-light: #e0e7ff;
+      --secondary: #06b6d4;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --bg-page: #f8fafc;
+      --bg-card: #ffffff;
+      --border: #e2e8f0;
+      --code-bg: #0f172a;
+      --code-text: #e2e8f0;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      line-height: 1.65;
+      padding: 0;
+      font-size: 15px;
+    }
+
+    /* Fixed Floating Top Bar */
+    .top-action-bar {
+      position: sticky;
+      top: 0;
+      z-index: 9999;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 2px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    }
+
+    .top-action-bar .brand {
+      font-weight: 800;
+      font-size: 1.1rem;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+    }
+
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .btn-print {
+      background: var(--primary);
+      color: white;
+    }
+    .btn-print:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+
+    .btn-pdf {
+      background: #0f172a;
+      color: white;
+    }
+    .btn-pdf:hover {
+      background: #1e293b;
+      transform: translateY(-1px);
+    }
+
+    /* Main Container */
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 24px 80px 24px;
+      background: var(--bg-card);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.04);
+    }
+
+    /* Header Banner */
+    .hero-banner {
+      background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);
+      color: white;
+      border-radius: 16px;
+      padding: 40px 32px;
+      margin-bottom: 36px;
+      text-align: center;
+    }
+
+    .hero-banner h1 {
+      font-size: 2.3rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+      line-height: 1.25;
+    }
+
+    .hero-banner p {
+      font-size: 1.1rem;
+      opacity: 0.92;
+      max-width: 700px;
+      margin: 0 auto 16px auto;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Table of Contents */
+    .toc-card {
+      background: var(--primary-light);
+      border: 1px solid #c7d2fe;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 40px;
+    }
+
+    .toc-card h3 {
+      color: var(--primary-dark);
+      font-size: 1.15rem;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 10px;
+    }
+
+    .toc-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.92rem;
+      color: var(--primary-dark);
+      text-decoration: none;
+      font-weight: 500;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.7);
+    }
+    .toc-item:hover {
+      background: white;
+    }
+
+    /* Section Styling */
+    .module-section {
+      margin-bottom: 48px;
+      padding-top: 10px;
+    }
+
+    .module-header {
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 12px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .module-title {
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .module-tag {
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: #e2e8f0;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    h3 {
+      font-size: 1.22rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 24px 0 10px 0;
+    }
+
+    h4 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #334155;
+      margin: 18px 0 8px 0;
+    }
+
+    p {
+      margin-bottom: 14px;
+      color: #334155;
+    }
+
+    ul, ol {
+      margin-left: 24px;
+      margin-bottom: 16px;
+      color: #334155;
+    }
+
+    li {
+      margin-bottom: 6px;
+    }
+
+    /* Code Blocks */
+    pre {
+      background: var(--code-bg);
+      color: var(--code-text);
+      font-family: 'Fira Code', monospace;
+      font-size: 0.88rem;
+      border-radius: 10px;
+      padding: 16px 20px;
+      overflow-x: auto;
+      margin: 16px 0 20px 0;
+      border: 1px solid #334155;
+      line-height: 1.5;
+    }
+
+    code {
+      font-family: 'Fira Code', monospace;
+      font-size: 0.88em;
+      background: #e2e8f0;
+      color: #0f172a;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+    }
+
+    /* Callout Boxes */
+    .callout {
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin: 18px 0;
+      border-left: 5px solid;
+    }
+
+    .callout-info {
+      background: #eff6ff;
+      border-left-color: #3b82f6;
+      color: #1e3a8a;
+    }
+
+    .callout-warning {
+      background: #fffbeb;
+      border-left-color: #f59e0b;
+      color: #78350f;
+    }
+
+    .callout-success {
+      background: #ecfdf5;
+      border-left-color: #10b981;
+      color: #064e3b;
+    }
+
+    .callout-danger {
+      background: #fef2f2;
+      border-left-color: #ef4444;
+      color: #7f1d1d;
+    }
+
+    .callout strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.96rem;
+    }
+
+    /* Flow Chart / Visual Cards */
+    .flow-card {
+      background: #f1f5f9;
+      border: 1px dashed #cbd5e1;
+      border-radius: 10px;
+      padding: 16px;
+      margin: 16px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .flow-step {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 500;
+    }
+
+    .flow-step .num {
+      width: 26px;
+      height: 26px;
+      background: var(--primary);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* Table Styling */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 18px 0;
+      font-size: 0.92rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      text-align: left;
+    }
+
+    th {
+      background: #f8fafc;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    /* Printable Formatting */
+    @media print {
+      body {
+        background: white !important;
+        font-size: 13px !important;
+      }
+      .no-print, .top-action-bar {
+        display: none !important;
+      }
+      .container {
+        box-shadow: none !important;
+        padding: 0 !important;
+        max-width: 100% !important;
+      }
+      .hero-banner {
+        background: #4f46e5 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        padding: 24px !important;
+      }
+      pre {
+        background: #1e293b !important;
+        color: #f8fafc !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        white-space: pre-wrap !important;
+        word-break: break-word;
+        font-size: 11px !important;
+        padding: 10px !important;
+      }
+      .page-break {
+        page-break-before: always;
+      }
+      @page {
+        size: A4;
+        margin: 15mm 12mm 15mm 12mm;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Sticky Navigation & PDF Export Controls -->
+  <div class="top-action-bar no-print">
+    <div class="brand">
+      <span>🛡️</span> PulseChat Developer Academy
+    </div>
+    <div class="btn-group">
+      <button class="action-btn btn-print" onclick="window.print()">
+        <span>🖨️</span> Save as PDF / Print
+      </button>
+      <button class="action-btn btn-pdf" onclick="generateDirectPDF()">
+        <span>📥</span> Download PDF Directly
+      </button>
+    </div>
+  </div>
+
+  <div class="container" id="printable-content">
+    
+    <!-- Hero Header -->
+    <div class="hero-banner">
+      <span class="hero-badge">Masterclass Teaching Manual</span>
+      <h1>Full-Stack Auth & Email Verification</h1>
+      <p>Kissi bhi web application me secure <strong>Login, Register, Password Hashing, JWT Sessions,</strong> aur <strong>OTP Email Verification</strong> step-by-step banane ki complete guide.</p>
+      <div style="font-size: 0.85rem; opacity: 0.8;">Author: DeepMind Antigravity Engineering • Language: Hindi + Hinglish + Clean Code</div>
+    </div>
+
+    <!-- Table of Contents -->
+    <div class="toc-card">
+      <h3>📑 Course Index (Syllabus)</h3>
+      <div class="toc-grid">
+        <a href="#mod1" class="toc-item">1. Auth Architecture & Flow</a>
+        <a href="#mod2" class="toc-item">2. Database Schema Design</a>
+        <a href="#mod3" class="toc-item">3. Email Services & Brevo/SMTP</a>
+        <a href="#mod4" class="toc-item">4. Backend API Endpoints (Express)</a>
+        <a href="#mod5" class="toc-item">5. Frontend UI & State (React)</a>
+        <a href="#mod6" class="toc-item">6. Security & Edge Case Handling</a>
+        <a href="#mod7" class="toc-item">7. Real Practice Projects</a>
+        <a href="#cheat" class="toc-item">8. Quick Syntax Cheat Sheet</a>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODULE 1 -->
+    <!-- ========================================== -->
+    <div class="module-section" id="mod1">
+      <div class="module-header">
+        <div class="module-title"><span>01</span> Authentication Architecture & Core Concepts</div>
+        <span class="module-tag">Theory & Flow</span>
+      </div>
+
+      <p>Kissi bhi production-grade website (jaise Instagram, Netflix, ya PulseChat) me user management 4 main pillars par tiki hoti hai:</p>
+
+      <div class="flow-card">
+        <div class="flow-step">
+          <div class="num">1</div>
+          <div><strong>Identity Creation (Registration):</strong> User apni details deta hai (Email, Password, Username).</div>
+        </div>
+        <div class="flow-step">
+          <div class="num">2</div>
+          <div><strong>Verification (Email OTP):</strong> Confirm karna ki email sach me usi user ka hai taaki bots aur fake spam accounts na banein.</div>
+        </div>
+        <div class="flow-step">
+          <div class="num">3</div>
+          <div><strong>Authentication (Login):</strong> Password check karke user ki identity verify karna.</div>
+        </div>
+        <div class="flow-step">
+          <div class="num">4</div>
+          <div><strong>Authorization (Session / JWT Token):</strong> User ko ek Digital ID Card (Token) dena taaki har agle request par baar-baar password na mangna pade.</div>
+        </div>
+      </div>
+
+      <h3>🔑 Sessions vs JWT (JSON Web Tokens) - Konsa Kab Use Karein?</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Traditional Session (Cookie)</th>
+            <th>JWT (JSON Web Token) - <em>Recommended</em></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Store Kahan Hota Hai?</strong></td>
+            <td>Server memory / Redis me</td>
+            <td>Client ke pass (LocalStorage / HttpOnly Cookie)</td>
+          </tr>
+          <tr>
+            <td><strong>Server Load</strong></td>
+            <td>Zyaada (Har request par DB lookup)</td>
+            <td>Zero (Stateless — Token decrypt karke verify hota hai)</td>
+          </tr>
+          <tr>
+            <td><strong>Mobile App & Cross-Domain</strong></td>
+            <td>Difficult configure karna</td>
+            <td>Super Easy (React Native, Android, Web sabme chalta hai)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>🔒 Password Hashing (Bcrypt) — Sabse Badi Galati Jo Kabhi Mat Karna</h3>
+      <div class="callout callout-danger">
+        <strong>⚠️ RULE #1: Kabhi bhi user ka Password Plain-text me save mat karna!</strong>
+        Agar aapka database kabhi leak ho gaya, to saare users ke passwords leak ho jayenge. Isliye hum <strong>Bcrypt</strong> use karte hain jo password ko One-way Cryptographic Hash me convert kar deta hai.
+      </div>
+
+      <p>Plain Password: <code>mysecretpassword123</code><br>
+      Bcrypt Hashed Password: <code>$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa</code></p>
+      <p>Bcrypt ki khasiyat ye hai ki is hash se wapas original password nikalna mathematically impossible hai. Jab user login karta hai, hum <code>bcrypt.compare(inputPassword, storedHash)</code> se verify karte hain.</p>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODULE 2 -->
+    <!-- ========================================== -->
+    <div class="module-section page-break" id="mod2">
+      <div class="module-header">
+        <div class="module-title"><span>02</span> Database Schema Design (Mongoose / MongoDB)</div>
+        <span class="module-tag">Database Layer</span>
+      </div>
+
+      <p>Email verification system ke liye aapke User Schema me ye specific fields hona zaroori hai:</p>
+
+      <pre><code>// models/User.js
+const mongoose = require('mongoose');
+
+const userSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true }, // Custom clean ID jaise user_abc123
+  username: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  displayName: { type: String, required: true, trim: true },
+  passwordHash: { type: String, required: true },
+
+  // --- Email Verification Fields ---
+  isEmailVerified: { type: Boolean, default: false }, // Default hamesha false hoga!
+  otpCode: { type: String, default: null },           // 6-digit OTP code (e.g. "849201")
+  otpExpires: { type: Date, default: null },           // Expiry time (current time + 10 mins)
+  
+  // --- Security & Activity Tracking ---
+  lastLogin: { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now }
+});
+
+module.exports = mongoose.model('User', userSchema);
+</code></pre>
+
+      <div class="callout callout-info">
+        <strong>💡 Pro Tip: Lowercase & Trim Zaroor Lagayein!</strong>
+        Agar user register karte waqt <code>John@Example.com</code> likhta hai aur login me <code>john@example.com</code> likhta hai, to bina <code>lowercase: true</code> ke matching fail ho jayegi!
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODULE 3 -->
+    <!-- ========================================== -->
+    <div class="module-section page-break" id="mod3">
+      <div class="module-header">
+        <div class="module-title"><span>03</span> Email Delivery Engine (Brevo API & SMTP)</div>
+        <span class="module-tag">Mailing Layer</span>
+      </div>
+
+      <p>Email bhejne ke do tareeqe hote hain:</p>
+      <ul>
+        <li><strong>1. SMTP (Nodemailer):</strong> Standard email protocol (Gmail SMTP, Brevo SMTP, Amazon SES).</li>
+        <li><strong>2. HTTP REST API (Brevo / Resend):</strong> Cloud platforms (Render/Heroku) par SMTP ports block ho sakte hain, isliye REST API 100% reliable hoti hai.</li>
+      </ul>
+
+      <h3>Professional OTP Email Sender Utility</h3>
+      <pre><code>// utils/mailer.js
+const nodemailer = require('nodemailer');
+
+// 1. Brevo Direct API Fallback (Best for Cloud Deployments like Render)
+async function sendViaBrevoApi(toEmail, otpCode, appName = 'MyAwesomeApp') {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) throw new Error('BREVO_API_KEY is not configured');
+
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'accept': 'application/json',
+      'api-key': apiKey,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      sender: { name: appName, email: process.env.SMTP_FROM || 'no-reply@myapp.com' },
+      to: [{ email: toEmail }],
+      subject: `${otpCode} is your verification code for ${appName}`,
+      htmlContent: getOtpHtmlTemplate(otpCode, appName)
+    })
+  });
+
+  return response.ok;
+}
+
+// 2. High-Converting Beautiful HTML Email Template
+function getOtpHtmlTemplate(otpCode, appName) {
+  return `
+    &lt;div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px;"&gt;
+      &lt;h2 style="color: #4f46e5; text-align: center; margin-bottom: 20px;"&gt;${appName}&lt;/h2&gt;
+      &lt;p style="font-size: 15px; color: #334155;"&gt;Namaste! Aapka account verify karne ke liye ye raha aapka 6-digit OTP code:&lt;/p&gt;
+      &lt;div style="background: #f1f5f9; padding: 16px; border-radius: 8px; text-align: center; margin: 24px 0;"&gt;
+        &lt;span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #0f172a;"&gt;${otpCode}&lt;/span&gt;
+      &lt;/div&gt;
+      &lt;p style="font-size: 13px; color: #64748b;"&gt;Ye code agle &lt;strong&gt;10 minutes&lt;/strong&gt; ke liye valid hai. Kisi ke saath share na karein.&lt;/p&gt;
+    &lt;/div&gt;
+  `;
+}
+
+module.exports = { sendViaBrevoApi, getOtpHtmlTemplate };
+</code></pre>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODULE 4 -->
+    <!-- ========================================== -->
+    <div class="module-section page-break" id="mod4">
+      <div class="module-header">
+        <div class="module-title"><span>04</span> Backend API Endpoints (Express.js)</div>
+        <span class="module-tag">Backend Routes</span>
+      </div>
+
+      <p>Ab hum 4 critical endpoints implement karenge: Register, Verify OTP, Resend OTP, aur Login.</p>
+
+      <h3>Endpoint 1: POST /api/auth/register</h3>
+      <pre><code>// routes/auth.js
+const express = require('express');
+const router = express.Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const { sendViaBrevoApi } = require('../utils/mailer');
+
+router.post('/register', async (req, res) => {
+  try {
+    const { email, password, username, displayName } = req.body;
+
+    // 1. Validation
+    if (!email || !password || !username || !displayName) {
+      return res.status(400).json({ error: 'Saare fields bharna zaroori hai!' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanUsername = username.toLowerCase().trim().replace(/[^a-z0-9_]/g, '');
+
+    // 2. Check agar email pehle se exist karta hai
+    const existingUser = await User.findOne({ email: cleanEmail });
+
+    // IMPORTANT EDGE CASE: Agar user pehle register karne aaya tha par OTP verify nahi kiya
+    if (existingUser) {
+      if (existingUser.isEmailVerified) {
+        return res.status(400).json({ error: 'Ye email pehle se registered hai. Please Login karein.' });
+      }
+
+      // Re-generate OTP for unverified user and update details
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(password, salt);
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+
+      existingUser.username = cleanUsername;
+      existingUser.displayName = displayName.trim();
+      existingUser.passwordHash = passwordHash;
+      existingUser.otpCode = otp;
+      existingUser.otpExpires = otpExpires;
+      await existingUser.save();
+
+      await sendViaBrevoApi(cleanEmail, otp);
+      return res.json({ success: true, message: 'OTP send ho gaya!', email: cleanEmail });
+    }
+
+    // 3. New User: Hash password & Generate 6-digit OTP
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+    const newUser = new User({
+      id: 'user_' + Date.now(),
+      username: cleanUsername,
+      email: cleanEmail,
+      displayName: displayName.trim(),
+      passwordHash,
+      isEmailVerified: false,
+      otpCode: otp,
+      otpExpires
+    });
+
+    await newUser.save();
+    await sendViaBrevoApi(cleanEmail, otp);
+
+    res.status(201).json({ success: true, message: 'OTP aapke email par bhej diya gaya hai!', email: cleanEmail });
+  } catch (err) {
+    console.error('Register error:', err);
+    res.status(500).json({ error: 'Registration failed. Kripya dubara koshish karein.' });
+  }
+});
+</code></pre>
+
+      <h3>Endpoint 2: POST /api/auth/verify-otp</h3>
+      <pre><code>router.post('/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: 'Email aur OTP dono zaroori hain.' });
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) return res.status(404).json({ error: 'User nahi mila.' });
+
+    // 1. Check if OTP is expired
+    if (!user.otpExpires || new Date() > new Date(user.otpExpires)) {
+      return res.status(400).json({ error: 'OTP expire ho chuka hai! "Resend OTP" par click karein.' });
+    }
+
+    // 2. Check if OTP matches
+    if (user.otpCode !== otp.trim()) {
+      return res.status(400).json({ error: 'Galat OTP code! Kripya check karke dubara daalein.' });
+    }
+
+    // 3. Mark user verified and clear OTP
+    user.isEmailVerified = true;
+    user.otpCode = null;
+    user.otpExpires = null;
+    await user.save();
+
+    // 4. Generate JWT Login Token
+    const token = jwt.sign(
+      { id: user.id, email: user.email, username: user.username },
+      process.env.JWT_SECRET || 'super_secret_jwt_key_123',
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      success: true,
+      message: 'Email successfully verify ho gaya!',
+      token,
+      user: { id: user.id, username: user.username, email: user.email, displayName: user.displayName }
+    });
+  } catch (err) {
+    console.error('Verify error:', err);
+    res.status(500).json({ error: 'Verification failed.' });
+  }
+});
+</code></pre>
+
+      <h3>Endpoint 3: POST /api/auth/login</h3>
+      <pre><code>router.post('/login', async (req, res) => {
+  try {
+    const { identifier, password } = req.body; // Can be email or username
+    if (!identifier || !password) return res.status(400).json({ error: 'Credentials required.' });
+
+    const clean = identifier.toLowerCase().trim();
+    const user = await User.findOne({
+      $or: [{ email: clean }, { username: clean }]
+    });
+
+    if (!user) return res.status(401).json({ error: 'Galat email/username ya password.' });
+
+    // Verify password hash
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) return res.status(401).json({ error: 'Galat email/username ya password.' });
+
+    // IMPORTANT: Check if email is verified
+    if (!user.isEmailVerified) {
+      // Send fresh OTP automatically
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      user.otpCode = otp;
+      user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+      await user.save();
+      await sendViaBrevoApi(user.email, otp);
+
+      return res.status(403).json({
+        needsVerification: true,
+        email: user.email,
+        message: 'Aapka email verify nahi hai. Humne naya OTP bhej diya hai!'
+      });
+    }
+
+    // Issue JWT
+    const token = jwt.sign(
+      { id: user.id, email: user.email, username: user.username },
+      process.env.JWT_SECRET || 'super_secret_jwt_key_123',
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      success: true,
+      token,
+      user: { id: user.id, username: user.username, email: user.email, displayName: user.displayName }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Login failed.' });
+  }
+});
+</code></pre>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODULE 5 -->
+    <!-- ========================================== -->
+    <div class="module-section page-break" id="mod5">
+      <div class="module-header">
+        <div class="module-title"><span>05</span> Frontend Implementation (React.js)</div>
+        <span class="module-tag">Client UI Layer</span>
+      </div>
+
+      <p>Frontend me hum ek seamless <strong>Step-based state machine</strong> banate hain:
+      <code>Form Fill &rarr; Show OTP Input (with 60s Countdown) &rarr; Auto-Login on Success</code>.</p>
+
+      <pre><code>// components/AuthModal.jsx
+import React, { useState, useEffect } from 'react';
+
+export default function AuthModal({ onLoginSuccess }) {
+  // Step: 'login' | 'register' | 'verify_otp'
+  const [step, setStep] = useState('register');
+  
+  // Form Inputs
+  const [formData, setFormData] = useState({ email: '', password: '', username: '', displayName: '' });
+  const [otp, setOtp] = useState('');
+  
+  // States
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [cooldown, setCooldown] = useState(60); // 60-second timer for Resend OTP
+
+  // Cooldown countdown timer effect
+  useEffect(() => {
+    let timer;
+    if (step === 'verify_otp' && cooldown > 0) {
+      timer = setInterval(() => setCooldown(c => c - 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [step, cooldown]);
+
+  // Handle Registration Submit
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || 'Registration failed');
+
+      // Move to OTP step!
+      setStep('verify_otp');
+      setCooldown(60);
+    } catch (err) {
+      setErrorMessage(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle OTP Verification Submit
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, otp })
+      });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || 'Invalid OTP');
+
+      // Save Token to LocalStorage!
+      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('user_profile', JSON.stringify(data.user));
+
+      onLoginSuccess(data.user, data.token);
+    } catch (err) {
+      setErrorMessage(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    &lt;div className="auth-card"&gt;
+      {errorMessage && &lt;div className="alert-error"&gt;{errorMessage}&lt;/div&gt;}
+
+      {step === 'register' && (
+        &lt;form onSubmit={handleRegister}&gt;
+          &lt;h2&gt;Create an Account&lt;/h2&gt;
+          &lt;input 
+            type="text" 
+            placeholder="Full Name" 
+            value={formData.displayName} 
+            onChange={e =&gt; setFormData({...formData, displayName: e.target.value})} 
+            required 
+          /&gt;
+          &lt;input 
+            type="text" 
+            placeholder="Username (e.g. rahul_99)" 
+            value={formData.username} 
+            onChange={e =&gt; setFormData({...formData, username: e.target.value})} 
+            required 
+          /&gt;
+          &lt;input 
+            type="email" 
+            placeholder="Email Address" 
+            value={formData.email} 
+            onChange={e =&gt; setFormData({...formData, email: e.target.value})} 
+            required 
+          /&gt;
+          &lt;input 
+            type="password" 
+            placeholder="Password (min 6 chars)" 
+            value={formData.password} 
+            onChange={e =&gt; setFormData({...formData, password: e.target.value})} 
+            required 
+          /&gt;
+          &lt;button type="submit" disabled={loading}&gt;
+            {loading ? 'Sending OTP...' : 'Register & Send Code'}
+          &lt;/button&gt;
+        &lt;/form&gt;
+      )}
+
+      {step === 'verify_otp' && (
+        &lt;form onSubmit={handleVerifyOtp}&gt;
+          &lt;h2&gt;Enter Verification Code&lt;/h2&gt;
+          &lt;p&gt;We have sent a 6-digit code to &lt;strong&gt;{formData.email}&lt;/strong&gt;&lt;/p&gt;
+          &lt;input 
+            type="text" 
+            maxLength={6} 
+            placeholder="123456" 
+            value={otp} 
+            onChange={e =&gt; setOtp(e.target.value)} 
+            style={{ fontSize: '24px', letterSpacing: '6px', textAlign: 'center' }} 
+            required 
+          /&gt;
+          &lt;button type="submit" disabled={loading}&gt;
+            {loading ? 'Verifying...' : 'Verify & Continue'}
+          &lt;/button&gt;
+
+          &lt;div className="resend-box"&gt;
+            {cooldown &gt; 0 ? (
+              &lt;span&gt;Resend code in {cooldown}s&lt;/span&gt;
+            ) : (
+              &lt;button type="button" onClick={handleRegister}&gt;Resend OTP&lt;/button&gt;
+            )}
+          &lt;/div&gt;
+        &lt;/form&gt;
+      )}
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODULE 6 -->
+    <!-- ========================================== -->
+    <div class="module-section page-break" id="mod6">
+      <div class="module-header">
+        <div class="module-title"><span>06</span> Security & Real-World Production Checklist</div>
+        <span class="module-tag">Best Practices</span>
+      </div>
+
+      <div class="callout callout-warning">
+        <strong>🛡️ Production Security Checklist:</strong>
+        Ye 6 rules hamesha yaad rakhein jab bhi aap kisi client ya company ke liye authentication banayein:
+      </div>
+
+      <ol>
+        <li><strong>Rate Limiting Lagayein:</strong> <code>express-rate-limit</code> use karein taaki koi hacker script chala kar 10,000 baar OTP guess (Brute-Force) na kar sake. Ek IP se max 5 attempts allow karein.</li>
+        <li><strong>OTP Expiry Short Rakhein:</strong> OTP hamesha 5 se 10 minute ke andar expire hona chahiye (kabhi bhi 1 din ya unlimited mat rakhna).</li>
+        <li><strong>Single-Use OTP:</strong> Jaise hi OTP ek baar verify ho jaye, database se <code>otpCode = null</code> kar dein taaki dobara wahi code use na ho sake.</li>
+        <li><strong>Timing-Attack Safe Comparison:</strong> Password compare karne ke liye hamesha <code>bcrypt.compare()</code> use karein, normal <code>===</code> nahi.</li>
+        <li><strong>JWT Secret in Environment Variable:</strong> <code>JWT_SECRET</code> ko code me hardcode mat karein, hamesha <code>.env</code> file me rakhein.</li>
+        <li><strong>CORS Configuration:</strong> Backend me <code>cors({ origin: 'https://yourdomain.com' })</code> set karein taaki koi unauthorized website aapki API call na kar sake.</li>
+      </ol>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODULE 7 -->
+    <!-- ========================================== -->
+    <div class="module-section page-break" id="mod7">
+      <div class="module-header">
+        <div class="module-title"><span>07</span> 3 Hands-On Practice Projects</div>
+        <span class="module-tag">Practice Exercises</span>
+      </div>
+
+      <p>Authentication me master banne ka sabse best tareeqa hai khud code likhna. Ye 3 projects step-by-step banayein:</p>
+
+      <div class="flow-card">
+        <div class="flow-step">
+          <div class="num">1</div>
+          <div>
+            <strong>Project 1 (Easy): Personal Notes App with OTP Verification</strong>
+            <p style="font-size: 0.85rem; margin: 4px 0 0 0; color: var(--text-muted);">Ek simple app banayein jahan user register kare, email OTP se verify ho, aur apne private notes create/delete kar sake.</p>
+          </div>
+        </div>
+
+        <div class="flow-step">
+          <div class="num">2</div>
+          <div>
+            <strong>Project 2 (Medium): Forgot Password & Reset via Email Link / OTP</strong>
+            <p style="font-size: 0.85rem; margin: 4px 0 0 0; color: var(--text-muted);">Agar user password bhool jaye, to "Forgot Password" button dabane par unhe reset OTP jaye aur naya password save ho sake.</p>
+          </div>
+        </div>
+
+        <div class="flow-step">
+          <div class="num">3</div>
+          <div>
+            <strong>Project 3 (Advanced): Role-Based Auth (User vs Admin Dashboard)</strong>
+            <p style="font-size: 0.85rem; margin: 4px 0 0 0; color: var(--text-muted);">User schema me <code>role: 'user' | 'admin'</code> add karein. Sirf verified Admin hi user list dekh sake ya unko block kar sake.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODULE 8 -->
+    <!-- ========================================== -->
+    <div class="module-section" id="cheat">
+      <div class="module-header">
+        <div class="module-title"><span>08</span> Quick Syntax Cheat Sheet</div>
+        <span class="module-tag">Quick Reference</span>
+      </div>
+
+      <pre><code>// 1. Install Dependencies
+npm install express mongoose bcryptjs jsonwebtoken cors dotenv nodemailer
+
+// 2. Hash Password (Bcrypt)
+const salt = await bcrypt.genSalt(10);
+const hash = await bcrypt.hash(rawPassword, salt);
+
+// 3. Compare Password
+const isMatch = await bcrypt.compare(inputPassword, storedHash);
+
+// 4. Create JWT Token
+const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+// 5. Verify JWT Token (Middleware)
+const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+// 6. Generate 6-Digit OTP
+const otp = Math.floor(100000 + Math.random() * 900000).toString();
+</code></pre>
+
+      <div style="text-align: center; margin-top: 40px; padding: 24px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.88rem;">
+        🎉 <strong>Badhaai Ho!</strong> Aapne Full-Stack Auth & Email Verification ka poora system master kar liya hai.<br>
+        Upar diye gaye <strong>"Save as PDF / Print"</strong> button se is file ko offline PDF me save karein aur practice start karein!
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Client-side Direct PDF Generation Script -->
+  <script>
+    function generateDirectPDF() {
+      const element = document.getElementById('printable-content');
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: 'FullStack_Auth_Email_Verification_Masterclass.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'] }
+      };
+
+      // Notification
+      const btn = event.currentTarget;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '⏳ Generating PDF...';
+      btn.disabled = true;
+
+      html2pdf().set(opt).from(element).save().then(() => {
+        btn.innerHTML = '✅ Downloaded!';
+        setTimeout(() => {
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+        }, 3000);
+      }).catch(err => {
+        console.error(err);
+        alert('Direct PDF generation error. Please use "Save as PDF / Print" button which uses your browser\'s native high-resolution PDF print engine.');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      });
+    }
+  </script>
+
+</body>
+</html>

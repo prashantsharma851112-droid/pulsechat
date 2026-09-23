@@ -159,15 +159,16 @@ router.post('/verify', authMiddleware, async (req, res) => {
     if (!userDoc) return res.status(404).json({ error: 'User not found' });
 
     if (plan.type === 'pro') {
+      const isUpgradeToYearly = userDoc.isPro && userDoc.proTier === 'monthly' && plan.tier === 'yearly';
       const durationMs = (plan.durationDays || 30) * 24 * 60 * 60 * 1000;
-      const currentExpiry = userDoc.proExpiresAt && userDoc.proExpiresAt > new Date()
+      const baseTime = (userDoc.proExpiresAt && userDoc.proExpiresAt > new Date() && !isUpgradeToYearly)
         ? userDoc.proExpiresAt.getTime()
         : Date.now();
 
       userDoc.isPro = true;
       userDoc.proTier = plan.tier || 'monthly';
-      userDoc.proExpiresAt = new Date(currentExpiry + durationMs);
-      userDoc.customBadge = '👑 PRO';
+      userDoc.proExpiresAt = new Date(baseTime + durationMs);
+      userDoc.customBadge = '⚡ VIP';
     } else if (plan.type === 'sparks') {
       userDoc.pulseSparks = (userDoc.pulseSparks || 0) + (plan.sparks || 0);
     }
@@ -199,11 +200,16 @@ router.post('/demo-activate', authMiddleware, async (req, res) => {
     if (!userDoc) return res.status(404).json({ error: 'User not found' });
 
     if (plan.type === 'pro') {
+      const isUpgradeToYearly = userDoc.isPro && userDoc.proTier === 'monthly' && plan.tier === 'yearly';
       const durationMs = (plan.durationDays || 30) * 24 * 60 * 60 * 1000;
+      const baseTime = (userDoc.proExpiresAt && userDoc.proExpiresAt > new Date() && !isUpgradeToYearly)
+        ? userDoc.proExpiresAt.getTime()
+        : Date.now();
+
       userDoc.isPro = true;
       userDoc.proTier = plan.tier || 'monthly';
-      userDoc.proExpiresAt = new Date(Date.now() + durationMs);
-      userDoc.customBadge = '👑 PRO';
+      userDoc.proExpiresAt = new Date(baseTime + durationMs);
+      userDoc.customBadge = '⚡ VIP';
     } else if (plan.type === 'sparks') {
       userDoc.pulseSparks = (userDoc.pulseSparks || 0) + (plan.sparks || 100);
     }
@@ -214,9 +220,13 @@ router.post('/demo-activate', authMiddleware, async (req, res) => {
       .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
       .lean();
 
+    const returnMsg = plan.type === 'pro'
+      ? (plan.tier === 'yearly' ? '👑 Pulse VIP Annual Plan Activated!' : '⚡ Pulse VIP Monthly Plan Activated!')
+      : `⚡ +${plan.sparks} Sparks Credited!`;
+
     res.json({
       success: true,
-      message: plan.type === 'pro' ? '👑 PulseChat Pro Activated (Sandbox)!' : `⚡ +${plan.sparks} Sparks Credited!`,
+      message: returnMsg,
       user: sanitizedUser
     });
   } catch (err) {

@@ -6,6 +6,7 @@ import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 import EditPollModal from './EditPollModal';
 import { getPollTheme } from './pollThemes';
+import PulseVipBadge from '../common/PulseVipBadge';
 
 export default function MessageItem({
   message,
@@ -386,17 +387,7 @@ export default function MessageItem({
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent)', marginBottom: '3px', marginLeft: '6px' }}>
           <span>{senderName || 'Group Member'}</span>
           {senderIsPro && (
-            <span style={{
-              fontSize: '0.65rem',
-              fontWeight: 800,
-              background: 'linear-gradient(90deg, #f59e0b, #eab308)',
-              color: '#000',
-              padding: '1px 6px',
-              borderRadius: '8px',
-              boxShadow: '0 2px 6px rgba(245, 158, 11, 0.3)'
-            }}>
-              👑 PRO
-            </span>
+            <PulseVipBadge size={14} showLabel={false} />
           )}
         </div>
       )}

@@ -1,6 +1,6 @@
 # ⚡ PulseChat - Next Gen Real-Time Messaging Platform
 
-PulseChat is a modern, ultra-responsive WhatsApp & Discord hybrid messaging platform built with **Node.js, Express, Socket.io, MongoDB, and React**.
+PulseChat is a next-generation, high-performance real-time messaging platform built with **Node.js, Express, Socket.io, MongoDB, and React**.
 
 > 📖 **[Click here to view the Full Detailed Features Documentation (FEATURES.md)](./FEATURES.md)**
 

@@ -105,7 +105,9 @@
 }
 
 /* --- PRO EXCLUSIVE THEMES --- */
+[data-theme="royal_gold"],
 [data-theme="gold_nitro"],
+[data-chat-theme="royal_gold"],
 [data-chat-theme="gold_nitro"] {
   --bg-main: #0c0903;
   --bg-sidebar: #171206;
@@ -1478,6 +1480,25 @@ input, textarea {
   0% { transform: scale(0.6) rotate(-10deg); opacity: 0; }
   50% { transform: scale(1.15) rotate(5deg); }
   100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+/* --- TOPBAR DROPDOWN & VIP CREST STYLES --- */
+.dropdown-menu-item {
+  transition: all 0.15s ease;
+}
+
+.dropdown-menu-item:hover {
+  background: var(--hover-bg) !important;
+  transform: translateX(2px);
+}
+
+.pulse-vip-emblem {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease;
+}
+
+.pulse-vip-emblem:hover {
+  transform: scale(1.1);
+  filter: drop-shadow(0 2px 8px rgba(245, 158, 11, 0.7));
 }
 
 

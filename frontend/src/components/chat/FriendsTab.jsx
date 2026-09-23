@@ -5,6 +5,7 @@ import { UserPlus, UserCheck, Users, UserX, Check, X, Search, MessageSquare, Clo
 import { BACKEND_URL } from '../../utils/config';
 import { parseSafeJson } from '../../utils/imageCompressor';
 import { getCachedFriends, setCachedFriends } from '../../utils/offlineStorage';
+import PulseVipBadge from '../common/PulseVipBadge';
 
 export default function FriendsTab({ setActiveChat, onRequestsCountChange, initialSubTab = 'friends', onOpenFullDp }) {
   const { user, token } = useContext(AuthContext);
@@ -634,6 +635,9 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                             {friend.isEmailVerified && (
                               <CheckCircle2 size={13} color="#10b981" style={{ flexShrink: 0 }} />
                             )}
+                            {friend.isPro && (
+                              <PulseVipBadge size={14} showLabel={false} />
+                            )}
                           </div>
                           <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             @{friend.username}
@@ -724,6 +728,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                                 {sender.displayName || sender.username}
                               </span>
                               {sender.isEmailVerified && <CheckCircle2 size={12} color="#10b981" />}
+                              {sender.isPro && <PulseVipBadge size={13} showLabel={false} />}
                             </div>
                             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>@{sender.username}</span>
                           </div>
@@ -924,7 +929,8 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                             <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {target.displayName || target.username}
                             </span>
-                            {target.isEmailVerified && <CheckCircle2 size={12} color="#10b981" />}
+                              {target.isEmailVerified && <CheckCircle2 size={12} color="#10b981" />}
+                              {target.isPro && <PulseVipBadge size={13} showLabel={false} />}
                           </div>
                           <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>@{target.username}</span>
                         </div>

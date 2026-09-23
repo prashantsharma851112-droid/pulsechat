@@ -24,32 +24,32 @@ const THEMES = [
   },
   {
     id: 'gold_nitro',
-    name: 'Royal Gold Nitro',
-    category: 'Pro Exclusive',
+    name: 'Royal Gold Aura',
+    category: 'VIP Exclusive',
     bg: '#0f0c05',
     card: '#241a06',
     accent: '#f59e0b',
-    tag: '👑 Pro Gold',
+    tag: '⚡ VIP Gold',
     isPro: true
   },
   {
     id: 'nebula',
     name: 'Cosmic Nebula',
-    category: 'Pro Exclusive',
+    category: 'VIP Exclusive',
     bg: '#0c071e',
     card: '#211342',
     accent: '#a855f7',
-    tag: '👑 Pro Nebula',
+    tag: '⚡ VIP Nebula',
     isPro: true
   },
   {
     id: 'cyber_glow',
     name: 'Cyber Pulse',
-    category: 'Pro Exclusive',
+    category: 'VIP Exclusive',
     bg: '#030d12',
     card: '#082531',
     accent: '#06b6d4',
-    tag: '👑 Pro Cyber',
+    tag: '⚡ VIP Cyber',
     isPro: true
   },
   {
@@ -126,7 +126,7 @@ export default function ChatThemeModal({ currentTheme, onSelectTheme, onClose })
           {/* Theme Content */}
           <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-              Personalize this conversation. Pro exclusive themes include custom neon and nitro glows.
+              Personalize this conversation. VIP exclusive themes include ambient frequency glows.
             </div>
 
             <div className="theme-grid">

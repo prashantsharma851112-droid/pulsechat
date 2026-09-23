@@ -1,11 +1,12 @@
 import React, { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
 import SettingsModal from '../profile/SettingsModal';
 import FriendsTab from './FriendsTab';
 import PulseProModal from './PulseProModal';
+import PulseVipBadge from '../common/PulseVipBadge';
 import { BACKEND_URL } from '../../utils/config';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
 import {
@@ -45,6 +46,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [outgoingPendingIds, setOutgoingPendingIds] = useState(new Set());
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [showProModal, setShowProModal] = useState(false);
+  const [proModalTab, setProModalTab] = useState('pro');
+  const [showTopMenu, setShowTopMenu] = useState(false);
+  const topMenuRef = useRef(null);
   const activeChatRef = React.useRef(activeChat);
   useEffect(() => {
     activeChatRef.current = activeChat;
@@ -63,6 +67,22 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     window.addEventListener('pulsechat_open_tab', handleOpenTab);
     return () => window.removeEventListener('pulsechat_open_tab', handleOpenTab);
   }, []);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (topMenuRef.current && !topMenuRef.current.contains(e.target)) {
+        setShowTopMenu(false);
+      }
+    };
+    if (showTopMenu) {
+      document.addEventListener('mousedown', handleOutsideClick);
+      document.addEventListener('touchstart', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, [showTopMenu]);
 
   // Load friendship status and pending friend requests count
   const loadFriendshipInfo = useCallback(async () => {
@@ -632,94 +652,241 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: 'var(--text-main)', letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <h3 style={{ fontSize: '1.02rem', fontWeight: 700, margin: 0, color: 'var(--text-main)', letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user?.displayName || user?.username || 'PulseChat'}
               </h3>
               {user?.isPro && (
-                <span style={{
-                  fontSize: '0.62rem',
-                  fontWeight: 800,
-                  background: 'linear-gradient(90deg, #f59e0b, #eab308)',
-                  color: '#000',
-                  padding: '1px 6px',
-                  borderRadius: '6px',
-                  flexShrink: 0,
-                  boxShadow: '0 2px 6px rgba(245, 158, 11, 0.3)'
-                }}>
-                  👑 PRO
-                </span>
+                <PulseVipBadge size={16} showLabel={false} />
               )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                @{user?.username}
-              </p>
-              <span
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowProModal(true);
-                }}
-                style={{
-                  fontSize: '0.72rem',
-                  color: '#f59e0b',
-                  fontWeight: 800,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '2px',
-                  cursor: 'pointer'
-                }}
-                title="Your Pulse Sparks Balance. Click to open Sparks store!"
-              >
-                <Zap size={11} fill="#f59e0b" /> {user?.pulseSparks ?? 50}
-              </span>
-            </div>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              @{user?.username}
+            </p>
           </div>
         </div>
 
-        {/* Header Action Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        {/* Topbar Single 3-Dot More Menu */}
+        <div style={{ position: 'relative' }} ref={topMenuRef}>
           <button
-            onClick={() => setShowProModal(true)}
-            title="PulseChat Pro & Sparks Store"
+            onClick={() => setShowTopMenu(prev => !prev)}
+            title="Menu & Pulse Sparks"
             className="icon-btn-ghost"
             style={{
               width: '38px',
               height: '38px',
               borderRadius: '50%',
-              background: user?.isPro ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(239, 68, 68, 0.2))' : 'var(--bg-card)',
-              color: '#f59e0b',
-              border: user?.isPro ? '1px solid rgba(245, 158, 11, 0.4)' : 'none',
+              background: showTopMenu ? 'var(--hover-bg)' : 'var(--bg-card)',
+              color: 'var(--text-main)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              border: '1px solid var(--border)',
+              transition: 'all 0.2s ease'
             }}
           >
-            <Crown size={19} />
+            <MoreVertical size={20} />
           </button>
-          <button
-            onClick={handleManualRefresh}
-            title="Refresh chats & connection"
-            className="icon-btn-ghost"
-            style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'var(--bg-card)', color: isRefreshing ? 'var(--accent)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          >
-            <RotateCw size={18} style={{ transform: isRefreshing ? 'rotate(360deg)' : 'none', transition: 'transform 0.6s ease' }} />
-          </button>
-          <button
-            onClick={() => setShowCreateGroupModal(true)}
-            title="Create New Group"
-            className="icon-btn-ghost"
-            style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'var(--bg-card)', color: 'var(--accent)' }}
-          >
-            <Plus size={20} />
-          </button>
-          <button
-            onClick={() => setShowSettingsModal(true)}
-            title="App Settings & Options"
-            className="icon-btn-ghost"
-            style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'var(--bg-card)' }}
-          >
-            <Settings size={20} color="var(--text-main)" />
-          </button>
+
+          {showTopMenu && (
+            <div
+              className="topbar-dropdown-menu"
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 8px)',
+                right: 0,
+                width: '270px',
+                background: 'var(--bg-sidebar)',
+                border: '1px solid var(--border)',
+                borderRadius: '16px',
+                boxShadow: '0 12px 36px rgba(0,0,0,0.45)',
+                zIndex: 1100,
+                padding: '8px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+                animation: 'pulseModalPop 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
+              }}
+            >
+              {/* Sparks Wallet Balance Card */}
+              <div
+                onClick={() => {
+                  setProModalTab('coins');
+                  setShowProModal(true);
+                  setShowTopMenu(false);
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(236, 72, 153, 0.12))',
+                  border: '1px solid rgba(245, 158, 11, 0.35)',
+                  borderRadius: '12px',
+                  padding: '10px 12px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '4px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)'
+                  }}>
+                    <Zap size={16} fill="#fff" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', fontWeight: 700 }}>Pulse Sparks</div>
+                    <div style={{ fontSize: '1rem', fontWeight: 800, color: '#f59e0b' }}>
+                      {user?.pulseSparks ?? 50} <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>Sparks</span>
+                    </div>
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  color: 'var(--accent)',
+                  background: 'var(--bg-card)',
+                  padding: '4px 8px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)'
+                }}>
+                  + Top Up
+                </span>
+              </div>
+
+              {/* Pulse VIP / Upgrade Button */}
+              <button
+                onClick={() => {
+                  setProModalTab('pro');
+                  setShowProModal(true);
+                  setShowTopMenu(false);
+                }}
+                className="dropdown-menu-item"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '10px',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: user?.isPro ? 'linear-gradient(90deg, rgba(245, 158, 11, 0.12), transparent)' : 'transparent',
+                  color: 'var(--text-main)',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  width: '100%',
+                  transition: 'background 0.15s ease'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Crown size={17} color="#f59e0b" />
+                  <span>{user?.isPro ? 'Pulse VIP (Manage / Upgrade)' : 'Get Pulse VIP'}</span>
+                </div>
+                {user?.isPro ? (
+                  <PulseVipBadge size={14} showLabel={false} />
+                ) : (
+                  <span style={{ fontSize: '0.68rem', fontWeight: 700, background: '#f59e0b', color: '#000', padding: '1px 6px', borderRadius: '4px' }}>
+                    VIP
+                  </span>
+                )}
+              </button>
+
+              {/* Create New Group */}
+              <button
+                onClick={() => {
+                  setShowCreateGroupModal(true);
+                  setShowTopMenu(false);
+                }}
+                className="dropdown-menu-item"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text-main)',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  width: '100%',
+                  transition: 'background 0.15s ease'
+                }}
+              >
+                <Plus size={17} color="var(--accent)" />
+                <span>Create New Group</span>
+              </button>
+
+              {/* Sync & Refresh Chats */}
+              <button
+                onClick={() => {
+                  handleManualRefresh();
+                  setShowTopMenu(false);
+                }}
+                className="dropdown-menu-item"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text-main)',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  width: '100%',
+                  transition: 'background 0.15s ease'
+                }}
+              >
+                <RotateCw size={17} color={isRefreshing ? 'var(--accent)' : 'var(--text-muted)'} className={isRefreshing ? 'animate-spin' : ''} />
+                <span>Sync & Refresh Chats</span>
+              </button>
+
+              <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
+
+              {/* Settings & Profile */}
+              <button
+                onClick={() => {
+                  setShowSettingsModal(true);
+                  setShowTopMenu(false);
+                }}
+                className="dropdown-menu-item"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text-main)',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  width: '100%',
+                  transition: 'background 0.15s ease'
+                }}
+              >
+                <Settings size={17} color="var(--text-muted)" />
+                <span>Settings & Profile</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -934,8 +1101,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {u.displayName || u.name}
+                      <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <span>{u.displayName || u.name}</span>
+                        {!u.isGroup && u.isPro && (
+                          <PulseVipBadge size={14} showLabel={false} />
+                        )}
                       </h4>
                       {!u.isGroup && (
                         friendIdsSet.has(u.id) ? (
@@ -1069,9 +1239,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                         <h4 style={{ fontSize: '1.02rem', fontWeight: u.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
                           <span>{u.displayName}</span>
                           {u.isPro && (
-                            <span style={{ fontSize: '0.62rem', fontWeight: 800, background: 'linear-gradient(90deg, #f59e0b, #eab308)', color: '#000', padding: '0px 5px', borderRadius: '6px' }}>
-                              👑 PRO
-                            </span>
+                            <PulseVipBadge size={14} showLabel={false} />
                           )}
                         </h4>
                         {u.unreadCount > 0 && (
@@ -1125,8 +1293,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h4 style={{ fontSize: '1.02rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {u.displayName}
+                        <h4 style={{ fontSize: '1.02rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <span>{u.displayName}</span>
+                          {u.isPro && (
+                            <PulseVipBadge size={14} showLabel={false} />
+                          )}
                         </h4>
                         {friendIdsSet.has(u.id) ? (
                           <span className="pulse-sync-btn synced" title="Pulse Frequency Synced">
@@ -1229,7 +1400,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
       {showProModal && (
         <PulseProModal
-          initialTab="pro"
+          initialTab={proModalTab}
           onClose={() => setShowProModal(false)}
         />
       )}

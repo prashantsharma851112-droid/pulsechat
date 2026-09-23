@@ -1,6 +1,6 @@
 # ⚡ PulseChat — Complete Features Documentation (फ़ीचर लिस्ट)
 
-PulseChat ek ultra-modern, high-performance, real-time messaging aur communication platform hai jo WhatsApp, Telegram aur Discord ke best features ko combine karta hai.
+PulseChat ek ultra-modern, high-performance, real-time messaging aur communication platform hai jisme advanced privacy, custom resonance themes, exclusive VIP perks aur instant socket connectivity shamil hai.
 
 ---
 

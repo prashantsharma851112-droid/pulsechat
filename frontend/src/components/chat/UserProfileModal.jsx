@@ -3,6 +3,7 @@ import { X, CheckCircle2, Phone, Video, Eye, Info, User, ShieldCheck, Clock, Ban
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
+import PulseVipBadge from '../common/PulseVipBadge';
 
 export default function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp }) {
   const { user, token, blockUser, unblockUser } = useContext(AuthContext);
@@ -343,17 +344,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
               <CheckCircle2 size={18} color="#10b981" title="Verified Account" />
             )}
             {userToDisplay?.isPro && (
-              <span style={{
-                fontSize: '0.68rem',
-                fontWeight: 800,
-                background: 'linear-gradient(90deg, #f59e0b, #eab308)',
-                color: '#000',
-                padding: '2px 8px',
-                borderRadius: '8px',
-                boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)'
-              }}>
-                👑 PRO
-              </span>
+              <PulseVipBadge size={20} showLabel={true} />
             )}
           </div>
           <p style={{ margin: '2px 0 0.75rem 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>

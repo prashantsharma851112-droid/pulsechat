@@ -13,6 +13,7 @@ import MediaUploadModal from './MediaUploadModal';
 import ChatThemeModal from './ChatThemeModal';
 import PulseProModal from './PulseProModal';
 import GiftPickerModal from './GiftPickerModal';
+import PulseVipBadge from '../common/PulseVipBadge';
 import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
@@ -1105,6 +1106,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)' }}>
                   {chatDisplayName || activeChat.displayName}
                 </h3>
+                {!isGroup && activeChat?.isPro && (
+                  <PulseVipBadge size={16} showLabel={false} />
+                )}
                 {isGroup && <span className="group-pill-badge"><Users size={12} /> Group</span>}
                 {chatSetting?.disappearingEnabled && (
                   <span

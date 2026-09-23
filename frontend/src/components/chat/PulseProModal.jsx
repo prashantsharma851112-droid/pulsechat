@@ -1,16 +1,23 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { X, Sparkles, Check, Crown, Zap, ShieldCheck, Flame, Coffee, Heart, Rocket, Diamond, Award, ArrowRight, Loader2 } from 'lucide-react';
+import PulseVipBadge from '../common/PulseVipBadge';
 import { BACKEND_URL } from '../../utils/config';
 
 export default function PulseProModal({ onClose, initialTab = 'pro' }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
-  const [activeTab, setActiveTab] = useState(initialTab); // 'pro' | 'sparks'
+  const [activeTab, setActiveTab] = useState(initialTab === 'coins' ? 'sparks' : initialTab); // 'pro' | 'sparks'
   const [billingCycle, setBillingCycle] = useState('monthly'); // 'monthly' | 'yearly'
   const [selectedSparksPack, setSelectedSparksPack] = useState('sparks_300');
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [razorpayConfig, setRazorpayConfig] = useState({ keyId: '', isLive: false });
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab === 'coins' ? 'sparks' : initialTab);
+    }
+  }, [initialTab]);
 
   useEffect(() => {
     // Fetch Razorpay config
@@ -229,25 +236,49 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h2 style={{ margin: 0, fontSize: '1.45rem', fontWeight: 900, letterSpacing: '-0.02em' }}>
-                  PulseChat <span style={{ color: '#fbbf24' }}>PRO</span>
+                <h2 style={{ margin: 0, fontSize: '1.45rem', fontWeight: 900, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  PulseChat <span style={{ color: '#fbbf24' }}>VIP</span>
                 </h2>
                 {isUserPro && (
                   <span style={{
-                    fontSize: '0.72rem',
+                    fontSize: '0.7rem',
                     fontWeight: 800,
-                    background: 'linear-gradient(90deg, #f59e0b, #eab308)',
-                    color: '#000',
+                    background: 'linear-gradient(90deg, #f59e0b, #ec4899)',
+                    color: '#fff',
                     padding: '2px 8px',
-                    borderRadius: '12px'
+                    borderRadius: '12px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
                   }}>
-                    ACTIVE MEMBER
+                    <Zap size={11} fill="#fff" /> {user?.proTier === 'yearly' ? 'ANNUAL VIP' : 'MONTHLY VIP'}
                   </span>
                 )}
               </div>
-              <p style={{ margin: 0, fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.75)' }}>
-                Elevate your pulse: Discord Nitro style perks & virtual gifts
+              <p style={{ margin: '3px 0 0 0', fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.78)' }}>
+                High-capacity 500MB media, custom pulse themes & exclusive frequency perks
               </p>
+              {isUserPro && (
+                <div style={{
+                  marginTop: '10px',
+                  background: 'rgba(0, 0, 0, 0.35)',
+                  border: '1px solid rgba(245, 158, 11, 0.35)',
+                  borderRadius: '12px',
+                  padding: '6px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '0.78rem'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <PulseVipBadge size={14} showLabel={false} />
+                    <span>Plan: <strong style={{ color: '#fbbf24' }}>{user?.proTier === 'yearly' ? 'Annual VIP' : 'Monthly VIP'}</strong></span>
+                  </div>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.72rem' }}>
+                    {user?.proExpiresAt ? `Valid till ${new Date(user.proExpiresAt).toLocaleDateString()}` : 'Active'}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -279,7 +310,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                 transition: 'all 0.2s'
               }}
             >
-              <Crown size={15} /> 👑 Pulse Pro Perks
+              <Crown size={15} /> Pulse VIP Perks
             </button>
             <button
               onClick={() => setActiveTab('sparks')}
@@ -336,8 +367,8 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                 }}>
                   <div style={{ color: '#f59e0b', flexShrink: 0 }}><Crown size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Gold Badge</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Verified 👑 PRO glow badge across all chats & profile.</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Pulse VIP Crest</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Signature glowing VIP crest badge across all chats & profile.</div>
                   </div>
                 </div>
 
@@ -367,7 +398,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   <div style={{ color: '#a855f7', flexShrink: 0 }}><Sparkles size={20} /></div>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Exclusive Themes</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Unlock Royal Gold Nitro, Nebula & Cyber Glow.</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Unlock Royal Gold, Cosmic Nebula & Cyber Pulse.</div>
                   </div>
                 </div>
 
@@ -463,8 +494,26 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                     cursor: loading ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  {loading ? <Loader2 size={18} className="spin" /> : <Crown size={18} />}
-                  {isUserPro ? 'Extend Pro Membership' : `Upgrade to Pro — ₹${billingCycle === 'monthly' ? '49' : '499'}`}
+                  {loading ? <Loader2 size={18} className="spin" /> : <Zap size={18} fill="#fff" />}
+                  {(() => {
+                    const isMonthly = user?.proTier === 'monthly';
+                    const isYearly = user?.proTier === 'yearly';
+
+                    if (!isUserPro) {
+                      return billingCycle === 'monthly' ? '⚡ Activate Monthly VIP — ₹49' : '⚡ Activate Annual VIP — ₹499';
+                    }
+
+                    if (billingCycle === 'yearly' && isMonthly) {
+                      return '🚀 Upgrade to Annual VIP — ₹499 (Save 15%)';
+                    }
+                    if (billingCycle === 'yearly' && isYearly) {
+                      return '🔄 Extend Annual VIP for 1 Year — ₹499';
+                    }
+                    if (billingCycle === 'monthly' && isMonthly) {
+                      return '🔄 Extend Monthly VIP for 1 Month — ₹49';
+                    }
+                    return `⚡ Extend VIP Membership — ₹${billingCycle === 'monthly' ? '49' : '499'}`;
+                  })()}
                 </button>
 
                 {/* Instant Sandbox Button */}
@@ -487,7 +536,12 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   }}
                   title="Test sandbox mode without UPI/Card"
                 >
-                  <Zap size={13} color="#f59e0b" /> Instant Test Sandbox Mode (One-Click Activate)
+                  <Zap size={13} color="#f59e0b" />
+                  {(() => {
+                    if (!isUserPro) return '⚡ Instant Test Activate VIP (Sandbox Mode)';
+                    if (billingCycle === 'yearly' && user?.proTier === 'monthly') return '🚀 Instant Test Upgrade to Annual VIP (Sandbox)';
+                    return '🔄 Instant Test Extend VIP (Sandbox Mode)';
+                  })()}
                 </button>
               </div>
             </div>
