@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useContext, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2 } from 'lucide-react';
@@ -269,24 +269,74 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleManualRefresh = async () => {
+    if (!token) return;
     setIsRefreshing(true);
     try {
-      loadRecentChats();
-      loadGroups();
-      loadAllUsers();
-      if (socket) {
-        if (!socket.connected) {
-          socket.connect();
-        }
-        if (user?.id) {
-          socket.emit('setup', user.id);
+      // 1. Fetch fresh users, recent conversations, groups, and friendship info in parallel
+      const [usersRes, recentRes, groupsRes] = await Promise.allSettled([
+        fetch(`${BACKEND_URL}/api/users`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${BACKEND_URL}/api/users/recent`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${BACKEND_URL}/api/groups`, { headers: { Authorization: `Bearer ${token}` } }),
+        loadFriendshipInfo()
+      ]);
+
+      let freshUsers = [];
+      if (usersRes.status === 'fulfilled' && usersRes.value.ok) {
+        freshUsers = await parseSafeJson(usersRes.value);
+        if (Array.isArray(freshUsers)) {
+          setAllUsers(freshUsers);
+          if (user?.id) setCachedAllUsers(user.id, freshUsers);
         }
       }
-      window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+
+      if (groupsRes.status === 'fulfilled' && groupsRes.value.ok) {
+        const groupsData = await parseSafeJson(groupsRes.value);
+        if (Array.isArray(groupsData)) {
+          setGroups(groupsData);
+          if (user?.id) setCachedGroups(user.id, groupsData);
+        }
+      }
+
+      if (recentRes.status === 'fulfilled' && recentRes.value.ok) {
+        const recentData = await parseSafeJson(recentRes.value);
+        if (Array.isArray(recentData)) {
+          const uMap = new Map();
+          freshUsers.forEach(u => {
+            if (u.id) uMap.set(u.id, u);
+            if (u._id) uMap.set(u._id, u);
+            if (u.username) uMap.set(u.username, u);
+          });
+
+          const mapped = recentData.map(item => {
+            const fresh = uMap.get(item.id) || (item.username ? uMap.get(item.username) : null);
+            let res = { ...item };
+            if (fresh) {
+              if (fresh.avatar) res.avatar = fresh.avatar;
+              if (fresh.displayName) res.displayName = fresh.displayName;
+              if (fresh.isPro !== undefined) res.isPro = Boolean(fresh.isPro);
+              if (fresh.proTier) res.proTier = fresh.proTier;
+              if (fresh.customBadge !== undefined) res.customBadge = fresh.customBadge;
+            }
+            if (activeChatRef.current && (res.id === activeChatRef.current.id || (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username))) {
+              res.unreadCount = 0;
+            }
+            return res;
+          });
+
+          setRecentChats(mapped);
+          if (user?.id) setCachedRecentChats(user.id, mapped);
+        }
+      }
+
+      // 2. Re-establish socket connection & setup if needed
+      if (socket) {
+        if (!socket.connected) socket.connect();
+        if (user?.id) socket.emit('setup', user.id);
+      }
     } catch (e) {
       console.warn('Manual refresh error:', e);
     } finally {
-      setTimeout(() => setIsRefreshing(false), 700);
+      setTimeout(() => setIsRefreshing(false), 600);
     }
   };
 
@@ -309,13 +359,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           const mapped = data.map(item => {
             const fresh = uMap.get(item.id) || (item.username ? uMap.get(item.username) : null);
             let res = { ...item };
-            if (!res.avatar && fresh?.avatar) {
-              res.avatar = fresh.avatar;
-            }
-            if (fresh?.isPro && !res.isPro) {
-              res.isPro = fresh.isPro;
-              res.proTier = fresh.proTier;
-              res.customBadge = fresh.customBadge;
+            if (fresh) {
+              if (fresh.avatar) res.avatar = fresh.avatar;
+              if (fresh.displayName) res.displayName = fresh.displayName;
+              if (fresh.isPro !== undefined) res.isPro = Boolean(fresh.isPro);
+              if (fresh.proTier) res.proTier = fresh.proTier;
+              if (fresh.customBadge !== undefined) res.customBadge = fresh.customBadge;
             }
             if (activeChatRef.current && (res.id === activeChatRef.current.id || (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username))) {
               res.unreadCount = 0;
@@ -385,7 +434,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       });
   }, [token, user?.id]);
 
-  // Auto-sync fresh avatars from allUsers into recentChats
+  // Auto-sync fresh avatars, VIP/Pro neon status, and badges from allUsers into recentChats
   useEffect(() => {
     if (allUsers.length > 0 && recentChats.length > 0) {
       const uMap = new Map();
@@ -397,11 +446,31 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       let changed = false;
       const synced = recentChats.map(item => {
         const fresh = uMap.get(item.id) || (item.username ? uMap.get(item.username) : null);
-        if (fresh && fresh.avatar && fresh.avatar !== item.avatar) {
-          changed = true;
-          return { ...item, avatar: fresh.avatar, displayName: fresh.displayName || item.displayName };
+        if (!fresh) return item;
+        let itemChanged = false;
+        let updated = { ...item };
+        if (fresh.avatar && fresh.avatar !== item.avatar) {
+          updated.avatar = fresh.avatar;
+          itemChanged = true;
         }
-        return item;
+        if (fresh.isPro !== undefined && Boolean(fresh.isPro) !== Boolean(item.isPro)) {
+          updated.isPro = Boolean(fresh.isPro);
+          itemChanged = true;
+        }
+        if (fresh.proTier && fresh.proTier !== item.proTier) {
+          updated.proTier = fresh.proTier;
+          itemChanged = true;
+        }
+        if (fresh.customBadge !== undefined && fresh.customBadge !== item.customBadge) {
+          updated.customBadge = fresh.customBadge;
+          itemChanged = true;
+        }
+        if (fresh.displayName && fresh.displayName !== item.displayName) {
+          updated.displayName = fresh.displayName;
+          itemChanged = true;
+        }
+        if (itemChanged) changed = true;
+        return itemChanged ? updated : item;
       });
       if (changed) {
         setRecentChats(synced);
@@ -588,7 +657,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           ...(displayName !== undefined && displayName !== '' && { displayName }),
           ...(avatar !== undefined && avatar !== '' && { avatar }),
           ...(status !== undefined && { status }),
-          ...(isPro !== undefined && { isPro }),
+          ...(isPro !== undefined && { isPro: Boolean(isPro) }),
           ...(proTier !== undefined && { proTier }),
           ...(customBadge !== undefined && { customBadge }),
           ...(pulseSparks !== undefined && { pulseSparks })
@@ -602,7 +671,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           ...u,
           ...(displayName !== undefined && displayName !== '' && { displayName }),
           ...(avatar !== undefined && avatar !== '' && { avatar }),
-          ...(isPro !== undefined && { isPro }),
+          ...(isPro !== undefined && { isPro: Boolean(isPro) }),
           ...(proTier !== undefined && { proTier }),
           ...(customBadge !== undefined && { customBadge })
         } : u);
@@ -777,8 +846,21 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     setShowPanicModal(false);
   };
 
-  // Contacts to show when no search query & no recent chats
-  const contactsNotInRecent = allUsers.filter(u => !recentChats.some(r => r.id === u.id));
+  // Contacts to show when no search query: all registered users not yet in recent chats
+  const contactsNotInRecent = useMemo(() => {
+    if (!Array.isArray(allUsers)) return [];
+    return allUsers.filter(u => {
+      if (!u) return false;
+      // Exclude logged in user themselves
+      if (u.id === user?.id || (user?.username && u.username === user.username)) return false;
+      // Exclude if already present in recent chats
+      return !recentChats.some(r =>
+        r.id === u.id ||
+        (r._id && u._id && r._id === u._id) ||
+        (r.username && u.username && r.username === u.username)
+      );
+    });
+  }, [allUsers, recentChats, user?.id, user?.username]);
 
   return (
     <div className={`sidebar-container ${activeChat ? 'mobile-hidden' : ''}`}>

@@ -86,9 +86,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         .then(res => res.json())
         .then(userData => {
           if (userData && !userData.error) {
+            const isProVal = Boolean(userData.isPro);
             if (userData.isPro !== undefined) {
-              setChatIsPro(Boolean(userData.isPro));
-              if (activeChat) activeChat.isPro = Boolean(userData.isPro);
+              setChatIsPro(isProVal);
+              if (activeChat) activeChat.isPro = isProVal;
             }
             if (userData.avatar) {
               setChatAvatar(userData.avatar);
@@ -98,6 +99,24 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               setChatDisplayName(userData.displayName);
               if (activeChat) activeChat.displayName = userData.displayName;
             }
+
+            // Sync with Sidebar recent chats and all users immediately (0ms)
+            window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+              detail: {
+                targetUserId: activeChat.id,
+                updates: {
+                  userId: activeChat.id,
+                  userMongoId: userData._id ? userData._id.toString() : null,
+                  username: userData.username || activeChat.username,
+                  displayName: userData.displayName || activeChat.displayName,
+                  avatar: userData.avatar,
+                  isPro: isProVal,
+                  proTier: userData.proTier,
+                  customBadge: userData.customBadge,
+                  pulseSparks: userData.pulseSparks
+                }
+              }
+            }));
           }
         })
         .catch(err => console.warn('Could not fetch activeChat profile:', err));

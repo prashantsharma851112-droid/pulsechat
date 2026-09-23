@@ -9,7 +9,12 @@ const { uploadToCloudinary } = require('../utils/cloudinary');
 // Get all registered users (newest users first, up to 200)
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const results = await User.find({ id: { $ne: req.user.id } })
+    const myId = req.user.id;
+    const myUsername = req.user.username;
+    const results = await User.find({
+      id: { $ne: myId },
+      ...(myUsername ? { username: { $ne: myUsername } } : {})
+    })
       .sort({ createdAt: -1, _id: -1 })
       .select('id username displayName avatar isEmailVerified status email createdAt isPro proTier customBadge pulseSparks')
       .limit(200)

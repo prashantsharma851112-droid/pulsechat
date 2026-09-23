@@ -81,13 +81,17 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
   };
 
   if (existingIdx !== -1) {
-    // Update existing entry and move to top (preserve and update avatar if fresher non-empty avatar provided)
+    // Update existing entry and move to top (preserve and update avatar, isPro, badge if provided)
     const existingAvatar = recent[existingIdx].avatar;
     const incomingAvatar = targetChat?.avatar;
     const updated = {
       ...recent[existingIdx],
       ...snippet,
-      avatar: incomingAvatar || existingAvatar || ''
+      avatar: incomingAvatar || existingAvatar || '',
+      displayName: targetChat?.displayName || recent[existingIdx].displayName,
+      isPro: targetChat?.isPro !== undefined ? Boolean(targetChat.isPro) : Boolean(recent[existingIdx].isPro),
+      proTier: targetChat?.proTier || recent[existingIdx].proTier || null,
+      customBadge: targetChat?.customBadge !== undefined ? targetChat.customBadge : (recent[existingIdx].customBadge || null)
     };
     const newRecent = [updated, ...recent.filter((_, i) => i !== existingIdx)];
     setCachedRecentChats(userId, newRecent);

@@ -352,6 +352,9 @@ module.exports = {
 
         results.push({
           ...otherUser,
+          isPro: Boolean(otherUser.isPro),
+          proTier: otherUser.proTier || 'none',
+          customBadge: otherUser.customBadge || '',
           lastMessage: lastMsgText,
           lastMessageTime: lastMessage.timestamp,
           lastMessageTimestamp: lastMessage.timestamp,
