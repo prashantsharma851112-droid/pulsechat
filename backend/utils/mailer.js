@@ -8,19 +8,23 @@ async function postJson(urlStr, headers, bodyObj) {
   const bodyData = JSON.stringify(bodyObj);
 
   if (typeof fetch === 'function') {
-    const res = await fetch(urlStr, {
-      method: 'POST',
-      headers,
-      body: bodyData
-    });
-    const text = await res.text();
-    let data;
     try {
-      data = JSON.parse(text);
-    } catch {
-      data = { raw: text };
+      const res = await fetch(urlStr, {
+        method: 'POST',
+        headers,
+        body: bodyData
+      });
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { raw: text };
+      }
+      return { ok: res.ok, status: res.status, data };
+    } catch (fetchErr) {
+      return { ok: false, status: 0, data: { message: fetchErr.message } };
     }
-    return { ok: res.ok, status: res.status, data };
   }
 
   return new Promise((resolve, reject) => {

@@ -67,88 +67,124 @@ router.post('/register', async (req, res) => {
 
     const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_]/g, '');
     if (cleanUsername.length < 3) {
-      return res.status(400).json({ error: 'Username must be at least 3 characters.' });
+      return res.status(400).json({ error: 'Username must be at least 3 characters long.' });
     }
 
-    // Check if username is already taken (username must be unique across all accounts)
+    // Check BOTH username and email in database
     const existingUsername = await User.findOne({ username: cleanUsername });
+    const existingEmail = await User.findOne({ email: cleanEmail });
 
-    if (existingUsername) {
-      if (existingUsername.isEmailVerified) {
+    // 1. If username is already verified on an account
+    if (existingUsername && existingUsername.isEmailVerified) {
+      if (existingUsername.email !== cleanEmail) {
+        return res.status(400).json({ error: 'This username is already taken. Please choose another username.' });
+      } else {
+        return res.status(400).json({ error: 'An account with this username and email already exists. Please log in.' });
+      }
+    }
+
+    // 2. If email is already verified on an account
+    if (existingEmail && existingEmail.isEmailVerified) {
+      return res.status(400).json({ error: 'This email address is already registered. Please sign in or use "Forgot Password".' });
+    }
+
+    // Generate secure 6-digit OTP & password hash
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    let targetUserId = null;
+
+    // 3. If unverified account with this email already exists: update it with new details & fresh OTP
+    if (existingEmail && !existingEmail.isEmailVerified) {
+      // Check if username is taken by another verified user
+      if (existingUsername && existingUsername.id !== existingEmail.id && existingUsername.isEmailVerified) {
         return res.status(400).json({ error: 'This username is already taken. Please choose another username.' });
       }
 
-      // Username was previously entered but not yet verified — allow updating registration with fresh OTP
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(password, salt);
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-
+      targetUserId = existingEmail.id;
+      await db.updateUser(existingEmail.id, {
+        username: cleanUsername,
+        passwordHash,
+        displayName: displayName.trim(),
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${cleanUsername}`,
+        otpCode: otp,
+        otpExpires
+      });
+    }
+    // 4. If unverified account with this username exists: update it with new email & fresh OTP
+    else if (existingUsername && !existingUsername.isEmailVerified) {
+      targetUserId = existingUsername.id;
       await db.updateUser(existingUsername.id, {
         email: cleanEmail,
         passwordHash,
         displayName: displayName.trim(),
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${cleanUsername}`,
         otpCode: otp,
         otpExpires
       });
-
-      const mailResult = await mailer.sendOtpEmail(cleanEmail, otp, displayName.trim());
-
-      return res.status(200).json({
-        success: true,
-        requiresVerification: true,
-        message: mailResult.delivered
-          ? 'Verification code sent to your email address.'
-          : 'Verification code generated.',
+    }
+    // 5. Fresh registration: create new user document
+    else {
+      targetUserId = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+      const newUser = {
+        id: targetUserId,
         email: cleanEmail,
-        userId: existingUsername.id,
-        emailDelivered: mailResult.delivered,
-        fallbackOtp: !mailResult.delivered ? otp : undefined,
-        mailError: !mailResult.delivered ? mailResult.error : undefined
-      });
+        username: cleanUsername,
+        passwordHash,
+        displayName: displayName.trim(),
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${cleanUsername}`,
+        status: 'Hey there! I am using PulseChat.',
+        isEmailVerified: false,
+        otpCode: otp,
+        otpExpires,
+        pulseSparks: 50,
+        hasUsed3DTrial: false,
+        claimedFreeSparks: {},
+        createdAt: new Date().toISOString()
+      };
+
+      await db.saveUser(newUser);
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
+    // Send real OTP email to user's actual email address safely
+    let mailResult = { delivered: false };
+    try {
+      mailResult = await mailer.sendOtpEmail(cleanEmail, otp, displayName.trim());
+    } catch (mailErr) {
+      console.warn('sendOtpEmail warning during registration:', mailErr.message);
+      mailResult = { delivered: false, error: mailErr.message };
+    }
 
-    // Generate secure 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-    const newUser = {
-      id: 'user_' + Date.now(),
-      email: cleanEmail,
-      username: cleanUsername,
-      passwordHash,
-      displayName: displayName.trim(),
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${cleanUsername}`,
-      status: 'Hey there! I am using PulseChat.',
-      isEmailVerified: false,
-      otpCode: otp,
-      otpExpires,
-      createdAt: new Date().toISOString()
-    };
-
-    await db.saveUser(newUser);
-
-    // Send real OTP email to user's actual email address
-    const mailResult = await mailer.sendOtpEmail(cleanEmail, otp, displayName.trim());
-
-    res.status(201).json({
+    res.status(200).json({
       success: true,
       requiresVerification: true,
       message: mailResult.delivered
         ? 'Verification code sent to your email address.'
         : 'Verification code generated.',
       email: cleanEmail,
-      userId: newUser.id,
+      userId: targetUserId,
       emailDelivered: mailResult.delivered,
       fallbackOtp: !mailResult.delivered ? otp : undefined,
       mailError: !mailResult.delivered ? mailResult.error : undefined
     });
   } catch (err) {
     console.error('Registration Error:', err);
-    res.status(500).json({ error: 'Server error during registration.' });
+
+    // MongoDB duplicate key error handling
+    if (err.code === 11000 || err.name === 'MongoServerError') {
+      const errStr = (err.message || '') + JSON.stringify(err.keyPattern || err.keyValue || {});
+      if (errStr.includes('email')) {
+        return res.status(400).json({ error: 'This email is already registered. Please sign in or use "Forgot Password".' });
+      }
+      if (errStr.includes('username')) {
+        return res.status(400).json({ error: 'This username is already taken. Please choose another username.' });
+      }
+      return res.status(400).json({ error: 'An account with these details already exists. Please sign in.' });
+    }
+
+    res.status(500).json({ error: err.message || 'Server error during registration.' });
   }
 });
 
@@ -162,24 +198,34 @@ router.post('/login', async (req, res) => {
 
     const cleanId = identifier.toLowerCase().trim().replace(/^@/, '');
     const candidates = await User.find({
-      $or: [{ email: cleanId }, { username: cleanId }]
+      $or: [
+        { email: cleanId },
+        { username: cleanId },
+        { email: new RegExp('^' + cleanId + '$', 'i') },
+        { username: new RegExp('^' + cleanId + '$', 'i') }
+      ]
     });
 
     if (!candidates || candidates.length === 0) {
-      return res.status(400).json({ error: 'Invalid credentials.' });
+      return res.status(400).json({ error: 'Invalid credentials. User not found.' });
     }
 
     let user = null;
     for (const cand of candidates) {
-      const match = await bcrypt.compare(password, cand.passwordHash);
-      if (match) {
-        user = cand;
-        break;
+      if (!cand.passwordHash) continue;
+      try {
+        const match = await bcrypt.compare(password, cand.passwordHash);
+        if (match) {
+          user = cand;
+          break;
+        }
+      } catch (bcryptErr) {
+        console.warn('bcrypt compare error on candidate:', bcryptErr.message);
       }
     }
 
     if (!user) {
-      return res.status(400).json({ error: 'Invalid credentials.' });
+      return res.status(400).json({ error: 'Invalid credentials. Incorrect password.' });
     }
 
     // STRICT SECURITY: If email is NOT verified, refuse login and require OTP verification!
@@ -192,7 +238,13 @@ router.post('/login', async (req, res) => {
         otpExpires
       });
 
-      const mailResult = await mailer.sendOtpEmail(user.email, otp, user.displayName);
+      let mailResult = { delivered: false };
+      try {
+        mailResult = await mailer.sendOtpEmail(user.email, otp, user.displayName);
+      } catch (mailErr) {
+        console.warn('Login sendOtpEmail error:', mailErr.message);
+        mailResult = { delivered: false, error: mailErr.message };
+      }
 
       return res.status(403).json({
         requiresVerification: true,
@@ -211,11 +263,15 @@ router.post('/login', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    const { passwordHash: _, otpCode: __, ...userWithoutPass } = user.toObject ? user.toObject() : user;
-    res.json({ token, user: userWithoutPass });
+    const userObj = user.toObject ? user.toObject() : { ...user };
+    delete userObj.passwordHash;
+    delete userObj.otpCode;
+    delete userObj.otpExpires;
+
+    res.json({ token, user: userObj });
   } catch (err) {
     console.error('Login Error:', err);
-    res.status(500).json({ error: 'Server error during login.' });
+    res.status(500).json({ error: err.message || 'Server error during login.' });
   }
 });
 
@@ -228,7 +284,15 @@ router.post('/resend-otp', async (req, res) => {
     }
 
     const cleanEmail = (email || '').toLowerCase().trim();
-    const user = await User.findOne(userId ? { id: userId } : { email: cleanEmail });
+    let user = null;
+    if (userId) {
+      const mongoose = require('mongoose');
+      const isObjectId = mongoose.Types.ObjectId.isValid(userId);
+      user = await User.findOne(isObjectId ? { $or: [{ id: userId }, { _id: userId }] } : { id: userId });
+    }
+    if (!user && cleanEmail) {
+      user = await User.findOne({ email: cleanEmail });
+    }
 
     if (!user) {
       return res.status(404).json({ error: 'Account not found with this email.' });
@@ -243,8 +307,14 @@ router.post('/resend-otp', async (req, res) => {
       otpExpires
     });
 
-    // Send real email
-    const mailResult = await mailer.sendOtpEmail(user.email, otp, user.displayName);
+    // Send real email safely
+    let mailResult = { delivered: false };
+    try {
+      mailResult = await mailer.sendOtpEmail(user.email, otp, user.displayName);
+    } catch (mailErr) {
+      console.warn('Resend OTP sendOtpEmail error:', mailErr.message);
+      mailResult = { delivered: false, error: mailErr.message };
+    }
 
     res.json({
       success: true,
@@ -257,7 +327,7 @@ router.post('/resend-otp', async (req, res) => {
     });
   } catch (err) {
     console.error('Resend OTP Error:', err);
-    res.status(500).json({ error: 'Failed to resend OTP code.' });
+    res.status(500).json({ error: err.message || 'Failed to resend OTP code.' });
   }
 });
 
@@ -309,7 +379,12 @@ router.post('/send-otp', async (req, res) => {
         otpCode: otp,
         otpExpires: new Date(Date.now() + 10 * 60 * 1000)
       });
-      mailResult = await mailer.sendOtpEmail(cleanEmail, otp, existingUser.displayName);
+      try {
+        mailResult = await mailer.sendOtpEmail(cleanEmail, otp, existingUser.displayName);
+      } catch (mailErr) {
+        console.warn('sendOtpEmail warning in send-otp:', mailErr.message);
+        mailResult = { delivered: false, error: mailErr.message };
+      }
     }
 
     res.json({
@@ -319,7 +394,8 @@ router.post('/send-otp', async (req, res) => {
       fallbackOtp: !mailResult.delivered ? otp : undefined
     });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to send OTP.' });
+    console.error('Send OTP Error:', err);
+    res.status(500).json({ error: err.message || 'Failed to send OTP.' });
   }
 });
 
@@ -330,7 +406,15 @@ router.post('/verify-otp', async (req, res) => {
     if (!otp) return res.status(400).json({ error: 'OTP code is required.' });
 
     const cleanEmail = (email || '').toLowerCase().trim();
-    const user = await User.findOne(userId ? { id: userId } : { email: cleanEmail });
+    let user = null;
+    if (userId) {
+      const mongoose = require('mongoose');
+      const isObjectId = mongoose.Types.ObjectId.isValid(userId);
+      user = await User.findOne(isObjectId ? { $or: [{ id: userId }, { _id: userId }] } : { id: userId });
+    }
+    if (!user && cleanEmail) {
+      user = await User.findOne({ email: cleanEmail });
+    }
 
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
@@ -347,20 +431,33 @@ router.post('/verify-otp', async (req, res) => {
     }
 
     // Mark user as verified and clear OTP
-    const updated = await db.updateUser(user.id, {
+    const targetId = user.id || user._id;
+    let updated = await db.updateUser(targetId, {
       isEmailVerified: true,
       otpCode: null,
       otpExpires: null
     });
 
+    if (!updated) {
+      user.isEmailVerified = true;
+      user.otpCode = null;
+      user.otpExpires = null;
+      await user.save();
+      updated = user.toObject ? user.toObject() : user;
+    }
+
     // Issue JWT token now that email is verified!
     const token = jwt.sign(
-      { id: updated.id, username: updated.username, email: updated.email },
+      { id: updated.id || user.id, username: updated.username || user.username, email: updated.email || user.email },
       config.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    const { passwordHash: _, otpCode: __, ...safeUser } = updated;
+    const safeUser = updated.toObject ? updated.toObject() : { ...updated };
+    delete safeUser.passwordHash;
+    delete safeUser.otpCode;
+    delete safeUser.otpExpires;
+    safeUser.isEmailVerified = true;
 
     // Broadcast new user to all connected clients in real time
     const io = req.app.get('io');
@@ -371,7 +468,7 @@ router.post('/verify-otp', async (req, res) => {
         displayName: safeUser.displayName,
         avatar: safeUser.avatar,
         status: safeUser.status,
-        isEmailVerified: safeUser.isEmailVerified,
+        isEmailVerified: true,
         email: safeUser.email,
         createdAt: safeUser.createdAt
       });
@@ -385,7 +482,7 @@ router.post('/verify-otp', async (req, res) => {
     });
   } catch (err) {
     console.error('Verify OTP Error:', err);
-    res.status(500).json({ error: 'Failed to verify OTP.' });
+    res.status(500).json({ error: err.message || 'Failed to verify OTP.' });
   }
 });
 
@@ -412,7 +509,13 @@ router.post('/forgot-password', async (req, res) => {
       otpExpires
     });
 
-    const mailResult = await mailer.sendOtpEmail(cleanEmail, otp, user.displayName, 'reset');
+    let mailResult = { delivered: false };
+    try {
+      mailResult = await mailer.sendOtpEmail(cleanEmail, otp, user.displayName, 'reset');
+    } catch (mailErr) {
+      console.warn('sendOtpEmail warning in forgot-password:', mailErr.message);
+      mailResult = { delivered: false, error: mailErr.message };
+    }
 
     res.json({
       success: true,
@@ -427,7 +530,7 @@ router.post('/forgot-password', async (req, res) => {
     });
   } catch (err) {
     console.error('Forgot Password Error:', err);
-    res.status(500).json({ error: 'Server error while processing password reset request.' });
+    res.status(500).json({ error: err.message || 'Server error while processing password reset request.' });
   }
 });
 
