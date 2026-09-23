@@ -208,6 +208,13 @@ router.post('/verify', authMiddleware, async (req, res) => {
       .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
       .lean();
 
+    // Invalidate Redis RAM caches so updated Pro status and badges reflect immediately
+    try {
+      const redis = require('../utils/redis');
+      if (sanitizedUser.id) redis.invalidateUser(sanitizedUser.id).catch(() => {});
+      redis.invalidateAllRecent().catch(() => {});
+    } catch {}
+
     // Broadcast VIP Pro / Profile update in real time to all connected users
     const io = req.app.get('io');
     if (io) {
@@ -312,6 +319,13 @@ router.post('/demo-activate', authMiddleware, async (req, res) => {
     const sanitizedUser = await User.findOne({ id: req.user.id })
       .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
       .lean();
+
+    // Invalidate Redis RAM caches so updated Pro status and badges reflect immediately
+    try {
+      const redis = require('../utils/redis');
+      if (sanitizedUser.id) redis.invalidateUser(sanitizedUser.id).catch(() => {});
+      redis.invalidateAllRecent().catch(() => {});
+    } catch {}
 
     // Broadcast VIP Pro / Profile update in real time to all connected users
     const io = req.app.get('io');

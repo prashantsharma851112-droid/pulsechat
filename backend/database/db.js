@@ -28,6 +28,13 @@ module.exports = {
       ? { $or: [{ id }, { _id: id }] }
       : { id };
     const updated = await User.findOneAndUpdate(query, updates, { new: true }).lean();
+    if (updated) {
+      try {
+        const redis = require('../utils/redis');
+        if (updated.id) redis.invalidateUser(updated.id).catch(() => {});
+        redis.invalidateAllRecent().catch(() => {});
+      } catch {}
+    }
     return updated;
   },
 

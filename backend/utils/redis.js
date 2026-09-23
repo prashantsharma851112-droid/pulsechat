@@ -135,6 +135,26 @@ const redis = {
     await this.del(`pulse_recent:${userId}`);
   },
 
+  // 6b. Invalidate ALL Recent Conversations Caches across all users
+  async invalidateAllRecent() {
+    if (!this.isConnected()) return;
+    try {
+      const stream = redisClient.scanStream({ match: 'pulse_recent:*', count: 100 });
+      stream.on('data', (keys) => {
+        if (keys && keys.length > 0) {
+          redisClient.del(keys).catch(() => {});
+        }
+      });
+    } catch (e) {
+      try {
+        const keys = await redisClient.keys('pulse_recent:*');
+        if (keys && keys.length > 0) {
+          await redisClient.del(keys);
+        }
+      } catch {}
+    }
+  },
+
   // 7. Get Cached User Profile
   async getCachedUser(userId) {
     if (!userId) return null;

@@ -459,6 +459,12 @@ router.post('/verify-otp', async (req, res) => {
     delete safeUser.otpExpires;
     safeUser.isEmailVerified = true;
 
+    // Invalidate Redis RAM caches so Discover Pulses and suggestions refresh immediately
+    try {
+      const redis = require('../utils/redis');
+      redis.invalidateAllRecent().catch(() => {});
+    } catch {}
+
     // Broadcast new user to all connected clients in real time
     const io = req.app.get('io');
     if (io) {
@@ -466,9 +472,13 @@ router.post('/verify-otp', async (req, res) => {
         id: safeUser.id,
         username: safeUser.username,
         displayName: safeUser.displayName,
-        avatar: safeUser.avatar,
-        status: safeUser.status,
+        avatar: safeUser.avatar || '',
+        status: safeUser.status || 'Hey there! I am using PulseChat.',
         isEmailVerified: true,
+        isPro: Boolean(safeUser.isPro),
+        proTier: safeUser.proTier || 'none',
+        customBadge: safeUser.customBadge || '',
+        pulseSparks: safeUser.pulseSparks || 50,
         email: safeUser.email,
         createdAt: safeUser.createdAt
       });
@@ -634,11 +644,21 @@ router.post('/google', async (req, res) => {
         avatar: googlePayload.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${candidateUsername}`,
         status: 'Hey there! I am using PulseChat.',
         isEmailVerified: true,
+        isPro: false,
+        proTier: 'none',
+        customBadge: '',
+        pulseSparks: 50,
         createdAt: new Date().toISOString()
       };
 
       await db.saveUser(newUser);
       user = newUser;
+
+      // Invalidate Redis RAM caches
+      try {
+        const redis = require('../utils/redis');
+        redis.invalidateAllRecent().catch(() => {});
+      } catch {}
 
       const io = req.app.get('io');
       if (io) {
@@ -649,6 +669,10 @@ router.post('/google', async (req, res) => {
           avatar: newUser.avatar,
           status: newUser.status,
           isEmailVerified: newUser.isEmailVerified,
+          isPro: false,
+          proTier: 'none',
+          customBadge: '',
+          pulseSparks: 50,
           email: newUser.email,
           createdAt: newUser.createdAt
         });

@@ -56,10 +56,12 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
 
   // 1. Fetch Friends
   const fetchFriends = useCallback(async () => {
-    if (!token) return;
+    const curToken = token || localStorage.getItem('pulsechat_token');
+    if (!curToken) return;
     try {
-      const res = await fetch(`${BACKEND_URL}/api/friends`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const res = await fetch(`${BACKEND_URL}/api/friends?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${curToken}` }
       });
       const data = await parseSafeJson(res);
       if (data && data.friends) {
@@ -94,10 +96,12 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
 
   // 2. Fetch Requests
   const fetchRequests = useCallback(async () => {
-    if (!token) return;
+    const curToken = token || localStorage.getItem('pulsechat_token');
+    if (!curToken) return;
     try {
-      const res = await fetch(`${BACKEND_URL}/api/friends/requests`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const res = await fetch(`${BACKEND_URL}/api/friends/requests?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${curToken}` }
       });
       const data = await parseSafeJson(res);
       if (data) {
@@ -108,6 +112,17 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
         if (onRequestsCountChange) {
           onRequestsCountChange(inc.length);
         }
+
+        const statusMap = {};
+        inc.forEach(r => {
+          if (r.senderId) statusMap[r.senderId] = { status: 'pending_received', requestId: r.id };
+          if (r.sender?.id) statusMap[r.sender.id] = { status: 'pending_received', requestId: r.id };
+        });
+        out.forEach(r => {
+          if (r.receiverId) statusMap[r.receiverId] = { status: 'pending_sent', requestId: r.id };
+          if (r.receiver?.id) statusMap[r.receiver.id] = { status: 'pending_sent', requestId: r.id };
+        });
+        setRequestStatusMap(prev => ({ ...prev, ...statusMap }));
       }
     } catch (err) {
       console.error('Error fetching requests:', err);
@@ -249,7 +264,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
   useEffect(() => {
     const handleProfileUpdate = (data) => {
       if (!data) return;
-      const { userId, userMongoId, username, displayName, avatar, status } = data;
+      const { userId, userMongoId, username, displayName, avatar, status, isPro, proTier, customBadge } = data;
 
       const isMatch = (u) => {
         if (!u) return false;
@@ -259,12 +274,19 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
         return false;
       };
 
-      setFriends(prev => prev.map(f => isMatch(f) ? {
-        ...f,
-        ...(displayName !== undefined && displayName !== '' && { displayName }),
-        ...(avatar !== undefined && avatar !== '' && { avatar }),
-        ...(status !== undefined && { status })
-      } : f));
+      setFriends(prev => {
+        const next = prev.map(f => isMatch(f) ? {
+          ...f,
+          ...(displayName !== undefined && displayName !== '' && { displayName }),
+          ...(avatar !== undefined && avatar !== '' && { avatar }),
+          ...(status !== undefined && { status }),
+          ...(isPro !== undefined && { isPro: Boolean(isPro) }),
+          ...(proTier !== undefined && { proTier }),
+          ...(customBadge !== undefined && { customBadge })
+        } : f);
+        if (user?.id) setCachedFriends(user.id, next);
+        return next;
+      });
 
       setIncomingRequests(prev => prev.map(r => {
         if (r.sender && isMatch(r.sender)) {
@@ -273,7 +295,10 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
             sender: {
               ...r.sender,
               ...(displayName !== undefined && displayName !== '' && { displayName }),
-              ...(avatar !== undefined && avatar !== '' && { avatar })
+              ...(avatar !== undefined && avatar !== '' && { avatar }),
+              ...(isPro !== undefined && { isPro: Boolean(isPro) }),
+              ...(proTier !== undefined && { proTier }),
+              ...(customBadge !== undefined && { customBadge })
             }
           };
         }
@@ -287,12 +312,25 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
             receiver: {
               ...r.receiver,
               ...(displayName !== undefined && displayName !== '' && { displayName }),
-              ...(avatar !== undefined && avatar !== '' && { avatar })
+              ...(avatar !== undefined && avatar !== '' && { avatar }),
+              ...(isPro !== undefined && { isPro: Boolean(isPro) }),
+              ...(proTier !== undefined && { proTier }),
+              ...(customBadge !== undefined && { customBadge })
             }
           };
         }
         return r;
       }));
+
+      setAddSearchResults(prev => prev.map(u => isMatch(u) ? {
+        ...u,
+        ...(displayName !== undefined && displayName !== '' && { displayName }),
+        ...(avatar !== undefined && avatar !== '' && { avatar }),
+        ...(status !== undefined && { status }),
+        ...(isPro !== undefined && { isPro: Boolean(isPro) }),
+        ...(proTier !== undefined && { proTier }),
+        ...(customBadge !== undefined && { customBadge })
+      } : u));
     };
 
     if (socket) socket.on('user_profile_updated', handleProfileUpdate);

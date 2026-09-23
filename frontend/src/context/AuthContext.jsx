@@ -140,6 +140,40 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Listen for real-time profile updates (e.g. avatar, name, bio, pro status, sparks)
+  useEffect(() => {
+    const handleProfileUpdateEvent = (e) => {
+      const data = e.detail?.updates || e.detail;
+      if (!data) return;
+      const targetUserId = e.detail?.targetUserId || data.userId || data.id;
+      setUser(current => {
+        if (!current) return current;
+        const isMe = current.id === targetUserId ||
+          (data.userMongoId && current._id === data.userMongoId) ||
+          (data.username && current.username === data.username);
+        if (!isMe) return current;
+
+        const merged = {
+          ...current,
+          ...(data.displayName !== undefined && data.displayName !== '' && { displayName: data.displayName }),
+          ...(data.avatar !== undefined && data.avatar !== '' && { avatar: data.avatar }),
+          ...(data.status !== undefined && { status: data.status }),
+          ...(data.isPro !== undefined && { isPro: Boolean(data.isPro) }),
+          ...(data.proTier !== undefined && { proTier: data.proTier }),
+          ...(data.customBadge !== undefined && { customBadge: data.customBadge }),
+          ...(data.pulseSparks !== undefined && { pulseSparks: data.pulseSparks })
+        };
+        setCachedUser(merged);
+        const curToken = localStorage.getItem('pulsechat_token');
+        if (curToken) updateSavedAccountsList(merged, curToken);
+        return merged;
+      });
+    };
+
+    window.addEventListener('pulsechat_user_profile_updated', handleProfileUpdateEvent);
+    return () => window.removeEventListener('pulsechat_user_profile_updated', handleProfileUpdateEvent);
+  }, []);
+
   const updateUserProfile = (updatedUser) => {
     setUser(updatedUser);
     setCachedUser(updatedUser);

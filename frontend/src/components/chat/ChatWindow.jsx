@@ -137,6 +137,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           setChatIsPro(Boolean(data.isPro));
           if (activeChat) activeChat.isPro = Boolean(data.isPro);
         }
+        if (data.proTier) {
+          if (activeChat) activeChat.proTier = data.proTier;
+        }
+        if (data.customBadge !== undefined) {
+          if (activeChat) activeChat.customBadge = data.customBadge;
+        }
         if (data.avatar) {
           setChatAvatar(data.avatar);
           if (activeChat) activeChat.avatar = data.avatar;
@@ -145,6 +151,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           setChatDisplayName(data.displayName);
           if (activeChat) activeChat.displayName = data.displayName;
         }
+        if (data.status) {
+          if (activeChat) activeChat.status = data.status;
+        }
+
+        // Also instantly update message sender avatars in active chat
+        setMessages(prev => prev.map(m => {
+          const isSender = (m.senderId && (m.senderId === data.userId || (data.userMongoId && m.senderId === data.userMongoId))) ||
+            (m.sender && data.username && m.sender === data.username);
+          if (isSender) {
+            return {
+              ...m,
+              ...(data.avatar && { senderAvatar: data.avatar }),
+              ...(data.displayName && { senderName: data.displayName })
+            };
+          }
+          return m;
+        }));
       }
     };
 

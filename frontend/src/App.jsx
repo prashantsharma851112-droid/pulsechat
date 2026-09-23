@@ -116,8 +116,29 @@ export default function App() {
 
     const handleProfileUpdate = (data) => {
       if (!data) return;
-      const targetUserId = data.userId;
+      const targetUserId = data.userId || data.id;
       updateUserProfileInStorage(targetUserId, data, user?.id);
+
+      // Dispatch window event so all in-page components (AuthContext, Sidebar, FriendsTab) react in 0ms
+      window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+        detail: { targetUserId, updates: data }
+      }));
+
+      // If current logged-in user changed profile or upgraded, update their state immediately
+      if (user && (user.id === targetUserId || (data.userMongoId && user._id === data.userMongoId) || (data.username && user.username === data.username))) {
+        if (typeof updateUserProfile === 'function') {
+          updateUserProfile({
+            ...user,
+            ...(data.displayName !== undefined && data.displayName !== '' && { displayName: data.displayName }),
+            ...(data.avatar !== undefined && data.avatar !== '' && { avatar: data.avatar }),
+            ...(data.status !== undefined && { status: data.status }),
+            ...(data.isPro !== undefined && { isPro: Boolean(data.isPro) }),
+            ...(data.proTier !== undefined && { proTier: data.proTier }),
+            ...(data.customBadge !== undefined && { customBadge: data.customBadge }),
+            ...(data.pulseSparks !== undefined && { pulseSparks: data.pulseSparks })
+          });
+        }
+      }
 
       // Instantly update activeChat if it's the user whose profile changed
       setActiveChat(prev => {
@@ -132,7 +153,7 @@ export default function App() {
             ...(data.displayName !== undefined && data.displayName !== '' && { displayName: data.displayName }),
             ...(data.avatar !== undefined && data.avatar !== '' && { avatar: data.avatar }),
             ...(data.status !== undefined && { status: data.status }),
-            ...(data.isPro !== undefined && { isPro: data.isPro }),
+            ...(data.isPro !== undefined && { isPro: Boolean(data.isPro) }),
             ...(data.proTier !== undefined && { proTier: data.proTier }),
             ...(data.customBadge !== undefined && { customBadge: data.customBadge })
           };

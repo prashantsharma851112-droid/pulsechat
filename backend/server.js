@@ -124,6 +124,38 @@ io.on('connection', (socket) => {
     socket.join(`user_${userId}`); // Join user's personal private room
     socket.join(userId);           // Also join direct userId room
     onlineUsers.set(userId, socket.id);
+
+    try {
+      const mongoose = require('mongoose');
+      const isObjectId = mongoose.Types.ObjectId.isValid(userId);
+      const uDoc = await User.findOne({
+        $or: [
+          { id: userId },
+          ...(isObjectId ? [{ _id: userId }] : []),
+          { username: userId }
+        ]
+      }).select('id _id username').lean();
+
+      if (uDoc) {
+        if (uDoc.id && uDoc.id !== userId) {
+          socket.join(`user_${uDoc.id}`);
+          socket.join(uDoc.id);
+          onlineUsers.set(uDoc.id, socket.id);
+        }
+        if (uDoc._id) {
+          const strId = uDoc._id.toString();
+          if (strId !== userId) {
+            socket.join(`user_${strId}`);
+            socket.join(strId);
+          }
+        }
+        if (uDoc.username && uDoc.username !== userId) {
+          socket.join(`user_${uDoc.username}`);
+          socket.join(uDoc.username);
+        }
+      }
+    } catch {}
+
     io.emit('user_status', { userId, status: 'online' });
     io.emit('online_users_list', Array.from(onlineUsers.keys()));
 

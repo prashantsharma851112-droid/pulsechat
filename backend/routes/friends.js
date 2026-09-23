@@ -30,18 +30,20 @@ const getUserIdentifiers = (user) => {
   if (user.id) ids.add(user.id);
   if (user._id) ids.add(user._id.toString());
   if (user.username) ids.add(user.username);
+  if (user.email) ids.add(user.email);
   return Array.from(ids);
 };
 
-// Helper to lookup user by id, _id, or username
-const findUserAnywhere = async (idOrUsername) => {
-  if (!idOrUsername) return null;
-  const isObjectId = mongoose.Types.ObjectId.isValid(idOrUsername);
+// Helper to lookup user by id, _id, username, or email
+const findUserAnywhere = async (idOrUsernameOrEmail) => {
+  if (!idOrUsernameOrEmail) return null;
+  const isObjectId = mongoose.Types.ObjectId.isValid(idOrUsernameOrEmail);
   return User.findOne({
     $or: [
-      { id: idOrUsername },
-      ...(isObjectId ? [{ _id: idOrUsername }] : []),
-      { username: idOrUsername }
+      { id: idOrUsernameOrEmail },
+      ...(isObjectId ? [{ _id: idOrUsernameOrEmail }] : []),
+      { username: idOrUsernameOrEmail },
+      { email: idOrUsernameOrEmail }
     ]
   });
 };
@@ -49,7 +51,8 @@ const findUserAnywhere = async (idOrUsername) => {
 // 1. Get Current User's Friends List (Only logged-in user can access their own friends)
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const currentUser = await findUserAnywhere(req.user.id);
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    const currentUser = await findUserAnywhere(req.user.id) || await findUserAnywhere(req.user.username);
     if (!currentUser) return res.status(404).json({ error: 'User not found' });
 
     const friendIds = currentUser.friends || [];
@@ -77,11 +80,15 @@ router.get('/', authMiddleware, async (req, res) => {
 // 2. Get Pending Friend Requests (Incoming & Outgoing)
 router.get('/requests', authMiddleware, async (req, res) => {
   try {
-    const currentUser = await findUserAnywhere(req.user.id);
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    const currentUser = await findUserAnywhere(req.user.id) || await findUserAnywhere(req.user.username);
     const myIds = Array.from(new Set([
       ...getUserIdentifiers(currentUser),
       req.user.id,
-      req.user.username
+      req.user.username,
+      currentUser?.id,
+      currentUser?.username,
+      currentUser?._id?.toString()
     ].filter(Boolean)));
 
     const [incomingReqs, outgoingReqs] = await Promise.all([

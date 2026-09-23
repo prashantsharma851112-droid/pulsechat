@@ -97,11 +97,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
   // Load friendship status and pending friend requests count
   const loadFriendshipInfo = useCallback(async () => {
-    if (!token) return;
+    const curToken = token || localStorage.getItem('pulsechat_token');
+    if (!curToken) return;
     try {
       const [reqRes, friendsRes] = await Promise.allSettled([
-        fetch(`${BACKEND_URL}/api/friends/requests`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${BACKEND_URL}/api/friends`, { headers: { Authorization: `Bearer ${token}` } })
+        fetch(`${BACKEND_URL}/api/friends/requests?t=${Date.now()}`, { cache: 'no-store', headers: { Authorization: `Bearer ${curToken}` } }),
+        fetch(`${BACKEND_URL}/api/friends?t=${Date.now()}`, { cache: 'no-store', headers: { Authorization: `Bearer ${curToken}` } })
       ]);
 
       if (reqRes.status === 'fulfilled' && reqRes.value.ok) {
@@ -122,7 +123,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         }
       }
     } catch {}
-  }, [token]);
+  }, [token, user?.id]);
 
   useEffect(() => {
     loadFriendshipInfo();
@@ -341,9 +342,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   };
 
   const loadRecentChats = useCallback(() => {
-    if (!token) return;
-    fetch(`${BACKEND_URL}/api/users/recent`, {
-      headers: { Authorization: `Bearer ${token}` }
+    const curToken = token || localStorage.getItem('pulsechat_token');
+    if (!curToken) return;
+    fetch(`${BACKEND_URL}/api/users/recent?t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { Authorization: `Bearer ${curToken}` }
     })
       .then(res => parseSafeJson(res))
       .then(data => {
@@ -393,9 +396,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   }, [token, user?.id]);
 
   const loadGroups = useCallback(() => {
-    if (!token) return;
-    fetch(`${BACKEND_URL}/api/groups`, {
-      headers: { Authorization: `Bearer ${token}` }
+    const curToken = token || localStorage.getItem('pulsechat_token');
+    if (!curToken) return;
+    fetch(`${BACKEND_URL}/api/groups?t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { Authorization: `Bearer ${curToken}` }
     })
       .then(res => parseSafeJson(res))
       .then(data => {
@@ -416,9 +421,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   }, [token, user?.id]);
 
   const loadAllUsers = useCallback(() => {
-    if (!token) return;
-    fetch(`${BACKEND_URL}/api/users`, {
-      headers: { Authorization: `Bearer ${token}` }
+    const curToken = token || localStorage.getItem('pulsechat_token');
+    if (!curToken) return;
+    fetch(`${BACKEND_URL}/api/users?t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { Authorization: `Bearer ${curToken}` }
     })
       .then(res => parseSafeJson(res))
       .then(data => {
@@ -433,6 +440,27 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         // Offline: already loaded from cache in state
       });
   }, [token, user?.id]);
+
+  // Background silent revalidation on window focus and socket reconnect
+  useEffect(() => {
+    const handleRevalidate = () => {
+      loadRecentChats();
+      loadAllUsers();
+      loadFriendshipInfo();
+    };
+
+    window.addEventListener('focus', handleRevalidate);
+    if (socket) {
+      socket.on('connect', handleRevalidate);
+    }
+
+    return () => {
+      window.removeEventListener('focus', handleRevalidate);
+      if (socket) {
+        socket.off('connect', handleRevalidate);
+      }
+    };
+  }, [socket, loadRecentChats, loadAllUsers, loadFriendshipInfo]);
 
   // Auto-sync fresh avatars, VIP/Pro neon status, and badges from allUsers into recentChats
   useEffect(() => {
@@ -630,9 +658,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     socket.on('chat_read_update', handleChatRead);
 
     const handleNewUser = (newUser) => {
-      if (!newUser || newUser.id === user?.id) return;
+      if (!newUser) return;
+      if (user && (newUser.id === user.id || (user.username && newUser.username === user.username))) return;
       setAllUsers(prev => {
-        if (prev.some(u => u.id === newUser.id)) return prev;
+        if (prev.some(u => u.id === newUser.id || (u.username && newUser.username && u.username === newUser.username))) return prev;
         const next = [newUser, ...prev];
         if (user?.id) setCachedAllUsers(user.id, next);
         return next;
@@ -671,6 +700,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           ...u,
           ...(displayName !== undefined && displayName !== '' && { displayName }),
           ...(avatar !== undefined && avatar !== '' && { avatar }),
+          ...(status !== undefined && { status }),
           ...(isPro !== undefined && { isPro: Boolean(isPro) }),
           ...(proTier !== undefined && { proTier }),
           ...(customBadge !== undefined && { customBadge })
@@ -678,6 +708,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         if (user?.id) setCachedRecentChats(user.id, next);
         return next;
       });
+
+      setSearchResults(prev => prev.map(u => isMatch(u) ? {
+        ...u,
+        ...(displayName !== undefined && displayName !== '' && { displayName }),
+        ...(avatar !== undefined && avatar !== '' && { avatar }),
+        ...(status !== undefined && { status }),
+        ...(isPro !== undefined && { isPro: Boolean(isPro) }),
+        ...(proTier !== undefined && { proTier }),
+        ...(customBadge !== undefined && { customBadge })
+      } : u));
     };
 
     socket.on('new_user_registered', handleNewUser);
@@ -749,9 +789,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       window.removeEventListener('pulsechat_user_profile_updated', handleWindowEvent);
       window.removeEventListener('pulsechat_group_updated', handleWindowGroupEvent);
     };
-  }, [socket, user?.id]);
+  }, [socket, user?.id, user?.username]);
 
-  // Search Users — instant 0ms local cache display + 150ms debounced server search
+  // Search Users — instant 0ms local in-memory display + 120ms debounced server search
   useEffect(() => {
     const q = searchQuery.trim().toLowerCase().replace(/^@/, '');
     if (q.length === 0) {
@@ -759,20 +799,24 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       return;
     }
 
-    // 1. Immediately show local cache results (0ms instant response)
+    // 1. Immediately search across all in-memory users & chats + offline cache (0ms instant response)
     const localUsers = getCachedAllUsers(user?.id) || [];
     const localRecent = getCachedRecentChats(user?.id) || [];
 
-    const seenIds = new Set();
-    const combined = [];
-    for (const u of [...localUsers, ...localRecent]) {
-      if (u && u.id && !seenIds.has(u.id)) {
-        seenIds.add(u.id);
-        combined.push(u);
-      }
+    const seenKeys = new Set();
+    const candidatePool = [];
+    for (const u of [...allUsers, ...recentChats, ...localUsers, ...localRecent]) {
+      if (!u) continue;
+      const key = u.id || u._id || u.username;
+      if (!key || seenKeys.has(key)) continue;
+      seenKeys.add(key);
+
+      // Exclude current user from search results
+      if (u.id === user?.id || (user?.username && u.username === user.username)) continue;
+      candidatePool.push(u);
     }
 
-    const localMatches = combined.filter(u => {
+    const localMatches = candidatePool.filter(u => {
       const nameMatch = (u.displayName || '').toLowerCase().includes(q);
       const usernameMatch = (u.username || '').toLowerCase().includes(q);
       const emailMatch = (u.email || '').toLowerCase().includes(q);
@@ -781,11 +825,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
     setSearchResults(localMatches);
 
-    // 2. Debounced network search (150ms) to avoid server lag & fetch any new users
-    if (!token) return;
+    // 2. Fast server search with AbortController to fetch any newly created users without race conditions
+    const curToken = token || localStorage.getItem('pulsechat_token');
+    if (!curToken) return;
+
+    const controller = new AbortController();
     const timer = setTimeout(() => {
-      fetch(`${BACKEND_URL}/api/users/search?q=${encodeURIComponent(q)}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      fetch(`${BACKEND_URL}/api/users/search?q=${encodeURIComponent(q)}&t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${curToken}` },
+        signal: controller.signal
       })
         .then(async (res) => {
           if (!res.ok) return;
@@ -794,17 +843,22 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             const data = JSON.parse(text);
             if (Array.isArray(data)) {
               if (user?.id && data.length > 0) mergeIntoAllUsersCache(user.id, data);
-              const serverIds = new Set(data.map(u => u.id));
+              const serverKeys = new Set(data.map(u => u.id || u.username));
               const merged = [
                 ...data,
-                ...localMatches.filter(u => !serverIds.has(u.id))
+                ...localMatches.filter(u => !serverKeys.has(u.id || u.username))
               ];
               setSearchResults(merged);
             }
           } catch (e) {}
         })
         .catch(() => {});
-    }, 150);
+    }, 120);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
 
     return () => clearTimeout(timer);
   }, [searchQuery, token, user?.id]);

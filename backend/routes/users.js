@@ -11,8 +11,12 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     const myId = req.user.id;
     const myUsername = req.user.username;
+    const mongoose = require('mongoose');
+    const excludeIds = [myId];
+    if (mongoose.Types.ObjectId.isValid(myId)) excludeIds.push(myId);
+
     const results = await User.find({
-      id: { $ne: myId },
+      id: { $nin: excludeIds },
       ...(myUsername ? { username: { $ne: myUsername } } : {})
     })
       .sort({ createdAt: -1, _id: -1 })
@@ -48,8 +52,15 @@ router.get('/search', authMiddleware, async (req, res) => {
     // Escape any regex special characters to prevent syntax errors
     const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+    const myId = req.user.id;
+    const myUsername = req.user.username;
+    const mongoose = require('mongoose');
+    const excludeIds = [myId];
+    if (mongoose.Types.ObjectId.isValid(myId)) excludeIds.push(myId);
+
     const results = await User.find({
-      id: { $ne: req.user.id },
+      id: { $nin: excludeIds },
+      ...(myUsername ? { username: { $ne: myUsername } } : {}),
       $or: [
         { username: { $regex: escapedQuery, $options: 'i' } },
         { displayName: { $regex: escapedQuery, $options: 'i' } },
