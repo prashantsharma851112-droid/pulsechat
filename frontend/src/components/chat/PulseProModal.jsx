@@ -47,65 +47,8 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
   };
 
   const handleCheckout = async (planId) => {
-    setLoading(true);
-    setStatusMsg({ type: '', text: '' });
-
-    try {
-      // 1. Create Order
-      const res = await fetch(`${BACKEND_URL}/api/payments/create-order`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ planId })
-      });
-
-      const orderData = await res.json();
-      if (!res.ok) throw new Error(orderData.error || 'Failed to create order');
-
-      // If Razorpay is not configured or in Sandbox, trigger instant verification
-      if (orderData.isSandbox || !razorpayConfig.isLive) {
-        await executeDemoActivation(planId);
-        return;
-      }
-
-      // 2. Open Live Razorpay Checkout
-      const isLoaded = await loadRazorpayScript();
-      if (!isLoaded) {
-        throw new Error('Razorpay SDK failed to load. Falling back to sandbox demo.');
-      }
-
-      const options = {
-        key: orderData.keyId,
-        amount: orderData.amount,
-        currency: orderData.currency,
-        name: 'PulseChat',
-        description: planId.startsWith('pro') ? 'PulseChat Pro Subscription' : 'Pulse Sparks Pack',
-        image: 'https://api.dicebear.com/7.x/bottts/svg?seed=pulsechat',
-        order_id: orderData.orderId,
-        handler: async function (response) {
-          await verifyPayment(response, planId, false);
-        },
-        prefill: {
-          name: user.displayName || user.username,
-          email: user.email || ''
-        },
-        theme: {
-          color: '#6366f1'
-        }
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function (response) {
-        setStatusMsg({ type: 'error', text: response.error?.description || 'Payment cancelled or failed.' });
-        setLoading(false);
-      });
-      rzp.open();
-    } catch (err) {
-      console.warn('Payment failed, attempting demo sandbox upgrade:', err);
-      await executeDemoActivation(planId);
-    }
+    // Online payment integration is pending, activate 100% FREE!
+    await executeDemoActivation(planId);
   };
 
   const verifyPayment = async (razorpayResponse, planId, isSandbox) => {
@@ -141,6 +84,8 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
   };
 
   const executeDemoActivation = async (planId) => {
+    setLoading(true);
+    setStatusMsg({ type: '', text: '' });
     try {
       const res = await fetch(`${BACKEND_URL}/api/payments/demo-activate`, {
         method: 'POST',
@@ -153,12 +98,15 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
       const data = await res.json();
       if (data.success && data.user) {
         updateUserProfile(data.user);
-        setStatusMsg({ type: 'success', text: data.message || 'Demo Sandbox Activated!' });
+        setStatusMsg({
+          type: 'success',
+          text: planId.startsWith('pro') ? '🎉 Pulse VIP Activated for 100% FREE! Enjoy VIP perks!' : '⚡ Pulse Sparks Credited for FREE!'
+        });
         setTimeout(() => {
           onClose();
-        }, 1400);
+        }, 1500);
       } else {
-        throw new Error(data.error || 'Demo activation failed');
+        throw new Error(data.error || 'Activation failed');
       }
     } catch (err) {
       setStatusMsg({ type: 'error', text: err.message });
@@ -418,7 +366,25 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                 </div>
               </div>
 
-              {/* Pricing Cards Selector */}
+              {/* Free Access Notice Banner */}
+              <div style={{
+                background: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                borderRadius: '14px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                color: '#10b981',
+                fontSize: '0.82rem'
+              }}>
+                <Sparkles size={18} style={{ flexShrink: 0 }} />
+                <div>
+                  <strong>Limited Time Free Access</strong>: Online payment abhi integrate nahi hua hai, isliye VIP membership abhi sabhi users ke liye <strong>100% FREE</strong> hai!
+                </div>
+              </div>
+
+              {/* Pricing Cards Selector with Strikethrough & FREE */}
               <div style={{ display: 'flex', gap: '10px' }}>
                 <div
                   onClick={() => setBillingCycle('monthly')}
@@ -426,16 +392,33 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                     flex: 1,
                     padding: '14px',
                     borderRadius: '16px',
-                    border: billingCycle === 'monthly' ? '2px solid var(--accent)' : '1px solid var(--border)',
-                    background: billingCycle === 'monthly' ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-card)',
+                    border: billingCycle === 'monthly' ? '2px solid #10b981' : '1px solid var(--border)',
+                    background: billingCycle === 'monthly' ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-card)',
                     cursor: 'pointer',
                     textAlign: 'center',
+                    position: 'relative',
                     transition: 'all 0.2s'
                   }}
                 >
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Monthly</div>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-main)', margin: '4px 0' }}>₹49</div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Billed monthly</div>
+                  <span style={{
+                    position: 'absolute',
+                    top: '-9px',
+                    right: '12px',
+                    background: '#10b981',
+                    color: '#fff',
+                    fontSize: '0.65rem',
+                    fontWeight: 800,
+                    padding: '1px 8px',
+                    borderRadius: '10px'
+                  }}>
+                    100% FREE
+                  </span>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Monthly VIP</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', margin: '4px 0' }}>
+                    <span style={{ fontSize: '1.15rem', textDecoration: 'line-through', opacity: 0.5, color: 'var(--text-muted)' }}>₹49</span>
+                    <span style={{ fontSize: '1.45rem', fontWeight: 900, color: '#10b981' }}>FREE</span>
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: '#10b981', fontWeight: 600 }}>Free Beta Access (₹0)</div>
                 </div>
 
                 <div
@@ -463,11 +446,14 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                     padding: '1px 8px',
                     borderRadius: '10px'
                   }}>
-                    SAVE 15%
+                    100% FREE
                   </span>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Annual VIP</div>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#f59e0b', margin: '4px 0' }}>₹499</div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>₹41.5 / month</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', margin: '4px 0' }}>
+                    <span style={{ fontSize: '1.15rem', textDecoration: 'line-through', opacity: 0.5, color: 'var(--text-muted)' }}>₹499</span>
+                    <span style={{ fontSize: '1.45rem', fontWeight: 900, color: '#10b981' }}>FREE</span>
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: '#10b981', fontWeight: 600 }}>Full 1 Year Free (₹0)</div>
                 </div>
               </div>
 
@@ -484,8 +470,8 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                     borderRadius: '16px',
                     fontWeight: 800,
                     fontSize: '0.96rem',
-                    background: 'linear-gradient(90deg, #6366f1 0%, #ec4899 100%)',
-                    boxShadow: '0 4px 18px rgba(99, 102, 241, 0.4)',
+                    background: 'linear-gradient(90deg, #10b981 0%, #6366f1 100%)',
+                    boxShadow: '0 4px 18px rgba(16, 185, 129, 0.35)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -500,47 +486,19 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                     const isYearly = user?.proTier === 'yearly';
 
                     if (!isUserPro) {
-                      return billingCycle === 'monthly' ? '⚡ Activate Monthly VIP — ₹49' : '⚡ Activate Annual VIP — ₹499';
+                      return billingCycle === 'monthly' ? '⚡ Activate Monthly VIP — 100% FREE' : '⚡ Activate Annual VIP — 100% FREE';
                     }
 
                     if (billingCycle === 'yearly' && isMonthly) {
-                      return '🚀 Upgrade to Annual VIP — ₹499 (Save 15%)';
+                      return '🚀 Upgrade to Annual VIP — 100% FREE';
                     }
                     if (billingCycle === 'yearly' && isYearly) {
-                      return '🔄 Extend Annual VIP for 1 Year — ₹499';
+                      return '🔄 Extend Annual VIP for 1 Year — 100% FREE';
                     }
                     if (billingCycle === 'monthly' && isMonthly) {
-                      return '🔄 Extend Monthly VIP for 1 Month — ₹49';
+                      return '🔄 Extend Monthly VIP for 1 Month — 100% FREE';
                     }
-                    return `⚡ Extend VIP Membership — ₹${billingCycle === 'monthly' ? '49' : '499'}`;
-                  })()}
-                </button>
-
-                {/* Instant Sandbox Button */}
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => executeDemoActivation(billingCycle === 'monthly' ? 'pro_monthly' : 'pro_yearly')}
-                  style={{
-                    background: 'transparent',
-                    border: '1px dashed var(--border)',
-                    borderRadius: '12px',
-                    padding: '8px',
-                    fontSize: '0.78rem',
-                    color: 'var(--text-muted)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
-                  }}
-                  title="Test sandbox mode without UPI/Card"
-                >
-                  <Zap size={13} color="#f59e0b" />
-                  {(() => {
-                    if (!isUserPro) return '⚡ Instant Test Activate VIP (Sandbox Mode)';
-                    if (billingCycle === 'yearly' && user?.proTier === 'monthly') return '🚀 Instant Test Upgrade to Annual VIP (Sandbox)';
-                    return '🔄 Instant Test Extend VIP (Sandbox Mode)';
+                    return '⚡ Extend VIP Membership — 100% FREE';
                   })()}
                 </button>
               </div>
@@ -618,8 +576,9 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontWeight: 900, fontSize: '1.05rem', color: '#f59e0b' }}>
-                          ₹{pack.price}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                          <span style={{ fontSize: '0.88rem', textDecoration: 'line-through', opacity: 0.5, color: 'var(--text-muted)' }}>₹{pack.price}</span>
+                          <span style={{ fontWeight: 900, fontSize: '1.05rem', color: '#10b981' }}>FREE</span>
                         </div>
                       </div>
                     </div>
@@ -638,8 +597,8 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   borderRadius: '16px',
                   fontWeight: 800,
                   fontSize: '0.96rem',
-                  background: 'linear-gradient(90deg, #f59e0b 0%, #ef4444 100%)',
-                  boxShadow: '0 4px 18px rgba(245, 158, 11, 0.4)',
+                  background: 'linear-gradient(90deg, #10b981 0%, #f59e0b 100%)',
+                  boxShadow: '0 4px 18px rgba(16, 185, 129, 0.35)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -649,28 +608,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                 }}
               >
                 {loading ? <Loader2 size={18} className="spin" /> : <Zap size={18} fill="#fff" />}
-                Purchase Sparks Pack
-              </button>
-
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => executeDemoActivation(selectedSparksPack)}
-                style={{
-                  background: 'transparent',
-                  border: '1px dashed var(--border)',
-                  borderRadius: '12px',
-                  padding: '8px',
-                  fontSize: '0.78rem',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
-              >
-                <Zap size={13} color="#f59e0b" /> Instant Test Sandbox Credit
+                ⚡ Claim Sparks Pack — 100% FREE
               </button>
             </div>
           )}

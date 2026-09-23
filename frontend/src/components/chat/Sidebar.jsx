@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2 } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
 import SettingsModal from '../profile/SettingsModal';
 import FriendsTab from './FriendsTab';
@@ -26,7 +26,7 @@ import {
 import { parseSafeJson } from '../../utils/imageCompressor';
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
-  const { user, logout, token, savedAccounts, switchAccount } = useContext(AuthContext);
+  const { user, logout, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
   const { socket, onlineUsers, lastNotification } = useContext(SocketContext);
   const currentUid = user?.id || getCachedUser()?.id;
 
@@ -48,7 +48,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [showProModal, setShowProModal] = useState(false);
   const [proModalTab, setProModalTab] = useState('pro');
   const [showTopMenu, setShowTopMenu] = useState(false);
+  const [showSwitchAccountMenu, setShowSwitchAccountMenu] = useState(false);
   const topMenuRef = useRef(null);
+  const switchAccountMenuRef = useRef(null);
   const activeChatRef = React.useRef(activeChat);
   useEffect(() => {
     activeChatRef.current = activeChat;
@@ -78,8 +80,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       if (topMenuRef.current && !topMenuRef.current.contains(e.target)) {
         setShowTopMenu(false);
       }
+      if (switchAccountMenuRef.current && !switchAccountMenuRef.current.contains(e.target)) {
+        setShowSwitchAccountMenu(false);
+      }
     };
-    if (showTopMenu) {
+    if (showTopMenu || showSwitchAccountMenu) {
       document.addEventListener('mousedown', handleOutsideClick);
       document.addEventListener('touchstart', handleOutsideClick);
     }
@@ -87,7 +92,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       document.removeEventListener('mousedown', handleOutsideClick);
       document.removeEventListener('touchstart', handleOutsideClick);
     };
-  }, [showTopMenu]);
+  }, [showTopMenu, showSwitchAccountMenu]);
 
   // Load friendship status and pending friend requests count
   const loadFriendshipInfo = useCallback(async () => {
@@ -825,6 +830,216 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               className={isRefreshing ? 'animate-spin' : ''}
             />
           </button>
+
+          {/* Quick Switch Account Button right next to Refresh */}
+          <div style={{ position: 'relative' }} ref={switchAccountMenuRef}>
+            <button
+              onClick={() => {
+                setShowSwitchAccountMenu(prev => !prev);
+                setShowTopMenu(false);
+              }}
+              title="Switch Account"
+              className="icon-btn-ghost"
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                background: showSwitchAccountMenu ? 'var(--hover-bg)' : 'var(--bg-card)',
+                color: showSwitchAccountMenu ? 'var(--accent)' : 'var(--text-main)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid var(--border)',
+                transition: 'all 0.2s ease',
+                position: 'relative'
+              }}
+            >
+              <ArrowRightLeft size={17} />
+              {savedAccounts && savedAccounts.length > 1 && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '-2px',
+                    right: '-2px',
+                    minWidth: '16px',
+                    height: '16px',
+                    borderRadius: '8px',
+                    background: 'var(--accent)',
+                    color: '#fff',
+                    fontSize: '0.62rem',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0 3px',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.2)'
+                  }}
+                >
+                  {savedAccounts.length}
+                </span>
+              )}
+            </button>
+
+            {/* Quick Switch Account Dropdown */}
+            {showSwitchAccountMenu && (
+              <div
+                className="topbar-dropdown-menu"
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: '-60px',
+                  width: '290px',
+                  background: 'var(--bg-sidebar)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '16px',
+                  boxShadow: '0 12px 36px rgba(0,0,0,0.45)',
+                  zIndex: 1100,
+                  padding: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  animation: 'pulseModalPop 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
+                }}
+              >
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '6px', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <ArrowRightLeft size={15} color="var(--accent)" />
+                    <span style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-main)' }}>Switch Account</span>
+                  </div>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {savedAccounts?.length || 1} saved
+                  </span>
+                </div>
+
+                {/* Account List */}
+                <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {(savedAccounts && savedAccounts.length > 0 ? savedAccounts : [{
+                    id: user?.id,
+                    username: user?.username,
+                    displayName: user?.displayName || user?.username,
+                    avatar: user?.avatar || '',
+                    isPro: user?.isPro
+                  }]).map(acc => {
+                    const isActive = acc.id === user?.id || acc.username === user?.username;
+                    return (
+                      <div
+                        key={acc.id || acc.username}
+                        onClick={() => {
+                          if (!isActive) {
+                            switchAccount(acc.id);
+                            setShowSwitchAccountMenu(false);
+                          }
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '7px 10px',
+                          borderRadius: '10px',
+                          background: isActive ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-card)',
+                          border: isActive ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                          cursor: isActive ? 'default' : 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                          <div style={{ position: 'relative', flexShrink: 0 }}>
+                            <img
+                              src={acc.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${acc.username}`}
+                              alt={acc.displayName}
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '50%',
+                                objectFit: 'cover',
+                                border: acc.isPro ? '2px solid #f59e0b' : (isActive ? '2px solid var(--accent)' : '1px solid var(--border)')
+                              }}
+                            />
+                            {acc.isPro && (
+                              <span style={{ position: 'absolute', bottom: -2, right: -2, fontSize: '0.6rem' }}>👑</span>
+                            )}
+                          </div>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {acc.displayName || acc.username}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              @{acc.username}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {isActive ? (
+                            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--accent)', background: 'var(--bg-card)', padding: '2px 6px', borderRadius: '6px', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                              <Check size={11} /> Active
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  switchAccount(acc.id);
+                                  setShowSwitchAccountMenu(false);
+                                }}
+                                className="btn-primary"
+                                style={{ padding: '3px 8px', fontSize: '0.72rem', borderRadius: '6px' }}
+                              >
+                                Switch
+                              </button>
+                              {savedAccounts?.length > 1 && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removeSavedAccount(acc.id);
+                                  }}
+                                  title="Remove account"
+                                  className="icon-btn-ghost"
+                                  style={{ padding: '3px', color: 'var(--text-muted)', borderRadius: '6px' }}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ height: '1px', background: 'var(--border)', margin: '2px 0' }} />
+
+                {/* Add Another Account */}
+                <button
+                  onClick={() => {
+                    setShowSwitchAccountMenu(false);
+                    addAccount();
+                  }}
+                  className="dropdown-menu-item"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'var(--bg-card)',
+                    color: 'var(--accent)',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    width: '100%',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <Plus size={15} />
+                  <span>+ Add Another Account</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Topbar Single 3-Dot More Menu */}
           <div style={{ position: 'relative' }} ref={topMenuRef}>

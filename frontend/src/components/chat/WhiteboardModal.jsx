@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useContext } from 'react';
 import {
   X, Eraser, RotateCcw, RotateCw, Paintbrush, Send, Sparkles,
-  Square, Circle, Minus, MoveUpRight, Triangle, Smile, Sliders, Undo2, Download
+  Square, Circle, Minus, MoveUpRight, Triangle, Smile, Sliders, Undo2, Download, Presentation
 } from 'lucide-react';
 import { SocketContext } from '../../context/SocketContext';
 
@@ -415,10 +415,10 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
         {/* Modal Header */}
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Paintbrush size={20} color="var(--accent)" />
+            <Presentation size={20} color="var(--accent)" />
             <div>
               <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-main)' }}>
-                Pro Whiteboard — {chatTitle || 'Board'}
+                Whiteboard Drawing Board — {chatTitle || 'Board'}
               </h3>
               <span style={{ fontSize: '0.72rem', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                 <Sparkles size={11} /> Real-Time Multi-User Drawing, Shapes & Stickers

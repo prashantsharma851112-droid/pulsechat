@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -1159,10 +1159,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             <button
               onClick={() => setShowWhiteboard(true)}
               className="icon-btn-ghost"
-              title="Shared Whiteboard Canvas"
+              title="Shared Whiteboard Drawing Board"
               style={{ width: '38px', height: '38px', borderRadius: '50%' }}
             >
-              <Paintbrush size={19} color="var(--accent)" />
+              <Presentation size={19} color="var(--accent)" />
             </button>
             <button
               onClick={() => isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, false)) : onStartCall(false)}
@@ -1199,8 +1199,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     <span>Change Theme</span>
                   </button>
                   <button onClick={() => { setShowMoreMenu(false); setShowWhiteboard(true); }}>
-                    <Paintbrush size={16} color="var(--accent)" />
-                    <span>Whiteboard Canvas</span>
+                    <Presentation size={16} color="var(--accent)" />
+                    <span>Whiteboard Drawing Board</span>
                   </button>
                   <button onClick={() => { setShowMoreMenu(false); setIsMultiSelectMode(true); setSelectedMsgIds([]); }}>
                     <CheckSquare size={16} color="var(--accent)" />
