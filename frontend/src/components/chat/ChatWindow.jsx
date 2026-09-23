@@ -1997,42 +1997,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Emojis</span>
               </button>
 
-              {/* 6. Voice Note */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  setShowRecorder(true);
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)'
-                }}>
-                  <Mic size={20} />
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Voice Note</span>
-              </button>
             </div>
           )}
 
@@ -2068,6 +2032,32 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 <circle cx="7" cy="17" r="2.5" />
                 <circle cx="17" cy="17" r="2.5" />
               </svg>
+            </button>
+          )}
+
+          {/* Voice Note Button Beside 4-Dot Button */}
+          {!showRecorder && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowActionGrid(false);
+                setShowRecorder(true);
+              }}
+              className="icon-btn-ghost"
+              title="Record Voice Note"
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                color: 'var(--accent)',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Mic size={20} />
             </button>
           )}
 
