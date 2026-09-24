@@ -15,6 +15,7 @@ import EntranceAnimation from './components/common/EntranceAnimation';
 import PandaHero from './components/common/PandaHero';
 import FullDpModal from './components/common/FullDpModal';
 import Toast from './components/common/Toast';
+import EmojiParticleBurst from './components/common/EmojiParticleBurst';
 import { BACKEND_URL } from './utils/config';
 import { updateUserProfileInStorage, clearUnreadCount, getCachedAllUsers } from './utils/offlineStorage';
 import { Zap, AlertTriangle } from 'lucide-react';
@@ -659,6 +660,8 @@ export default function App() {
           />
         ))}
       </div>
+      {/* Global 3D Floating Emoji Particle Burst Engine */}
+      <EmojiParticleBurst />
       </div>
     </ErrorBoundary>
   );

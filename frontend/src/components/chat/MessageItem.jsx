@@ -10,6 +10,109 @@ import PulseVipBadge from '../common/PulseVipBadge';
 import Sticker3D from '../common/Sticker3D';
 import Animated3DText from '../common/Animated3DText';
 
+function StealthDustCard({ message, chatId, isMine, socket }) {
+  const [isRevealing, setIsRevealing] = useState(false);
+  const [countdown, setCountdown] = useState(5);
+  const [isDissolving, setIsDissolving] = useState(false);
+  const timerRef = useRef(null);
+
+  const startReveal = () => {
+    if (isDissolving) return;
+    setIsRevealing(true);
+    if (!timerRef.current) {
+      timerRef.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current);
+            dissolve();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+  };
+
+  const endReveal = () => {
+    if (isRevealing) {
+      dissolve();
+    }
+  };
+
+  const dissolve = () => {
+    if (isDissolving) return;
+    setIsDissolving(true);
+    if (timerRef.current) clearInterval(timerRef.current);
+    
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
+        detail: { emoji: '⚡', count: 25 }
+      }));
+    }
+
+    setTimeout(() => {
+      if (socket) {
+        socket.emit('dissolve_stealth_dust', { chatId, messageId: message.id });
+      }
+    }, 500);
+  };
+
+  if (isDissolving) {
+    return (
+      <div style={{ opacity: 0.3, filter: 'blur(8px)', transition: 'all 0.5s ease', padding: '10px 14px', fontStyle: 'italic', fontSize: '0.8rem', color: '#f59e0b' }}>
+        ⚡ Dissolving into digital dust...
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onMouseDown={startReveal}
+      onMouseUp={endReveal}
+      onTouchStart={startReveal}
+      onTouchEnd={endReveal}
+      style={{
+        background: 'rgba(15, 23, 42, 0.95)',
+        border: '1px solid rgba(245, 158, 11, 0.4)',
+        boxShadow: isRevealing ? '0 0 16px rgba(245, 158, 11, 0.6)' : '0 2px 8px rgba(0,0,0,0.3)',
+        borderRadius: '12px',
+        padding: '10px 12px',
+        color: '#fff',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        cursor: 'pointer',
+        transition: 'all 0.2s ease',
+        minWidth: '190px'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '4px' }}>
+        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          ⚡ STEALTH DUST NOTE
+        </span>
+        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#94a3b8', background: 'rgba(255,255,255,0.1)', padding: '1px 6px', borderRadius: '8px' }}>
+          {isRevealing ? `${countdown}s` : 'HOLD TO REVEAL'}
+        </span>
+      </div>
+
+      <div style={{
+        filter: isRevealing ? 'none' : 'blur(6px)',
+        transition: 'filter 0.2s ease',
+        fontSize: '0.9rem',
+        wordBreak: 'break-word',
+        fontFamily: isRevealing ? 'inherit' : 'monospace'
+      }}>
+        {message.content}
+      </div>
+
+      {!isRevealing && (
+        <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '6px', textAlign: 'center', fontStyle: 'italic' }}>
+          👁️ Press & Hold to unblur (Self-destructs after reveal)
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export default function MessageItem({
   message,
@@ -454,6 +557,11 @@ export default function MessageItem({
                       : `${message.replyTo.type || 'Message'}`}
             </div>
           </div>
+        )}
+
+        {/* Stealth Dust Note Message */}
+        {message.type === 'stealth_dust' && (
+          <StealthDustCard message={message} chatId={chatId} isMine={isMine} socket={socket} />
         )}
 
         {/* Voice Note Message */}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -15,7 +15,7 @@ import PulseProModal from './PulseProModal';
 import GiftPickerModal from './GiftPickerModal';
 import Animated3DTextModal from './Animated3DTextModal';
 import PulseVipBadge from '../common/PulseVipBadge';
-import { playSound } from '../../utils/audio';
+import { playSound, playPulseAuraSound, stopPulseAuraSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
 import {
@@ -301,6 +301,85 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   // Pagination for infinite fast scroll
   const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+
+  // Pulse Aura Soundscapes State
+  const [activeAura, setActiveAura] = useState(() => {
+    return localStorage.getItem(`pulsechat_aura_${chatId}`) || 'off';
+  });
+  const [showAuraMenu, setShowAuraMenu] = useState(false);
+
+  useEffect(() => {
+    const handleAuraChange = (e) => {
+      if (e.detail?.chatId === chatId) {
+        const newAura = e.detail.auraId || 'off';
+        setActiveAura(newAura);
+        playPulseAuraSound(newAura);
+        localStorage.setItem(`pulsechat_aura_${chatId}`, newAura);
+      }
+    };
+
+    const handleStealthDissolved = (e) => {
+      if (e.detail?.chatId === chatId && e.detail?.messageId) {
+        setMessages(prev => prev.filter(m => m.id !== e.detail.messageId));
+      }
+    };
+
+    window.addEventListener('pulsechat_aura_changed', handleAuraChange);
+    window.addEventListener('pulsechat_stealth_dust_dissolved', handleStealthDissolved);
+
+    return () => {
+      window.removeEventListener('pulsechat_aura_changed', handleAuraChange);
+      window.removeEventListener('pulsechat_stealth_dust_dissolved', handleStealthDissolved);
+      stopPulseAuraSound();
+    };
+  }, [chatId]);
+
+  const handleSelectAura = (auraId) => {
+    setActiveAura(auraId);
+    playPulseAuraSound(auraId);
+    localStorage.setItem(`pulsechat_aura_${chatId}`, auraId);
+    setShowAuraMenu(false);
+    if (socket) {
+      socket.emit('set_aura', { chatId, auraId, userId: user?.id });
+    }
+  };
+
+  const handleSendStealthDust = () => {
+    setShowActionGrid(false);
+    const dustText = prompt("⚡ Enter your Stealth Dust Secret Note:\n(It will render blurred until recipient holds down, then shatters into digital dust)");
+    if (!dustText || !dustText.trim()) return;
+
+    const tempMsgId = 'msg_stealth_' + Date.now();
+    const msgData = {
+      ...getSenderPayload(),
+      id: tempMsgId,
+      clientTempId: tempMsgId,
+      chatId,
+      senderId: user.id,
+      receiverId: isGroup ? '' : activeChat.id,
+      isGroup,
+      content: dustText.trim(),
+      type: 'stealth_dust',
+      status: 'sent',
+      timestamp: new Date().toISOString()
+    };
+
+    setMessages(prev => [...prev, msgData]);
+    playSound('sent');
+    if (socket) {
+      socket.emit('send_message', msgData);
+    }
+  };
+
+  const handleTriggerEmojiBurst = (emoji = '🔥') => {
+    setShowActionGrid(false);
+    if (socket) {
+      socket.emit('trigger_emoji_burst', { chatId, emoji, userId: user?.id });
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji, count: 35 } }));
+    }
+  };
 
   // Close 4-dot action grid on click outside
   useEffect(() => {
@@ -1439,6 +1518,75 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
 
           <div className="chat-header-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+            {/* Pulse Aura Background Soundscape Selector */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowAuraMenu(!showAuraMenu)}
+                className="icon-btn-ghost"
+                title="Pulse Aura: Synchronized Ambient Soundscapes"
+                style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '50%',
+                  background: activeAura !== 'off' ? 'rgba(245, 158, 11, 0.2)' : 'transparent',
+                  border: activeAura !== 'off' ? '1px solid #f59e0b' : 'none'
+                }}
+              >
+                <Music size={19} color={activeAura !== 'off' ? '#f59e0b' : 'var(--accent)'} />
+              </button>
+
+              {showAuraMenu && (
+                <div style={{
+                  position: 'absolute',
+                  top: '46px',
+                  right: 0,
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '14px',
+                  padding: '8px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                  zIndex: 100,
+                  width: '210px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-muted)', padding: '4px 8px', textTransform: 'uppercase' }}>
+                    🎵 Pulse Aura Soundscapes
+                  </div>
+                  {[
+                    { id: 'off', name: '🔇 Mute Aura Sound' },
+                    { id: 'rain', name: '🌧️ Cyberpunk Rain' },
+                    { id: 'lofi', name: '🎧 Lofi Chill Beats' },
+                    { id: 'waves', name: '🌊 Sunset Ocean Waves' },
+                    { id: 'nebula', name: '🌌 Space Nebula Synth' }
+                  ].map(a => (
+                    <button
+                      key={a.id}
+                      onClick={() => handleSelectAura(a.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 10px',
+                        borderRadius: '8px',
+                        background: activeAura === a.id ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+                        color: activeAura === a.id ? 'var(--accent)' : 'var(--text-main)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.82rem',
+                        fontWeight: activeAura === a.id ? 700 : 500,
+                        textAlign: 'left'
+                      }}
+                    >
+                      <span>{a.name}</span>
+                      {activeAura === a.id && <Check size={14} />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Drawboard (Shared Whiteboard) */}
             <button
               onClick={() => setShowWhiteboard(true)}
@@ -2149,6 +2297,74 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   🎁
                 </div>
                 <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Send Gift</span>
+              </button>
+
+              {/* 4. Stealth Dust Note (Touch to Reveal Self-Destruct) */}
+              <button
+                type="button"
+                onClick={handleSendStealthDust}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
+                }}>
+                  <Zap size={20} />
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f59e0b' }}>Stealth Dust</span>
+              </button>
+
+              {/* 5. Emoji Particle Burst */}
+              <button
+                type="button"
+                onClick={() => handleTriggerEmojiBurst('🔥')}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)'
+                }}>
+                  <Flame size={20} />
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ef4444' }}>Emoji Burst</span>
               </button>
 
               {/* 4. Create Poll */}

@@ -675,6 +675,32 @@ io.on('connection', (socket) => {
     socket.emit('chat_read_update', { chatId, userId: readerId });
   });
 
+  // Pulse Aura Soundscapes Synchronization
+  socket.on('set_aura', ({ chatId, auraId, userId }) => {
+    io.to(chatId).emit('aura_changed', { chatId, auraId, setBy: userId });
+    if (chatId && chatId.includes('_')) {
+      const parts = chatId.split('_');
+      parts.forEach(uId => io.to(`user_${uId}`).emit('aura_changed', { chatId, auraId, setBy: userId }));
+    }
+  });
+
+  // Stealth Dust Note Dissolve Handler
+  socket.on('dissolve_stealth_dust', async ({ chatId, messageId }) => {
+    try {
+      await db.deleteMessage(messageId);
+    } catch (e) {}
+    io.to(chatId).emit('stealth_dust_dissolved', { chatId, messageId });
+  });
+
+  // 3D Live Emoji Particle Burst Handler
+  socket.on('trigger_emoji_burst', ({ chatId, emoji, userId }) => {
+    io.to(chatId).emit('emoji_burst_received', { chatId, emoji, userId });
+    if (chatId && chatId.includes('_')) {
+      const parts = chatId.split('_');
+      parts.forEach(uId => io.to(`user_${uId}`).emit('emoji_burst_received', { chatId, emoji, userId }));
+    }
+  });
+
   socket.on('mark_chat_read', async ({ chatId, userId }) => {
     const readerId = userId || socket.userId;
     const isGhostMode = await resolveGhostMode(readerId);

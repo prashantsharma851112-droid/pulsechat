@@ -144,6 +144,24 @@ export function SocketProvider({ children }) {
         }
       });
 
+      newSocket.on('aura_changed', (data) => {
+        try {
+          window.dispatchEvent(new CustomEvent('pulsechat_aura_changed', { detail: data }));
+        } catch (e) {}
+      });
+
+      newSocket.on('stealth_dust_dissolved', (data) => {
+        try {
+          window.dispatchEvent(new CustomEvent('pulsechat_stealth_dust_dissolved', { detail: data }));
+        } catch (e) {}
+      });
+
+      newSocket.on('emoji_burst_received', (data) => {
+        try {
+          window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji: data.emoji || '🔥', count: 35 } }));
+        } catch (e) {}
+      });
+
       // Listen to real-time friend/sync request and acceptance alerts
       newSocket.on('friend_notification', (data) => {
         const notif = {
