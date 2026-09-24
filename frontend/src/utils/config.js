@@ -15,7 +15,7 @@ const getBackendUrl = () => {
       return window.location.origin;
     }
   }
-  return 'https://pulsechat-xzul.onrender.com';
+  return 'https://pulsechat-backend-api.onrender.com';
 };
 
 export const BACKEND_URL = getBackendUrl();
