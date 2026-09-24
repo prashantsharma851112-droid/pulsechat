@@ -87,7 +87,7 @@ function StealthDustCard({ message, chatId, isMine, socket }) {
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '4px' }}>
         <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          ⚡ STEALTH DUST NOTE
+          ⚡ DUST TEXT
         </span>
         <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#94a3b8', background: 'rgba(255,255,255,0.1)', padding: '1px 6px', borderRadius: '8px' }}>
           {isRevealing ? `${countdown}s` : 'HOLD TO REVEAL'}
@@ -261,6 +261,11 @@ export default function MessageItem({
   const handleReact = (emoji) => {
     if (socket && currentUser?.id) {
       socket.emit('add_reaction', { messageId: message.id, chatId, emoji, userId: currentUser.id });
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
+        detail: { emoji: emoji || '❤️', count: 50 }
+      }));
     }
     setShowContextMenu(false);
   };

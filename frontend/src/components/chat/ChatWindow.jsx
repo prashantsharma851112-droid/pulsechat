@@ -267,6 +267,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [show3DTextModal, setShow3DTextModal] = useState(false);
   const [showActionGrid, setShowActionGrid] = useState(false);
+  const [showEmojiBurstPicker, setShowEmojiBurstPicker] = useState(false);
   const actionGridRef = useRef(null);
   const [proModalTab, setProModalTab] = useState('pro');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -346,7 +347,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleSendStealthDust = () => {
     setShowActionGrid(false);
-    const dustText = prompt("⚡ Enter your Stealth Dust Secret Note:\n(It will render blurred until recipient holds down, then shatters into digital dust)");
+    const dustText = prompt("⚡ Enter your Dust Text Secret Note:\n(It will render blurred until recipient holds down, then shatters into digital dust)");
     if (!dustText || !dustText.trim()) return;
 
     const tempMsgId = 'msg_stealth_' + Date.now();
@@ -373,11 +374,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleTriggerEmojiBurst = (emoji = '🔥') => {
     setShowActionGrid(false);
+    setShowEmojiBurstPicker(false);
     if (socket) {
       socket.emit('trigger_emoji_burst', { chatId, emoji, userId: user?.id });
     }
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji, count: 35 } }));
+      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji, count: 55 } }));
     }
   };
 
@@ -2330,13 +2332,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 }}>
                   <Zap size={20} />
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f59e0b' }}>Stealth Dust</span>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f59e0b' }}>Dust text</span>
               </button>
 
               {/* 5. Emoji Particle Burst */}
               <button
                 type="button"
-                onClick={() => handleTriggerEmojiBurst('🔥')}
+                onClick={() => {
+                  setShowActionGrid(false);
+                  setShowEmojiBurstPicker(prev => !prev);
+                }}
                 className="action-grid-item"
                 style={{
                   display: 'flex',
@@ -2441,6 +2446,63 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Emojis</span>
               </button>
 
+            </div>
+          )}
+
+          {/* 3D Emoji Particle Burst Selector */}
+          {showEmojiBurstPicker && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 'calc(100% + 10px)',
+                left: '12px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: '20px',
+                padding: '14px',
+                boxShadow: '0 16px 40px rgba(0,0,0,0.5), 0 0 25px rgba(239, 68, 68, 0.3)',
+                zIndex: 1150,
+                width: 'min(320px, 92vw)',
+                animation: 'pulseModalPop 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <span style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  💥 3D Floating Emoji Burst
+                </span>
+                <button
+                  onClick={() => setShowEmojiBurstPicker(false)}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                {['🔥', '❤️', '⚡', '🎉', '🚀', '💎', '💩', '🥳', '😂', '🌟', '👑', '🦄'].map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => handleTriggerEmojiBurst(emoji)}
+                    style={{
+                      fontSize: '1.7rem',
+                      padding: '10px 4px',
+                      background: 'var(--hover-bg)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'transform 0.12s ease'
+                    }}
+                    onMouseDown={(e) => e.currentTarget.style.transform = 'scale(1.25)'}
+                    onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

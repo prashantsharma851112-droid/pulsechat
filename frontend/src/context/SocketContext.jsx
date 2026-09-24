@@ -158,7 +158,7 @@ export function SocketProvider({ children }) {
 
       newSocket.on('emoji_burst_received', (data) => {
         try {
-          window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji: data.emoji || '🔥', count: 35 } }));
+          window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji: data.emoji || '🔥', count: 55 } }));
         } catch (e) {}
       });
 

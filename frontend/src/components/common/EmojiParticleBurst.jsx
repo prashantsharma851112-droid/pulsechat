@@ -22,21 +22,27 @@ export default function EmojiParticleBurst() {
         this.x = x;
         this.y = y;
         this.emoji = emoji;
-        this.size = Math.random() * 24 + 20;
-        this.vx = (Math.random() - 0.5) * 12;
-        this.vy = -Math.random() * 14 - 6;
-        this.gravity = 0.35;
+        this.size = Math.random() * 28 + 24; // 24px - 52px 3D sizes
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 16 + 6;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed - 6; // upward bias burst
+        this.gravity = 0.28;
         this.rotation = Math.random() * Math.PI * 2;
-        this.vRot = (Math.random() - 0.5) * 0.15;
+        this.vRot = (Math.random() - 0.5) * 0.2;
+        this.scale = Math.random() * 0.5 + 0.7; // 3D depth scale
+        this.vScale = Math.random() * 0.01 + 0.005;
         this.opacity = 1;
-        this.fade = Math.random() * 0.015 + 0.01;
+        this.fade = Math.random() * 0.012 + 0.008;
       }
 
       update() {
         this.x += this.vx;
         this.y += this.vy;
         this.vy += this.gravity;
+        this.vx *= 0.98; // atmospheric drag
         this.rotation += this.vRot;
+        this.scale += this.vScale;
         this.opacity -= this.fade;
       }
 
@@ -45,7 +51,10 @@ export default function EmojiParticleBurst() {
         ctx.globalAlpha = Math.max(0, this.opacity);
         ctx.translate(this.x, this.y);
         ctx.rotate(this.rotation);
-        ctx.font = `${this.size}px sans-serif`;
+        ctx.scale(this.scale, this.scale);
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.4)';
+        ctx.shadowBlur = 12;
+        ctx.font = `${this.size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(this.emoji, 0, 0);
@@ -67,9 +76,9 @@ export default function EmojiParticleBurst() {
 
     const handleTriggerBurst = (e) => {
       const emoji = e.detail?.emoji || '🔥';
-      const count = e.detail?.count || 35;
+      const count = e.detail?.count || 50;
       const startX = e.detail?.x || window.innerWidth / 2;
-      const startY = e.detail?.y || window.innerHeight * 0.75;
+      const startY = e.detail?.y || window.innerHeight * 0.6;
 
       for (let i = 0; i < count; i++) {
         particles.push(new Particle(startX, startY, emoji));
@@ -99,3 +108,4 @@ export default function EmojiParticleBurst() {
     />
   );
 }
+
