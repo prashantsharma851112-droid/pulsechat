@@ -19,5 +19,5 @@ const getBackendUrl = () => {
 };
 
 export const BACKEND_URL = getBackendUrl();
-export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '954329116717-ig5j0hpo8jmp4chvhqrub840dpb8lhf0.apps.googleusercontent.com';
+export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '506857691919-p8rgd8v01840pmnrrc4n033faem9bgdi.apps.googleusercontent.com';
 
