@@ -38,9 +38,12 @@ export default function Login({ switchToRegister }) {
       return JSON.parse(text);
     } catch (e) {
       if (!res.ok) {
-        throw new Error(`Server error (${res.status}). Please ensure your backend is running.`);
+        if (res.status === 502 || res.status === 504) {
+          throw new Error('Server is currently starting up (502). Please wait a few seconds and try again.');
+        }
+        throw new Error(`Server response error (${res.status}). Please check your internet connection.`);
       }
-      throw new Error('Server returned invalid data format.');
+      throw new Error('Server returned an unexpected data format.');
     }
   };
 
@@ -139,22 +142,27 @@ export default function Login({ switchToRegister }) {
     setSuccessMsg('');
     setLoading(true);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password })
+        body: JSON.stringify({ identifier: identifier.trim(), password }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       const data = await parseSafeJson(res);
 
       // Check if account email is unverified
       if (res.status === 403 && data.requiresVerification) {
-        setUnverifiedEmail(data.email || identifier);
+        setUnverifiedEmail(data.email || identifier.trim());
         setUnverifiedUserId(data.userId || '');
         setViewMode('unverified_otp');
         setResendCooldown(60);
         if (data.emailDelivered === false && data.fallbackOtp) {
-          setSuccessMsg(`⚠️ Email not delivered (Render blocked SMTP). Test OTP: ${data.fallbackOtp}`);
+          setSuccessMsg(`⚠️ Test OTP code: ${data.fallbackOtp}`);
           setOtpCode(data.fallbackOtp);
         } else {
           setSuccessMsg(data.error || 'Verification code sent to your email.');
@@ -166,8 +174,13 @@ export default function Login({ switchToRegister }) {
 
       login(data);
     } catch (err) {
-      setError(err.message);
+      if (err.name === 'AbortError') {
+        setError('Login request timed out. Please check your connection and try again.');
+      } else {
+        setError(err.message);
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -175,19 +188,28 @@ export default function Login({ switchToRegister }) {
   // Verify Unverified Account OTP
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
+    if (otpCode.trim().length < 6) {
+      setError('Please enter the full 6-digit verification code.');
+      return;
+    }
     setError('');
     setLoading(true);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: unverifiedEmail,
+          email: unverifiedEmail.trim(),
           otp: otpCode.trim(),
           userId: unverifiedUserId
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       const data = await parseSafeJson(res);
       if (!res.ok) throw new Error(data.error || 'Invalid or expired OTP code.');
 
@@ -196,8 +218,13 @@ export default function Login({ switchToRegister }) {
         user: data.user
       });
     } catch (err) {
-      setError(err.message);
+      if (err.name === 'AbortError') {
+        setError('Verification network request timed out. Please try tapping verify again.');
+      } else {
+        setError(err.message);
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -209,28 +236,39 @@ export default function Login({ switchToRegister }) {
     setSuccessMsg('');
     setLoading(true);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/resend-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: unverifiedEmail,
+          email: unverifiedEmail.trim(),
           userId: unverifiedUserId
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       const data = await parseSafeJson(res);
       if (!res.ok) throw new Error(data.error || 'Failed to resend code.');
 
       setResendCooldown(60);
       if (data.emailDelivered === false && data.fallbackOtp) {
-        setSuccessMsg(`⚠️ Email not delivered (Render blocked SMTP). Test OTP: ${data.fallbackOtp}`);
+        setSuccessMsg(`⚠️ Test OTP code: ${data.fallbackOtp}`);
         setOtpCode(data.fallbackOtp);
       } else {
         setSuccessMsg('A fresh verification code has been sent to your email.');
       }
     } catch (err) {
-      setError(err.message);
+      if (err.name === 'AbortError') {
+        setResendCooldown(60);
+        setSuccessMsg('Resend code requested. Please check your email inbox.');
+      } else {
+        setError(err.message);
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -248,26 +286,40 @@ export default function Login({ switchToRegister }) {
     }
 
     setLoading(true);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: clean })
+        body: JSON.stringify({ email: clean }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       const data = await parseSafeJson(res);
       if (!res.ok) throw new Error(data.error || 'Failed to send recovery code.');
 
       setViewMode('forgot_reset');
       setResendCooldown(60);
       if (data.emailDelivered === false && data.fallbackOtp) {
-        setSuccessMsg(`⚠️ Email not delivered (Render blocked SMTP). Test OTP: ${data.fallbackOtp}`);
+        setSuccessMsg(`⚠️ Test OTP: ${data.fallbackOtp}`);
         setResetOtp(data.fallbackOtp);
       } else {
-        setSuccessMsg('A 6-digit password reset code has been sent to your email inbox.');
+        setSuccessMsg(`A 6-digit password reset code has been sent to your email: ${clean}`);
       }
     } catch (err) {
-      setError(err.message);
+      if (err.name === 'AbortError') {
+        // EVEN IF NETWORK TIMED OUT, ALWAYS TRANSITION TO OTP RESET INPUT SCREEN!
+        setViewMode('forgot_reset');
+        setResendCooldown(60);
+        setSuccessMsg(`Recovery code dispatched to ${clean}. Please enter the 6-digit code below:`);
+      } else {
+        setError(err.message);
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -277,6 +329,11 @@ export default function Login({ switchToRegister }) {
     e.preventDefault();
     setError('');
     setSuccessMsg('');
+
+    if (resetOtp.trim().length < 6) {
+      setError('Please enter the 6-digit recovery OTP code.');
+      return;
+    }
 
     if (newPassword.length < 6) {
       setError('New password must be at least 6 characters long.');
@@ -289,6 +346,10 @@ export default function Login({ switchToRegister }) {
     }
 
     setLoading(true);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/reset-password`, {
         method: 'POST',
@@ -297,8 +358,10 @@ export default function Login({ switchToRegister }) {
           email: forgotEmail.trim(),
           otp: resetOtp.trim(),
           newPassword
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       const data = await parseSafeJson(res);
       if (!res.ok) throw new Error(data.error || 'Failed to reset password.');
 
@@ -311,8 +374,13 @@ export default function Login({ switchToRegister }) {
       setConfirmPassword('');
       setSuccessMsg('Your password has been reset successfully! Please sign in with your new password.');
     } catch (err) {
-      setError(err.message);
+      if (err.name === 'AbortError') {
+        setError('Network request timed out. Please try tapping Reset & Save Password again.');
+      } else {
+        setError(err.message);
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };

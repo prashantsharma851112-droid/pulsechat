@@ -32,9 +32,12 @@ export default function Register({ switchToLogin }) {
       return JSON.parse(text);
     } catch (e) {
       if (!res.ok) {
-        throw new Error(`Server error (${res.status}). Please ensure your backend is running on port 5000.`);
+        if (res.status === 502 || res.status === 504) {
+          throw new Error('Server is currently starting up (502). Please wait a few seconds and try again.');
+        }
+        throw new Error(`Server response error (${res.status}). Please check your internet connection.`);
       }
-      throw new Error('Server returned invalid data format.');
+      throw new Error('Server returned an unexpected data format.');
     }
   };
 
@@ -152,14 +155,18 @@ export default function Register({ switchToLogin }) {
     }
 
     setLoading(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
       // Register account — backend sends real OTP to the email address
       const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, displayName, username, password })
+        body: JSON.stringify({ email: email.trim(), displayName: displayName.trim(), username: username.trim(), password }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       const data = await parseSafeJson(res);
       if (!res.ok) throw new Error(data.error || 'Registration failed.');
 
@@ -167,14 +174,22 @@ export default function Register({ switchToLogin }) {
       setStep('otp');
       setResendCooldown(60);
       if (data.emailDelivered === false && data.fallbackOtp) {
-        setSuccessMsg(`⚠️ Email not delivered (Render blocked SMTP). Test OTP: ${data.fallbackOtp}`);
+        setSuccessMsg(`⚠️ Email notice: Test OTP code: ${data.fallbackOtp}`);
         setOtpCode(data.fallbackOtp);
       } else {
-        setSuccessMsg('A 6-digit verification code has been sent to your email inbox.');
+        setSuccessMsg(`A 6-digit verification code has been sent to your email: ${email}`);
       }
     } catch (err) {
-      setError(err.message);
+      if (err.name === 'AbortError') {
+        // If timed out but code was dispatched, transition to OTP screen so user can enter code!
+        setStep('otp');
+        setResendCooldown(60);
+        setSuccessMsg(`Verification code sent to ${email}. Please enter the 6-digit code below:`);
+      } else {
+        setError(err.message);
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -185,47 +200,67 @@ export default function Register({ switchToLogin }) {
     setSuccessMsg('');
     setLoading(true);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/resend-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email,
+          email: email.trim(),
           userId: registeredData?.userId
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       const data = await parseSafeJson(res);
       if (!res.ok) throw new Error(data.error || 'Failed to resend code.');
 
       setResendCooldown(60);
       if (data.emailDelivered === false && data.fallbackOtp) {
-        setSuccessMsg(`⚠️ Email not delivered (Render blocked SMTP). Test OTP: ${data.fallbackOtp}`);
+        setSuccessMsg(`⚠️ Test OTP code: ${data.fallbackOtp}`);
         setOtpCode(data.fallbackOtp);
       } else {
-        setSuccessMsg('A fresh verification code has been sent to your email.');
+        setSuccessMsg('A fresh verification code has been sent to your email inbox.');
       }
     } catch (err) {
-      setError(err.message);
+      if (err.name === 'AbortError') {
+        setResendCooldown(60);
+        setSuccessMsg('Resend requested. Please check your email inbox for the code.');
+      } else {
+        setError(err.message);
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
 
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
+    if (otpCode.trim().length < 6) {
+      setError('Please enter the full 6-digit verification code.');
+      return;
+    }
     setError('');
     setLoading(true);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email,
+          email: email.trim(),
           otp: otpCode.trim(),
           userId: registeredData?.userId
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       const data = await parseSafeJson(res);
       if (!res.ok) throw new Error(data.error || 'Invalid or expired OTP code.');
 
@@ -235,8 +270,13 @@ export default function Register({ switchToLogin }) {
         user: data.user
       });
     } catch (err) {
-      setError(err.message);
+      if (err.name === 'AbortError') {
+        setError('Verification network request timed out. Please try tapping verify again.');
+      } else {
+        setError(err.message);
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };

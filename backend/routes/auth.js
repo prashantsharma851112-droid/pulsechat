@@ -9,6 +9,17 @@ const User = require('../models/User');
 const authMiddleware = require('../middleware/authMiddleware');
 const mailer = require('../utils/mailer');
 
+// Helper to send OTP mail with fast 2.5s response guarantee
+const safeSendOtpMail = async (email, otp, name, purpose = 'verification') => {
+  try {
+    const mailPromise = mailer.sendOtpEmail(email, otp, name, purpose);
+    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ delivered: false, timeout: true }), 2500));
+    return await Promise.race([mailPromise, timeoutPromise]);
+  } catch (err) {
+    return { delivered: false, error: err.message };
+  }
+};
+
 // Helper to verify Google ID Token with Google OAuth2 API
 async function verifyGoogleIdToken(idToken) {
   const url = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`;
@@ -151,7 +162,7 @@ router.post('/register', async (req, res) => {
     // Send real OTP email to user's actual email address safely
     let mailResult = { delivered: false };
     try {
-      mailResult = await mailer.sendOtpEmail(cleanEmail, otp, displayName.trim());
+      mailResult = await safeSendOtpMail(cleanEmail, otp, displayName.trim());
     } catch (mailErr) {
       console.warn('sendOtpEmail warning during registration:', mailErr.message);
       mailResult = { delivered: false, error: mailErr.message };
@@ -240,7 +251,7 @@ router.post('/login', async (req, res) => {
 
       let mailResult = { delivered: false };
       try {
-        mailResult = await mailer.sendOtpEmail(user.email, otp, user.displayName);
+        mailResult = await safeSendOtpMail(user.email, otp, user.displayName);
       } catch (mailErr) {
         console.warn('Login sendOtpEmail error:', mailErr.message);
         mailResult = { delivered: false, error: mailErr.message };
@@ -310,7 +321,7 @@ router.post('/resend-otp', async (req, res) => {
     // Send real email safely
     let mailResult = { delivered: false };
     try {
-      mailResult = await mailer.sendOtpEmail(user.email, otp, user.displayName);
+      mailResult = await safeSendOtpMail(user.email, otp, user.displayName);
     } catch (mailErr) {
       console.warn('Resend OTP sendOtpEmail error:', mailErr.message);
       mailResult = { delivered: false, error: mailErr.message };
@@ -380,7 +391,7 @@ router.post('/send-otp', async (req, res) => {
         otpExpires: new Date(Date.now() + 10 * 60 * 1000)
       });
       try {
-        mailResult = await mailer.sendOtpEmail(cleanEmail, otp, existingUser.displayName);
+        mailResult = await safeSendOtpMail(cleanEmail, otp, existingUser.displayName);
       } catch (mailErr) {
         console.warn('sendOtpEmail warning in send-otp:', mailErr.message);
         mailResult = { delivered: false, error: mailErr.message };
@@ -521,7 +532,7 @@ router.post('/forgot-password', async (req, res) => {
 
     let mailResult = { delivered: false };
     try {
-      mailResult = await mailer.sendOtpEmail(cleanEmail, otp, user.displayName, 'reset');
+      mailResult = await safeSendOtpMail(cleanEmail, otp, user.displayName, 'reset');
     } catch (mailErr) {
       console.warn('sendOtpEmail warning in forgot-password:', mailErr.message);
       mailResult = { delivered: false, error: mailErr.message };

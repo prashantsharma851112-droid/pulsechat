@@ -232,8 +232,8 @@ async function sendViaSmtp(recipientEmail, otpCode, displayName, htmlContent, te
   // Try standard service for Gmail first (avoids TLS cipher issues)
   const configs = isGmail
     ? [
-        { service: 'gmail', auth: { user, pass }, connectionTimeout: 6000, socketTimeout: 8000, greetingTimeout: 6000 },
-        { host: 'smtp.gmail.com', port: 465, secure: true, auth: { user, pass }, connectionTimeout: 6000, socketTimeout: 8000, greetingTimeout: 6000, tls: { rejectUnauthorized: false } }
+        { service: 'gmail', auth: { user, pass }, connectionTimeout: 2500, socketTimeout: 3000, greetingTimeout: 2500 },
+        { host: 'smtp.gmail.com', port: 465, secure: true, auth: { user, pass }, connectionTimeout: 2500, socketTimeout: 3000, greetingTimeout: 2500, tls: { rejectUnauthorized: false } }
       ]
     : [
         {
@@ -241,9 +241,9 @@ async function sendViaSmtp(recipientEmail, otpCode, displayName, htmlContent, te
           port: Number(process.env.SMTP_PORT || 465),
           secure: Number(process.env.SMTP_PORT || 465) === 465,
           auth: { user, pass },
-          connectionTimeout: 6000,
-          socketTimeout: 8000,
-          greetingTimeout: 6000,
+          connectionTimeout: 2500,
+          socketTimeout: 3000,
+          greetingTimeout: 2500,
           tls: { rejectUnauthorized: false }
         }
       ];
