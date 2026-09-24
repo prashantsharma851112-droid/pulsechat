@@ -1007,7 +1007,7 @@ mongoose.connect(config.MONGO_URI)
       console.log(`🚀 PulseChat Backend running on port ${config.PORT}`);
 
       // Automated Keep-Alive Ping Engine to prevent Render / free tier cold starts
-      const renderUrl = process.env.RENDER_EXTERNAL_URL || process.env.SELF_PING_URL;
+      const renderUrl = process.env.RENDER_EXTERNAL_URL || process.env.SELF_PING_URL || 'https://pulsechat-xzul.onrender.com';
       if (renderUrl) {
         console.log(`📡 Keep-Alive Engine activated for: ${renderUrl}`);
         setInterval(() => {
