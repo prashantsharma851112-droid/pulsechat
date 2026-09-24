@@ -336,6 +336,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   }, [chatId]);
 
   const handleSelectAura = (auraId) => {
+    if (auraId !== 'off' && !user?.isPro) {
+      setShowAuraMenu(false);
+      setShowProModal(true);
+      return;
+    }
     setActiveAura(auraId);
     playPulseAuraSound(auraId);
     localStorage.setItem(`pulsechat_aura_${chatId}`, auraId);
@@ -347,6 +352,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleSendStealthDust = () => {
     setShowActionGrid(false);
+    if (!user?.isPro) {
+      setShowProModal(true);
+      return;
+    }
     const dustText = prompt("⚡ Enter your Dust Text Secret Note:\n(It will render blurred until recipient holds down, then shatters into digital dust)");
     if (!dustText || !dustText.trim()) return;
 
@@ -375,6 +384,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const handleTriggerEmojiBurst = (emoji = '🔥') => {
     setShowActionGrid(false);
     setShowEmojiBurstPicker(false);
+    if (!user?.isPro) {
+      setShowProModal(true);
+      return;
+    }
     if (socket) {
       socket.emit('trigger_emoji_burst', { chatId, emoji, userId: user?.id });
     }
@@ -2340,6 +2353,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 type="button"
                 onClick={() => {
                   setShowActionGrid(false);
+                  if (!user?.isPro) {
+                    setShowProModal(true);
+                    return;
+                  }
                   setShowEmojiBurstPicker(prev => !prev);
                 }}
                 className="action-grid-item"

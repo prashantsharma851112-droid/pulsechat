@@ -251,7 +251,13 @@ export default function SettingsModal({
 
             {/* Hide Online Status (Incognito / Online Dot Privacy) */}
             <div
-              onClick={() => toggleHideOnlineStatus(!user?.hideOnlineStatus)}
+              onClick={() => {
+                if (!user?.isPro) {
+                  setShowProModal(true);
+                  return;
+                }
+                toggleHideOnlineStatus(!user?.hideOnlineStatus);
+              }}
               className="user-select-card"
               style={{
                 width: '100%',
@@ -280,6 +286,19 @@ export default function SettingsModal({
                   <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span>Hide Online Status</span>
                     <span style={{
+                      fontSize: '0.65rem',
+                      fontWeight: 900,
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      background: 'rgba(245, 158, 11, 0.2)',
+                      color: '#f59e0b',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '2px'
+                    }}>
+                      <Crown size={11} /> PRO
+                    </span>
+                    <span style={{
                       fontSize: '0.68rem',
                       fontWeight: 800,
                       padding: '1px 6px',
@@ -293,7 +312,7 @@ export default function SettingsModal({
                   <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
                     {user?.hideOnlineStatus
                       ? 'Your green online dot indicator is hidden from everyone'
-                      : 'Show green dot indicator when you are online'}
+                      : 'VIP Pro: Hide green dot indicator from everyone'}
                   </div>
                 </div>
               </div>
