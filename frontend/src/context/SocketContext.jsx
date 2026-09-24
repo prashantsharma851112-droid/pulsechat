@@ -171,9 +171,22 @@ export function SocketProvider({ children }) {
         }
       });
 
+      const handleToggleOnlinePrivacy = (e) => {
+        if (newSocket && newSocket.connected && e.detail) {
+          const curId = userRef.current?.id || user?.id;
+          newSocket.emit('toggle_online_privacy', {
+            hideOnlineStatus: Boolean(e.detail.hideOnlineStatus),
+            userId: curId
+          });
+        }
+      };
+
+      window.addEventListener('pulsechat_toggle_online_privacy', handleToggleOnlinePrivacy);
+
       return () => {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
+        window.removeEventListener('pulsechat_toggle_online_privacy', handleToggleOnlinePrivacy);
         newSocket.disconnect();
       };
     } else {

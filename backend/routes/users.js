@@ -82,7 +82,7 @@ router.get('/search', authMiddleware, async (req, res) => {
 // Update Profile (DP / Avatar, Display Name, Status/Bio, Privacy)
 router.put('/profile', authMiddleware, async (req, res) => {
   try {
-    const { displayName, avatar, status, hideReadReceipts } = req.body;
+    const { displayName, avatar, status, hideReadReceipts, hideOnlineStatus } = req.body;
     const updates = {};
     if (displayName) updates.displayName = displayName.trim();
     if (avatar !== undefined) {
@@ -94,6 +94,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
     }
     if (status !== undefined) updates.status = status.trim();
     if (hideReadReceipts !== undefined) updates.hideReadReceipts = Boolean(hideReadReceipts);
+    if (hideOnlineStatus !== undefined) updates.hideOnlineStatus = Boolean(hideOnlineStatus);
 
     const updatedUser = await db.updateUser(req.user.id, updates);
     if (!updatedUser) return res.status(404).json({ error: 'User not found' });
@@ -113,8 +114,13 @@ router.put('/profile', authMiddleware, async (req, res) => {
         isPro: Boolean(userWithoutPass.isPro),
         proTier: userWithoutPass.proTier,
         customBadge: userWithoutPass.customBadge,
-        pulseSparks: userWithoutPass.pulseSparks
+        pulseSparks: userWithoutPass.pulseSparks,
+        hideOnlineStatus: userWithoutPass.hideOnlineStatus
       });
+
+      if (hideOnlineStatus !== undefined && typeof req.app.get('updateUserOnlinePrivacy') === 'function') {
+        req.app.get('updateUserOnlinePrivacy')(req.user.id, userWithoutPass.hideOnlineStatus);
+      }
     }
 
     res.json({ user: userWithoutPass });
@@ -124,12 +130,13 @@ router.put('/profile', authMiddleware, async (req, res) => {
   }
 });
 
-// Update Privacy (Hide Read Receipts / Unseen Mode)
+// Update Privacy (Hide Read Receipts / Unseen Mode & Hide Online Status)
 router.put('/privacy', authMiddleware, async (req, res) => {
   try {
-    const { hideReadReceipts } = req.body;
+    const { hideReadReceipts, hideOnlineStatus } = req.body;
     const updates = {};
     if (hideReadReceipts !== undefined) updates.hideReadReceipts = Boolean(hideReadReceipts);
+    if (hideOnlineStatus !== undefined) updates.hideOnlineStatus = Boolean(hideOnlineStatus);
 
     const updatedUser = await db.updateUser(req.user.id, updates);
     if (!updatedUser) return res.status(404).json({ error: 'User not found' });
@@ -141,8 +148,13 @@ router.put('/privacy', authMiddleware, async (req, res) => {
       io.to(`user_${req.user.id}`).emit('user_profile_updated', {
         userId: userWithoutPass.id,
         userMongoId: userWithoutPass._id?.toString(),
-        hideReadReceipts: userWithoutPass.hideReadReceipts
+        hideReadReceipts: userWithoutPass.hideReadReceipts,
+        hideOnlineStatus: userWithoutPass.hideOnlineStatus
       });
+
+      if (hideOnlineStatus !== undefined && typeof req.app.get('updateUserOnlinePrivacy') === 'function') {
+        req.app.get('updateUserOnlinePrivacy')(req.user.id, userWithoutPass.hideOnlineStatus);
+      }
     }
 
     res.json({ user: userWithoutPass });

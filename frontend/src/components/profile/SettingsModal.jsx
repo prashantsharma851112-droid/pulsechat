@@ -31,7 +31,7 @@ export default function SettingsModal({
   onOpenFullDp
 }) {
   const { theme, changeTheme } = useContext(ThemeContext);
-  const { user, logout, toggleHideReadReceipts, unblockUser, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
+  const { user, logout, toggleHideReadReceipts, toggleHideOnlineStatus, unblockUser, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
   const [showBlockedModal, setShowBlockedModal] = useState(false);
   const [blockedList, setBlockedList] = useState([]);
   const [loadingBlocked, setLoadingBlocked] = useState(false);
@@ -249,51 +249,74 @@ export default function SettingsModal({
               </div>
             </div>
 
-            {setSilentMode && (
-              <div
-                onClick={() => setSilentMode(!silentMode)}
-                className="user-select-card"
-                style={{
-                  width: '100%',
-                  background: 'var(--bg-card)',
-                  padding: '12px 14px',
-                  border: '1px solid var(--border)',
+            {/* Hide Online Status (Incognito / Online Dot Privacy) */}
+            <div
+              onClick={() => toggleHideOnlineStatus(!user?.hideOnlineStatus)}
+              className="user-select-card"
+              style={{
+                width: '100%',
+                background: 'var(--bg-card)',
+                padding: '12px 14px',
+                border: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  background: user?.hideOnlineStatus ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
-                  cursor: 'pointer'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: silentMode ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <EyeOff size={18} color={silentMode ? '#f59e0b' : 'var(--text-muted)'} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>Incognito Silent Mode</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Hide your online status indicator</div>
-                  </div>
-                </div>
-                <div style={{
-                  width: '36px',
-                  height: '20px',
-                  borderRadius: '10px',
-                  background: silentMode ? '#f59e0b' : 'var(--border)',
-                  position: 'relative',
-                  transition: 'all 0.2s ease'
+                  justifyContent: 'center'
                 }}>
-                  <div style={{
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '50%',
-                    background: '#fff',
-                    position: 'absolute',
-                    top: '2px',
-                    left: silentMode ? '18px' : '2px',
-                    transition: 'all 0.2s ease'
-                  }} />
+                  <EyeOff size={18} color={user?.hideOnlineStatus ? '#f59e0b' : 'var(--text-muted)'} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>Hide Online Status</span>
+                    <span style={{
+                      fontSize: '0.68rem',
+                      fontWeight: 800,
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      background: user?.hideOnlineStatus ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                      color: user?.hideOnlineStatus ? '#f59e0b' : '#10b981'
+                    }}>
+                      {user?.hideOnlineStatus ? 'HIDDEN' : 'VISIBLE'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                    {user?.hideOnlineStatus
+                      ? 'Your green online dot indicator is hidden from everyone'
+                      : 'Show green dot indicator when you are online'}
+                  </div>
                 </div>
               </div>
-            )}
+              <div style={{
+                width: '36px',
+                height: '20px',
+                borderRadius: '10px',
+                background: user?.hideOnlineStatus ? '#f59e0b' : 'var(--border)',
+                position: 'relative',
+                transition: 'all 0.2s ease'
+              }}>
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  background: '#fff',
+                  position: 'absolute',
+                  top: '2px',
+                  left: user?.hideOnlineStatus ? '18px' : '2px',
+                  transition: 'all 0.2s ease'
+                }} />
+              </div>
+            </div>
 
             {/* Unseen Privacy Mode (Ghost Seen) */}
             <div

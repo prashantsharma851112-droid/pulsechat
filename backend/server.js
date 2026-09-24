@@ -121,6 +121,29 @@ const resolveGhostMode = async (userId) => {
 };
 
 const onlineUsers = new Map(); // userId -> socketId
+const hiddenOnlineUsers = new Set(); // userId set of users with hideOnlineStatus enabled
+
+const getPublicOnlineUsers = () => {
+  return Array.from(onlineUsers.keys()).filter(id => !hiddenOnlineUsers.has(id));
+};
+
+const updateUserOnlinePrivacy = (userId, hideOnlineStatus) => {
+  if (hideOnlineStatus) {
+    hiddenOnlineUsers.add(userId);
+  } else {
+    hiddenOnlineUsers.delete(userId);
+  }
+  if (hideOnlineStatus) {
+    io.emit('user_status', { userId, status: 'offline', lastSeen: new Date().toISOString() });
+  } else {
+    if (onlineUsers.has(userId)) {
+      io.emit('user_status', { userId, status: 'online' });
+    }
+  }
+  io.emit('online_users_list', getPublicOnlineUsers());
+};
+
+app.set('updateUserOnlinePrivacy', updateUserOnlinePrivacy);
 
 io.on('connection', (socket) => {
   console.log('⚡ Socket Connected:', socket.id);
@@ -130,8 +153,18 @@ io.on('connection', (socket) => {
     const id = userId || socket.userId;
     if (id) {
       onlineUsers.delete(id);
-      io.emit('user_status', { userId: id, status: 'offline', lastSeen: new Date().toISOString() });
-      io.emit('online_users_list', Array.from(onlineUsers.keys()));
+      if (!hiddenOnlineUsers.has(id)) {
+        io.emit('user_status', { userId: id, status: 'offline', lastSeen: new Date().toISOString() });
+      }
+      io.emit('online_users_list', getPublicOnlineUsers());
+    }
+  });
+
+  // Dynamic socket event for toggling online status privacy in real time
+  socket.on('toggle_online_privacy', ({ hideOnlineStatus, userId }) => {
+    const targetId = userId || socket.userId;
+    if (targetId) {
+      updateUserOnlinePrivacy(targetId, Boolean(hideOnlineStatus));
     }
   });
 
@@ -151,9 +184,21 @@ io.on('connection', (socket) => {
           ...(isObjectId ? [{ _id: userId }] : []),
           { username: userId }
         ]
-      }).select('id _id username').lean();
+      }).select('id _id username hideOnlineStatus').lean();
 
       if (uDoc) {
+        if (uDoc.hideOnlineStatus) {
+          hiddenOnlineUsers.add(userId);
+          if (uDoc.id) hiddenOnlineUsers.add(uDoc.id);
+          if (uDoc._id) hiddenOnlineUsers.add(uDoc._id.toString());
+          if (uDoc.username) hiddenOnlineUsers.add(uDoc.username);
+        } else {
+          hiddenOnlineUsers.delete(userId);
+          if (uDoc.id) hiddenOnlineUsers.delete(uDoc.id);
+          if (uDoc._id) hiddenOnlineUsers.delete(uDoc._id.toString());
+          if (uDoc.username) hiddenOnlineUsers.delete(uDoc.username);
+        }
+
         if (uDoc.id && uDoc.id !== userId) {
           socket.join(`user_${uDoc.id}`);
           socket.join(uDoc.id);
@@ -173,8 +218,10 @@ io.on('connection', (socket) => {
       }
     } catch {}
 
-    io.emit('user_status', { userId, status: 'online' });
-    io.emit('online_users_list', Array.from(onlineUsers.keys()));
+    if (!hiddenOnlineUsers.has(userId)) {
+      io.emit('user_status', { userId, status: 'online' });
+    }
+    io.emit('online_users_list', getPublicOnlineUsers());
 
     // Mobile data on ya user connect hone par pending 'sent' messages ko 'delivered' mark karo
     try {
@@ -938,8 +985,10 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     if (socket.userId) {
       onlineUsers.delete(socket.userId);
-      io.emit('user_status', { userId: socket.userId, status: 'offline', lastSeen: new Date().toISOString() });
-      io.emit('online_users_list', Array.from(onlineUsers.keys()));
+      if (!hiddenOnlineUsers.has(socket.userId)) {
+        io.emit('user_status', { userId: socket.userId, status: 'offline', lastSeen: new Date().toISOString() });
+      }
+      io.emit('online_users_list', getPublicOnlineUsers());
     }
     console.log('⚡ Socket Disconnected:', socket.id);
   });

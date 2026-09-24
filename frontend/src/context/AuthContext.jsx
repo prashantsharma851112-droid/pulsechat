@@ -161,7 +161,8 @@ export function AuthProvider({ children }) {
           ...(data.isPro !== undefined && { isPro: Boolean(data.isPro) }),
           ...(data.proTier !== undefined && { proTier: data.proTier }),
           ...(data.customBadge !== undefined && { customBadge: data.customBadge }),
-          ...(data.pulseSparks !== undefined && { pulseSparks: data.pulseSparks })
+          ...(data.pulseSparks !== undefined && { pulseSparks: data.pulseSparks }),
+          ...(data.hideOnlineStatus !== undefined && { hideOnlineStatus: Boolean(data.hideOnlineStatus) })
         };
         setCachedUser(merged);
         const curToken = localStorage.getItem('pulsechat_token');
@@ -261,6 +262,49 @@ export function AuthProvider({ children }) {
     return false;
   };
 
+  const toggleHideOnlineStatus = async (enabled) => {
+    if (!token) return false;
+    const prevSetting = Boolean(user?.hideOnlineStatus);
+    const nextUser = { ...user, hideOnlineStatus: Boolean(enabled) };
+
+    // 0ms Optimistic UI update & offline storage sync
+    setUser(nextUser);
+    setCachedUser(nextUser);
+    updateSavedAccountsList(nextUser, token);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechat_toggle_online_privacy', {
+        detail: { hideOnlineStatus: Boolean(enabled) }
+      }));
+    }
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/users/privacy`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ hideOnlineStatus: Boolean(enabled) })
+      });
+      const data = await res.json();
+      if (data.user) {
+        const confirmed = { ...nextUser, ...data.user };
+        setUser(confirmed);
+        setCachedUser(confirmed);
+        updateSavedAccountsList(confirmed, token);
+        return true;
+      }
+    } catch (e) {
+      console.error('Failed to update hide online status on backend, rolling back:', e);
+      const rollbackUser = { ...user, hideOnlineStatus: prevSetting };
+      setUser(rollbackUser);
+      setCachedUser(rollbackUser);
+      updateSavedAccountsList(rollbackUser, token);
+    }
+    return false;
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -275,7 +319,8 @@ export function AuthProvider({ children }) {
       updateUserProfile,
       blockUser,
       unblockUser,
-      toggleHideReadReceipts
+      toggleHideReadReceipts,
+      toggleHideOnlineStatus
     }}>
       {children}
     </AuthContext.Provider>
