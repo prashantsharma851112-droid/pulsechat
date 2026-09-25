@@ -38,6 +38,7 @@ export default function SettingsModal({
   const [showProModal, setShowProModal] = useState(false);
   const [cleaningStorage, setCleaningStorage] = useState(false);
   const [cleanupResult, setCleanupResult] = useState(null);
+  const [cleanupDays, setCleanupDays] = useState(30);
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
     return localStorage.getItem('pulsechat_notifications_enabled') !== 'false';
   });
@@ -47,9 +48,9 @@ export default function SettingsModal({
     setCleaningStorage(true);
     setCleanupResult(null);
     try {
-      const res = await runInstantCleanup(30);
+      const res = await runInstantCleanup(cleanupDays);
       if (res && res.success) {
-        setCleanupResult({ type: 'success', msg: `Cleaned ${res.deletedCount} old msgs!` });
+        setCleanupResult({ type: 'success', msg: `Cleaned ${res.deletedCount} msgs (${cleanupDays}+ d)!` });
       } else {
         setCleanupResult({ type: 'error', msg: 'Cleanup failed.' });
       }
@@ -446,7 +447,7 @@ export default function SettingsModal({
                   </div>
                   <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
                     {user?.autoCleanupEnabled !== false
-                      ? 'Auto-delete read chats > 30 days (MongoDB 500MB protection active)'
+                      ? 'Auto-delete read chats older than 30 days'
                       : 'Disabled: Old chat history will be kept permanently'}
                   </div>
                 </div>
@@ -472,9 +473,8 @@ export default function SettingsModal({
               </div>
             </div>
 
-            {/* Run Instant Storage Cleanup Button */}
+            {/* Run Instant Storage Cleanup Card with Day Selection */}
             <div
-              onClick={handleRunInstantCleanup}
               className="user-select-card"
               style={{
                 width: '100%',
@@ -482,32 +482,91 @@ export default function SettingsModal({
                 padding: '12px 14px',
                 border: '1px solid rgba(99, 102, 241, 0.25)',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: cleaningStorage ? 'wait' : 'pointer'
+                flexDirection: 'column',
+                gap: '10px'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(99, 102, 241, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Sparkles size={18} color="var(--accent)" />
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>Run Instant Storage Cleanup</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(99, 102, 241, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Sparkles size={18} color="var(--accent)" />
                   </div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                    {cleaningStorage ? '🧹 Purging read messages older than 30 days...' : 'Instantly purge old read messages (30+ days) to free up space'}
+                  <div>
+                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                      Run Instant Storage Cleanup
+                    </div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                      {cleaningStorage ? `🧹 Purging messages older than ${cleanupDays} days...` : `Purge read messages older than ${cleanupDays} days`}
+                    </div>
                   </div>
                 </div>
-              </div>
-              {cleanupResult ? (
-                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: cleanupResult.type === 'success' ? '#10b981' : '#ef4444' }}>
-                  {cleanupResult.msg}
-                </span>
-              ) : (
-                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent)', background: 'rgba(99, 102, 241, 0.15)', padding: '4px 8px', borderRadius: '8px' }}>
+
+                <button
+                  type="button"
+                  onClick={handleRunInstantCleanup}
+                  disabled={cleaningStorage}
+                  style={{
+                    border: 'none',
+                    outline: 'none',
+                    cursor: cleaningStorage ? 'wait' : 'pointer',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    color: '#fff',
+                    background: 'var(--accent)',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)'
+                  }}
+                >
                   {cleaningStorage ? 'Cleaning...' : '⚡ Clean Now'}
+                </button>
+              </div>
+
+              {/* Day Selection Pills */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', paddingTop: '2px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, marginRight: '2px' }}>
+                  Select History Threshold:
                 </span>
+                {[7, 15, 30, 60, 90].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCleanupDays(d);
+                    }}
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: '0.72rem',
+                      borderRadius: '6px',
+                      border: cleanupDays === d ? '1px solid var(--accent)' : '1px solid var(--border)',
+                      background: cleanupDays === d ? 'var(--accent)' : 'var(--bg-card)',
+                      color: cleanupDays === d ? '#fff' : 'var(--text-main)',
+                      cursor: 'pointer',
+                      fontWeight: cleanupDays === d ? 700 : 500,
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {d} Days
+                  </button>
+                ))}
+              </div>
+
+              {cleanupResult && (
+                <div style={{
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  color: cleanupResult.type === 'success' ? '#10b981' : '#ef4444',
+                  background: cleanupResult.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  textAlign: 'center'
+                }}>
+                  {cleanupResult.msg}
+                </div>
               )}
             </div>
 
