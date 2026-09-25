@@ -179,4 +179,67 @@ router.post('/toggle-user-pro', authMiddleware, adminOnly, async (req, res) => {
   }
 });
 
+// Admin Permanent User Account Deletion Route
+router.delete('/delete-user/:targetUserId', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { targetUserId } = req.params;
+    if (!targetUserId) return res.status(400).json({ error: 'Target User ID is required.' });
+
+    const mongoose = require('mongoose');
+    const isObjectId = mongoose.Types.ObjectId.isValid(targetUserId);
+    const query = isObjectId
+      ? { $or: [{ id: targetUserId }, { _id: targetUserId }] }
+      : { $or: [{ id: targetUserId }, { username: targetUserId }] };
+
+    const userToDelete = await User.findOne(query).lean();
+    if (!userToDelete) {
+      return res.status(404).json({ error: 'Target user account not found in database.' });
+    }
+
+    const targetIdStr = userToDelete.id || (userToDelete._id ? userToDelete._id.toString() : '');
+    const targetMongoIdStr = userToDelete._id ? userToDelete._id.toString() : '';
+
+    // Prevent Admin from deleting their own account via dashboard
+    const currentAdminId = (req.user?.id || req.user?._id || '').toString();
+    if (targetIdStr === currentAdminId || targetMongoIdStr === currentAdminId) {
+      return res.status(400).json({ error: 'You cannot delete your own Master Admin account.' });
+    }
+
+    // 1. Delete user record from MongoDB
+    await User.deleteOne({ _id: userToDelete._id });
+
+    // 2. Clean up messages involving this deleted user
+    await Message.deleteMany({
+      $or: [
+        { senderId: targetIdStr },
+        { receiverId: targetIdStr },
+        ...(targetMongoIdStr ? [{ senderId: targetMongoIdStr }, { receiverId: targetMongoIdStr }] : [])
+      ]
+    });
+
+    // 3. Emit real-time socket events for clean UI synchronization
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('user_deleted', {
+        userId: targetIdStr,
+        userMongoId: targetMongoIdStr,
+        username: userToDelete.username
+      });
+      io.emit('user_profile_updated', {
+        userId: targetIdStr,
+        userMongoId: targetMongoIdStr,
+        isDeleted: true
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `User @${userToDelete.username || userToDelete.displayName} permanently deleted from database.`
+    });
+  } catch (err) {
+    console.error('Delete user error:', err);
+    res.status(500).json({ error: 'Failed to delete user account: ' + err.message });
+  }
+});
+
 module.exports = router;

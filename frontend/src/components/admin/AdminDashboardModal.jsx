@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, Shield, Users, Wifi, MessageSquare, PlusCircle, RefreshCw, Crown, Lock, CheckCircle2, AlertCircle, Search, Sparkles } from 'lucide-react';
+import { X, Shield, Users, Wifi, MessageSquare, PlusCircle, RefreshCw, Crown, Lock, CheckCircle2, AlertCircle, Search, Sparkles, Trash2 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 
 export default function AdminDashboardModal({ onClose }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
 
-  const [secretCode, setSecretCode] = useState('pulse_master_admin_851112');
+  const [secretCode, setSecretCode] = useState('');
   const [claimLoading, setClaimLoading] = useState(false);
   const [claimMsg, setClaimMsg] = useState('');
   const [claimError, setClaimError] = useState('');
@@ -77,7 +77,11 @@ export default function AdminDashboardModal({ onClose }) {
 
   const handleClaimAdmin = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
-    const passcode = secretCode.trim() || 'pulse_master_admin_851112';
+    const passcode = secretCode.trim();
+    if (!passcode) {
+      setClaimError('Please enter the Master Admin secret passcode.');
+      return;
+    }
 
     setClaimLoading(true);
     setClaimError('');
@@ -136,6 +140,38 @@ export default function AdminDashboardModal({ onClose }) {
       }
     } catch (err) {
       alert('Network error updating user status.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleDeleteUser = async (targetUserId, targetUsername) => {
+    if (!activeToken) return;
+    const confirmMsg = `⚠️ PERMANENT DELETE WARNING ⚠️\n\nAre you sure you want to PERMANENTLY delete user "@${targetUsername || 'this user'}"?\n\nThis will erase their account and message history from database. This action CANNOT be undone!`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setActionLoadingId(targetUserId);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/delete-user/${targetUserId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${activeToken}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setStats(prev => {
+          if (!prev || !prev.users) return prev;
+          return {
+            ...prev,
+            totalUsers: Math.max(0, (prev.totalUsers || 1) - 1),
+            users: prev.users.filter(u => u.id !== targetUserId && u.mongoId !== targetUserId)
+          };
+        });
+        fetchStats();
+      } else {
+        alert(data.error || 'Failed to delete user account.');
+      }
+    } catch (err) {
+      alert('Network error deleting user account.');
     } finally {
       setActionLoadingId(null);
     }
@@ -220,7 +256,7 @@ export default function AdminDashboardModal({ onClose }) {
                 <input
                   type="password"
                   className="form-input"
-                  placeholder="Passcode: pulse_master_admin_851112"
+                  placeholder="Enter Secret Master Admin Passcode"
                   value={secretCode}
                   onChange={(e) => setSecretCode(e.target.value)}
                   style={{ width: '100%', textAlign: 'center', fontSize: '0.92rem', fontWeight: 600, letterSpacing: '1px' }}
@@ -404,26 +440,53 @@ export default function AdminDashboardModal({ onClose }) {
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePro(u.id || u.mongoId, u.isPro)}
-                          disabled={actionLoadingId === u.id || actionLoadingId === u.mongoId}
-                          style={{
-                            padding: '5px 12px',
-                            borderRadius: '10px',
-                            fontSize: '0.74rem',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            border: u.isPro ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid var(--accent)',
-                            background: u.isPro ? 'rgba(245, 158, 11, 0.18)' : 'rgba(99, 102, 241, 0.15)',
-                            color: u.isPro ? '#f59e0b' : 'var(--accent)',
-                            transition: 'all 0.15s ease'
-                          }}
-                        >
-                          {(actionLoadingId === u.id || actionLoadingId === u.mongoId)
-                            ? 'Updating...'
-                            : (u.isPro ? '👑 Revoke VIP' : '⭐ Grant VIP Pro')}
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePro(u.id || u.mongoId, u.isPro)}
+                            disabled={actionLoadingId === u.id || actionLoadingId === u.mongoId}
+                            style={{
+                              padding: '5px 12px',
+                              borderRadius: '10px',
+                              fontSize: '0.74rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              border: u.isPro ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid var(--accent)',
+                              background: u.isPro ? 'rgba(245, 158, 11, 0.18)' : 'rgba(99, 102, 241, 0.15)',
+                              color: u.isPro ? '#f59e0b' : 'var(--accent)',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            {(actionLoadingId === u.id || actionLoadingId === u.mongoId)
+                              ? 'Updating...'
+                              : (u.isPro ? '👑 Revoke VIP' : '⭐ Grant VIP Pro')}
+                          </button>
+
+                          {!u.isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUser(u.id || u.mongoId, u.username)}
+                              disabled={actionLoadingId === u.id || actionLoadingId === u.mongoId}
+                              title="Permanently Delete Account from DB"
+                              style={{
+                                padding: '5px 10px',
+                                borderRadius: '10px',
+                                fontSize: '0.74rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                border: '1px solid rgba(239, 68, 68, 0.4)',
+                                background: 'rgba(239, 68, 68, 0.12)',
+                                color: '#ef4444',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <Trash2 size={13} /> Delete
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))
                   )}
