@@ -5,12 +5,16 @@ import Animated3DText from '../common/Animated3DText';
 import PulseProModal from './PulseProModal';
 
 const STYLES = [
-  { id: 'cyber-neon', name: 'Cyber Neon', icon: <Zap size={14} />, color: '#06b6d4', desc: 'Electric Cyan & Magenta holographic glow' },
-  { id: 'gold-deluxe', name: 'Gold Deluxe', icon: <Crown size={14} />, color: '#f59e0b', desc: 'Extruded golden chrome with metallic sheen' },
-  { id: 'flame-inferno', name: 'Inferno Blaze', icon: <Flame size={14} />, color: '#f97316', desc: 'Fiery blazing embers with magma depth' },
-  { id: 'cosmic-nebula', name: 'Cosmic Nebula', icon: <Sparkles size={14} />, color: '#a855f7', desc: 'Deep galactic stardust violet pulsar' },
-  { id: 'diamond-crystal', name: 'Crystal Diamond', icon: <Gem size={14} />, color: '#38bdf8', desc: 'Crystalline ice blue diamond facets' },
-  { id: 'bubble-candy', name: 'Candy Pop', icon: <Smile size={14} />, color: '#ec4899', desc: 'Glossy rounded bubblegum balloon text' }
+  { id: 'cyber-neon', name: 'Cyber Neon', icon: <Zap size={14} />, color: '#06b6d4', desc: 'Electric Cyan & Magenta holographic glow', isPro: false },
+  { id: 'gold-deluxe', name: 'Gold Deluxe', icon: <Crown size={14} />, color: '#f59e0b', desc: 'Extruded golden chrome with metallic sheen', isPro: true },
+  { id: 'flame-inferno', name: 'Inferno Blaze', icon: <Flame size={14} />, color: '#f97316', desc: 'Fiery blazing embers with magma depth', isPro: false },
+  { id: 'cosmic-nebula', name: 'Cosmic Nebula', icon: <Sparkles size={14} />, color: '#a855f7', desc: 'Deep galactic stardust violet pulsar', isPro: true },
+  { id: 'emerald-matrix', name: 'Emerald Matrix', icon: <Sparkles size={14} />, color: '#10b981', desc: 'Glowing green digital matrix code 3D shadow', isPro: true },
+  { id: 'blood-crimson', name: 'Blood Crimson', icon: <Flame size={14} />, color: '#f43f5e', desc: 'Gothic crimson red ruby metallic depth', isPro: true },
+  { id: 'tokyo-synthwave', name: 'Tokyo Synth', icon: <Zap size={14} />, color: '#ec4899', desc: '80s retro neon pink & violet grid 3D', isPro: true },
+  { id: 'royal-platinum', name: 'Royal Platinum', icon: <Crown size={14} />, color: '#e2e8f0', desc: 'Polished platinum silver metallic sheen', isPro: true },
+  { id: 'diamond-crystal', name: 'Crystal Diamond', icon: <Gem size={14} />, color: '#38bdf8', desc: 'Crystalline ice blue diamond facets', isPro: true },
+  { id: 'bubble-candy', name: 'Candy Pop', icon: <Smile size={14} />, color: '#ec4899', desc: 'Glossy rounded bubblegum balloon text', isPro: false }
 ];
 
 const PRESET_WORDS = ['💗', '🔥', '⚡', '🎉', '🚀', '💎', '✨', '💖', '👑', '🌸', '😍', '🔥❤️'];
@@ -333,15 +337,16 @@ export default function Animated3DTextModal({ initialText = '', onSend3D, onClos
                         gap: '2px'
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', fontWeight: 700, color: s.color }}>
-                          {s.icon}
-                          <span>{s.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', fontWeight: 700, color: s.color }}>
+                            {s.icon}
+                            <span>{s.name}</span>
+                            {s.isPro && <Crown size={12} color="#f59e0b" />}
+                          </div>
+                          {isSelected && (
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.color }} />
+                          )}
                         </div>
-                        {isSelected && (
-                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.color }} />
-                        )}
-                      </div>
                       <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', lineHeight: 1.2 }}>
                         {s.desc}
                       </span>

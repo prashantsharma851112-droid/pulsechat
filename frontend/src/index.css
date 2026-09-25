@@ -2000,6 +2000,50 @@ input, textarea {
           drop-shadow(0 0 18px rgba(244, 114, 182, 0.7));
 }
 
+/* 7. EMERALD MATRIX (VIP) */
+.text-3d-emerald .text-3d-content {
+  background: linear-gradient(180deg, #ffffff 0%, #a7f3d0 25%, #34d399 60%, #059669 90%, #064e3b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 0 #10b981)
+          drop-shadow(0 4px 0 #047857)
+          drop-shadow(0 6px 2px rgba(0,0,0,0.6))
+          drop-shadow(0 0 20px rgba(52, 211, 153, 0.85));
+}
+
+/* 8. BLOOD CRIMSON (VIP) */
+.text-3d-crimson .text-3d-content {
+  background: linear-gradient(180deg, #ffffff 0%, #fecdd3 25%, #f43f5e 60%, #e11d48 90%, #881337 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 0 #e11d48)
+          drop-shadow(0 4px 0 #9f1239)
+          drop-shadow(0 6px 2px rgba(0,0,0,0.6))
+          drop-shadow(0 0 22px rgba(244, 63, 94, 0.85));
+}
+
+/* 9. TOKYO SYNTHWAVE (VIP) */
+.text-3d-tokyo .text-3d-content {
+  background: linear-gradient(180deg, #ffffff 0%, #f472b6 30%, #c084fc 70%, #4338ca 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 0 #a855f7)
+          drop-shadow(0 4px 0 #6366f1)
+          drop-shadow(0 6px 2px rgba(0,0,0,0.6))
+          drop-shadow(0 0 25px rgba(236, 72, 153, 0.9));
+}
+
+/* 10. ROYAL PLATINUM (VIP) */
+.text-3d-platinum .text-3d-content {
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 30%, #94a3b8 65%, #475569 95%, #1e293b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 0 #64748b)
+          drop-shadow(0 4px 0 #334155)
+          drop-shadow(0 6px 2px rgba(0,0,0,0.6))
+          drop-shadow(0 0 20px rgba(255, 255, 255, 0.8));
+}
+
 /* Spin utility animations */
 .spin, .animate-spin {
   animation: pulsechat-spin 1s linear infinite;

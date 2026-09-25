@@ -51,6 +51,34 @@ export default function Animated3DText({
           icon: <Smile size={12} color="#ec4899" />,
           accentColor: '#ec4899'
         };
+      case 'emerald-matrix':
+        return {
+          className: 'text-3d-emerald',
+          label: 'Emerald Matrix',
+          icon: <Sparkles size={12} color="#10b981" />,
+          accentColor: '#10b981'
+        };
+      case 'blood-crimson':
+        return {
+          className: 'text-3d-crimson',
+          label: 'Blood Crimson',
+          icon: <Flame size={12} color="#f43f5e" />,
+          accentColor: '#f43f5e'
+        };
+      case 'tokyo-synthwave':
+        return {
+          className: 'text-3d-tokyo',
+          label: 'Tokyo Synthwave',
+          icon: <Zap size={12} color="#ec4899" />,
+          accentColor: '#ec4899'
+        };
+      case 'royal-platinum':
+        return {
+          className: 'text-3d-platinum',
+          label: 'Royal Platinum',
+          icon: <Crown size={12} color="#e2e8f0" />,
+          accentColor: '#e2e8f0'
+        };
       case 'cyber-neon':
       default:
         return {

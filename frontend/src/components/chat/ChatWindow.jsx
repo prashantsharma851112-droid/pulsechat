@@ -2466,7 +2466,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 }}>
                   3D
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#06b6d4' }}>3D Text</span>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#06b6d4', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>3D Text</span>
+                  <Crown size={12} color="#06b6d4" />
+                </span>
               </button>
 
               {/* 3. Virtual Gift */}
@@ -2504,7 +2507,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 }}>
                   🎁
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Send Gift</span>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ec4899', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>Send Gift</span>
+                  <Crown size={12} color="#ec4899" />
+                </span>
               </button>
 
               {/* 4. Stealth Dust Note (Touch to Reveal Self-Destruct) */}
@@ -2582,7 +2588,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 }}>
                   <Flame size={20} />
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ef4444' }}>Emoji Burst</span>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ef4444', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>Emoji Burst</span>
+                  <Crown size={12} color="#ef4444" />
+                </span>
               </button>
 
               {/* 4. Create Poll */}
