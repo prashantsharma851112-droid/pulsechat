@@ -392,7 +392,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.emit('trigger_emoji_burst', { chatId, emoji, userId: user?.id });
     }
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji, duration: 5 } }));
+      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji, mode: 'burst', duration: 5 } }));
     }
   };
 
