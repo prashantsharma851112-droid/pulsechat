@@ -366,6 +366,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [showActionGrid, setShowActionGrid] = useState(false);
   const [showEmojiBurstPicker, setShowEmojiBurstPicker] = useState(false);
   const actionGridRef = useRef(null);
+  const actionGridBtnRef = useRef(null);
   const [proModalTab, setProModalTab] = useState('pro');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [pendingMedia, setPendingMedia] = useState(null);
@@ -502,18 +503,26 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   // Close 4-dot action grid on click outside
   useEffect(() => {
     const handleOutsideClick = (e) => {
-      if (actionGridRef.current && !actionGridRef.current.contains(e.target)) {
+      if (
+        actionGridRef.current &&
+        !actionGridRef.current.contains(e.target) &&
+        actionGridBtnRef.current &&
+        !actionGridBtnRef.current.contains(e.target)
+      ) {
         setShowActionGrid(false);
       }
     };
     if (showActionGrid) {
-      document.addEventListener('mousedown', handleOutsideClick);
-      document.addEventListener('touchstart', handleOutsideClick);
+      const timer = setTimeout(() => {
+        document.addEventListener('click', handleOutsideClick);
+        document.addEventListener('touchstart', handleOutsideClick);
+      }, 0);
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener('click', handleOutsideClick);
+        document.removeEventListener('touchstart', handleOutsideClick);
+      };
     }
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-      document.removeEventListener('touchstart', handleOutsideClick);
-    };
   }, [showActionGrid]);
 
   // Automatic Outbox Sync when network or socket reconnects
@@ -2713,6 +2722,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           {/* 4-Dot Button Beside Typing Input Box */}
           {!showRecorder && (
             <button
+              ref={actionGridBtnRef}
               type="button"
               onClick={() => {
                 setShowActionGrid(prev => !prev);
