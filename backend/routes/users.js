@@ -79,11 +79,29 @@ router.get('/search', authMiddleware, async (req, res) => {
   }
 });
 
-// Update Profile (DP / Avatar, Display Name, Status/Bio, Privacy)
+// Update Profile (DP / Avatar, Username, Display Name, Status/Bio, Privacy)
 router.put('/profile', authMiddleware, async (req, res) => {
   try {
-    const { displayName, avatar, status, hideReadReceipts, hideOnlineStatus } = req.body;
+    const { username, displayName, avatar, status, hideReadReceipts, hideOnlineStatus } = req.body;
     const updates = {};
+    if (username !== undefined && username.trim() !== '') {
+      const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+      if (!cleanUsername || cleanUsername.length < 3) {
+        return res.status(400).json({ error: 'Username must be at least 3 characters long.' });
+      }
+      const mongoose = require('mongoose');
+      const excludeIds = [req.user.id];
+      if (mongoose.Types.ObjectId.isValid(req.user.id)) excludeIds.push(req.user.id);
+
+      const existing = await User.findOne({
+        username: cleanUsername,
+        id: { $nin: excludeIds }
+      });
+      if (existing) {
+        return res.status(400).json({ error: `Username @${cleanUsername} is already taken by another user.` });
+      }
+      updates.username = cleanUsername;
+    }
     if (displayName) updates.displayName = displayName.trim();
     if (avatar !== undefined) {
       if (avatar && typeof avatar === 'string' && avatar.startsWith('data:')) {

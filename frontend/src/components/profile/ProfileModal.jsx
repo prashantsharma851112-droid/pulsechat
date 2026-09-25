@@ -25,6 +25,7 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
 
   // Profile Edit States
   const [displayName, setDisplayName] = useState(user.displayName);
+  const [username, setUsername] = useState(user.username || '');
   const [status, setStatus] = useState(user.status || '');
   const [avatar, setAvatar] = useState(user.avatar);
   const [loading, setLoading] = useState(false);
@@ -70,6 +71,7 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
+          username: (username || '').trim(),
           displayName: (displayName || '').trim(),
           avatar,
           status: (status || '').trim()
@@ -82,6 +84,7 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
           detail: {
             targetUserId: data.user.id,
             updates: {
+              username: data.user.username,
               avatar: data.user.avatar,
               displayName: data.user.displayName,
               status: data.user.status,
@@ -314,6 +317,21 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
                   }}
                 />
               ))}
+            </div>
+
+            {/* Username Handle */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label className="form-label">Username (@handle)</label>
+              <input
+                type="text"
+                className="form-input"
+                value={username}
+                onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                placeholder="username"
+              />
+              <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                Your unique handle: <strong style={{ color: 'var(--accent)' }}>@{username || 'username'}</strong>
+              </div>
             </div>
 
             {/* Display Name */}

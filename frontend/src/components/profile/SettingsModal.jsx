@@ -171,12 +171,8 @@ export default function SettingsModal({
           </div>
 
           {/* Quick Actions */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Group Actions
-            </span>
-
-            {openCreateGroupModal && (
+          {openCreateGroupModal && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <button
                 className="user-select-card"
                 onClick={() => { onClose(); openCreateGroupModal(); }}
@@ -189,8 +185,8 @@ export default function SettingsModal({
                   <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>Create New Group</span>
                 </div>
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Privacy & Modes */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
