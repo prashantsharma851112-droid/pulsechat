@@ -113,27 +113,108 @@ export function playPulseAuraSound(auraId, volume = 0.7) {
       whiteNoise.start();
       activeAuraNodes.push(whiteNoise, filter);
     } else if (auraId === 'lofi') {
-      // Warm Lofi Chill Beats Synth Chords (Fmaj7 / Am9) - Rich volume & harmonics
-      const freqs = [174.61, 220.00, 261.63, 329.63]; // F, A, C, E
-      freqs.forEach((freq, idx) => {
+      // Warm Lofi Chill Beats (Lush 7th Chords + Sub Bass + Tape Wobble + Vinyl Texture + Beat Pulse)
+      const padNotes = [
+        { freq: 174.61, gain: 0.28 }, // F3
+        { freq: 220.00, gain: 0.25 }, // A3
+        { freq: 261.63, gain: 0.22 }, // C4
+        { freq: 329.63, gain: 0.20 }, // E4
+        { freq: 392.00, gain: 0.16 }  // G4
+      ];
+
+      padNotes.forEach(({ freq, gain }) => {
         const osc = activeAuraCtx.createOscillator();
+        const subOsc = activeAuraCtx.createOscillator();
         const filter = activeAuraCtx.createBiquadFilter();
         const gainNode = activeAuraCtx.createGain();
 
-        osc.type = 'sine';
+        osc.type = 'triangle';
         osc.frequency.setValueAtTime(freq, activeAuraCtx.currentTime);
 
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(650 + idx * 80, activeAuraCtx.currentTime);
+        subOsc.type = 'sine';
+        subOsc.frequency.setValueAtTime(freq * 0.5, activeAuraCtx.currentTime);
 
-        gainNode.gain.setValueAtTime(0.3, activeAuraCtx.currentTime); // Boosted from 0.08
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(750, activeAuraCtx.currentTime);
+
+        // Tape Wobble (Vibrato LFO)
+        const lfo = activeAuraCtx.createOscillator();
+        const lfoGain = activeAuraCtx.createGain();
+        lfo.frequency.setValueAtTime(4.2, activeAuraCtx.currentTime);
+        lfoGain.gain.setValueAtTime(2.2, activeAuraCtx.currentTime);
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+        lfo.start();
+
+        gainNode.gain.setValueAtTime(gain, activeAuraCtx.currentTime);
 
         osc.connect(filter);
+        subOsc.connect(filter);
         filter.connect(gainNode);
         gainNode.connect(masterGain);
+
         osc.start();
-        activeAuraNodes.push(osc, filter, gainNode);
+        subOsc.start();
+        activeAuraNodes.push(osc, subOsc, filter, gainNode, lfo, lfoGain);
       });
+
+      // Lofi Vinyl Texture
+      const bufferSize = activeAuraCtx.sampleRate * 2;
+      const crackleBuffer = activeAuraCtx.createBuffer(1, bufferSize, activeAuraCtx.sampleRate);
+      const crackleData = crackleBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        crackleData[i] = Math.random() < 0.002 ? (Math.random() * 2 - 1) * 0.22 : (Math.random() * 2 - 1) * 0.02;
+      }
+      const crackleSrc = activeAuraCtx.createBufferSource();
+      crackleSrc.buffer = crackleBuffer;
+      crackleSrc.loop = true;
+
+      const crackleFilter = activeAuraCtx.createBiquadFilter();
+      crackleFilter.type = 'bandpass';
+      crackleFilter.frequency.setValueAtTime(1600, activeAuraCtx.currentTime);
+
+      crackleSrc.connect(crackleFilter);
+      crackleFilter.connect(masterGain);
+      crackleSrc.start();
+      activeAuraNodes.push(crackleSrc, crackleFilter);
+
+      // Smooth Chillhop Rhythm Beat Pulse (~84 bpm)
+      const beatInterval = 1.42;
+      const runLofiBeat = () => {
+        if (!activeAuraCtx || currentAuraId !== 'lofi') return;
+        try {
+          const now = activeAuraCtx.currentTime;
+          // Soft Lofi Kick
+          const kickOsc = activeAuraCtx.createOscillator();
+          const kickGain = activeAuraCtx.createGain();
+          kickOsc.type = 'sine';
+          kickOsc.frequency.setValueAtTime(95, now);
+          kickOsc.frequency.exponentialRampToValueAtTime(38, now + 0.16);
+          kickGain.gain.setValueAtTime(0.38, now);
+          kickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+          kickOsc.connect(kickGain);
+          kickGain.connect(masterGain);
+          kickOsc.start(now);
+          kickOsc.stop(now + 0.16);
+
+          // Soft Snare Brush
+          const snareOsc = activeAuraCtx.createOscillator();
+          const snareGain = activeAuraCtx.createGain();
+          snareOsc.type = 'triangle';
+          snareOsc.frequency.setValueAtTime(240, now + beatInterval / 2);
+          snareOsc.frequency.exponentialRampToValueAtTime(110, now + beatInterval / 2 + 0.12);
+          snareGain.gain.setValueAtTime(0.22, now + beatInterval / 2);
+          snareGain.gain.exponentialRampToValueAtTime(0.001, now + beatInterval / 2 + 0.12);
+          snareOsc.connect(snareGain);
+          snareGain.connect(masterGain);
+          snareOsc.start(now + beatInterval / 2);
+          snareOsc.stop(now + beatInterval / 2 + 0.12);
+        } catch (e) {}
+      };
+
+      runLofiBeat();
+      const beatTimer = setInterval(runLofiBeat, beatInterval * 1000);
+      activeAuraNodes.push({ stop: () => clearInterval(beatTimer), disconnect: () => {} });
     } else if (auraId === 'waves') {
       // Sunset Ocean Waves (Modulated Pink Noise)
       const bufferSize = activeAuraCtx.sampleRate * 2;

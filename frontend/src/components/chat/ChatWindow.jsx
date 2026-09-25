@@ -348,11 +348,17 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [showAuraMenu, setShowAuraMenu] = useState(false);
 
   useEffect(() => {
+    const savedAura = localStorage.getItem(`pulsechat_aura_${chatId}`) || 'off';
+    setActiveAura(savedAura);
+    if (savedAura && savedAura !== 'off') {
+      playPulseAuraSound(savedAura, auraVolume);
+    }
+
     const handleAuraChange = (e) => {
       if (e.detail?.chatId === chatId) {
         const newAura = e.detail.auraId || 'off';
         setActiveAura(newAura);
-        playPulseAuraSound(newAura);
+        playPulseAuraSound(newAura, auraVolume);
         localStorage.setItem(`pulsechat_aura_${chatId}`, newAura);
       }
     };
@@ -371,7 +377,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       window.removeEventListener('pulsechat_stealth_dust_dissolved', handleStealthDissolved);
       stopPulseAuraSound();
     };
-  }, [chatId]);
+  }, [chatId, auraVolume]);
 
   const handleSelectAura = (auraId) => {
     if (auraId !== 'off' && !user?.isPro) {
