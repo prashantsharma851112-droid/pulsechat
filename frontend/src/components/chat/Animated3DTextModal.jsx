@@ -13,11 +13,11 @@ const STYLES = [
   { id: 'bubble-candy', name: 'Candy Pop', icon: <Smile size={14} />, color: '#ec4899', desc: 'Glossy rounded bubblegum balloon text' }
 ];
 
-const PRESET_WORDS = ['PULSE', 'VIP', 'LEGEND', 'FIRE 🔥', 'SUPER', 'BOOM 💥', 'LOVE ❤️', 'CHILL'];
+const PRESET_WORDS = ['💗', '🔥', '⚡', '🎉', '🚀', '💎', '✨', '💖', '👑', '🌸', '😍', '🔥❤️'];
 
 export default function Animated3DTextModal({ initialText = '', onSend3D, onClose, onOpenProModal }) {
   const { user } = useContext(AuthContext);
-  const [inputText, setInputText] = useState(initialText || 'PULSE');
+  const [inputText, setInputText] = useState(initialText || 'LOVE💗');
   const [selectedStyle, setSelectedStyle] = useState('cyber-neon');
   const [showProModal, setShowProModal] = useState(false);
   const [proModalTab, setProModalTab] = useState('pro');
@@ -26,7 +26,7 @@ export default function Animated3DTextModal({ initialText = '', onSend3D, onClos
   const isTrial = !hasUsedTrial;
   const isUserPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
   const currentSparks = user?.pulseSparks ?? 0;
-  const cleanText = inputText.trim() || 'PULSE';
+  const cleanText = inputText.trim() || 'LOVE💗';
 
   const openPro = (tab = 'pro') => {
     if (onOpenProModal) {
@@ -287,26 +287,24 @@ export default function Animated3DTextModal({ initialText = '', onSend3D, onClos
               </div>
             </div>
 
-            {/* Quick Word Presets */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {PRESET_WORDS.map(word => (
+            {/* Quick Emoji Presets */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {PRESET_WORDS.map(emoji => (
                 <button
-                  key={word}
+                  key={emoji}
                   type="button"
-                  onClick={() => setInputText(word)}
+                  onClick={() => setInputText(prev => (prev === 'LOVE💗' ? emoji : prev + emoji))}
                   style={{
                     background: 'var(--bg-card)',
                     border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    padding: '3px 9px',
-                    fontSize: '0.74rem',
-                    color: 'var(--text-main)',
-                    fontWeight: 600,
+                    borderRadius: '10px',
+                    padding: '4px 10px',
+                    fontSize: '1rem',
                     cursor: 'pointer',
                     transition: 'all 0.15s ease'
                   }}
                 >
-                  {word}
+                  {emoji}
                 </button>
               ))}
             </div>

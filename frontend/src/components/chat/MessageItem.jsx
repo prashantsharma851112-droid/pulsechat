@@ -264,7 +264,7 @@ export default function MessageItem({
     }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
-        detail: { emoji: emoji || '❤️', count: 50 }
+        detail: { emoji: emoji || '❤️', duration: 3 }
       }));
     }
     setShowContextMenu(false);
