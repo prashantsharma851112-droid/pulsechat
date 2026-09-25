@@ -253,6 +253,46 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setChatWallpaper(savedWall);
     const savedCustom = localStorage.getItem(`pulsechat_custom_wallpaper_${chatId}`);
     setCustomWallpaper(savedCustom || null);
+
+    const handleWallpaperUpdated = (e) => {
+      if (e.detail?.chatId === chatId) {
+        const newWall = e.detail.wallpaperId || 'none';
+        const customUrl = e.detail.customWallpaperUrl || null;
+        setChatWallpaper(newWall);
+        setCustomWallpaper(customUrl);
+        if (newWall === 'none') {
+          localStorage.removeItem(`pulsechat_chat_wallpaper_${chatId}`);
+        } else {
+          localStorage.setItem(`pulsechat_chat_wallpaper_${chatId}`, newWall);
+        }
+        if (customUrl) {
+          localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, customUrl);
+        } else {
+          localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
+        }
+      }
+    };
+
+    const handleThemeUpdated = (e) => {
+      if (e.detail?.chatId === chatId) {
+        const newTheme = e.detail.themeId || 'default';
+        setChatTheme(newTheme);
+        if (newTheme === 'default' || newTheme === 'midnight_amoled') {
+          localStorage.removeItem(`pulsechat_chat_theme_${chatId}`);
+        } else {
+          localStorage.setItem(`pulsechat_chat_theme_${chatId}`, newTheme);
+          localStorage.setItem('pulsechat_chat_default_theme', newTheme);
+        }
+      }
+    };
+
+    window.addEventListener('pulsechat_wallpaper_updated', handleWallpaperUpdated);
+    window.addEventListener('pulsechat_theme_updated', handleThemeUpdated);
+
+    return () => {
+      window.removeEventListener('pulsechat_wallpaper_updated', handleWallpaperUpdated);
+      window.removeEventListener('pulsechat_theme_updated', handleThemeUpdated);
+    };
   }, [chatId]);
 
   const handleSelectChatTheme = (newTheme) => {
@@ -263,14 +303,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       localStorage.setItem(`pulsechat_chat_theme_${chatId}`, newTheme);
       localStorage.setItem('pulsechat_chat_default_theme', newTheme);
     }
+    if (socket) {
+      socket.emit('set_chat_theme', { chatId, themeId: newTheme, userId: user?.id });
+    }
   };
 
-  const handleSelectChatWallpaper = (newWall) => {
+  const handleSelectChatWallpaper = (newWall, customUrl = customWallpaper) => {
     setChatWallpaper(newWall);
     if (newWall === 'none') {
       localStorage.removeItem(`pulsechat_chat_wallpaper_${chatId}`);
     } else {
       localStorage.setItem(`pulsechat_chat_wallpaper_${chatId}`, newWall);
+    }
+    if (socket) {
+      socket.emit('set_chat_wallpaper', { chatId, wallpaperId: newWall, customWallpaperUrl: customUrl, userId: user?.id });
     }
   };
 
@@ -278,10 +324,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setCustomWallpaper(dataUrl);
     if (dataUrl) {
       localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, dataUrl);
-      handleSelectChatWallpaper('custom_image');
+      handleSelectChatWallpaper('custom_image', dataUrl);
     } else {
       localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
-      handleSelectChatWallpaper('none');
+      handleSelectChatWallpaper('none', null);
     }
   };
 
@@ -2804,6 +2850,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {showSolidThemeModal && (
         <SolidThemeModal
           onClose={() => setShowSolidThemeModal(false)}
+          onSelectTheme={handleSelectChatTheme}
         />
       )}
 

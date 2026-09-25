@@ -150,6 +150,18 @@ export function SocketProvider({ children }) {
         } catch (e) {}
       });
 
+      newSocket.on('chat_wallpaper_updated', (data) => {
+        try {
+          window.dispatchEvent(new CustomEvent('pulsechat_wallpaper_updated', { detail: data }));
+        } catch (e) {}
+      });
+
+      newSocket.on('chat_theme_updated', (data) => {
+        try {
+          window.dispatchEvent(new CustomEvent('pulsechat_theme_updated', { detail: data }));
+        } catch (e) {}
+      });
+
       newSocket.on('stealth_dust_dissolved', (data) => {
         try {
           window.dispatchEvent(new CustomEvent('pulsechat_stealth_dust_dissolved', { detail: data }));

@@ -684,6 +684,24 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Chat Live & Custom Wallpaper Real-Time Synchronization
+  socket.on('set_chat_wallpaper', ({ chatId, wallpaperId, customImage, setBy }) => {
+    io.to(chatId).emit('chat_wallpaper_updated', { chatId, wallpaperId, customImage, setBy });
+    if (chatId && chatId.includes('_')) {
+      const parts = chatId.split('_');
+      parts.forEach(uId => io.to(`user_${uId}`).emit('chat_wallpaper_updated', { chatId, wallpaperId, customImage, setBy }));
+    }
+  });
+
+  // Chat Solid Color Theme Real-Time Synchronization
+  socket.on('set_chat_theme', ({ chatId, themeId, setBy }) => {
+    io.to(chatId).emit('chat_theme_updated', { chatId, themeId, setBy });
+    if (chatId && chatId.includes('_')) {
+      const parts = chatId.split('_');
+      parts.forEach(uId => io.to(`user_${uId}`).emit('chat_theme_updated', { chatId, themeId, setBy }));
+    }
+  });
+
   // Stealth Dust Note Dissolve Handler
   socket.on('dissolve_stealth_dust', async ({ chatId, messageId }) => {
     try {

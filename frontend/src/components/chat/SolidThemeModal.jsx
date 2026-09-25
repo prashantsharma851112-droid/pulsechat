@@ -19,7 +19,7 @@ const SOLID_THEMES = [
   { id: 'cyber_glow', name: '⚡ Cyber Pulse', color: '#06b6d4', card: '#082531', isPro: true }
 ];
 
-export default function SolidThemeModal({ onClose }) {
+export default function SolidThemeModal({ onClose, onSelectTheme }) {
   const { theme, changeTheme } = useContext(ThemeContext);
   const { user } = useContext(AuthContext);
   const [showProModal, setShowProModal] = useState(false);
@@ -32,6 +32,7 @@ export default function SolidThemeModal({ onClose }) {
       return;
     }
     changeTheme(t.id);
+    if (onSelectTheme) onSelectTheme(t.id);
   };
 
   return (
