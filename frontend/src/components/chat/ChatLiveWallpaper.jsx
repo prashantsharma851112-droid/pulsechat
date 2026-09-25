@@ -28,15 +28,19 @@ export default function ChatLiveWallpaper({ wallpaperId, customImage }) {
     const isCyber = wallpaperId === 'cyber_grid_live';
 
     class Particle {
-      constructor() {
-        this.reset();
+      constructor(isInitial = false) {
+        this.reset(isInitial);
       }
 
-      reset() {
-        const w = canvas.width || 360;
-        const h = canvas.height || 640;
+      reset(isInitial = false) {
+        const w = canvas.width || window.innerWidth || 360;
+        const h = canvas.height || window.innerHeight || 640;
         this.x = Math.random() * w;
-        this.y = isNature ? -20 : (h + Math.random() * 40);
+        if (isInitial) {
+          this.y = Math.random() * h;
+        } else {
+          this.y = isNature ? -20 : (h + Math.random() * 40);
+        }
         this.size = Math.random() * 16 + 14;
         this.vy = isNature ? (Math.random() * 1.2 + 0.6) : -(Math.random() * 1.4 + 0.6);
         this.vx = (Math.random() - 0.5) * 0.8;
@@ -60,15 +64,15 @@ export default function ChatLiveWallpaper({ wallpaperId, customImage }) {
       }
 
       update() {
-        const h = canvas.height || 640;
+        const h = canvas.height || window.innerHeight || 640;
         this.y += this.vy;
         this.x += this.vx;
         this.rotation += this.vRot;
 
         if (isNature) {
-          if (this.y > h + 30) this.reset();
+          if (this.y > h + 30) this.reset(false);
         } else {
-          if (this.y < -30) this.reset();
+          if (this.y < -30) this.reset(false);
         }
       }
 
@@ -85,9 +89,9 @@ export default function ChatLiveWallpaper({ wallpaperId, customImage }) {
       }
     }
 
-    const count = 18;
+    const count = 22;
     for (let i = 0; i < count; i++) {
-      particles.push(new Particle());
+      particles.push(new Particle(true));
     }
 
     const animate = () => {
