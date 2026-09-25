@@ -19,12 +19,14 @@ export default function AdminDashboardModal({ onClose }) {
 
   const isAdminActive = Boolean(user?.isAdmin);
 
+  const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('pulsechat_token') : null);
+
   const fetchStats = async () => {
-    if (!token || !isAdminActive) return;
+    if (!activeToken || !isAdminActive) return;
     try {
       setError('');
       const res = await fetch(`${BACKEND_URL}/api/admin/stats`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${activeToken}` }
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -33,7 +35,7 @@ export default function AdminDashboardModal({ onClose }) {
         setError(data.error || 'Failed to load admin metrics.');
       }
     } catch (err) {
-      setError('Network error loading admin stats.');
+      setError('Network error loading admin stats. Please verify server connection.');
     } finally {
       setLoading(false);
     }
@@ -47,7 +49,7 @@ export default function AdminDashboardModal({ onClose }) {
     } else {
       setLoading(false);
     }
-  }, [isAdminActive, token]);
+  }, [isAdminActive, activeToken]);
 
   const handleClaimAdmin = async (e) => {
     e.preventDefault();
@@ -61,7 +63,7 @@ export default function AdminDashboardModal({ onClose }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${activeToken}`
         },
         body: JSON.stringify({ secretCode: secretCode.trim() })
       });
@@ -82,18 +84,27 @@ export default function AdminDashboardModal({ onClose }) {
   };
 
   const handleTogglePro = async (targetUserId, currentPro) => {
+    if (!activeToken) return;
     setActionLoadingId(targetUserId);
     try {
       const res = await fetch(`${BACKEND_URL}/api/admin/toggle-user-pro`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${activeToken}`
         },
         body: JSON.stringify({ targetUserId, isPro: !currentPro })
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        // Optimistically update local stats
+        setStats(prev => {
+          if (!prev || !prev.users) return prev;
+          return {
+            ...prev,
+            users: prev.users.map(u => u.id === targetUserId || u.mongoId === targetUserId ? { ...u, isPro: !currentPro } : u)
+          };
+        });
         fetchStats();
       } else {
         alert(data.error || 'Failed to update user VIP status.');
@@ -337,30 +348,34 @@ export default function AdminDashboardModal({ onClose }) {
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '5px' }}>
                               <span>{u.displayName || u.username}</span>
-                              {u.isPro && <Crown size={13} color="#f59e0b" />}
+                              {u.isPro && <Crown size={13} color="#f59e0b" title="VIP Pro Member" />}
+                              {u.isAdmin && <span style={{ fontSize: '0.62rem', padding: '1px 5px', borderRadius: '4px', background: 'rgba(99, 102, 241, 0.2)', color: 'var(--accent)', fontWeight: 800 }}>ADMIN</span>}
                             </div>
                             <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                              @{u.username} • {u.email}
+                              @{u.username} {u.email ? `• ${u.email}` : ''}
                             </div>
                           </div>
                         </div>
 
                         <button
                           type="button"
-                          onClick={() => handleTogglePro(u.id, u.isPro)}
-                          disabled={actionLoadingId === u.id}
+                          onClick={() => handleTogglePro(u.id || u.mongoId, u.isPro)}
+                          disabled={actionLoadingId === u.id || actionLoadingId === u.mongoId}
                           style={{
-                            padding: '4px 10px',
+                            padding: '5px 12px',
                             borderRadius: '10px',
                             fontSize: '0.74rem',
                             fontWeight: 700,
                             cursor: 'pointer',
-                            border: u.isPro ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border)',
-                            background: u.isPro ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
-                            color: u.isPro ? '#f59e0b' : 'var(--text-main)'
+                            border: u.isPro ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid var(--accent)',
+                            background: u.isPro ? 'rgba(245, 158, 11, 0.18)' : 'rgba(99, 102, 241, 0.15)',
+                            color: u.isPro ? '#f59e0b' : 'var(--accent)',
+                            transition: 'all 0.15s ease'
                           }}
                         >
-                          {actionLoadingId === u.id ? 'Updating...' : (u.isPro ? '👑 VIP Pro' : 'Make VIP')}
+                          {(actionLoadingId === u.id || actionLoadingId === u.mongoId)
+                            ? 'Updating...'
+                            : (u.isPro ? '👑 Revoke VIP' : '⭐ Grant VIP Pro')}
                         </button>
                       </div>
                     ))

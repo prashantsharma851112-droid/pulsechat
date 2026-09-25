@@ -10,12 +10,19 @@ const db = require('../database/db');
 const adminOnly = async (req, res, next) => {
   try {
     const mongoose = require('mongoose');
-    const isObjectId = mongoose.Types.ObjectId.isValid(req.user.id);
+    const userId = req.user?.id || req.user?._id;
+    const username = req.user?.username;
+
+    if (!userId && !username) {
+      return res.status(401).json({ error: 'Unauthorized user session.' });
+    }
+
+    const isObjectId = userId && mongoose.Types.ObjectId.isValid(userId);
     const user = await User.findOne({
       $or: [
-        { id: req.user.id },
-        ...(isObjectId ? [{ _id: req.user.id }] : []),
-        { username: req.user.username }
+        ...(userId ? [{ id: userId }] : []),
+        ...(isObjectId ? [{ _id: userId }] : []),
+        ...(username ? [{ username: username }] : [])
       ]
     }).lean();
 
@@ -25,6 +32,7 @@ const adminOnly = async (req, res, next) => {
     req.adminUser = user;
     next();
   } catch (err) {
+    console.error('adminOnly middleware error:', err);
     res.status(500).json({ error: 'Failed to verify admin status.' });
   }
 };
@@ -36,36 +44,52 @@ router.get('/stats', authMiddleware, adminOnly, async (req, res) => {
     const onlineMap = typeof getOnlineMap === 'function' ? getOnlineMap() : null;
     const liveOnlineUserIds = onlineMap ? Array.from(onlineMap.keys()) : [];
 
-    const [totalUsers, totalMessages, totalGroups, allUsers] = await Promise.all([
-      User.countDocuments({ isAdmin: { $ne: true } }),
+    const [totalUsersCount, totalMessages, totalGroups, rawUsersList] = await Promise.all([
+      User.countDocuments({}),
       Message.countDocuments({ type: { $ne: 'system' } }),
       Group.countDocuments(),
-      User.find({ isAdmin: { $ne: true } })
+      User.find({})
         .sort({ createdAt: -1 })
-        .select('id username displayName email avatar isEmailVerified isPro proTier status createdAt')
+        .select('id _id username displayName email avatar isEmailVerified isPro proTier isAdmin status createdAt')
         .lean()
     ]);
 
     const onlineSet = new Set(liveOnlineUserIds);
 
-    const usersWithOnlineStatus = allUsers.map(u => ({
-      ...u,
-      isLiveOnline: onlineSet.has(u.id) || onlineSet.has(u.username) || (u._id && onlineSet.has(u._id.toString()))
-    }));
+    const formattedUsersList = rawUsersList.map(u => {
+      const uStrId = u.id || (u._id ? u._id.toString() : '');
+      const isOnline = onlineSet.has(uStrId) ||
+        (u.username && onlineSet.has(u.username)) ||
+        (u._id && onlineSet.has(u._id.toString()));
 
-    const liveOnlineCount = usersWithOnlineStatus.filter(u => u.isLiveOnline).length;
+      return {
+        id: uStrId,
+        mongoId: u._id ? u._id.toString() : '',
+        username: u.username || 'user',
+        displayName: u.displayName || u.username || 'User',
+        email: u.email || '',
+        avatar: u.avatar || '',
+        isPro: Boolean(u.isPro),
+        isAdmin: Boolean(u.isAdmin),
+        proTier: u.proTier || 'none',
+        createdAt: u.createdAt,
+        isLiveOnline: isOnline
+      };
+    });
+
+    const liveOnlineCount = formattedUsersList.filter(u => u.isLiveOnline).length;
 
     res.json({
       success: true,
-      totalUsers,
+      totalUsers: totalUsersCount,
       liveOnlineCount,
       totalMessages,
       totalGroups,
-      users: usersWithOnlineStatus
+      users: formattedUsersList
     });
   } catch (err) {
     console.error('Admin stats error:', err);
-    res.status(500).json({ error: 'Failed to fetch admin stats' });
+    res.status(500).json({ error: 'Failed to fetch admin stats: ' + err.message });
   }
 });
 
@@ -79,10 +103,25 @@ router.post('/claim-admin', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Invalid Master Admin Passcode.' });
     }
 
-    const updated = await db.updateUser(req.user.id, { isAdmin: true });
-    if (!updated) return res.status(404).json({ error: 'User not found.' });
+    const mongoose = require('mongoose');
+    const userId = req.user?.id || req.user?._id;
+    const username = req.user?.username;
 
-    const { passwordHash, ...safeUser } = updated;
+    const isObjectId = userId && mongoose.Types.ObjectId.isValid(userId);
+    const query = {
+      $or: [
+        ...(userId ? [{ id: userId }] : []),
+        ...(isObjectId ? [{ _id: userId }] : []),
+        ...(username ? [{ username: username }] : [])
+      ]
+    };
+
+    const updated = await User.findOneAndUpdate(query, { isAdmin: true }, { new: true }).lean();
+    if (!updated) {
+      return res.status(404).json({ error: 'User account not found in database.' });
+    }
+
+    const { passwordHash, otpCode, otpExpires, ...safeUser } = updated;
     safeUser.isAdmin = true;
 
     res.json({
@@ -92,7 +131,7 @@ router.post('/claim-admin', authMiddleware, async (req, res) => {
     });
   } catch (err) {
     console.error('Claim admin error:', err);
-    res.status(500).json({ error: 'Failed to claim admin status' });
+    res.status(500).json({ error: 'Failed to claim admin status: ' + err.message });
   }
 });
 
@@ -102,16 +141,32 @@ router.post('/toggle-user-pro', authMiddleware, adminOnly, async (req, res) => {
     const { targetUserId, isPro } = req.body;
     if (!targetUserId) return res.status(400).json({ error: 'Target User ID required' });
 
-    const updated = await db.updateUser(targetUserId, {
-      isPro: Boolean(isPro),
-      proTier: isPro ? 'yearly' : 'none'
-    });
+    const mongoose = require('mongoose');
+    const isObjectId = mongoose.Types.ObjectId.isValid(targetUserId);
+    const query = isObjectId
+      ? { $or: [{ id: targetUserId }, { _id: targetUserId }] }
+      : { $or: [{ id: targetUserId }, { username: targetUserId }] };
+
+    const updated = await User.findOneAndUpdate(
+      query,
+      {
+        isPro: Boolean(isPro),
+        proTier: isPro ? 'yearly' : 'none',
+        proExpiresAt: isPro ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) : null
+      },
+      { new: true }
+    ).lean();
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Target user not found.' });
+    }
 
     const io = req.app.get('io');
-    if (io && updated) {
+    if (io) {
       io.emit('user_profile_updated', {
-        userId: updated.id,
+        userId: updated.id || updated._id?.toString(),
         userMongoId: updated._id?.toString(),
+        username: updated.username,
         isPro: Boolean(updated.isPro),
         proTier: updated.proTier
       });
@@ -119,7 +174,8 @@ router.post('/toggle-user-pro', authMiddleware, adminOnly, async (req, res) => {
 
     res.json({ success: true, user: updated });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update user Pro status' });
+    console.error('Toggle user pro error:', err);
+    res.status(500).json({ error: 'Failed to update user Pro status: ' + err.message });
   }
 });
 
