@@ -158,7 +158,7 @@ export default function AdminDashboardModal({ onClose }) {
                 PulseChat Master Admin Dashboard
               </h3>
               <div style={{ fontSize: '0.74rem', color: '#f59e0b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <Shield size={12} /> Stealth Admin Mode (Hidden from public searches)
+                <Shield size={12} /> Master Admin Mode (Full Access Control)
               </div>
             </div>
           </div>
