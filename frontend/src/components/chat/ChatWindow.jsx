@@ -11,6 +11,7 @@ import UserProfileModal from './UserProfileModal';
 import GroupProfileModal from './GroupProfileModal';
 import MediaUploadModal from './MediaUploadModal';
 import ChatThemeModal from './ChatThemeModal';
+import ChatLiveWallpaper from './ChatLiveWallpaper';
 import PulseProModal from './PulseProModal';
 import GiftPickerModal from './GiftPickerModal';
 import Animated3DTextModal from './Animated3DTextModal';
@@ -232,9 +233,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [friendshipStatus, setFriendshipStatus] = useState(() => isDirectFriend ? 'friends' : 'checking');
   const [friendRequestId, setFriendRequestId] = useState(null);
 
+  const [customWallpaper, setCustomWallpaper] = useState(() => localStorage.getItem(`pulsechat_custom_wallpaper_${chatId}`) || null);
+
   useEffect(() => {
     const saved = localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'default';
     setChatTheme(saved);
+    const savedCustom = localStorage.getItem(`pulsechat_custom_wallpaper_${chatId}`);
+    setCustomWallpaper(savedCustom || null);
   }, [chatId]);
 
   const handleSelectChatTheme = (newTheme) => {
@@ -245,6 +250,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       localStorage.setItem(`pulsechat_chat_theme_${chatId}`, newTheme);
       localStorage.setItem('pulsechat_chat_default_theme', newTheme);
     }
+  };
+
+  const handleSetCustomWallpaper = (dataUrl) => {
+    setCustomWallpaper(dataUrl);
+    localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, dataUrl);
   };
 
   const [messages, setMessages] = useState(() => {
@@ -1782,8 +1792,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
         )}
 
-      {/* Message Stream with WhatsApp-Style Date Dividers */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      {/* Message Stream with Live Wallpaper Overlay & WhatsApp-Style Date Dividers */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative' }}>
+        <ChatLiveWallpaper wallpaperId={chatTheme} customImage={customWallpaper} />
         {/* Load Earlier Messages Button (Pagination) */}
         {hasMoreOlderMessages && (
           <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 8px 0' }}>
@@ -2668,8 +2679,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {showThemeModal && (
         <ChatThemeModal
+          chatId={chatId}
           currentTheme={chatTheme}
           onSelectTheme={handleSelectChatTheme}
+          onSetCustomWallpaper={handleSetCustomWallpaper}
           onClose={() => setShowThemeModal(false)}
         />
       )}
