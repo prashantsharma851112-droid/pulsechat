@@ -213,7 +213,7 @@ export default function ChatThemeModal({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Palette size={20} color="var(--accent)" />
               <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)' }}>
-                Chat Theme & Wallpapers
+                Chat Wallpaper & Live Backgrounds
               </h3>
             </div>
             <button className="icon-btn-ghost" onClick={onClose}>
@@ -265,28 +265,6 @@ export default function ChatThemeModal({
               }}
             >
               <ImageIcon size={14} /> Upload Custom
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('color')}
-              style={{
-                flex: 1,
-                padding: '8px',
-                border: 'none',
-                borderBottom: activeTab === 'color' ? '2px solid var(--accent)' : '2px solid transparent',
-                background: 'transparent',
-                color: activeTab === 'color' ? 'var(--accent)' : 'var(--text-muted)',
-                fontWeight: 700,
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '5px'
-              }}
-            >
-              <Palette size={14} /> Solid Themes
             </button>
           </div>
 
@@ -484,52 +462,6 @@ export default function ChatThemeModal({
                   </>
                 )}
               </div>
-            )}
-
-            {/* TAB 3: SOLID THEMES */}
-            {activeTab === 'color' && (
-              <>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  Select UI bubble & card color theme. (Works simultaneously with wallpapers).
-                </div>
-                <div className="theme-grid">
-                  {THEMES.map((t) => {
-                    const isCurrent = currentTheme === t.id;
-                    const isLocked = t.isPro && !isUserPro;
-                    return (
-                      <div
-                        key={t.id}
-                        onClick={() => handleSelectTheme(t)}
-                        className={`theme-card ${isCurrent ? 'active' : ''}`}
-                        style={{
-                          background: t.card,
-                          border: isCurrent ? '2px solid var(--accent)' : (t.isPro ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border)'),
-                          position: 'relative'
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ fontSize: '0.88rem', fontWeight: 700, color: t.id === 'light' ? '#111827' : '#f3f4f6', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            {t.name}
-                            {t.isPro && <Crown size={13} color="#f59e0b" />}
-                          </div>
-                          {isCurrent ? (
-                            <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                              <Check size={12} strokeWidth={3} />
-                            </div>
-                          ) : isLocked ? (
-                            <div style={{ color: '#f59e0b' }}>
-                              <Lock size={14} />
-                            </div>
-                          ) : null}
-                        </div>
-                        <div style={{ fontSize: '0.74rem', color: t.isPro ? '#f59e0b' : (t.id === 'light' ? '#6b7280' : '#9ca3af') }}>
-                          {t.tag}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
             )}
 
             {/* Bottom Actions */}

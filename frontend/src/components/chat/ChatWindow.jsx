@@ -11,6 +11,7 @@ import UserProfileModal from './UserProfileModal';
 import GroupProfileModal from './GroupProfileModal';
 import MediaUploadModal from './MediaUploadModal';
 import ChatThemeModal from './ChatThemeModal';
+import SolidThemeModal from './SolidThemeModal';
 import ChatLiveWallpaper from './ChatLiveWallpaper';
 import PulseProModal from './PulseProModal';
 import GiftPickerModal from './GiftPickerModal';
@@ -56,6 +57,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   });
 
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showSolidThemeModal, setShowSolidThemeModal] = useState(false);
   const [chatTheme, setChatTheme] = useState(() => {
     return localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'default';
   });
@@ -1668,8 +1670,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   </button>
                   <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
                   <button onClick={() => { setShowMoreMenu(false); setShowThemeModal(true); }}>
+                    <ImageIcon size={16} color="var(--accent)" />
+                    <span>Change Wallpaper</span>
+                  </button>
+                  <button onClick={() => { setShowMoreMenu(false); setShowSolidThemeModal(true); }}>
                     <Palette size={16} color="var(--accent)" />
-                    <span>Change Theme</span>
+                    <span>Change Solid Theme</span>
                   </button>
                   <button onClick={() => { setShowMoreMenu(false); setShowWhiteboard(true); }}>
                     <Presentation size={16} color="var(--accent)" />
@@ -2709,6 +2715,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           customWallpaper={customWallpaper}
           onSetCustomWallpaper={handleSetCustomWallpaper}
           onClose={() => setShowThemeModal(false)}
+        />
+      )}
+
+      {showSolidThemeModal && (
+        <SolidThemeModal
+          onClose={() => setShowSolidThemeModal(false)}
         />
       )}
 
