@@ -439,7 +439,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   }, [chatId, auraVolume]);
 
   const handleSelectAura = (auraId) => {
-    if (auraId !== 'off' && !user?.isPro) {
+    if (auraId !== 'off' && auraId !== 'waves' && !user?.isPro) {
       setShowAuraMenu(false);
       setShowProModal(true);
       return;
@@ -1686,11 +1686,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     🎵 Pulse Aura Soundscapes
                   </div>
                   {[
-                    { id: 'off', name: '🔇 Mute Aura Sound' },
-                    { id: 'rain', name: '🌧️ Cyberpunk Rain' },
-                    { id: 'lofi', name: '🎧 Lofi Chill Beats' },
-                    { id: 'waves', name: '🌊 Sunset Ocean Waves' },
-                    { id: 'nebula', name: '🌌 Space Nebula Synth' }
+                    { id: 'off', name: '🔇 Mute Aura Sound', isPro: false },
+                    { id: 'waves', name: '🌊 Ocean Waves (FREE)', isPro: false },
+                    { id: 'lofi', name: '🎧 Lofi Chill Beats', isPro: true },
+                    { id: 'rain', name: '🌧️ Cyberpunk Rain', isPro: true },
+                    { id: 'nebula', name: '🌌 Space Nebula Synth', isPro: true }
                   ].map(a => (
                     <button
                       key={a.id}
@@ -1710,7 +1710,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                         textAlign: 'left'
                       }}
                     >
-                      <span>{a.name}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>{a.name}</span>
+                        {a.isPro && <Crown size={13} color="#f59e0b" />}
+                      </div>
                       {activeAura === a.id && <Check size={14} />}
                     </button>
                   ))}
@@ -2526,7 +2529,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 }}>
                   <Zap size={20} />
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f59e0b' }}>Dust text</span>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>Dust text</span>
+                  <Crown size={12} color="#f59e0b" />
+                </span>
               </button>
 
               {/* 5. Emoji Particle Burst */}

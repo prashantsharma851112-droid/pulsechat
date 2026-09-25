@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Sparkles, Check, Crown, Zap, ShieldCheck, Flame, Coffee, Heart, Rocket, Diamond, Award, ArrowRight, Loader2, Clock } from 'lucide-react';
+import { X, Sparkles, Check, Crown, Zap, ShieldCheck, Flame, Coffee, Heart, Rocket, Diamond, Award, ArrowRight, Loader2, Clock, Music, EyeOff, Palette } from 'lucide-react';
 import PulseVipBadge from '../common/PulseVipBadge';
 import { BACKEND_URL } from '../../utils/config';
 
@@ -476,7 +476,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
         }}>
           {activeTab === 'pro' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              {/* Feature Grid */}
+              {/* Feature Grid - 8 VIP Perks */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div style={{
                   padding: '12px',
@@ -489,7 +489,67 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   <div style={{ color: '#f59e0b', flexShrink: 0 }}><Crown size={20} /></div>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Pulse VIP Crest</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Signature glowing VIP crest badge across all chats & profile.</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Glowing golden VIP crest badge across all chats & profile.</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px'
+                }}>
+                  <div style={{ color: '#f59e0b', flexShrink: 0 }}><Zap size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Stealth Dust Text</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Touch-to-reveal secret notes that shatter into digital dust.</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px'
+                }}>
+                  <div style={{ color: '#ec4899', flexShrink: 0 }}><Music size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Aura Soundscapes</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Lofi Beats, Cyberpunk Rain & Space Nebula background music.</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px'
+                }}>
+                  <div style={{ color: '#10b981', flexShrink: 0 }}><Sparkles size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>4K Live Wallpapers</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Matrix Rain, Starry Galaxy, Fireflies & Floating Hearts.</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px'
+                }}>
+                  <div style={{ color: '#a855f7', flexShrink: 0 }}><Palette size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>VIP Solid Themes</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Royal Gold Aura, Cosmic Nebula, Cyber Pulse & Tokyo Synth.</div>
                   </div>
                 </div>
 
@@ -503,8 +563,8 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                 }}>
                   <div style={{ color: '#0ea5e9', flexShrink: 0 }}><Rocket size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>500 MB Files</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Upload massive video & files (Free is 25 MB).</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>500 MB File Limits</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Upload massive 4K videos & zip archives (Free: 25 MB).</div>
                   </div>
                 </div>
 
@@ -516,10 +576,10 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   display: 'flex',
                   gap: '10px'
                 }}>
-                  <div style={{ color: '#a855f7', flexShrink: 0 }}><Sparkles size={20} /></div>
+                  <div style={{ color: '#6366f1', flexShrink: 0 }}><EyeOff size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Exclusive Themes</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Unlock Royal Gold, Cosmic Nebula & Cyber Pulse.</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Incognito Ghost Mode</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Hide read receipts & online visibility independently.</div>
                   </div>
                 </div>
 
@@ -533,8 +593,8 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                 }}>
                   <div style={{ color: '#10b981', flexShrink: 0 }}><ShieldCheck size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>100% Ad-Free</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Zero ads, zero interruptions, pure high speed.</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>100% Ad-Free Priority</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Zero ads, zero interruptions, priority high-speed socket.</div>
                   </div>
                 </div>
               </div>

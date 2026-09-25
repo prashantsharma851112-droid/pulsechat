@@ -26,6 +26,9 @@ export default function ChatLiveWallpaper({ wallpaperId, customImage }) {
     const isNature = wallpaperId === 'nature_forest_live';
     const isOcean = wallpaperId === 'ocean_waves_live';
     const isCyber = wallpaperId === 'cyber_grid_live';
+    const isMatrix = wallpaperId === 'matrix_code_live';
+    const isStarry = wallpaperId === 'starry_galaxy_live';
+    const isFirefly = wallpaperId === 'firefly_night_live';
 
     class Particle {
       constructor(isInitial = false) {
@@ -39,14 +42,14 @@ export default function ChatLiveWallpaper({ wallpaperId, customImage }) {
         if (isInitial) {
           this.y = Math.random() * h;
         } else {
-          this.y = isNature ? -20 : (h + Math.random() * 40);
+          this.y = (isNature || isMatrix) ? -20 : (h + Math.random() * 40);
         }
-        this.size = Math.random() * 16 + 14;
-        this.vy = isNature ? (Math.random() * 1.2 + 0.6) : -(Math.random() * 1.4 + 0.6);
-        this.vx = (Math.random() - 0.5) * 0.8;
+        this.size = isMatrix ? (Math.random() * 12 + 12) : (Math.random() * 16 + 14);
+        this.vy = (isNature || isMatrix) ? (Math.random() * 1.6 + 0.8) : -(Math.random() * 1.4 + 0.6);
+        this.vx = isMatrix ? 0 : (Math.random() - 0.5) * 0.8;
         this.opacity = Math.random() * 0.35 + 0.15;
         this.rotation = Math.random() * Math.PI * 2;
-        this.vRot = (Math.random() - 0.5) * 0.02;
+        this.vRot = isMatrix ? 0 : (Math.random() - 0.5) * 0.02;
 
         if (isLove) {
           const emojis = ['💖', '💗', '💕', '❤️', '🌸'];
@@ -60,6 +63,15 @@ export default function ChatLiveWallpaper({ wallpaperId, customImage }) {
         } else if (isCyber) {
           const emojis = ['⚡', '🔮', '✨', '🪐', '🌟'];
           this.emoji = emojis[Math.floor(Math.random() * emojis.length)];
+        } else if (isMatrix) {
+          const emojis = ['0', '1', '🟢', '⚡', '1', '0', '❇️'];
+          this.emoji = emojis[Math.floor(Math.random() * emojis.length)];
+        } else if (isStarry) {
+          const emojis = ['✨', '⭐', '🌟', '💫', '🪐', '🌌'];
+          this.emoji = emojis[Math.floor(Math.random() * emojis.length)];
+        } else if (isFirefly) {
+          const emojis = ['✨', '🟡', '💡', '🌟', '💛'];
+          this.emoji = emojis[Math.floor(Math.random() * emojis.length)];
         }
       }
 
@@ -69,7 +81,7 @@ export default function ChatLiveWallpaper({ wallpaperId, customImage }) {
         this.x += this.vx;
         this.rotation += this.vRot;
 
-        if (isNature) {
+        if (isNature || isMatrix) {
           if (this.y > h + 30) this.reset(false);
         } else {
           if (this.y < -30) this.reset(false);
@@ -89,7 +101,7 @@ export default function ChatLiveWallpaper({ wallpaperId, customImage }) {
       }
     }
 
-    const count = 22;
+    const count = isMatrix ? 32 : 22;
     for (let i = 0; i < count; i++) {
       particles.push(new Particle(true));
     }
@@ -132,7 +144,16 @@ export default function ChatLiveWallpaper({ wallpaperId, customImage }) {
     }
   }
 
-  if (wallpaperId === 'love_hearts_live' || wallpaperId === 'nature_forest_live' || wallpaperId === 'ocean_waves_live' || wallpaperId === 'cyber_grid_live') {
+  const isLiveWallpaper =
+    wallpaperId === 'love_hearts_live' ||
+    wallpaperId === 'nature_forest_live' ||
+    wallpaperId === 'ocean_waves_live' ||
+    wallpaperId === 'cyber_grid_live' ||
+    wallpaperId === 'matrix_code_live' ||
+    wallpaperId === 'starry_galaxy_live' ||
+    wallpaperId === 'firefly_night_live';
+
+  if (isLiveWallpaper) {
     return (
       <div
         style={{
@@ -147,7 +168,13 @@ export default function ChatLiveWallpaper({ wallpaperId, customImage }) {
               ? 'radial-gradient(ellipse at top, #062419 0%, #020d09 100%)'
               : wallpaperId === 'ocean_waves_live'
                 ? 'radial-gradient(ellipse at bottom, #072740 0%, #020c14 100%)'
-                : 'radial-gradient(ellipse at center, #1b0730 0%, #080210 100%)'
+                : wallpaperId === 'matrix_code_live'
+                  ? 'radial-gradient(ellipse at center, #021a0d 0%, #000904 100%)'
+                  : wallpaperId === 'starry_galaxy_live'
+                    ? 'radial-gradient(ellipse at top, #110d2c 0%, #04020f 100%)'
+                    : wallpaperId === 'firefly_night_live'
+                      ? 'radial-gradient(ellipse at bottom, #1c1902 0%, #080701 100%)'
+                      : 'radial-gradient(ellipse at center, #1b0730 0%, #080210 100%)'
         }}
       >
         <canvas
