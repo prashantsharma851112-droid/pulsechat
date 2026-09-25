@@ -39,7 +39,7 @@ export default function SettingsModal({
   const [showProModal, setShowProModal] = useState(false);
   const [cleaningStorage, setCleaningStorage] = useState(false);
   const [cleanupResult, setCleanupResult] = useState(null);
-  const [cleanupDays, setCleanupDays] = useState(30);
+  const [cleanupDays, setCleanupDays] = useState(7);
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
     return localStorage.getItem('pulsechat_notifications_enabled') !== 'false';
   });
@@ -444,7 +444,7 @@ export default function SettingsModal({
                   </div>
                   <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
                     {user?.autoCleanupEnabled !== false
-                      ? 'Auto-delete read chats older than 30 days'
+                      ? 'Auto-delete read chats older than 7 days'
                       : 'Disabled: Old chat history will be kept permanently'}
                   </div>
                 </div>
@@ -632,7 +632,6 @@ export default function SettingsModal({
                       Master Admin Dashboard
                       {user?.isAdmin && <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontWeight: 800 }}>ACTIVE</span>}
                     </div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Live user tracking, metrics & VIP controls</div>
                   </div>
                 </div>
               </button>

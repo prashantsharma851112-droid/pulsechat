@@ -1098,12 +1098,12 @@ mongoose.connect(config.MONGO_URI)
         }, 10 * 60 * 1000); // Ping every 10 minutes (well before the 15-minute idle limit)
       }
 
-      // Storage Guard: Auto-Cleanup Old Chats (30+ Days) every 12 hours
+      // Storage Guard: Auto-Cleanup Old Chats (7+ Days) every 12 hours
       const AUTO_CLEANUP_INTERVAL = 12 * 60 * 60 * 1000;
       setTimeout(async () => {
         try {
-          console.log('🧹 [Storage Guard] Running initial 30-day chat auto-cleanup...');
-          await db.runAutoCleanupJob(30);
+          console.log('🧹 [Storage Guard] Running initial 7-day chat auto-cleanup...');
+          await db.runAutoCleanupJob(7);
         } catch (e) {
           console.warn('Auto-cleanup startup error:', e.message);
         }
@@ -1112,7 +1112,7 @@ mongoose.connect(config.MONGO_URI)
       setInterval(async () => {
         try {
           console.log('🧹 [Storage Guard] Running 12-hour periodic chat auto-cleanup...');
-          await db.runAutoCleanupJob(30);
+          await db.runAutoCleanupJob(7);
         } catch (e) {
           console.warn('Auto-cleanup interval error:', e.message);
         }

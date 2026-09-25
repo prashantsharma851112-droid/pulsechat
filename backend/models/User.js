@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema({
   hideReadReceipts: { type: Boolean, default: false },
   hideOnlineStatus: { type: Boolean, default: false },
   autoCleanupEnabled: { type: Boolean, default: true },
-  autoCleanupDays: { type: Number, default: 30 },
+  autoCleanupDays: { type: Number, default: 7 },
   isPro: { type: Boolean, default: false },
   proExpiresAt: { type: Date, default: null },
   proTier: { type: String, default: 'none' }, // 'none' | 'monthly' | 'yearly'
