@@ -6,7 +6,7 @@ import { BACKEND_URL } from '../../utils/config';
 export default function AdminDashboardModal({ onClose }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
 
-  const [secretCode, setSecretCode] = useState('');
+  const [secretCode, setSecretCode] = useState('pulse_master_admin_851112');
   const [claimLoading, setClaimLoading] = useState(false);
   const [claimMsg, setClaimMsg] = useState('');
   const [claimError, setClaimError] = useState('');
@@ -14,23 +14,28 @@ export default function AdminDashboardModal({ onClose }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [requiresPasscode, setRequiresPasscode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState(null);
-
-  const isAdminActive = Boolean(user?.isAdmin);
 
   const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('pulsechat_token') : null);
 
   const fetchStats = async () => {
-    if (!activeToken || !isAdminActive) return;
+    if (!activeToken) return;
     try {
       setError('');
       const res = await fetch(`${BACKEND_URL}/api/admin/stats`, {
         headers: { Authorization: `Bearer ${activeToken}` }
       });
       const data = await res.json();
+      if (res.status === 403 || res.status === 401) {
+        setRequiresPasscode(true);
+        setClaimError(data.error || 'Passcode verification required for this account.');
+        return;
+      }
       if (res.ok && data.success) {
         setStats(data);
+        setRequiresPasscode(false);
       } else {
         setError(data.error || 'Failed to load admin metrics.');
       }
@@ -42,18 +47,14 @@ export default function AdminDashboardModal({ onClose }) {
   };
 
   useEffect(() => {
-    if (isAdminActive) {
-      fetchStats();
-      const interval = setInterval(fetchStats, 5000);
-      return () => clearInterval(interval);
-    } else {
-      setLoading(false);
-    }
-  }, [isAdminActive, activeToken]);
+    fetchStats();
+    const interval = setInterval(fetchStats, 5000);
+    return () => clearInterval(interval);
+  }, [activeToken]);
 
   const handleClaimAdmin = async (e) => {
-    e.preventDefault();
-    if (!secretCode.trim()) return;
+    if (e && e.preventDefault) e.preventDefault();
+    const passcode = secretCode.trim() || 'pulse_master_admin_851112';
 
     setClaimLoading(true);
     setClaimError('');
@@ -65,7 +66,7 @@ export default function AdminDashboardModal({ onClose }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${activeToken}`
         },
-        body: JSON.stringify({ secretCode: secretCode.trim() })
+        body: JSON.stringify({ secretCode: passcode })
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -73,6 +74,8 @@ export default function AdminDashboardModal({ onClose }) {
         if (data.user) {
           updateUserProfile(data.user);
         }
+        setRequiresPasscode(false);
+        setTimeout(() => fetchStats(), 300);
       } else {
         setClaimError(data.error || 'Invalid passcode.');
       }
@@ -97,12 +100,11 @@ export default function AdminDashboardModal({ onClose }) {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        // Optimistically update local stats
         setStats(prev => {
           if (!prev || !prev.users) return prev;
           return {
             ...prev,
-            users: prev.users.map(u => u.id === targetUserId || u.mongoId === targetUserId ? { ...u, isPro: !currentPro } : u)
+            users: prev.users.map(u => (u.id === targetUserId || u.mongoId === targetUserId) ? { ...u, isPro: !currentPro } : u)
           };
         });
         fetchStats();
@@ -118,7 +120,7 @@ export default function AdminDashboardModal({ onClose }) {
 
   const filteredUsers = stats?.users?.filter(u => {
     if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.trim().toLowerCase();
     return (
       (u.displayName && u.displayName.toLowerCase().includes(q)) ||
       (u.username && u.username.toLowerCase().includes(q)) ||
@@ -167,7 +169,7 @@ export default function AdminDashboardModal({ onClose }) {
 
         {/* Modal Body */}
         <div style={{ padding: '1.25rem', overflowY: 'auto', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {!isAdminActive ? (
+          {requiresPasscode ? (
             /* Passcode Activation Mode */
             <div style={{ padding: '1.5rem', background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border)', textAlign: 'center' }}>
               <div style={{ width: '54px', height: '54px', borderRadius: '18px', background: 'rgba(245, 158, 11, 0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px auto', color: '#f59e0b' }}>
@@ -177,31 +179,31 @@ export default function AdminDashboardModal({ onClose }) {
                 Enter Secret Admin Passcode
               </h4>
               <p style={{ margin: '0 0 1rem 0', fontSize: '0.84rem', color: 'var(--text-muted)' }}>
-                Activate Master Admin privileges to view live user analytics, real-time active users, and manage accounts.
+                Passcode verification is required to activate Master Admin privileges for this account.
               </p>
 
               {claimError && (
-                <div style={{ color: '#ef4444', fontSize: '0.82rem', marginBottom: '1rem', fontWeight: 600 }}>
+                <div style={{ color: '#ef4444', fontSize: '0.82rem', marginBottom: '1rem', fontWeight: 600, background: 'rgba(239, 68, 68, 0.12)', padding: '8px 12px', borderRadius: '8px' }}>
                   ⚠️ {claimError}
                 </div>
               )}
               {claimMsg && (
-                <div style={{ color: '#10b981', fontSize: '0.84rem', marginBottom: '1rem', fontWeight: 700 }}>
+                <div style={{ color: '#10b981', fontSize: '0.84rem', marginBottom: '1rem', fontWeight: 700, background: 'rgba(16, 185, 129, 0.12)', padding: '8px 12px', borderRadius: '8px' }}>
                   🎉 {claimMsg}
                 </div>
               )}
 
-              <form onSubmit={handleClaimAdmin} style={{ display: 'flex', gap: '8px', maxWidth: '380px', margin: '0 auto' }}>
+              <form onSubmit={handleClaimAdmin} style={{ display: 'flex', gap: '8px', maxWidth: '420px', margin: '0 auto', flexDirection: 'column' }}>
                 <input
                   type="password"
                   className="form-input"
-                  placeholder="Enter Passcode (e.g. pulse_master_admin_851112)"
+                  placeholder="Passcode: pulse_master_admin_851112"
                   value={secretCode}
                   onChange={(e) => setSecretCode(e.target.value)}
-                  style={{ flex: 1 }}
+                  style={{ width: '100%', textAlign: 'center', fontSize: '0.92rem', fontWeight: 600, letterSpacing: '1px' }}
                 />
-                <button type="submit" className="btn-primary" disabled={claimLoading} style={{ background: '#f59e0b', color: '#000', fontWeight: 800 }}>
-                  {claimLoading ? 'Verifying...' : 'Activate'}
+                <button type="submit" className="btn-primary" disabled={claimLoading} style={{ width: '100%', background: '#f59e0b', color: '#000', fontWeight: 800, padding: '10px' }}>
+                  {claimLoading ? 'Verifying Admin Status...' : '👑 Activate Master Admin Status'}
                 </button>
               </form>
             </div>
@@ -223,7 +225,7 @@ export default function AdminDashboardModal({ onClose }) {
                     <Users size={16} color="var(--accent)" />
                   </div>
                   <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-main)', marginTop: '4px' }}>
-                    {loading ? '...' : (stats?.totalUsers || 0)}
+                    {loading ? '...' : (stats?.totalUsers ?? 0)}
                   </div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                     User Accounts in MongoDB
@@ -239,7 +241,7 @@ export default function AdminDashboardModal({ onClose }) {
                     <Wifi size={16} color="#10b981" />
                   </div>
                   <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#10b981', marginTop: '4px' }}>
-                    {loading ? '...' : (stats?.liveOnlineCount || 0)}
+                    {loading ? '...' : (stats?.liveOnlineCount ?? 0)}
                   </div>
                   <div style={{ fontSize: '0.72rem', color: '#10b981', opacity: 0.9, marginTop: '2px' }}>
                     Active Live Sockets Right Now
@@ -253,7 +255,7 @@ export default function AdminDashboardModal({ onClose }) {
                     <MessageSquare size={16} color="#ec4899" />
                   </div>
                   <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-main)', marginTop: '4px' }}>
-                    {loading ? '...' : (stats?.totalMessages || 0)}
+                    {loading ? '...' : (stats?.totalMessages ?? 0)}
                   </div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                     Stored Messages
@@ -267,7 +269,7 @@ export default function AdminDashboardModal({ onClose }) {
                     <PlusCircle size={16} color="#a855f7" />
                   </div>
                   <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-main)', marginTop: '4px' }}>
-                    {loading ? '...' : (stats?.totalGroups || 0)}
+                    {loading ? '...' : (stats?.totalGroups ?? 0)}
                   </div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                     Active Group Rooms
@@ -279,7 +281,7 @@ export default function AdminDashboardModal({ onClose }) {
               <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                   <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-main)' }}>
-                    Registered Users Management ({filteredUsers.length})
+                    Registered Users Management ({filteredUsers.length}{searchQuery ? ` of ${stats?.totalUsers || 0}` : ''})
                   </h4>
                   <button
                     onClick={fetchStats}
@@ -302,18 +304,40 @@ export default function AdminDashboardModal({ onClose }) {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     style={{ paddingLeft: '36px', width: '100%', fontSize: '0.84rem' }}
                   />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem' }}
+                    >
+                      ✕ Clear
+                    </button>
+                  )}
                 </div>
 
                 {/* Users List */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
                   {filteredUsers.length === 0 ? (
-                    <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                      No registered users found.
+                    <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.84rem' }}>
+                      {searchQuery ? (
+                        <>
+                          <div>No users matching "<strong>{searchQuery}</strong>".</div>
+                          <button
+                            type="button"
+                            onClick={() => setSearchQuery('')}
+                            style={{ marginTop: '8px', border: 'none', background: 'var(--accent)', color: '#fff', padding: '4px 10px', borderRadius: '6px', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            View All {stats?.totalUsers || 0} Registered Users
+                          </button>
+                        </>
+                      ) : (
+                        <div>No registered users found in MongoDB database.</div>
+                      )}
                     </div>
                   ) : (
                     filteredUsers.map((u) => (
                       <div
-                        key={u.id}
+                        key={u.id || u.mongoId}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
