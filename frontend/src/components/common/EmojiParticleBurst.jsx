@@ -6,36 +6,52 @@ export default function EmojiParticleBurst() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d', { alpha: true });
+    const ctx = canvas.getContext('2d');
     let animationFrameId;
     let particles = [];
 
     const handleResize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
     };
+
     handleResize();
     window.addEventListener('resize', handleResize);
 
-    class LightParticle {
+    class FloatingParticle {
       constructor(emoji, durationSecs = 3) {
         this.emoji = emoji;
-        // Spawns smoothly across screen width
-        this.x = Math.random() * (canvas.width * 0.86) + canvas.width * 0.07;
-        // Starts in middle/lower half of screen
-        this.y = canvas.height * (0.55 + Math.random() * 0.4);
-        this.size = Math.random() * 26 + 34; // 34px to 60px soft light size
-        this.vy = -(Math.random() * 1.8 + 1.2); // Silky smooth slow upward float
-        this.swaySpeed = Math.random() * 0.035 + 0.015;
-        this.swayAmount = Math.random() * 1.2 + 0.4;
+        const screenW = window.innerWidth;
+        const screenH = window.innerHeight;
+
+        // Spread horizontally across screen (10% to 90% width)
+        this.x = Math.random() * (screenW * 0.8) + screenW * 0.1;
+        // Start from middle/lower portion of screen
+        this.y = screenH * (0.55 + Math.random() * 0.38);
+        
+        // Particle size: 36px to 64px
+        this.size = Math.random() * 28 + 36;
+        // Smooth upward buoyancy float
+        this.vy = -(Math.random() * 1.6 + 1.2);
+        // Gentle horizontal sway
+        this.swaySpeed = Math.random() * 0.03 + 0.015;
+        this.swayAmount = Math.random() * 1.4 + 0.4;
         this.phase = Math.random() * Math.PI * 2;
         
-        // Very light, soft, translucent opacity (0.15 to 0.40 max opacity)
-        this.maxOpacity = Math.random() * 0.25 + 0.15;
+        // Soft translucent max opacity (0.45 to 0.70) for ultra clean look
+        this.maxOpacity = Math.random() * 0.25 + 0.45;
         this.opacity = 0;
         
-        const totalFrames = Math.max(60, Math.round(durationSecs * 60));
-        this.fadeInFrames = 18; // 0.3s soft fade in
+        const fps = 60;
+        const totalFrames = Math.max(60, Math.round(durationSecs * fps));
+        this.fadeInFrames = 15; // 0.25s smooth fade in
         this.fadeOutFrames = totalFrames - this.fadeInFrames;
         this.frameCounter = 0;
         this.totalFrames = totalFrames;
@@ -46,7 +62,7 @@ export default function EmojiParticleBurst() {
         this.y += this.vy;
         this.x += Math.sin(this.frameCounter * this.swaySpeed + this.phase) * this.swayAmount;
 
-        // Smooth fade-in then fade-out curve
+        // Smooth fade-in and fade-out curve
         if (this.frameCounter < this.fadeInFrames) {
           this.opacity = (this.frameCounter / this.fadeInFrames) * this.maxOpacity;
         } else {
@@ -58,21 +74,20 @@ export default function EmojiParticleBurst() {
       draw(ctx) {
         if (this.opacity <= 0) return;
         ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = this.opacity;
 
-        // Soft pastel glow aura behind particle
-        const glowRadius = this.size * 0.9;
+        // Soft pastel pink/magenta radial aura glow behind particle (like screenshot 2)
+        const glowRadius = this.size * 0.85;
         const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glowRadius);
-        grad.addColorStop(0, 'rgba(236, 72, 153, 0.3)'); // Soft pink/magenta glow like image 2
-        grad.addColorStop(1, 'rgba(236, 72, 153, 0)');
+        grad.addColorStop(0, 'rgba(244, 63, 94, 0.28)'); // Soft translucent pink/magenta glow
+        grad.addColorStop(1, 'rgba(244, 63, 94, 0)');
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(this.x, this.y, glowRadius, 0, Math.PI * 2);
         ctx.fill();
 
         // Render emoji
-        ctx.font = `${this.size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+        ctx.font = `${this.size}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(this.emoji, this.x, this.y);
@@ -81,32 +96,39 @@ export default function EmojiParticleBurst() {
     }
 
     const animate = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const screenW = window.innerWidth;
+      const screenH = window.innerHeight;
+      ctx.clearRect(0, 0, screenW, screenH);
+
       particles = particles.filter(p => p.frameCounter < p.totalFrames && p.opacity > 0);
       particles.forEach(p => {
         p.update();
         p.draw(ctx);
       });
+
       if (particles.length > 0) {
         animationFrameId = requestAnimationFrame(animate);
       }
     };
 
     const handleTriggerBurst = (e) => {
-      const emoji = e.detail?.emoji || '💗';
-      // 3 seconds for message reaction, 5 seconds for emoji burst action
-      const durationSecs = e.detail?.duration || (e.detail?.count > 30 ? 5 : 3);
-      // Low particle count (12 - 14 particles) for zero lag 60fps silk performance
-      const particleCount = 13;
+      const mainEmoji = e.detail?.emoji || '❤️';
+      const durationSecs = e.detail?.duration || 3; // 3s for reactions, 5s for burst
+      const count = 14; // Lightweight 14 particles for 60fps smooth performance
 
-      // Keep screen clean if multiple bursts triggered fast
-      if (particles.length > 25) {
-        particles = particles.slice(-10);
+      // Clear previous particles if new reaction happens fast so screen stays clean
+      if (particles.length > 18) {
+        particles = particles.slice(-8);
       }
 
-      for (let i = 0; i < particleCount; i++) {
-        particles.push(new LightParticle(emoji, durationSecs));
+      // Spawn mix of reacted emoji + soft heart accent particles (like image 2)
+      const accentEmojis = ['💗', '💖', '💕'];
+
+      for (let i = 0; i < count; i++) {
+        const emojiToUse = (i % 3 === 0 && mainEmoji !== '❤️') ? accentEmojis[i % accentEmojis.length] : mainEmoji;
+        particles.push(new FloatingParticle(emojiToUse, durationSecs));
       }
+
       cancelAnimationFrame(animationFrameId);
       animationFrameId = requestAnimationFrame(animate);
     };
@@ -127,7 +149,9 @@ export default function EmojiParticleBurst() {
         position: 'fixed',
         inset: 0,
         pointerEvents: 'none',
-        zIndex: 99999
+        zIndex: 99999,
+        width: '100vw',
+        height: '100vh'
       }}
     />
   );
