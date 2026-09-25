@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
+import { SocketContext } from '../../context/SocketContext';
 import { X, Shield, Users, Wifi, MessageSquare, PlusCircle, RefreshCw, Crown, Lock, CheckCircle2, AlertCircle, Search, Sparkles } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 
 export default function AdminDashboardModal({ onClose }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
+  const { socket } = useContext(SocketContext);
 
   const [secretCode, setSecretCode] = useState('pulse_master_admin_851112');
   const [claimLoading, setClaimLoading] = useState(false);
@@ -49,8 +51,29 @@ export default function AdminDashboardModal({ onClose }) {
   useEffect(() => {
     fetchStats();
     const interval = setInterval(fetchStats, 5000);
+
+    if (socket) {
+      const handleRealtimeTrigger = () => fetchStats();
+      socket.on('receive_message', handleRealtimeTrigger);
+      socket.on('message_sent', handleRealtimeTrigger);
+      socket.on('user_status', handleRealtimeTrigger);
+      socket.on('online_users_list', handleRealtimeTrigger);
+      socket.on('group_created', handleRealtimeTrigger);
+      socket.on('user_profile_updated', handleRealtimeTrigger);
+
+      return () => {
+        clearInterval(interval);
+        socket.off('receive_message', handleRealtimeTrigger);
+        socket.off('message_sent', handleRealtimeTrigger);
+        socket.off('user_status', handleRealtimeTrigger);
+        socket.off('online_users_list', handleRealtimeTrigger);
+        socket.off('group_created', handleRealtimeTrigger);
+        socket.off('user_profile_updated', handleRealtimeTrigger);
+      };
+    }
+
     return () => clearInterval(interval);
-  }, [activeToken]);
+  }, [activeToken, socket]);
 
   const handleClaimAdmin = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
