@@ -1778,7 +1778,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
                   <button onClick={() => { setShowMoreMenu(false); setShowThemeModal(true); }}>
                     <ImageIcon size={16} color="var(--accent)" />
-                    <span>Change Wallpaper</span>
+                    <span>Chat background</span>
                   </button>
                   <button onClick={() => { setShowMoreMenu(false); setShowSolidThemeModal(true); }}>
                     <Palette size={16} color="var(--accent)" />
