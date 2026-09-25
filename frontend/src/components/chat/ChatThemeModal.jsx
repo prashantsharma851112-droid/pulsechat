@@ -301,27 +301,7 @@ export default function ChatThemeModal({
               <Sparkles size={14} /> Live Animated
             </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('color')}
-              style={{
-                flex: 1,
-                padding: '8px',
-                border: 'none',
-                borderBottom: activeTab === 'color' ? '2px solid var(--accent)' : '2px solid transparent',
-                background: 'transparent',
-                color: activeTab === 'color' ? 'var(--accent)' : 'var(--text-muted)',
-                fontWeight: 700,
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '5px'
-              }}
-            >
-              <Palette size={14} /> VIP & Solid Themes
-            </button>
+
 
             <button
               type="button"
@@ -542,57 +522,7 @@ export default function ChatThemeModal({
               </div>
             )}
 
-            {/* TAB 3: SOLID & VIP COLOR THEMES */}
-            {activeTab === 'color' && (
-              <>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  Select a color theme or VIP exclusive aura background.
-                </div>
 
-                <div className="theme-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(1, 1fr)', gap: '10px' }}>
-                  {THEMES.map((t) => {
-                    const isCurrent = currentTheme === t.id;
-                    const isLocked = t.isPro && !isUserPro;
-                    return (
-                      <div
-                        key={t.id}
-                        onClick={() => handleSelectTheme(t)}
-                        className={`theme-card ${isCurrent ? 'active' : ''}`}
-                        style={{
-                          background: t.bg,
-                          border: isCurrent ? `2px solid ${t.accent}` : (t.isPro ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border)'),
-                          position: 'relative',
-                          padding: '14px 16px',
-                          borderRadius: '16px',
-                          cursor: 'pointer',
-                          boxShadow: '0 4px 14px rgba(0,0,0,0.3)'
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: t.accent, display: 'inline-block' }} />
-                            <span>{t.name}</span>
-                            {t.isPro && <Crown size={14} color="#f59e0b" />}
-                          </div>
-                          {isCurrent ? (
-                            <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: t.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                              <Check size={14} strokeWidth={3} />
-                            </div>
-                          ) : isLocked ? (
-                            <div style={{ color: '#f59e0b' }}>
-                              <Lock size={16} />
-                            </div>
-                          ) : null}
-                        </div>
-                        <div style={{ fontSize: '0.76rem', color: 'rgba(255, 255, 255, 0.75)', marginTop: '4px', fontWeight: 600 }}>
-                          {t.tag}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
 
             {/* Bottom Actions */}
             <div style={{ display: 'flex', gap: '10px', marginTop: '0.5rem' }}>
