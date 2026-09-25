@@ -1,6 +1,6 @@
 import React, { useState, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Palette, Check, RotateCcw, Crown, Lock, Image as ImageIcon, Sparkles, Heart, Trees, Waves, Zap } from 'lucide-react';
+import { X, Palette, Check, RotateCcw, Crown, Lock, Image as ImageIcon, Sparkles, Heart, Trees, Waves, Zap, Trash2 } from 'lucide-react';
 import PulseProModal from './PulseProModal';
 
 const LIVE_WALLPAPERS = [
@@ -127,7 +127,16 @@ const THEMES = [
   }
 ];
 
-export default function ChatThemeModal({ chatId, currentTheme, onSelectTheme, onClose, onSetCustomWallpaper }) {
+export default function ChatThemeModal({
+  chatId,
+  currentTheme,
+  onSelectTheme,
+  currentWallpaper,
+  onSelectWallpaper,
+  customWallpaper,
+  onSetCustomWallpaper,
+  onClose
+}) {
   const { user } = useContext(AuthContext);
   const [showProModal, setShowProModal] = useState(false);
   const [activeTab, setActiveTab] = useState('live'); // 'live' | 'custom' | 'color'
@@ -141,6 +150,14 @@ export default function ChatThemeModal({ chatId, currentTheme, onSelectTheme, on
       return;
     }
     if (onSelectTheme) onSelectTheme(t.id);
+  };
+
+  const handleSelectLiveWallpaper = (w) => {
+    if (w.isPro && !isUserPro) {
+      setShowProModal(true);
+      return;
+    }
+    if (onSelectWallpaper) onSelectWallpaper(w.id);
   };
 
   const handleCustomImageUpload = (e) => {
@@ -159,8 +176,8 @@ export default function ChatThemeModal({ chatId, currentTheme, onSelectTheme, on
         if (onSetCustomWallpaper) {
           onSetCustomWallpaper(dataUrl);
         }
-        if (onSelectTheme) {
-          onSelectTheme('custom_image');
+        if (onSelectWallpaper) {
+          onSelectWallpaper('custom_image');
         }
       }
     };
@@ -196,7 +213,7 @@ export default function ChatThemeModal({ chatId, currentTheme, onSelectTheme, on
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Palette size={20} color="var(--accent)" />
               <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)' }}>
-                Chat Wallpaper & Live Backgrounds
+                Chat Theme & Wallpapers
               </h3>
             </div>
             <button className="icon-btn-ghost" onClick={onClose}>
@@ -290,17 +307,17 @@ export default function ChatThemeModal({ chatId, currentTheme, onSelectTheme, on
             {activeTab === 'live' && (
               <>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  Choose real-time live floating wallpaper for this conversation.
+                  Select live floating background animation for this chat. (You can also select a Solid Theme alongside).
                 </div>
 
                 <div className="theme-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(1, 1fr)', gap: '10px' }}>
                   {LIVE_WALLPAPERS.map((w) => {
-                    const isCurrent = currentTheme === w.id;
+                    const isCurrent = currentWallpaper === w.id;
                     const isLocked = w.isPro && !isUserPro;
                     return (
                       <div
                         key={w.id}
-                        onClick={() => handleSelectTheme(w)}
+                        onClick={() => handleSelectLiveWallpaper(w)}
                         className={`theme-card ${isCurrent ? 'active' : ''}`}
                         style={{
                           background: w.previewBg,
@@ -335,12 +352,22 @@ export default function ChatThemeModal({ chatId, currentTheme, onSelectTheme, on
                     );
                   })}
                 </div>
+
+                {currentWallpaper !== 'none' && currentWallpaper !== 'custom_image' && (
+                  <button
+                    type="button"
+                    onClick={() => onSelectWallpaper && onSelectWallpaper('none')}
+                    style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: '12px', padding: '6px 14px', fontSize: '0.78rem', cursor: 'pointer' }}
+                  >
+                    🚫 Turn Off Live Wallpaper
+                  </button>
+                )}
               </>
             )}
 
-            {/* TAB 2: CUSTOM UPLOAD */}
+            {/* TAB 2: CUSTOM UPLOAD WITH GREEN TICK CONFIRMATION */}
             {activeTab === 'custom' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', padding: '1rem 0' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center', padding: '0.5rem 0' }}>
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -348,83 +375,161 @@ export default function ChatThemeModal({ chatId, currentTheme, onSelectTheme, on
                   onChange={handleCustomImageUpload}
                   style={{ display: 'none' }}
                 />
-                <div style={{
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: '20px',
-                  background: 'rgba(99, 102, 241, 0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--accent)'
-                }}>
-                  <ImageIcon size={32} />
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <h4 style={{ margin: '0 0 4px 0', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                    <span>Upload Gallery Wallpaper</span>
-                    {!isUserPro && <Crown size={14} color="#f59e0b" />}
-                  </h4>
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)', maxWidth: '320px' }}>
-                    Set any personal photo, couple memory or custom HD wallpaper as your chat background.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={() => {
-                    if (!isUserPro) {
-                      setShowProModal(true);
-                      return;
-                    }
-                    fileInputRef.current?.click();
-                  }}
-                  style={{ padding: '10px 24px', borderRadius: '20px', fontSize: '0.88rem', fontWeight: 700 }}
-                >
-                  📁 Select Photo from Device
-                </button>
+
+                {customWallpaper && currentWallpaper === 'custom_image' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', width: '100%' }}>
+                    {/* Green Tick Confirmation Badge */}
+                    <div style={{
+                      padding: '8px 18px',
+                      borderRadius: '20px',
+                      background: 'rgba(16, 185, 129, 0.18)',
+                      border: '1px solid #10b981',
+                      color: '#10b981',
+                      fontSize: '0.88rem',
+                      fontWeight: 800,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 14px rgba(16, 185, 129, 0.25)'
+                    }}>
+                      <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Check size={14} strokeWidth={3} />
+                      </div>
+                      <span>Wallpaper Applied Successfully!</span>
+                    </div>
+
+                    {/* Thumbnail Preview Card */}
+                    <div style={{
+                      width: '130px',
+                      height: '190px',
+                      borderRadius: '16px',
+                      overflow: 'hidden',
+                      border: '3px solid #10b981',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+                      position: 'relative'
+                    }}>
+                      <img src={customWallpaper} alt="Uploaded Wallpaper Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => fileInputRef.current?.click()}
+                        style={{ fontSize: '0.82rem', padding: '7px 16px', borderRadius: '14px' }}
+                      >
+                        📁 Change Photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onSetCustomWallpaper) onSetCustomWallpaper(null);
+                          if (onSelectWallpaper) onSelectWallpaper('none');
+                        }}
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          color: '#ef4444',
+                          border: '1px solid #ef4444',
+                          borderRadius: '14px',
+                          fontSize: '0.82rem',
+                          padding: '7px 16px',
+                          cursor: 'pointer',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '5px'
+                        }}
+                      >
+                        <Trash2 size={14} /> Remove Photo
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: '20px',
+                      background: 'rgba(99, 102, 241, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--accent)'
+                    }}>
+                      <ImageIcon size={32} />
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <h4 style={{ margin: '0 0 4px 0', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        <span>Upload Gallery Wallpaper</span>
+                        {!isUserPro && <Crown size={14} color="#f59e0b" />}
+                      </h4>
+                      <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)', maxWidth: '320px' }}>
+                        Set any personal photo, couple memory or custom HD wallpaper as your chat background.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => {
+                        if (!isUserPro) {
+                          setShowProModal(true);
+                          return;
+                        }
+                        fileInputRef.current?.click();
+                      }}
+                      style={{ padding: '10px 24px', borderRadius: '20px', fontSize: '0.88rem', fontWeight: 700 }}
+                    >
+                      📁 Select Photo from Device
+                    </button>
+                  </>
+                )}
               </div>
             )}
 
             {/* TAB 3: SOLID THEMES */}
             {activeTab === 'color' && (
-              <div className="theme-grid">
-                {THEMES.map((t) => {
-                  const isCurrent = currentTheme === t.id;
-                  const isLocked = t.isPro && !isUserPro;
-                  return (
-                    <div
-                      key={t.id}
-                      onClick={() => handleSelectTheme(t)}
-                      className={`theme-card ${isCurrent ? 'active' : ''}`}
-                      style={{
-                        background: t.card,
-                        border: isCurrent ? '2px solid var(--accent)' : (t.isPro ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border)'),
-                        position: 'relative'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ fontSize: '0.88rem', fontWeight: 700, color: t.id === 'light' ? '#111827' : '#f3f4f6', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          {t.name}
-                          {t.isPro && <Crown size={13} color="#f59e0b" />}
+              <>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Select UI bubble & card color theme. (Works simultaneously with wallpapers).
+                </div>
+                <div className="theme-grid">
+                  {THEMES.map((t) => {
+                    const isCurrent = currentTheme === t.id;
+                    const isLocked = t.isPro && !isUserPro;
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => handleSelectTheme(t)}
+                        className={`theme-card ${isCurrent ? 'active' : ''}`}
+                        style={{
+                          background: t.card,
+                          border: isCurrent ? '2px solid var(--accent)' : (t.isPro ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border)'),
+                          position: 'relative'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ fontSize: '0.88rem', fontWeight: 700, color: t.id === 'light' ? '#111827' : '#f3f4f6', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            {t.name}
+                            {t.isPro && <Crown size={13} color="#f59e0b" />}
+                          </div>
+                          {isCurrent ? (
+                            <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                              <Check size={12} strokeWidth={3} />
+                            </div>
+                          ) : isLocked ? (
+                            <div style={{ color: '#f59e0b' }}>
+                              <Lock size={14} />
+                            </div>
+                          ) : null}
                         </div>
-                        {isCurrent ? (
-                          <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                            <Check size={12} strokeWidth={3} />
-                          </div>
-                        ) : isLocked ? (
-                          <div style={{ color: '#f59e0b' }}>
-                            <Lock size={14} />
-                          </div>
-                        ) : null}
+                        <div style={{ fontSize: '0.74rem', color: t.isPro ? '#f59e0b' : (t.id === 'light' ? '#6b7280' : '#9ca3af') }}>
+                          {t.tag}
+                        </div>
                       </div>
-                      <div style={{ fontSize: '0.74rem', color: t.isPro ? '#f59e0b' : (t.id === 'light' ? '#6b7280' : '#9ca3af') }}>
-                        {t.tag}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
 
             {/* Bottom Actions */}
@@ -433,7 +538,10 @@ export default function ChatThemeModal({ chatId, currentTheme, onSelectTheme, on
                 type="button"
                 className="btn-secondary"
                 style={{ flex: 1, justifyContent: 'center', fontSize: '0.82rem' }}
-                onClick={() => onSelectTheme && onSelectTheme('midnight_amoled')}
+                onClick={() => {
+                  if (onSelectTheme) onSelectTheme('midnight_amoled');
+                  if (onSelectWallpaper) onSelectWallpaper('none');
+                }}
               >
                 <RotateCcw size={14} /> Reset Default
               </button>

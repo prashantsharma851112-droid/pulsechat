@@ -756,11 +756,13 @@ io.on('connection', (socket) => {
   socket.on('add_reaction', async ({ messageId, chatId, emoji, userId }) => {
     const updatedMsg = await db.toggleReaction(messageId, emoji, userId);
     if (updatedMsg) {
-      io.to(chatId).emit('reaction_updated', { messageId, reactions: updatedMsg.reactions });
-      io.to(chatId).emit('emoji_burst_received', { chatId, emoji: emoji || '❤️', userId });
+      const userReactions = updatedMsg.reactions?.[emoji] || [];
+      const isAdded = userReactions.includes(userId);
+
+      io.to(chatId).emit('reaction_updated', { messageId, reactions: updatedMsg.reactions, emoji, userId, isAdded });
       if (chatId && chatId.includes('_')) {
         const parts = chatId.split('_');
-        parts.forEach(uId => io.to(`user_${uId}`).emit('emoji_burst_received', { chatId, emoji: emoji || '❤️', userId }));
+        parts.forEach(uId => io.to(`user_${uId}`).emit('reaction_updated', { messageId, reactions: updatedMsg.reactions, emoji, userId, isAdded }));
       }
     }
   });

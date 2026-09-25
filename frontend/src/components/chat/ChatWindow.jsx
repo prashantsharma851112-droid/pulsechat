@@ -233,18 +233,25 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [friendshipStatus, setFriendshipStatus] = useState(() => isDirectFriend ? 'friends' : 'checking');
   const [friendRequestId, setFriendRequestId] = useState(null);
 
-  const [customWallpaper, setCustomWallpaper] = useState(() => localStorage.getItem(`pulsechat_custom_wallpaper_${chatId}`) || null);
+  const [chatWallpaper, setChatWallpaper] = useState(() => {
+    return localStorage.getItem(`pulsechat_chat_wallpaper_${chatId}`) || 'none';
+  });
+  const [customWallpaper, setCustomWallpaper] = useState(() => {
+    return localStorage.getItem(`pulsechat_custom_wallpaper_${chatId}`) || null;
+  });
 
   useEffect(() => {
-    const saved = localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'default';
-    setChatTheme(saved);
+    const savedTheme = localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'midnight_amoled';
+    setChatTheme(savedTheme);
+    const savedWall = localStorage.getItem(`pulsechat_chat_wallpaper_${chatId}`) || 'none';
+    setChatWallpaper(savedWall);
     const savedCustom = localStorage.getItem(`pulsechat_custom_wallpaper_${chatId}`);
     setCustomWallpaper(savedCustom || null);
   }, [chatId]);
 
   const handleSelectChatTheme = (newTheme) => {
     setChatTheme(newTheme);
-    if (newTheme === 'default') {
+    if (newTheme === 'default' || newTheme === 'midnight_amoled') {
       localStorage.removeItem(`pulsechat_chat_theme_${chatId}`);
     } else {
       localStorage.setItem(`pulsechat_chat_theme_${chatId}`, newTheme);
@@ -252,9 +259,24 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   };
 
+  const handleSelectChatWallpaper = (newWall) => {
+    setChatWallpaper(newWall);
+    if (newWall === 'none') {
+      localStorage.removeItem(`pulsechat_chat_wallpaper_${chatId}`);
+    } else {
+      localStorage.setItem(`pulsechat_chat_wallpaper_${chatId}`, newWall);
+    }
+  };
+
   const handleSetCustomWallpaper = (dataUrl) => {
     setCustomWallpaper(dataUrl);
-    localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, dataUrl);
+    if (dataUrl) {
+      localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, dataUrl);
+      handleSelectChatWallpaper('custom_image');
+    } else {
+      localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
+      handleSelectChatWallpaper('none');
+    }
   };
 
   const [messages, setMessages] = useState(() => {
@@ -1794,7 +1816,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {/* Message Stream with Live Wallpaper Overlay & WhatsApp-Style Date Dividers */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative' }}>
-        <ChatLiveWallpaper wallpaperId={chatTheme} customImage={customWallpaper} />
+        <ChatLiveWallpaper wallpaperId={chatWallpaper} customImage={customWallpaper} />
         {/* Load Earlier Messages Button (Pagination) */}
         {hasMoreOlderMessages && (
           <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 8px 0' }}>
@@ -2682,6 +2704,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           chatId={chatId}
           currentTheme={chatTheme}
           onSelectTheme={handleSelectChatTheme}
+          currentWallpaper={chatWallpaper}
+          onSelectWallpaper={handleSelectChatWallpaper}
+          customWallpaper={customWallpaper}
           onSetCustomWallpaper={handleSetCustomWallpaper}
           onClose={() => setShowThemeModal(false)}
         />

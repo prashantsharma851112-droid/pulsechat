@@ -259,10 +259,13 @@ export default function MessageItem({
   };
 
   const handleReact = (emoji) => {
+    const existingList = message.reactions?.[emoji] || [];
+    const isAlreadyReacted = Array.isArray(existingList) && existingList.includes(currentUser?.id);
+
     if (socket && currentUser?.id) {
       socket.emit('add_reaction', { messageId: message.id, chatId, emoji, userId: currentUser.id });
     }
-    if (typeof window !== 'undefined') {
+    if (!isAlreadyReacted && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
         detail: { emoji: emoji || '❤️', mode: 'reaction', duration: 3 }
       }));

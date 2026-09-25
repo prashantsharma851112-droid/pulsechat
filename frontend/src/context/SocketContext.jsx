@@ -156,6 +156,16 @@ export function SocketProvider({ children }) {
         } catch (e) {}
       });
 
+      newSocket.on('reaction_updated', (data) => {
+        try {
+          if (data && data.isAdded) {
+            window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
+              detail: { emoji: data.emoji || '❤️', mode: 'reaction', duration: 3 }
+            }));
+          }
+        } catch (e) {}
+      });
+
       newSocket.on('emoji_burst_received', (data) => {
         try {
           window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji: data.emoji || '❤️', mode: 'burst', duration: 5 } }));
