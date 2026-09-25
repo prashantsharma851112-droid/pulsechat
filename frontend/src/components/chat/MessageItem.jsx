@@ -5,7 +5,7 @@ import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 import EditPollModal from './EditPollModal';
-import { getPollTheme } from './pollThemes';
+import { getPollTheme, getPollAura } from './pollThemes';
 import PulseVipBadge from '../common/PulseVipBadge';
 import Sticker3D from '../common/Sticker3D';
 import Animated3DText from '../common/Animated3DText';
@@ -906,13 +906,14 @@ export default function MessageItem({
         {/* Poll Message */}
         {message.type === 'poll' && pollData && (() => {
           const pollTheme = getPollTheme(pollData.theme || 'purple');
+          const pollAura = getPollAura(pollData.aura || 'standard');
           const isQuiz = Boolean(pollData.correctAnswerId);
           const hasCurrentUserVoted = pollData.options.some(opt => opt.votes && opt.votes.includes(currentUser?.id));
           const myVotedOption = pollData.options.find(opt => opt.votes && opt.votes.includes(currentUser?.id));
           const isMyVoteCorrect = isQuiz && hasCurrentUserVoted && myVotedOption?.id === pollData.correctAnswerId;
 
           return (
-            <div style={{ minWidth: '230px', maxWidth: '330px' }}>
+            <div className={`poll-aura-card poll-aura-${pollData.aura || 'standard'}`} style={{ minWidth: '230px', maxWidth: '330px', padding: pollData.aura && pollData.aura !== 'standard' ? '10px' : '0' }}>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',

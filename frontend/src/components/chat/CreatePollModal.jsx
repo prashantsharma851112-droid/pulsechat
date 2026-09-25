@@ -1,16 +1,35 @@
 import React, { useState } from 'react';
-import { X, Plus, Trash2, BarChart2, CheckCircle2, Palette, Sparkles, Check } from 'lucide-react';
-import { POLL_THEMES, getPollTheme } from './pollThemes';
+import { X, Plus, Trash2, BarChart2, CheckCircle2, Palette, Sparkles, Check, Crown } from 'lucide-react';
+import { POLL_THEMES, getPollTheme, POLL_AURAS, getPollAura } from './pollThemes';
 
-export default function CreatePollModal({ onClose, onCreatePoll }) {
+export default function CreatePollModal({ onClose, onCreatePoll, user, onOpenProModal }) {
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState(['', '']);
   const [isMultipleChoice, setIsMultipleChoice] = useState(false);
   const [correctAnswerIndex, setCorrectAnswerIndex] = useState(null);
   const [theme, setTheme] = useState('purple');
+  const [aura, setAura] = useState('standard');
   const [error, setError] = useState('');
 
   const currentTheme = getPollTheme(theme);
+  const currentAura = getPollAura(aura);
+  const isProUser = Boolean(user?.isPro);
+
+  const handleSelectTheme = (t) => {
+    if (t.isPro && !isProUser) {
+      if (onOpenProModal) onOpenProModal('pro');
+      return;
+    }
+    setTheme(t.id);
+  };
+
+  const handleSelectAura = (a) => {
+    if (a.isPro && !isProUser) {
+      if (onOpenProModal) onOpenProModal('pro');
+      return;
+    }
+    setAura(a.id);
+  };
 
   const handleOptionChange = (index, value) => {
     const updated = [...options];
@@ -26,7 +45,6 @@ export default function CreatePollModal({ onClose, onCreatePoll }) {
 
   const removeOption = (index) => {
     if (options.length > 2) {
-      // Agar removed option correct tha toh reset karo
       if (correctAnswerIndex === index) setCorrectAnswerIndex(null);
       else if (correctAnswerIndex > index) setCorrectAnswerIndex(prev => prev - 1);
       setOptions(options.filter((_, i) => i !== index));
@@ -55,7 +73,6 @@ export default function CreatePollModal({ onClose, onCreatePoll }) {
       votes: []
     }));
 
-    // correctAnswerIndex se actual option id nikalo
     const correctAnswerId = correctAnswerIndex !== null && builtOptions[correctAnswerIndex]
       ? builtOptions[correctAnswerIndex].id
       : null;
@@ -65,7 +82,8 @@ export default function CreatePollModal({ onClose, onCreatePoll }) {
       options: builtOptions,
       isMultipleChoice,
       correctAnswerId,
-      theme: theme || 'purple'
+      theme: theme || 'purple',
+      aura: aura || 'standard'
     };
 
     onCreatePoll(pollData);
@@ -74,36 +92,46 @@ export default function CreatePollModal({ onClose, onCreatePoll }) {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card modal-responsive" style={{ borderTop: `4px solid ${currentTheme.primary}`, maxWidth: '460px', width: '100%', maxHeight: '90dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="modal-card modal-responsive" style={{ borderTop: `4px solid ${currentTheme.primary}`, maxWidth: '480px', width: '100%', maxHeight: '90dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className="modal-header" style={{ flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
+              width: '34px',
+              height: '34px',
+              borderRadius: '9px',
               background: currentTheme.gradient,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              boxShadow: `0 3px 10px ${currentTheme.glow}`
             }}>
-              <BarChart2 size={18} color="#fff" />
+              <BarChart2 size={19} color="#fff" />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-main)' }}>Create Poll</h3>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Interactive polls & quiz questions</span>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                Create Poll
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Interactive polls & animated quiz cards</span>
             </div>
           </div>
           <button className="icon-btn-ghost" onClick={onClose}><X size={20} /></button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ padding: '1.25rem 1.25rem 2.5rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '1.1rem', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <form onSubmit={handleSubmit} style={{ padding: '1.1rem 1.25rem 2rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '1.1rem', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {error && <div className="error-banner">{error}</div>}
 
           {/* Color Theme Selector */}
           <div>
-            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-              <Palette size={15} color={currentTheme.primary} />
-              <span>Poll Color Theme</span>
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Palette size={15} color={currentTheme.primary} />
+                <span>Poll Color Theme</span>
+              </div>
+              {!isProUser && (
+                <span style={{ fontSize: '0.72rem', color: '#f59e0b', fontWeight: 600 }}>
+                  👑 VIP Themes available
+                </span>
+              )}
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
               {POLL_THEMES.map(t => {
@@ -112,48 +140,118 @@ export default function CreatePollModal({ onClose, onCreatePoll }) {
                   <button
                     key={t.id}
                     type="button"
-                    onClick={() => setTheme(t.id)}
+                    onClick={() => handleSelectTheme(t)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px',
-                      padding: '7px 10px',
+                      justifyContent: 'space-between',
+                      gap: '4px',
+                      padding: '7px 8px',
                       borderRadius: '10px',
                       border: isSelected ? `2px solid ${t.primary}` : '1.5px solid rgba(255,255,255,0.1)',
                       background: isSelected ? t.bgLight : 'rgba(0,0,0,0.2)',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
-                      textAlign: 'left'
+                      textAlign: 'left',
+                      position: 'relative'
                     }}
                   >
-                    <span style={{
-                      width: '18px',
-                      height: '18px',
-                      borderRadius: '50%',
-                      background: t.gradient,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0
-                    }}>
-                      {isSelected && <Check size={11} color="#fff" strokeWidth={3} />}
-                    </span>
-                    <span style={{
-                      fontSize: '0.78rem',
-                      fontWeight: isSelected ? 600 : 400,
-                      color: isSelected ? '#fff' : 'var(--text-muted)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {t.name}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                      <span style={{
+                        width: '16px',
+                        height: '16px',
+                        borderRadius: '50%',
+                        background: t.gradient,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        {isSelected && <Check size={10} color="#fff" strokeWidth={3} />}
+                      </span>
+                      <span style={{
+                        fontSize: '0.76rem',
+                        fontWeight: isSelected ? 600 : 400,
+                        color: isSelected ? '#fff' : 'var(--text-muted)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {t.name.split(' ')[1] || t.name}
+                      </span>
+                    </div>
+                    {t.isPro && (
+                      <Crown size={11} color="#f59e0b" style={{ flexShrink: 0 }} />
+                    )}
                   </button>
                 );
               })}
             </div>
           </div>
 
+          {/* Animated Poll Aura Selector */}
+          <div>
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Sparkles size={15} color="#f59e0b" />
+                <span>Card Aura Decoration</span>
+              </div>
+              {currentAura.isPro && (
+                <span style={{ fontSize: '0.72rem', color: '#f59e0b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <Crown size={12} /> Pro Aura Selected
+                </span>
+              )}
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+              {POLL_AURAS.map(a => {
+                const isSelected = aura === a.id;
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => handleSelectAura(a)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '6px',
+                      padding: '8px 10px',
+                      borderRadius: '10px',
+                      border: isSelected ? `2px solid ${a.borderColor}` : '1.5px solid rgba(255,255,255,0.1)',
+                      background: isSelected ? 'rgba(245, 158, 11, 0.12)' : 'rgba(0,0,0,0.2)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      textAlign: 'left'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      <span style={{ fontSize: '1.05rem', flexShrink: 0 }}>{a.icon}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{
+                          fontSize: '0.77rem',
+                          fontWeight: isSelected ? 700 : 500,
+                          color: isSelected ? '#fff' : 'var(--text-main)',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}>
+                          {a.name.replace(' 👑', '')}
+                        </div>
+                        <div style={{ fontSize: '0.67rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {a.desc}
+                        </div>
+                      </div>
+                    </div>
+                    {a.isPro && (
+                      <Crown size={11} color="#f59e0b" style={{ flexShrink: 0 }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Question input */}
           <div>
             <label className="form-label">Question</label>
             <input
@@ -170,13 +268,14 @@ export default function CreatePollModal({ onClose, onCreatePoll }) {
             />
           </div>
 
+          {/* Options */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
               <label className="form-label" style={{ margin: 0 }}>
                 Options
               </label>
               <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                <CheckCircle2 size={13} color="#10b981" /> Click circle to mark correct answer
+                <CheckCircle2 size={13} color="#10b981" /> Click circle for Quiz answer
               </span>
             </div>
 

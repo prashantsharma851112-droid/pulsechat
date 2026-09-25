@@ -2826,8 +2826,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {showCreatePoll && (
         <CreatePollModal
+          user={user}
           onClose={() => setShowCreatePoll(false)}
           onCreatePoll={handleCreatePoll}
+          onOpenProModal={(tab = 'pro') => {
+            setShowCreatePoll(false);
+            setProModalTab(tab);
+            setShowProModal(true);
+          }}
         />
       )}
 
