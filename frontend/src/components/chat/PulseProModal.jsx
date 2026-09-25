@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Sparkles, Check, Crown, Zap, ShieldCheck, Flame, Coffee, Heart, Rocket, Diamond, Award, ArrowRight, Loader2, Clock, Music, EyeOff, Palette } from 'lucide-react';
+import { X, Sparkles, Check, Crown, Zap, ShieldCheck, Flame, Coffee, Heart, Rocket, Diamond, Award, ArrowRight, Loader2, Clock, Music, EyeOff, Palette, BarChart2, Type } from 'lucide-react';
 import PulseVipBadge from '../common/PulseVipBadge';
 import { BACKEND_URL } from '../../utils/config';
 
@@ -476,7 +476,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
         }}>
           {activeTab === 'pro' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              {/* Feature Grid - 8 VIP Perks */}
+              {/* Feature Grid - 12 Complete VIP Perks */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div style={{
                   padding: '12px',
@@ -490,6 +490,51 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   <div>
                     <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Pulse VIP Crest</div>
                     <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Glowing golden VIP crest badge across all chats & profile.</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px'
+                }}>
+                  <div style={{ color: '#8b5cf6', flexShrink: 0 }}><BarChart2 size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>VIP Poll Themes & Auras</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Pro poll themes & animated card decorations (Gold Stardust, Cyber Matrix, Inferno Blaze).</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px'
+                }}>
+                  <div style={{ color: '#06b6d4', flexShrink: 0 }}><Type size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Animated 3D Text</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Pro 3D styles: Emerald Matrix, Blood Crimson, Tokyo Synth & Royal Platinum.</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px'
+                }}>
+                  <div style={{ color: '#ef4444', flexShrink: 0 }}><Flame size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>3D Emoji Bursts</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Trigger full-screen floating 3D emoji explosions in chat.</div>
                   </div>
                 </div>
 
@@ -534,7 +579,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   <div style={{ color: '#10b981', flexShrink: 0 }}><Sparkles size={20} /></div>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>4K Live Wallpapers</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Matrix Rain, Starry Galaxy, Fireflies & Floating Hearts.</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Matrix Rain, Starry Galaxy, Fireflies, Floating Hearts & Custom Uploads.</div>
                   </div>
                 </div>
 
@@ -595,6 +640,21 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   <div>
                     <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>100% Ad-Free Priority</div>
                     <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Zero ads, zero interruptions, priority high-speed socket.</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px'
+                }}>
+                  <div style={{ color: '#fbbf24', flexShrink: 0 }}><Diamond size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Daily Bonus Sparks</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Higher daily free claim allowance for virtual gifts & rewards.</div>
                   </div>
                 </div>
               </div>

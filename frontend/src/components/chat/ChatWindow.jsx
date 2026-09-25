@@ -2507,9 +2507,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 }}>
                   🎁
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ec4899', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                  <span>Send Gift</span>
-                  <Crown size={12} color="#ec4899" />
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ec4899' }}>
+                  Send Gift
                 </span>
               </button>
 
