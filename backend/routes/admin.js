@@ -6,9 +6,23 @@ const Message = require('../models/Message');
 const Group = require('../models/Group');
 const db = require('../database/db');
 
-// Middleware to check Admin status
+// In-memory stats cache for instant 0ms responses
+let cachedStatsPayload = null;
+let lastStatsCacheTimestamp = 0;
+const STATS_CACHE_TTL = 3000; // 3 seconds TTL
+
+const invalidateAdminCache = () => {
+  lastStatsCacheTimestamp = 0;
+  cachedStatsPayload = null;
+};
+
+// Middleware to check Admin status (0ms instant check)
 const adminOnly = async (req, res, next) => {
   try {
+    if (req.user && req.user.isAdmin) {
+      req.adminUser = req.user;
+      return next();
+    }
     const mongoose = require('mongoose');
     const userId = req.user?.id || req.user?._id;
     const username = req.user?.username;
@@ -18,13 +32,14 @@ const adminOnly = async (req, res, next) => {
     }
 
     const isObjectId = userId && mongoose.Types.ObjectId.isValid(userId);
-    const user = await User.findOne({
-      $or: [
-        ...(userId ? [{ id: userId }] : []),
-        ...(isObjectId ? [{ _id: userId }] : []),
-        ...(username ? [{ username: username }] : [])
-      ]
-    }).lean();
+    const user = isObjectId
+      ? await User.findById(userId).select('isAdmin id username').lean()
+      : await User.findOne({
+          $or: [
+            ...(userId ? [{ id: userId }] : []),
+            ...(username ? [{ username: username }] : [])
+          ]
+        }).select('isAdmin id username').lean();
 
     if (!user || !user.isAdmin) {
       return res.status(403).json({ error: 'Access denied: Master Admin privileges required.' });
@@ -37,17 +52,40 @@ const adminOnly = async (req, res, next) => {
   }
 };
 
-// GET Live Admin System Stats & User Metrics
+// GET Live Admin System Stats & User Metrics (Super Fast & Cached)
 router.get('/stats', authMiddleware, adminOnly, async (req, res) => {
   try {
+    const now = Date.now();
+    const isFreshRequested = req.query.fresh === 'true';
+
+    // Serve from memory cache if less than 3s old
+    if (!isFreshRequested && cachedStatsPayload && (now - lastStatsCacheTimestamp < STATS_CACHE_TTL)) {
+      const getOnlineMap = req.app.get('getRawOnlineUsersMap');
+      const onlineMap = typeof getOnlineMap === 'function' ? getOnlineMap() : null;
+      const liveOnlineUserIds = onlineMap ? Array.from(onlineMap.keys()) : [];
+      const onlineSet = new Set(liveOnlineUserIds);
+
+      const usersWithOnlineStatus = cachedStatsPayload.users.map(u => ({
+        ...u,
+        isLiveOnline: onlineSet.has(u.id) || onlineSet.has(u.mongoId) || onlineSet.has(u.username)
+      }));
+
+      const liveOnlineCount = usersWithOnlineStatus.filter(u => u.isLiveOnline).length;
+
+      return res.json({
+        ...cachedStatsPayload,
+        liveOnlineCount,
+        users: usersWithOnlineStatus
+      });
+    }
+
     const getOnlineMap = req.app.get('getRawOnlineUsersMap');
     const onlineMap = typeof getOnlineMap === 'function' ? getOnlineMap() : null;
     const liveOnlineUserIds = onlineMap ? Array.from(onlineMap.keys()) : [];
 
-    const [totalUsersCount, totalMessages, totalGroups, rawUsersList] = await Promise.all([
-      User.countDocuments({}),
-      Message.countDocuments({ type: { $ne: 'system' } }),
-      Group.countDocuments(),
+    const [totalMessages, totalGroups, rawUsersList] = await Promise.all([
+      Message.estimatedDocumentCount().catch(() => Message.countDocuments()),
+      Group.estimatedDocumentCount().catch(() => Group.countDocuments()),
       User.find({})
         .sort({ createdAt: -1 })
         .select('id _id username displayName email avatar isEmailVerified isPro proTier isAdmin status createdAt')
@@ -79,14 +117,19 @@ router.get('/stats', authMiddleware, adminOnly, async (req, res) => {
 
     const liveOnlineCount = formattedUsersList.filter(u => u.isLiveOnline).length;
 
-    res.json({
+    const payload = {
       success: true,
-      totalUsers: totalUsersCount,
+      totalUsers: formattedUsersList.length,
       liveOnlineCount,
       totalMessages,
       totalGroups,
       users: formattedUsersList
-    });
+    };
+
+    cachedStatsPayload = payload;
+    lastStatsCacheTimestamp = now;
+
+    res.json(payload);
   } catch (err) {
     console.error('Admin stats error:', err);
     res.status(500).json({ error: 'Failed to fetch admin stats: ' + err.message });
@@ -124,6 +167,7 @@ router.post('/claim-admin', authMiddleware, async (req, res) => {
     const { passwordHash, otpCode, otpExpires, ...safeUser } = updated;
     safeUser.isAdmin = true;
 
+    invalidateAdminCache();
     res.json({
       success: true,
       message: '👑 Stealth Master Admin Activated Successfully!',
@@ -160,6 +204,8 @@ router.post('/toggle-user-pro', authMiddleware, adminOnly, async (req, res) => {
     if (!updated) {
       return res.status(404).json({ error: 'Target user not found.' });
     }
+
+    invalidateAdminCache();
 
     const io = req.app.get('io');
     if (io) {
@@ -216,6 +262,8 @@ router.delete('/delete-user/:targetUserId', authMiddleware, adminOnly, async (re
         ...(targetMongoIdStr ? [{ senderId: targetMongoIdStr }, { receiverId: targetMongoIdStr }] : [])
       ]
     });
+
+    invalidateAdminCache();
 
     // 3. Emit real-time socket events for clean UI synchronization
     const io = req.app.get('io');

@@ -13,8 +13,15 @@ export default function AdminDashboardModal({ onClose }) {
   const [claimMsg, setClaimMsg] = useState('');
   const [claimError, setClaimError] = useState('');
 
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? sessionStorage.getItem('pulsechat_admin_stats') : null;
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState(() => !stats);
   const [error, setError] = useState('');
   const [requiresPasscode, setRequiresPasscode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -22,8 +29,9 @@ export default function AdminDashboardModal({ onClose }) {
 
   const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('pulsechat_token') : null);
 
-  const fetchStats = async () => {
+  const fetchStats = async (showSpinner = false) => {
     if (!activeToken) return;
+    if (showSpinner && !stats) setLoading(true);
     try {
       setError('');
       const res = await fetch(`${BACKEND_URL}/api/admin/stats`, {
@@ -38,22 +46,30 @@ export default function AdminDashboardModal({ onClose }) {
       if (res.ok && data.success) {
         setStats(data);
         setRequiresPasscode(false);
+        try {
+          sessionStorage.setItem('pulsechat_admin_stats', JSON.stringify(data));
+        } catch (e) {}
       } else {
-        setError(data.error || 'Failed to load admin metrics.');
+        if (!stats) setError(data.error || 'Failed to load admin metrics.');
       }
     } catch (err) {
-      setError('Network error loading admin stats. Please verify server connection.');
+      if (!stats) setError('Network error loading admin stats. Please verify server connection.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStats();
-    const interval = setInterval(fetchStats, 5000);
+    fetchStats(!stats);
+    const interval = setInterval(() => fetchStats(false), 8000);
 
     if (socket) {
-      const handleRealtimeTrigger = () => fetchStats();
+      let debounceTimer;
+      const handleRealtimeTrigger = () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => fetchStats(false), 2000);
+      };
+
       socket.on('receive_message', handleRealtimeTrigger);
       socket.on('message_sent', handleRealtimeTrigger);
       socket.on('user_status', handleRealtimeTrigger);
@@ -63,6 +79,7 @@ export default function AdminDashboardModal({ onClose }) {
 
       return () => {
         clearInterval(interval);
+        clearTimeout(debounceTimer);
         socket.off('receive_message', handleRealtimeTrigger);
         socket.off('message_sent', handleRealtimeTrigger);
         socket.off('user_status', handleRealtimeTrigger);
