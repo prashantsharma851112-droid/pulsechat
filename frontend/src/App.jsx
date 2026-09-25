@@ -7,6 +7,7 @@ import Sidebar from './components/chat/Sidebar';
 import ChatWindow from './components/chat/ChatWindow';
 import ProfileModal from './components/profile/ProfileModal';
 import SettingsModal from './components/profile/SettingsModal';
+import AdminDashboardModal from './components/admin/AdminDashboardModal';
 import CallModal from './components/chat/CallModal';
 import IncomingCallModal from './components/chat/IncomingCallModal';
 import GroupCallModal from './components/chat/GroupCallModal';
@@ -93,6 +94,7 @@ export default function App() {
   const [activeChat, setActiveChat] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
   const [fullDpData, setFullDpData] = useState(null); // { imageUrl, name, username }
 
   // Entrance Animation state
@@ -587,7 +589,12 @@ export default function App() {
           onClose={() => setShowSettings(false)}
           openProfileModal={() => { setShowSettings(false); setShowProfile(true); }}
           onOpenFullDp={handleOpenFullDp}
+          openAdminModal={() => setShowAdminModal(true)}
         />
+      )}
+
+      {showAdminModal && (
+        <AdminDashboardModal onClose={() => setShowAdminModal(false)} />
       )}
 
       {/* Full Screen DP Lightbox Modal */}

@@ -28,7 +28,8 @@ export default function SettingsModal({
   silentMode,
   setSilentMode,
   openPanicModal,
-  onOpenFullDp
+  onOpenFullDp,
+  openAdminModal
 }) {
   const { theme, changeTheme } = useContext(ThemeContext);
   const { user, logout, toggleHideReadReceipts, toggleHideOnlineStatus, toggleAutoCleanup, runInstantCleanup, unblockUser, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
@@ -611,6 +612,27 @@ export default function SettingsModal({
                   <div style={{ textAlign: 'left' }}>
                     <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#ef4444' }}>Panic Wipe Chats</div>
                     <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Immediately clear active conversations</div>
+                  </div>
+                </div>
+              </button>
+            )}
+
+            {openAdminModal && (
+              <button
+                className="user-select-card"
+                onClick={() => { onClose(); openAdminModal(); }}
+                style={{ width: '100%', background: 'rgba(99, 102, 241, 0.1)', padding: '12px 14px', border: '1px solid rgba(99, 102, 241, 0.3)' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(99, 102, 241, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <ShieldAlert size={18} color="var(--accent)" />
+                  </div>
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Master Admin Dashboard
+                      {user?.isAdmin && <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontWeight: 800 }}>ACTIVE</span>}
+                    </div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Live user tracking, metrics & VIP controls</div>
                   </div>
                 </div>
               </button>

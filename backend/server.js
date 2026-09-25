@@ -18,6 +18,7 @@ const groupRoutes = require('./routes/groups');
 const friendRoutes = require('./routes/friends');
 const uploadRoutes = require('./routes/upload');
 const paymentRoutes = require('./routes/payments');
+const adminRoutes = require('./routes/admin');
 const { uploadToCloudinary } = require('./utils/cloudinary');
 const redis = require('./utils/redis');
 
@@ -52,6 +53,7 @@ app.use('/api/groups', groupRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check endpoint for uptime monitoring & 0ms keep-alive
 app.get('/api/health', (req, res) => {
@@ -152,6 +154,7 @@ const updateUserOnlinePrivacy = (userId, hideOnlineStatus) => {
 };
 
 app.set('updateUserOnlinePrivacy', updateUserOnlinePrivacy);
+app.set('getRawOnlineUsersMap', () => onlineUsers);
 
 io.on('connection', (socket) => {
   console.log('⚡ Socket Connected:', socket.id);

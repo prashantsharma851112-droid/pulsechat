@@ -17,6 +17,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
     const results = await User.find({
       id: { $nin: excludeIds },
+      isAdmin: { $ne: true },
       ...(myUsername ? { username: { $ne: myUsername } } : {})
     })
       .sort({ createdAt: -1, _id: -1 })
@@ -60,6 +61,7 @@ router.get('/search', authMiddleware, async (req, res) => {
 
     const results = await User.find({
       id: { $nin: excludeIds },
+      isAdmin: { $ne: true },
       ...(myUsername ? { username: { $ne: myUsername } } : {}),
       $or: [
         { username: { $regex: escapedQuery, $options: 'i' } },

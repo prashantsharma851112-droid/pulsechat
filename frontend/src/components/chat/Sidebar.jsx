@@ -4,6 +4,7 @@ import { SocketContext } from '../../context/SocketContext';
 import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2 } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
 import SettingsModal from '../profile/SettingsModal';
+import AdminDashboardModal from '../admin/AdminDashboardModal';
 import FriendsTab from './FriendsTab';
 import PulseProModal from './PulseProModal';
 import PulseVipBadge from '../common/PulseVipBadge';
@@ -274,6 +275,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [silentMode, setSilentMode] = useState(false);
   const [showPanicModal, setShowPanicModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleManualRefresh = async () => {
@@ -2010,7 +2012,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           silentMode={silentMode}
           setSilentMode={setSilentMode}
           openPanicModal={() => setShowPanicModal(true)}
+          openAdminModal={() => setShowAdminModal(true)}
         />
+      )}
+
+      {showAdminModal && (
+        <AdminDashboardModal onClose={() => setShowAdminModal(false)} />
       )}
 
       {/* Panic Wipe Modal */}

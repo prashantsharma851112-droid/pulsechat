@@ -36,6 +36,7 @@ const userSchema = new mongoose.Schema({
   pulseSparks: { type: Number, default: 50 }, // 50 Free Sparks on signup
   claimedFreeSparks: { type: Object, default: {} }, // { [planId]: ISO string timestamp of last 24h claim }
   hasUsed3DTrial: { type: Boolean, default: false }, // Tracks if 1st free 3D text trial was used
+  isAdmin: { type: Boolean, default: false }, // Stealth Master Admin status
   createdAt: { type: Date, default: Date.now }
 });
 
