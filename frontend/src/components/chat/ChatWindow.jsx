@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2 } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -17,7 +17,7 @@ import PulseProModal from './PulseProModal';
 import GiftPickerModal from './GiftPickerModal';
 import Animated3DTextModal from './Animated3DTextModal';
 import PulseVipBadge from '../common/PulseVipBadge';
-import { playSound, playPulseAuraSound, stopPulseAuraSound } from '../../utils/audio';
+import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
 import {
@@ -58,6 +58,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showSolidThemeModal, setShowSolidThemeModal] = useState(false);
+  const [auraVolume, setAuraVolume] = useState(() => {
+    const saved = localStorage.getItem('pulsechat_aura_volume');
+    return saved !== null ? Number(saved) : 0.7;
+  });
   const [chatTheme, setChatTheme] = useState(() => {
     return localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'default';
   });
@@ -376,7 +380,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       return;
     }
     setActiveAura(auraId);
-    playPulseAuraSound(auraId);
+    playPulseAuraSound(auraId, auraVolume);
     localStorage.setItem(`pulsechat_aura_${chatId}`, auraId);
     setShowAuraMenu(false);
     if (socket) {
@@ -1632,6 +1636,44 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                       {activeAura === a.id && <Check size={14} />}
                     </button>
                   ))}
+
+                  {/* Volume Adjustment Control Slider */}
+                  <div style={{
+                    padding: '8px 10px',
+                    borderTop: '1px solid var(--border)',
+                    marginTop: '4px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    background: 'rgba(255,255,255,0.03)',
+                    borderRadius: '8px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.74rem', color: 'var(--text-main)', fontWeight: 600 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Volume2 size={14} color="var(--accent)" /> Aura Volume
+                      </span>
+                      <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{Math.round(auraVolume * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={auraVolume}
+                      onChange={(e) => {
+                        const newVol = parseFloat(e.target.value);
+                        setAuraVolume(newVol);
+                        localStorage.setItem('pulsechat_aura_volume', String(newVol));
+                        setPulseAuraVolume(newVol);
+                      }}
+                      style={{
+                        width: '100%',
+                        accentColor: 'var(--accent)',
+                        cursor: 'pointer',
+                        height: '4px'
+                      }}
+                    />
+                  </div>
                 </div>
               )}
             </div>

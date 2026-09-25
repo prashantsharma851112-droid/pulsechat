@@ -33,6 +33,7 @@ export function playSound(type = 'received') {
 // Global active Aura soundscape instance
 let activeAuraCtx = null;
 let activeAuraNodes = [];
+let activeMasterGain = null;
 let currentAuraId = null;
 
 export function stopPulseAuraSound() {
@@ -51,10 +52,21 @@ export function stopPulseAuraSound() {
     } catch (e) {}
     activeAuraCtx = null;
   }
+  activeMasterGain = null;
   currentAuraId = null;
 }
 
-export function playPulseAuraSound(auraId, volume = 0.15) {
+export function setPulseAuraVolume(vol = 0.7) {
+  if (activeMasterGain && activeAuraCtx) {
+    try {
+      const cleanVol = Math.max(0, Math.min(1, vol));
+      activeMasterGain.gain.setValueAtTime(activeMasterGain.gain.value, activeAuraCtx.currentTime);
+      activeMasterGain.gain.linearRampToValueAtTime(cleanVol, activeAuraCtx.currentTime + 0.05);
+    } catch (e) {}
+  }
+}
+
+export function playPulseAuraSound(auraId, volume = 0.7) {
   stopPulseAuraSound();
   if (!auraId || auraId === 'off') return;
 
@@ -64,12 +76,14 @@ export function playPulseAuraSound(auraId, volume = 0.15) {
 
     activeAuraCtx = new AudioContext();
     const masterGain = activeAuraCtx.createGain();
-    masterGain.gain.setValueAtTime(volume, activeAuraCtx.currentTime);
+    const initialVol = Math.max(0, Math.min(1, Number(volume) || 0.7));
+    masterGain.gain.setValueAtTime(initialVol, activeAuraCtx.currentTime);
     masterGain.connect(activeAuraCtx.destination);
+    activeMasterGain = masterGain;
     currentAuraId = auraId;
 
     if (auraId === 'rain') {
-      // Pink/White noise generator + Lowpass Filter (Cyberpunk Rain)
+      // Cyberpunk Rain - Increased volume & richer filter frequency
       const bufferSize = activeAuraCtx.sampleRate * 2;
       const noiseBuffer = activeAuraCtx.createBuffer(1, bufferSize, activeAuraCtx.sampleRate);
       const output = noiseBuffer.getChannelData(0);
@@ -83,7 +97,7 @@ export function playPulseAuraSound(auraId, volume = 0.15) {
         b4 = 0.55000 * b4 + white * 0.5329522;
         b5 = -0.7616 * b5 - white * 0.0168980;
         output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
-        output[i] *= 0.11;
+        output[i] *= 0.35; // Boosted from 0.11 for rich rain sound
         b6 = white * 0.115926;
       }
       const whiteNoise = activeAuraCtx.createBufferSource();
@@ -92,14 +106,14 @@ export function playPulseAuraSound(auraId, volume = 0.15) {
 
       const filter = activeAuraCtx.createBiquadFilter();
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(500, activeAuraCtx.currentTime);
+      filter.frequency.setValueAtTime(1100, activeAuraCtx.currentTime); // Crisp rain
 
       whiteNoise.connect(filter);
       filter.connect(masterGain);
       whiteNoise.start();
       activeAuraNodes.push(whiteNoise, filter);
     } else if (auraId === 'lofi') {
-      // Warm Lofi Synth Chords (Fmaj7 / Am9)
+      // Warm Lofi Chill Beats Synth Chords (Fmaj7 / Am9) - Rich volume & harmonics
       const freqs = [174.61, 220.00, 261.63, 329.63]; // F, A, C, E
       freqs.forEach((freq, idx) => {
         const osc = activeAuraCtx.createOscillator();
@@ -110,9 +124,9 @@ export function playPulseAuraSound(auraId, volume = 0.15) {
         osc.frequency.setValueAtTime(freq, activeAuraCtx.currentTime);
 
         filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(320 + idx * 40, activeAuraCtx.currentTime);
+        filter.frequency.setValueAtTime(650 + idx * 80, activeAuraCtx.currentTime);
 
-        gainNode.gain.setValueAtTime(0.08, activeAuraCtx.currentTime);
+        gainNode.gain.setValueAtTime(0.3, activeAuraCtx.currentTime); // Boosted from 0.08
 
         osc.connect(filter);
         filter.connect(gainNode);
@@ -126,7 +140,7 @@ export function playPulseAuraSound(auraId, volume = 0.15) {
       const noiseBuffer = activeAuraCtx.createBuffer(1, bufferSize, activeAuraCtx.sampleRate);
       const output = noiseBuffer.getChannelData(0);
       for (let i = 0; i < bufferSize; i++) {
-        output[i] = (Math.random() * 2 - 1) * 0.2;
+        output[i] = (Math.random() * 2 - 1) * 0.45; // Boosted from 0.2
       }
       const whiteNoise = activeAuraCtx.createBufferSource();
       whiteNoise.buffer = noiseBuffer;
@@ -134,13 +148,12 @@ export function playPulseAuraSound(auraId, volume = 0.15) {
 
       const filter = activeAuraCtx.createBiquadFilter();
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(350, activeAuraCtx.currentTime);
+      filter.frequency.setValueAtTime(700, activeAuraCtx.currentTime);
 
-      // LFO for wave swelling
       const lfo = activeAuraCtx.createOscillator();
-      lfo.frequency.setValueAtTime(0.12, activeAuraCtx.currentTime); // 12-second wave cycle
+      lfo.frequency.setValueAtTime(0.12, activeAuraCtx.currentTime);
       const lfoGain = activeAuraCtx.createGain();
-      lfoGain.gain.setValueAtTime(250, activeAuraCtx.currentTime);
+      lfoGain.gain.setValueAtTime(400, activeAuraCtx.currentTime);
 
       lfo.connect(lfoGain);
       lfoGain.connect(filter.frequency);
@@ -152,7 +165,7 @@ export function playPulseAuraSound(auraId, volume = 0.15) {
       lfo.start();
       activeAuraNodes.push(whiteNoise, filter, lfo, lfoGain);
     } else if (auraId === 'nebula') {
-      // Cosmic Space Drone
+      // Space Nebula Synth Drone - Deep rich ambient pads
       const freqs = [110, 164.81, 220, 277.18];
       freqs.forEach(freq => {
         const osc = activeAuraCtx.createOscillator();
@@ -161,7 +174,7 @@ export function playPulseAuraSound(auraId, volume = 0.15) {
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(freq, activeAuraCtx.currentTime);
 
-        gainNode.gain.setValueAtTime(0.05, activeAuraCtx.currentTime);
+        gainNode.gain.setValueAtTime(0.25, activeAuraCtx.currentTime); // Boosted from 0.05
 
         osc.connect(gainNode);
         gainNode.connect(masterGain);
