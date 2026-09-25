@@ -1475,10 +1475,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     <div
       className="chat-window-container"
       data-chat-theme={chatTheme !== 'default' ? chatTheme : undefined}
-      style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-chat)', overflow: 'hidden' }}
+      style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-chat)', overflow: 'hidden', position: 'relative' }}
     >
+      <ChatLiveWallpaper wallpaperId={chatWallpaper} customImage={customWallpaper} />
+
       {/* Header Bar */}
-      <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div style={{
+        padding: '0.75rem 1rem',
+        borderBottom: '1px solid var(--border)',
+        background: (chatWallpaper && chatWallpaper !== 'none') ? 'rgba(11, 15, 25, 0.78)' : 'var(--bg-sidebar)',
+        backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
+        WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+        position: 'relative',
+        zIndex: 2
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flex: 1, minWidth: 0 }}>
             {onBack && (
@@ -1863,8 +1876,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         )}
 
       {/* Message Stream with Live Wallpaper Overlay & WhatsApp-Style Date Dividers */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative' }}>
-        <ChatLiveWallpaper wallpaperId={chatWallpaper} customImage={customWallpaper} />
+      <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', zIndex: 1 }}>
         {/* Load Earlier Messages Button (Pagination) */}
         {hasMoreOlderMessages && (
           <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 8px 0' }}>
@@ -2144,7 +2156,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {/* AI Smart Suggested Reply Chips */}
       {(isGroup || friendshipStatus === 'friends') && !blockStatus.isBlockedByMe && !blockStatus.isBlockedByThem && (
-        <div style={{ padding: '0.4rem 1rem', display: 'flex', gap: '6px', overflowX: 'auto', background: 'var(--bg-chat)' }}>
+        <div style={{ padding: '0.4rem 1rem', display: 'flex', gap: '6px', overflowX: 'auto', background: 'transparent', position: 'relative', zIndex: 2 }}>
           {smartReplies.map((replyText, i) => (
             <button
               key={i}
@@ -2162,11 +2174,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {replyTo && (
         <div style={{
           padding: '8px 16px',
-          background: 'var(--bg-sidebar)',
+          background: (chatWallpaper && chatWallpaper !== 'none') ? 'rgba(11, 15, 25, 0.78)' : 'var(--bg-sidebar)',
+          backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
+          WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
           borderTop: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
-          gap: '10px'
+          gap: '10px',
+          position: 'relative',
+          zIndex: 2
         }}>
           <div style={{ color: 'var(--accent)', flexShrink: 0 }}>
             <CornerUpLeft size={16} />
@@ -2209,14 +2225,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {blockStatus.isBlockedByMe ? (
         <div style={{
           padding: '1.1rem',
-          background: 'var(--bg-sidebar)',
+          background: (chatWallpaper && chatWallpaper !== 'none') ? 'rgba(11, 15, 25, 0.78)' : 'var(--bg-sidebar)',
+          backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
+          WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
           borderTop: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: '12px',
           color: 'var(--text-muted)',
-          fontSize: '0.9rem'
+          fontSize: '0.9rem',
+          position: 'relative',
+          zIndex: 2
         }}>
           <Ban size={18} color="#ef4444" />
           <span>You have blocked this contact.</span>
@@ -2234,20 +2254,35 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       ) : blockStatus.isBlockedByThem ? (
         <div style={{
           padding: '1.1rem',
-          background: 'var(--bg-sidebar)',
+          background: (chatWallpaper && chatWallpaper !== 'none') ? 'rgba(11, 15, 25, 0.78)' : 'var(--bg-sidebar)',
+          backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
+          WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
           borderTop: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: '8px',
           color: 'var(--text-muted)',
-          fontSize: '0.88rem'
+          fontSize: '0.88rem',
+          position: 'relative',
+          zIndex: 2
         }}>
           <ShieldAlert size={18} color="var(--text-muted)" />
           <span>You cannot reply to this conversation.</span>
         </div>
       ) : (!isGroup && friendshipStatus !== 'friends') ? null : (
-        <div style={{ padding: '0.75rem 1rem', background: 'var(--bg-sidebar)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
+        <div style={{
+          padding: '0.75rem 1rem',
+          background: (chatWallpaper && chatWallpaper !== 'none') ? 'rgba(11, 15, 25, 0.78)' : 'var(--bg-sidebar)',
+          backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
+          WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          position: 'relative',
+          zIndex: 2
+        }}>
           {showEmoji && (
             <EmojiPicker onSelectEmoji={(emoji) => setText(prev => prev + emoji)} onClose={() => setShowEmoji(false)} />
           )}
