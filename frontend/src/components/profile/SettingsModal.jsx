@@ -31,14 +31,35 @@ export default function SettingsModal({
   onOpenFullDp
 }) {
   const { theme, changeTheme } = useContext(ThemeContext);
-  const { user, logout, toggleHideReadReceipts, toggleHideOnlineStatus, unblockUser, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
+  const { user, logout, toggleHideReadReceipts, toggleHideOnlineStatus, toggleAutoCleanup, runInstantCleanup, unblockUser, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
   const [showBlockedModal, setShowBlockedModal] = useState(false);
   const [blockedList, setBlockedList] = useState([]);
   const [loadingBlocked, setLoadingBlocked] = useState(false);
   const [showProModal, setShowProModal] = useState(false);
+  const [cleaningStorage, setCleaningStorage] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
     return localStorage.getItem('pulsechat_notifications_enabled') !== 'false';
   });
+
+  const handleRunInstantCleanup = async () => {
+    if (cleaningStorage) return;
+    setCleaningStorage(true);
+    setCleanupResult(null);
+    try {
+      const res = await runInstantCleanup(30);
+      if (res && res.success) {
+        setCleanupResult({ type: 'success', msg: `Cleaned ${res.deletedCount} old msgs!` });
+      } else {
+        setCleanupResult({ type: 'error', msg: 'Cleanup failed.' });
+      }
+    } catch (e) {
+      setCleanupResult({ type: 'error', msg: 'Cleanup error.' });
+    } finally {
+      setCleaningStorage(false);
+      setTimeout(() => setCleanupResult(null), 5000);
+    }
+  };
 
   const handleToggleNotifications = async () => {
     const nextState = !notificationsEnabled;
@@ -380,6 +401,114 @@ export default function SettingsModal({
                   transition: 'all 0.2s ease'
                 }} />
               </div>
+            </div>
+
+            {/* Auto-Cleanup Old Chats Toggle Switch (MongoDB 500MB Saver) */}
+            <div
+              onClick={() => toggleAutoCleanup && toggleAutoCleanup(user?.autoCleanupEnabled === false ? true : false)}
+              className="user-select-card"
+              style={{
+                width: '100%',
+                background: 'var(--bg-card)',
+                padding: '12px 14px',
+                border: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  background: user?.autoCleanupEnabled !== false ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Trash2 size={18} color={user?.autoCleanupEnabled !== false ? '#10b981' : '#ef4444'} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>Auto-Cleanup Old Chats</span>
+                    <span style={{
+                      fontSize: '0.68rem',
+                      fontWeight: 800,
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      background: user?.autoCleanupEnabled !== false ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                      color: user?.autoCleanupEnabled !== false ? '#10b981' : '#ef4444'
+                    }}>
+                      {user?.autoCleanupEnabled !== false ? 'ACTIVE' : 'INACTIVE'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                    {user?.autoCleanupEnabled !== false
+                      ? 'Auto-delete read chats > 30 days (MongoDB 500MB protection active)'
+                      : 'Disabled: Old chat history will be kept permanently'}
+                  </div>
+                </div>
+              </div>
+              <div style={{
+                width: '36px',
+                height: '20px',
+                borderRadius: '10px',
+                background: user?.autoCleanupEnabled !== false ? '#10b981' : 'var(--border)',
+                position: 'relative',
+                transition: 'all 0.2s ease'
+              }}>
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  background: '#fff',
+                  position: 'absolute',
+                  top: '2px',
+                  left: user?.autoCleanupEnabled !== false ? '18px' : '2px',
+                  transition: 'all 0.2s ease'
+                }} />
+              </div>
+            </div>
+
+            {/* Run Instant Storage Cleanup Button */}
+            <div
+              onClick={handleRunInstantCleanup}
+              className="user-select-card"
+              style={{
+                width: '100%',
+                background: 'rgba(99, 102, 241, 0.08)',
+                padding: '12px 14px',
+                border: '1px solid rgba(99, 102, 241, 0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: cleaningStorage ? 'wait' : 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(99, 102, 241, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Sparkles size={18} color="var(--accent)" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>Run Instant Storage Cleanup</span>
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                    {cleaningStorage ? '🧹 Purging read messages older than 30 days...' : 'Instantly purge old read messages (30+ days) to free up space'}
+                  </div>
+                </div>
+              </div>
+              {cleanupResult ? (
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: cleanupResult.type === 'success' ? '#10b981' : '#ef4444' }}>
+                  {cleanupResult.msg}
+                </span>
+              ) : (
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent)', background: 'rgba(99, 102, 241, 0.15)', padding: '4px 8px', borderRadius: '8px' }}>
+                  {cleaningStorage ? 'Cleaning...' : '⚡ Clean Now'}
+                </span>
+              )}
             </div>
 
             {/* Blocked Contacts Manager Button */}

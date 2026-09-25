@@ -342,4 +342,27 @@ router.post('/send', authMiddleware, async (req, res) => {
   }
 });
 
+// Run Instant Storage Cleanup
+router.post('/auto-cleanup', authMiddleware, async (req, res) => {
+  try {
+    const days = parseInt(req.body.days, 10) || 30;
+    const result = await db.runAutoCleanupJob(days);
+
+    // Invalidate Redis RAM Cache
+    try {
+      const redis = require('../utils/redis');
+      redis.invalidateAllRecent().catch(() => {});
+    } catch {}
+
+    res.json({
+      success: true,
+      deletedCount: result.deletedCount,
+      message: `Storage cleanup completed successfully! Removed ${result.deletedCount} old messages (${days}+ days old).`
+    });
+  } catch (err) {
+    console.error('Instant auto-cleanup endpoint error:', err);
+    res.status(500).json({ error: 'Failed to execute storage cleanup' });
+  }
+});
+
 module.exports = router;

@@ -162,7 +162,8 @@ export function AuthProvider({ children }) {
           ...(data.proTier !== undefined && { proTier: data.proTier }),
           ...(data.customBadge !== undefined && { customBadge: data.customBadge }),
           ...(data.pulseSparks !== undefined && { pulseSparks: data.pulseSparks }),
-          ...(data.hideOnlineStatus !== undefined && { hideOnlineStatus: Boolean(data.hideOnlineStatus) })
+          ...(data.hideOnlineStatus !== undefined && { hideOnlineStatus: Boolean(data.hideOnlineStatus) }),
+          ...(data.autoCleanupEnabled !== undefined && { autoCleanupEnabled: Boolean(data.autoCleanupEnabled) })
         };
         setCachedUser(merged);
         const curToken = localStorage.getItem('pulsechat_token');
@@ -305,6 +306,61 @@ export function AuthProvider({ children }) {
     return false;
   };
 
+  const toggleAutoCleanup = async (enabled) => {
+    if (!token) return false;
+    const prevSetting = user?.autoCleanupEnabled !== false;
+    const nextUser = { ...user, autoCleanupEnabled: Boolean(enabled) };
+
+    setUser(nextUser);
+    setCachedUser(nextUser);
+    updateSavedAccountsList(nextUser, token);
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/users/privacy`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ autoCleanupEnabled: Boolean(enabled) })
+      });
+      const data = await res.json();
+      if (data.user) {
+        const confirmed = { ...nextUser, ...data.user };
+        setUser(confirmed);
+        setCachedUser(confirmed);
+        updateSavedAccountsList(confirmed, token);
+        return true;
+      }
+    } catch (e) {
+      console.error('Failed to update auto-cleanup setting on backend:', e);
+      const rollbackUser = { ...user, autoCleanupEnabled: prevSetting };
+      setUser(rollbackUser);
+      setCachedUser(rollbackUser);
+      updateSavedAccountsList(rollbackUser, token);
+    }
+    return false;
+  };
+
+  const runInstantCleanup = async (days = 30) => {
+    if (!token) return { success: false, deletedCount: 0 };
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/messages/auto-cleanup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ days })
+      });
+      const data = await res.json();
+      return data;
+    } catch (e) {
+      console.error('Failed to execute instant storage cleanup:', e);
+      return { success: false, error: e.message, deletedCount: 0 };
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -320,7 +376,9 @@ export function AuthProvider({ children }) {
       blockUser,
       unblockUser,
       toggleHideReadReceipts,
-      toggleHideOnlineStatus
+      toggleHideOnlineStatus,
+      toggleAutoCleanup,
+      runInstantCleanup
     }}>
       {children}
     </AuthContext.Provider>

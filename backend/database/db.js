@@ -515,5 +515,35 @@ module.exports = {
       aBlockedB,
       bBlockedA
     };
+  },
+
+  runAutoCleanupJob: async (days = 30) => {
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+      const cutoffIso = cutoffDate.toISOString();
+
+      // Find users who explicitly turned OFF auto-cleanup
+      const disabledUsers = await User.find({ autoCleanupEnabled: false }).select('id').lean();
+      const disabledIds = disabledUsers.map(u => u.id).filter(Boolean);
+
+      const query = {
+        timestamp: { $lt: cutoffIso },
+        isViewOnce: false,
+        type: { $ne: 'system' }
+      };
+
+      if (disabledIds.length > 0) {
+        query.senderId = { $nin: disabledIds };
+        query.receiverId = { $nin: disabledIds };
+      }
+
+      const result = await Message.deleteMany(query);
+      console.log(`[Auto-Cleanup Job] Successfully purged ${result.deletedCount || 0} old messages (${days}+ days old).`);
+      return { success: true, deletedCount: result.deletedCount || 0 };
+    } catch (err) {
+      console.error('[Auto-Cleanup Job] Error performing cleanup:', err);
+      return { success: false, error: err.message, deletedCount: 0 };
+    }
   }
 };
