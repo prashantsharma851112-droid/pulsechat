@@ -11,15 +11,8 @@ export default function EmojiParticleBurst() {
     let particles = [];
 
     const handleResize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.scale(dpr, dpr);
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
     };
 
     handleResize();
@@ -28,27 +21,27 @@ export default function EmojiParticleBurst() {
     class FloatingParticle {
       constructor(emoji, durationSecs = 3) {
         this.emoji = emoji;
-        const screenW = window.innerWidth;
-        const screenH = window.innerHeight;
+        const screenW = window.innerWidth || 360;
+        const screenH = window.innerHeight || 640;
 
         // Spread horizontally across screen (10% to 90% width)
         this.x = Math.random() * (screenW * 0.8) + screenW * 0.1;
-        // Start from middle/lower portion of screen
-        this.y = screenH * (0.55 + Math.random() * 0.38);
-        
-        // Particle size: 36px to 64px
-        this.size = Math.random() * 28 + 36;
+        // Start from lower/middle portion of screen
+        this.y = screenH * (0.6 + Math.random() * 0.35);
+
+        // Size: 34px to 62px
+        this.size = Math.random() * 28 + 34;
         // Smooth upward buoyancy float
-        this.vy = -(Math.random() * 1.6 + 1.2);
+        this.vy = -(Math.random() * 1.8 + 1.2);
         // Gentle horizontal sway
         this.swaySpeed = Math.random() * 0.03 + 0.015;
-        this.swayAmount = Math.random() * 1.4 + 0.4;
+        this.swayAmount = Math.random() * 1.5 + 0.5;
         this.phase = Math.random() * Math.PI * 2;
-        
-        // Soft translucent max opacity (0.45 to 0.70) for ultra clean look
-        this.maxOpacity = Math.random() * 0.25 + 0.45;
-        this.opacity = 0;
-        
+
+        // Soft translucent opacity (0.50 to 0.75 max opacity for clear visibility)
+        this.maxOpacity = Math.random() * 0.25 + 0.50;
+        this.opacity = 0.05;
+
         const fps = 60;
         const totalFrames = Math.max(60, Math.round(durationSecs * fps));
         this.fadeInFrames = 15; // 0.25s smooth fade in
@@ -77,10 +70,10 @@ export default function EmojiParticleBurst() {
         ctx.globalAlpha = this.opacity;
 
         // Soft pastel pink/magenta radial aura glow behind particle (like screenshot 2)
-        const glowRadius = this.size * 0.85;
+        const glowRadius = this.size * 0.9;
         const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glowRadius);
-        grad.addColorStop(0, 'rgba(244, 63, 94, 0.28)'); // Soft translucent pink/magenta glow
-        grad.addColorStop(1, 'rgba(244, 63, 94, 0)');
+        grad.addColorStop(0, 'rgba(236, 72, 153, 0.35)'); // Soft translucent pink/magenta glow
+        grad.addColorStop(1, 'rgba(236, 72, 153, 0)');
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(this.x, this.y, glowRadius, 0, Math.PI * 2);
@@ -96,11 +89,9 @@ export default function EmojiParticleBurst() {
     }
 
     const animate = () => {
-      const screenW = window.innerWidth;
-      const screenH = window.innerHeight;
-      ctx.clearRect(0, 0, screenW, screenH);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      particles = particles.filter(p => p.frameCounter < p.totalFrames && p.opacity > 0);
+      particles = particles.filter(p => p.frameCounter < p.totalFrames);
       particles.forEach(p => {
         p.update();
         p.draw(ctx);
@@ -114,14 +105,12 @@ export default function EmojiParticleBurst() {
     const handleTriggerBurst = (e) => {
       const mainEmoji = e.detail?.emoji || '❤️';
       const durationSecs = e.detail?.duration || 3; // 3s for reactions, 5s for burst
-      const count = 14; // Lightweight 14 particles for 60fps smooth performance
+      const count = 14;
 
-      // Clear previous particles if new reaction happens fast so screen stays clean
-      if (particles.length > 18) {
-        particles = particles.slice(-8);
+      if (particles.length > 20) {
+        particles = particles.slice(-6);
       }
 
-      // Spawn mix of reacted emoji + soft heart accent particles (like image 2)
       const accentEmojis = ['💗', '💖', '💕'];
 
       for (let i = 0; i < count; i++) {
@@ -147,11 +136,12 @@ export default function EmojiParticleBurst() {
       ref={canvasRef}
       style={{
         position: 'fixed',
-        inset: 0,
-        pointerEvents: 'none',
-        zIndex: 99999,
+        top: 0,
+        left: 0,
         width: '100vw',
-        height: '100vh'
+        height: '100vh',
+        pointerEvents: 'none',
+        zIndex: 99999
       }}
     />
   );
