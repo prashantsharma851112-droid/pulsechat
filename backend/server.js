@@ -685,11 +685,25 @@ io.on('connection', (socket) => {
   });
 
   // Chat Live & Custom Wallpaper Real-Time Synchronization
-  socket.on('set_chat_wallpaper', ({ chatId, wallpaperId, customImage, setBy }) => {
-    io.to(chatId).emit('chat_wallpaper_updated', { chatId, wallpaperId, customImage, setBy });
+  socket.on('set_chat_wallpaper', (data) => {
+    if (!data) return;
+    const { chatId, wallpaperId, customWallpaperUrl, customImage, userId, setBy } = data;
+    const finalCustomUrl = customWallpaperUrl || customImage || null;
+    const finalUserId = userId || setBy || null;
+
+    const payload = {
+      chatId,
+      wallpaperId,
+      customWallpaperUrl: finalCustomUrl,
+      customImage: finalCustomUrl,
+      userId: finalUserId,
+      setBy: finalUserId
+    };
+
+    io.to(chatId).emit('chat_wallpaper_updated', payload);
     if (chatId && chatId.includes('_')) {
       const parts = chatId.split('_');
-      parts.forEach(uId => io.to(`user_${uId}`).emit('chat_wallpaper_updated', { chatId, wallpaperId, customImage, setBy }));
+      parts.forEach(uId => io.to(`user_${uId}`).emit('chat_wallpaper_updated', payload));
     }
   });
 

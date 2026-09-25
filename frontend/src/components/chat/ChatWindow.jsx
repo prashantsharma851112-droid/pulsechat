@@ -257,18 +257,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const handleWallpaperUpdated = (e) => {
       if (e.detail?.chatId === chatId) {
         const newWall = e.detail.wallpaperId || 'none';
-        const customUrl = e.detail.customWallpaperUrl || null;
+        const incomingCustomUrl = e.detail.customWallpaperUrl || e.detail.customImage;
+        const fallbackCustomUrl = localStorage.getItem(`pulsechat_custom_wallpaper_${chatId}`);
+        const customUrl = incomingCustomUrl || fallbackCustomUrl || null;
+
         setChatWallpaper(newWall);
-        setCustomWallpaper(customUrl);
-        if (newWall === 'none') {
+        if (newWall === 'custom_image' && customUrl) {
+          setCustomWallpaper(customUrl);
+          localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, customUrl);
+          localStorage.setItem(`pulsechat_chat_wallpaper_${chatId}`, 'custom_image');
+        } else if (newWall === 'none') {
+          setCustomWallpaper(null);
           localStorage.removeItem(`pulsechat_chat_wallpaper_${chatId}`);
+          localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
         } else {
           localStorage.setItem(`pulsechat_chat_wallpaper_${chatId}`, newWall);
-        }
-        if (customUrl) {
-          localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, customUrl);
-        } else {
-          localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
         }
       }
     };
@@ -315,8 +318,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     } else {
       localStorage.setItem(`pulsechat_chat_wallpaper_${chatId}`, newWall);
     }
+    if (customUrl) {
+      localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, customUrl);
+    }
     if (socket) {
-      socket.emit('set_chat_wallpaper', { chatId, wallpaperId: newWall, customWallpaperUrl: customUrl, userId: user?.id });
+      socket.emit('set_chat_wallpaper', {
+        chatId,
+        wallpaperId: newWall,
+        customWallpaperUrl: customUrl,
+        customImage: customUrl,
+        userId: user?.id,
+        setBy: user?.id
+      });
     }
   };
 

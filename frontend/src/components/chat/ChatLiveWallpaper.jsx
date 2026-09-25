@@ -107,21 +107,25 @@ export default function ChatLiveWallpaper({ wallpaperId, customImage }) {
     };
   }, [wallpaperId]);
 
-  if (wallpaperId === 'custom_image' && customImage) {
-    return (
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: `url(${customImage})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          opacity: 0.88,
-          pointerEvents: 'none',
-          zIndex: 0
-        }}
-      />
-    );
+  if (wallpaperId === 'custom_image') {
+    const bgSrc = customImage || (typeof window !== 'undefined' ? localStorage.getItem(`pulsechat_custom_wallpaper_${wallpaperId}`) : null);
+    if (bgSrc) {
+      return (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundImage: `url(${bgSrc})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            opacity: 0.92,
+            pointerEvents: 'none',
+            zIndex: 0
+          }}
+        />
+      );
+    }
   }
 
   if (wallpaperId === 'love_hearts_live' || wallpaperId === 'nature_forest_live' || wallpaperId === 'ocean_waves_live' || wallpaperId === 'cyber_grid_live') {
