@@ -1660,23 +1660,123 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
 
           <div className="chat-header-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
-            {/* Pulse Aura Background Soundscape Selector */}
-            <div style={{ position: 'relative' }}>
+            {/* Live 2-Player Arrow Battle Game Button in Top Header Bar */}
+            <button
+              onClick={() => setShowArrowGameModal(true)}
+              className="icon-btn-ghost"
+              title="Live 2-Player Arrow Battle Game"
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                background: 'rgba(236, 72, 153, 0.18)',
+                border: '1px solid rgba(236, 72, 153, 0.4)'
+              }}
+            >
+              <Zap size={19} color="#ec4899" />
+            </button>
+
+            {/* Drawboard (Shared Whiteboard) */}
+            <button
+              onClick={() => setShowWhiteboard(true)}
+              className="icon-btn-ghost"
+              title="Shared Whiteboard Drawing Board"
+              style={{ width: '38px', height: '38px', borderRadius: '50%' }}
+            >
+              <Presentation size={19} color="var(--accent)" />
+            </button>
+
+            {/* 3-Dots More Options Menu */}
+            <div className="chat-header-more-container" style={{ position: 'relative' }}>
               <button
-                onClick={() => setShowAuraMenu(!showAuraMenu)}
+                onClick={() => setShowMoreMenu(prev => !prev)}
                 className="icon-btn-ghost"
-                title="Pulse Aura: Synchronized Ambient Soundscapes"
-                style={{
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '50%',
-                  background: activeAura !== 'off' ? 'rgba(245, 158, 11, 0.2)' : 'transparent',
-                  border: activeAura !== 'off' ? '1px solid #f59e0b' : 'none'
-                }}
+                title="More Options"
+                style={{ width: '38px', height: '38px', borderRadius: '50%', background: showMoreMenu ? 'var(--hover-bg)' : 'transparent' }}
               >
-                <Music size={19} color={activeAura !== 'off' ? '#f59e0b' : 'var(--accent)'} />
+                <MoreVertical size={20} />
               </button>
 
+              {showMoreMenu && (
+                <div className="chat-header-dropdown-menu">
+                  {/* Voice & Video Calls moved inside 3-dots menu */}
+                  <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, false)) : onStartCall(false); }}>
+                    <Phone size={16} color="var(--accent)" />
+                    <span>{isGroup ? 'Group Voice Call' : 'Voice Call'}</span>
+                  </button>
+                  <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, true)) : onStartCall(true); }}>
+                    <Video size={16} color="var(--accent)" />
+                    <span>{isGroup ? 'Group Video Call' : 'Video Call'}</span>
+                  </button>
+                  <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
+                  {/* Pulse Aura Background Soundscapes moved inside 3-dots menu */}
+                  <button onClick={() => { setShowMoreMenu(false); setShowAuraMenu(prev => !prev); }}>
+                    <Music size={16} color="#f59e0b" />
+                    <span>Pulse Aura Soundscapes {activeAura !== 'off' ? `(${activeAura})` : ''}</span>
+                  </button>
+                  <button onClick={() => { setShowMoreMenu(false); setShowThemeModal(true); }}>
+                    <ImageIcon size={16} color="var(--accent)" />
+                    <span>Chat background</span>
+                  </button>
+                  <button onClick={() => { setShowMoreMenu(false); setShowSolidThemeModal(true); }}>
+                    <Palette size={16} color="var(--accent)" />
+                    <span>Change Solid Theme</span>
+                  </button>
+                  <button onClick={() => { setShowMoreMenu(false); setShowWhiteboard(true); }}>
+                    <Presentation size={16} color="var(--accent)" />
+                    <span>Whiteboard Drawing Board</span>
+                  </button>
+                  <button onClick={() => { setShowMoreMenu(false); setIsMultiSelectMode(true); setSelectedMsgIds([]); }}>
+                    <CheckSquare size={16} color="var(--accent)" />
+                    <span>Select Messages</span>
+                  </button>
+                  <button onClick={() => {
+                    setShowMoreMenu(false);
+                    if (isGroup) {
+                      setShowGroupProfileModal(true);
+                    } else {
+                      setShowUserProfileModal(true);
+                    }
+                  }}>
+                    <Clock size={16} color="var(--accent)" />
+                    <span>Disappearing Messages {chatSetting?.disappearingEnabled ? '(On)' : '(Off)'}</span>
+                  </button>
+                  {!isGroup && (
+                    <button
+                      onClick={async () => {
+                        setShowMoreMenu(false);
+                        const willBlock = !blockStatus.isBlockedByMe;
+                        const confirmMsg = willBlock
+                          ? `Are you sure you want to block ${activeChat.displayName}? You will no longer receive their messages or calls.`
+                          : `Unblock ${activeChat.displayName}?`;
+                        if (window.confirm(confirmMsg)) {
+                          if (willBlock) {
+                            await blockUser(activeChat.id);
+                            setBlockStatus(prev => ({ ...prev, isBlockedByMe: true }));
+                          } else {
+                            await unblockUser(activeChat.id);
+                            setBlockStatus(prev => ({ ...prev, isBlockedByMe: false }));
+                          }
+                        }
+                      }}
+                      style={{ color: blockStatus.isBlockedByMe ? 'var(--accent)' : '#ef4444' }}
+                    >
+                      <Ban size={16} color={blockStatus.isBlockedByMe ? 'var(--accent)' : '#ef4444'} />
+                      <span>{blockStatus.isBlockedByMe ? 'Unblock Contact' : 'Block Contact'}</span>
+                    </button>
+                  )}
+                  <button onClick={() => { setShowMoreMenu(false); handleClearCurrentChat(); }} style={{ color: '#ef4444' }}>
+                    <Trash2 size={16} color="#ef4444" />
+                    <span>Clear Chat</span>
+                  </button>
+                  <button onClick={() => { setShowMoreMenu(false); isGroup ? setShowGroupProfileModal(true) : setShowUserProfileModal(true); }}>
+                    <Info size={16} color="var(--text-muted)" />
+                    <span>{isGroup ? 'Group Info' : 'Contact Info'}</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Pulse Aura Background Soundscape Dropdown Selector Card */}
               {showAuraMenu && (
                 <div style={{
                   position: 'absolute',
@@ -1686,15 +1786,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   border: '1px solid var(--border)',
                   borderRadius: '14px',
                   padding: '8px',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                  zIndex: 100,
-                  width: '210px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                  zIndex: 1100,
+                  width: '220px',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '4px'
                 }}>
-                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-muted)', padding: '4px 8px', textTransform: 'uppercase' }}>
-                    🎵 Pulse Aura Soundscapes
+                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-muted)', padding: '4px 8px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>🎵 Pulse Aura Soundscapes</span>
+                    <button onClick={() => setShowAuraMenu(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                      <X size={14} />
+                    </button>
                   </div>
                   {[
                     { id: 'off', name: '🔇 Mute Aura Sound', isPro: false },
@@ -1705,7 +1808,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   ].map(a => (
                     <button
                       key={a.id}
-                      onClick={() => handleSelectAura(a.id)}
+                      onClick={() => { handleSelectAura(a.id); setShowAuraMenu(false); }}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -1766,102 +1869,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                       }}
                     />
                   </div>
-                </div>
-              )}
-            </div>
-
-            {/* Drawboard (Shared Whiteboard) */}
-            <button
-              onClick={() => setShowWhiteboard(true)}
-              className="icon-btn-ghost"
-              title="Shared Whiteboard Drawing Board"
-              style={{ width: '38px', height: '38px', borderRadius: '50%' }}
-            >
-              <Presentation size={19} color="var(--accent)" />
-            </button>
-
-            {/* 3-Dots More Options Menu */}
-            <div className="chat-header-more-container" style={{ position: 'relative' }}>
-              <button
-                onClick={() => setShowMoreMenu(prev => !prev)}
-                className="icon-btn-ghost"
-                title="More Options"
-                style={{ width: '38px', height: '38px', borderRadius: '50%', background: showMoreMenu ? 'var(--hover-bg)' : 'transparent' }}
-              >
-                <MoreVertical size={20} />
-              </button>
-
-              {showMoreMenu && (
-                <div className="chat-header-dropdown-menu">
-                  {/* Voice & Video Calls moved inside 3-dots menu */}
-                  <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, false)) : onStartCall(false); }}>
-                    <Phone size={16} color="var(--accent)" />
-                    <span>{isGroup ? 'Group Voice Call' : 'Voice Call'}</span>
-                  </button>
-                  <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, true)) : onStartCall(true); }}>
-                    <Video size={16} color="var(--accent)" />
-                    <span>{isGroup ? 'Group Video Call' : 'Video Call'}</span>
-                  </button>
-                  <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
-                  <button onClick={() => { setShowMoreMenu(false); setShowThemeModal(true); }}>
-                    <ImageIcon size={16} color="var(--accent)" />
-                    <span>Chat background</span>
-                  </button>
-                  <button onClick={() => { setShowMoreMenu(false); setShowSolidThemeModal(true); }}>
-                    <Palette size={16} color="var(--accent)" />
-                    <span>Change Solid Theme</span>
-                  </button>
-                  <button onClick={() => { setShowMoreMenu(false); setShowWhiteboard(true); }}>
-                    <Presentation size={16} color="var(--accent)" />
-                    <span>Whiteboard Drawing Board</span>
-                  </button>
-                  <button onClick={() => { setShowMoreMenu(false); setIsMultiSelectMode(true); setSelectedMsgIds([]); }}>
-                    <CheckSquare size={16} color="var(--accent)" />
-                    <span>Select Messages</span>
-                  </button>
-                  <button onClick={() => {
-                    setShowMoreMenu(false);
-                    if (isGroup) {
-                      setShowGroupProfileModal(true);
-                    } else {
-                      setShowUserProfileModal(true);
-                    }
-                  }}>
-                    <Clock size={16} color="var(--accent)" />
-                    <span>Disappearing Messages {chatSetting?.disappearingEnabled ? '(On)' : '(Off)'}</span>
-                  </button>
-                  {!isGroup && (
-                    <button
-                      onClick={async () => {
-                        setShowMoreMenu(false);
-                        const willBlock = !blockStatus.isBlockedByMe;
-                        const confirmMsg = willBlock
-                          ? `Are you sure you want to block ${activeChat.displayName}? You will no longer receive their messages or calls.`
-                          : `Unblock ${activeChat.displayName}?`;
-                        if (window.confirm(confirmMsg)) {
-                          if (willBlock) {
-                            await blockUser(activeChat.id);
-                            setBlockStatus(prev => ({ ...prev, isBlockedByMe: true }));
-                          } else {
-                            await unblockUser(activeChat.id);
-                            setBlockStatus(prev => ({ ...prev, isBlockedByMe: false }));
-                          }
-                        }
-                      }}
-                      style={{ color: blockStatus.isBlockedByMe ? 'var(--accent)' : '#ef4444' }}
-                    >
-                      <Ban size={16} color={blockStatus.isBlockedByMe ? 'var(--accent)' : '#ef4444'} />
-                      <span>{blockStatus.isBlockedByMe ? 'Unblock Contact' : 'Block Contact'}</span>
-                    </button>
-                  )}
-                  <button onClick={() => { setShowMoreMenu(false); handleClearCurrentChat(); }} style={{ color: '#ef4444' }}>
-                    <Trash2 size={16} color="#ef4444" />
-                    <span>Clear Chat</span>
-                  </button>
-                  <button onClick={() => { setShowMoreMenu(false); isGroup ? setShowGroupProfileModal(true) : setShowUserProfileModal(true); }}>
-                    <Info size={16} color="var(--text-muted)" />
-                    <span>{isGroup ? 'Group Info' : 'Contact Info'}</span>
-                  </button>
                 </div>
               )}
             </div>

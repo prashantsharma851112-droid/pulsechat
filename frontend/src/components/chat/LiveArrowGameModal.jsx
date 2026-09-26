@@ -484,7 +484,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
             gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
             gap: '4px'
           }}>
-            {grid.map((rowArr, r) =>
+            {!isGameOver && grid.map((rowArr, r) =>
               rowArr.map((arrow, c) => {
                 if (!arrow) {
                   return <div key={`empty_${r}_${c}`} />;
