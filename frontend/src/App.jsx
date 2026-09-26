@@ -529,7 +529,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className={`app-root-container ${isMobile ? 'is-mobile' : 'is-desktop'}`} style={{ display: 'flex', height: '100dvh', width: '100dvw', overflow: 'hidden', position: 'relative' }}>
+      <div className={`app-root-container ${isMobile ? 'is-mobile' : 'is-desktop'}`} style={{ display: 'flex', height: '100dvh', width: '100%', maxWidth: '100vw', overflow: 'hidden', position: 'relative', background: 'var(--bg-main, #000000)' }}>
       {/* Master Post-Login Entrance Animation */}
       {showEntrance && (
         <EntranceAnimation
