@@ -285,7 +285,16 @@ io.on('connection', (socket) => {
   // Helper function to dispatch background web push (for closed app)
   const dispatchWebPush = async (targetUserId, title, body, tag, chatTargetId, messageId = null, senderId = null, isGroup = false, iconUrl = null) => {
     try {
-      const targetUser = await User.findOne({ id: targetUserId });
+      const mongoose = require('mongoose');
+      const isObjectId = mongoose.Types.ObjectId.isValid(targetUserId);
+      const targetUser = await User.findOne({
+        $or: [
+          { id: targetUserId },
+          ...(isObjectId ? [{ _id: targetUserId }] : []),
+          { username: targetUserId }
+        ]
+      });
+
       if (targetUser && targetUser.pushSubscriptions && targetUser.pushSubscriptions.length > 0) {
         const queryParams = new URLSearchParams();
         if (chatTargetId) queryParams.set('openChat', chatTargetId);
@@ -310,12 +319,15 @@ io.on('connection', (socket) => {
           }
         };
 
+        let pushDelivered = false;
         const deadEndpoints = [];
         for (const sub of targetUser.pushSubscriptions) {
           try {
             const res = await webpush.sendPushNotification(sub, pushPayload);
             if (res && res.expired) {
               deadEndpoints.push(sub.endpoint);
+            } else if (res && !res.error && !res.expired) {
+              pushDelivered = true;
             }
           } catch (err) {}
         }
@@ -326,6 +338,41 @@ io.on('connection', (socket) => {
           );
           targetUser.markModified('pushSubscriptions');
           await targetUser.save();
+        }
+
+        // Target user mobile data is ON -> Push delivered! Update status to 'delivered' and emit to sender!
+        if (pushDelivered && messageId) {
+          try {
+            const updatedMsg = await Message.findOneAndUpdate(
+              { id: messageId, status: 'sent' },
+              { status: 'delivered' },
+              { new: true }
+            );
+            if (updatedMsg && senderId) {
+              io.to(`user_${senderId}`).emit('message_delivered_update', {
+                messageId,
+                chatId: chatTargetId,
+                status: 'delivered'
+              });
+              io.to(`user_${senderId}`).emit('messages_delivered', {
+                chatId: chatTargetId,
+                messageIds: [messageId],
+                status: 'delivered'
+              });
+              if (chatTargetId) {
+                io.to(chatTargetId).emit('message_delivered_update', {
+                  messageId,
+                  chatId: chatTargetId,
+                  status: 'delivered'
+                });
+                io.to(chatTargetId).emit('messages_delivered', {
+                  chatId: chatTargetId,
+                  messageIds: [messageId],
+                  status: 'delivered'
+                });
+              }
+            }
+          } catch (e) {}
         }
       }
     } catch (e) {
