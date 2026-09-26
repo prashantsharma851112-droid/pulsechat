@@ -48,7 +48,29 @@ const ONBOARDING_STEPS = [
   },
   {
     step: 5,
-    title: 'Ghost Mode & Stealth Dust Notes 👻',
+    title: 'Pulse 24h Vibe Stories ⚡',
+    subtitle: 'Share 24h Stories with Music & 3D Text',
+    icon: Sparkles,
+    iconBg: 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)',
+    iconColor: '#fff',
+    location: '📍 Sidebar Top Tray > Pulse Vibes ⚡ (24h Stories)',
+    description: 'Post 24h Vibe stories with Lofi Beats, Cyberpunk Rain or Space Nebula soundtracks! Custom 3D Animated typography text, Live Matrix/Galaxy canvas wallpapers & Sparks tipping.',
+    tip: 'Viewed stories automatically change to subtle gray rings just like IG & WhatsApp!'
+  },
+  {
+    step: 6,
+    title: 'Pulse Zone Mini-Games & Leaderboard 🎮',
+    subtitle: 'Hot Arrow Puzzle & Speed Tapper',
+    icon: Rocket,
+    iconBg: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
+    iconColor: '#fff',
+    location: '📍 Sidebar Header > Game Controller Icon (Pulse Zone)',
+    description: 'Play hot Arrow Puzzle & Speed Tapper games 100% offline! Win Sparks rewards and climb the real-time community leaderboard.',
+    tip: 'Game scores update in 0ms using local storage sync!'
+  },
+  {
+    step: 7,
+    title: 'Ghost Mode & Privacy 👻',
     subtitle: 'Maximum Privacy Controls',
     icon: EyeOff,
     iconBg: 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
@@ -58,14 +80,14 @@ const ONBOARDING_STEPS = [
     tip: 'Ghost mode gives you complete stealth while reading messages.'
   },
   {
-    step: 6,
+    step: 8,
     title: 'Pulse VIP Pro Perks 👑',
     subtitle: 'Unlock 500MB Uploads & Pro Features',
     icon: Crown,
     iconBg: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
     iconColor: '#fff',
     location: '📍 Top Bar / Settings > VIP Pro Badge',
-    description: 'Get 500 MB file upload limit, Golden VIP Crest, 3D text effects, Pro poll auras & 100% ad-free experience. Monthly VIP is 100% FREE for beta access!',
+    description: 'Get 500 MB file upload limit, Golden VIP Crest, 3D text effects, Live story wallpapers, Pro poll auras & 100% ad-free experience. Monthly VIP is 100% FREE!',
     tip: 'Tap the Crown badge anytime in header to manage your VIP perks.'
   }
 ];

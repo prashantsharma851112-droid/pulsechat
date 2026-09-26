@@ -518,8 +518,8 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                 }}>
                   <div style={{ color: '#06b6d4', flexShrink: 0 }}><Type size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Animated 3D Text</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Pro 3D styles: Emerald Matrix, Blood Crimson, Tokyo Synth & Royal Platinum.</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>3D Text in Stories & Chat</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Pro 3D Typography: Cyber Neon, Gold Deluxe, Blood Crimson, Emerald Matrix & Tokyo Synth.</div>
                   </div>
                 </div>
 
@@ -531,10 +531,10 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   display: 'flex',
                   gap: '10px'
                 }}>
-                  <div style={{ color: '#ef4444', flexShrink: 0 }}><Flame size={20} /></div>
+                  <div style={{ color: '#ec4899', flexShrink: 0 }}><Sparkles size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>3D Emoji Bursts</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Trigger full-screen floating 3D emoji explosions in chat.</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Live Story Wallpapers</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Animated Canvas backgrounds for Stories: Matrix Rain, Galaxy, Cyber Grid & Fireflies.</div>
                   </div>
                 </div>
 
@@ -546,10 +546,10 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   display: 'flex',
                   gap: '10px'
                 }}>
-                  <div style={{ color: '#f59e0b', flexShrink: 0 }}><Zap size={20} /></div>
+                  <div style={{ color: '#f59e0b', flexShrink: 0 }}><Gamepad2 size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Stealth Dust Text</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Touch-to-reveal secret notes that shatter into digital dust.</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Pulse Zone Mini-Games</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Play Arrow Puzzle & Speed Tapper offline, earn Sparks & rank on Leaderboard.</div>
                   </div>
                 </div>
 

@@ -4,6 +4,8 @@ import { X, Music, Trash2, Zap, Eye } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 
+import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
+
 export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const vibes = vibeGroup?.vibes || [];
@@ -239,6 +241,11 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
           </div>
         </div>
 
+        {/* Live Canvas Background if selected */}
+        {currentVibe.animatedBg && currentVibe.animatedBg !== 'none' && !currentVibe.mediaUrl && (
+          <ChatLiveWallpaper wallpaperId={currentVibe.animatedBg} />
+        )}
+
         {/* Media or Text Content Body */}
         <div
           onClick={(e) => {
@@ -264,6 +271,15 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
               alt="Vibe Content"
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
+          ) : currentVibe.textStyle3D && currentVibe.textStyle3D !== 'none' ? (
+            <div className={`animated-3d-stage ${currentVibe.textStyle3D}`} style={{ position: 'relative', zIndex: 3, maxWidth: '100%' }}>
+              <div className="animated-3d-card" style={{ padding: '12px 20px' }}>
+                <div className="text-3d-content" style={{ fontSize: '1.45rem' }}>
+                  {currentVibe.caption}
+                </div>
+                <div className="text-3d-shadow" />
+              </div>
+            </div>
           ) : (
             <h2 style={{
               color: '#fff',

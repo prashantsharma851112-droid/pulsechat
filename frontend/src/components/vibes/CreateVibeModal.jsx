@@ -1,7 +1,8 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Sparkles, Image as ImageIcon, Music, Palette, Send, Loader2 } from 'lucide-react';
+import { X, Sparkles, Image as ImageIcon, Music, Palette, Send, Loader2, Type, Sparkle } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
+import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 
 const GRADIENTS = [
   { id: 'g1', name: 'Pulse Purple', value: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)' },
@@ -11,6 +12,25 @@ const GRADIENTS = [
   { id: 'g5', name: 'Midnight AMOLED', value: 'linear-gradient(135deg, #18181b 0%, #09090b 100%)' }
 ];
 
+const TEXT_STYLES_3D = [
+  { id: 'none', label: 'Standard', class: '' },
+  { id: 'text-3d-neon', label: '⚡ Cyber Neon', class: 'text-3d-neon' },
+  { id: 'text-3d-gold', label: '👑 Gold Deluxe', class: 'text-3d-gold' },
+  { id: 'text-3d-ruby', label: '💎 Blood Crimson', class: 'text-3d-ruby' },
+  { id: 'text-3d-matrix', label: '❇️ Emerald Matrix', class: 'text-3d-matrix' },
+  { id: 'text-3d-synthwave', label: '🌌 Tokyo Synth', class: 'text-3d-synthwave' },
+  { id: 'text-3d-platinum', label: '🏆 Royal Platinum', class: 'text-3d-platinum' }
+];
+
+const ANIMATED_BGS = [
+  { id: 'none', label: 'Static Gradient' },
+  { id: 'matrix_code_live', label: '❇️ Matrix Rain' },
+  { id: 'starry_galaxy_live', label: '🌌 Starry Galaxy' },
+  { id: 'cyber_grid_live', label: '⚡ Cyber Grid' },
+  { id: 'firefly_night_live', label: '💡 Firefly Glow' },
+  { id: 'love_hearts_live', label: '💖 Floating Hearts' }
+];
+
 const SOUNDTRACKS = [
   { id: 'lofi', name: '🎧 Lofi Chill Beats' },
   { id: 'cyberpunk', name: '⚡ Cyberpunk Rain' },
@@ -18,7 +38,6 @@ const SOUNDTRACKS = [
   { id: 'none', name: '🔇 Silent' }
 ];
 
-// Helper to compress image client-side to base64 Data URI for 0ms offline storage
 const compressImageToBase64 = (file) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -62,6 +81,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [caption, setCaption] = useState('');
   const [selectedGradient, setSelectedGradient] = useState(GRADIENTS[0].value);
   const [soundtrack, setSoundtrack] = useState('lofi');
+  const [textStyle3D, setTextStyle3D] = useState('none');
+  const [animatedBg, setAnimatedBg] = useState('none');
   const [mediaUrl, setMediaUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -81,7 +102,6 @@ export default function CreateVibeModal({ onClose, onCreated }) {
 
     let uploadedUrl = null;
 
-    // 1. Attempt server upload if connected
     if (token) {
       try {
         const formData = new FormData();
@@ -100,7 +120,6 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       }
     }
 
-    // 2. Fallback to client-side compressed base64 Data URI (Instant & offline-ready)
     if (!uploadedUrl) {
       try {
         uploadedUrl = await compressImageToBase64(file);
@@ -137,13 +156,14 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       mediaUrl: mediaUrl || null,
       soundtrack,
       bgGradient: selectedGradient,
+      textStyle3D,
+      animatedBg,
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       views: [],
       sparksEarned: 0
     };
 
-    // Attempt server sync
     if (token) {
       try {
         await fetch(`${BACKEND_URL}/api/vibes/create`, {
@@ -156,7 +176,9 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             caption: caption.trim(),
             mediaUrl: mediaUrl || null,
             soundtrack,
-            bgGradient: selectedGradient
+            bgGradient: selectedGradient,
+            textStyle3D,
+            animatedBg
           })
         });
       } catch (err) {
@@ -164,7 +186,6 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       }
     }
 
-    // Always save in LocalStorage so story works 100% reliably
     try {
       const raw = localStorage.getItem('pulsechat_local_vibes');
       const existing = raw ? JSON.parse(raw) : [];
@@ -187,14 +208,15 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         className="modal-card modal-responsive"
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: '440px',
+          maxWidth: '460px',
           width: '100%',
           display: 'flex',
           flexDirection: 'column',
           borderRadius: '24px',
           overflow: 'hidden',
           background: 'var(--bg-card)',
-          border: '1px solid rgba(255,255,255,0.15)'
+          border: '1px solid rgba(255,255,255,0.15)',
+          maxHeight: '92dvh'
         }}
       >
         {/* Header */}
@@ -213,10 +235,11 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           <button className="icon-btn-ghost" onClick={onClose}><X size={18} /></button>
         </div>
 
-        {/* Live Card Preview */}
-        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {/* Scrollable Content */}
+        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
           {error && <div className="error-banner">{error}</div>}
 
+          {/* Live Card Preview */}
           <div style={{
             position: 'relative',
             height: '240px',
@@ -231,30 +254,60 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
             border: '1px solid rgba(255,255,255,0.2)'
           }}>
+            {/* Live Canvas Background if selected */}
+            {animatedBg !== 'none' && !mediaUrl && (
+              <ChatLiveWallpaper wallpaperId={animatedBg} />
+            )}
+
             {mediaUrl ? (
               <img src={mediaUrl} alt="Vibe Media" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', top: 0, left: 0 }} />
             ) : null}
 
-            <textarea
-              placeholder="What's your vibe today? Write something..."
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              style={{
-                position: 'relative',
-                zIndex: 2,
-                background: 'transparent',
-                border: 'none',
-                color: '#fff',
-                fontSize: '1.1rem',
-                fontWeight: 700,
-                textAlign: 'center',
-                outline: 'none',
-                resize: 'none',
-                width: '100%',
-                height: '100%',
-                textShadow: '0 2px 8px rgba(0,0,0,0.8)'
-              }}
-            />
+            {/* 3D Text Card or Normal Textarea */}
+            {textStyle3D !== 'none' && !mediaUrl ? (
+              <div className={`animated-3d-stage ${textStyle3D}`} style={{ position: 'relative', zIndex: 3, maxWidth: '100%' }}>
+                <div className="animated-3d-card" style={{ padding: '10px 16px' }}>
+                  <textarea
+                    placeholder="Type 3D Vibe text..."
+                    value={caption}
+                    onChange={(e) => setCaption(e.target.value)}
+                    className="text-3d-content"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      outline: 'none',
+                      resize: 'none',
+                      width: '100%',
+                      fontSize: '1.15rem',
+                      textAlign: 'center',
+                      fontFamily: 'inherit'
+                    }}
+                  />
+                  <div className="text-3d-shadow" />
+                </div>
+              </div>
+            ) : (
+              <textarea
+                placeholder="What's your vibe today? Write something..."
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                style={{
+                  position: 'relative',
+                  zIndex: 2,
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
+                  textAlign: 'center',
+                  outline: 'none',
+                  resize: 'none',
+                  width: '100%',
+                  height: '100%',
+                  textShadow: '0 2px 8px rgba(0,0,0,0.8)'
+                }}
+              />
+            )}
 
             {soundtrack !== 'none' && (
               <div style={{
@@ -270,7 +323,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '5px',
-                zIndex: 3
+                zIndex: 4
               }}>
                 <Music size={12} color="#f59e0b" />
                 <span>{SOUNDTRACKS.find(s => s.id === soundtrack)?.name}</span>
@@ -278,11 +331,71 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             )}
           </div>
 
-          {/* Media Upload & Background Controls */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* Controls Section */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            
+            {/* 3D Text Style Selector */}
+            <div>
+              <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px' }}>
+                <Type size={14} color="#3b82f6" /> 3D Text Style (VIP Feature)
+              </label>
+              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+                {TEXT_STYLES_3D.map(st => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => setTextStyle3D(st.id)}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '12px',
+                      border: textStyle3D === st.id ? '1.5px solid #3b82f6' : '1px solid var(--border)',
+                      background: textStyle3D === st.id ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-card)',
+                      color: textStyle3D === st.id ? '#38bdf8' : 'var(--text-muted)',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Live Animated Wallpaper Selector */}
+            <div>
+              <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px' }}>
+                <Sparkle size={14} color="#ec4899" /> Live Animated Canvas Background
+              </label>
+              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+                {ANIMATED_BGS.map(bg => (
+                  <button
+                    key={bg.id}
+                    type="button"
+                    onClick={() => { setAnimatedBg(bg.id); setMediaUrl(''); }}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '12px',
+                      border: animatedBg === bg.id && !mediaUrl ? '1.5px solid #ec4899' : '1px solid var(--border)',
+                      background: animatedBg === bg.id && !mediaUrl ? 'rgba(236, 72, 153, 0.2)' : 'var(--bg-card)',
+                      color: animatedBg === bg.id && !mediaUrl ? '#f472b6' : 'var(--text-muted)',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {bg.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Background Gradients & Media Upload */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <Palette size={14} /> Background Gradient
+                <Palette size={14} /> Background Color
               </label>
               <label style={{ cursor: 'pointer', fontSize: '0.78rem', color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <ImageIcon size={14} /> {uploading ? 'Processing...' : mediaUrl ? 'Change Image' : 'Add Image'}
@@ -295,13 +408,13 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 <button
                   key={g.id}
                   type="button"
-                  onClick={() => { setSelectedGradient(g.value); setMediaUrl(''); }}
+                  onClick={() => { setSelectedGradient(g.value); setAnimatedBg('none'); setMediaUrl(''); }}
                   style={{
                     width: '32px',
                     height: '32px',
                     borderRadius: '50%',
                     background: g.value,
-                    border: selectedGradient === g.value && !mediaUrl ? '2px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+                    border: selectedGradient === g.value && animatedBg === 'none' && !mediaUrl ? '2px solid #fff' : '1px solid rgba(255,255,255,0.2)',
                     cursor: 'pointer',
                     flexShrink: 0
                   }}
@@ -310,7 +423,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             </div>
 
             {/* Soundtrack Selector */}
-            <div style={{ marginTop: '4px' }}>
+            <div style={{ marginTop: '2px' }}>
               <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px' }}>
                 <Music size={14} /> Background Soundtrack
               </label>
@@ -341,6 +454,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             </div>
           </div>
 
+          {/* Action Buttons */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
             <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
             <button
