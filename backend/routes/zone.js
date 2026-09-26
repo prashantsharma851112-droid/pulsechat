@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth');
+const mongoose = require('mongoose');
+const authMiddleware = require('../middleware/authMiddleware');
 const User = require('../models/User');
 const GameScore = require('../models/GameScore');
 
-// In-Memory & Persistent daily trivia state
+// Daily trivia poll state
 let currentDailyTrivia = {
   id: 'trivia_today',
   question: '🔥 Daily Pulse Poll: What gives you the best vibe during chat sessions?',
@@ -19,9 +20,10 @@ let currentDailyTrivia = {
 // Get Daily Trivia Poll
 router.get('/daily-trivia', authMiddleware, async (req, res) => {
   try {
+    const currentUserId = req.userId || req.user?.id || req.user?.userId;
     const totalVotes = currentDailyTrivia.options.reduce((acc, opt) => acc + opt.votes.length, 0);
-    const hasVoted = currentDailyTrivia.options.some(opt => opt.votes.includes(req.userId));
-    const votedOptionId = currentDailyTrivia.options.find(opt => opt.votes.includes(req.userId))?.id || null;
+    const hasVoted = currentDailyTrivia.options.some(opt => opt.votes.includes(currentUserId));
+    const votedOptionId = currentDailyTrivia.options.find(opt => opt.votes.includes(currentUserId))?.id || null;
 
     const formattedOptions = currentDailyTrivia.options.map(opt => {
       const votesCount = opt.votes.length;
@@ -51,7 +53,7 @@ router.get('/daily-trivia', authMiddleware, async (req, res) => {
 router.post('/daily-trivia/vote', authMiddleware, async (req, res) => {
   try {
     const { optionId } = req.body;
-    const userId = req.userId;
+    const userId = req.userId || req.user?.id || req.user?.userId;
 
     const hasVoted = currentDailyTrivia.options.some(opt => opt.votes.includes(userId));
     if (hasVoted) {
@@ -65,8 +67,15 @@ router.post('/daily-trivia/vote', authMiddleware, async (req, res) => {
 
     targetOpt.votes.push(userId);
 
+    const isObjectId = mongoose.Types.ObjectId.isValid(userId);
     const updatedUser = await User.findOneAndUpdate(
-      { id: userId },
+      {
+        $or: [
+          { id: userId },
+          ...(isObjectId ? [{ _id: userId }] : []),
+          { username: userId }
+        ]
+      },
       { $inc: { pulseSparks: 20 } },
       { new: true }
     ).select('id pulseSparks').lean();
@@ -86,7 +95,7 @@ router.get('/leaderboard', authMiddleware, async (req, res) => {
   try {
     const scores = await GameScore.find({})
       .sort({ score: -1 })
-      .limit(20)
+      .limit(30)
       .lean();
 
     const leaderboardList = scores.map((s, idx) => ({
@@ -109,33 +118,42 @@ router.get('/leaderboard', authMiddleware, async (req, res) => {
 router.post('/game-score', authMiddleware, async (req, res) => {
   try {
     const { gameName, score } = req.body;
-    const userId = req.userId;
+    const userId = req.userId || req.user?.id || req.user?.userId;
 
     if (!score || score <= 0) {
       return res.status(400).json({ error: 'Invalid score' });
     }
 
-    const user = await User.findOne({ id: userId }).lean();
+    const isObjectId = mongoose.Types.ObjectId.isValid(userId);
+    const user = await User.findOne({
+      $or: [
+        { id: userId },
+        ...(isObjectId ? [{ _id: userId }] : []),
+        { username: userId }
+      ]
+    }).lean();
+
     if (!user) return res.status(404).json({ error: 'User not found' });
 
+    const resolvedUserId = user.id || (user._id ? user._id.toString() : userId);
     const rewardSparks = Math.min(Math.floor(score / 50), 50);
 
     let updatedUser = null;
     if (rewardSparks > 0) {
       updatedUser = await User.findOneAndUpdate(
-        { id: userId },
+        { id: resolvedUserId },
         { $inc: { pulseSparks: rewardSparks } },
         { new: true }
       ).select('id pulseSparks').lean();
     }
 
     // Save/Update highest score per user in MongoDB GameScore collection
-    const existingScoreDoc = await GameScore.findOne({ userId, gameName }).lean();
+    const existingScoreDoc = await GameScore.findOne({ userId: resolvedUserId, gameName }).lean();
     if (!existingScoreDoc || score > existingScoreDoc.score) {
       await GameScore.findOneAndUpdate(
-        { userId, gameName },
+        { userId: resolvedUserId, gameName },
         {
-          userId,
+          userId: resolvedUserId,
           displayName: user.displayName || user.username,
           avatar: user.avatar || '',
           gameName: gameName || 'Arrow Puzzle',
@@ -146,10 +164,10 @@ router.post('/game-score', authMiddleware, async (req, res) => {
       );
     }
 
-    // Fetch fresh top 20 scores from MongoDB
+    // Fetch fresh top 30 scores from MongoDB
     const topScores = await GameScore.find({})
       .sort({ score: -1 })
-      .limit(20)
+      .limit(30)
       .lean();
 
     const leaderboardList = topScores.map((s, idx) => ({
