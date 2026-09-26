@@ -2374,6 +2374,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       ) : (!isGroup && friendshipStatus !== 'friends') ? null : (
         <div style={{
           padding: '0.75rem 1rem',
+          paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))',
           background: (chatWallpaper && chatWallpaper !== 'none') ? 'rgba(11, 15, 25, 0.78)' : 'var(--bg-sidebar)',
           backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
           WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
