@@ -145,15 +145,15 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
   };
 
   // Check if ray to boundary in arrow's direction is clear of un-cleared arrows
-  const isPathClear = (r, c, dirKey, currentBoard, clearedSet) => {
+  const isPathClear = (r, c, dirKey, currentBoard, clearedSet, flyingSet = flyingIds) => {
     const { dr, dc } = DIRS[dirKey];
     let currR = r + dr;
     let currC = c + dc;
 
     while (currR >= 0 && currR < gridConfig.rows && currC >= 0 && currC < gridConfig.cols) {
       const item = currentBoard[currR][currC];
-      if (item && !clearedSet.has(item.id)) {
-        return false; // Path blocked by another arrow!
+      if (item && !clearedSet.has(item.id) && !flyingSet.has(item.id)) {
+        return false; // Path blocked by another real arrow!
       }
       currR += dr;
       currC += dc;
@@ -167,7 +167,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
     const arrow = grid[r][c];
     if (!arrow || clearedIds.has(arrow.id) || flyingIds.has(arrow.id)) return;
 
-    if (isPathClear(r, c, arrow.dir, grid, clearedIds)) {
+    if (isPathClear(r, c, arrow.dir, grid, clearedIds, flyingIds)) {
       // CLEAR! Trigger smooth flying escape animation & swoosh sound!
       playSwooshSound();
 

@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Sparkles, Check, Crown, Zap, ShieldCheck, Flame, Coffee, Heart, Rocket, Diamond, Award, ArrowRight, Loader2, Clock, Music, EyeOff, Palette, BarChart2, Type } from 'lucide-react';
+import { X, Sparkles, Check, Crown, Zap, ShieldCheck, Flame, Coffee, Heart, Rocket, Diamond, Award, ArrowRight, Loader2, Clock, Music, EyeOff, Palette, BarChart2, Type, Gamepad2 } from 'lucide-react';
 import PulseVipBadge from '../common/PulseVipBadge';
 import { BACKEND_URL } from '../../utils/config';
 
