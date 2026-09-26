@@ -878,6 +878,31 @@ io.on('connection', (socket) => {
     socket.to(chatId).emit('wb_restore', { boardDataUrl });
   });
 
+  // Real-Time Live Draw & Guess Game Socket Handlers
+  socket.on('draw_stroke', (data) => {
+    if (data && data.chatId) {
+      io.to(data.chatId).emit('draw_stroke', data);
+    }
+  });
+
+  socket.on('draw_clear', (data) => {
+    if (data && data.chatId) {
+      io.to(data.chatId).emit('draw_clear', data);
+    }
+  });
+
+  socket.on('draw_game_start', (data) => {
+    if (data && data.chatId) {
+      io.to(data.chatId).emit('draw_game_start', data);
+    }
+  });
+
+  socket.on('draw_guess', (data) => {
+    if (data && data.chatId) {
+      io.to(data.chatId).emit('draw_guess', data);
+    }
+  });
+
   // Audio/Video Call WebRTC Signaling (1-to-1)
   socket.on('call_user', async ({ userToCall, signalData, from, callerName, callerAvatar, isVideo }) => {
     // Check if target user has blocked caller or caller has blocked target user

@@ -16,6 +16,7 @@ import ChatLiveWallpaper from './ChatLiveWallpaper';
 import PulseProModal from './PulseProModal';
 import GiftPickerModal from './GiftPickerModal';
 import Animated3DTextModal from './Animated3DTextModal';
+import LiveDrawGameModal from './LiveDrawGameModal';
 import PulseVipBadge from '../common/PulseVipBadge';
 import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
@@ -363,6 +364,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [showProModal, setShowProModal] = useState(false);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [show3DTextModal, setShow3DTextModal] = useState(false);
+  const [showDrawGameModal, setShowDrawGameModal] = useState(false);
   const [showActionGrid, setShowActionGrid] = useState(false);
   const [showEmojiBurstPicker, setShowEmojiBurstPicker] = useState(false);
   const actionGridRef = useRef(null);
@@ -2667,6 +2669,43 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Emojis</span>
               </button>
 
+              {/* 6. Live Draw & Guess Game */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  setShowDrawGameModal(true);
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #ec4899, #8b5cf6)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(236, 72, 153, 0.4)'
+                }}>
+                  <Palette size={20} />
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ec4899' }}>Live Draw</span>
+              </button>
+
             </div>
           )}
 
@@ -2928,6 +2967,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             setProModalTab(tab);
             setShowProModal(true);
           }}
+        />
+      )}
+
+      {showDrawGameModal && (
+        <LiveDrawGameModal
+          activeChat={activeChat}
+          onClose={() => setShowDrawGameModal(false)}
         />
       )}
     </div>
