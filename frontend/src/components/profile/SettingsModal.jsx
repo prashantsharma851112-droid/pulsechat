@@ -567,6 +567,40 @@ export default function SettingsModal({
               )}
             </div>
 
+            {/* App Feature Tour / Walkthrough */}
+            <div
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('pulsechat_open_onboarding'));
+                onClose();
+              }}
+              className="user-select-card"
+              style={{
+                width: '100%',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.12))',
+                padding: '12px 14px',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg, #6366f1, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                  <Sparkles size={18} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>App Features Walkthrough Tour</span>
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                    Step-by-step guide to all PulseChat features & where to use them
+                  </div>
+                </div>
+              </div>
+              <ArrowRightLeft size={16} color="var(--accent)" />
+            </div>
+
             {/* Blocked Contacts Manager Button */}
             <div
               onClick={() => {

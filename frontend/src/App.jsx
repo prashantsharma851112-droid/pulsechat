@@ -17,6 +17,7 @@ import PandaHero from './components/common/PandaHero';
 import FullDpModal from './components/common/FullDpModal';
 import Toast from './components/common/Toast';
 import EmojiParticleBurst from './components/common/EmojiParticleBurst';
+import AppOnboardingModal from './components/common/AppOnboardingModal';
 import { BACKEND_URL } from './utils/config';
 import { updateUserProfileInStorage, clearUnreadCount, getCachedAllUsers } from './utils/offlineStorage';
 import { Zap, AlertTriangle } from 'lucide-react';
@@ -95,7 +96,30 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [fullDpData, setFullDpData] = useState(null); // { imageUrl, name, username }
+
+  // Auto-trigger feature walkthrough tour for new users
+  useEffect(() => {
+    if (user?.id) {
+      const isCompleted = localStorage.getItem(`pulsechat_onboarding_${user.id}`) === 'true' ||
+                          localStorage.getItem('pulsechat_onboarding_completed') === 'true';
+      if (!isCompleted) {
+        const timer = setTimeout(() => {
+          setShowOnboardingModal(true);
+        }, 700);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    const handleOpenOnboarding = () => {
+      setShowOnboardingModal(true);
+    };
+    window.addEventListener('pulsechat_open_onboarding', handleOpenOnboarding);
+    return () => window.removeEventListener('pulsechat_open_onboarding', handleOpenOnboarding);
+  }, []);
 
   // Entrance Animation state
   const [showEntrance, setShowEntrance] = useState(false);
@@ -667,6 +691,14 @@ export default function App() {
           />
         ))}
       </div>
+      {/* Interactive App Features Walkthrough Onboarding Modal */}
+      {showOnboardingModal && (
+        <AppOnboardingModal
+          userId={user?.id}
+          onClose={() => setShowOnboardingModal(false)}
+        />
+      )}
+
       {/* Global 3D Floating Emoji Particle Burst Engine */}
       <EmojiParticleBurst />
       </div>
