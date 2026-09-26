@@ -1,10 +1,7 @@
-// PulseChat Push Notification Utility
-// Browser/PWA push notifications + Web Push background service helper functions
+// push notification utils
 import { BACKEND_URL } from './config';
 
-/**
- * Convert VAPID base64 string to Uint8Array required by pushManager.subscribe
- */
+// convert base64 to uint8array for vapid key
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -16,16 +13,11 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-/**
- * User se notification permission maango bina baar-baar pareshan kiye
- * @param {boolean} forcePrompt - Whether user manually tapped Allow / Enable
- * @param {string|null} token - Auth JWT token to register Web Push
- * @returns {Promise<boolean>} true if granted
- */
+// request notification permission
 export async function requestNotificationPermission(forcePrompt = false, token = null) {
   if (typeof window === 'undefined' || !('Notification' in window)) return false;
 
-  // Agar already granted hai
+  // if already granted
   if (Notification.permission === 'granted') {
     localStorage.setItem('pulsechat_notif_granted', 'true');
     if (token) {
@@ -34,12 +26,12 @@ export async function requestNotificationPermission(forcePrompt = false, token =
     return true;
   }
 
-  // Agar user ne pehle hi block/deny kar diya hai
+  // if denied
   if (Notification.permission === 'denied') {
     return false;
   }
 
-  // Agar automatic call hai aur user ne pehle banner dismiss kar diya tha, toh dobara prompt mat karo
+  // if dismissed before
   if (!forcePrompt && localStorage.getItem('pulsechat_notif_dismissed') === 'true') {
     return false;
   }
@@ -63,10 +55,7 @@ export async function requestNotificationPermission(forcePrompt = false, token =
   }
 }
 
-/**
- * Register Web Push subscription with Service Worker & Backend
- * Taaki app poori band hone par bhi notifications receive ho sakein
- */
+// subscribe user to web push
 export async function subscribeUserToPush(token = null) {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     return false;
@@ -83,12 +72,12 @@ export async function subscribeUserToPush(token = null) {
     }
     if (!reg || !reg.pushManager) return false;
 
-    // 1. Backend se persistent VAPID public key fetch karo
+    // fetch vapid public key
     const res = await fetch(`${BACKEND_URL}/api/users/vapid-public-key`);
     const { publicKey } = await res.json();
     if (!publicKey) return false;
 
-    // 2. Existing subscription check karo aur key mismatch ho toh renew karo
+    // check existing subscription
     let subscription = await reg.pushManager.getSubscription();
     const storedKey = localStorage.getItem('pulsechat_vapid_key');
 
@@ -108,7 +97,7 @@ export async function subscribeUserToPush(token = null) {
       localStorage.setItem('pulsechat_vapid_key', publicKey);
     }
 
-    // 3. Subscription backend mein register karo (taaki app band hone par bhi notification aaye)
+    // register push sub with backend
     const authToken = token || localStorage.getItem('pulsechat_token');
     if (subscription && authToken) {
       const subJson = subscription.toJSON();
@@ -127,7 +116,6 @@ export async function subscribeUserToPush(token = null) {
             keys: { p256dh, auth }
           })
         });
-        console.log('✅ Registered Push Subscription for closed app notifications');
         return true;
       }
     }
@@ -137,18 +125,14 @@ export async function subscribeUserToPush(token = null) {
   return false;
 }
 
-/**
- * User ne notification banner dismiss kiya
- */
+// dismiss notification banner
 export function dismissNotificationBanner() {
   if (typeof window !== 'undefined') {
     localStorage.setItem('pulsechat_notif_dismissed', 'true');
   }
 }
 
-/**
- * Push notification show karo (Service Worker ke through - Android/PWA compatible)
- */
+// show browser push notification
 export async function showPushNotification(title, body, icon = '/icon-192.png', tag = 'pulsechat-msg', data = {}) {
   if (typeof window === 'undefined' || !('Notification' in window)) return;
   if (localStorage.getItem('pulsechat_notifications_enabled') === 'false') return;

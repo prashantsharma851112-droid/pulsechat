@@ -1,6 +1,4 @@
-// PulseChat Sentence & Word Sentiment Analyzer
-// Evaluates chat messages sentence-by-sentence and word-by-word
-// Supports English + Hinglish emotion vocabularies
+// message sentiment helper
 
 export const MOOD_DEFINITIONS = {
   Joy: {

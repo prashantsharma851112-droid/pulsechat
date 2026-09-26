@@ -1,7 +1,4 @@
-// Standards-Compliant Web Push Utility for Node.js
-// Implements VAPID (RFC 8292) and Push Message Encryption (RFC 8291 aes128gcm) using Node's crypto & https
-// Compatible with Google FCM (Chrome / Android), Apple APNS (Safari / iOS PWA), and Mozilla Autopush (Firefox)
-
+// web push helper
 const crypto = require('crypto');
 const https = require('https');
 const http = require('http');

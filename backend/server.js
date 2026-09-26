@@ -1082,27 +1082,26 @@ mongoose.connect(config.MONGO_URI)
     server.listen(config.PORT, () => {
       console.log(`🚀 PulseChat Backend running on port ${config.PORT}`);
 
-      // Automated Keep-Alive Ping Engine to prevent Render / free tier cold starts
+      // keep-alive ping
       const renderUrl = process.env.RENDER_EXTERNAL_URL || process.env.SELF_PING_URL || 'https://pulsechat-xzul.onrender.com';
       if (renderUrl) {
-        console.log(`📡 Keep-Alive Engine activated for: ${renderUrl}`);
+        console.log(`Keep-Alive activated for: ${renderUrl}`);
         setInterval(() => {
           try {
             const https = renderUrl.startsWith('https') ? require('https') : require('http');
             https.get(`${renderUrl}/api/health`, (res) => {
-              // Pulse kept active
             }).on('error', (err) => {
               console.warn('Keep-alive ping error:', err.message);
             });
           } catch (pingErr) {}
-        }, 10 * 60 * 1000); // Ping every 10 minutes (well before the 15-minute idle limit)
+        }, 10 * 60 * 1000);
       }
 
-      // Storage Guard: Auto-Cleanup Old Chats (7+ Days) every 12 hours
+      // auto-cleanup chats older than 7 days
       const AUTO_CLEANUP_INTERVAL = 12 * 60 * 60 * 1000;
       setTimeout(async () => {
         try {
-          console.log('🧹 [Storage Guard] Running initial 7-day chat auto-cleanup...');
+          console.log('Running 7-day chat auto-cleanup...');
           await db.runAutoCleanupJob(7);
         } catch (e) {
           console.warn('Auto-cleanup startup error:', e.message);
@@ -1111,7 +1110,7 @@ mongoose.connect(config.MONGO_URI)
 
       setInterval(async () => {
         try {
-          console.log('🧹 [Storage Guard] Running 12-hour periodic chat auto-cleanup...');
+          console.log('Running periodic chat auto-cleanup...');
           await db.runAutoCleanupJob(7);
         } catch (e) {
           console.warn('Auto-cleanup interval error:', e.message);

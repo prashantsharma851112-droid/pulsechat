@@ -1,5 +1,4 @@
-// PulseChat Offline Storage & Auto-Sync Engine
-// Caches chats, groups, message history, and outgoing message queue in localStorage
+// local storage helper functions
 
 const STORAGE_KEYS = {
   USER: 'pulsechat_user',
@@ -12,7 +11,7 @@ const STORAGE_KEYS = {
   FRIENDS_PREFIX: 'pulsechat_friends_'
 };
 
-// Safe JSON parser
+// json parse wrapper
 function safeParse(str, fallback = null) {
   if (!str) return fallback;
   try {
@@ -22,7 +21,7 @@ function safeParse(str, fallback = null) {
   }
 }
 
-// User Profile Cache
+// user cache
 export function getCachedUser() {
   if (typeof window === 'undefined') return null;
   return safeParse(localStorage.getItem(STORAGE_KEYS.USER), null);
@@ -36,12 +35,12 @@ export function setCachedUser(user) {
     try {
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
     } catch (e) {
-      console.warn('LocalStorage quota exceeded setting user', e);
+      console.warn('LocalStorage error setting user', e);
     }
   }
 }
 
-// Recent Chats Cache (per user)
+// recent chats
 export function getCachedRecentChats(userId) {
   if (typeof window === 'undefined' || !userId) return [];
   return safeParse(localStorage.getItem(`${STORAGE_KEYS.RECENT_PREFIX}${userId}`), []);
@@ -52,18 +51,15 @@ export function setCachedRecentChats(userId, chats) {
   try {
     localStorage.setItem(`${STORAGE_KEYS.RECENT_PREFIX}${userId}`, JSON.stringify(chats));
   } catch (e) {
-    console.warn('LocalStorage quota exceeded setting recent chats', e);
+    console.warn('LocalStorage error setting recent chats', e);
   }
 }
 
-// Update the last message snippet in recent chats when offline message sent/received.
-// targetChat is the full user/group object being chatted with (activeChat from state).
+// update last message snippet in recent chats
 export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
   if (!userId || !chatId || !message) return;
   let recent = getCachedRecentChats(userId);
 
-  // Check if there's an existing entry for this contact/group
-  // chatId for 1-to-1 is "userId1_userId2" — we match against the other party's id
   const contactId = targetChat?.id || message.receiverId || null;
 
   const existingIdx = recent.findIndex(c => {
@@ -81,7 +77,6 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
   };
 
   if (existingIdx !== -1) {
-    // Update existing entry and move to top (preserve and update avatar, isPro, badge if provided)
     const existingAvatar = recent[existingIdx].avatar;
     const incomingAvatar = targetChat?.avatar;
     const updated = {
@@ -96,45 +91,41 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
     const newRecent = [updated, ...recent.filter((_, i) => i !== existingIdx)];
     setCachedRecentChats(userId, newRecent);
   } else if (targetChat) {
-    // New conversation: prepend the target contact with snippet info
     const newEntry = {
-      ...targetChat,
+      id: targetChat.id || chatId,
+      displayName: targetChat.displayName || targetChat.name || 'Chat',
+      avatar: targetChat.avatar || '',
+      isGroup: Boolean(targetChat.isGroup),
+      isPro: Boolean(targetChat.isPro),
+      proTier: targetChat.proTier || null,
+      customBadge: targetChat.customBadge || null,
+      unreadCount: 0,
       ...snippet
     };
     setCachedRecentChats(userId, [newEntry, ...recent]);
   }
 }
 
-// Clear unread count for a specific contact or group across cached recent chats
-export function clearUnreadCount(userId, targetIdOrChatId) {
-  if (!userId || !targetIdOrChatId) return [];
-  const recent = getCachedRecentChats(userId);
-  if (!recent || recent.length === 0) return [];
-
-  let changed = false;
-  const updated = recent.map(c => {
-    const isMatch =
-      c.id === targetIdOrChatId ||
-      c._id === targetIdOrChatId ||
-      c.username === targetIdOrChatId ||
-      (typeof targetIdOrChatId === 'string' && (
-        targetIdOrChatId.includes(c.id) ||
-        (c.username && targetIdOrChatId.includes(c.username))
-      ));
-    if (isMatch && (c.unreadCount || 0) > 0) {
-      changed = true;
-      return { ...c, unreadCount: 0 };
+// clear unread count
+export function clearUnreadCount(userId, targetId) {
+  if (!userId || !targetId) return;
+  let recent = getCachedRecentChats(userId);
+  let updated = false;
+  const newRecent = recent.map(c => {
+    if (c.id === targetId || (targetId.includes('_') && targetId.includes(c.id))) {
+      if (c.unreadCount > 0) {
+        updated = true;
+        return { ...c, unreadCount: 0 };
+      }
     }
     return c;
   });
-
-  if (changed) {
-    setCachedRecentChats(userId, updated);
+  if (updated) {
+    setCachedRecentChats(userId, newRecent);
   }
-  return updated;
 }
 
-// Groups Cache (per user)
+// cached groups
 export function getCachedGroups(userId) {
   if (typeof window === 'undefined' || !userId) return [];
   return safeParse(localStorage.getItem(`${STORAGE_KEYS.GROUPS_PREFIX}${userId}`), []);
@@ -145,11 +136,11 @@ export function setCachedGroups(userId, groups) {
   try {
     localStorage.setItem(`${STORAGE_KEYS.GROUPS_PREFIX}${userId}`, JSON.stringify(groups));
   } catch (e) {
-    console.warn('LocalStorage quota exceeded setting groups', e);
+    console.warn('LocalStorage error setting groups', e);
   }
 }
 
-// Friends Cache (per user)
+// cached friends
 export function getCachedFriends(userId) {
   if (typeof window === 'undefined' || !userId) return [];
   return safeParse(localStorage.getItem(`${STORAGE_KEYS.FRIENDS_PREFIX}${userId}`), []);
@@ -160,17 +151,17 @@ export function setCachedFriends(userId, friends) {
   try {
     localStorage.setItem(`${STORAGE_KEYS.FRIENDS_PREFIX}${userId}`, JSON.stringify(friends));
   } catch (e) {
-    console.warn('LocalStorage quota exceeded setting friends', e);
+    console.warn('LocalStorage error setting friends', e);
   }
 }
 
 export function isCachedFriend(userId, targetId) {
   if (!userId || !targetId) return false;
   const friends = getCachedFriends(userId);
-  return friends.some(f => f.id === targetId || f.username === targetId);
+  return friends.some(f => f.id === targetId || f._id === targetId);
 }
 
-// All Known Users Cache (per user — everyone the app has fetched from /api/users)
+// all users cache
 export function getCachedAllUsers(userId) {
   if (typeof window === 'undefined' || !userId) return [];
   return safeParse(localStorage.getItem(`${STORAGE_KEYS.ALL_USERS_PREFIX}${userId}`), []);
@@ -181,39 +172,27 @@ export function setCachedAllUsers(userId, users) {
   try {
     localStorage.setItem(`${STORAGE_KEYS.ALL_USERS_PREFIX}${userId}`, JSON.stringify(users));
   } catch (e) {
-    console.warn('LocalStorage quota exceeded setting all users', e);
+    console.warn('LocalStorage error setting all users', e);
   }
 }
 
-// Merge new users into existing cached all-users list (avoids duplicates)
+// merge new users into cached users list
 export function mergeIntoAllUsersCache(userId, newUsers) {
-  if (!userId || !Array.isArray(newUsers)) return;
-  const existing = getCachedAllUsers(userId);
-  const existingIds = new Set(existing.map(u => u.id));
-  const merged = [...existing];
-  for (const u of newUsers) {
-    if (!existingIds.has(u.id)) {
-      merged.push(u);
-      existingIds.add(u.id);
-    } else {
-      // Update existing entry with fresher data
-      const idx = merged.findIndex(e => e.id === u.id);
-      if (idx !== -1) {
-        const existingAvatar = merged[idx].avatar;
-        merged[idx] = {
-          ...merged[idx],
-          ...u,
-          avatar: u.avatar || existingAvatar || ''
-        };
-      }
+  if (!userId || !Array.isArray(newUsers) || newUsers.length === 0) return;
+  const current = getCachedAllUsers(userId);
+  const map = new Map();
+  current.forEach(u => map.set(u.id || u._id, u));
+  newUsers.forEach(u => {
+    const key = u.id || u._id;
+    if (key) {
+      const existing = map.get(key) || {};
+      map.set(key, { ...existing, ...u });
     }
-  }
-  setCachedAllUsers(userId, merged);
+  });
+  setCachedAllUsers(userId, Array.from(map.values()));
 }
 
-// Message History Cache (per chatId) - keeps up to 250 latest messages
-const MAX_CACHED_MESSAGES = 250;
-
+// message history cache
 export function getCachedMessages(chatId) {
   if (typeof window === 'undefined' || !chatId) return [];
   return safeParse(localStorage.getItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`), []);
@@ -222,81 +201,61 @@ export function getCachedMessages(chatId) {
 export function setCachedMessages(chatId, messages) {
   if (typeof window === 'undefined' || !chatId || !Array.isArray(messages)) return;
   try {
-    const trimmed = messages.slice(-MAX_CACHED_MESSAGES);
+    const trimmed = messages.slice(-250);
     localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`, JSON.stringify(trimmed));
   } catch (e) {
-    // If quota exceeded, trim further
     try {
-      const small = messages.slice(-100);
-      localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`, JSON.stringify(small));
+      const trimmed = messages.slice(-100);
+      localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`, JSON.stringify(trimmed));
     } catch (err) {
-      console.warn('LocalStorage quota exceeded setting messages', err);
+      console.warn('LocalStorage error setting messages', err);
     }
   }
 }
 
 export function appendCachedMessage(chatId, message) {
   if (!chatId || !message) return;
-  const current = getCachedMessages(chatId);
-  const existingIdx = current.findIndex(m => m.id === message.id || (message.clientTempId && m.id === message.clientTempId));
-  let updated;
-  if (existingIdx !== -1) {
-    updated = [...current];
-    updated[existingIdx] = { ...updated[existingIdx], ...message };
-  } else {
-    updated = [...current, message];
+  const msgs = getCachedMessages(chatId);
+  if (msgs.some(m => (m.id && m.id === message.id) || (m.tempId && m.tempId === message.tempId))) {
+    return;
   }
-  setCachedMessages(chatId, updated);
+  setCachedMessages(chatId, [...msgs, message]);
 }
 
-export function updateCachedMessageStatus(chatId, messageId, status, newId = null) {
-  if (!chatId || !messageId) return;
-  const current = getCachedMessages(chatId);
-  const updated = current.map(m => {
-    if (m.id === messageId || m.clientTempId === messageId) {
-      return {
-        ...m,
-        id: newId || m.id,
-        status: status || m.status
-      };
+export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
+  if (!chatId || !messageIdOrTempId || !updates) return;
+  const msgs = getCachedMessages(chatId);
+  const updated = msgs.map(m => {
+    if (m.id === messageIdOrTempId || m.tempId === messageIdOrTempId) {
+      return { ...m, ...updates };
     }
     return m;
   });
   setCachedMessages(chatId, updated);
 }
 
-// Outbox / Pending Messages Queue (per user)
+// outbox queue
 export function getOutbox(userId) {
   if (typeof window === 'undefined' || !userId) return [];
   return safeParse(localStorage.getItem(`${STORAGE_KEYS.OUTBOX_PREFIX}${userId}`), []);
 }
 
-export function setOutbox(userId, queue) {
-  if (typeof window === 'undefined' || !userId) return;
-  try {
-    localStorage.setItem(`${STORAGE_KEYS.OUTBOX_PREFIX}${userId}`, JSON.stringify(queue));
-  } catch (e) {
-    console.warn('LocalStorage quota exceeded setting outbox', e);
+export function addToOutbox(userId, pendingMessage) {
+  if (!userId || !pendingMessage) return;
+  const current = getOutbox(userId);
+  if (!current.some(m => m.tempId === pendingMessage.tempId)) {
+    localStorage.setItem(`${STORAGE_KEYS.OUTBOX_PREFIX}${userId}`, JSON.stringify([...current, pendingMessage]));
   }
 }
 
-export function addToOutbox(userId, message) {
-  if (!userId || !message) return;
-  const outbox = getOutbox(userId);
-  // Avoid duplicate tempIds
-  const filtered = outbox.filter(m => m.id !== message.id && m.clientTempId !== message.id);
-  filtered.push(message);
-  setOutbox(userId, filtered);
+export function removeFromOutbox(userId, tempId) {
+  if (!userId || !tempId) return;
+  const current = getOutbox(userId);
+  const updated = current.filter(m => m.tempId !== tempId);
+  localStorage.setItem(`${STORAGE_KEYS.OUTBOX_PREFIX}${userId}`, JSON.stringify(updated));
 }
 
-export function removeFromOutbox(userId, messageIdOrTempId) {
-  if (!userId || !messageIdOrTempId) return;
-  const outbox = getOutbox(userId);
-  const filtered = outbox.filter(m => m.id !== messageIdOrTempId && m.clientTempId !== messageIdOrTempId);
-  setOutbox(userId, filtered);
-}
-
-// Network Connectivity Helpers
+// online network helpers
 export function isDeviceOnline() {
   if (typeof navigator === 'undefined') return true;
   return navigator.onLine !== false;
@@ -317,7 +276,7 @@ export function subscribeToNetworkChanges(callback) {
   };
 }
 
-// Synchronize a user's updated profile (DP, displayName, status) across ALL caches & dispatch event
+// sync user profile in storage
 export function updateUserProfileInStorage(targetUserId, updates, currentUserId) {
   if (!targetUserId || !updates) return;
 
@@ -347,7 +306,6 @@ export function updateUserProfileInStorage(targetUserId, updates, currentUserId)
     };
   };
 
-  // 1. Update Recent Chats cache
   if (currentUserId) {
     const recent = getCachedRecentChats(currentUserId);
     if (recent && recent.length > 0) {
@@ -355,14 +313,12 @@ export function updateUserProfileInStorage(targetUserId, updates, currentUserId)
       setCachedRecentChats(currentUserId, updatedRecent);
     }
 
-    // 2. Update All Users cache
     const allUsers = getCachedAllUsers(currentUserId);
     if (allUsers && allUsers.length > 0) {
       const updatedAllUsers = allUsers.map(applyUpdates);
       setCachedAllUsers(currentUserId, updatedAllUsers);
     }
 
-    // 3. Update Friends cache
     const friends = getCachedFriends(currentUserId);
     if (friends && friends.length > 0) {
       const updatedFriends = friends.map(applyUpdates);
@@ -370,14 +326,12 @@ export function updateUserProfileInStorage(targetUserId, updates, currentUserId)
     }
   }
 
-  // 4. Update own profile if the current logged-in user changed their DP
   const currentUser = getCachedUser();
   if (currentUser && isMatch(currentUser)) {
     const updatedMe = applyUpdates(currentUser);
     setCachedUser(updatedMe);
   }
 
-  // 5. Dispatch global window event so activeChat, ChatWindow, and FriendsTab update immediately
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
       detail: { targetUserId, updates }
@@ -385,7 +339,7 @@ export function updateUserProfileInStorage(targetUserId, updates, currentUserId)
   }
 }
 
-// Synchronize an updated group (name, avatar, description, members) across ALL caches & dispatch event
+// sync group in storage
 export function updateGroupInStorage(groupId, updates, currentUserId) {
   if (!groupId || !updates) return;
 
@@ -408,14 +362,12 @@ export function updateGroupInStorage(groupId, updates, currentUserId) {
   };
 
   if (currentUserId) {
-    // 1. Update Groups cache
     const groups = getCachedGroups(currentUserId);
     if (groups && groups.length > 0) {
       const updatedGroups = groups.map(applyGroupUpdates);
       setCachedGroups(currentUserId, updatedGroups);
     }
 
-    // 2. Update Recent Chats cache if this group is in recent chats
     const recent = getCachedRecentChats(currentUserId);
     if (recent && recent.length > 0) {
       const updatedRecent = recent.map(applyGroupUpdates);
@@ -423,11 +375,9 @@ export function updateGroupInStorage(groupId, updates, currentUserId) {
     }
   }
 
-  // 3. Dispatch global window event so ChatWindow, Sidebar, and App update immediately (0ms)
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('pulsechat_group_updated', {
       detail: { groupId, updates }
     }));
   }
 }
-
