@@ -1,17 +1,62 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { ArrowLeft, RotateCcw, Sparkles, Heart, Lightbulb, Play, Calendar, Award, CheckCircle2, ChevronRight, HelpCircle } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Heart, Lightbulb, Calendar, Award } from 'lucide-react';
 import { playSound } from '../../utils/audio';
 
-// Direction vectors: [row_delta, col_delta, rotation_deg, arrow_unicode]
+// Web Audio API Sound Synthesizers for 0ms instant Audio Feedback
+const playSwooshSound = () => {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(900, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.25);
+    gain.gain.setValueAtTime(0.35, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.25);
+  } catch (e) {}
+};
+
+const playBumpSound = () => {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(160, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(45, ctx.currentTime + 0.18);
+    gain.gain.setValueAtTime(0.45, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.18);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.18);
+  } catch (e) {}
+};
+
+// Direction Vectors & Rotations
 const DIRS = {
-  UP: { dr: -1, dc: 0, deg: 0, icon: '↑' },
-  RIGHT: { dr: 0, dc: 1, deg: 90, icon: '→' },
-  DOWN: { dr: 1, dc: 0, deg: 180, icon: '↓' },
-  LEFT: { dr: 0, dc: -1, deg: 270, icon: '←' }
+  UP: { dr: -1, dc: 0, deg: 0, flyX: 0, flyY: -450 },
+  RIGHT: { dr: 0, dc: 1, deg: 90, flyX: 450, flyY: 0 },
+  DOWN: { dr: 1, dc: 0, deg: 180, flyX: 0, flyY: 450 },
+  LEFT: { dr: 0, dc: -1, deg: 270, flyX: -450, flyY: 0 }
 };
 
 const DIR_KEYS = ['UP', 'RIGHT', 'DOWN', 'LEFT'];
+
+// Scaling Grid Size, Density & Gap according to Level
+const getGridConfig = (lvl) => {
+  if (lvl <= 2) return { rows: 6, cols: 6, countMultiplier: 0.55, gap: '3px' };
+  if (lvl <= 5) return { rows: 7, cols: 7, countMultiplier: 0.68, gap: '2.5px' };
+  if (lvl <= 12) return { rows: 8, cols: 8, countMultiplier: 0.78, gap: '2px' };
+  if (lvl <= 25) return { rows: 9, cols: 9, countMultiplier: 0.84, gap: '1.5px' };
+  if (lvl <= 50) return { rows: 10, cols: 10, countMultiplier: 0.88, gap: '1px' };
+  return { rows: 11, cols: 11, countMultiplier: 0.92, gap: '1px' };
+};
 
 export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
   const { user, updateUserProfile } = useContext(AuthContext);
@@ -23,35 +68,31 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
   });
   const [hearts, setHearts] = useState(3);
   const [grid, setGrid] = useState([]);
-  const [gridRows, setGridRows] = useState(6);
-  const [gridCols, setGridCols] = useState(6);
+  const [gridConfig, setGridConfig] = useState(() => getGridConfig(1));
   const [clearedCount, setClearedCount] = useState(0);
   const [totalArrows, setTotalArrows] = useState(0);
+  const [flyingIds, setFlyingIds] = useState(new Set());
+  const [clearedIds, setClearedIds] = useState(new Set());
   const [shakingId, setShakingId] = useState(null);
   const [hintId, setHintId] = useState(null);
   const [isDailyChallenge, setIsDailyChallenge] = useState(false);
 
   // Generate a 100% guaranteed solvable Arrow Puzzle grid
   const generatePuzzle = (lvl, isDaily = false) => {
-    const rows = 6 + Math.min(Math.floor(lvl / 10), 2); // 6x6 up to 8x8
-    const cols = 6 + Math.min(Math.floor(lvl / 10), 2);
-    setGridRows(rows);
-    setGridCols(cols);
+    const config = getGridConfig(lvl);
+    setGridConfig(config);
+    const { rows, cols, countMultiplier } = config;
 
-    // Initialize empty grid
     const board = Array.from({ length: rows }, () => Array(cols).fill(null));
-    const placedArrows = [];
-
-    // Number of arrows to place
-    const arrowCount = Math.min(16 + Math.floor(lvl * 1.5), rows * cols - 4);
+    const placed = [];
+    const maxArrows = Math.floor(rows * cols * countMultiplier);
 
     // Build puzzle in reverse order (guarantees solvability)
-    for (let i = 0; i < arrowCount; i++) {
+    for (let i = 0; i < maxArrows; i++) {
       let candidateCells = [];
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           if (board[r][c] === null) {
-            // Check available directions where exit ray is clear of CURRENT board items
             DIR_KEYS.forEach(dirKey => {
               const { dr, dc } = DIRS[dirKey];
               let currR = r + dr;
@@ -75,24 +116,23 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
 
       if (candidateCells.length === 0) break;
 
-      // Pick a random valid placement
       const pick = candidateCells[Math.floor(Math.random() * candidateCells.length)];
       const id = `arrow_${pick.r}_${pick.c}_${Date.now()}_${Math.random()}`;
       const arrowObj = {
         id,
         r: pick.r,
         c: pick.c,
-        dir: pick.dir,
-        cleared: false,
-        flying: false
+        dir: pick.dir
       };
       board[pick.r][pick.c] = arrowObj;
-      placedArrows.push(arrowObj);
+      placed.push(arrowObj);
     }
 
     setGrid(board);
-    setTotalArrows(placedArrows.length);
+    setTotalArrows(placed.length);
     setClearedCount(0);
+    setFlyingIds(new Set());
+    setClearedIds(new Set());
     setHearts(3);
     setHintId(null);
     setIsDailyChallenge(isDaily);
@@ -104,16 +144,16 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
     playSound('pop');
   };
 
-  // Check if ray to boundary in arrow's direction is clear
-  const isPathClear = (r, c, dirKey, currentBoard) => {
+  // Check if ray to boundary in arrow's direction is clear of un-cleared arrows
+  const isPathClear = (r, c, dirKey, currentBoard, clearedSet) => {
     const { dr, dc } = DIRS[dirKey];
     let currR = r + dr;
     let currC = c + dc;
 
-    while (currR >= 0 && currR < gridRows && currC >= 0 && currC < gridCols) {
+    while (currR >= 0 && currR < gridConfig.rows && currC >= 0 && currC < gridConfig.cols) {
       const item = currentBoard[currR][currC];
-      if (item && !item.cleared) {
-        return false; // Path blocked!
+      if (item && !clearedSet.has(item.id)) {
+        return false; // Path blocked by another arrow!
       }
       currR += dr;
       currC += dc;
@@ -125,28 +165,36 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
   const handleArrowTap = (r, c) => {
     if (screen !== 'playing') return;
     const arrow = grid[r][c];
-    if (!arrow || arrow.cleared) return;
+    if (!arrow || clearedIds.has(arrow.id) || flyingIds.has(arrow.id)) return;
 
-    if (isPathClear(r, c, arrow.dir, grid)) {
-      // CLEAR! Animate fly-off
-      playSound('pop');
-      const newGrid = grid.map(row => [...row]);
-      newGrid[r][c] = { ...arrow, flying: true, cleared: true };
-      setGrid(newGrid);
-      setClearedCount(prev => {
-        const updated = prev + 1;
-        if (updated >= totalArrows) {
-          // Level Complete!
-          setTimeout(() => handleWin(), 300);
-        }
-        return updated;
-      });
+    if (isPathClear(r, c, arrow.dir, grid, clearedIds)) {
+      // CLEAR! Trigger flying escape animation & swoosh sound!
+      playSwooshSound();
+
+      setFlyingIds(prev => new Set([...prev, arrow.id]));
+
+      setTimeout(() => {
+        setClearedIds(prev => {
+          const nextSet = new Set([...prev, arrow.id]);
+          if (nextSet.size >= totalArrows) {
+            setTimeout(() => handleWin(), 300);
+          }
+          return nextSet;
+        });
+        setFlyingIds(prev => {
+          const next = new Set(prev);
+          next.delete(arrow.id);
+          return next;
+        });
+      }, 320);
+
+      setClearedCount(prev => prev + 1);
       if (hintId === arrow.id) setHintId(null);
     } else {
-      // BLOCKED! Shake tile and reduce heart
-      playSound('error');
+      // BLOCKED! Bump thud sound & shake animation
+      playBumpSound();
       setShakingId(arrow.id);
-      setTimeout(() => setShakingId(null), 500);
+      setTimeout(() => setShakingId(null), 450);
 
       setHearts(prev => {
         const nextH = prev - 1;
@@ -166,7 +214,6 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
       localStorage.setItem('pulsechat_arrow_level', nextLvl.toString());
     } catch (e) {}
 
-    // Reward Sparks
     const reward = isDailyChallenge ? 30 : 15;
     const currentSparks = user?.pulseSparks || 100;
     if (updateUserProfile) {
@@ -179,14 +226,15 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
   };
 
   const handleHint = () => {
-    // Find first arrow that has a clear exit path
-    for (let r = 0; r < gridRows; r++) {
-      for (let c = 0; c < gridCols; c++) {
+    for (let r = 0; r < gridConfig.rows; r++) {
+      for (let c = 0; c < gridConfig.cols; c++) {
         const item = grid[r][c];
-        if (item && !item.cleared && isPathClear(r, c, item.dir, grid)) {
-          setHintId(item.id);
-          playSound('pop');
-          return;
+        if (item && !clearedIds.has(item.id) && !flyingIds.has(item.id)) {
+          if (isPathClear(r, c, item.dir, grid, clearedIds)) {
+            setHintId(item.id);
+            playSound('pop');
+            return;
+          }
         }
       }
     }
@@ -198,7 +246,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
     <div style={{
       width: '100%',
       minHeight: '440px',
-      background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+      background: 'linear-gradient(180deg, #0f172a 0%, #1e1b4b 100%)',
       borderRadius: '20px',
       color: '#fff',
       display: 'flex',
@@ -270,12 +318,12 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
           </div>
 
           {/* Title */}
-          <div style={{ margin: '24px 0' }}>
-            <h1 style={{ margin: 0, fontSize: '2.2rem', fontWeight: 900, letterSpacing: '-0.5px', color: '#fff', textShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+          <div style={{ margin: '20px 0' }}>
+            <h1 style={{ margin: 0, fontSize: '2.1rem', fontWeight: 900, letterSpacing: '-0.5px', color: '#fff', textShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
               Arrow Puzzle
             </h1>
             <p style={{ margin: '4px 0 0 0', fontSize: '0.84rem', color: '#94a3b8' }}>
-              Tap arrows to untangle & clear the maze!
+              Tap arrows to watch them shoot off & untangle the grid!
             </p>
           </div>
 
@@ -328,7 +376,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '16px' }}>
 
           {/* Top Header Navigation */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
             <button
               onClick={() => setScreen('main')}
               style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -345,9 +393,9 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
             </div>
           </div>
 
-          {/* HUD Bar (Target count & Hearts) */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: 'rgba(0,0,0,0.3)', borderRadius: '14px', marginBottom: '16px' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* HUD Bar */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: 'rgba(0,0,0,0.35)', borderRadius: '14px', marginBottom: '12px' }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#38bdf8' }}>
               <span>🚀 Remaining: {totalArrows - clearedCount}</span>
             </div>
 
@@ -364,36 +412,39 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
             </div>
           </div>
 
-          {/* Main Arrow Board Canvas */}
+          {/* Main Arrow Board Canvas (No Boxes - Pure Crisp Arrows) */}
           <div style={{
             flex: 1,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '10px'
+            padding: '4px',
+            overflow: 'hidden'
           }}>
             <div style={{
               display: 'grid',
-              gridTemplateRows: `repeat(${gridRows}, 1fr)`,
-              gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
-              gap: '6px',
+              gridTemplateRows: `repeat(${gridConfig.rows}, 1fr)`,
+              gridTemplateColumns: `repeat(${gridConfig.cols}, 1fr)`,
+              gap: gridConfig.gap,
               width: '100%',
-              maxWidth: '340px',
+              maxWidth: '360px',
               aspectRatio: '1',
-              background: 'rgba(255,255,255,0.04)',
-              border: '2px solid rgba(255,255,255,0.1)',
+              background: 'rgba(15, 23, 42, 0.6)',
+              border: '1.5px solid rgba(255,255,255,0.08)',
               borderRadius: '20px',
-              padding: '10px',
+              padding: '8px',
               position: 'relative'
             }}>
               {grid.map((row, r) =>
                 row.map((cell, c) => {
-                  if (!cell || cell.cleared) {
+                  if (!cell || clearedIds.has(cell.id)) {
                     return <div key={`${r}_${c}`} />;
                   }
 
+                  const isFlying = flyingIds.has(cell.id);
                   const isShaking = shakingId === cell.id;
                   const isHinted = hintId === cell.id;
+                  const { flyX, flyY, deg } = DIRS[cell.dir];
 
                   return (
                     <button
@@ -402,26 +453,57 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                       style={{
                         width: '100%',
                         height: '100%',
-                        borderRadius: '12px',
-                        background: isHinted
-                          ? 'linear-gradient(135deg, #f59e0b, #ef4444)'
-                          : isShaking
-                          ? '#ef4444'
-                          : 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                        border: isHinted ? '2px solid #fff' : '1px solid rgba(255,255,255,0.3)',
-                        color: '#fff',
-                        fontSize: '1.4rem',
-                        fontWeight: 900,
+                        background: 'transparent',
+                        border: 'none',
+                        outline: 'none',
+                        padding: 0,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        boxShadow: isHinted ? '0 0 15px #f59e0b' : '0 4px 10px rgba(0,0,0,0.3)',
-                        transform: `rotate(${DIRS[cell.dir].deg}deg) ${isShaking ? 'scale(0.9)' : 'scale(1)'}`,
-                        transition: 'transform 0.15s ease, background 0.15s ease'
+                        transform: isFlying
+                          ? `translate(${flyX}px, ${flyY}px) scale(0.6)`
+                          : isShaking
+                          ? 'scale(0.85)'
+                          : 'scale(1)',
+                        opacity: isFlying ? 0 : 1,
+                        transition: isFlying
+                          ? 'transform 0.32s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.32s ease'
+                          : 'transform 0.12s ease',
+                        position: 'relative',
+                        zIndex: isFlying ? 10 : 1
                       }}
                     >
-                      <span style={{ transform: 'translateY(-2px)' }}>↑</span>
+                      {/* SVG Crisp Vector Arrow (NO SQUARE BOX) */}
+                      <svg
+                        viewBox="0 0 40 40"
+                        style={{
+                          width: '85%',
+                          height: '85%',
+                          transform: `rotate(${deg}deg)`,
+                          filter: isHinted
+                            ? 'drop-shadow(0 0 8px #f59e0b)'
+                            : isShaking
+                            ? 'drop-shadow(0 0 8px #ef4444)'
+                            : 'drop-shadow(0 0 3px rgba(56, 189, 248, 0.4))'
+                        }}
+                      >
+                        {/* Arrow Line Shaft */}
+                        <line
+                          x1="20"
+                          y1="34"
+                          x2="20"
+                          y2="10"
+                          stroke={isHinted ? '#f59e0b' : isShaking ? '#ef4444' : '#38bdf8'}
+                          strokeWidth="4"
+                          strokeLinecap="round"
+                        />
+                        {/* Arrow Head Triangle */}
+                        <polygon
+                          points="20,4 10,18 30,18"
+                          fill={isHinted ? '#f59e0b' : isShaking ? '#ef4444' : '#38bdf8'}
+                        />
+                      </svg>
                     </button>
                   );
                 })
@@ -430,7 +512,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
           </div>
 
           {/* Bottom Game Controls */}
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '10px' }}>
             <button
               onClick={handleHint}
               style={{
@@ -480,7 +562,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(15, 23, 42, 0.92)',
+          background: 'rgba(15, 23, 42, 0.94)',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           flexDirection: 'column',
@@ -538,7 +620,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(15, 23, 42, 0.92)',
+          background: 'rgba(15, 23, 42, 0.94)',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           flexDirection: 'column',
