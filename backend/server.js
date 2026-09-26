@@ -878,28 +878,16 @@ io.on('connection', (socket) => {
     socket.to(chatId).emit('wb_restore', { boardDataUrl });
   });
 
-  // Real-Time Live Draw & Guess Game Socket Handlers
-  socket.on('draw_stroke', (data) => {
+  // Real-Time Live Arrow Battle Game Socket Handlers
+  socket.on('arrow_game_start', (data) => {
     if (data && data.chatId) {
-      io.to(data.chatId).emit('draw_stroke', data);
+      io.to(data.chatId).emit('arrow_game_start', data);
     }
   });
 
-  socket.on('draw_clear', (data) => {
+  socket.on('arrow_tap', (data) => {
     if (data && data.chatId) {
-      io.to(data.chatId).emit('draw_clear', data);
-    }
-  });
-
-  socket.on('draw_game_start', (data) => {
-    if (data && data.chatId) {
-      io.to(data.chatId).emit('draw_game_start', data);
-    }
-  });
-
-  socket.on('draw_guess', (data) => {
-    if (data && data.chatId) {
-      io.to(data.chatId).emit('draw_guess', data);
+      io.to(data.chatId).emit('arrow_tap', data);
     }
   });
 

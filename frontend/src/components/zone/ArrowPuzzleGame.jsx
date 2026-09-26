@@ -173,7 +173,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
 
       setFlyingIds(prev => new Set([...prev, arrow.id]));
 
-      // 750ms Smooth Flight Duration with Blend Dissolve Fade
+      // 800ms Ultra-Smooth Flight Duration with Blend Dissolve Fade
       setTimeout(() => {
         setClearedIds(prev => {
           const nextSet = new Set([...prev, arrow.id]);
@@ -187,7 +187,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
           next.delete(arrow.id);
           return next;
         });
-      }, 750);
+      }, 800);
 
       setClearedCount(prev => prev + 1);
       if (hintId === arrow.id) setHintId(null);
