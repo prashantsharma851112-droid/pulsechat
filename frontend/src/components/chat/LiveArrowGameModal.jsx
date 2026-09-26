@@ -184,8 +184,14 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const chatId = activeChat?.id;
+  const isGroup = !!activeChat?.isGroup;
   const myId = user?.id || user?._id || 'local';
+  const partnerId = activeChat?.id || activeChat?._id || 'partner';
+
+  const chatId = isGroup
+    ? activeChat?.id
+    : [myId, partnerId].sort().join('_');
+
   const myName = user?.displayName || user?.username || 'You';
   const partnerName = activeChat?.displayName || activeChat?.username || 'Partner';
 
@@ -328,6 +334,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     };
 
     const handleArrowTap = (data) => {
+      setGameStarted(true);
       const { r, c, playerId, playerName, isClear, arrowId } = data;
       const isMe = playerId === myId;
 
