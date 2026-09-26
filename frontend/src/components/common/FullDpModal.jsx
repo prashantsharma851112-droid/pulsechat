@@ -1,15 +1,33 @@
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, User as UserIcon } from 'lucide-react';
 
 export default function FullDpModal({ imageUrl, name, username, onClose }) {
   const defaultFallback = `https://api.dicebear.com/7.x/avataaars/svg?seed=${username || 'pulse'}`;
   const [imgSrc, setImgSrc] = useState(imageUrl || defaultFallback);
   const [imgLoading, setImgLoading] = useState(true);
+  const [hasFailed, setHasFailed] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setImgSrc(imageUrl || defaultFallback);
     setImgLoading(true);
+    setHasFailed(false);
+
+    // Safety timeout: Never stay stuck on "Loading DP..." for more than 1 second!
+    const timer = setTimeout(() => {
+      setImgLoading(false);
+    }, 1000);
+
+    return () => clearTimeout(timer);
   }, [imageUrl, username]);
+
+  const handleImageError = () => {
+    if (imgSrc !== defaultFallback) {
+      setImgSrc(defaultFallback);
+    } else {
+      setHasFailed(true);
+    }
+    setImgLoading(false);
+  };
 
   return (
     <div
@@ -82,35 +100,48 @@ export default function FullDpModal({ imageUrl, name, username, onClose }) {
         }}
       >
         {imgLoading && (
-          <div style={{ position: 'absolute', color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem' }}>
+          <div style={{ position: 'absolute', color: 'rgba(255,255,255,0.75)', fontSize: '0.9rem', fontWeight: 600 }}>
             Loading DP...
           </div>
         )}
-        <img
-          src={imgSrc}
-          alt={name || 'Profile Picture'}
-          onLoad={() => setImgLoading(false)}
-          onError={() => {
-            if (imgSrc !== defaultFallback) {
-              setImgSrc(defaultFallback);
-            }
-            setImgLoading(false);
-          }}
-          style={{
-            width: 'auto',
-            height: 'auto',
-            minWidth: '260px',
-            minHeight: '260px',
-            maxWidth: '85vw',
-            maxHeight: '75vh',
-            borderRadius: '24px',
-            objectFit: 'contain',
-            boxShadow: '0 25px 70px rgba(0, 0, 0, 0.8)',
-            border: '2px solid rgba(255, 255, 255, 0.2)',
-            opacity: imgLoading ? 0 : 1,
-            transition: 'opacity 0.25s ease'
-          }}
-        />
+
+        {hasFailed ? (
+          <div style={{
+            width: '260px',
+            height: '260px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#fff',
+            fontSize: '4rem',
+            fontWeight: 900
+          }}>
+            {name ? name.charAt(0).toUpperCase() : <UserIcon size={80} />}
+          </div>
+        ) : (
+          <img
+            src={imgSrc}
+            alt={name || 'Profile Picture'}
+            onLoad={() => setImgLoading(false)}
+            onError={handleImageError}
+            style={{
+              width: 'auto',
+              height: 'auto',
+              minWidth: '220px',
+              minHeight: '220px',
+              maxWidth: '85vw',
+              maxHeight: '75vh',
+              borderRadius: '24px',
+              objectFit: 'contain',
+              boxShadow: '0 25px 70px rgba(0, 0, 0, 0.8)',
+              border: '2px solid rgba(255, 255, 255, 0.2)',
+              opacity: imgLoading ? 0.3 : 1,
+              transition: 'opacity 0.2s ease'
+            }}
+          />
+        )}
       </div>
 
       {/* Click outside hint */}

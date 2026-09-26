@@ -10,6 +10,8 @@ const VibeSchema = new mongoose.Schema({
   caption: { type: String, default: '' },
   soundtrack: { type: String, default: 'lofi' },
   bgGradient: { type: String, default: 'linear-gradient(135deg, #1e1b4b 0%, #311042 100%)' },
+  textStyle3D: { type: String, default: 'none' },
+  animatedBg: { type: String, default: 'none' },
   views: [{
     userId: String,
     displayName: String,

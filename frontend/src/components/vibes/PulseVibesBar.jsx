@@ -59,25 +59,37 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
       }
     } catch (e) {}
 
-    const combinedGroups = [...serverGroups];
-    const currentUserId = user?.id || user?._id || 'local_user';
-
-    // Merge local user's own vibes if any
+    // Merge ALL active local vibes grouped by userId (so ANY user's local or socket vibes are visible)
     if (localVibes.length > 0) {
-      const myGroupIndex = combinedGroups.findIndex(g => isMyId(g.userId));
-      if (myGroupIndex >= 0) {
-        const existingIds = new Set(combinedGroups[myGroupIndex].vibes.map(v => v.id));
-        const newLocal = localVibes.filter(v => !existingIds.has(v.id));
-        combinedGroups[myGroupIndex].vibes = [...newLocal, ...combinedGroups[myGroupIndex].vibes];
-      } else {
-        combinedGroups.unshift({
-          userId: currentUserId,
-          username: user?.username || 'you',
-          displayName: user?.displayName || user?.username || 'You',
-          avatar: user?.avatar,
-          vibes: localVibes
-        });
-      }
+      const localMap = {};
+      localVibes.forEach(vibe => {
+        const uId = vibe.userId || (vibe.username ? `user_${vibe.username}` : 'local_user');
+        if (!localMap[uId]) {
+          localMap[uId] = {
+            userId: uId,
+            username: vibe.username || 'user',
+            displayName: vibe.displayName || vibe.username || 'User',
+            avatar: vibe.avatar || '',
+            vibes: []
+          };
+        }
+        localMap[uId].vibes.push(vibe);
+      });
+
+      Object.values(localMap).forEach(localGrp => {
+        const existingIdx = combinedGroups.findIndex(g => isMyId(g.userId) ? isMyId(localGrp.userId) : (g.userId === localGrp.userId || (g.username && g.username === localGrp.username)));
+        if (existingIdx >= 0) {
+          const existingIds = new Set(combinedGroups[existingIdx].vibes.map(v => v.id));
+          const newVibes = localGrp.vibes.filter(v => !existingIds.has(v.id));
+          combinedGroups[existingIdx].vibes = [...newVibes, ...combinedGroups[existingIdx].vibes];
+        } else {
+          if (isMyId(localGrp.userId)) {
+            combinedGroups.unshift(localGrp);
+          } else {
+            combinedGroups.push(localGrp);
+          }
+        }
+      });
     }
 
     setGroupedVibes(combinedGroups);

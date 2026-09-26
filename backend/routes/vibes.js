@@ -8,7 +8,7 @@ const User = require('../models/User');
 // Create a new 24-hour Vibe Story
 router.post('/create', authMiddleware, async (req, res) => {
   try {
-    const { mediaUrl, caption, soundtrack, bgGradient } = req.body;
+    const { mediaUrl, caption, soundtrack, bgGradient, textStyle3D, animatedBg } = req.body;
     const isObjectId = mongoose.Types.ObjectId.isValid(req.userId);
 
     const user = await User.findOne({
@@ -37,6 +37,8 @@ router.post('/create', authMiddleware, async (req, res) => {
       caption: caption || '',
       soundtrack: soundtrack || 'lofi',
       bgGradient: bgGradient || 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+      textStyle3D: textStyle3D || 'none',
+      animatedBg: animatedBg || 'none',
       expiresAt
     });
 
