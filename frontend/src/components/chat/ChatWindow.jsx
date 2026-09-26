@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useContext, useCallback, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, Crown } from 'lucide-react';
@@ -375,6 +375,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [groupMembersMap, setGroupMembersMap] = useState({});
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  const deduplicatedMessages = useMemo(() => {
+    const seen = new Set();
+    const deduped = [];
+    for (const m of messages) {
+      const pKey = m.id || m.clientTempId;
+      const tKey = m.clientTempId;
+      if (pKey && seen.has(pKey)) continue;
+      if (tKey && seen.has(tKey)) continue;
+      if (pKey) seen.add(pKey);
+      if (tKey) seen.add(tKey);
+      deduped.push(m);
+    }
+    return deduped;
+  }, [messages]);
 
   // Reply state (WhatsApp style)
   const [replyTo, setReplyTo] = useState(null);
@@ -2046,14 +2061,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
         )}
 
-        {messages.map((msg, index) => {
+        {deduplicatedMessages.map((msg, index) => {
           const senderObj = groupMembersMap[msg.senderId];
-          const prevMsg = index > 0 ? messages[index - 1] : null;
+          const prevMsg = index > 0 ? deduplicatedMessages[index - 1] : null;
           const showDateHeader = index === 0 || isDifferentDay(prevMsg?.timestamp, msg.timestamp);
           const dateLabel = formatMessageDateHeader(msg.timestamp);
 
           return (
-            <React.Fragment key={msg.id}>
+            <React.Fragment key={msg.id || msg.clientTempId || index}>
               {showDateHeader && (
                 <div style={{ display: 'flex', justifyContent: 'center', margin: '0.5rem 0' }}>
                   <div

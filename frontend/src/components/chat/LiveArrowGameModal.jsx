@@ -76,6 +76,24 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
   const myName = user?.displayName || user?.username || 'You';
   const partnerName = activeChat?.displayName || activeChat?.username || 'Partner';
 
+  const myScoreRef = useRef(0);
+  const partnerScoreRef = useRef(0);
+  const coopScoreRef = useRef(0);
+  const modeRef = useRef('versus');
+  const userRef = useRef(user);
+  const clearedIdsRef = useRef(new Set());
+  const flyingIdsRef = useRef(new Set());
+  const gridRef = useRef([]);
+
+  useEffect(() => { myScoreRef.current = myScore; }, [myScore]);
+  useEffect(() => { partnerScoreRef.current = partnerScore; }, [partnerScore]);
+  useEffect(() => { coopScoreRef.current = coopScore; }, [coopScore]);
+  useEffect(() => { modeRef.current = mode; }, [mode]);
+  useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => { clearedIdsRef.current = clearedIds; }, [clearedIds]);
+  useEffect(() => { flyingIdsRef.current = flyingIds; }, [flyingIds]);
+  useEffect(() => { gridRef.current = grid; }, [grid]);
+
   // Generate a 100% guaranteed solvable Arrow Puzzle board in reverse order
   const generateSolvableBoard = (rows = 7, cols = 7, density = 0.72) => {
     const board = Array.from({ length: rows }, () => Array(cols).fill(null));
@@ -124,16 +142,23 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
   const startNewGame = (gameMode = mode) => {
     const { board, total } = generateSolvableBoard(7, 7, 0.72);
     setGrid(board);
+    gridRef.current = board;
     setTotalArrows(total);
     setClearedIds(new Set());
+    clearedIdsRef.current = new Set();
     setFlyingIds(new Set());
+    flyingIdsRef.current = new Set();
     setMyScore(0);
+    myScoreRef.current = 0;
     setPartnerScore(0);
+    partnerScoreRef.current = 0;
     setCoopScore(0);
+    coopScoreRef.current = 0;
     setTimeLeft(45);
     setIsGameOver(false);
     setWinner(null);
     setMode(gameMode);
+    modeRef.current = gameMode;
 
     if (socket && chatId) {
       socket.emit('arrow_game_start', {
@@ -154,37 +179,66 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
 
     const handleGameStart = (data) => {
       setGrid(data.board);
+      gridRef.current = data.board;
       setTotalArrows(data.total);
       setClearedIds(new Set());
+      clearedIdsRef.current = new Set();
       setFlyingIds(new Set());
+      flyingIdsRef.current = new Set();
       setMyScore(0);
+      myScoreRef.current = 0;
       setPartnerScore(0);
+      partnerScoreRef.current = 0;
       setCoopScore(0);
+      coopScoreRef.current = 0;
       setTimeLeft(45);
       setIsGameOver(false);
       setWinner(null);
-      if (data.mode) setMode(data.mode);
+      if (data.mode) {
+        setMode(data.mode);
+        modeRef.current = data.mode;
+      }
     };
 
     const handleArrowTap = (data) => {
       const { r, c, playerId, playerName, isClear, arrowId } = data;
       const isMe = playerId === myId;
 
+      // Ignore if already cleared or flying
+      if (clearedIdsRef.current.has(arrowId) || flyingIdsRef.current.has(arrowId)) return;
+
       if (isClear) {
         playSwooshSound();
-        setFlyingIds(prev => new Set([...prev, arrowId]));
+        setFlyingIds(prev => {
+          const next = new Set([...prev, arrowId]);
+          flyingIdsRef.current = next;
+          return next;
+        });
         setLastTapInfo({ name: playerName, isMe, x: c, y: r });
 
         if (isMe) {
-          setMyScore(prev => prev + 10);
+          setMyScore(prev => {
+            const val = prev + 10;
+            myScoreRef.current = val;
+            return val;
+          });
         } else {
-          setPartnerScore(prev => prev + 10);
+          setPartnerScore(prev => {
+            const val = prev + 10;
+            partnerScoreRef.current = val;
+            return val;
+          });
         }
-        setCoopScore(prev => prev + 10);
+        setCoopScore(prev => {
+          const val = prev + 10;
+          coopScoreRef.current = val;
+          return val;
+        });
 
         setTimeout(() => {
           setClearedIds(prev => {
             const next = new Set([...prev, arrowId]);
+            clearedIdsRef.current = next;
             if (next.size >= totalArrows) {
               setTimeout(() => handleFinishGame(true), 300);
             }
@@ -193,9 +247,10 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
           setFlyingIds(prev => {
             const next = new Set(prev);
             next.delete(arrowId);
+            flyingIdsRef.current = next;
             return next;
           });
-        }, 800); // 800ms ultra-smooth flying flight duration
+        }, 800);
       } else {
         playBumpSound();
         setShakingId(arrowId);
@@ -234,30 +289,33 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     return () => clearInterval(timer);
   }, [timeLeft, isGameOver]);
 
-  // Check if path to boundary is clear
-  const isPathClear = (r, c, dirKey, currentBoard, clearedSet) => {
+  // Check if path to boundary is clear (flying arrows DO NOT block!)
+  const isPathClear = (r, c, dirKey, currentBoard) => {
     const { dr, dc } = DIRS[dirKey];
     let currR = r + dr;
     let currC = c + dc;
 
+    const clearedSet = clearedIdsRef.current;
+    const flyingSet = flyingIdsRef.current;
+
     while (currR >= 0 && currR < gridRows && currC >= 0 && currC < gridCols) {
       const item = currentBoard[currR][currC];
-      if (item && !clearedSet.has(item.id)) {
-        return false;
+      if (item && !clearedSet.has(item.id) && !flyingSet.has(item.id)) {
+        return false; // Real un-cleared obstacle found!
       }
       currR += dr;
       currC += dc;
     }
-    return true;
+    return true; // Path clear to edge!
   };
 
   // Player Taps an Arrow
   const handleTap = (r, c) => {
     if (isGameOver) return;
     const arrow = grid[r][c];
-    if (!arrow || clearedIds.has(arrow.id) || flyingIds.has(arrow.id)) return;
+    if (!arrow || clearedIdsRef.current.has(arrow.id) || flyingIdsRef.current.has(arrow.id)) return;
 
-    const clear = isPathClear(r, c, arrow.dir, grid, clearedIds);
+    const clear = isPathClear(r, c, arrow.dir, grid);
 
     if (socket && chatId) {
       socket.emit('arrow_tap', {
@@ -273,14 +331,31 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
       // Local fallback
       if (clear) {
         playSwooshSound();
-        setFlyingIds(prev => new Set([...prev, arrow.id]));
-        setMyScore(prev => prev + 10);
-        setCoopScore(prev => prev + 10);
+        setFlyingIds(prev => {
+          const next = new Set([...prev, arrow.id]);
+          flyingIdsRef.current = next;
+          return next;
+        });
+        setMyScore(prev => {
+          const val = prev + 10;
+          myScoreRef.current = val;
+          return val;
+        });
+        setCoopScore(prev => {
+          const val = prev + 10;
+          coopScoreRef.current = val;
+          return val;
+        });
         setTimeout(() => {
-          setClearedIds(prev => new Set([...prev, arrow.id]));
+          setClearedIds(prev => {
+            const next = new Set([...prev, arrow.id]);
+            clearedIdsRef.current = next;
+            return next;
+          });
           setFlyingIds(prev => {
             const next = new Set(prev);
             next.delete(arrow.id);
+            flyingIdsRef.current = next;
             return next;
           });
         }, 800);
@@ -296,21 +371,26 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     setIsGameOver(true);
     playSound('success');
 
+    const m = modeRef.current;
+    const s1 = myScoreRef.current;
+    const s2 = partnerScoreRef.current;
+    const sTeam = coopScoreRef.current;
+
     let winText = '';
-    if (mode === 'versus') {
-      if (myScore > partnerScore) {
-        winText = `🎉 You Won! (${myScore} vs ${partnerScore} pts)`;
-        const currentSparks = user?.pulseSparks || 100;
-        if (updateUserProfile) updateUserProfile({ ...user, pulseSparks: currentSparks + 50 });
-      } else if (partnerScore > myScore) {
-        winText = `👑 ${partnerName} Won! (${partnerScore} vs ${myScore} pts)`;
+    if (m === 'versus') {
+      if (s1 > s2) {
+        winText = `🎉 You Won! (${s1} vs ${s2} pts)`;
+        const curSparks = userRef.current?.pulseSparks || 100;
+        if (updateUserProfile) updateUserProfile({ ...userRef.current, pulseSparks: curSparks + 50 });
+      } else if (s2 > s1) {
+        winText = `👑 ${partnerName} Won! (${s2} vs ${s1} pts)`;
       } else {
-        winText = `🤝 It's a Tie! (${myScore} pts)`;
+        winText = `🤝 It's a Tie! (${s1} pts)`;
       }
     } else {
-      winText = clearedAll ? `🎉 Victory! Board Cleared!` : `⏱️ Time's Up! Team Score: ${coopScore} pts`;
-      const currentSparks = user?.pulseSparks || 100;
-      if (updateUserProfile) updateUserProfile({ ...user, pulseSparks: currentSparks + 50 });
+      winText = clearedAll ? `🎉 Victory! Board Cleared!` : `⏱️ Time's Up! Team Score: ${sTeam} pts`;
+      const curSparks = userRef.current?.pulseSparks || 100;
+      if (updateUserProfile) updateUserProfile({ ...userRef.current, pulseSparks: curSparks + 50 });
     }
 
     setWinner(winText);

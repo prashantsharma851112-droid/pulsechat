@@ -216,7 +216,14 @@ export function setCachedMessages(chatId, messages) {
 export function appendCachedMessage(chatId, message) {
   if (!chatId || !message) return;
   const msgs = getCachedMessages(chatId);
-  if (msgs.some(m => (m.id && m.id === message.id) || (m.tempId && m.tempId === message.tempId))) {
+  const targetId = message.id || message.clientTempId;
+  const targetTempId = message.clientTempId || message.tempId;
+
+  if (msgs.some(m =>
+    (targetId && m.id === targetId) ||
+    (targetTempId && (m.clientTempId === targetTempId || m.tempId === targetTempId || m.id === targetTempId)) ||
+    (m.clientTempId && targetId && m.clientTempId === targetId)
+  )) {
     return;
   }
   setCachedMessages(chatId, [...msgs, message]);
@@ -226,8 +233,8 @@ export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
   if (!chatId || !messageIdOrTempId || !updates) return;
   const msgs = getCachedMessages(chatId);
   const updated = msgs.map(m => {
-    if (m.id === messageIdOrTempId || m.tempId === messageIdOrTempId) {
-      return { ...m, ...updates };
+    if (m.id === messageIdOrTempId || m.clientTempId === messageIdOrTempId || m.tempId === messageIdOrTempId) {
+      return typeof updates === 'string' ? { ...m, status: updates } : { ...m, ...updates };
     }
     return m;
   });
