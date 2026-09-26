@@ -279,6 +279,33 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     return 'granted';
   });
 
+  const handleAvatarStoryClick = async (e, targetUser) => {
+    e.stopPropagation();
+    const targetId = targetUser.id || targetUser._id || targetUser.username;
+
+    let userVibeGroup = null;
+    const curToken = token || localStorage.getItem('pulsechat_token');
+    if (curToken && targetId) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/vibes/user/${targetId}`, {
+          headers: { Authorization: `Bearer ${curToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.vibes && data.vibes.length > 0) {
+            userVibeGroup = data;
+          }
+        }
+      } catch (err) {}
+    }
+
+    if (userVibeGroup) {
+      setSelectedVibeGroup(userVibeGroup);
+    } else {
+      if (onOpenFullDp) onOpenFullDp(targetUser.avatar, targetUser.displayName || targetUser.name, targetUser.username);
+    }
+  };
+
   // Next-Gen Feature States
   const [silentMode, setSilentMode] = useState(false);
   const [showPanicModal, setShowPanicModal] = useState(false);
@@ -1894,10 +1921,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                       <img
                         src={u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`}
                         alt="Avatar"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (onOpenFullDp) onOpenFullDp(u.avatar, u.displayName, u.username);
-                        }}
+                        onClick={(e) => handleAvatarStoryClick(e, u)}
                         onError={(e) => {
                           e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
                         }}
@@ -1954,10 +1978,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                       <img
                         src={u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`}
                         alt="Avatar"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (onOpenFullDp) onOpenFullDp(u.avatar, u.displayName, u.username);
-                        }}
+                        onClick={(e) => handleAvatarStoryClick(e, u)}
                         onError={(e) => {
                           e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
                         }}

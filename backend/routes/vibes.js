@@ -98,6 +98,47 @@ router.get('/active', authMiddleware, async (req, res) => {
   }
 });
 
+// Fetch active vibes for a specific user ID or username
+router.get('/user/:userId', authMiddleware, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const isObjectId = mongoose.Types.ObjectId.isValid(userId);
+
+    const user = await User.findOne({
+      $or: [
+        { id: userId },
+        ...(isObjectId ? [{ _id: userId }] : []),
+        { username: userId }
+      ]
+    }).lean();
+
+    const searchIds = [
+      userId,
+      ...(user ? [user.id, user._id?.toString(), user.username] : [])
+    ].filter(Boolean);
+
+    const vibes = await Vibe.find({
+      userId: { $in: searchIds },
+      $or: [
+        { expiresAt: { $gt: now } },
+        { createdAt: { $gt: twentyFourHoursAgo } }
+      ]
+    }).sort({ createdAt: -1 }).lean();
+
+    res.json({
+      userId: user?.id || userId,
+      displayName: user?.displayName || user?.username || 'User',
+      username: user?.username || '',
+      avatar: user?.avatar || '',
+      vibes
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch user vibes' });
+  }
+});
+
 // Mark a Vibe Story as viewed by current user
 router.post('/view/:vibeId', authMiddleware, async (req, res) => {
   try {

@@ -4,8 +4,27 @@ import { SocketContext } from '../../context/SocketContext';
 import { Plus, Sparkles } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 
-// Sample Active Community Stories if DB has no other stories yet
+// Active Featured & Community Vibe Stories
 const SAMPLE_COMMUNITY_VIBES = [
+  {
+    userId: 'sunaina_singh',
+    displayName: 'Sunaina Singh 🌸',
+    username: 'sunaina_singh',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sunaina',
+    vibes: [
+      {
+        id: 'vibe_sunaina_1',
+        userId: 'sunaina_singh',
+        caption: 'Good morning Pulse family! Have a wonderful day 🌸✨',
+        mediaUrl: null,
+        soundtrack: '🎧 Lofi Chill Beats',
+        bgGradient: 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)',
+        createdAt: new Date().toISOString(),
+        views: [{ userId: '1', displayName: 'User' }],
+        sparksEarned: 40
+      }
+    ]
+  },
   {
     userId: 'community_1',
     displayName: 'Pulse Official ⚡',
@@ -126,15 +145,12 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
       }
     }
 
-    // If no other user vibes exist yet, include sample active community vibes
-    const hasOtherVibes = combinedGroups.some(g => !isMyId(g.userId));
-    if (!hasOtherVibes) {
-      SAMPLE_COMMUNITY_VIBES.forEach(sample => {
-        if (!combinedGroups.some(g => g.userId === sample.userId)) {
-          combinedGroups.push(sample);
-        }
-      });
-    }
+    // Include featured community stories (including Sunaina Singh)
+    SAMPLE_COMMUNITY_VIBES.forEach(sample => {
+      if (!combinedGroups.some(g => g.userId === sample.userId || (sample.username && g.username === sample.username))) {
+        combinedGroups.push(sample);
+      }
+    });
 
     setGroupedVibes(combinedGroups);
   };
