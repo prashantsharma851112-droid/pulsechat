@@ -29,6 +29,18 @@ router.post('/create', authMiddleware, async (req, res) => {
       expiresAt
     });
 
+    // Real-time broadcast to ALL connected users via Socket.io
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('new_vibe_posted', {
+        userId: user.id,
+        displayName: user.displayName || user.username,
+        username: user.username,
+        avatar: user.avatar,
+        vibe: newVibe
+      });
+    }
+
     res.json({ success: true, vibe: newVibe });
   } catch (err) {
     console.error('Error creating vibe:', err);
@@ -40,7 +52,14 @@ router.post('/create', authMiddleware, async (req, res) => {
 router.get('/active', authMiddleware, async (req, res) => {
   try {
     const now = new Date();
-    const activeVibes = await Vibe.find({ expiresAt: { $gt: now } })
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const activeVibes = await Vibe.find({
+      $or: [
+        { expiresAt: { $gt: now } },
+        { createdAt: { $gt: twentyFourHoursAgo } }
+      ]
+    })
       .sort({ createdAt: -1 })
       .lean();
 
@@ -50,9 +69,9 @@ router.get('/active', authMiddleware, async (req, res) => {
       if (!groupedMap.has(v.userId)) {
         groupedMap.set(v.userId, {
           userId: v.userId,
-          displayName: v.displayName,
-          username: v.username,
-          avatar: v.avatar,
+          displayName: v.displayName || v.username || 'Pulse User',
+          username: v.username || '',
+          avatar: v.avatar || '',
           vibes: []
         });
       }
