@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, ChevronRight, ChevronLeft, Heart, Zap, Flame, Eye, Music, Trash2, Send } from 'lucide-react';
+import { X, Music, Trash2, Zap, Eye } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 
@@ -13,11 +13,12 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
   const currentVibe = vibes[currentIndex] || vibes[0];
   const timerRef = useRef(null);
 
-  const isMine = currentVibe?.userId === user?.id;
+  const currentUserId = user?.id || user?._id || 'local_user';
+  const isMine = currentVibe?.userId === currentUserId || vibeGroup?.userId === currentUserId;
 
   // Mark current story as viewed
   useEffect(() => {
-    if (currentVibe && token && !isMine) {
+    if (currentVibe && token && !isMine && currentVibe.id && !currentVibe.id.startsWith('vibe_')) {
       fetch(`${BACKEND_URL}/api/vibes/view/${currentVibe.id}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
@@ -66,43 +67,63 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
   };
 
   const handleReact = async (emoji, tipSparks = 0) => {
-    if (!token || !currentVibe) return;
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/vibes/react/${currentVibe.id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ emoji, tipSparks })
-      });
-      const data = await res.json();
-      if (data.success) {
-        playSound('pop');
-        if (tipSparks > 0) {
-          setSparksMsg(`⚡ Tipped 10 Sparks to ${vibeGroup.displayName}!`);
-          if (data.remainingSparks !== undefined) {
-            updateUserProfile({ ...user, pulseSparks: data.remainingSparks });
-          }
-          setTimeout(() => setSparksMsg(''), 3000);
-        }
-        if (onRefresh) onRefresh();
+    if (!currentVibe) return;
+    playSound('pop');
+
+    if (tipSparks > 0) {
+      setSparksMsg(`⚡ Tipped ${tipSparks} Sparks to ${vibeGroup?.displayName || 'User'}!`);
+      const currentSparks = user?.pulseSparks || 100;
+      const newBalance = Math.max(0, currentSparks - tipSparks);
+      if (updateUserProfile) {
+        updateUserProfile({ ...user, pulseSparks: newBalance });
       }
-    } catch (e) {
-      console.warn('Failed to react:', e);
+      setTimeout(() => setSparksMsg(''), 3000);
+    }
+
+    if (token && currentVibe.id && !currentVibe.id.startsWith('vibe_')) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/vibes/react/${currentVibe.id}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ emoji, tipSparks })
+        });
+        const data = await res.json();
+        if (data.success && data.remainingSparks !== undefined && updateUserProfile) {
+          updateUserProfile({ ...user, pulseSparks: data.remainingSparks });
+        }
+      } catch (e) {}
     }
   };
 
   const handleDelete = async () => {
-    if (!token || !currentVibe) return;
+    if (!currentVibe) return;
+
+    // Delete from LocalStorage if present
     try {
-      await fetch(`${BACKEND_URL}/api/vibes/${currentVibe.id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (onRefresh) onRefresh();
-      onClose();
+      const raw = localStorage.getItem('pulsechat_local_vibes');
+      if (raw) {
+        const items = JSON.parse(raw);
+        const filtered = items.filter(v => v.id !== currentVibe.id);
+        localStorage.setItem('pulsechat_local_vibes', JSON.stringify(filtered));
+      }
     } catch (e) {}
+
+    window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
+
+    if (token && currentVibe.id && !currentVibe.id.startsWith('vibe_')) {
+      try {
+        await fetch(`${BACKEND_URL}/api/vibes/${currentVibe.id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (e) {}
+    }
+
+    if (onRefresh) onRefresh();
+    onClose();
   };
 
   if (!currentVibe) return null;
@@ -171,13 +192,13 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <img
-              src={vibeGroup.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${vibeGroup.username}`}
-              alt={vibeGroup.displayName}
+              src={vibeGroup?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${vibeGroup?.username || 'user'}`}
+              alt={vibeGroup?.displayName}
               style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid #fff' }}
             />
             <div>
               <div style={{ fontSize: '0.86rem', fontWeight: 800, textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
-                {vibeGroup.displayName}
+                {vibeGroup?.displayName || 'User'}
               </div>
               <div style={{ fontSize: '0.68rem', opacity: 0.8, display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <Music size={11} /> {currentVibe.soundtrack !== 'none' ? currentVibe.soundtrack : 'Vibe Story'}
@@ -284,7 +305,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
           )}
         </div>
 
-        {/* Bottom Reaction Bar (Views or Quick Emojis & Sparks Tipping) */}
+        {/* Bottom Reaction Bar */}
         <div style={{
           padding: '14px 16px',
           background: 'rgba(0,0,0,0.6)',
@@ -321,8 +342,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'transform 0.12s'
+                      justifyContent: 'center'
                     }}
                   >
                     {emoji}

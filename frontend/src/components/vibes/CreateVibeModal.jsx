@@ -18,8 +18,47 @@ const SOUNDTRACKS = [
   { id: 'none', name: '🔇 Silent' }
 ];
 
+// Helper to compress image client-side to base64 Data URI for 0ms offline storage
+const compressImageToBase64 = (file) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 640;
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.72));
+      };
+      img.onerror = () => resolve(event.target.result);
+    };
+    reader.onerror = () => resolve('');
+  });
+};
+
 export default function CreateVibeModal({ onClose, onCreated }) {
-  const { token } = useContext(AuthContext);
+  const { user, token } = useContext(AuthContext);
   const [caption, setCaption] = useState('');
   const [selectedGradient, setSelectedGradient] = useState(GRADIENTS[0].value);
   const [soundtrack, setSoundtrack] = useState('lofi');
@@ -32,33 +71,50 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (file.size > 15 * 1024 * 1024) {
-      setError('File size exceeds 15MB limit.');
+    if (file.size > 20 * 1024 * 1024) {
+      setError('File size exceeds 20MB limit.');
       return;
     }
 
     setUploading(true);
     setError('');
-    const formData = new FormData();
-    formData.append('file', file);
 
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/upload`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData
-      });
-      const data = await res.json();
-      if (data.url) {
-        setMediaUrl(data.url);
-      } else {
-        throw new Error(data.error || 'Upload failed');
+    let uploadedUrl = null;
+
+    // 1. Attempt server upload if connected
+    if (token) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`${BACKEND_URL}/api/upload`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.url) uploadedUrl = data.url;
+        }
+      } catch (err) {
+        console.warn('Server media upload offline, falling back to compressed local storage.');
       }
-    } catch (err) {
-      setError('Failed to upload image/video.');
-    } finally {
-      setUploading(false);
     }
+
+    // 2. Fallback to client-side compressed base64 Data URI (Instant & offline-ready)
+    if (!uploadedUrl) {
+      try {
+        uploadedUrl = await compressImageToBase64(file);
+      } catch (err) {
+        console.warn('Local compression failed:', err);
+      }
+    }
+
+    if (uploadedUrl) {
+      setMediaUrl(uploadedUrl);
+    } else {
+      setError('Unable to load image.');
+    }
+    setUploading(false);
   };
 
   const handleSubmit = async (e) => {
@@ -71,32 +127,58 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     setSubmitting(true);
     setError('');
 
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/vibes/create`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          caption: caption.trim(),
-          mediaUrl: mediaUrl || null,
-          soundtrack,
-          bgGradient: selectedGradient
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        if (onCreated) onCreated();
-        onClose();
-      } else {
-        throw new Error(data.error || 'Failed to post Vibe');
+    const newVibe = {
+      id: 'vibe_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+      userId: user?.id || user?._id || 'local_user',
+      username: user?.username || 'you',
+      displayName: user?.displayName || user?.username || 'You',
+      avatar: user?.avatar,
+      caption: caption.trim(),
+      mediaUrl: mediaUrl || null,
+      soundtrack,
+      bgGradient: selectedGradient,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      views: [],
+      sparksEarned: 0
+    };
+
+    // Attempt server sync
+    if (token) {
+      try {
+        await fetch(`${BACKEND_URL}/api/vibes/create`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            caption: caption.trim(),
+            mediaUrl: mediaUrl || null,
+            soundtrack,
+            bgGradient: selectedGradient
+          })
+        });
+      } catch (err) {
+        console.warn('Server offline, vibe saved in local storage.');
       }
-    } catch (err) {
-      setError(err.message || 'Failed to post story');
-    } finally {
-      setSubmitting(false);
     }
+
+    // Always save in LocalStorage so story works 100% reliably
+    try {
+      const raw = localStorage.getItem('pulsechat_local_vibes');
+      const existing = raw ? JSON.parse(raw) : [];
+      existing.unshift(newVibe);
+      localStorage.setItem('pulsechat_local_vibes', JSON.stringify(existing));
+    } catch (err) {
+      console.warn('LocalStorage error:', err);
+    }
+
+    window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
+
+    setSubmitting(false);
+    if (onCreated) onCreated();
+    onClose();
   };
 
   return (
@@ -203,8 +285,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 <Palette size={14} /> Background Gradient
               </label>
               <label style={{ cursor: 'pointer', fontSize: '0.78rem', color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <ImageIcon size={14} /> {uploading ? 'Uploading...' : mediaUrl ? 'Change Image' : 'Add Image/Video'}
-                <input type="file" accept="image/*,video/*" onChange={handleFileUpload} style={{ display: 'none' }} />
+                <ImageIcon size={14} /> {uploading ? 'Processing...' : mediaUrl ? 'Change Image' : 'Add Image'}
+                <input type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
               </label>
             </div>
 

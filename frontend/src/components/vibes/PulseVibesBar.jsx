@@ -1,38 +1,78 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { Plus, Sparkles, Flame, Eye, Music } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
-import PulseVipBadge from '../common/PulseVipBadge';
 
 export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
   const { user, token } = useContext(AuthContext);
   const [groupedVibes, setGroupedVibes] = useState([]);
-  const [loading, setLoading] = useState(false);
 
   const fetchActiveVibes = async () => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/vibes/active`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setGroupedVibes(data);
+    let serverGroups = [];
+    if (token) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/vibes/active`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) serverGroups = data;
+        }
+      } catch (e) {
+        console.warn('Backend vibes offline, using local storage.');
       }
-    } catch (e) {
-      console.warn('Error loading active vibes:', e);
     }
+
+    // Load active LocalStorage vibes
+    let localVibes = [];
+    try {
+      const raw = localStorage.getItem('pulsechat_local_vibes');
+      if (raw) {
+        const items = JSON.parse(raw);
+        const now = Date.now();
+        // Keep only active vibes (< 24h old)
+        localVibes = items.filter(v => (now - new Date(v.createdAt).getTime()) < 24 * 60 * 60 * 1000);
+      }
+    } catch (e) {}
+
+    const combinedGroups = [...serverGroups];
+    const currentUserId = user?.id || user?._id || 'local_user';
+
+    if (localVibes.length > 0) {
+      const myGroupIndex = combinedGroups.findIndex(g => g.userId === currentUserId);
+      if (myGroupIndex >= 0) {
+        const existingIds = new Set(combinedGroups[myGroupIndex].vibes.map(v => v.id));
+        const newLocal = localVibes.filter(v => !existingIds.has(v.id));
+        combinedGroups[myGroupIndex].vibes = [...newLocal, ...combinedGroups[myGroupIndex].vibes];
+      } else {
+        combinedGroups.unshift({
+          userId: currentUserId,
+          username: user?.username || 'you',
+          displayName: user?.displayName || user?.username || 'You',
+          avatar: user?.avatar,
+          vibes: localVibes
+        });
+      }
+    }
+
+    setGroupedVibes(combinedGroups);
   };
 
   useEffect(() => {
     fetchActiveVibes();
-    const interval = setInterval(fetchActiveVibes, 30000); // refresh every 30s
-    return () => clearInterval(interval);
-  }, [token]);
+    const interval = setInterval(fetchActiveVibes, 30000);
+    const handleUpdate = () => fetchActiveVibes();
+    window.addEventListener('pulsechat_vibes_updated', handleUpdate);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('pulsechat_vibes_updated', handleUpdate);
+    };
+  }, [token, user]);
 
   // Separate user's own vibes from others
-  const myVibesGroup = groupedVibes.find(g => g.userId === user?.id);
-  const otherVibesGroups = groupedVibes.filter(g => g.userId !== user?.id);
+  const currentUserId = user?.id || user?._id || 'local_user';
+  const myVibesGroup = groupedVibes.find(g => g.userId === currentUserId);
+  const otherVibesGroups = groupedVibes.filter(g => g.userId !== currentUserId);
 
   return (
     <div style={{
@@ -183,7 +223,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
               />
             </div>
             <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-main)', maxWidth: '58px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {group.displayName.split(' ')[0]}
+              {group.displayName ? group.displayName.split(' ')[0] : 'User'}
             </span>
           </div>
         ))}
