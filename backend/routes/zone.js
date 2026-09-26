@@ -179,6 +179,11 @@ router.post('/game-score', authMiddleware, async (req, res) => {
       timestamp: s.updatedAt
     }));
 
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('leaderboard_updated', leaderboardList);
+    }
+
     res.json({
       success: true,
       rewardSparks,

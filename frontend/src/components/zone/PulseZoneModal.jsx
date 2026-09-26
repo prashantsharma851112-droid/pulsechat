@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
+import { SocketContext } from '../../context/SocketContext';
 import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
@@ -7,6 +8,7 @@ import ArrowPuzzleGame from './ArrowPuzzleGame';
 
 export default function PulseZoneModal({ onClose }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
+  const { socket } = useContext(SocketContext);
   const [activeTab, setActiveTab] = useState('games'); // 'games' | 'leaderboard'
   const [selectedGame, setSelectedGame] = useState('arrow'); // 'arrow' | 'tapper'
 
@@ -26,68 +28,14 @@ export default function PulseZoneModal({ onClose }) {
       if (pts > oldHigh) {
         localStorage.setItem('pulsechat_local_high_score', pts.toString());
       }
-
-      const rawLocalLb = localStorage.getItem('pulsechat_local_leaderboard');
-      let localList = rawLocalLb ? JSON.parse(rawLocalLb) : [];
-      if (!Array.isArray(localList)) localList = [];
-
-      const myId = user?.id || user?._id || 'local_user';
-      const myName = user?.displayName || user?.username || 'You';
-      const myAvatar = user?.avatar;
-
-      const idx = localList.findIndex(item => item.id === myId || item.displayName === myName);
-      if (idx >= 0) {
-        if (pts > localList[idx].score) {
-          localList[idx].score = pts;
-          localList[idx].gameName = gameName;
-          if (myAvatar) localList[idx].avatar = myAvatar;
-        }
-      } else {
-        localList.push({
-          id: myId,
-          displayName: myName,
-          gameName,
-          score: pts,
-          avatar: myAvatar
-        });
-      }
-
-      localList.sort((a, b) => b.score - a.score);
-      localStorage.setItem('pulsechat_local_leaderboard', JSON.stringify(localList));
-
-      window.dispatchEvent(new CustomEvent('pulsechat_leaderboard_updated'));
+      localStorage.removeItem('pulsechat_local_leaderboard');
     } catch (e) {}
   };
 
   const fetchLeaderboard = async () => {
-    let localList = [];
     try {
-      const rawLocalLb = localStorage.getItem('pulsechat_local_leaderboard');
-      if (rawLocalLb) {
-        const parsed = JSON.parse(rawLocalLb);
-        if (Array.isArray(parsed)) localList = parsed;
-      }
+      localStorage.removeItem('pulsechat_local_leaderboard');
     } catch (e) {}
-
-    let localScore = 0;
-    try {
-      localScore = parseInt(localStorage.getItem('pulsechat_local_high_score') || '0', 10);
-    } catch (e) {}
-
-    const myId = user?.id || user?._id || 'local_user';
-    const myName = user?.displayName || user?.username || 'You';
-
-    if (localScore > 0 && !localList.some(item => item.id === myId || item.displayName === myName)) {
-      localList.push({
-        id: myId,
-        displayName: myName,
-        gameName: 'Arrow Puzzle',
-        score: localScore,
-        avatar: user?.avatar
-      });
-    }
-
-    setLeaderboard([...localList].sort((a, b) => b.score - a.score));
 
     if (token) {
       try {
@@ -97,43 +45,31 @@ export default function PulseZoneModal({ onClose }) {
         if (res.ok) {
           const serverList = await res.json();
           if (Array.isArray(serverList)) {
-            const combinedMap = new Map();
-            serverList.forEach(item => {
-              const key = item.id || item.displayName;
-              combinedMap.set(key, item);
-            });
-
-            localList.forEach(item => {
-              const key = item.id || item.displayName;
-              const existing = combinedMap.get(key);
-              if (!existing || item.score > existing.score) {
-                combinedMap.set(key, item);
-              }
-            });
-
-            const merged = Array.from(combinedMap.values()).sort((a, b) => b.score - a.score);
-            try {
-              localStorage.setItem('pulsechat_local_leaderboard', JSON.stringify(merged));
-            } catch (e) {}
-            setLeaderboard(merged);
+            setLeaderboard(serverList);
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('Error fetching leaderboard:', e);
+      }
     }
   };
 
   useEffect(() => {
     fetchLeaderboard();
 
-    const handleLbUpdate = () => fetchLeaderboard();
-    window.addEventListener('pulsechat_leaderboard_updated', handleLbUpdate);
-    window.addEventListener('storage', handleLbUpdate);
+    if (socket) {
+      const handleSocketLbUpdate = (data) => {
+        if (Array.isArray(data)) {
+          setLeaderboard(data);
+        }
+      };
+      socket.on('leaderboard_updated', handleSocketLbUpdate);
 
-    return () => {
-      window.removeEventListener('pulsechat_leaderboard_updated', handleLbUpdate);
-      window.removeEventListener('storage', handleLbUpdate);
-    };
-  }, [token, user]);
+      return () => {
+        socket.off('leaderboard_updated', handleSocketLbUpdate);
+      };
+    }
+  }, [token, user, socket]);
 
   // Speed Tapper Game Loop
   useEffect(() => {

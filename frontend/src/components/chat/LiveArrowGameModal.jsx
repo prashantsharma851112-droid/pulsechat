@@ -3,6 +3,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { X, RotateCcw, Award, Zap, Users, Swords, ShieldCheck, Sparkles, RefreshCw } from 'lucide-react';
 import { playSound } from '../../utils/audio';
+import { BACKEND_URL } from '../../utils/config';
 
 // Web Audio API Sound Synthesizers for 0ms Instant Audio Feedback
 const playSwooshSound = () => {
@@ -394,6 +395,26 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     }
 
     setWinner(winText);
+
+    const token = localStorage.getItem('pulsechat_token');
+    const finalScore = m === 'versus' ? s1 : sTeam;
+    if (token && finalScore > 0) {
+      fetch(`${BACKEND_URL}/api/zone/game-score`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ gameName: 'Live Arrow Battle', score: finalScore })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.newSparksBalance !== undefined && updateUserProfile) {
+            updateUserProfile({ ...userRef.current, pulseSparks: data.newSparksBalance });
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   return (
