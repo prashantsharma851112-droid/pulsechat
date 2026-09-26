@@ -885,6 +885,12 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('arrow_game_match_started', (data) => {
+    if (data && data.chatId) {
+      io.to(data.chatId).emit('arrow_game_match_started', data);
+    }
+  });
+
   socket.on('arrow_tap', (data) => {
     if (data && data.chatId) {
       io.to(data.chatId).emit('arrow_tap', data);

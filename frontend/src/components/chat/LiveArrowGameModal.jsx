@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, RotateCcw, Award, Zap, Users, Swords, ShieldCheck, Sparkles, RefreshCw } from 'lucide-react';
+import { X, RotateCcw, Award, Zap, Users, Swords, ShieldCheck, Sparkles, RefreshCw, Play } from 'lucide-react';
 import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 
@@ -40,6 +40,108 @@ const playBumpSound = () => {
   } catch (e) {}
 };
 
+// Canvas Fireworks & Pataka Cracker Explosion Component
+function FireworksCanvas() {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let animationFrameId;
+
+    const width = (canvas.width = canvas.parentElement?.offsetWidth || window.innerWidth);
+    const height = (canvas.height = canvas.parentElement?.offsetHeight || window.innerHeight);
+
+    let particles = [];
+    const colors = [
+      '#f43f5e', '#ec4899', '#d946ef', '#a855f7',
+      '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4',
+      '#10b981', '#eab308', '#f97316', '#fbbf24'
+    ];
+
+    const createExplosion = (x, y) => {
+      const count = 50 + Math.floor(Math.random() * 40);
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 8 + 3;
+        particles.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius: Math.random() * 3.5 + 2,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          alpha: 1,
+          decay: Math.random() * 0.014 + 0.008,
+          gravity: 0.12
+        });
+      }
+    };
+
+    createExplosion(width / 2, height / 3);
+    createExplosion(width / 4, height / 2.5);
+    createExplosion((3 * width) / 4, height / 2.5);
+
+    const interval = setInterval(() => {
+      const rx = Math.random() * (width - 120) + 60;
+      const ry = Math.random() * (height / 2) + 40;
+      createExplosion(rx, ry);
+    }, 500);
+
+    const render = () => {
+      ctx.clearRect(0, 0, width, height);
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += p.gravity;
+        p.alpha -= p.decay;
+
+        if (p.alpha <= 0) {
+          particles.splice(i, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      clearInterval(interval);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        zIndex: 10
+      }}
+    />
+  );
+}
+
 // Direction Vectors & Smooth Flying Offsets
 const DIRS = {
   UP: { dr: -1, dc: 0, deg: 0, flyX: 0, flyY: -480 },
@@ -64,13 +166,23 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
   const [partnerScore, setPartnerScore] = useState(0);
   const [coopScore, setCoopScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(45);
+
+  const [gameStarted, setGameStarted] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
-  const [winner, setWinner] = useState(null);
+  const [winner, setWinner] = useState(null); // { title, details, isMeWinner }
 
   const [flyingIds, setFlyingIds] = useState(new Set());
   const [clearedIds, setClearedIds] = useState(new Set());
   const [shakingId, setShakingId] = useState(null);
   const [lastTapInfo, setLastTapInfo] = useState(null);
+
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 640);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 640);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const chatId = activeChat?.id;
   const myId = user?.id || user?._id || 'local';
@@ -139,7 +251,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     return { board, total: placed.length };
   };
 
-  // Start new game & broadcast to socket
+  // Start new game & broadcast to socket (Wait for Start Match button to trigger timer)
   const startNewGame = (gameMode = mode) => {
     const { board, total } = generateSolvableBoard(7, 7, 0.72);
     setGrid(board);
@@ -156,6 +268,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     setCoopScore(0);
     coopScoreRef.current = 0;
     setTimeLeft(45);
+    setGameStarted(false);
     setIsGameOver(false);
     setWinner(null);
     setMode(gameMode);
@@ -169,6 +282,14 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
         board,
         total
       });
+    }
+  };
+
+  const handleStartMatch = () => {
+    setGameStarted(true);
+    playSound('pop');
+    if (socket && chatId) {
+      socket.emit('arrow_game_match_started', { chatId });
     }
   };
 
@@ -193,6 +314,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
       setCoopScore(0);
       coopScoreRef.current = 0;
       setTimeLeft(45);
+      setGameStarted(false);
       setIsGameOver(false);
       setWinner(null);
       if (data.mode) {
@@ -201,11 +323,14 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
       }
     };
 
+    const handleMatchStarted = () => {
+      setGameStarted(true);
+    };
+
     const handleArrowTap = (data) => {
       const { r, c, playerId, playerName, isClear, arrowId } = data;
       const isMe = playerId === myId;
 
-      // Ignore if already cleared or flying
       if (clearedIdsRef.current.has(arrowId) || flyingIdsRef.current.has(arrowId)) return;
 
       if (isClear) {
@@ -260,10 +385,12 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     };
 
     socket.on('arrow_game_start', handleGameStart);
+    socket.on('arrow_game_match_started', handleMatchStarted);
     socket.on('arrow_tap', handleArrowTap);
 
     return () => {
       socket.off('arrow_game_start', handleGameStart);
+      socket.off('arrow_game_match_started', handleMatchStarted);
       socket.off('arrow_tap', handleArrowTap);
     };
   }, [socket, chatId, myId, totalArrows]);
@@ -275,9 +402,9 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     }
   }, []);
 
-  // Timer countdown
+  // Timer countdown (Only ticks when gameStarted is true!)
   useEffect(() => {
-    if (isGameOver || timeLeft <= 0) return;
+    if (!gameStarted || isGameOver || timeLeft <= 0) return;
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
@@ -288,7 +415,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [timeLeft, isGameOver]);
+  }, [gameStarted, timeLeft, isGameOver]);
 
   // Check if path to boundary is clear (flying arrows DO NOT block!)
   const isPathClear = (r, c, dirKey, currentBoard) => {
@@ -302,16 +429,20 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     while (currR >= 0 && currR < gridRows && currC >= 0 && currC < gridCols) {
       const item = currentBoard[currR][currC];
       if (item && !clearedSet.has(item.id) && !flyingSet.has(item.id)) {
-        return false; // Real un-cleared obstacle found!
+        return false;
       }
       currR += dr;
       currC += dc;
     }
-    return true; // Path clear to edge!
+    return true;
   };
 
   // Player Taps an Arrow
   const handleTap = (r, c) => {
+    if (!gameStarted) {
+      handleStartMatch();
+      return;
+    }
     if (isGameOver) return;
     const arrow = grid[r][c];
     if (!arrow || clearedIdsRef.current.has(arrow.id) || flyingIdsRef.current.has(arrow.id)) return;
@@ -329,7 +460,6 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
         arrowId: arrow.id
       });
     } else {
-      // Local fallback
       if (clear) {
         playSwooshSound();
         setFlyingIds(prev => {
@@ -377,24 +507,35 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     const s2 = partnerScoreRef.current;
     const sTeam = coopScoreRef.current;
 
-    let winText = '';
+    let winnerTitle = '';
+    let winDetails = '';
+    let isMeWinner = false;
+
     if (m === 'versus') {
       if (s1 > s2) {
-        winText = `🎉 You Won! (${s1} vs ${s2} pts)`;
+        winnerTitle = `${myName} Won!`;
+        winDetails = `🏆 (${s1} vs ${s2} pts)`;
+        isMeWinner = true;
         const curSparks = userRef.current?.pulseSparks || 100;
         if (updateUserProfile) updateUserProfile({ ...userRef.current, pulseSparks: curSparks + 50 });
       } else if (s2 > s1) {
-        winText = `👑 ${partnerName} Won! (${s2} vs ${s1} pts)`;
+        winnerTitle = `${partnerName} Won!`;
+        winDetails = `👑 (${s2} vs ${s1} pts)`;
+        isMeWinner = false;
       } else {
-        winText = `🤝 It's a Tie! (${s1} pts)`;
+        winnerTitle = `ITS A TIE!`;
+        winDetails = `🤝 (${s1} pts each)`;
+        isMeWinner = true;
       }
     } else {
-      winText = clearedAll ? `🎉 Victory! Board Cleared!` : `⏱️ Time's Up! Team Score: ${sTeam} pts`;
+      winnerTitle = clearedAll ? `VICTORY!` : `QUEST FINISHED`;
+      winDetails = clearedAll ? `🎉 Board Cleared! Score: ${sTeam} pts` : `⏱️ Team Score: ${sTeam} pts`;
+      isMeWinner = true;
       const curSparks = userRef.current?.pulseSparks || 100;
       if (updateUserProfile) updateUserProfile({ ...userRef.current, pulseSparks: curSparks + 50 });
     }
 
-    setWinner(winText);
+    setWinner({ title: winnerTitle, details: winDetails, isMeWinner });
 
     const token = localStorage.getItem('pulsechat_token');
     const finalScore = m === 'versus' ? s1 : sTeam;
@@ -418,26 +559,48 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1350 }}>
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1350, padding: isMobile ? 0 : '16px' }}>
+      <style>{`
+        @keyframes popIn3D {
+          0% { transform: perspective(600px) rotateX(25deg) scale(0.6); opacity: 0; }
+          60% { transform: perspective(600px) rotateX(-8deg) scale(1.08); opacity: 1; }
+          100% { transform: perspective(600px) rotateX(0deg) scale(1); opacity: 1; }
+        }
+        @keyframes winnerPulse3D {
+          0%, 100% { transform: perspective(600px) rotateX(6deg) translateY(0px); }
+          50% { transform: perspective(600px) rotateX(-4deg) translateY(-8px); }
+        }
+        @keyframes floatUp {
+          0% { opacity: 0; transform: translateY(20px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          20%, 60% { transform: translateX(-6px); }
+          40%, 80% { transform: translateX(6px); }
+        }
+      `}</style>
+
       <div
         className="modal-card modal-responsive"
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: '520px',
+          maxWidth: isMobile ? '100vw' : '540px',
           width: '100%',
-          maxHeight: '94dvh',
+          height: isMobile ? '100dvh' : 'auto',
+          maxHeight: isMobile ? '100dvh' : '96dvh',
           display: 'flex',
           flexDirection: 'column',
-          borderRadius: '24px',
+          borderRadius: isMobile ? '0px' : '24px',
           overflow: 'hidden',
           background: 'var(--bg-card)',
-          border: '1px solid rgba(99, 102, 241, 0.4)',
+          border: isMobile ? 'none' : '1px solid rgba(99, 102, 241, 0.4)',
           boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 30px rgba(99, 102, 241, 0.25)'
         }}
       >
         {/* Banner Header */}
         <div style={{
-          padding: '16px 18px 12px 18px',
+          padding: isMobile ? '14px 16px 10px 16px' : '16px 18px 12px 18px',
           background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311042 100%)',
           borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
           color: '#fff',
@@ -458,7 +621,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                 <Zap size={22} color="#fff" />
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <h3 style={{ margin: 0, fontSize: isMobile ? '1.05rem' : '1.15rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '6px' }}>
                   Live Arrow Battle ⚡ <span style={{ fontSize: '0.75rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.18)', padding: '2px 8px', borderRadius: '10px' }}>2-Player</span>
                 </h3>
                 <span style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.75)' }}>
@@ -466,8 +629,8 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                 </span>
               </div>
             </div>
-            <button className="icon-btn-ghost" onClick={onClose} style={{ color: '#fff', background: 'rgba(0,0,0,0.3)', borderRadius: '50%' }}>
-              <X size={18} />
+            <button className="icon-btn-ghost" onClick={onClose} style={{ color: '#fff', background: 'rgba(0,0,0,0.3)', borderRadius: '50%', padding: '6px' }}>
+              <X size={20} />
             </button>
           </div>
 
@@ -477,13 +640,13 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
               onClick={() => startNewGame('versus')}
               style={{
                 flex: 1,
-                padding: '7px',
+                padding: '8px',
                 borderRadius: '8px',
                 border: 'none',
                 background: mode === 'versus' ? 'linear-gradient(90deg, #ec4899, #f43f5e)' : 'transparent',
                 color: mode === 'versus' ? '#fff' : 'rgba(255,255,255,0.7)',
                 fontWeight: 800,
-                fontSize: '0.78rem',
+                fontSize: '0.8rem',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -497,13 +660,13 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
               onClick={() => startNewGame('coop')}
               style={{
                 flex: 1,
-                padding: '7px',
+                padding: '8px',
                 borderRadius: '8px',
                 border: 'none',
                 background: mode === 'coop' ? 'linear-gradient(90deg, #3b82f6, #6366f1)' : 'transparent',
                 color: mode === 'coop' ? '#fff' : 'rgba(255,255,255,0.7)',
                 fontWeight: 800,
-                fontSize: '0.78rem',
+                fontSize: '0.8rem',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -524,10 +687,11 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          color: '#fff'
+          color: '#fff',
+          flexShrink: 0
         }}>
           {mode === 'versus' ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '0.86rem', fontWeight: 800 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '0.88rem', fontWeight: 800 }}>
               <div style={{ color: '#ec4899' }}>
                 {myName}: <strong>{myScore}</strong> pts
               </div>
@@ -537,14 +701,14 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: '0.86rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Sparkles size={16} /> Team Score: <strong>{coopScore}</strong> pts
             </div>
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: timeLeft <= 10 ? '#ef4444' : '#10b981' }}>
-              ⏳ {timeLeft}s
+            <span style={{ fontSize: '0.86rem', fontWeight: 900, color: !gameStarted ? '#fbbf24' : (timeLeft <= 10 ? '#ef4444' : '#10b981') }}>
+              {!gameStarted ? '⏸️ Ready' : `⏳ ${timeLeft}s`}
             </span>
             <button
               onClick={() => startNewGame(mode)}
@@ -553,8 +717,8 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                 color: '#fff',
                 border: 'none',
                 borderRadius: '8px',
-                padding: '4px 10px',
-                fontSize: '0.72rem',
+                padding: '5px 12px',
+                fontSize: '0.74rem',
                 fontWeight: 700,
                 cursor: 'pointer',
                 display: 'flex',
@@ -562,28 +726,38 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                 gap: '4px'
               }}
             >
-              <RefreshCw size={12} /> Reset
+              <RefreshCw size={13} /> Reset
             </button>
           </div>
         </div>
 
         {/* Game Canvas / Grid Wrapper */}
-        <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+        <div style={{
+          padding: isMobile ? '12px' : '20px',
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+          overflow: 'hidden',
+          background: 'radial-gradient(circle at center, #0f172a 0%, #050b18 100%)'
+        }}>
 
-          {/* Interactive Arrow Grid */}
+          {/* Interactive Arrow Grid (Bigger Board for Mobile) */}
           <div style={{
             position: 'relative',
-            width: 'min(360px, 86vw)',
-            height: 'min(360px, 86vw)',
+            width: isMobile ? 'min(440px, 94vw)' : 'min(420px, 85vw)',
+            height: isMobile ? 'min(440px, 94vw)' : 'min(420px, 85vw)',
             background: 'linear-gradient(135deg, #0b1329 0%, #171e38 100%)',
-            borderRadius: '20px',
-            border: '2px solid rgba(255, 255, 255, 0.12)',
-            padding: '8px',
-            boxShadow: 'inset 0 0 25px rgba(0,0,0,0.6)',
+            borderRadius: '24px',
+            border: '2px solid rgba(255, 255, 255, 0.15)',
+            padding: isMobile ? '10px' : '12px',
+            boxShadow: 'inset 0 0 30px rgba(0,0,0,0.7), 0 10px 30px rgba(0,0,0,0.6)',
             display: 'grid',
             gridTemplateRows: `repeat(${gridRows}, 1fr)`,
             gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
-            gap: '4px'
+            gap: isMobile ? '5px' : '6px'
           }}>
             {!isGameOver && grid.map((rowArr, r) =>
               rowArr.map((arrow, c) => {
@@ -600,7 +774,6 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                   return <div key={arrow.id} />;
                 }
 
-                // Flight vector calculation with smooth blend-dissolve
                 const flightStyle = isFlying ? {
                   transform: `translate(${dirInfo.flyX}px, ${dirInfo.flyY}px) rotate(${dirInfo.deg}deg) scale(0.6)`,
                   opacity: 0,
@@ -622,12 +795,12 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                       width: '100%',
                       height: '100%',
                       background: isShaking
-                        ? 'rgba(239, 68, 68, 0.35)'
+                        ? 'rgba(239, 68, 68, 0.4)'
                         : 'radial-gradient(circle, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)',
                       border: isShaking
                         ? '2px solid #ef4444'
-                        : '1px solid rgba(255, 255, 255, 0.15)',
-                      borderRadius: '12px',
+                        : '1px solid rgba(255, 255, 255, 0.18)',
+                      borderRadius: isMobile ? '14px' : '16px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
@@ -636,48 +809,187 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                       position: 'relative',
                       zIndex: isFlying ? 100 : 1,
                       animation: isShaking ? 'shake 0.4s ease' : 'none',
-                      boxShadow: '0 4px 10px rgba(0,0,0,0.4)',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
                       ...flightStyle
                     }}
                   >
-                    <svg width="24" height="24" viewBox="0 0 40 40">
-                      <line x1="20" y1="36" x2="20" y2="12" stroke="#38bdf8" strokeWidth="4.5" strokeLinecap="round" />
-                      <polygon points="20,2 9,18 31,18" fill="#38bdf8" />
+                    <svg width={isMobile ? '30' : '28'} height={isMobile ? '30' : '28'} viewBox="0 0 40 40">
+                      <line x1="20" y1="36" x2="20" y2="12" stroke="#38bdf8" strokeWidth="5" strokeLinecap="round" />
+                      <polygon points="20,2 8,18 32,18" fill="#38bdf8" />
                     </svg>
                   </button>
                 );
               })
             )}
+
+            {/* Ready to Start Match Banner Overlay */}
+            {!gameStarted && !isGameOver && (
+              <div style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'rgba(15, 23, 42, 0.88)',
+                backdropFilter: 'blur(6px)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '16px',
+                padding: '24px',
+                color: '#fff',
+                borderRadius: '24px',
+                zIndex: 50
+              }}>
+                <div style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #38bdf8, #8b5cf6)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 0 30px rgba(56, 189, 248, 0.5)'
+                }}>
+                  <Zap size={34} color="#fff" />
+                </div>
+
+                <h2 style={{ margin: 0, fontSize: isMobile ? '1.25rem' : '1.4rem', fontWeight: 900, textAlign: 'center' }}>
+                  {mode === 'versus' ? '⚔️ 1v1 Arrow Race Ready!' : '🤝 Co-Op Arrow Quest Ready!'}
+                </h2>
+
+                <p style={{ margin: 0, fontSize: '0.86rem', color: 'rgba(255,255,255,0.8)', textAlign: 'center', maxWidth: '280px' }}>
+                  Click below to start the timer and begin tapping arrows!
+                </p>
+
+                <button
+                  onClick={handleStartMatch}
+                  style={{
+                    padding: '14px 34px',
+                    fontSize: '1.1rem',
+                    fontWeight: 900,
+                    borderRadius: '16px',
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    boxShadow: '0 8px 25px rgba(16, 185, 129, 0.5)',
+                    cursor: 'pointer',
+                    border: 'none',
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  <Play size={20} fill="#fff" /> START MATCH NOW
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Winner / Finish Overlay */}
-          {isGameOver && (
+          {/* Grand Celebration Winner & Fireworks Overlay */}
+          {isGameOver && winner && (
             <div style={{
               position: 'absolute',
               inset: 0,
-              background: 'rgba(15, 23, 42, 0.92)',
-              backdropFilter: 'blur(8px)',
+              background: 'radial-gradient(circle at center, rgba(15, 23, 42, 0.94) 0%, rgba(5, 8, 22, 0.98) 100%)',
+              backdropFilter: 'blur(10px)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '12px',
-              padding: '20px',
+              gap: '16px',
+              padding: '24px',
               color: '#fff',
-              borderRadius: '24px',
-              animation: 'fadeIn 0.2s ease-out'
+              borderRadius: isMobile ? '0px' : '24px',
+              zIndex: 100,
+              animation: 'floatUp 0.3s ease-out'
             }}>
-              <Award size={46} color="#fbbf24" />
-              <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#10b981', fontWeight: 900, textAlign: 'center' }}>
-                {winner}
-              </h2>
-              <p style={{ margin: 0, fontSize: '0.88rem', color: '#fbbf24', fontWeight: 700 }}>
-                ⚡ +50 Sparks Credited!
-              </p>
+              <FireworksCanvas />
+
+              <div style={{
+                animation: 'winnerPulse3D 2.5s infinite ease-in-out',
+                textAlign: 'center',
+                zIndex: 20
+              }}>
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '76px',
+                  height: '76px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                  boxShadow: '0 0 35px rgba(251, 191, 36, 0.8), 0 0 70px rgba(245, 158, 11, 0.4)',
+                  marginBottom: '12px'
+                }}>
+                  <Award size={48} color="#fff" />
+                </div>
+
+                {/* 3D Extruded Glowing Winner Name */}
+                <h1 style={{
+                  margin: 0,
+                  fontSize: isMobile ? '2.1rem' : '2.8rem',
+                  fontWeight: 900,
+                  textTransform: 'uppercase',
+                  letterSpacing: '2px',
+                  background: 'linear-gradient(180deg, #ffffff 0%, #fef08a 40%, #f59e0b 80%, #b45309 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  filter: 'drop-shadow(0px 8px 18px rgba(245, 158, 11, 0.7))',
+                  textShadow: `
+                    0 1px 0 #d97706,
+                    0 2px 0 #b45309,
+                    0 3px 0 #92400e,
+                    0 4px 0 #78350f,
+                    0 5px 0 #451a03,
+                    0 8px 15px rgba(0,0,0,0.8)
+                  `,
+                  lineHeight: 1.15
+                }}>
+                  👑 {winner.title} 👑
+                </h1>
+
+                <div style={{
+                  fontSize: '1.2rem',
+                  fontWeight: 800,
+                  color: '#38bdf8',
+                  marginTop: '12px',
+                  textShadow: '0 0 12px rgba(56, 189, 248, 0.7)'
+                }}>
+                  {winner.details}
+                </div>
+
+                <div style={{
+                  fontSize: '0.95rem',
+                  fontWeight: 800,
+                  color: '#fbbf24',
+                  marginTop: '8px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  padding: '6px 18px',
+                  borderRadius: '20px',
+                  border: '1px solid rgba(251, 191, 36, 0.3)'
+                }}>
+                  <Sparkles size={18} color="#fbbf24" /> +50 Pulse Sparks Credited!
+                </div>
+              </div>
+
               <button
                 onClick={() => startNewGame(mode)}
                 className="btn-primary"
-                style={{ marginTop: '10px', padding: '10px 24px', borderRadius: '14px', fontWeight: 800, fontSize: '0.92rem' }}
+                style={{
+                  marginTop: '16px',
+                  padding: '14px 36px',
+                  borderRadius: '18px',
+                  fontWeight: 900,
+                  fontSize: '1.1rem',
+                  background: 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
+                  boxShadow: '0 8px 30px rgba(236, 72, 153, 0.5)',
+                  border: 'none',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  zIndex: 20
+                }}
               >
                 Play Next Round 🚀
               </button>
