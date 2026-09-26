@@ -10,14 +10,14 @@ const playSwooshSound = () => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(900, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.25);
-    gain.gain.setValueAtTime(0.35, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+    osc.frequency.setValueAtTime(850, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.45);
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    osc.stop(ctx.currentTime + 0.25);
+    osc.stop(ctx.currentTime + 0.45);
   } catch (e) {}
 };
 
@@ -38,12 +38,12 @@ const playBumpSound = () => {
   } catch (e) {}
 };
 
-// Direction Vectors & Rotations
+// Direction Vectors & Smooth Flying Distances
 const DIRS = {
-  UP: { dr: -1, dc: 0, deg: 0, flyX: 0, flyY: -450 },
-  RIGHT: { dr: 0, dc: 1, deg: 90, flyX: 450, flyY: 0 },
-  DOWN: { dr: 1, dc: 0, deg: 180, flyX: 0, flyY: 450 },
-  LEFT: { dr: 0, dc: -1, deg: 270, flyX: -450, flyY: 0 }
+  UP: { dr: -1, dc: 0, deg: 0, flyX: 0, flyY: -550 },
+  RIGHT: { dr: 0, dc: 1, deg: 90, flyX: 550, flyY: 0 },
+  DOWN: { dr: 1, dc: 0, deg: 180, flyX: 0, flyY: 550 },
+  LEFT: { dr: 0, dc: -1, deg: 270, flyX: -550, flyY: 0 }
 };
 
 const DIR_KEYS = ['UP', 'RIGHT', 'DOWN', 'LEFT'];
@@ -168,11 +168,12 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
     if (!arrow || clearedIds.has(arrow.id) || flyingIds.has(arrow.id)) return;
 
     if (isPathClear(r, c, arrow.dir, grid, clearedIds)) {
-      // CLEAR! Trigger flying escape animation & swoosh sound!
+      // CLEAR! Trigger smooth flying escape animation & swoosh sound!
       playSwooshSound();
 
       setFlyingIds(prev => new Set([...prev, arrow.id]));
 
+      // 750ms Smooth Flight Duration with Blend Dissolve Fade
       setTimeout(() => {
         setClearedIds(prev => {
           const nextSet = new Set([...prev, arrow.id]);
@@ -186,7 +187,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
           next.delete(arrow.id);
           return next;
         });
-      }, 320);
+      }, 750);
 
       setClearedCount(prev => prev + 1);
       if (hintId === arrow.id) setHintId(null);
@@ -412,7 +413,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
             </div>
           </div>
 
-          {/* Main Arrow Board Canvas (No Boxes - Pure Crisp Arrows) */}
+          {/* Main Arrow Board Canvas (No Boxes - Smooth Glide & Blend Dissolve) */}
           <div style={{
             flex: 1,
             display: 'flex',
@@ -462,19 +463,20 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                         alignItems: 'center',
                         justifyContent: 'center',
                         transform: isFlying
-                          ? `translate(${flyX}px, ${flyY}px) scale(0.6)`
+                          ? `translate(${flyX}px, ${flyY}px) scale(0.4)`
                           : isShaking
                           ? 'scale(0.85)'
                           : 'scale(1)',
                         opacity: isFlying ? 0 : 1,
+                        filter: isFlying ? 'blur(6px)' : 'none',
                         transition: isFlying
-                          ? 'transform 0.32s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.32s ease'
+                          ? 'transform 0.75s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.75s cubic-bezier(0.5, 0, 1, 1), filter 0.75s ease'
                           : 'transform 0.12s ease',
                         position: 'relative',
                         zIndex: isFlying ? 10 : 1
                       }}
                     >
-                      {/* SVG Crisp Vector Arrow (NO SQUARE BOX) */}
+                      {/* SVG Crisp Vector Arrow */}
                       <svg
                         viewBox="0 0 40 40"
                         style={{
