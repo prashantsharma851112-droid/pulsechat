@@ -48,6 +48,8 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
       }
     }
 
+    let combinedGroups = [...serverGroups];
+
     // Load active LocalStorage vibes
     let localVibes = [];
     try {

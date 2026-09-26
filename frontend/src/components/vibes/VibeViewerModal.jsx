@@ -31,7 +31,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
         }
       } catch (e) {}
 
-      if (token && !isMine && !currentVibe.id.startsWith('vibe_')) {
+      if (token && !isMine && currentVibe.id) {
         fetch(`${BACKEND_URL}/api/vibes/view/${currentVibe.id}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` }
@@ -94,7 +94,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
       setTimeout(() => setSparksMsg(''), 3000);
     }
 
-    if (token && currentVibe.id && !currentVibe.id.startsWith('vibe_')) {
+    if (token && currentVibe.id) {
       try {
         const res = await fetch(`${BACKEND_URL}/api/vibes/react/${currentVibe.id}`, {
           method: 'POST',
@@ -127,7 +127,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
 
     window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
 
-    if (token && currentVibe.id && !currentVibe.id.startsWith('vibe_')) {
+    if (token && currentVibe.id) {
       try {
         await fetch(`${BACKEND_URL}/api/vibes/${currentVibe.id}`, {
           method: 'DELETE',
