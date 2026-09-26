@@ -4,86 +4,6 @@ import { SocketContext } from '../../context/SocketContext';
 import { Plus, Sparkles } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 
-// Active Featured & Community Vibe Stories
-const SAMPLE_COMMUNITY_VIBES = [
-  {
-    userId: 'sunaina_singh',
-    displayName: 'Sunaina Singh 🌸',
-    username: 'sunaina_singh',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sunaina',
-    vibes: [
-      {
-        id: 'vibe_sunaina_1',
-        userId: 'sunaina_singh',
-        caption: 'Good morning Pulse family! Have a wonderful day 🌸✨',
-        mediaUrl: null,
-        soundtrack: '🎧 Lofi Chill Beats',
-        bgGradient: 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)',
-        createdAt: new Date().toISOString(),
-        views: [{ userId: '1', displayName: 'User' }],
-        sparksEarned: 40
-      }
-    ]
-  },
-  {
-    userId: 'community_1',
-    displayName: 'Pulse Official ⚡',
-    username: 'pulse_official',
-    avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=PulseOfficial',
-    vibes: [
-      {
-        id: 'c_vibe_1',
-        userId: 'community_1',
-        caption: 'Welcome to Pulse 24h Vibes! Share your day with friends ✨',
-        mediaUrl: null,
-        soundtrack: '🎧 Lofi Chill Beats',
-        bgGradient: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-        createdAt: new Date().toISOString(),
-        views: [{ userId: '1', displayName: 'User' }],
-        sparksEarned: 50
-      }
-    ]
-  },
-  {
-    userId: 'community_2',
-    displayName: 'Aarav Sharma ⚡',
-    username: 'aarav_sharma',
-    avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Aarav',
-    vibes: [
-      {
-        id: 'c_vibe_2',
-        userId: 'community_2',
-        caption: 'Late night coding vibes 🎧⚡',
-        mediaUrl: null,
-        soundtrack: '⚡ Cyberpunk Rain',
-        bgGradient: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
-        createdAt: new Date().toISOString(),
-        views: [{ userId: '1', displayName: 'User' }],
-        sparksEarned: 20
-      }
-    ]
-  },
-  {
-    userId: 'community_3',
-    displayName: 'Priya Verma 🌸',
-    username: 'priya_verma',
-    avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Priya',
-    vibes: [
-      {
-        id: 'c_vibe_3',
-        userId: 'community_3',
-        caption: 'Weekend sunset energy 🌅✨',
-        mediaUrl: null,
-        soundtrack: '🌌 Space Nebula',
-        bgGradient: 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)',
-        createdAt: new Date().toISOString(),
-        views: [{ userId: '1', displayName: 'User' }],
-        sparksEarned: 30
-      }
-    ]
-  }
-];
-
 export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
   const { user, token } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
@@ -144,13 +64,6 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
         });
       }
     }
-
-    // Include featured community stories (including Sunaina Singh)
-    SAMPLE_COMMUNITY_VIBES.forEach(sample => {
-      if (!combinedGroups.some(g => g.userId === sample.userId || (sample.username && g.username === sample.username))) {
-        combinedGroups.push(sample);
-      }
-    });
 
     setGroupedVibes(combinedGroups);
   };

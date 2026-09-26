@@ -90,11 +90,11 @@ export default function PulseZoneModal({ onClose }) {
         localScore = parseInt(localStorage.getItem('pulsechat_local_high_score') || '0', 10);
       } catch (e) {}
 
-      list = [
-        { id: '1', displayName: user?.displayName || user?.username || 'You', gameName: 'Arrow Puzzle', score: Math.max(localScore, 240), avatar: user?.avatar },
-        { id: '2', displayName: 'Aarav Sharma', gameName: 'Arrow Puzzle', score: 180, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Aarav' },
-        { id: '3', displayName: 'Priya Verma', gameName: 'Pulse Speed Tapper', score: 140, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Priya' }
-      ];
+      if (localScore > 0) {
+        list = [
+          { id: '1', displayName: user?.displayName || user?.username || 'You', gameName: 'Arrow Puzzle', score: localScore, avatar: user?.avatar }
+        ];
+      }
     }
     setLeaderboard(list);
   };
