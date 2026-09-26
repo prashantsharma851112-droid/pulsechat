@@ -8,6 +8,16 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
   const { user, token } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
   const [groupedVibes, setGroupedVibes] = useState([]);
+  const [viewedSet, setViewedSet] = useState(new Set());
+
+  const syncViewedSet = () => {
+    try {
+      const raw = localStorage.getItem('pulsechat_viewed_vibes');
+      if (raw) {
+        setViewedSet(new Set(JSON.parse(raw)));
+      }
+    } catch (e) {}
+  };
 
   const isMyId = (id) => {
     if (!id) return false;
@@ -15,6 +25,11 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
     const uMongo = user?._id;
     const uName = user?.username;
     return id === uId || id === uMongo || (uMongo && id === uMongo.toString()) || id === uName;
+  };
+
+  const isGroupViewed = (group) => {
+    if (!group || !group.vibes || group.vibes.length === 0) return true;
+    return group.vibes.every(v => viewedSet.has(v.id));
   };
 
   const fetchActiveVibes = async () => {
@@ -70,17 +85,27 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
 
   useEffect(() => {
     fetchActiveVibes();
+    syncViewedSet();
 
-    const interval = setInterval(fetchActiveVibes, 10000);
+    const interval = setInterval(() => {
+      fetchActiveVibes();
+      syncViewedSet();
+    }, 10000);
 
-    const handleUpdate = () => fetchActiveVibes();
+    const handleUpdate = () => {
+      fetchActiveVibes();
+      syncViewedSet();
+    };
     window.addEventListener('pulsechat_vibes_updated', handleUpdate);
     window.addEventListener('storage', handleUpdate);
 
     let bc;
     if (typeof BroadcastChannel !== 'undefined') {
       bc = new BroadcastChannel('pulsechat_vibes_channel');
-      bc.onmessage = () => fetchActiveVibes();
+      bc.onmessage = () => {
+        fetchActiveVibes();
+        syncViewedSet();
+      };
     }
 
     if (socket) {
@@ -215,46 +240,54 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
         </div>
 
         {/* Other Users' / Friends' Stories */}
-        {otherVibesGroups.map(group => (
-          <div
-            key={group.userId}
-            onClick={() => onOpenVibeViewer(group)}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '4px',
-              cursor: 'pointer',
-              flexShrink: 0
-            }}
-          >
-            <div style={{
-              position: 'relative',
-              width: '54px',
-              height: '54px',
-              borderRadius: '50%',
-              padding: '2.5px',
-              background: 'linear-gradient(135deg, #f59e0b, #ec4899, #6366f1)',
-              boxShadow: '0 0 12px rgba(236, 72, 153, 0.45)',
-              animation: 'pulseGlow 2.5s infinite alternate'
-            }}>
-              <img
-                src={group.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${group.username || 'vibe'}`}
-                alt={group.displayName}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '50%',
-                  objectFit: 'cover',
-                  background: '#111'
-                }}
-              />
+        {otherVibesGroups.map(group => {
+          const viewed = isGroupViewed(group);
+          return (
+            <div
+              key={group.userId}
+              onClick={() => onOpenVibeViewer(group)}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '4px',
+                cursor: 'pointer',
+                flexShrink: 0,
+                opacity: viewed ? 0.65 : 1
+              }}
+            >
+              <div style={{
+                position: 'relative',
+                width: '54px',
+                height: '54px',
+                borderRadius: '50%',
+                padding: '2.5px',
+                background: viewed
+                  ? 'linear-gradient(135deg, #64748b, #94a3b8)'
+                  : 'linear-gradient(135deg, #f59e0b, #ec4899, #6366f1)',
+                boxShadow: viewed
+                  ? 'none'
+                  : '0 0 12px rgba(236, 72, 153, 0.45)',
+                animation: viewed ? 'none' : 'pulseGlow 2.5s infinite alternate'
+              }}>
+                <img
+                  src={group.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${group.username || 'vibe'}`}
+                  alt={group.displayName}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    background: '#111'
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: viewed ? 'var(--text-muted)' : 'var(--text-main)', maxWidth: '58px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {group.displayName ? group.displayName.split(' ')[0] : 'User'}
+              </span>
             </div>
-            <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-main)', maxWidth: '58px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {group.displayName ? group.displayName.split(' ')[0] : 'User'}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

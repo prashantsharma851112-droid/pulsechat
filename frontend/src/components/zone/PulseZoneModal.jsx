@@ -1,26 +1,13 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Sparkles, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Target } from 'lucide-react';
+import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 import ArrowPuzzleGame from './ArrowPuzzleGame';
 
-const DEFAULT_TRIVIA = {
-  id: 'daily_trivia_1',
-  question: 'Which PulseChat feature helps you stay connected with friends instantly?',
-  options: [
-    { id: 'opt1', text: '⚡ 24h Vibe Stories', percentage: 45 },
-    { id: 'opt2', text: '🎮 Pulse Zone Mini-Games', percentage: 30 },
-    { id: 'opt3', text: '🔒 Quantum 256-bit Encryption', percentage: 15 },
-    { id: 'opt4', text: '💎 Pulse Pro VIP Badge', percentage: 10 }
-  ],
-  hasVoted: false,
-  votedOptionId: null
-};
-
 export default function PulseZoneModal({ onClose }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
-  const [activeTab, setActiveTab] = useState('games'); // 'games' | 'trivia' | 'leaderboard'
+  const [activeTab, setActiveTab] = useState('games'); // 'games' | 'leaderboard'
   const [selectedGame, setSelectedGame] = useState('arrow'); // 'arrow' | 'tapper'
 
   // Speed Tapper Game State
@@ -30,74 +17,123 @@ export default function PulseZoneModal({ onClose }) {
   const [targetPos, setTargetPos] = useState({ top: '40%', left: '40%' });
   const [gameResult, setGameResult] = useState(null);
 
-  // Daily Trivia State
-  const [trivia, setTrivia] = useState(null);
-  const [triviaMsg, setTriviaMsg] = useState('');
-
   // Leaderboard State
   const [leaderboard, setLeaderboard] = useState([]);
 
-  useEffect(() => {
-    fetchTrivia();
-    fetchLeaderboard();
-  }, []);
+  const saveLocalScore = (gameName, pts) => {
+    try {
+      const oldHigh = parseInt(localStorage.getItem('pulsechat_local_high_score') || '0', 10);
+      if (pts > oldHigh) {
+        localStorage.setItem('pulsechat_local_high_score', pts.toString());
+      }
 
-  const fetchTrivia = async () => {
-    let triviaData = null;
-    if (token) {
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/zone/daily-trivia`, {
-          headers: { Authorization: `Bearer ${token}` }
+      const rawLocalLb = localStorage.getItem('pulsechat_local_leaderboard');
+      let localList = rawLocalLb ? JSON.parse(rawLocalLb) : [];
+      if (!Array.isArray(localList)) localList = [];
+
+      const myId = user?.id || user?._id || 'local_user';
+      const myName = user?.displayName || user?.username || 'You';
+      const myAvatar = user?.avatar;
+
+      const idx = localList.findIndex(item => item.id === myId || item.displayName === myName);
+      if (idx >= 0) {
+        if (pts > localList[idx].score) {
+          localList[idx].score = pts;
+          localList[idx].gameName = gameName;
+          if (myAvatar) localList[idx].avatar = myAvatar;
+        }
+      } else {
+        localList.push({
+          id: myId,
+          displayName: myName,
+          gameName,
+          score: pts,
+          avatar: myAvatar
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.id) triviaData = data;
-        }
-      } catch (e) {}
-    }
+      }
 
-    if (!triviaData) {
-      triviaData = { ...DEFAULT_TRIVIA };
-      try {
-        const localVote = localStorage.getItem('pulsechat_local_trivia_vote');
-        if (localVote) {
-          const parsed = JSON.parse(localVote);
-          triviaData.hasVoted = true;
-          triviaData.votedOptionId = parsed.optionId;
-        }
-      } catch (e) {}
-    }
-    setTrivia(triviaData);
+      localList.sort((a, b) => b.score - a.score);
+      localStorage.setItem('pulsechat_local_leaderboard', JSON.stringify(localList));
+
+      window.dispatchEvent(new CustomEvent('pulsechat_leaderboard_updated'));
+    } catch (e) {}
   };
 
   const fetchLeaderboard = async () => {
-    let list = [];
+    let localList = [];
+    try {
+      const rawLocalLb = localStorage.getItem('pulsechat_local_leaderboard');
+      if (rawLocalLb) {
+        const parsed = JSON.parse(rawLocalLb);
+        if (Array.isArray(parsed)) localList = parsed;
+      }
+    } catch (e) {}
+
+    let localScore = 0;
+    try {
+      localScore = parseInt(localStorage.getItem('pulsechat_local_high_score') || '0', 10);
+    } catch (e) {}
+
+    const myId = user?.id || user?._id || 'local_user';
+    const myName = user?.displayName || user?.username || 'You';
+
+    if (localScore > 0 && !localList.some(item => item.id === myId || item.displayName === myName)) {
+      localList.push({
+        id: myId,
+        displayName: myName,
+        gameName: 'Arrow Puzzle',
+        score: localScore,
+        avatar: user?.avatar
+      });
+    }
+
+    setLeaderboard([...localList].sort((a, b) => b.score - a.score));
+
     if (token) {
       try {
         const res = await fetch(`${BACKEND_URL}/api/zone/leaderboard`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data)) list = data;
+          const serverList = await res.json();
+          if (Array.isArray(serverList)) {
+            const combinedMap = new Map();
+            serverList.forEach(item => {
+              const key = item.id || item.displayName;
+              combinedMap.set(key, item);
+            });
+
+            localList.forEach(item => {
+              const key = item.id || item.displayName;
+              const existing = combinedMap.get(key);
+              if (!existing || item.score > existing.score) {
+                combinedMap.set(key, item);
+              }
+            });
+
+            const merged = Array.from(combinedMap.values()).sort((a, b) => b.score - a.score);
+            try {
+              localStorage.setItem('pulsechat_local_leaderboard', JSON.stringify(merged));
+            } catch (e) {}
+            setLeaderboard(merged);
+          }
         }
       } catch (e) {}
     }
-
-    if (list.length === 0) {
-      let localScore = 0;
-      try {
-        localScore = parseInt(localStorage.getItem('pulsechat_local_high_score') || '0', 10);
-      } catch (e) {}
-
-      if (localScore > 0) {
-        list = [
-          { id: '1', displayName: user?.displayName || user?.username || 'You', gameName: 'Arrow Puzzle', score: localScore, avatar: user?.avatar }
-        ];
-      }
-    }
-    setLeaderboard(list);
   };
+
+  useEffect(() => {
+    fetchLeaderboard();
+
+    const handleLbUpdate = () => fetchLeaderboard();
+    window.addEventListener('pulsechat_leaderboard_updated', handleLbUpdate);
+    window.addEventListener('storage', handleLbUpdate);
+
+    return () => {
+      window.removeEventListener('pulsechat_leaderboard_updated', handleLbUpdate);
+      window.removeEventListener('storage', handleLbUpdate);
+    };
+  }, [token, user]);
 
   // Speed Tapper Game Loop
   useEffect(() => {
@@ -154,12 +190,7 @@ export default function PulseZoneModal({ onClose }) {
       setGameResult({ rewardSparks: 0, score });
     }
 
-    try {
-      const oldHigh = parseInt(localStorage.getItem('pulsechat_local_high_score') || '0', 10);
-      if (score > oldHigh) {
-        localStorage.setItem('pulsechat_local_high_score', score.toString());
-      }
-    } catch (e) {}
+    saveLocalScore('Pulse Speed Tapper', score);
 
     if (token) {
       try {
@@ -181,12 +212,7 @@ export default function PulseZoneModal({ onClose }) {
   };
 
   const handleGameScoreUpdate = async (gameName, pts) => {
-    try {
-      const oldHigh = parseInt(localStorage.getItem('pulsechat_local_high_score') || '0', 10);
-      if (pts > oldHigh) {
-        localStorage.setItem('pulsechat_local_high_score', pts.toString());
-      }
-    } catch (e) {}
+    saveLocalScore(gameName, pts);
 
     if (token) {
       try {
@@ -201,40 +227,6 @@ export default function PulseZoneModal({ onClose }) {
       } catch (e) {}
     }
     fetchLeaderboard();
-  };
-
-  const handleVoteTrivia = async (optionId) => {
-    if (!trivia || trivia.hasVoted) return;
-    playSound('pop');
-    setTriviaMsg(`🎉 +20 Sparks Credited for participating!`);
-
-    try {
-      localStorage.setItem('pulsechat_local_trivia_vote', JSON.stringify({ optionId, time: Date.now() }));
-    } catch (e) {}
-
-    const currentSparks = user?.pulseSparks || 100;
-    if (updateUserProfile) {
-      updateUserProfile({ ...user, pulseSparks: currentSparks + 20 });
-    }
-
-    setTrivia(prev => prev ? { ...prev, hasVoted: true, votedOptionId: optionId } : prev);
-
-    if (token) {
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/zone/daily-trivia/vote`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({ optionId })
-        });
-        const data = await res.json();
-        if (data.success && data.newSparksBalance !== undefined && updateUserProfile) {
-          updateUserProfile({ ...user, pulseSparks: data.newSparksBalance });
-        }
-      } catch (e) {}
-    }
   };
 
   return (
@@ -282,7 +274,7 @@ export default function PulseZoneModal({ onClose }) {
                   Pulse Zone <span style={{ color: '#fbbf24' }}>🎮</span>
                 </h2>
                 <span style={{ fontSize: '0.76rem', color: 'rgba(255,255,255,0.78)' }}>
-                  Arrow Puzzle, Mini-Games & Daily Trivia
+                  Arrow Puzzle, Mini-Games & Leaderboard
                 </span>
               </div>
             </div>
@@ -318,27 +310,6 @@ export default function PulseZoneModal({ onClose }) {
               }}
             >
               <Gamepad2 size={14} /> Mini-Games
-            </button>
-
-            <button
-              onClick={() => setActiveTab('trivia')}
-              style={{
-                flex: 1,
-                padding: '7px 8px',
-                borderRadius: '10px',
-                border: 'none',
-                background: activeTab === 'trivia' ? 'linear-gradient(90deg, #10b981, #06b6d4)' : 'transparent',
-                color: activeTab === 'trivia' ? '#fff' : 'rgba(255,255,255,0.7)',
-                fontWeight: 700,
-                fontSize: '0.8rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px'
-              }}
-            >
-              <Sparkles size={14} /> Daily Trivia (+20⚡)
             </button>
 
             <button
@@ -561,84 +532,6 @@ export default function PulseZoneModal({ onClose }) {
             </div>
           )}
 
-          {activeTab === 'trivia' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {triviaMsg && (
-                <div style={{
-                  padding: '10px 14px',
-                  borderRadius: '12px',
-                  background: 'rgba(16, 185, 129, 0.15)',
-                  border: '1px solid #10b981',
-                  color: '#10b981',
-                  fontSize: '0.84rem',
-                  fontWeight: 700,
-                  textAlign: 'center'
-                }}>
-                  {triviaMsg}
-                </div>
-              )}
-
-              {trivia && (
-                <div style={{
-                  background: 'var(--hover-bg)',
-                  borderRadius: '18px',
-                  border: '1px solid var(--border)',
-                  padding: '16px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px'
-                }}>
-                  <div style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1.4 }}>
-                    {trivia.question}
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
-                    {trivia.options?.map(opt => {
-                      const isVoted = trivia.votedOptionId === opt.id;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          disabled={trivia.hasVoted}
-                          onClick={() => handleVoteTrivia(opt.id)}
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '4px',
-                            padding: '10px 14px',
-                            borderRadius: '12px',
-                            border: isVoted ? '2px solid #10b981' : '1px solid var(--border)',
-                            background: isVoted ? 'rgba(16, 185, 129, 0.12)' : 'var(--bg-card)',
-                            cursor: trivia.hasVoted ? 'default' : 'pointer',
-                            textAlign: 'left',
-                            transition: 'all 0.15s ease'
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                            <span style={{ fontSize: '0.85rem', fontWeight: isVoted ? 700 : 500, color: 'var(--text-main)' }}>
-                              {opt.text}
-                            </span>
-                            {trivia.hasVoted && (
-                              <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#10b981' }}>
-                                {opt.percentage}%
-                              </span>
-                            )}
-                          </div>
-
-                          {trivia.hasVoted && (
-                            <div style={{ width: '100%', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.1)', overflow: 'hidden', marginTop: '4px' }}>
-                              <div style={{ height: '100%', background: isVoted ? '#10b981' : 'var(--accent)', width: `${opt.percentage}%`, transition: 'width 0.4s ease' }} />
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
           {activeTab === 'leaderboard' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
@@ -646,43 +539,49 @@ export default function PulseZoneModal({ onClose }) {
                 <span>Today's Top Pulse Champions</span>
               </div>
 
-              {leaderboard.map((item, idx) => (
-                <div
-                  key={item.id || idx}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 14px',
-                    borderRadius: '14px',
-                    background: idx === 0 ? 'rgba(245, 158, 11, 0.12)' : 'var(--hover-bg)',
-                    border: idx === 0 ? '1px solid rgba(245, 158, 11, 0.35)' : '1px solid var(--border)'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '0.9rem', fontWeight: 900, color: idx === 0 ? '#f59e0b' : 'var(--text-muted)', width: '20px' }}>
-                      #{idx + 1}
-                    </span>
-                    <img
-                      src={item.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${item.displayName}`}
-                      alt={item.displayName}
-                      style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
-                    />
-                    <div>
-                      <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                        {item.displayName}
-                      </div>
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-                        {item.gameName}
+              {leaderboard.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 15px', color: 'var(--text-muted)', fontSize: '0.86rem' }}>
+                  🏆 No scores submitted today yet! Play games to claim the #1 spot!
+                </div>
+              ) : (
+                leaderboard.map((item, idx) => (
+                  <div
+                    key={item.id || idx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 14px',
+                      borderRadius: '14px',
+                      background: idx === 0 ? 'rgba(245, 158, 11, 0.12)' : 'var(--hover-bg)',
+                      border: idx === 0 ? '1px solid rgba(245, 158, 11, 0.35)' : '1px solid var(--border)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 900, color: idx === 0 ? '#f59e0b' : 'var(--text-muted)', width: '20px' }}>
+                        #{idx + 1}
+                      </span>
+                      <img
+                        src={item.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${item.displayName}`}
+                        alt={item.displayName}
+                        style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+                      />
+                      <div>
+                        <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                          {item.displayName}
+                        </div>
+                        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                          {item.gameName}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#10b981' }}>
-                    {item.score} pts
-                  </span>
-                </div>
-              ))}
+                    <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#10b981' }}>
+                      {item.score} pts
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           )}
         </div>

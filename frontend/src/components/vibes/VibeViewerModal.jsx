@@ -16,13 +16,25 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
   const currentUserId = user?.id || user?._id || 'local_user';
   const isMine = currentVibe?.userId === currentUserId || vibeGroup?.userId === currentUserId;
 
-  // Mark current story as viewed
+  // Mark current story as viewed in LocalStorage and send view ping to Backend
   useEffect(() => {
-    if (currentVibe && token && !isMine && currentVibe.id && !currentVibe.id.startsWith('vibe_')) {
-      fetch(`${BACKEND_URL}/api/vibes/view/${currentVibe.id}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      }).catch(() => {});
+    if (currentVibe && currentVibe.id) {
+      try {
+        const rawViewed = localStorage.getItem('pulsechat_viewed_vibes');
+        const viewedSet = new Set(rawViewed ? JSON.parse(rawViewed) : []);
+        if (!viewedSet.has(currentVibe.id)) {
+          viewedSet.add(currentVibe.id);
+          localStorage.setItem('pulsechat_viewed_vibes', JSON.stringify(Array.from(viewedSet)));
+          window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
+        }
+      } catch (e) {}
+
+      if (token && !isMine && !currentVibe.id.startsWith('vibe_')) {
+        fetch(`${BACKEND_URL}/api/vibes/view/${currentVibe.id}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => {});
+      }
     }
   }, [currentVibe?.id, token, isMine]);
 
