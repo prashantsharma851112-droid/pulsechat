@@ -546,6 +546,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
 
     const token = localStorage.getItem('pulsechat_token');
     const finalScore = m === 'versus' ? s1 : sTeam;
+    const curLevel = parseInt(localStorage.getItem('pulsechat_arrow_level') || '1', 10);
     if (token && finalScore > 0) {
       fetch(`${BACKEND_URL}/api/zone/game-score`, {
         method: 'POST',
@@ -553,7 +554,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ gameName: 'Live Arrow Battle', score: finalScore })
+        body: JSON.stringify({ gameName: 'Live Arrow Battle', score: finalScore, level: curLevel })
       })
         .then(res => res.json())
         .then(data => {

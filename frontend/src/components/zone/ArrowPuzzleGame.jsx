@@ -77,6 +77,14 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
   const [hintId, setHintId] = useState(null);
   const [isDailyChallenge, setIsDailyChallenge] = useState(false);
 
+  // Sync current saved Arrow Puzzle level on mount
+  useEffect(() => {
+    const savedLevel = parseInt(localStorage.getItem('pulsechat_arrow_level') || '1', 10);
+    if (onScoreUpdate) {
+      onScoreUpdate('Arrow Puzzle', 0, savedLevel);
+    }
+  }, []);
+
   // Generate a 100% guaranteed solvable Arrow Puzzle grid
   const generatePuzzle = (lvl, isDaily = false) => {
     const config = getGridConfig(lvl);

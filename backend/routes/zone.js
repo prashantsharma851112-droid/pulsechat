@@ -207,8 +207,8 @@ router.post('/game-score', authMiddleware, async (req, res) => {
 
     const resolvedUserId = user.id || (user._id ? user._id.toString() : userId);
 
-    // Save/Update Cumulative Score & Level per user in MongoDB GameScore collection
-    const existingScoreDoc = await GameScore.findOne({ userId: resolvedUserId, gameName }).lean();
+    // Save/Update Cumulative Score & Level per user in MongoDB GameScore collection (Single Consolidated Entry per User)
+    const existingScoreDoc = await GameScore.findOne({ userId: resolvedUserId }).lean();
 
     let newTotalScore = rawScore;
     let newLevel = Math.max(1, rawLevel);
@@ -220,16 +220,20 @@ router.post('/game-score', authMiddleware, async (req, res) => {
       newGamesCount = (existingScoreDoc.gamesPlayed || 1) + 1;
 
       await GameScore.findOneAndUpdate(
-        { userId: resolvedUserId, gameName },
+        { userId: resolvedUserId },
         {
           displayName: user.displayName || user.username,
           avatar: user.avatar || '',
+          gameName: gameName || existingScoreDoc.gameName || 'Arrow Puzzle',
           score: newTotalScore,
           level: newLevel,
           gamesPlayed: newGamesCount,
           updatedAt: new Date()
         }
       );
+
+      // Clean up any old duplicate records for this user so each user has exactly 1 leaderboard row
+      await GameScore.deleteMany({ userId: resolvedUserId, _id: { $ne: existingScoreDoc._id } });
     } else {
       await GameScore.create({
         userId: resolvedUserId,
