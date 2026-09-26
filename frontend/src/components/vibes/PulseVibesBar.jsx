@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Plus, Sparkles, Flame, Eye, Music } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 
 // Sample Active Community Stories if DB has no other stories yet
@@ -70,7 +70,13 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
   const { socket } = useContext(SocketContext);
   const [groupedVibes, setGroupedVibes] = useState([]);
 
-  const currentUserId = user?.id || user?._id || 'local_user';
+  const isMyId = (id) => {
+    if (!id) return false;
+    const uId = user?.id;
+    const uMongo = user?._id;
+    const uName = user?.username;
+    return id === uId || id === uMongo || (uMongo && id === uMongo.toString()) || id === uName;
+  };
 
   const fetchActiveVibes = async () => {
     let serverGroups = [];
@@ -100,10 +106,11 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
     } catch (e) {}
 
     const combinedGroups = [...serverGroups];
+    const currentUserId = user?.id || user?._id || 'local_user';
 
     // Merge local user's own vibes if any
     if (localVibes.length > 0) {
-      const myGroupIndex = combinedGroups.findIndex(g => g.userId === currentUserId);
+      const myGroupIndex = combinedGroups.findIndex(g => isMyId(g.userId));
       if (myGroupIndex >= 0) {
         const existingIds = new Set(combinedGroups[myGroupIndex].vibes.map(v => v.id));
         const newLocal = localVibes.filter(v => !existingIds.has(v.id));
@@ -120,7 +127,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
     }
 
     // If no other user vibes exist yet, include sample active community vibes
-    const hasOtherVibes = combinedGroups.some(g => g.userId !== currentUserId);
+    const hasOtherVibes = combinedGroups.some(g => !isMyId(g.userId));
     if (!hasOtherVibes) {
       SAMPLE_COMMUNITY_VIBES.forEach(sample => {
         if (!combinedGroups.some(g => g.userId === sample.userId)) {
@@ -135,20 +142,18 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
   useEffect(() => {
     fetchActiveVibes();
 
-    const interval = setInterval(fetchActiveVibes, 15000);
+    const interval = setInterval(fetchActiveVibes, 10000);
 
     const handleUpdate = () => fetchActiveVibes();
     window.addEventListener('pulsechat_vibes_updated', handleUpdate);
     window.addEventListener('storage', handleUpdate);
 
-    // BroadcastChannel for instant cross-tab sync
     let bc;
     if (typeof BroadcastChannel !== 'undefined') {
       bc = new BroadcastChannel('pulsechat_vibes_channel');
       bc.onmessage = () => fetchActiveVibes();
     }
 
-    // Real-time Socket Listener for new stories posted by ANY user on the server
     if (socket) {
       socket.on('new_vibe_posted', handleUpdate);
     }
@@ -165,8 +170,8 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
   }, [token, user, socket]);
 
   // Separate user's own vibes from others
-  const myVibesGroup = groupedVibes.find(g => g.userId === currentUserId);
-  const otherVibesGroups = groupedVibes.filter(g => g.userId !== currentUserId);
+  const myVibesGroup = groupedVibes.find(g => isMyId(g.userId));
+  const otherVibesGroups = groupedVibes.filter(g => !isMyId(g.userId));
 
   return (
     <div style={{
@@ -280,7 +285,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
           </span>
         </div>
 
-        {/* Other Users' Stories */}
+        {/* Other Users' / Friends' Stories */}
         {otherVibesGroups.map(group => (
           <div
             key={group.userId}

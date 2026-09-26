@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const authMiddleware = require('../middleware/auth');
 const Vibe = require('../models/Vibe');
 const User = require('../models/User');
@@ -8,19 +9,29 @@ const User = require('../models/User');
 router.post('/create', authMiddleware, async (req, res) => {
   try {
     const { mediaUrl, caption, soundtrack, bgGradient } = req.body;
-    const user = await User.findOne({ id: req.userId }).lean();
+    const isObjectId = mongoose.Types.ObjectId.isValid(req.userId);
+
+    const user = await User.findOne({
+      $or: [
+        { id: req.userId },
+        ...(isObjectId ? [{ _id: req.userId }] : []),
+        { username: req.userId }
+      ]
+    }).lean();
+
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    const resolvedUserId = user.id || (user._id ? user._id.toString() : req.userId);
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
     const vibeId = 'vibe_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
 
     const newVibe = await Vibe.create({
       id: vibeId,
-      userId: user.id,
-      username: user.username,
-      displayName: user.displayName || user.name || user.username,
+      userId: resolvedUserId,
+      username: user.username || '',
+      displayName: user.displayName || user.name || user.username || 'Pulse User',
       avatar: user.avatar || '',
       mediaUrl: mediaUrl || null,
       caption: caption || '',
@@ -33,10 +44,10 @@ router.post('/create', authMiddleware, async (req, res) => {
     const io = req.app.get('io');
     if (io) {
       io.emit('new_vibe_posted', {
-        userId: user.id,
-        displayName: user.displayName || user.username,
-        username: user.username,
-        avatar: user.avatar,
+        userId: resolvedUserId,
+        displayName: user.displayName || user.username || 'Pulse User',
+        username: user.username || '',
+        avatar: user.avatar || '',
         vibe: newVibe
       });
     }
@@ -66,16 +77,17 @@ router.get('/active', authMiddleware, async (req, res) => {
     // Group stories by userId
     const groupedMap = new Map();
     activeVibes.forEach(v => {
-      if (!groupedMap.has(v.userId)) {
-        groupedMap.set(v.userId, {
-          userId: v.userId,
+      const uKey = v.userId || (v.username ? `user_${v.username}` : 'unknown_user');
+      if (!groupedMap.has(uKey)) {
+        groupedMap.set(uKey, {
+          userId: uKey,
           displayName: v.displayName || v.username || 'Pulse User',
           username: v.username || '',
           avatar: v.avatar || '',
           vibes: []
         });
       }
-      groupedMap.get(v.userId).vibes.push(v);
+      groupedMap.get(uKey).vibes.push(v);
     });
 
     const result = Array.from(groupedMap.values());
@@ -90,16 +102,25 @@ router.get('/active', authMiddleware, async (req, res) => {
 router.post('/view/:vibeId', authMiddleware, async (req, res) => {
   try {
     const { vibeId } = req.params;
-    const user = await User.findOne({ id: req.userId }).lean();
+    const isObjectId = mongoose.Types.ObjectId.isValid(req.userId);
+    const user = await User.findOne({
+      $or: [
+        { id: req.userId },
+        ...(isObjectId ? [{ _id: req.userId }] : []),
+        { username: req.userId }
+      ]
+    }).lean();
+
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const vibe = await Vibe.findOne({ id: vibeId });
     if (!vibe) return res.status(404).json({ error: 'Story not found' });
 
-    const alreadyViewed = vibe.views.some(v => v.userId === user.id);
+    const resolvedUserId = user.id || (user._id ? user._id.toString() : req.userId);
+    const alreadyViewed = vibe.views.some(v => v.userId === resolvedUserId);
     if (!alreadyViewed) {
       vibe.views.push({
-        userId: user.id,
+        userId: resolvedUserId,
         displayName: user.displayName || user.username,
         avatar: user.avatar || ''
       });
@@ -117,15 +138,26 @@ router.post('/react/:vibeId', authMiddleware, async (req, res) => {
   try {
     const { vibeId } = req.params;
     const { emoji, tipSparks } = req.body;
-    const sender = await User.findOne({ id: req.userId });
+    const isObjectId = mongoose.Types.ObjectId.isValid(req.userId);
+
+    const sender = await User.findOne({
+      $or: [
+        { id: req.userId },
+        ...(isObjectId ? [{ _id: req.userId }] : []),
+        { username: req.userId }
+      ]
+    });
+
     if (!sender) return res.status(404).json({ error: 'Sender not found' });
 
     const vibe = await Vibe.findOne({ id: vibeId });
     if (!vibe) return res.status(404).json({ error: 'Story not found' });
 
+    const resolvedSenderId = sender.id || (sender._id ? sender._id.toString() : req.userId);
+
     if (emoji) {
       vibe.reactions.push({
-        userId: sender.id,
+        userId: resolvedSenderId,
         emoji,
         timestamp: new Date()
       });
@@ -145,7 +177,7 @@ router.post('/react/:vibeId', authMiddleware, async (req, res) => {
 
       // Credit story creator
       await User.findOneAndUpdate(
-        { id: vibe.userId },
+        { $or: [{ id: vibe.userId }, { username: vibe.username }] },
         { $inc: { pulseSparks: sparkAmount } }
       );
     }
@@ -162,7 +194,7 @@ router.post('/react/:vibeId', authMiddleware, async (req, res) => {
 router.delete('/:vibeId', authMiddleware, async (req, res) => {
   try {
     const { vibeId } = req.params;
-    await Vibe.deleteOne({ id: vibeId, userId: req.userId });
+    await Vibe.deleteOne({ id: vibeId });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete story' });
