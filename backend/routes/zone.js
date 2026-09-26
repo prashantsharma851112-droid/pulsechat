@@ -90,40 +90,10 @@ router.post('/daily-trivia/vote', authMiddleware, async (req, res) => {
   }
 });
 
-// Fetch Mini-Games Leaderboard permanently from MongoDB GameScore
-router.get('/leaderboard', authMiddleware, async (req, res) => {
+// Fetch Daily Task & 7-Day Streak Status
+router.get('/daily-task', authMiddleware, async (req, res) => {
   try {
-    const scores = await GameScore.find({})
-      .sort({ score: -1 })
-      .limit(30)
-      .lean();
-
-    const leaderboardList = scores.map((s, idx) => ({
-      id: s.userId || `score_${idx}`,
-      displayName: s.displayName,
-      avatar: s.avatar,
-      gameName: s.gameName,
-      score: s.score,
-      timestamp: s.updatedAt
-    }));
-
-    res.json(leaderboardList);
-  } catch (err) {
-    console.error('Error fetching leaderboard:', err);
-    res.status(500).json({ error: 'Failed to fetch leaderboard' });
-  }
-});
-
-// Submit Mini-Game Score & Earn Reward Sparks
-router.post('/game-score', authMiddleware, async (req, res) => {
-  try {
-    const { gameName, score } = req.body;
     const userId = req.userId || req.user?.id || req.user?.userId;
-
-    if (!score || score <= 0) {
-      return res.status(400).json({ error: 'Invalid score' });
-    }
-
     const isObjectId = mongoose.Types.ObjectId.isValid(userId);
     const user = await User.findOne({
       $or: [
@@ -135,59 +105,257 @@ router.post('/game-score', authMiddleware, async (req, res) => {
 
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const resolvedUserId = user.id || (user._id ? user._id.toString() : userId);
-    const rewardSparks = Math.min(Math.floor(score / 50), 50);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
-    let updatedUser = null;
-    if (rewardSparks > 0) {
-      updatedUser = await User.findOneAndUpdate(
-        { id: resolvedUserId },
-        { $inc: { pulseSparks: rewardSparks } },
-        { new: true }
-      ).select('id pulseSparks').lean();
+    let streakDays = user.gamingStreakCount || 0;
+    const lastDate = user.lastGamingTaskDate || '';
+    if (lastDate !== todayStr && lastDate !== yesterdayStr) {
+      streakDays = 0;
     }
 
-    // Save/Update highest score per user in MongoDB GameScore collection
-    const existingScoreDoc = await GameScore.findOne({ userId: resolvedUserId, gameName }).lean();
-    if (!existingScoreDoc || score > existingScoreDoc.score) {
-      await GameScore.findOneAndUpdate(
-        { userId: resolvedUserId, gameName },
-        {
-          userId: resolvedUserId,
-          displayName: user.displayName || user.username,
-          avatar: user.avatar || '',
-          gameName: gameName || 'Arrow Puzzle',
-          score,
-          updatedAt: new Date()
-        },
-        { upsert: true, new: true }
-      );
-    }
+    const hasCrown = Boolean(
+      user.hasKingCrown &&
+      user.kingCrownExpiresAt &&
+      new Date(user.kingCrownExpiresAt) > new Date()
+    );
 
-    // Fetch fresh top 30 scores from MongoDB
-    const topScores = await GameScore.find({})
-      .sort({ score: -1 })
+    res.json({
+      taskCompletedToday: lastDate === todayStr,
+      streakDays,
+      hasKingCrown: hasCrown,
+      kingCrownExpiresAt: user.kingCrownExpiresAt || null,
+      pulseSparks: user.pulseSparks || 0
+    });
+  } catch (err) {
+    console.error('Error fetching daily task:', err);
+    res.status(500).json({ error: 'Failed to fetch daily task' });
+  }
+});
+
+// Fetch Mini-Games Leaderboard permanently from MongoDB GameScore
+router.get('/leaderboard', authMiddleware, async (req, res) => {
+  try {
+    const scores = await GameScore.find({})
+      .sort({ score: -1, level: -1, gamesPlayed: -1 })
       .limit(30)
       .lean();
 
-    const leaderboardList = topScores.map((s, idx) => ({
-      id: s.userId || `score_${idx}`,
-      displayName: s.displayName,
-      avatar: s.avatar,
-      gameName: s.gameName,
-      score: s.score,
-      timestamp: s.updatedAt
-    }));
+    const userIds = scores.map(s => s.userId).filter(Boolean);
+    const usersList = await User.find({ id: { $in: userIds } })
+      .select('id hasKingCrown kingCrownExpiresAt avatar displayName username')
+      .lean();
+
+    const userMap = new Map();
+    usersList.forEach(u => {
+      userMap.set(u.id, u);
+    });
+
+    const leaderboardList = scores.map((s, idx) => {
+      const uDoc = userMap.get(s.userId);
+      const hasCrown = Boolean(
+        uDoc &&
+        uDoc.hasKingCrown &&
+        uDoc.kingCrownExpiresAt &&
+        new Date(uDoc.kingCrownExpiresAt) > new Date()
+      );
+
+      return {
+        id: s.userId || `score_${idx}`,
+        displayName: s.displayName,
+        avatar: uDoc?.avatar || s.avatar || '',
+        gameName: s.gameName,
+        score: s.score || 0,
+        level: s.level || 1,
+        gamesPlayed: s.gamesPlayed || 1,
+        hasKingCrown: hasCrown,
+        isDailyChampion: idx === 0,
+        timestamp: s.updatedAt
+      };
+    });
+
+    res.json(leaderboardList);
+  } catch (err) {
+    console.error('Error fetching leaderboard:', err);
+    res.status(500).json({ error: 'Failed to fetch leaderboard' });
+  }
+});
+
+// Submit Mini-Game Score, Level & Earn Rewards / Streaks
+router.post('/game-score', authMiddleware, async (req, res) => {
+  try {
+    const { gameName, score, level } = req.body;
+    const userId = req.userId || req.user?.id || req.user?.userId;
+
+    const rawScore = parseInt(score || '0', 10);
+    const rawLevel = parseInt(level || '1', 10);
+
+    if (isNaN(rawScore) || rawScore < 0) {
+      return res.status(400).json({ error: 'Invalid score' });
+    }
+
+    const isObjectId = mongoose.Types.ObjectId.isValid(userId);
+    let user = await User.findOne({
+      $or: [
+        { id: userId },
+        ...(isObjectId ? [{ _id: userId }] : []),
+        { username: userId }
+      ]
+    });
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const resolvedUserId = user.id || (user._id ? user._id.toString() : userId);
+
+    // Save/Update Cumulative Score & Level per user in MongoDB GameScore collection
+    const existingScoreDoc = await GameScore.findOne({ userId: resolvedUserId, gameName }).lean();
+
+    let newTotalScore = rawScore;
+    let newLevel = Math.max(1, rawLevel);
+    let newGamesCount = 1;
+
+    if (existingScoreDoc) {
+      newTotalScore = Math.max(existingScoreDoc.score + rawScore, rawScore);
+      newLevel = Math.max(existingScoreDoc.level || 1, rawLevel);
+      newGamesCount = (existingScoreDoc.gamesPlayed || 1) + 1;
+
+      await GameScore.findOneAndUpdate(
+        { userId: resolvedUserId, gameName },
+        {
+          displayName: user.displayName || user.username,
+          avatar: user.avatar || '',
+          score: newTotalScore,
+          level: newLevel,
+          gamesPlayed: newGamesCount,
+          updatedAt: new Date()
+        }
+      );
+    } else {
+      await GameScore.create({
+        userId: resolvedUserId,
+        displayName: user.displayName || user.username,
+        avatar: user.avatar || '',
+        gameName: gameName || 'Arrow Puzzle',
+        score: newTotalScore,
+        level: newLevel,
+        gamesPlayed: 1,
+        updatedAt: new Date()
+      });
+    }
+
+    // Performance Sparks earned for playing
+    let earnedSparks = Math.min(Math.floor(rawScore / 50), 50);
+
+    // Daily Gaming Task & 7-Day Streak Evaluation
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+    let taskCompletedToday = user.lastGamingTaskDate === todayStr;
+    let dailyTaskSparks = 0;
+    let newStreak = user.gamingStreakCount || 0;
+    let unlockedKingCrown = false;
+
+    if (!taskCompletedToday) {
+      taskCompletedToday = true;
+      dailyTaskSparks = 30; // +30 Sparks for Daily Game Task!
+
+      if (user.lastGamingTaskDate === yesterdayStr) {
+        newStreak = (user.gamingStreakCount || 0) + 1;
+      } else {
+        newStreak = 1;
+      }
+
+      if (newStreak >= 7) {
+        newStreak = 7;
+        unlockedKingCrown = true;
+        user.hasKingCrown = true;
+        user.kingCrownExpiresAt = new Date(Date.now() + 24 * 3600 * 1000); // 24 Hours King Crown on DP!
+      }
+
+      user.lastGamingTaskDate = todayStr;
+      user.gamingStreakCount = newStreak;
+    }
+
+    // Check King Crown Expiry
+    if (user.hasKingCrown && user.kingCrownExpiresAt && new Date(user.kingCrownExpiresAt) <= new Date()) {
+      user.hasKingCrown = false;
+    }
+
+    // Daily #1 Champion Reward (+100 Sparks)
+    let dailyRankOneSparks = 0;
+    const currentLeaderboard = await GameScore.find({})
+      .sort({ score: -1, level: -1, gamesPlayed: -1 })
+      .limit(1)
+      .lean();
+
+    if (currentLeaderboard.length > 0 && currentLeaderboard[0].userId === resolvedUserId) {
+      if (user.claimedDailyFirstReward !== todayStr) {
+        dailyRankOneSparks = 100;
+        user.claimedDailyFirstReward = todayStr;
+      }
+    }
+
+    const totalSparksGained = earnedSparks + dailyTaskSparks + dailyRankOneSparks;
+    user.pulseSparks = (user.pulseSparks || 0) + totalSparksGained;
+    await user.save();
+
+    // Fetch fresh top 30 scores from MongoDB for real-time broadcast
+    const topScores = await GameScore.find({})
+      .sort({ score: -1, level: -1, gamesPlayed: -1 })
+      .limit(30)
+      .lean();
+
+    const allUserIds = topScores.map(s => s.userId).filter(Boolean);
+    const usersList = await User.find({ id: { $in: allUserIds } })
+      .select('id hasKingCrown kingCrownExpiresAt avatar')
+      .lean();
+
+    const userMap = new Map();
+    usersList.forEach(u => userMap.set(u.id, u));
+
+    const leaderboardList = topScores.map((s, idx) => {
+      const uDoc = userMap.get(s.userId);
+      const hasCrown = Boolean(
+        uDoc &&
+        uDoc.hasKingCrown &&
+        uDoc.kingCrownExpiresAt &&
+        new Date(uDoc.kingCrownExpiresAt) > new Date()
+      );
+
+      return {
+        id: s.userId || `score_${idx}`,
+        displayName: s.displayName,
+        avatar: uDoc?.avatar || s.avatar || '',
+        gameName: s.gameName,
+        score: s.score || 0,
+        level: s.level || 1,
+        gamesPlayed: s.gamesPlayed || 1,
+        hasKingCrown: hasCrown,
+        isDailyChampion: idx === 0,
+        timestamp: s.updatedAt
+      };
+    });
 
     const io = req.app.get('io');
     if (io) {
       io.emit('leaderboard_updated', leaderboardList);
+      io.to(`user_${resolvedUserId}`).emit('user_profile_updated', {
+        userId: resolvedUserId,
+        pulseSparks: user.pulseSparks,
+        hasKingCrown: user.hasKingCrown,
+        gamingStreakCount: user.gamingStreakCount
+      });
     }
 
     res.json({
       success: true,
-      rewardSparks,
-      newSparksBalance: updatedUser?.pulseSparks || user.pulseSparks,
+      rewardSparks: totalSparksGained,
+      dailyTaskBonus: dailyTaskSparks,
+      dailyRankOneBonus: dailyRankOneSparks,
+      newSparksBalance: user.pulseSparks,
+      streakDays: user.gamingStreakCount,
+      unlockedKingCrown,
+      hasKingCrown: Boolean(user.hasKingCrown && user.kingCrownExpiresAt && new Date(user.kingCrownExpiresAt) > new Date()),
       leaderboard: leaderboardList
     });
   } catch (err) {

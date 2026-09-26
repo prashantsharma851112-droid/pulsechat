@@ -221,7 +221,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
       updateUserProfile({ ...user, pulseSparks: currentSparks + reward });
     }
     if (onScoreUpdate) {
-      onScoreUpdate('Arrow Puzzle', nextLvl * 50);
+      onScoreUpdate('Arrow Puzzle', nextLvl * 50, nextLvl);
     }
     setScreen('win');
   };

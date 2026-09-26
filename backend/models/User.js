@@ -37,6 +37,11 @@ const userSchema = new mongoose.Schema({
   claimedFreeSparks: { type: Object, default: {} }, // { [planId]: ISO string timestamp of last 24h claim }
   hasUsed3DTrial: { type: Boolean, default: false }, // Tracks if 1st free 3D text trial was used
   isAdmin: { type: Boolean, default: false }, // Stealth Master Admin status
+  gamingStreakCount: { type: Number, default: 0 },
+  lastGamingTaskDate: { type: String, default: '' },
+  hasKingCrown: { type: Boolean, default: false },
+  kingCrownExpiresAt: { type: Date, default: null },
+  claimedDailyFirstReward: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });
 

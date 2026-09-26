@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw } from 'lucide-react';
+import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Sparkles, Award } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 import ArrowPuzzleGame from './ArrowPuzzleGame';
@@ -19,16 +19,25 @@ export default function PulseZoneModal({ onClose }) {
   const [targetPos, setTargetPos] = useState({ top: '40%', left: '40%' });
   const [gameResult, setGameResult] = useState(null);
 
-  // Leaderboard State
+  // Leaderboard State & Daily Task
   const [leaderboard, setLeaderboard] = useState([]);
+  const [dailyTask, setDailyTask] = useState(null);
 
-  const saveLocalScore = (gameName, pts) => {
+  const fetchDailyTask = async () => {
+    if (!token) return;
     try {
-      const oldHigh = parseInt(localStorage.getItem('pulsechat_local_high_score') || '0', 10);
-      if (pts > oldHigh) {
-        localStorage.setItem('pulsechat_local_high_score', pts.toString());
+      const res = await fetch(`${BACKEND_URL}/api/zone/daily-task`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDailyTask(data);
+        if (data.pulseSparks !== undefined && user && updateUserProfile) {
+          if (data.pulseSparks !== user.pulseSparks) {
+            updateUserProfile({ ...user, pulseSparks: data.pulseSparks });
+          }
+        }
       }
-      localStorage.removeItem('pulsechat_local_leaderboard');
     } catch (e) {}
   };
 
@@ -55,6 +64,7 @@ export default function PulseZoneModal({ onClose }) {
   };
 
   useEffect(() => {
+    fetchDailyTask();
     fetchLeaderboard();
 
     if (socket) {
@@ -115,19 +125,6 @@ export default function PulseZoneModal({ onClose }) {
     setTapperState('ended');
     playSound('success');
 
-    const rewardSparks = Math.floor(score / 10);
-    if (rewardSparks > 0) {
-      const currentSparks = user?.pulseSparks || 100;
-      if (updateUserProfile) {
-        updateUserProfile({ ...user, pulseSparks: currentSparks + rewardSparks });
-      }
-      setGameResult({ rewardSparks, score });
-    } else {
-      setGameResult({ rewardSparks: 0, score });
-    }
-
-    saveLocalScore('Pulse Speed Tapper', score);
-
     if (token) {
       try {
         const res = await fetch(`${BACKEND_URL}/api/zone/game-score`, {
@@ -136,30 +133,43 @@ export default function PulseZoneModal({ onClose }) {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`
           },
-          body: JSON.stringify({ gameName: 'Pulse Speed Tapper', score })
+          body: JSON.stringify({ gameName: 'Pulse Speed Tapper', score, level: 1 })
         });
         const data = await res.json();
-        if (data.success && data.newSparksBalance !== undefined && updateUserProfile) {
-          updateUserProfile({ ...user, pulseSparks: data.newSparksBalance });
+        if (data.success) {
+          if (data.newSparksBalance !== undefined && updateUserProfile) {
+            updateUserProfile({ ...user, pulseSparks: data.newSparksBalance });
+          }
+          setGameResult({
+            rewardSparks: data.rewardSparks,
+            score,
+            unlockedKingCrown: data.unlockedKingCrown
+          });
+          fetchDailyTask();
         }
       } catch (e) {}
     }
     fetchLeaderboard();
   };
 
-  const handleGameScoreUpdate = async (gameName, pts) => {
-    saveLocalScore(gameName, pts);
-
+  const handleGameScoreUpdate = async (gameName, pts, lvl = 1) => {
     if (token) {
       try {
-        await fetch(`${BACKEND_URL}/api/zone/game-score`, {
+        const res = await fetch(`${BACKEND_URL}/api/zone/game-score`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`
           },
-          body: JSON.stringify({ gameName, score: pts })
+          body: JSON.stringify({ gameName, score: pts, level: lvl })
         });
+        const data = await res.json();
+        if (data.success) {
+          if (data.newSparksBalance !== undefined && updateUserProfile) {
+            updateUserProfile({ ...user, pulseSparks: data.newSparksBalance });
+          }
+          fetchDailyTask();
+        }
       } catch (e) {}
     }
     fetchLeaderboard();
@@ -171,16 +181,16 @@ export default function PulseZoneModal({ onClose }) {
         className="modal-card modal-responsive"
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: '520px',
+          maxWidth: '540px',
           width: '100%',
-          maxHeight: '92dvh',
+          maxHeight: '94dvh',
           display: 'flex',
           flexDirection: 'column',
           borderRadius: '24px',
           overflow: 'hidden',
           background: 'var(--bg-card)',
-          border: '1px solid rgba(245, 158, 11, 0.3)',
-          boxShadow: '0 20px 50px rgba(0,0,0,0.6), 0 0 30px rgba(245, 158, 11, 0.15)'
+          border: '1px solid rgba(245, 158, 11, 0.35)',
+          boxShadow: '0 20px 50px rgba(0,0,0,0.6), 0 0 30px rgba(245, 158, 11, 0.18)'
         }}
       >
         {/* Banner Header */}
@@ -210,7 +220,7 @@ export default function PulseZoneModal({ onClose }) {
                   Pulse Zone <span style={{ color: '#fbbf24' }}>🎮</span>
                 </h2>
                 <span style={{ fontSize: '0.76rem', color: 'rgba(255,255,255,0.78)' }}>
-                  Arrow Puzzle, Mini-Games & Leaderboard
+                  Arrow Puzzle, Mini-Games & Live Leaderboard
                 </span>
               </div>
             </div>
@@ -231,42 +241,42 @@ export default function PulseZoneModal({ onClose }) {
               onClick={() => setActiveTab('games')}
               style={{
                 flex: 1,
-                padding: '7px 8px',
+                padding: '8px',
                 borderRadius: '10px',
                 border: 'none',
                 background: activeTab === 'games' ? 'linear-gradient(90deg, #2563eb, #3b82f6)' : 'transparent',
                 color: activeTab === 'games' ? '#fff' : 'rgba(255,255,255,0.7)',
-                fontWeight: 700,
-                fontSize: '0.8rem',
+                fontWeight: 800,
+                fontSize: '0.82rem',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '4px'
+                gap: '5px'
               }}
             >
-              <Gamepad2 size={14} /> Mini-Games
+              <Gamepad2 size={15} /> Mini-Games
             </button>
 
             <button
               onClick={() => setActiveTab('leaderboard')}
               style={{
                 flex: 1,
-                padding: '7px 8px',
+                padding: '8px',
                 borderRadius: '10px',
                 border: 'none',
                 background: activeTab === 'leaderboard' ? 'linear-gradient(90deg, #6366f1, #a855f7)' : 'transparent',
                 color: activeTab === 'leaderboard' ? '#fff' : 'rgba(255,255,255,0.7)',
-                fontWeight: 700,
-                fontSize: '0.8rem',
+                fontWeight: 800,
+                fontSize: '0.82rem',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '4px'
+                gap: '5px'
               }}
             >
-              <Trophy size={14} /> Leaderboard
+              <Trophy size={15} /> Leaderboard
             </button>
           </div>
         </div>
@@ -279,6 +289,92 @@ export default function PulseZoneModal({ onClose }) {
           overflowY: 'auto',
           WebkitOverflowScrolling: 'touch'
         }}>
+          {/* Daily Task & 7-Day Gaming Streak Card */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16) 0%, rgba(99, 102, 241, 0.12) 100%)',
+            borderRadius: '18px',
+            border: '1px solid rgba(245, 158, 11, 0.35)',
+            padding: '14px',
+            marginBottom: '14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Flame size={20} color="#f59e0b" />
+                <span style={{ fontSize: '0.92rem', fontWeight: 900, color: 'var(--text-main)' }}>
+                  7-Day Gaming Streak Quest
+                </span>
+              </div>
+              <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#fbbf24', background: 'rgba(251, 191, 36, 0.2)', padding: '3px 10px', borderRadius: '12px' }}>
+                Day {dailyTask?.streakDays || 0}/7 🔥
+              </span>
+            </div>
+
+            {/* 7 Streak Day Badges */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '4px', margin: '2px 0' }}>
+              {[1, 2, 3, 4, 5, 6, 7].map(day => {
+                const isDone = (dailyTask?.streakDays || 0) >= day;
+                const isDay7 = day === 7;
+                return (
+                  <div key={day} style={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: isDone
+                        ? (isDay7 ? 'linear-gradient(135deg, #fbbf24, #f59e0b)' : 'linear-gradient(135deg, #10b981, #059669)')
+                        : 'rgba(255,255,255,0.08)',
+                      border: isDay7 ? '2px solid #fbbf24' : '1px solid rgba(255,255,255,0.18)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: isDay7 ? '1.1rem' : '0.82rem',
+                      fontWeight: 900,
+                      color: '#fff',
+                      boxShadow: isDone ? (isDay7 ? '0 0 12px rgba(251, 191, 36, 0.8)' : '0 0 8px rgba(16, 185, 129, 0.5)') : 'none'
+                    }}>
+                      {isDay7 ? '👑' : (isDone ? '✓' : day)}
+                    </div>
+                    <span style={{ fontSize: '0.62rem', color: isDone ? '#10b981' : 'var(--text-muted)', fontWeight: 700 }}>
+                      Day {day}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{
+              fontSize: '0.78rem',
+              color: dailyTask?.taskCompletedToday ? '#10b981' : '#fbbf24',
+              fontWeight: 800,
+              background: 'rgba(0,0,0,0.3)',
+              padding: '8px 12px',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <span>
+                {dailyTask?.taskCompletedToday
+                  ? '✅ Daily Task Complete (+30⚡ Sparks Earned!)'
+                  : '⚡ Play 1 game today to earn +30 Sparks & level up 7-Day Streak!'}
+              </span>
+              {dailyTask?.hasKingCrown && (
+                <span style={{ color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 900 }}>
+                  👑 King Crown Active!
+                </span>
+              )}
+            </div>
+          </div>
+
           {activeTab === 'games' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
@@ -328,7 +424,7 @@ export default function PulseZoneModal({ onClose }) {
               {/* Selected Game Screen */}
               {selectedGame === 'arrow' ? (
                 <ArrowPuzzleGame
-                  onScoreUpdate={handleGameScoreUpdate}
+                  onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
                 />
               ) : (
                 <div style={{
@@ -487,34 +583,70 @@ export default function PulseZoneModal({ onClose }) {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      padding: '10px 14px',
-                      borderRadius: '14px',
-                      background: idx === 0 ? 'rgba(245, 158, 11, 0.12)' : 'var(--hover-bg)',
-                      border: idx === 0 ? '1px solid rgba(245, 158, 11, 0.35)' : '1px solid var(--border)'
+                      padding: '12px 14px',
+                      borderRadius: '16px',
+                      background: idx === 0 ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(234, 179, 8, 0.1) 100%)' : 'var(--hover-bg)',
+                      border: idx === 0 ? '1.5px solid rgba(245, 158, 11, 0.6)' : '1px solid var(--border)',
+                      boxShadow: idx === 0 ? '0 4px 18px rgba(245, 158, 11, 0.25)' : 'none'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '0.9rem', fontWeight: 900, color: idx === 0 ? '#f59e0b' : 'var(--text-muted)', width: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ fontSize: '0.95rem', fontWeight: 900, color: idx === 0 ? '#f59e0b' : (idx === 1 ? '#94a3b8' : (idx === 2 ? '#b45309' : 'var(--text-muted)')), width: '22px' }}>
                         #{idx + 1}
                       </span>
-                      <img
-                        src={item.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${item.displayName}`}
-                        alt={item.displayName}
-                        style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
-                      />
+
+                      {/* Avatar with King Crown Overlay */}
+                      <div style={{ position: 'relative' }}>
+                        {item.hasKingCrown && (
+                          <div style={{
+                            position: 'absolute',
+                            top: -12,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            fontSize: '1.1rem',
+                            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))',
+                            zIndex: 5
+                          }}>
+                            👑
+                          </div>
+                        )}
+                        <img
+                          src={item.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${item.displayName}`}
+                          alt={item.displayName}
+                          style={{
+                            width: '38px',
+                            height: '38px',
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                            border: item.hasKingCrown ? '2px solid #fbbf24' : (idx === 0 ? '2px solid #f59e0b' : '1px solid rgba(255,255,255,0.2)')
+                          }}
+                        />
+                      </div>
+
                       <div>
-                        <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                          {item.displayName}
+                        <div style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>{item.displayName}</span>
+                          {idx === 0 && (
+                            <span style={{ fontSize: '0.66rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.2)', padding: '1px 6px', borderRadius: '8px', border: '1px solid rgba(251, 191, 36, 0.4)' }}>
+                              👑 #1 Daily (+100⚡)
+                            </span>
+                          )}
                         </div>
-                        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-                          {item.gameName}
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                          <span style={{ color: '#38bdf8', fontWeight: 800, background: 'rgba(56, 189, 248, 0.15)', padding: '1px 6px', borderRadius: '6px' }}>
+                            Level {item.level || 1}
+                          </span>
+                          <span>• {item.gamesPlayed || 1} Played</span>
+                          <span>• {item.gameName}</span>
                         </div>
                       </div>
                     </div>
 
-                    <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#10b981' }}>
-                      {item.score} pts
-                    </span>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '0.96rem', fontWeight: 900, color: '#10b981', display: 'block' }}>
+                        {item.score} pts
+                      </span>
+                    </div>
                   </div>
                 ))
               )}
