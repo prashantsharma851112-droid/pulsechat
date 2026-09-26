@@ -19,6 +19,8 @@ const friendRoutes = require('./routes/friends');
 const uploadRoutes = require('./routes/upload');
 const paymentRoutes = require('./routes/payments');
 const adminRoutes = require('./routes/admin');
+const vibeRoutes = require('./routes/vibes');
+const zoneRoutes = require('./routes/zone');
 const { uploadToCloudinary } = require('./utils/cloudinary');
 const redis = require('./utils/redis');
 
@@ -54,6 +56,8 @@ app.use('/api/friends', friendRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/vibes', vibeRoutes);
+app.use('/api/zone', zoneRoutes);
 
 // Health check endpoint for uptime monitoring & 0ms keep-alive
 app.get('/api/health', (req, res) => {

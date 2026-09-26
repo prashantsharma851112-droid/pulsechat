@@ -8,6 +8,11 @@ import AdminDashboardModal from '../admin/AdminDashboardModal';
 import FriendsTab from './FriendsTab';
 import PulseProModal from './PulseProModal';
 import PulseVipBadge from '../common/PulseVipBadge';
+import PulseVibesBar from '../vibes/PulseVibesBar';
+import CreateVibeModal from '../vibes/CreateVibeModal';
+import VibeViewerModal from '../vibes/VibeViewerModal';
+import PulseZoneModal from '../zone/PulseZoneModal';
+import { Gamepad2 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
 import {
@@ -50,6 +55,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [showProModal, setShowProModal] = useState(false);
   const [proModalTab, setProModalTab] = useState('pro');
+  const [showCreateVibe, setShowCreateVibe] = useState(false);
+  const [selectedVibeGroup, setSelectedVibeGroup] = useState(null);
+  const [showPulseZone, setShowPulseZone] = useState(false);
   const [showTopMenu, setShowTopMenu] = useState(false);
   const [showSwitchAccountMenu, setShowSwitchAccountMenu] = useState(false);
   const topMenuRef = useRef(null);
@@ -1082,8 +1090,30 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           </div>
         </div>
 
-        {/* Topbar Actions: Direct Refresh + 3-Dot More Menu */}
+        {/* Topbar Actions: Direct Refresh + Pulse Zone + 3-Dot More Menu */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button
+            onClick={() => setShowPulseZone(true)}
+            title="Pulse Zone (Mini-Games, Trivia & Leaderboards)"
+            className="icon-btn-ghost"
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(239, 68, 68, 0.2))',
+              color: '#f59e0b',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px solid rgba(245, 158, 11, 0.4)',
+              transition: 'all 0.2s ease',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)'
+            }}
+          >
+            <Gamepad2 size={18} />
+          </button>
+
           <button
             onClick={handleManualRefresh}
             disabled={isRefreshing}
@@ -1517,6 +1547,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         </div>
       </div>
     </div>
+
+      {/* Pulse Vibes ⚡ 24-Hour Stories Bar */}
+      <PulseVibesBar
+        onOpenCreateVibe={() => setShowCreateVibe(true)}
+        onOpenVibeViewer={(group) => setSelectedVibeGroup(group)}
+      />
 
       {/* WhatsApp-Style Navigation Tabs: Chats vs Groups */}
       <div className="sidebar-tabs" style={{ display: 'flex', borderBottom: '2px solid var(--border)', background: 'var(--bg-sidebar)' }}>
@@ -2046,6 +2082,30 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         <PulseProModal
           initialTab={proModalTab}
           onClose={() => setShowProModal(false)}
+        />
+      )}
+
+      {showCreateVibe && (
+        <CreateVibeModal
+          onClose={() => setShowCreateVibe(false)}
+          onCreated={() => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
+            }
+          }}
+        />
+      )}
+
+      {selectedVibeGroup && (
+        <VibeViewerModal
+          vibeGroup={selectedVibeGroup}
+          onClose={() => setSelectedVibeGroup(null)}
+        />
+      )}
+
+      {showPulseZone && (
+        <PulseZoneModal
+          onClose={() => setShowPulseZone(false)}
         />
       )}
     </div>
