@@ -43,13 +43,24 @@ export function setCachedUser(user) {
 // recent chats
 export function getCachedRecentChats(userId) {
   if (typeof window === 'undefined' || !userId) return [];
-  return safeParse(localStorage.getItem(`${STORAGE_KEYS.RECENT_PREFIX}${userId}`), []);
+  const raw = safeParse(localStorage.getItem(`${STORAGE_KEYS.RECENT_PREFIX}${userId}`), []);
+  if (!Array.isArray(raw)) return [];
+  return [...raw].sort((a, b) => {
+    const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
+    const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
+    return tB - tA;
+  });
 }
 
 export function setCachedRecentChats(userId, chats) {
   if (typeof window === 'undefined' || !userId || !Array.isArray(chats)) return;
   try {
-    localStorage.setItem(`${STORAGE_KEYS.RECENT_PREFIX}${userId}`, JSON.stringify(chats));
+    const sorted = [...chats].sort((a, b) => {
+      const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
+      const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
+      return tB - tA;
+    });
+    localStorage.setItem(`${STORAGE_KEYS.RECENT_PREFIX}${userId}`, JSON.stringify(sorted));
   } catch (e) {
     console.warn('LocalStorage error setting recent chats', e);
   }
@@ -87,14 +98,16 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
   if (!userId || !chatId || !message) return;
   restoreDeletedChatId(userId, chatId);
   if (targetChat?.id) restoreDeletedChatId(userId, targetChat.id);
+  if (targetChat?._id) restoreDeletedChatId(userId, targetChat._id);
 
   let recent = getCachedRecentChats(userId);
 
-  const contactId = targetChat?.id || message.receiverId || null;
+  const contactId = targetChat?.id || targetChat?._id || message.receiverId || (message.senderId !== userId ? message.senderId : null);
 
   const existingIdx = recent.findIndex(c => {
-    if (c.id === contactId) return true;
-    if (c.id === chatId) return true;
+    if (contactId && (c.id === contactId || c._id === contactId || c.username === contactId)) return true;
+    if (chatId && (c.id === chatId || c._id === chatId || (typeof chatId === 'string' && chatId.includes(c.id)))) return true;
+    if (targetChat?.username && c.username === targetChat.username) return true;
     return false;
   });
 
@@ -116,33 +129,36 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
     }
   }
 
+  const msgTime = message.timestamp || new Date().toISOString();
   const snippet = {
     lastMessage: message.type === '3d_text'
       ? `✨ 3D: ${message.content}`
       : (formattedContent || (message.type === 'voice' ? '🎤 Voice note' : 'Sent a file')),
-    lastMessageTime: message.timestamp || new Date().toISOString(),
+    lastMessageTime: msgTime,
+    lastMessageTimestamp: msgTime,
     lastMessageType: message.type || 'text',
-    lastMessageFromMe: isFromMe
+    lastMessageFromMe: isFromMe,
+    lastMessageStatus: message.status || 'sent'
   };
 
+  let updatedEntry;
   if (existingIdx !== -1) {
-    const existingAvatar = recent[existingIdx].avatar;
-    const incomingAvatar = targetChat?.avatar;
-    const updated = {
-      ...recent[existingIdx],
+    const existing = recent[existingIdx];
+    updatedEntry = {
+      ...existing,
       ...snippet,
-      avatar: incomingAvatar || existingAvatar || '',
-      displayName: targetChat?.displayName || recent[existingIdx].displayName,
-      isPro: targetChat?.isPro !== undefined ? Boolean(targetChat.isPro) : Boolean(recent[existingIdx].isPro),
-      proTier: targetChat?.proTier || recent[existingIdx].proTier || null,
-      customBadge: targetChat?.customBadge !== undefined ? targetChat.customBadge : (recent[existingIdx].customBadge || null)
+      avatar: targetChat?.avatar || existing.avatar || '',
+      displayName: targetChat?.displayName || targetChat?.name || existing.displayName,
+      username: targetChat?.username || existing.username || '',
+      isPro: targetChat?.isPro !== undefined ? Boolean(targetChat.isPro) : Boolean(existing.isPro),
+      proTier: targetChat?.proTier || existing.proTier || null,
+      customBadge: targetChat?.customBadge !== undefined ? targetChat.customBadge : (existing.customBadge || null)
     };
-    const newRecent = [updated, ...recent.filter((_, i) => i !== existingIdx)];
-    setCachedRecentChats(userId, newRecent);
   } else if (targetChat) {
-    const newEntry = {
-      id: targetChat.id || chatId,
-      displayName: targetChat.displayName || targetChat.name || 'Chat',
+    updatedEntry = {
+      id: targetChat.id || targetChat._id || contactId || chatId,
+      displayName: targetChat.displayName || targetChat.name || targetChat.username || 'Chat',
+      username: targetChat.username || '',
       avatar: targetChat.avatar || '',
       isGroup: Boolean(targetChat.isGroup),
       isPro: Boolean(targetChat.isPro),
@@ -151,8 +167,16 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
       unreadCount: 0,
       ...snippet
     };
-    setCachedRecentChats(userId, [newEntry, ...recent]);
-  }
+  } else return;
+
+  const filtered = recent.filter((_, i) => i !== existingIdx);
+  const newRecent = [updatedEntry, ...filtered].sort((a, b) => {
+    const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
+    const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
+    return tB - tA;
+  });
+
+  setCachedRecentChats(userId, newRecent);
 }
 
 // clear unread count

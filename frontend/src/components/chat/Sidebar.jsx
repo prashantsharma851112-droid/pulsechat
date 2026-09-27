@@ -453,7 +453,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             if (u.username) uMap.set(u.username, u);
           });
 
-          const mapped = data.map(item => {
+          const cachedList = (user?.id ? getCachedRecentChats(user.id) : []) || [];
+          const deletedSet = getDeletedChatIds(user?.id);
+
+          const serverMapped = data.map(item => {
             const fresh = uMap.get(item.id) || (item.username ? uMap.get(item.username) : null);
             let res = { ...item };
             if (fresh) {
@@ -463,35 +466,53 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               if (fresh.proTier) res.proTier = fresh.proTier;
               if (fresh.customBadge !== undefined) res.customBadge = fresh.customBadge;
             }
+
+            const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
+            if (cachedMatch) {
+              if (cachedMatch.unreadCount) {
+                res.unreadCount = Math.max(res.unreadCount || 0, cachedMatch.unreadCount);
+              }
+              const cachedTime = new Date(cachedMatch.lastMessageTimestamp || cachedMatch.lastMessageTime || 0).getTime();
+              const serverTime = new Date(res.lastMessageTimestamp || res.lastMessageTime || 0).getTime();
+              if (cachedTime > serverTime) {
+                res.lastMessage = cachedMatch.lastMessage;
+                res.lastMessageTime = cachedMatch.lastMessageTime;
+                res.lastMessageTimestamp = cachedMatch.lastMessageTimestamp;
+                res.lastMessageFromMe = cachedMatch.lastMessageFromMe;
+                res.lastMessageStatus = cachedMatch.lastMessageStatus;
+              }
+            }
+
             if (activeChatRef.current && (
               res.id === activeChatRef.current.id ||
               res._id === activeChatRef.current.id ||
               (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username)
             )) {
               res.unreadCount = 0;
-            } else if (user?.id) {
-              const cachedList = getCachedRecentChats(user.id) || [];
-              const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
-              if (cachedMatch && cachedMatch.unreadCount) {
-                res.unreadCount = Math.max(res.unreadCount || 0, cachedMatch.unreadCount);
-              }
-              if (cachedMatch && cachedMatch.lastMessageTimestamp && res.lastMessageTimestamp) {
-                if (new Date(cachedMatch.lastMessageTimestamp) > new Date(res.lastMessageTimestamp)) {
-                  res.lastMessage = cachedMatch.lastMessage;
-                  res.lastMessageTime = cachedMatch.lastMessageTime;
-                  res.lastMessageTimestamp = cachedMatch.lastMessageTimestamp;
-                  res.lastMessageFromMe = cachedMatch.lastMessageFromMe;
-                  res.lastMessageStatus = cachedMatch.lastMessageStatus;
-                }
-              }
             }
             return res;
           });
-          const deletedSet = getDeletedChatIds(user?.id);
-          const filteredMapped = mapped.filter(c => !deletedSet.has(c.id) && (!c._id || !deletedSet.has(c._id)));
-          setRecentChats(filteredMapped);
+
+          // Preserve local chats not present in server data yet
+          const serverKeys = new Set(serverMapped.flatMap(s => [s.id, s._id, s.username].filter(Boolean)));
+          const extraLocal = cachedList.filter(c =>
+            !serverKeys.has(c.id) &&
+            (!c._id || !serverKeys.has(c._id)) &&
+            (!c.username || !serverKeys.has(c.username))
+          );
+
+          const combined = [...serverMapped, ...extraLocal];
+          const finalSorted = combined
+            .filter(c => !deletedSet.has(c.id) && (!c._id || !deletedSet.has(c._id)))
+            .sort((a, b) => {
+              const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
+              const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
+              return tB - tA;
+            });
+
+          setRecentChats(finalSorted);
           if (user?.id) {
-            setCachedRecentChats(user.id, mapped);
+            setCachedRecentChats(user.id, finalSorted);
           }
         }
       })
@@ -794,7 +815,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         };
 
         const remaining = prevChats.filter((_, idx) => idx !== existingIdx);
-        const reordered = [updatedChat, ...remaining];
+        const reordered = [updatedChat, ...remaining].sort((a, b) => {
+          const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
+          const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
+          return tB - tA;
+        });
 
         if (user?.id) {
           setCachedRecentChats(user.id, reordered);
