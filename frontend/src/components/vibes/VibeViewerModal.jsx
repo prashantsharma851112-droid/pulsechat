@@ -419,70 +419,72 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-                {/* Text Reply Input (Insta / WhatsApp style) */}
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (replyText.trim()) {
-                      handleReact('', 0, replyText.trim());
-                    }
+              {/* Row 1: Text Reply Input (Insta / WhatsApp style) */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (replyText.trim()) {
+                    handleReact('', 0, replyText.trim());
+                  }
+                }}
+                style={{ display: 'flex', width: '100%', gap: '8px', alignItems: 'center' }}
+              >
+                <input
+                  type="text"
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder={`Reply to ${vibeGroup?.displayName || 'User'}...`}
+                  style={{
+                    flex: 1,
+                    background: 'rgba(255,255,255,0.12)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '20px',
+                    padding: '8px 14px',
+                    color: '#fff',
+                    fontSize: '0.86rem',
+                    outline: 'none'
                   }}
-                  style={{ display: 'flex', flex: 1, gap: '6px', alignItems: 'center' }}
+                />
+                <button
+                  type="submit"
+                  style={{
+                    background: 'var(--accent, #6366f1)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '38px',
+                    height: '38px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)'
+                  }}
                 >
-                  <input
-                    type="text"
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    placeholder={`Reply to ${vibeGroup?.displayName || 'User'}...`}
-                    style={{
-                      flex: 1,
-                      background: 'rgba(255,255,255,0.12)',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      borderRadius: '20px',
-                      padding: '7px 14px',
-                      color: '#fff',
-                      fontSize: '0.85rem',
-                      outline: 'none'
-                    }}
-                  />
-                  <button
-                    type="submit"
-                    style={{
-                      background: 'var(--accent, #6366f1)',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '50%',
-                      width: '34px',
-                      height: '34px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      flexShrink: 0
-                    }}
-                  >
-                    <Send size={15} />
-                  </button>
-                </form>
+                  <Send size={16} />
+                </button>
+              </form>
 
-                {/* Quick Emojis */}
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  {['❤️', '🔥', '😂'].map(emoji => (
+              {/* Row 2: Quick Emojis & Tip Sparks (Never cropped) */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', width: '100%' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {['❤️', '🔥', '😂', '👏'].map(emoji => (
                     <button
                       key={emoji}
                       onClick={() => handleReact(emoji)}
                       style={{
-                        background: 'rgba(255,255,255,0.12)',
-                        border: 'none',
+                        background: 'rgba(255,255,255,0.14)',
+                        border: '1px solid rgba(255,255,255,0.18)',
                         borderRadius: '50%',
-                        width: '34px',
-                        height: '34px',
-                        fontSize: '1rem',
+                        width: '38px',
+                        height: '38px',
+                        fontSize: '1.15rem',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        transition: 'transform 0.15s ease'
                       }}
                     >
                       {emoji}
@@ -499,17 +501,17 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
                     color: '#fff',
                     border: 'none',
                     borderRadius: '16px',
-                    padding: '6px 10px',
-                    fontSize: '0.74rem',
+                    padding: '7px 12px',
+                    fontSize: '0.78rem',
                     fontWeight: 800,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '3px',
-                    flexShrink: 0
+                    gap: '4px',
+                    boxShadow: '0 3px 10px rgba(245, 158, 11, 0.4)'
                   }}
                 >
-                  <Zap size={13} fill="#fff" /> 10
+                  <Zap size={14} fill="#fff" /> Tip 10 Sparks
                 </button>
               </div>
             </div>

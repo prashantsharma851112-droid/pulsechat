@@ -244,7 +244,20 @@ router.post('/react/:vibeId', authMiddleware, async (req, res) => {
 
     // Automatically send Direct Message to Story Author in Chat (WhatsApp / Insta style)
     let createdMsg = null;
-    const storyAuthorId = vibe.userId;
+    let storyAuthorId = vibe.userId;
+
+    // Resolve canonical user ID for story author to guarantee exact chatId matching
+    const authorUser = await User.findOne({
+      $or: [
+        { id: vibe.userId },
+        { username: vibe.username },
+        ...(mongoose.Types.ObjectId.isValid(vibe.userId) ? [{ _id: vibe.userId }] : [])
+      ]
+    }).select('id username').lean();
+
+    if (authorUser && authorUser.id) {
+      storyAuthorId = authorUser.id;
+    }
 
     if (storyAuthorId && storyAuthorId !== resolvedSenderId) {
       const db = require('../database/db');

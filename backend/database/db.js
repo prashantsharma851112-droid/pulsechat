@@ -357,23 +357,34 @@ module.exports = {
                             (otherUser._id && unreadMap.get(otherUser._id.toString())) ||
                             unreadMap.get(otherId) || 0;
 
-        const lastMsgText = lastMessage.type === 'text'
-          ? lastMessage.content
-          : (lastMessage.type === '3d_text'
-              ? `✨ 3D: ${lastMessage.content}`
-              : (lastMessage.type === 'gift'
-                  ? '🎁 Virtual Gift'
-                  : (lastMessage.type === 'call'
-                      ? (lastMessage.callData?.isVideo ? '📹 Video Call' : '📞 Voice Call')
-                      : (lastMessage.type === 'voice'
-                          ? '🎤 Voice note'
-                          : (lastMessage.type === 'image'
-                              ? (lastMessage.content || '🖼️ Photo')
-                              : (lastMessage.type === 'video'
-                                  ? '🎥 Video'
-                                  : (lastMessage.type === 'poll'
-                                      ? '📊 Poll'
-                                      : `[${lastMessage.type}]`)))))));
+        let lastMsgText = '';
+        const isFromMe = myVariants.includes(lastMessage.senderId);
+
+        if (lastMessage.type === 'text') {
+          if (lastMessage.content && lastMessage.content.startsWith('Replied to your story:')) {
+            lastMsgText = isFromMe
+              ? lastMessage.content.replace(/^Replied to your story:\s*/, 'You replied: ')
+              : lastMessage.content;
+          } else {
+            lastMsgText = lastMessage.content;
+          }
+        } else if (lastMessage.type === '3d_text') {
+          lastMsgText = `✨ 3D: ${lastMessage.content}`;
+        } else if (lastMessage.type === 'gift') {
+          lastMsgText = '🎁 Virtual Gift';
+        } else if (lastMessage.type === 'call') {
+          lastMsgText = lastMessage.callData?.isVideo ? '📹 Video Call' : '📞 Voice Call';
+        } else if (lastMessage.type === 'voice') {
+          lastMsgText = '🎤 Voice note';
+        } else if (lastMessage.type === 'image') {
+          lastMsgText = lastMessage.content || '🖼️ Photo';
+        } else if (lastMessage.type === 'video') {
+          lastMsgText = '🎥 Video';
+        } else if (lastMessage.type === 'poll') {
+          lastMsgText = '📊 Poll';
+        } else {
+          lastMsgText = lastMessage.content || `[${lastMessage.type}]`;
+        }
 
         results.push({
           ...otherUser,
