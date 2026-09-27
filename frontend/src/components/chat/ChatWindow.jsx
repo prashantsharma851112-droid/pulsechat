@@ -46,7 +46,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const isGroup = !!activeChat.isGroup;
   const chatId = isGroup ? activeChat.id : [user.id, activeChat.id].sort().join('_');
   const isOnline = !isGroup && onlineUsers.includes(activeChat.id);
-  const isTyping = typingMap[chatId] === activeChat.username;
+  const typingUser = typingMap[chatId];
+  const isTyping = Boolean(typingUser && typingUser !== user?.username && typingUser !== user?.id && typingUser !== user?.displayName);
+  const typingTimeoutRef = useRef(null);
 
   const getSenderPayload = () => ({
     senderName: user?.displayName || user?.username || 'User',
@@ -1361,18 +1363,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     e?.preventDefault();
     if (!text.trim()) return;
 
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    if (socket && user?.id) {
+      socket.emit('typing_stop', { chatId, userId: user.id, receiverId: isGroup ? '' : activeChat?.id });
+    }
+
     // Check emotional trigger words for 3s cooldown using sentiment utility
     if (isEmotionalTriggerMessage(text) && !forceInstant) {
       setCooldownMsg(text);
       setCooldownSecs(3);
       setText('');
-      socket.emit('typing_stop', { chatId, userId: user.id });
       return;
     }
 
     dispatchMessage(text);
     setText('');
-    socket.emit('typing_stop', { chatId, userId: user.id });
   };
 
   // Emotional Message Countdown Timer (3s -> auto send)
@@ -1516,14 +1521,41 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   const handleTextChange = (e) => {
-    setText(e.target.value);
-    if (socket) {
-      socket.emit('typing_start', { chatId, userId: user.id, username: user.username });
-      setTimeout(() => {
-        socket.emit('typing_stop', { chatId, userId: user.id });
-      }, 2000);
+    const val = e.target.value;
+    setText(val);
+
+    if (!socket) return;
+    const receiverId = isGroup ? '' : activeChat?.id;
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
     }
+
+    if (!val.trim()) {
+      socket.emit('typing_stop', { chatId, userId: user?.id, receiverId });
+      return;
+    }
+
+    socket.emit('typing_start', {
+      chatId,
+      userId: user?.id,
+      username: user?.displayName || user?.username || 'User',
+      receiverId
+    });
+
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit('typing_stop', { chatId, userId: user?.id, receiverId });
+    }, 2500);
   };
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (socket && user?.id && chatId) {
+        socket.emit('typing_stop', { chatId, userId: user.id, receiverId: isGroup ? '' : activeChat?.id });
+      }
+    };
+  }, [chatId]);
 
   // Calculate Mood Timeline using sentence + word sentiment from utility
   const moodTimeline = calculateConversationMoodTimeline(messages, cooldownMsg);
@@ -1662,11 +1694,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   </span>
                 )}
               </div>
-              <p style={{ fontSize: '0.8rem', color: isTyping ? 'var(--accent)' : 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: '0.8rem', color: isTyping ? '#22c55e' : 'var(--text-muted)', fontWeight: isTyping ? 600 : 400, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {isGroup
-                  ? `${activeChat.members?.length || 0} members • Click for info`
+                  ? (isTyping ? `✍️ ${typingUser} is typing...` : `${activeChat.members?.length || 0} members • Click for info`)
                   : isTyping
-                    ? 'typing...'
+                    ? '✍️ typing...'
                     : isOnline
                       ? 'Online'
                       : 'Offline • Click for Bio'}

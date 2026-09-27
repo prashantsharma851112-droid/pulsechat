@@ -88,11 +88,15 @@ export function SocketProvider({ children }) {
       });
 
       newSocket.on('typing_start', ({ chatId, username }) => {
-        setTypingMap(prev => ({ ...prev, [chatId]: username }));
+        setTypingMap(prev => ({ ...prev, [chatId]: username || 'Someone' }));
       });
 
       newSocket.on('typing_stop', ({ chatId }) => {
-        setTypingMap(prev => ({ ...prev, [chatId]: null }));
+        setTypingMap(prev => {
+          const next = { ...prev };
+          delete next[chatId];
+          return next;
+        });
       });
 
       const triggerPushIfBackground = (msg) => {

@@ -274,12 +274,20 @@ io.on('connection', (socket) => {
   });
 
   // Typing Indicators
-  socket.on('typing_start', ({ chatId, userId, username }) => {
+  socket.on('typing_start', ({ chatId, userId, username, receiverId }) => {
     socket.to(chatId).emit('typing_start', { chatId, userId, username });
+    if (receiverId) {
+      socket.to(`user_${receiverId}`).emit('typing_start', { chatId, userId, username });
+      socket.to(receiverId).emit('typing_start', { chatId, userId, username });
+    }
   });
 
-  socket.on('typing_stop', ({ chatId, userId }) => {
+  socket.on('typing_stop', ({ chatId, userId, receiverId }) => {
     socket.to(chatId).emit('typing_stop', { chatId, userId });
+    if (receiverId) {
+      socket.to(`user_${receiverId}`).emit('typing_stop', { chatId, userId });
+      socket.to(receiverId).emit('typing_stop', { chatId, userId });
+    }
   });
 
   // Helper function to dispatch background web push (for closed app)

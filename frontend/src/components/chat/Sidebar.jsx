@@ -38,7 +38,7 @@ import { playSound } from '../../utils/audio';
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
   const { user, logout, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
-  const { socket, onlineUsers, lastNotification } = useContext(SocketContext);
+  const { socket, onlineUsers, typingMap, lastNotification } = useContext(SocketContext);
   const currentUid = user?.id || getCachedUser()?.id;
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -2005,7 +2005,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                         </div>
                       </div>
                       <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {u.lastMessage ? u.lastMessage : `@${u.username}`}
+                        {(() => {
+                          const contactChatId = u.isGroup ? u.id : (user?.id ? [user.id, u.id].sort().join('_') : u.id);
+                          const typingUser = typingMap ? typingMap[contactChatId] : null;
+                          const isContactTyping = Boolean(typingUser && typingUser !== user?.username && typingUser !== user?.id);
+                          if (isContactTyping) {
+                            return <span style={{ color: '#22c55e', fontWeight: 600 }}>✍️ typing...</span>;
+                          }
+                          return u.lastMessage ? u.lastMessage : `@${u.username}`;
+                        })()}
                       </p>
                     </div>
                   </div>
