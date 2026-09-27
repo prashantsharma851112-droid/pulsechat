@@ -229,15 +229,36 @@ router.post('/react/:vibeId', authMiddleware, async (req, res) => {
         return res.status(400).json({ error: 'Not enough Sparks balance' });
       }
 
-      sender.pulseSparks = (sender.pulseSparks || 0) - sparkAmount;
+      // 1. Deduct from Sender
+      sender.pulseSparks = Math.max(0, (sender.pulseSparks || 0) - sparkAmount);
       await sender.save();
 
       vibe.sparksEarned = (vibe.sparksEarned || 0) + sparkAmount;
 
-      await User.findOneAndUpdate(
-        { $or: [{ id: vibe.userId }, { username: vibe.username }] },
-        { $inc: { pulseSparks: sparkAmount } }
-      );
+      // 2. Add / Credit to Story Author in MongoDB
+      const authorObjectId = mongoose.Types.ObjectId.isValid(vibe.userId);
+      const updatedAuthor = await User.findOneAndUpdate(
+        {
+          $or: [
+            { id: vibe.userId },
+            ...(authorObjectId ? [{ _id: vibe.userId }] : []),
+            { username: vibe.username }
+          ]
+        },
+        { $inc: { pulseSparks: sparkAmount } },
+        { new: true }
+      ).select('id _id username pulseSparks').lean();
+
+      // 3. Broadcast real-time profile update to Author's socket room
+      const io = req.app.get('io');
+      if (io && updatedAuthor) {
+        const canonicalAuthorId = updatedAuthor.id || updatedAuthor._id?.toString();
+        io.to(`user_${canonicalAuthorId}`).emit('user_profile_updated', {
+          userId: canonicalAuthorId,
+          userMongoId: updatedAuthor._id ? updatedAuthor._id.toString() : null,
+          pulseSparks: updatedAuthor.pulseSparks
+        });
+      }
     }
 
     await vibe.save();
