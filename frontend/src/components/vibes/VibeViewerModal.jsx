@@ -3,6 +3,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { X, Music, Trash2, Zap, Eye, Send, Users } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
+import { updateRecentChatSnippet } from '../../utils/offlineStorage';
 
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 
@@ -26,6 +27,21 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
   useEffect(() => {
     if (currentVibe && currentVibe.id) {
       setLiveViews(currentVibe.views || []);
+
+      // Always fetch fresh live views for THIS specific story ID
+      if (token && currentVibe.id) {
+        fetch(`${BACKEND_URL}/api/vibes/views/${currentVibe.id}?t=${Date.now()}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.views) {
+              setLiveViews(data.views);
+            }
+          })
+          .catch(() => {});
+      }
+
       try {
         const rawViewed = localStorage.getItem('pulsechat_viewed_vibes');
         const viewedSet = new Set(rawViewed ? JSON.parse(rawViewed) : []);
@@ -54,7 +70,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
   const fetchLiveViews = async () => {
     if (token && currentVibe?.id) {
       try {
-        const res = await fetch(`${BACKEND_URL}/api/vibes/views/${currentVibe.id}`, {
+        const res = await fetch(`${BACKEND_URL}/api/vibes/views/${currentVibe.id}?t=${Date.now()}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
@@ -114,8 +130,44 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     if (!currentVibe) return;
     playSound('pop');
 
+    const storyAuthorId = currentVibe.userId || vibeGroup?.userId;
+    const authorName = vibeGroup?.displayName || vibeGroup?.username || 'User';
+
+    let msgText = '';
+    if (textMsg && textMsg.trim()) {
+      msgText = textMsg.trim();
+    } else if (tipSparks > 0) {
+      msgText = `Tipped ⚡ ${tipSparks} Sparks on story`;
+    } else if (emoji) {
+      msgText = `Reacted ${emoji} to story`;
+    }
+
+    // 1. INSTANT LOCAL RECENT CHATS UPDATE (0ms latency, zero chat disappearance!)
+    if (user?.id && storyAuthorId && msgText) {
+      const chatId = [user.id, storyAuthorId].sort().join('_');
+      const tempMsg = {
+        id: 'msg_vibe_temp_' + Date.now(),
+        chatId,
+        senderId: user.id,
+        receiverId: storyAuthorId,
+        isGroup: false,
+        content: msgText,
+        type: 'text',
+        status: 'sent',
+        timestamp: new Date().toISOString()
+      };
+      const targetChatObj = {
+        id: storyAuthorId,
+        displayName: authorName,
+        avatar: vibeGroup?.avatar || '',
+        isGroup: false
+      };
+      updateRecentChatSnippet(user.id, chatId, tempMsg, targetChatObj);
+      window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+    }
+
     if (tipSparks > 0) {
-      setSparksMsg(`⚡ Tipped ${tipSparks} Sparks to ${vibeGroup?.displayName || 'User'}!`);
+      setSparksMsg(`⚡ Tipped ${tipSparks} Sparks to ${authorName}!`);
       const currentSparks = user?.pulseSparks || 100;
       const newBalance = Math.max(0, currentSparks - tipSparks);
       if (updateUserProfile) {
@@ -123,11 +175,16 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
       }
       setTimeout(() => setSparksMsg(''), 3000);
     } else if (emoji || textMsg) {
-      const toastText = textMsg ? `Sent reply to ${vibeGroup?.displayName || 'User'} in Chat! 💬` : `Reacted ${emoji} in Chat! 💬`;
+      const toastText = textMsg ? `Sent reply to ${authorName} in Chat! 💬` : `Reacted ${emoji} in Chat! 💬`;
       setSparksMsg(toastText);
       setTimeout(() => setSparksMsg(''), 3000);
     }
 
+    if (textMsg) {
+      setReplyText('');
+    }
+
+    // 2. BACKGROUND PERSISTENCE & SOCKET EMISSION
     if (token && currentVibe.id) {
       try {
         const res = await fetch(`${BACKEND_URL}/api/vibes/react/${currentVibe.id}`, {
@@ -139,16 +196,18 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
           body: JSON.stringify({ emoji, tipSparks, replyText: textMsg })
         });
         const data = await res.json();
+        if (data.success && data.createdMessage && user?.id) {
+          updateRecentChatSnippet(user.id, data.createdMessage.chatId, data.createdMessage, {
+            id: storyAuthorId,
+            displayName: authorName,
+            avatar: vibeGroup?.avatar || ''
+          });
+          window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+        }
         if (data.success && data.remainingSparks !== undefined && updateUserProfile) {
           updateUserProfile({ ...user, pulseSparks: data.remainingSparks });
         }
-        // Dispatch recent chats refresh so DM appears in sidebar
-        window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
       } catch (e) {}
-    }
-
-    if (textMsg) {
-      setReplyText('');
     }
   };
 
