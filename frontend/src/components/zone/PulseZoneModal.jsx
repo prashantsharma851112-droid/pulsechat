@@ -568,12 +568,12 @@ export default function PulseZoneModal({ onClose }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                 <Trophy size={16} color="#f59e0b" />
-                <span>Today's Top Pulse Champions</span>
+                <span>Top Pulse Champions</span>
               </div>
 
               {leaderboard.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '30px 15px', color: 'var(--text-muted)', fontSize: '0.86rem' }}>
-                  🏆 No scores submitted today yet! Play games to claim the #1 spot!
+                  🏆 No leaderboard scores submitted yet! Play mini-games to claim the #1 spot!
                 </div>
               ) : (
                 leaderboard.map((item, idx) => (
@@ -628,7 +628,7 @@ export default function PulseZoneModal({ onClose }) {
                           <span>{item.displayName}</span>
                           {idx === 0 && (
                             <span style={{ fontSize: '0.66rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.2)', padding: '1px 6px', borderRadius: '8px', border: '1px solid rgba(251, 191, 36, 0.4)' }}>
-                              👑 #1 Daily (+100⚡)
+                              👑 #1 Champion (+100⚡)
                             </span>
                           )}
                         </div>

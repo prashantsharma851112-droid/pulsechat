@@ -432,15 +432,16 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
           )}
         </div>
 
-        {/* Bottom Reaction Bar */}
+        {/* Bottom Reaction Bar (Safe-Area padded to prevent mobile navigation bar cropping) */}
         <div style={{
-          padding: '14px 16px',
-          background: 'rgba(0,0,0,0.6)',
-          backdropFilter: 'blur(10px)',
-          borderTop: '1px solid rgba(255,255,255,0.1)',
+          padding: '12px 16px calc(24px + env(safe-area-inset-bottom, 16px))',
+          background: 'rgba(0,0,0,0.75)',
+          backdropFilter: 'blur(12px)',
+          borderTop: '1px solid rgba(255,255,255,0.12)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '8px',
+          gap: '10px',
+          flexShrink: 0,
           zIndex: 10
         }}>
           {isMine ? (
