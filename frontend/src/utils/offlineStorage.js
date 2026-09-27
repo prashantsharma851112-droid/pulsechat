@@ -98,12 +98,31 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
     return false;
   });
 
+  const isFromMe = message.senderId === userId;
+  let formattedContent = message.content || '';
+  if (message.type === 'text' && formattedContent) {
+    if (formattedContent.startsWith('Replied to your story:')) {
+      formattedContent = isFromMe
+        ? formattedContent.replace(/^Replied to your story:\s*/, 'You replied: ')
+        : formattedContent;
+    } else if (formattedContent.startsWith('Reacted ') && formattedContent.includes(' to your story')) {
+      formattedContent = isFromMe
+        ? formattedContent.replace(/\s*to your story$/, ' to story')
+        : formattedContent;
+    } else if (formattedContent.startsWith('Tipped ') && formattedContent.includes(' on your story!')) {
+      formattedContent = isFromMe
+        ? formattedContent.replace(/\s*on your story!$/, ' on story!')
+        : formattedContent;
+    }
+  }
+
   const snippet = {
     lastMessage: message.type === '3d_text'
       ? `✨ 3D: ${message.content}`
-      : (message.content || (message.type === 'voice' ? '🎤 Voice note' : 'Sent a file')),
+      : (formattedContent || (message.type === 'voice' ? '🎤 Voice note' : 'Sent a file')),
     lastMessageTime: message.timestamp || new Date().toISOString(),
-    lastMessageType: message.type || 'text'
+    lastMessageType: message.type || 'text',
+    lastMessageFromMe: isFromMe
   };
 
   if (existingIdx !== -1) {

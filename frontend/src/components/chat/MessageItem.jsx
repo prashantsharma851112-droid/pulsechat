@@ -598,7 +598,23 @@ export default function MessageItem({
 
         {/* Text Message */}
         {message.type === 'text' && (
-          <p style={{ fontSize: '0.98rem', wordBreak: 'break-word', margin: 0, lineHeight: 1.45 }}>{message.content}</p>
+          <p style={{ fontSize: '0.98rem', wordBreak: 'break-word', margin: 0, lineHeight: 1.45 }}>
+            {(() => {
+              if (!message.content) return '';
+              if (isMine) {
+                if (message.content.startsWith('Replied to your story:')) {
+                  return message.content.replace(/^Replied to your story:\s*/, 'You replied: ');
+                }
+                if (message.content.startsWith('Reacted ') && message.content.includes(' to your story')) {
+                  return message.content.replace(/\s*to your story$/, ' to story');
+                }
+                if (message.content.startsWith('Tipped ') && message.content.includes(' on your story!')) {
+                  return message.content.replace(/\s*on your story!$/, ' on story!');
+                }
+              }
+              return message.content;
+            })()}
+          </p>
         )}
 
         {/* View Once Media Message */}

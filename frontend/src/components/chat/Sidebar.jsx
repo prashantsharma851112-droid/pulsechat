@@ -671,7 +671,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       const targetId = isMyMsg ? msg.receiverId : (msg.isGroup ? msg.chatId : msg.senderId);
       if (!targetId && !msg.chatId) return;
 
-      const contentSnippet = msg.type === 'text'
+      let contentSnippet = msg.type === 'text'
         ? (msg.content || '')
         : (msg.type === '3d_text' ? `✨ 3D: ${msg.content}`
         : msg.type === 'image' ? '📷 Photo'
@@ -681,6 +681,22 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         : msg.type === 'poll' ? '📊 Poll'
         : msg.type === 'call' ? '📞 Call'
         : 'File attachment');
+
+      if (msg.type === 'text' && contentSnippet) {
+        if (contentSnippet.startsWith('Replied to your story:')) {
+          contentSnippet = isMyMsg
+            ? contentSnippet.replace(/^Replied to your story:\s*/, 'You replied: ')
+            : contentSnippet;
+        } else if (contentSnippet.startsWith('Reacted ') && contentSnippet.includes(' to your story')) {
+          contentSnippet = isMyMsg
+            ? contentSnippet.replace(/\s*to your story$/, ' to story')
+            : contentSnippet;
+        } else if (contentSnippet.startsWith('Tipped ') && contentSnippet.includes(' on your story!')) {
+          contentSnippet = isMyMsg
+            ? contentSnippet.replace(/\s*on your story!$/, ' on story!')
+            : contentSnippet;
+        }
+      }
 
       setRecentChats(prevChats => {
         const existingIdx = prevChats.findIndex(c =>

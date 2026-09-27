@@ -365,6 +365,14 @@ module.exports = {
             lastMsgText = isFromMe
               ? lastMessage.content.replace(/^Replied to your story:\s*/, 'You replied: ')
               : lastMessage.content;
+          } else if (lastMessage.content && lastMessage.content.startsWith('Reacted ') && lastMessage.content.includes(' to your story')) {
+            lastMsgText = isFromMe
+              ? lastMessage.content.replace(/\s*to your story$/, ' to story')
+              : lastMessage.content;
+          } else if (lastMessage.content && lastMessage.content.startsWith('Tipped ') && lastMessage.content.includes(' on your story!')) {
+            lastMsgText = isFromMe
+              ? lastMessage.content.replace(/\s*on your story!$/, ' on story!')
+              : lastMessage.content;
           } else {
             lastMsgText = lastMessage.content;
           }
