@@ -22,16 +22,22 @@ module.exports = {
   },
 
   updateUser: async (id, updates) => {
+    if (!id) return null;
     const mongoose = require('mongoose');
     const isObjectId = mongoose.Types.ObjectId.isValid(id);
-    const query = isObjectId
-      ? { $or: [{ id }, { _id: id }] }
-      : { id };
+    const query = {
+      $or: [
+        { id },
+        ...(isObjectId ? [{ _id: id }] : []),
+        { username: id }
+      ]
+    };
     const updated = await User.findOneAndUpdate(query, updates, { new: true }).lean();
     if (updated) {
       try {
         const redis = require('../utils/redis');
         if (updated.id) redis.invalidateUser(updated.id).catch(() => {});
+        if (updated.username) redis.invalidateUser(updated.username).catch(() => {});
         redis.invalidateAllRecent().catch(() => {});
       } catch {}
     }

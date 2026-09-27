@@ -82,6 +82,7 @@ router.get('/search', authMiddleware, async (req, res) => {
 // Update Profile (DP / Avatar, Username, Display Name, Status/Bio, Privacy)
 router.put('/profile', authMiddleware, async (req, res) => {
   try {
+    const targetUserId = req.userId || req.user?.id || req.user?.userId;
     const { username, displayName, avatar, status, hideReadReceipts, hideOnlineStatus } = req.body;
     const updates = {};
     if (username !== undefined && username.trim() !== '') {
@@ -90,8 +91,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
         return res.status(400).json({ error: 'Username must be at least 3 characters long.' });
       }
       const mongoose = require('mongoose');
-      const excludeIds = [req.user.id];
-      if (mongoose.Types.ObjectId.isValid(req.user.id)) excludeIds.push(req.user.id);
+      const excludeIds = [targetUserId, req.user?.id, req.user?.username].filter(Boolean);
 
       const existing = await User.findOne({
         username: cleanUsername,
@@ -114,10 +114,28 @@ router.put('/profile', authMiddleware, async (req, res) => {
     if (hideReadReceipts !== undefined) updates.hideReadReceipts = Boolean(hideReadReceipts);
     if (hideOnlineStatus !== undefined) updates.hideOnlineStatus = Boolean(hideOnlineStatus);
 
-    const updatedUser = await db.updateUser(req.user.id, updates);
+    const updatedUser = await db.updateUser(targetUserId, updates);
     if (!updatedUser) return res.status(404).json({ error: 'User not found' });
 
     const { passwordHash, ...userWithoutPass } = updatedUser;
+
+    // Synchronize avatar and display name across Vibe stories
+    if (updates.avatar || updates.displayName || updates.username) {
+      const Vibe = require('../models/Vibe');
+      const syncObj = {};
+      if (updates.avatar !== undefined) syncObj.avatar = userWithoutPass.avatar;
+      if (updates.displayName) syncObj.displayName = userWithoutPass.displayName;
+      if (updates.username) syncObj.username = userWithoutPass.username;
+
+      const userQuery = {
+        $or: [
+          { userId: userWithoutPass.id },
+          ...(userWithoutPass._id ? [{ userId: userWithoutPass._id.toString() }] : []),
+          { username: userWithoutPass.username }
+        ]
+      };
+      await Vibe.updateMany(userQuery, syncObj).catch(() => {});
+    }
 
     // Broadcast profile update in real time to all connected users
     const io = req.app.get('io');
@@ -137,7 +155,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
       });
 
       if (hideOnlineStatus !== undefined && typeof req.app.get('updateUserOnlinePrivacy') === 'function') {
-        req.app.get('updateUserOnlinePrivacy')(req.user.id, userWithoutPass.hideOnlineStatus);
+        req.app.get('updateUserOnlinePrivacy')(targetUserId, userWithoutPass.hideOnlineStatus);
       }
     }
 
