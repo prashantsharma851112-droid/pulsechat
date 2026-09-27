@@ -102,8 +102,17 @@ export default function GroupCallModal({ group, isVideo, isCaller, onClose }) {
           }
         }
       } catch (err) {
-        console.error('Failed to get media devices for group call:', err);
-        setCallStatus('Audio / Video Device Access Error');
+        console.warn('Failed to get media devices for group call, trying audio fallback:', err);
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          localStreamRef.current = stream;
+          setVideoOff(true);
+        } catch (err2) {
+          setCallStatus('Mic permission required');
+          setTimeout(() => {
+            handleEndCall();
+          }, 2500);
+        }
       }
     };
 

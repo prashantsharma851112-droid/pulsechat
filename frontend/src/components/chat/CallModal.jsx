@@ -200,24 +200,19 @@ export default function CallModal({ targetUser, isVideo, isCaller, incomingSigna
         });
       } catch (err) {
         console.warn('Full stream failed, trying audio fallback:', err);
-        if (isVideo) {
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({
-              audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-              }
-            });
-            setVideoOff(true);
-          } catch (err2) {
-            console.error('Audio fallback also failed:', err2);
-          }
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          if (isVideo) setVideoOff(true);
+        } catch (err2) {
+          console.error('Audio fallback also failed:', err2);
         }
       }
 
       if (!stream) {
-        setCallStatus('Device Access Error (No Mic/Cam)');
+        setCallStatus('Mic permission required');
+        setTimeout(() => {
+          if (mounted) handleEndCall('no_permission');
+        }, 2500);
         return;
       }
 
