@@ -55,9 +55,39 @@ export function setCachedRecentChats(userId, chats) {
   }
 }
 
+// deleted/hidden chats helper
+export function getDeletedChatIds(userId) {
+  if (typeof window === 'undefined' || !userId) return new Set();
+  const raw = localStorage.getItem(`pulsechat_deleted_chats_${userId}`);
+  return new Set(safeParse(raw, []));
+}
+
+export function addDeletedChatId(userId, chatId) {
+  if (typeof window === 'undefined' || !userId || !chatId) return;
+  const deletedSet = getDeletedChatIds(userId);
+  deletedSet.add(chatId);
+  try {
+    localStorage.setItem(`pulsechat_deleted_chats_${userId}`, JSON.stringify(Array.from(deletedSet)));
+  } catch (e) {}
+}
+
+export function restoreDeletedChatId(userId, chatId) {
+  if (typeof window === 'undefined' || !userId || !chatId) return;
+  const deletedSet = getDeletedChatIds(userId);
+  if (deletedSet.has(chatId)) {
+    deletedSet.delete(chatId);
+    try {
+      localStorage.setItem(`pulsechat_deleted_chats_${userId}`, JSON.stringify(Array.from(deletedSet)));
+    } catch (e) {}
+  }
+}
+
 // update last message snippet in recent chats
 export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
   if (!userId || !chatId || !message) return;
+  restoreDeletedChatId(userId, chatId);
+  if (targetChat?.id) restoreDeletedChatId(userId, targetChat.id);
+
   let recent = getCachedRecentChats(userId);
 
   const contactId = targetChat?.id || message.receiverId || null;

@@ -28,7 +28,10 @@ import {
   mergeIntoAllUsersCache,
   isDeviceOnline,
   subscribeToNetworkChanges,
-  clearUnreadCount
+  clearUnreadCount,
+  getDeletedChatIds,
+  addDeletedChatId,
+  restoreDeletedChatId
 } from '../../utils/offlineStorage';
 import { parseSafeJson } from '../../utils/imageCompressor';
 import { playSound } from '../../utils/audio';
@@ -234,10 +237,27 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     }
   };
 
+  const handleDeleteChat = (e, chatItem) => {
+    e.stopPropagation();
+    if (!chatItem || !chatItem.id) return;
+    if (window.confirm(`Delete conversation with ${chatItem.displayName || chatItem.username || 'this contact'}?`)) {
+      if (currentUid) {
+        addDeletedChatId(currentUid, chatItem.id);
+        if (chatItem._id) addDeletedChatId(currentUid, chatItem._id);
+        setRecentChats(prev => prev.filter(c => c.id !== chatItem.id && c._id !== chatItem.id));
+        if (activeChat?.id === chatItem.id) {
+          setActiveChat(null);
+        }
+        window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+      }
+    }
+  };
+
   // When user becomes available (after login / token restore), load data from cache immediately
   useEffect(() => {
     if (user?.id) {
-      const cached = getCachedRecentChats(user.id);
+      const deletedSet = getDeletedChatIds(user.id);
+      const cached = getCachedRecentChats(user.id).filter(c => !deletedSet.has(c.id) && (!c._id || !deletedSet.has(c._id)));
       if (cached.length > 0) setRecentChats(cached);
       const cachedGroups = getCachedGroups(user.id);
       if (cachedGroups.length > 0) setGroups(cachedGroups);
@@ -263,7 +283,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   useEffect(() => {
     const handleRecentUpdate = () => {
       if (user?.id) {
-        setRecentChats(getCachedRecentChats(user.id));
+        const deletedSet = getDeletedChatIds(user.id);
+        const cached = getCachedRecentChats(user.id).filter(c => !deletedSet.has(c.id) && (!c._id || !deletedSet.has(c._id)));
+        setRecentChats(cached);
       }
     };
     window.addEventListener('pulsechat_recent_updated', handleRecentUpdate);
@@ -465,7 +487,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             }
             return res;
           });
-          setRecentChats(mapped);
+          const deletedSet = getDeletedChatIds(user?.id);
+          const filteredMapped = mapped.filter(c => !deletedSet.has(c.id) && (!c._id || !deletedSet.has(c._id)));
+          setRecentChats(filteredMapped);
           if (user?.id) {
             setCachedRecentChats(user.id, mapped);
           }
@@ -474,7 +498,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       .catch(() => {
         // Offline: restore from cache
         if (user?.id) {
-          const cached = getCachedRecentChats(user.id);
+          const deletedSet = getDeletedChatIds(user.id);
+          const cached = getCachedRecentChats(user.id).filter(c => !deletedSet.has(c.id) && (!c._id || !deletedSet.has(c._id)));
           if (cached.length > 0) setRecentChats(cached);
         }
       });
@@ -1938,11 +1963,30 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                             <PulseVipBadge size={14} showLabel={false} />
                           )}
                         </h4>
-                        {u.unreadCount > 0 && (
-                          <span className="unread-badge" style={{ marginLeft: '6px' }}>
-                            {u.unreadCount}
-                          </span>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {u.unreadCount > 0 && (
+                            <span className="unread-badge">
+                              {u.unreadCount}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteChat(e, u)}
+                            className="icon-btn-ghost"
+                            title="Delete Chat"
+                            style={{
+                              padding: '5px',
+                              color: 'var(--text-muted)',
+                              opacity: 0.5,
+                              borderRadius: '50%',
+                              flexShrink: 0
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = '#ef4444'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.opacity = 0.5; e.currentTarget.style.color = 'var(--text-muted)'; }}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
                       <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {u.lastMessage ? u.lastMessage : `@${u.username}`}

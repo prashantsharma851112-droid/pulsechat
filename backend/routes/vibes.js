@@ -166,23 +166,37 @@ router.post('/view/:vibeId', authMiddleware, async (req, res) => {
     if (!alreadyViewed) {
       vibe.views.push({
         userId: resolvedUserId,
-        displayName: user.displayName || user.username,
-        avatar: user.avatar || ''
+        displayName: user.displayName || user.username || 'Pulse User',
+        username: user.username || '',
+        avatar: user.avatar || '',
+        viewedAt: new Date()
       });
       await vibe.save();
     }
 
-    res.json({ success: true, viewsCount: vibe.views.length });
+    res.json({ success: true, viewsCount: vibe.views.length, views: vibe.views });
   } catch (err) {
     res.status(500).json({ error: 'Failed to record view' });
   }
 });
 
-// React emoji or tip Sparks on a Vibe Story
+// Fetch detailed view list for a Vibe Story (Author only or viewers)
+router.get('/views/:vibeId', authMiddleware, async (req, res) => {
+  try {
+    const { vibeId } = req.params;
+    const vibe = await Vibe.findOne({ id: vibeId }).lean();
+    if (!vibe) return res.status(404).json({ error: 'Story not found' });
+    res.json({ success: true, views: vibe.views || [], viewsCount: (vibe.views || []).length });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch views' });
+  }
+});
+
+// React emoji, send text reply, or tip Sparks on a Vibe Story (sends DM to author)
 router.post('/react/:vibeId', authMiddleware, async (req, res) => {
   try {
     const { vibeId } = req.params;
-    const { emoji, tipSparks } = req.body;
+    const { emoji, tipSparks, replyText } = req.body;
     const targetUserId = req.userId || req.user?.id || req.user?.userId;
     const isObjectId = mongoose.Types.ObjectId.isValid(targetUserId);
 
@@ -227,7 +241,59 @@ router.post('/react/:vibeId', authMiddleware, async (req, res) => {
     }
 
     await vibe.save();
-    res.json({ success: true, reactions: vibe.reactions, sparksEarned: vibe.sparksEarned, remainingSparks: sender.pulseSparks });
+
+    // Automatically send Direct Message to Story Author in Chat (WhatsApp / Insta style)
+    let createdMsg = null;
+    const storyAuthorId = vibe.userId;
+
+    if (storyAuthorId && storyAuthorId !== resolvedSenderId) {
+      const db = require('../database/db');
+      const chatId = [resolvedSenderId, storyAuthorId].sort().join('_');
+
+      let msgText = '';
+      if (replyText && replyText.trim()) {
+        msgText = `Replied to your story: "${replyText.trim()}"`;
+      } else if (tipSparks > 0) {
+        msgText = `Tipped ⚡ ${tipSparks} Sparks on your story!`;
+      } else if (emoji) {
+        msgText = `Reacted ${emoji} to your story`;
+      }
+
+      if (msgText) {
+        createdMsg = {
+          id: 'msg_vibe_' + Date.now(),
+          chatId,
+          senderId: resolvedSenderId,
+          receiverId: storyAuthorId,
+          isGroup: false,
+          content: msgText,
+          type: 'text',
+          status: 'sent',
+          timestamp: new Date().toISOString()
+        };
+
+        await db.saveMessage(createdMsg);
+
+        const io = req.app.get('io');
+        if (io) {
+          io.to(chatId).emit('new_message', createdMsg);
+          io.to(`user_${storyAuthorId}`).emit('message_notification', {
+            ...createdMsg,
+            senderName: sender.displayName || sender.username || 'Pulse User',
+            senderAvatar: sender.avatar || null
+          });
+          io.to(`user_${resolvedSenderId}`).emit('new_message', createdMsg);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      reactions: vibe.reactions,
+      sparksEarned: vibe.sparksEarned,
+      remainingSparks: sender.pulseSparks,
+      createdMessage: createdMsg
+    });
   } catch (err) {
     console.error('Error reacting to vibe:', err);
     res.status(500).json({ error: 'Failed to add reaction' });

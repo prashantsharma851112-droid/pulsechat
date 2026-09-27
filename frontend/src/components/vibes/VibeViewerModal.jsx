@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Music, Trash2, Zap, Eye } from 'lucide-react';
+import { X, Music, Trash2, Zap, Eye, Send, Users } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 
@@ -12,6 +12,10 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [sparksMsg, setSparksMsg] = useState('');
+  const [replyText, setReplyText] = useState('');
+  const [showViewersSheet, setShowViewersSheet] = useState(false);
+  const [liveViews, setLiveViews] = useState([]);
+  const [isPaused, setIsPaused] = useState(false);
   const currentVibe = vibes[currentIndex] || vibes[0];
   const timerRef = useRef(null);
 
@@ -21,6 +25,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
   // Mark current story as viewed in LocalStorage and send view ping to Backend
   useEffect(() => {
     if (currentVibe && currentVibe.id) {
+      setLiveViews(currentVibe.views || []);
       try {
         const rawViewed = localStorage.getItem('pulsechat_viewed_vibes');
         const viewedSet = new Set(rawViewed ? JSON.parse(rawViewed) : []);
@@ -35,13 +40,38 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
         fetch(`${BACKEND_URL}/api/vibes/view/${currentVibe.id}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` }
-        }).catch(() => {});
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.views) setLiveViews(data.views);
+          })
+          .catch(() => {});
       }
     }
   }, [currentVibe?.id, token, isMine]);
 
-  // Story Auto-Advance Progress Bar Timer (5s per story)
+  // Fetch live views for owner when modal opens
+  const fetchLiveViews = async () => {
+    if (token && currentVibe?.id) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/vibes/views/${currentVibe.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success && data.views) {
+          setLiveViews(data.views);
+        }
+      } catch (e) {}
+    }
+  };
+
+  // Story Auto-Advance Progress Bar Timer (5s per story, pauses when viewers sheet is open)
   useEffect(() => {
+    if (isPaused || showViewersSheet) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
+
     setProgress(0);
     if (timerRef.current) clearInterval(timerRef.current);
 
@@ -64,7 +94,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [currentIndex, vibes.length, onClose]);
+  }, [currentIndex, vibes.length, onClose, isPaused, showViewersSheet]);
 
   const handleNext = () => {
     if (currentIndex < vibes.length - 1) {
@@ -80,7 +110,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     }
   };
 
-  const handleReact = async (emoji, tipSparks = 0) => {
+  const handleReact = async (emoji, tipSparks = 0, textMsg = '') => {
     if (!currentVibe) return;
     playSound('pop');
 
@@ -92,6 +122,10 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
         updateUserProfile({ ...user, pulseSparks: newBalance });
       }
       setTimeout(() => setSparksMsg(''), 3000);
+    } else if (emoji || textMsg) {
+      const toastText = textMsg ? `Sent reply to ${vibeGroup?.displayName || 'User'} in Chat! 💬` : `Reacted ${emoji} in Chat! 💬`;
+      setSparksMsg(toastText);
+      setTimeout(() => setSparksMsg(''), 3000);
     }
 
     if (token && currentVibe.id) {
@@ -102,13 +136,19 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`
           },
-          body: JSON.stringify({ emoji, tipSparks })
+          body: JSON.stringify({ emoji, tipSparks, replyText: textMsg })
         });
         const data = await res.json();
         if (data.success && data.remainingSparks !== undefined && updateUserProfile) {
           updateUserProfile({ ...user, pulseSparks: data.remainingSparks });
         }
+        // Dispatch recent chats refresh so DM appears in sidebar
+        window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
       } catch (e) {}
+    }
+
+    if (textMsg) {
+      setReplyText('');
     }
   };
 
@@ -340,67 +380,225 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
           backdropFilter: 'blur(10px)',
           borderTop: '1px solid rgba(255,255,255,0.1)',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          flexDirection: 'column',
+          gap: '8px',
           zIndex: 10
         }}>
           {isMine ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'rgba(255,255,255,0.85)', fontSize: '0.8rem', fontWeight: 600 }}>
-              <Eye size={16} color="#6366f1" />
-              <span>{currentVibe.views?.length || 0} Views</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  fetchLiveViews();
+                  setShowViewersSheet(prev => !prev);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: '#ffffff',
+                  background: showViewersSheet ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255,255,255,0.14)',
+                  border: '1px solid rgba(129, 140, 248, 0.45)',
+                  borderRadius: '20px',
+                  padding: '6px 14px',
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Eye size={16} color="#a5b4fc" />
+                <span>{(liveViews && liveViews.length) || (currentVibe.views && currentVibe.views.length) || 0} Viewers</span>
+              </button>
+
               {currentVibe.sparksEarned > 0 && (
-                <span style={{ color: '#f59e0b', marginLeft: '10px' }}>⚡ {currentVibe.sparksEarned} Sparks Tipped!</span>
+                <span style={{ color: '#f59e0b', fontSize: '0.8rem', fontWeight: 800 }}>
+                  ⚡ {currentVibe.sparksEarned} Sparks Tipped!
+                </span>
               )}
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: 'space-between' }}>
-              {/* Quick Emojis */}
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {['❤️', '🔥', '😂', '👏'].map(emoji => (
-                  <button
-                    key={emoji}
-                    onClick={() => handleReact(emoji)}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+                {/* Text Reply Input (Insta / WhatsApp style) */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (replyText.trim()) {
+                      handleReact('', 0, replyText.trim());
+                    }
+                  }}
+                  style={{ display: 'flex', flex: 1, gap: '6px', alignItems: 'center' }}
+                >
+                  <input
+                    type="text"
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    placeholder={`Reply to ${vibeGroup?.displayName || 'User'}...`}
                     style={{
+                      flex: 1,
                       background: 'rgba(255,255,255,0.12)',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      borderRadius: '20px',
+                      padding: '7px 14px',
+                      color: '#fff',
+                      fontSize: '0.85rem',
+                      outline: 'none'
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    style={{
+                      background: 'var(--accent, #6366f1)',
+                      color: '#fff',
                       border: 'none',
                       borderRadius: '50%',
-                      width: '36px',
-                      height: '36px',
-                      fontSize: '1.1rem',
-                      cursor: 'pointer',
+                      width: '34px',
+                      height: '34px',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      flexShrink: 0
                     }}
                   >
-                    {emoji}
+                    <Send size={15} />
                   </button>
-                ))}
-              </div>
+                </form>
 
-              {/* Tip Sparks Button */}
-              <button
-                onClick={() => handleReact('⚡', 10)}
-                style={{
-                  background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '14px',
-                  padding: '7px 12px',
-                  fontSize: '0.78rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  boxShadow: '0 3px 10px rgba(245, 158, 11, 0.4)'
-                }}
-              >
-                <Zap size={14} fill="#fff" /> Tip 10 Sparks
-              </button>
+                {/* Quick Emojis */}
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {['❤️', '🔥', '😂'].map(emoji => (
+                    <button
+                      key={emoji}
+                      onClick={() => handleReact(emoji)}
+                      style={{
+                        background: 'rgba(255,255,255,0.12)',
+                        border: 'none',
+                        borderRadius: '50%',
+                        width: '34px',
+                        height: '34px',
+                        fontSize: '1rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Tip Sparks Button */}
+                <button
+                  onClick={() => handleReact('⚡', 10)}
+                  title="Tip 10 Sparks"
+                  style={{
+                    background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '16px',
+                    padding: '6px 10px',
+                    fontSize: '0.74rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    flexShrink: 0
+                  }}
+                >
+                  <Zap size={13} fill="#fff" /> 10
+                </button>
+              </div>
             </div>
           )}
         </div>
+
+        {/* Viewers Sliding Sheet (Instagram / WhatsApp style) */}
+        {showViewersSheet && isMine && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              top: 'auto',
+              maxHeight: '65%',
+              background: 'rgba(15, 23, 42, 0.96)',
+              backdropFilter: 'blur(16px)',
+              borderTopLeftRadius: '24px',
+              borderTopRightRadius: '24px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+              zIndex: 100,
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 -10px 30px rgba(0,0,0,0.8)',
+              animation: 'modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fff', fontWeight: 800, fontSize: '0.98rem' }}>
+                <Eye size={18} color="#818cf8" />
+                <span>Story Viewers ({liveViews.length})</span>
+              </div>
+              <button
+                onClick={() => setShowViewersSheet(false)}
+                className="icon-btn-ghost"
+                style={{ color: '#fff', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', padding: '4px' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {liveViews.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.6)', padding: '2rem 1rem', fontSize: '0.88rem' }}>
+                  <Users size={32} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
+                  <p style={{ margin: 0 }}>No views yet.</p>
+                  <p style={{ fontSize: '0.78rem', opacity: 0.8, marginTop: '4px' }}>Share your story with friends!</p>
+                </div>
+              ) : (
+                liveViews.map((viewer, idx) => (
+                  <div
+                    key={viewer.userId || idx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 10px',
+                      borderRadius: '12px',
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.08)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <img
+                        src={viewer.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${viewer.username || viewer.displayName || 'user'}`}
+                        alt={viewer.displayName}
+                        style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #818cf8' }}
+                      />
+                      <div>
+                        <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#fff' }}>
+                          {viewer.displayName || viewer.username || 'User'}
+                        </div>
+                        {viewer.username && (
+                          <div style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.6)' }}>
+                            @{viewer.username}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <span style={{ fontSize: '0.72rem', color: '#a5b4fc', background: 'rgba(99, 102, 241, 0.2)', padding: '2px 8px', borderRadius: '10px' }}>
+                      Viewed
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
