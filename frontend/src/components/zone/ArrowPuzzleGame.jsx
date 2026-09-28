@@ -50,11 +50,13 @@ const DIR_KEYS = ['UP', 'RIGHT', 'DOWN', 'LEFT'];
 
 // Scaling Grid Size, Density & Gap according to Level
 const getGridConfig = (lvl) => {
-  if (lvl <= 1) return { rows: 8, cols: 8, countMultiplier: 0.82, gap: '0px' };
-  if (lvl <= 3) return { rows: 10, cols: 10, countMultiplier: 0.85, gap: '0px' };
-  if (lvl <= 5) return { rows: 12, cols: 12, countMultiplier: 0.88, gap: '0px' };
-  if (lvl <= 10) return { rows: 14, cols: 14, countMultiplier: 0.90, gap: '0px' };
-  return { rows: 16, cols: 16, countMultiplier: 0.92, gap: '0px' };
+  if (lvl <= 1) return { rows: 5, cols: 5, countMultiplier: 0.72, gap: '2px' };
+  if (lvl <= 2) return { rows: 6, cols: 6, countMultiplier: 0.76, gap: '2px' };
+  if (lvl <= 3) return { rows: 7, cols: 7, countMultiplier: 0.78, gap: '2px' };
+  if (lvl <= 4) return { rows: 8, cols: 8, countMultiplier: 0.80, gap: '2px' };
+  if (lvl <= 5) return { rows: 9, cols: 9, countMultiplier: 0.83, gap: '2px' };
+  if (lvl <= 7) return { rows: 10, cols: 10, countMultiplier: 0.85, gap: '2px' };
+  return { rows: 12, cols: 12, countMultiplier: 0.88, gap: '2px' };
 };
 
 export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
@@ -94,7 +96,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
     const board = Array.from({ length: rows }, () => Array(cols).fill(null));
     const placed = [];
     const maxArrows = Math.floor(rows * cols * countMultiplier);
-    const tailTypes = ['path_1', 'path_2', 'path_3', 'path_4', 'path_5', 'path_6', 'path_7'];
+    const tailTypes = ['snake_z', 'snake_s', 'staircase', 'loop_in', 'hook_bend', 'straight'];
 
     // Build puzzle in reverse order (guarantees solvability)
     for (let i = 0; i < maxArrows; i++) {
@@ -470,16 +472,25 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                       style={{
                         width: '100%',
                         height: '100%',
-                        background: 'transparent',
-                        border: 'none',
-                        outline: 'none',
-                        borderRadius: '0px',
-                        padding: 0,
+                        background: isShaking
+                          ? 'rgba(239, 68, 68, 0.35)'
+                          : isHinted
+                          ? 'rgba(245, 158, 11, 0.3)'
+                          : (theme === 'light' ? '#ffffff' : 'rgba(15, 23, 42, 0.8)'),
+                        border: isShaking
+                          ? '2px solid #ef4444'
+                          : isHinted
+                          ? '2px solid #f59e0b'
+                          : (theme === 'light' ? '1px solid #cbd5e1' : '1px solid rgba(255, 255, 255, 0.12)'),
+                        borderRadius: gridConfig.rows >= 10 ? '4px' : '8px',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        boxShadow: 'none',
+                        padding: '2px',
+                        position: 'relative',
+                        overflow: 'hidden', // PREVENTS OVERFLOW OUTSIDE CELL FRAME!
+                        boxShadow: theme === 'light' ? '0 1px 3px rgba(0,0,0,0.06)' : '0 2px 8px rgba(0,0,0,0.4)',
                         transform: isFlying
                           ? `translate(${flyX}px, ${flyY}px) scale(0.4)`
                           : isShaking
@@ -490,77 +501,77 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                         transition: isFlying
                           ? 'transform 0.75s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.75s cubic-bezier(0.5, 0, 1, 1), filter 0.75s ease'
                           : 'transform 0.12s ease',
-                        position: 'relative',
                         zIndex: isFlying ? 10 : 1
                       }}
                     >
-                      {/* SVG Crisp Vector Arrow with Multi-turn Orthogonal Maze Tail */}
+                      {/* SVG Crisp Vector Arrow with Winding Snake Tail */}
                       {(() => {
-                        const tailType = cell.tailType || 'path_1';
-                        let pathD = "M 22 46 L 22 34 L 10 34 L 10 20 L 34 20 L 34 10 L 22 10 L 22 14";
+                        const tailType = cell.tailType || 'snake_z';
+                        let pathD = "M 20 36 L 20 15";
 
-                        if (tailType === 'path_2') {
-                          pathD = "M 22 46 L 38 46 L 38 30 L 6 30 L 6 14 L 22 14";
-                        } else if (tailType === 'path_3') {
-                          pathD = "M 22 46 L 22 38 L 34 38 L 34 26 L 10 26 L 10 14 L 22 14";
-                        } else if (tailType === 'path_4') {
-                          pathD = "M 22 46 L 6 46 L 6 34 L 38 34 L 38 22 L 6 22 L 6 14 L 22 14";
-                        } else if (tailType === 'path_5') {
-                          pathD = "M 22 46 L 22 26 L 12 26 L 12 14 L 22 14";
-                        } else if (tailType === 'path_6') {
-                          pathD = "M 22 46 L 34 46 L 34 36 L 10 36 L 10 24 L 34 24 L 34 14 L 22 14";
-                        } else if (tailType === 'path_7') {
-                          pathD = "M 22 46 L 8 46 L 8 18 L 22 18 L 22 14";
+                        if (tailType === 'snake_z') {
+                          pathD = "M 20 36 L 30 36 L 30 25 L 10 25 L 10 15 L 20 15";
+                        } else if (tailType === 'snake_s') {
+                          pathD = "M 20 36 L 10 36 L 10 25 L 30 25 L 30 15 L 20 15";
+                        } else if (tailType === 'staircase') {
+                          pathD = "M 20 36 L 10 36 L 10 28 L 20 28 L 20 20 L 30 20 L 30 15 L 20 15";
+                        } else if (tailType === 'loop_in') {
+                          pathD = "M 20 36 L 32 36 L 32 22 L 18 22 L 18 28 L 8 28 L 8 15 L 20 15";
+                        } else if (tailType === 'hook_bend') {
+                          pathD = "M 20 36 L 8 36 L 8 20 L 20 20 L 20 15";
                         }
 
-                        const svgSize = gridConfig.rows >= 14 ? '20' : gridConfig.rows >= 10 ? '24' : '28';
+                        const svgSize = gridConfig.rows >= 10 ? '24' : gridConfig.rows >= 7 ? '28' : '32';
 
-                        const strokeColor = isHinted
-                          ? '#f59e0b'
-                          : isShaking
+                        const strokeColor = isShaking
                           ? '#ef4444'
-                          : (theme === 'light' ? '#0f172a' : '#38bdf8');
-
-                        const fillColor = strokeColor;
-
-                        const dotColor = isHinted
+                          : isHinted
                           ? '#f59e0b'
-                          : isShaking
+                          : (theme === 'light' ? '#1e293b' : '#38bdf8');
+
+                        const headColor = isShaking
                           ? '#ef4444'
-                          : (theme === 'light' ? '#1e40af' : '#ec4899');
+                          : isHinted
+                          ? '#f59e0b'
+                          : (theme === 'light' ? '#0f172a' : '#00f0ff');
+
+                        const dotColor = isShaking
+                          ? '#ef4444'
+                          : isHinted
+                          ? '#f59e0b'
+                          : (theme === 'light' ? '#2563eb' : '#ec4899');
 
                         return (
                           <svg
                             width={svgSize}
                             height={svgSize}
-                            viewBox="0 0 44 48"
+                            viewBox="0 0 40 40"
                             style={{
                               transform: `rotate(${deg}deg)`,
-                              overflow: 'visible',
-                              filter: isHinted
-                                ? 'drop-shadow(0 0 8px #f59e0b)'
-                                : isShaking
-                                ? 'drop-shadow(0 0 8px #ef4444)'
-                                : (theme === 'light' ? 'none' : 'drop-shadow(0 0 3px rgba(56, 189, 248, 0.4))')
+                              overflow: 'hidden',
+                              display: 'block',
+                              filter: isShaking
+                                ? 'drop-shadow(0 0 6px #ef4444)'
+                                : isHinted
+                                ? 'drop-shadow(0 0 6px #f59e0b)'
+                                : 'none'
                             }}
                           >
+                            <circle cx="20" cy="36" r="2.5" fill={dotColor} />
                             <path
                               d={pathD}
                               stroke={strokeColor}
-                              strokeWidth={gridConfig.rows >= 14 ? "4.2" : "3.6"}
+                              strokeWidth="3.2"
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               fill="none"
                             />
-                            <circle
-                              cx="22"
-                              cy="44"
-                              r={gridConfig.rows >= 14 ? "3" : "2.5"}
-                              fill={dotColor}
-                            />
                             <polygon
-                              points="22,2 10,16 34,16"
-                              fill={fillColor}
+                              points="20,2 9,15 31,15"
+                              fill={headColor}
+                              stroke={headColor}
+                              strokeWidth="1"
+                              strokeLinejoin="round"
                             />
                           </svg>
                         );

@@ -214,23 +214,25 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
   useEffect(() => { flyingIdsRef.current = flyingIds; }, [flyingIds]);
   useEffect(() => { gridRef.current = grid; }, [grid]);
 
-  const [theme, setTheme] = useState('light'); // 'light' (Notebook Paper) | 'dark' (Cyber)
+  const [theme, setTheme] = useState('light'); // 'light' (Notebook Tile) | 'dark' (Cyber Tile)
 
-  // Level configuration helper (Grid size, arrow density, time limit scaling)
+  // Level configuration helper (Grid size scales smoothly: Lvl 1=5x5, Lvl 2=6x6, Lvl 3=7x7, Lvl 4=8x8, Lvl 5=9x9, Lvl 6+=10x10+)
   const getGridConfig = (lvl) => {
-    if (lvl <= 1) return { rows: 8, cols: 8, density: 0.82, time: 60 };
-    if (lvl <= 3) return { rows: 10, cols: 10, density: 0.85, time: 80 };
-    if (lvl <= 5) return { rows: 12, cols: 12, density: 0.88, time: 100 };
-    if (lvl <= 10) return { rows: 14, cols: 14, density: 0.90, time: 125 };
-    return { rows: 16, cols: 16, density: 0.92, time: 150 };
+    if (lvl <= 1) return { rows: 5, cols: 5, density: 0.72, time: 50 };
+    if (lvl <= 2) return { rows: 6, cols: 6, density: 0.76, time: 60 };
+    if (lvl <= 3) return { rows: 7, cols: 7, density: 0.78, time: 70 };
+    if (lvl <= 4) return { rows: 8, cols: 8, density: 0.80, time: 85 };
+    if (lvl <= 5) return { rows: 9, cols: 9, density: 0.83, time: 100 };
+    if (lvl <= 7) return { rows: 10, cols: 10, density: 0.85, time: 120 };
+    return { rows: 12, cols: 12, density: 0.88, time: 150 };
   };
 
   // Generate a 100% guaranteed solvable Arrow Puzzle board in reverse order
-  const generateSolvableBoard = (rows = 8, cols = 8, density = 0.82) => {
+  const generateSolvableBoard = (rows = 5, cols = 5, density = 0.72) => {
     const board = Array.from({ length: rows }, () => Array(cols).fill(null));
     const placed = [];
     const maxArrows = Math.floor(rows * cols * density);
-    const tailTypes = ['path_1', 'path_2', 'path_3', 'path_4', 'path_5', 'path_6', 'path_7'];
+    const tailTypes = ['snake_z', 'snake_s', 'staircase', 'loop_in', 'hook_bend', 'straight'];
 
     for (let i = 0; i < maxArrows; i++) {
       let candidateCells = [];
@@ -607,65 +609,69 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
   };
 
   const renderArrowSvg = (arrow) => {
-    const tailType = arrow.tailType || 'path_1';
-    let pathD = "M 22 46 L 22 34 L 10 34 L 10 20 L 34 20 L 34 10 L 22 10 L 22 14";
+    const tailType = arrow.tailType || 'snake_z';
+    let pathD = "M 20 36 L 20 15";
 
-    if (tailType === 'path_2') {
-      pathD = "M 22 46 L 38 46 L 38 30 L 6 30 L 6 14 L 22 14";
-    } else if (tailType === 'path_3') {
-      pathD = "M 22 46 L 22 38 L 34 38 L 34 26 L 10 26 L 10 14 L 22 14";
-    } else if (tailType === 'path_4') {
-      pathD = "M 22 46 L 6 46 L 6 34 L 38 34 L 38 22 L 6 22 L 6 14 L 22 14";
-    } else if (tailType === 'path_5') {
-      pathD = "M 22 46 L 22 26 L 12 26 L 12 14 L 22 14";
-    } else if (tailType === 'path_6') {
-      pathD = "M 22 46 L 34 46 L 34 36 L 10 36 L 10 24 L 34 24 L 34 14 L 22 14";
-    } else if (tailType === 'path_7') {
-      pathD = "M 22 46 L 8 46 L 8 18 L 22 18 L 22 14";
+    if (tailType === 'snake_z') {
+      pathD = "M 20 36 L 30 36 L 30 25 L 10 25 L 10 15 L 20 15";
+    } else if (tailType === 'snake_s') {
+      pathD = "M 20 36 L 10 36 L 10 25 L 30 25 L 30 15 L 20 15";
+    } else if (tailType === 'staircase') {
+      pathD = "M 20 36 L 10 36 L 10 28 L 20 28 L 20 20 L 30 20 L 30 15 L 20 15";
+    } else if (tailType === 'loop_in') {
+      pathD = "M 20 36 L 32 36 L 32 22 L 18 22 L 18 28 L 8 28 L 8 15 L 20 15";
+    } else if (tailType === 'hook_bend') {
+      pathD = "M 20 36 L 8 36 L 8 20 L 20 20 L 20 15";
     }
 
     const svgSize = isMobile
-      ? (gridRows >= 14 ? '20' : gridRows >= 10 ? '24' : '28')
-      : (gridRows >= 14 ? '22' : gridRows >= 10 ? '26' : '30');
+      ? (gridRows >= 10 ? '24' : gridRows >= 7 ? '28' : '32')
+      : (gridRows >= 10 ? '28' : gridRows >= 7 ? '32' : '36');
 
     const isShaking = shakingId === arrow.id;
     const strokeColor = isShaking
       ? '#ef4444'
-      : (theme === 'light' ? '#0f172a' : '#38bdf8');
-    const fillColor = strokeColor;
+      : (theme === 'light' ? '#1e293b' : '#38bdf8');
+    const headColor = isShaking
+      ? '#ef4444'
+      : (theme === 'light' ? '#0f172a' : '#00f0ff');
     const dotColor = isShaking
       ? '#ef4444'
-      : (theme === 'light' ? '#1e40af' : '#ec4899');
+      : (theme === 'light' ? '#2563eb' : '#ec4899');
 
     return (
       <svg
         width={svgSize}
         height={svgSize}
-        viewBox="0 0 44 48"
+        viewBox="0 0 40 40"
         style={{
-          overflow: 'visible',
+          overflow: 'hidden',
+          display: 'block',
           filter: isShaking
-            ? 'drop-shadow(0 0 8px #ef4444)'
-            : (theme === 'light' ? 'none' : 'drop-shadow(0 0 3px rgba(56, 189, 248, 0.4))')
+            ? 'drop-shadow(0 0 6px #ef4444)'
+            : 'none'
         }}
       >
+        {/* Tail Base Glow Dot */}
+        <circle cx="20" cy="36" r="2.5" fill={dotColor} />
+
+        {/* Winding Snake Tail Shaft */}
         <path
           d={pathD}
           stroke={strokeColor}
-          strokeWidth={gridRows >= 14 ? "4.2" : "3.6"}
+          strokeWidth="3.2"
           strokeLinecap="round"
           strokeLinejoin="round"
           fill="none"
         />
-        <circle
-          cx="22"
-          cy="44"
-          r={gridRows >= 14 ? "3" : "2.5"}
-          fill={dotColor}
-        />
+
+        {/* Crystal Clear Sharp Arrow Head Triangle */}
         <polygon
-          points="22,2 10,16 34,16"
-          fill={fillColor}
+          points="20,2 9,15 31,15"
+          fill={headColor}
+          stroke={headColor}
+          strokeWidth="1"
+          strokeLinejoin="round"
         />
       </svg>
     );
@@ -877,24 +883,24 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
           background: 'radial-gradient(circle at center, #0f172a 0%, #050b18 100%)'
         }}>
 
-          {/* Interactive Arrow Grid Canvas (Seamless Open Maze) */}
+          {/* Interactive Arrow Grid Canvas (Sleek Clean Grid) */}
           <div style={{
             position: 'relative',
-            width: isMobile ? 'min(450px, 96vw)' : 'min(440px, 88vw)',
-            height: isMobile ? 'min(450px, 96vw)' : 'min(440px, 88vw)',
-            background: theme === 'light' ? '#ffffff' : 'radial-gradient(circle at center, #0b1329 0%, #030712 100%)',
+            width: isMobile ? 'min(440px, 95vw)' : 'min(440px, 88vw)',
+            height: isMobile ? 'min(440px, 95vw)' : 'min(440px, 88vw)',
+            background: theme === 'light' ? '#f8fafc' : 'radial-gradient(circle at center, #0b1329 0%, #030712 100%)',
             backgroundImage: theme === 'light'
-              ? 'linear-gradient(rgba(148, 163, 184, 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.3) 1px, transparent 1px)'
+              ? 'linear-gradient(rgba(226, 232, 240, 0.8) 1px, transparent 1px), linear-gradient(90deg, rgba(226, 232, 240, 0.8) 1px, transparent 1px)'
               : 'linear-gradient(rgba(56, 189, 248, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(56, 189, 248, 0.06) 1px, transparent 1px)',
-            backgroundSize: gridRows >= 14 ? '14px 14px' : '20px 20px',
+            backgroundSize: gridRows >= 10 ? '16px 16px' : '22px 22px',
             borderRadius: '24px',
             border: theme === 'light' ? '2px solid #cbd5e1' : '2px solid rgba(255, 255, 255, 0.15)',
-            padding: '6px',
-            boxShadow: theme === 'light' ? '0 10px 30px rgba(0,0,0,0.1)' : 'inset 0 0 30px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.6)',
+            padding: '8px',
+            boxShadow: theme === 'light' ? '0 10px 30px rgba(0,0,0,0.08)' : 'inset 0 0 30px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.6)',
             display: 'grid',
             gridTemplateRows: `repeat(${gridRows}, 1fr)`,
             gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
-            gap: '0px'
+            gap: gridRows >= 10 ? '2px' : '4px'
           }}>
             {!isGameOver && grid.map((rowArr, r) =>
               rowArr.map((arrow, c) => {
@@ -931,20 +937,21 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                     style={{
                       width: '100%',
                       height: '100%',
-                      background: 'transparent',
-                      border: 'none',
-                      outline: 'none',
-                      borderRadius: '0px',
+                      background: isShaking
+                        ? 'rgba(239, 68, 68, 0.35)'
+                        : (theme === 'light' ? '#ffffff' : 'rgba(15, 23, 42, 0.8)'),
+                      border: isShaking
+                        ? '2px solid #ef4444'
+                        : (theme === 'light' ? '1px solid #cbd5e1' : '1px solid rgba(255, 255, 255, 0.12)'),
+                      borderRadius: gridRows >= 10 ? '4px' : (isMobile ? '6px' : '10px'),
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      padding: 0,
+                      padding: '2px',
                       position: 'relative',
-                      zIndex: isFlying ? 100 : 1,
-                      animation: isShaking ? 'shake 0.4s ease' : 'none',
-                      boxShadow: 'none',
-                      overflow: 'visible',
+                      overflow: 'hidden', // STOPS OVERFLOW OUTSIDE CELL FRAME!
+                      boxShadow: theme === 'light' ? '0 1px 3px rgba(0,0,0,0.06)' : '0 2px 8px rgba(0,0,0,0.4)',
                       ...flightStyle
                     }}
                   >
