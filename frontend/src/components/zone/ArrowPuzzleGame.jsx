@@ -96,7 +96,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
     const board = Array.from({ length: rows }, () => Array(cols).fill(null));
     const placed = [];
     const maxArrows = Math.floor(rows * cols * countMultiplier);
-    const tailTypes = ['ext_wavy_s', 'ext_wavy_z', 'ext_ortho_step', 'ext_ortho_u', 'ext_long_tail', 'ext_curly_loop'];
+    const tailTypes = ['snake_z', 'snake_s', 'staircase', 'loop_in', 'hook_bend', 'straight'];
 
     // Build puzzle in reverse order (guarantees solvability)
     for (let i = 0; i < maxArrows; i++) {
@@ -489,7 +489,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                         justifyContent: 'center',
                         padding: '2px',
                         position: 'relative',
-                        overflow: 'visible',
+                        overflow: 'hidden',
                         boxShadow: theme === 'light' ? '0 1px 3px rgba(0,0,0,0.06)' : '0 2px 8px rgba(0,0,0,0.4)',
                         transform: isFlying
                           ? `translate(${flyX}px, ${flyY}px) scale(0.4)`
@@ -504,23 +504,21 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                         zIndex: isFlying ? 10 : 1
                       }}
                     >
-                      {/* SVG Crisp Vector Arrow with External Winding Tail */}
+                      {/* SVG Crisp Vector Arrow with Winding Snake Tail */}
                       {(() => {
-                        const tailType = cell.tailType || 'ext_wavy_s';
-                        let pathD = "M 22 14 L 22 46";
+                        const tailType = cell.tailType || 'snake_z';
+                        let pathD = "M 20 36 L 20 15";
 
-                        if (tailType === 'ext_wavy_s') {
-                          pathD = "M 22 14 Q -6 24 22 34 T 50 44 Q 22 54 -8 44";
-                        } else if (tailType === 'ext_wavy_z') {
-                          pathD = "M 22 14 Q 50 24 22 34 T -6 44 Q 22 54 52 44";
-                        } else if (tailType === 'ext_ortho_step') {
-                          pathD = "M 22 14 L 50 14 L 50 36 L -8 36 L -8 50 L 22 50";
-                        } else if (tailType === 'ext_ortho_u') {
-                          pathD = "M 22 14 L -8 14 L -8 44 L 52 44 L 52 28 L 22 28";
-                        } else if (tailType === 'ext_long_tail') {
-                          pathD = "M 22 14 L 22 56 L -10 56 L -10 30 L 22 30";
-                        } else if (tailType === 'ext_curly_loop') {
-                          pathD = "M 22 14 C 52 8 52 42 22 34 C -8 26 -8 56 22 52";
+                        if (tailType === 'snake_z') {
+                          pathD = "M 20 36 L 30 36 L 30 25 L 10 25 L 10 15 L 20 15";
+                        } else if (tailType === 'snake_s') {
+                          pathD = "M 20 36 L 10 36 L 10 25 L 30 25 L 30 15 L 20 15";
+                        } else if (tailType === 'staircase') {
+                          pathD = "M 20 36 L 10 36 L 10 28 L 20 28 L 20 20 L 30 20 L 30 15 L 20 15";
+                        } else if (tailType === 'loop_in') {
+                          pathD = "M 20 36 L 32 36 L 32 22 L 18 22 L 18 28 L 8 28 L 8 15 L 20 15";
+                        } else if (tailType === 'hook_bend') {
+                          pathD = "M 20 36 L 8 36 L 8 20 L 20 20 L 20 15";
                         }
 
                         const svgSize = gridConfig.rows >= 10 ? '24' : gridConfig.rows >= 7 ? '28' : '32';
@@ -547,10 +545,10 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                           <svg
                             width={svgSize}
                             height={svgSize}
-                            viewBox="0 0 44 48"
+                            viewBox="0 0 40 40"
                             style={{
                               transform: `rotate(${deg}deg)`,
-                              overflow: 'visible',
+                              overflow: 'hidden',
                               display: 'block',
                               filter: isShaking
                                 ? 'drop-shadow(0 0 6px #ef4444)'
@@ -559,6 +557,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                                 : 'none'
                             }}
                           >
+                            <circle cx="20" cy="36" r="2.5" fill={dotColor} />
                             <path
                               d={pathD}
                               stroke={strokeColor}
@@ -567,9 +566,8 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                               strokeLinejoin="round"
                               fill="none"
                             />
-                            <circle cx="22" cy="14" r="2.5" fill={dotColor} />
                             <polygon
-                              points="22,2 10,16 34,16"
+                              points="20,2 9,15 31,15"
                               fill={headColor}
                               stroke={headColor}
                               strokeWidth="1"
