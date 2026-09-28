@@ -50,12 +50,10 @@ const DIR_KEYS = ['UP', 'RIGHT', 'DOWN', 'LEFT'];
 
 // Scaling Grid Size, Density & Gap according to Level
 const getGridConfig = (lvl) => {
-  if (lvl <= 2) return { rows: 6, cols: 6, countMultiplier: 0.55, gap: '3px' };
-  if (lvl <= 5) return { rows: 7, cols: 7, countMultiplier: 0.68, gap: '2.5px' };
-  if (lvl <= 12) return { rows: 8, cols: 8, countMultiplier: 0.78, gap: '2px' };
-  if (lvl <= 25) return { rows: 9, cols: 9, countMultiplier: 0.84, gap: '1.5px' };
-  if (lvl <= 50) return { rows: 10, cols: 10, countMultiplier: 0.88, gap: '1px' };
-  return { rows: 11, cols: 11, countMultiplier: 0.92, gap: '1px' };
+  if (lvl <= 1) return { rows: 6, cols: 6, countMultiplier: 0.78, gap: '3px' };
+  if (lvl <= 3) return { rows: 7, cols: 7, countMultiplier: 0.82, gap: '2.5px' };
+  if (lvl <= 5) return { rows: 8, cols: 8, countMultiplier: 0.85, gap: '2px' };
+  return { rows: 9, cols: 9, countMultiplier: 0.88, gap: '1.5px' };
 };
 
 export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
@@ -94,6 +92,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
     const board = Array.from({ length: rows }, () => Array(cols).fill(null));
     const placed = [];
     const maxArrows = Math.floor(rows * cols * countMultiplier);
+    const tailTypes = ['curved_s', 'curved_z', 'loop_tail', 'bent_left', 'bent_right', 'wavy_long'];
 
     // Build puzzle in reverse order (guarantees solvability)
     for (let i = 0; i < maxArrows; i++) {
@@ -126,11 +125,13 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
 
       const pick = candidateCells[Math.floor(Math.random() * candidateCells.length)];
       const id = `arrow_${pick.r}_${pick.c}_${Date.now()}_${Math.random()}`;
+      const tailType = tailTypes[Math.floor(Math.random() * tailTypes.length)];
       const arrowObj = {
         id,
         r: pick.r,
         c: pick.c,
-        dir: pick.dir
+        dir: pick.dir,
+        tailType
       };
       board[pick.r][pick.c] = arrowObj;
       placed.push(arrowObj);
@@ -484,36 +485,47 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                         zIndex: isFlying ? 10 : 1
                       }}
                     >
-                      {/* SVG Crisp Vector Arrow */}
-                      <svg
-                        viewBox="0 0 40 40"
-                        style={{
-                          width: '85%',
-                          height: '85%',
-                          transform: `rotate(${deg}deg)`,
-                          filter: isHinted
-                            ? 'drop-shadow(0 0 8px #f59e0b)'
-                            : isShaking
-                            ? 'drop-shadow(0 0 8px #ef4444)'
-                            : 'drop-shadow(0 0 3px rgba(56, 189, 248, 0.4))'
-                        }}
-                      >
-                        {/* Arrow Line Shaft */}
-                        <line
-                          x1="20"
-                          y1="34"
-                          x2="20"
-                          y2="10"
-                          stroke={isHinted ? '#f59e0b' : isShaking ? '#ef4444' : '#38bdf8'}
-                          strokeWidth="4"
-                          strokeLinecap="round"
-                        />
-                        {/* Arrow Head Triangle */}
-                        <polygon
-                          points="20,4 10,18 30,18"
-                          fill={isHinted ? '#f59e0b' : isShaking ? '#ef4444' : '#38bdf8'}
-                        />
-                      </svg>
+                      {/* SVG Crisp Vector Arrow with Curvy/Bent Long Tail */}
+                      {(() => {
+                        const tailType = cell.tailType || 'curved_s';
+                        let pathD = "M 22 14 C 6 22, 38 32, 22 44";
+                        if (tailType === 'curved_z') {
+                          pathD = "M 22 14 C 38 20, 6 34, 22 44";
+                        } else if (tailType === 'loop_tail') {
+                          pathD = "M 22 14 C 38 18, 38 34, 22 30 C 10 26, 10 40, 22 44";
+                        } else if (tailType === 'bent_left') {
+                          pathD = "M 22 14 C 2 20, 6 36, 22 44";
+                        } else if (tailType === 'bent_right') {
+                          pathD = "M 22 14 C 42 20, 38 36, 22 44";
+                        } else if (tailType === 'wavy_long') {
+                          pathD = "M 22 14 C 2 22, 42 30, 22 46";
+                        }
+
+                        const strokeColor = isHinted ? '#f59e0b' : isShaking ? '#ef4444' : '#38bdf8';
+                        const fillColor = isHinted ? '#f59e0b' : isShaking ? '#ef4444' : '#38bdf8';
+                        const dotColor = isHinted ? '#f59e0b' : isShaking ? '#ef4444' : '#ec4899';
+
+                        return (
+                          <svg
+                            viewBox="0 0 44 48"
+                            style={{
+                              width: '90%',
+                              height: '90%',
+                              transform: `rotate(${deg}deg)`,
+                              overflow: 'visible',
+                              filter: isHinted
+                                ? 'drop-shadow(0 0 8px #f59e0b)'
+                                : isShaking
+                                ? 'drop-shadow(0 0 8px #ef4444)'
+                                : 'drop-shadow(0 0 3px rgba(56, 189, 248, 0.4))'
+                            }}
+                          >
+                            <path d={pathD} stroke={strokeColor} strokeWidth="3.8" strokeLinecap="round" fill="none" />
+                            <circle cx="22" cy="44" r="2.5" fill={dotColor} />
+                            <polygon points="22,2 10,16 34,16" fill={fillColor} />
+                          </svg>
+                        );
+                      })()}
                     </button>
                   );
                 })
