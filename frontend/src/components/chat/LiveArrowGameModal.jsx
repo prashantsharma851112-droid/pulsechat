@@ -214,20 +214,23 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
   useEffect(() => { flyingIdsRef.current = flyingIds; }, [flyingIds]);
   useEffect(() => { gridRef.current = grid; }, [grid]);
 
+  const [theme, setTheme] = useState('light'); // 'light' (Notebook Paper) | 'dark' (Cyber)
+
   // Level configuration helper (Grid size, arrow density, time limit scaling)
   const getGridConfig = (lvl) => {
-    if (lvl <= 1) return { rows: 6, cols: 6, density: 0.78, time: 50 };
-    if (lvl <= 3) return { rows: 7, cols: 7, density: 0.82, time: 60 };
-    if (lvl <= 5) return { rows: 8, cols: 8, density: 0.85, time: 75 };
-    return { rows: 9, cols: 9, density: 0.88, time: 90 };
+    if (lvl <= 1) return { rows: 8, cols: 8, density: 0.82, time: 60 };
+    if (lvl <= 3) return { rows: 10, cols: 10, density: 0.85, time: 80 };
+    if (lvl <= 5) return { rows: 12, cols: 12, density: 0.88, time: 100 };
+    if (lvl <= 10) return { rows: 14, cols: 14, density: 0.90, time: 125 };
+    return { rows: 16, cols: 16, density: 0.92, time: 150 };
   };
 
   // Generate a 100% guaranteed solvable Arrow Puzzle board in reverse order
-  const generateSolvableBoard = (rows = 7, cols = 7, density = 0.80) => {
+  const generateSolvableBoard = (rows = 8, cols = 8, density = 0.82) => {
     const board = Array.from({ length: rows }, () => Array(cols).fill(null));
     const placed = [];
     const maxArrows = Math.floor(rows * cols * density);
-    const tailTypes = ['ortho_z', 'ortho_u', 'ortho_stair', 'bent_hook', 'curved_s', 'curved_z', 'loop_tail'];
+    const tailTypes = ['path_1', 'path_2', 'path_3', 'path_4', 'path_5', 'path_6', 'path_7'];
 
     for (let i = 0; i < maxArrows; i++) {
       let candidateCells = [];
@@ -604,31 +607,35 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
   };
 
   const renderArrowSvg = (arrow) => {
-    const tailType = arrow.tailType || 'curved_s';
-    let pathD = "M 22 14 C 6 22, 38 32, 22 44";
+    const tailType = arrow.tailType || 'path_1';
+    let pathD = "M 22 46 L 22 34 L 10 34 L 10 20 L 34 20 L 34 10 L 22 10 L 22 14";
 
-    if (tailType === 'ortho_z') {
-      pathD = "M 22 46 L 22 30 L 10 30 L 10 16 L 22 16 L 22 14";
-    } else if (tailType === 'ortho_u') {
-      pathD = "M 22 46 L 36 46 L 36 24 L 22 24 L 22 14";
-    } else if (tailType === 'ortho_stair') {
-      pathD = "M 22 46 L 22 36 L 10 36 L 10 24 L 34 24 L 34 14 L 22 14";
-    } else if (tailType === 'bent_hook') {
+    if (tailType === 'path_2') {
+      pathD = "M 22 46 L 38 46 L 38 30 L 6 30 L 6 14 L 22 14";
+    } else if (tailType === 'path_3') {
+      pathD = "M 22 46 L 22 38 L 34 38 L 34 26 L 10 26 L 10 14 L 22 14";
+    } else if (tailType === 'path_4') {
+      pathD = "M 22 46 L 6 46 L 6 34 L 38 34 L 38 22 L 6 22 L 6 14 L 22 14";
+    } else if (tailType === 'path_5') {
+      pathD = "M 22 46 L 22 26 L 12 26 L 12 14 L 22 14";
+    } else if (tailType === 'path_6') {
+      pathD = "M 22 46 L 34 46 L 34 36 L 10 36 L 10 24 L 34 24 L 34 14 L 22 14";
+    } else if (tailType === 'path_7') {
       pathD = "M 22 46 L 8 46 L 8 18 L 22 18 L 22 14";
-    } else if (tailType === 'curved_z') {
-      pathD = "M 22 14 C 38 20, 6 34, 22 44";
-    } else if (tailType === 'loop_tail') {
-      pathD = "M 22 14 C 38 18, 38 34, 22 30 C 10 26, 10 40, 22 44";
     }
 
     const svgSize = isMobile
-      ? (gridRows >= 8 ? '26' : '30')
-      : (gridRows >= 8 ? '28' : '32');
+      ? (gridRows >= 14 ? '20' : gridRows >= 10 ? '24' : '28')
+      : (gridRows >= 14 ? '22' : gridRows >= 10 ? '26' : '30');
 
     const isShaking = shakingId === arrow.id;
-    const strokeColor = isShaking ? '#ef4444' : '#38bdf8';
-    const fillColor = isShaking ? '#ef4444' : '#38bdf8';
-    const dotColor = isShaking ? '#ef4444' : '#ec4899';
+    const strokeColor = isShaking
+      ? '#ef4444'
+      : (theme === 'light' ? '#0f172a' : '#38bdf8');
+    const fillColor = strokeColor;
+    const dotColor = isShaking
+      ? '#ef4444'
+      : (theme === 'light' ? '#1e40af' : '#ec4899');
 
     return (
       <svg
@@ -638,13 +645,28 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
         style={{
           overflow: 'visible',
           filter: isShaking
-            ? 'drop-shadow(0 0 10px #ef4444)'
-            : 'drop-shadow(0 0 3px rgba(56, 189, 248, 0.4))'
+            ? 'drop-shadow(0 0 8px #ef4444)'
+            : (theme === 'light' ? 'none' : 'drop-shadow(0 0 3px rgba(56, 189, 248, 0.4))')
         }}
       >
-        <path d={pathD} stroke={strokeColor} strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        <circle cx="22" cy="44" r="2.5" fill={dotColor} />
-        <polygon points="22,2 10,16 34,16" fill={fillColor} />
+        <path
+          d={pathD}
+          stroke={strokeColor}
+          strokeWidth={gridRows >= 14 ? "4.2" : "3.6"}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+        <circle
+          cx="22"
+          cy="44"
+          r={gridRows >= 14 ? "3" : "2.5"}
+          fill={dotColor}
+        />
+        <polygon
+          points="22,2 10,16 34,16"
+          fill={fillColor}
+        />
       </svg>
     );
   };
@@ -720,9 +742,26 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                 </span>
               </div>
             </div>
-            <button className="icon-btn-ghost" onClick={onClose} style={{ color: '#fff', background: 'rgba(0,0,0,0.3)', borderRadius: '50%', padding: '6px' }}>
-              <X size={20} />
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button
+                onClick={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')}
+                style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  border: 'none',
+                  color: '#fff',
+                  borderRadius: '10px',
+                  padding: '4px 8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  cursor: 'pointer'
+                }}
+              >
+                {theme === 'light' ? '📜 Paper' : '🌙 Dark'}
+              </button>
+              <button className="icon-btn-ghost" onClick={onClose} style={{ color: '#fff', background: 'rgba(0,0,0,0.3)', borderRadius: '50%', padding: '6px' }}>
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
           {/* Mode Selector Tabs */}
@@ -841,15 +880,17 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
           {/* Interactive Arrow Grid Canvas (Seamless Open Maze) */}
           <div style={{
             position: 'relative',
-            width: isMobile ? 'min(440px, 94vw)' : 'min(430px, 85vw)',
-            height: isMobile ? 'min(440px, 94vw)' : 'min(430px, 85vw)',
-            background: 'radial-gradient(circle at center, #0b1329 0%, #030712 100%)',
-            backgroundImage: 'linear-gradient(rgba(56, 189, 248, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(56, 189, 248, 0.06) 1px, transparent 1px)',
-            backgroundSize: '24px 24px',
+            width: isMobile ? 'min(450px, 96vw)' : 'min(440px, 88vw)',
+            height: isMobile ? 'min(450px, 96vw)' : 'min(440px, 88vw)',
+            background: theme === 'light' ? '#ffffff' : 'radial-gradient(circle at center, #0b1329 0%, #030712 100%)',
+            backgroundImage: theme === 'light'
+              ? 'linear-gradient(rgba(148, 163, 184, 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.3) 1px, transparent 1px)'
+              : 'linear-gradient(rgba(56, 189, 248, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(56, 189, 248, 0.06) 1px, transparent 1px)',
+            backgroundSize: gridRows >= 14 ? '14px 14px' : '20px 20px',
             borderRadius: '24px',
-            border: '2px solid rgba(255, 255, 255, 0.15)',
-            padding: '8px',
-            boxShadow: 'inset 0 0 30px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.6)',
+            border: theme === 'light' ? '2px solid #cbd5e1' : '2px solid rgba(255, 255, 255, 0.15)',
+            padding: '6px',
+            boxShadow: theme === 'light' ? '0 10px 30px rgba(0,0,0,0.1)' : 'inset 0 0 30px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.6)',
             display: 'grid',
             gridTemplateRows: `repeat(${gridRows}, 1fr)`,
             gridTemplateColumns: `repeat(${gridCols}, 1fr)`,

@@ -50,10 +50,11 @@ const DIR_KEYS = ['UP', 'RIGHT', 'DOWN', 'LEFT'];
 
 // Scaling Grid Size, Density & Gap according to Level
 const getGridConfig = (lvl) => {
-  if (lvl <= 1) return { rows: 6, cols: 6, countMultiplier: 0.78, gap: '3px' };
-  if (lvl <= 3) return { rows: 7, cols: 7, countMultiplier: 0.82, gap: '2.5px' };
-  if (lvl <= 5) return { rows: 8, cols: 8, countMultiplier: 0.85, gap: '2px' };
-  return { rows: 9, cols: 9, countMultiplier: 0.88, gap: '1.5px' };
+  if (lvl <= 1) return { rows: 8, cols: 8, countMultiplier: 0.82, gap: '0px' };
+  if (lvl <= 3) return { rows: 10, cols: 10, countMultiplier: 0.85, gap: '0px' };
+  if (lvl <= 5) return { rows: 12, cols: 12, countMultiplier: 0.88, gap: '0px' };
+  if (lvl <= 10) return { rows: 14, cols: 14, countMultiplier: 0.90, gap: '0px' };
+  return { rows: 16, cols: 16, countMultiplier: 0.92, gap: '0px' };
 };
 
 export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
@@ -61,6 +62,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
 
   // Screen view: 'main' | 'playing' | 'win' | 'gameover'
   const [screen, setScreen] = useState('main');
+  const [theme, setTheme] = useState('light'); // 'light' (Notebook Paper) | 'dark' (Cyber)
   const [level, setLevel] = useState(() => {
     return parseInt(localStorage.getItem('pulsechat_arrow_level') || '1', 10);
   });
@@ -92,7 +94,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
     const board = Array.from({ length: rows }, () => Array(cols).fill(null));
     const placed = [];
     const maxArrows = Math.floor(rows * cols * countMultiplier);
-    const tailTypes = ['ortho_z', 'ortho_u', 'ortho_stair', 'bent_hook', 'curved_s', 'curved_z', 'loop_tail'];
+    const tailTypes = ['path_1', 'path_2', 'path_3', 'path_4', 'path_5', 'path_6', 'path_7'];
 
     // Build puzzle in reverse order (guarantees solvability)
     for (let i = 0; i < maxArrows; i++) {
@@ -437,15 +439,17 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
               gridTemplateColumns: `repeat(${gridConfig.cols}, 1fr)`,
               gap: '0px',
               width: '100%',
-              maxWidth: '360px',
+              maxWidth: '380px',
               aspectRatio: '1',
-              background: 'radial-gradient(circle at center, #0b1329 0%, #030712 100%)',
-              backgroundImage: 'linear-gradient(rgba(56, 189, 248, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(56, 189, 248, 0.06) 1px, transparent 1px)',
-              backgroundSize: '24px 24px',
-              border: '1.5px solid rgba(255,255,255,0.15)',
+              background: theme === 'light' ? '#ffffff' : 'radial-gradient(circle at center, #0b1329 0%, #030712 100%)',
+              backgroundImage: theme === 'light'
+                ? 'linear-gradient(rgba(148, 163, 184, 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.3) 1px, transparent 1px)'
+                : 'linear-gradient(rgba(56, 189, 248, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(56, 189, 248, 0.06) 1px, transparent 1px)',
+              backgroundSize: gridConfig.rows >= 14 ? '14px 14px' : '20px 20px',
+              border: theme === 'light' ? '2px solid #cbd5e1' : '1.5px solid rgba(255,255,255,0.15)',
               borderRadius: '20px',
               padding: '6px',
-              boxShadow: 'inset 0 0 30px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.6)',
+              boxShadow: theme === 'light' ? '0 10px 30px rgba(0,0,0,0.1)' : 'inset 0 0 30px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.6)',
               position: 'relative'
             }}>
               {grid.map((row, r) =>
@@ -490,46 +494,74 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                         zIndex: isFlying ? 10 : 1
                       }}
                     >
-                      {/* SVG Crisp Vector Arrow with Winding Orthogonal Maze Tail */}
+                      {/* SVG Crisp Vector Arrow with Multi-turn Orthogonal Maze Tail */}
                       {(() => {
-                        const tailType = cell.tailType || 'curved_s';
-                        let pathD = "M 22 14 C 6 22, 38 32, 22 44";
-                        if (tailType === 'ortho_z') {
-                          pathD = "M 22 46 L 22 30 L 10 30 L 10 16 L 22 16 L 22 14";
-                        } else if (tailType === 'ortho_u') {
-                          pathD = "M 22 46 L 36 46 L 36 24 L 22 24 L 22 14";
-                        } else if (tailType === 'ortho_stair') {
-                          pathD = "M 22 46 L 22 36 L 10 36 L 10 24 L 34 24 L 34 14 L 22 14";
-                        } else if (tailType === 'bent_hook') {
+                        const tailType = cell.tailType || 'path_1';
+                        let pathD = "M 22 46 L 22 34 L 10 34 L 10 20 L 34 20 L 34 10 L 22 10 L 22 14";
+
+                        if (tailType === 'path_2') {
+                          pathD = "M 22 46 L 38 46 L 38 30 L 6 30 L 6 14 L 22 14";
+                        } else if (tailType === 'path_3') {
+                          pathD = "M 22 46 L 22 38 L 34 38 L 34 26 L 10 26 L 10 14 L 22 14";
+                        } else if (tailType === 'path_4') {
+                          pathD = "M 22 46 L 6 46 L 6 34 L 38 34 L 38 22 L 6 22 L 6 14 L 22 14";
+                        } else if (tailType === 'path_5') {
+                          pathD = "M 22 46 L 22 26 L 12 26 L 12 14 L 22 14";
+                        } else if (tailType === 'path_6') {
+                          pathD = "M 22 46 L 34 46 L 34 36 L 10 36 L 10 24 L 34 24 L 34 14 L 22 14";
+                        } else if (tailType === 'path_7') {
                           pathD = "M 22 46 L 8 46 L 8 18 L 22 18 L 22 14";
-                        } else if (tailType === 'curved_z') {
-                          pathD = "M 22 14 C 38 20, 6 34, 22 44";
-                        } else if (tailType === 'loop_tail') {
-                          pathD = "M 22 14 C 38 18, 38 34, 22 30 C 10 26, 10 40, 22 44";
                         }
 
-                        const strokeColor = isHinted ? '#f59e0b' : isShaking ? '#ef4444' : '#38bdf8';
-                        const fillColor = isHinted ? '#f59e0b' : isShaking ? '#ef4444' : '#38bdf8';
-                        const dotColor = isHinted ? '#f59e0b' : isShaking ? '#ef4444' : '#ec4899';
+                        const svgSize = gridConfig.rows >= 14 ? '20' : gridConfig.rows >= 10 ? '24' : '28';
+
+                        const strokeColor = isHinted
+                          ? '#f59e0b'
+                          : isShaking
+                          ? '#ef4444'
+                          : (theme === 'light' ? '#0f172a' : '#38bdf8');
+
+                        const fillColor = strokeColor;
+
+                        const dotColor = isHinted
+                          ? '#f59e0b'
+                          : isShaking
+                          ? '#ef4444'
+                          : (theme === 'light' ? '#1e40af' : '#ec4899');
 
                         return (
                           <svg
+                            width={svgSize}
+                            height={svgSize}
                             viewBox="0 0 44 48"
                             style={{
-                              width: '90%',
-                              height: '90%',
                               transform: `rotate(${deg}deg)`,
                               overflow: 'visible',
                               filter: isHinted
                                 ? 'drop-shadow(0 0 8px #f59e0b)'
                                 : isShaking
                                 ? 'drop-shadow(0 0 8px #ef4444)'
-                                : 'drop-shadow(0 0 3px rgba(56, 189, 248, 0.4))'
+                                : (theme === 'light' ? 'none' : 'drop-shadow(0 0 3px rgba(56, 189, 248, 0.4))')
                             }}
                           >
-                            <path d={pathD} stroke={strokeColor} strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                            <circle cx="22" cy="44" r="2.5" fill={dotColor} />
-                            <polygon points="22,2 10,16 34,16" fill={fillColor} />
+                            <path
+                              d={pathD}
+                              stroke={strokeColor}
+                              strokeWidth={gridConfig.rows >= 14 ? "4.2" : "3.6"}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              fill="none"
+                            />
+                            <circle
+                              cx="22"
+                              cy="44"
+                              r={gridConfig.rows >= 14 ? "3" : "2.5"}
+                              fill={dotColor}
+                            />
+                            <polygon
+                              points="22,2 10,16 34,16"
+                              fill={fillColor}
+                            />
                           </svg>
                         );
                       })()}
