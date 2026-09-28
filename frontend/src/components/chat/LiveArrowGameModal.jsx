@@ -227,7 +227,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     const board = Array.from({ length: rows }, () => Array(cols).fill(null));
     const placed = [];
     const maxArrows = Math.floor(rows * cols * density);
-    const tailTypes = ['curved_s', 'curved_z', 'loop_tail', 'bent_left', 'bent_right', 'wavy_long'];
+    const tailTypes = ['ortho_z', 'ortho_u', 'ortho_stair', 'bent_hook', 'curved_s', 'curved_z', 'loop_tail'];
 
     for (let i = 0; i < maxArrows; i++) {
       let candidateCells = [];
@@ -607,27 +607,44 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     const tailType = arrow.tailType || 'curved_s';
     let pathD = "M 22 14 C 6 22, 38 32, 22 44";
 
-    if (tailType === 'curved_z') {
+    if (tailType === 'ortho_z') {
+      pathD = "M 22 46 L 22 30 L 10 30 L 10 16 L 22 16 L 22 14";
+    } else if (tailType === 'ortho_u') {
+      pathD = "M 22 46 L 36 46 L 36 24 L 22 24 L 22 14";
+    } else if (tailType === 'ortho_stair') {
+      pathD = "M 22 46 L 22 36 L 10 36 L 10 24 L 34 24 L 34 14 L 22 14";
+    } else if (tailType === 'bent_hook') {
+      pathD = "M 22 46 L 8 46 L 8 18 L 22 18 L 22 14";
+    } else if (tailType === 'curved_z') {
       pathD = "M 22 14 C 38 20, 6 34, 22 44";
     } else if (tailType === 'loop_tail') {
       pathD = "M 22 14 C 38 18, 38 34, 22 30 C 10 26, 10 40, 22 44";
-    } else if (tailType === 'bent_left') {
-      pathD = "M 22 14 C 2 20, 6 36, 22 44";
-    } else if (tailType === 'bent_right') {
-      pathD = "M 22 14 C 42 20, 38 36, 22 44";
-    } else if (tailType === 'wavy_long') {
-      pathD = "M 22 14 C 2 22, 42 30, 22 46";
     }
 
     const svgSize = isMobile
-      ? (gridRows >= 8 ? '24' : '28')
-      : (gridRows >= 8 ? '26' : '30');
+      ? (gridRows >= 8 ? '26' : '30')
+      : (gridRows >= 8 ? '28' : '32');
+
+    const isShaking = shakingId === arrow.id;
+    const strokeColor = isShaking ? '#ef4444' : '#38bdf8';
+    const fillColor = isShaking ? '#ef4444' : '#38bdf8';
+    const dotColor = isShaking ? '#ef4444' : '#ec4899';
 
     return (
-      <svg width={svgSize} height={svgSize} viewBox="0 0 44 48" style={{ overflow: 'visible' }}>
-        <path d={pathD} stroke="#38bdf8" strokeWidth="3.8" strokeLinecap="round" fill="none" />
-        <circle cx="22" cy="44" r="2.5" fill="#ec4899" />
-        <polygon points="22,2 10,16 34,16" fill="#38bdf8" />
+      <svg
+        width={svgSize}
+        height={svgSize}
+        viewBox="0 0 44 48"
+        style={{
+          overflow: 'visible',
+          filter: isShaking
+            ? 'drop-shadow(0 0 10px #ef4444)'
+            : 'drop-shadow(0 0 3px rgba(56, 189, 248, 0.4))'
+        }}
+      >
+        <path d={pathD} stroke={strokeColor} strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        <circle cx="22" cy="44" r="2.5" fill={dotColor} />
+        <polygon points="22,2 10,16 34,16" fill={fillColor} />
       </svg>
     );
   };
@@ -821,20 +838,22 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
           background: 'radial-gradient(circle at center, #0f172a 0%, #050b18 100%)'
         }}>
 
-          {/* Interactive Arrow Grid */}
+          {/* Interactive Arrow Grid Canvas (Seamless Open Maze) */}
           <div style={{
             position: 'relative',
             width: isMobile ? 'min(440px, 94vw)' : 'min(430px, 85vw)',
             height: isMobile ? 'min(440px, 94vw)' : 'min(430px, 85vw)',
-            background: 'linear-gradient(135deg, #0b1329 0%, #171e38 100%)',
+            background: 'radial-gradient(circle at center, #0b1329 0%, #030712 100%)',
+            backgroundImage: 'linear-gradient(rgba(56, 189, 248, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(56, 189, 248, 0.06) 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
             borderRadius: '24px',
             border: '2px solid rgba(255, 255, 255, 0.15)',
-            padding: gridRows >= 8 ? (isMobile ? '6px' : '8px') : (isMobile ? '10px' : '12px'),
-            boxShadow: 'inset 0 0 30px rgba(0,0,0,0.7), 0 10px 30px rgba(0,0,0,0.6)',
+            padding: '8px',
+            boxShadow: 'inset 0 0 30px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.6)',
             display: 'grid',
             gridTemplateRows: `repeat(${gridRows}, 1fr)`,
             gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
-            gap: gridRows >= 8 ? '3px' : (isMobile ? '4px' : '6px')
+            gap: '0px'
           }}>
             {!isGameOver && grid.map((rowArr, r) =>
               rowArr.map((arrow, c) => {
@@ -871,13 +890,10 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                     style={{
                       width: '100%',
                       height: '100%',
-                      background: isShaking
-                        ? 'rgba(239, 68, 68, 0.4)'
-                        : 'radial-gradient(circle, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)',
-                      border: isShaking
-                        ? '2px solid #ef4444'
-                        : '1px solid rgba(255, 255, 255, 0.18)',
-                      borderRadius: gridRows >= 8 ? (isMobile ? '10px' : '12px') : (isMobile ? '14px' : '16px'),
+                      background: 'transparent',
+                      border: 'none',
+                      outline: 'none',
+                      borderRadius: '0px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
@@ -886,7 +902,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                       position: 'relative',
                       zIndex: isFlying ? 100 : 1,
                       animation: isShaking ? 'shake 0.4s ease' : 'none',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                      boxShadow: 'none',
                       overflow: 'visible',
                       ...flightStyle
                     }}
