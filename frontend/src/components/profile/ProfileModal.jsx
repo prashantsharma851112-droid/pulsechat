@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Upload, Camera, Lock, User as UserIcon, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Upload, Camera, Lock, User as UserIcon, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { compressImage, parseSafeJson } from '../../utils/imageCompressor';
 
@@ -242,9 +242,13 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-card modal-responsive" style={{ maxWidth: '460px' }}>
-        <div className="modal-header">
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal-card modal-responsive"
+        onClick={e => e.stopPropagation()}
+        style={{ maxWidth: '460px', width: '100%', maxHeight: '90dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      >
+        <div className="modal-header" style={{ flexShrink: 0 }}>
           <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)', fontWeight: 600 }}>
             Account Settings
           </h3>
@@ -257,7 +261,8 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
           borderBottom: '1px solid var(--border)',
           background: 'var(--bg-card)',
           padding: '4px 8px 0 8px',
-          gap: '6px'
+          gap: '6px',
+          flexShrink: 0
         }}>
           <button
             onClick={() => setActiveTab('profile')}
@@ -306,7 +311,7 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
         </div>
 
         {activeTab === 'profile' ? (
-          <div style={{ padding: '1.5rem' }}>
+          <div style={{ padding: '1.5rem', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
             {profileError && (
               <div style={{
                 display: 'flex',
@@ -407,6 +412,47 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
               ))}
             </div>
 
+            {/* Instant DP Save Prompt Banner when a new avatar is selected */}
+            {avatar !== user?.avatar && (
+              <div style={{
+                marginBottom: '1.25rem',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(16, 185, 129, 0.15) 100%)',
+                border: '1.5px solid var(--accent)',
+                padding: '12px 16px',
+                borderRadius: '16px',
+                textAlign: 'center',
+                boxShadow: '0 4px 14px rgba(0,0,0,0.15)'
+              }}>
+                <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Sparkles size={16} color="var(--accent)" /> New Profile Photo Selected!
+                </span>
+                <button
+                  type="button"
+                  onClick={handleSaveProfile}
+                  className="btn-primary"
+                  disabled={loading}
+                  style={{
+                    padding: '8px 22px',
+                    borderRadius: '20px',
+                    fontSize: '0.88rem',
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                  {loading ? 'Saving DP...' : 'Save New DP Now'}
+                </button>
+              </div>
+            )}
+
             {/* Username Handle */}
             <div style={{ marginBottom: '1rem' }}>
               <label className="form-label">Username (@handle)</label>
@@ -451,7 +497,7 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
           </div>
         ) : (
           /* Password Change Tab */
-          <form onSubmit={handleChangePassword} style={{ padding: '1.5rem' }}>
+          <form onSubmit={handleChangePassword} style={{ padding: '1.5rem', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
             {passError && (
               <div style={{
                 display: 'flex',
