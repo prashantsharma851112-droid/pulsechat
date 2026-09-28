@@ -326,6 +326,23 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
             className={userToDisplay?.isPro ? 'pro-neon-avatar pro-neon-avatar-lg' : ''}
             style={{ position: 'relative', display: 'inline-block', marginBottom: '0.75rem' }}
           >
+            {userToDisplay?.hasKingCrown && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '-18px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  fontSize: '1.6rem',
+                  filter: 'drop-shadow(0 2px 6px rgba(245, 158, 11, 0.9))',
+                  zIndex: 10,
+                  pointerEvents: 'none'
+                }}
+                title="👑 #1 Leaderboard King Champion"
+              >
+                👑
+              </div>
+            )}
             <img
               src={validAvatar}
               alt={userToDisplay.displayName}
@@ -335,7 +352,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                 height: '100px',
                 borderRadius: '50%',
                 objectFit: 'cover',
-                border: userToDisplay?.isPro ? 'none' : '4px solid var(--bg-card)',
+                border: userToDisplay?.hasKingCrown ? '3.5px solid #fbbf24' : (userToDisplay?.isPro ? 'none' : '4px solid var(--bg-card)'),
                 boxShadow: userToDisplay?.isPro ? 'none' : '0 8px 24px rgba(0,0,0,0.3)',
                 cursor: 'pointer',
                 transition: 'transform 0.2s ease'

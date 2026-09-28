@@ -1144,6 +1144,23 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             }}
             title="Click to view full photo"
           >
+            {user?.hasKingCrown && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '-12px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  fontSize: '1.2rem',
+                  filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.9))',
+                  zIndex: 10,
+                  pointerEvents: 'none'
+                }}
+                title="👑 #1 Leaderboard King Champion"
+              >
+                👑
+              </div>
+            )}
             <img
               src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.username || 'Pulse')}`}
               alt="Profile"
@@ -1156,7 +1173,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 height: '44px',
                 borderRadius: '50%',
                 objectFit: 'cover',
-                border: user?.isPro ? 'none' : '2px solid var(--accent)',
+                border: user?.hasKingCrown ? '2.5px solid #fbbf24' : (user?.isPro ? 'none' : '2px solid var(--accent)'),
                 cursor: 'pointer'
               }}
             />

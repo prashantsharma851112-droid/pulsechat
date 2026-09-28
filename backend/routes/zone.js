@@ -133,9 +133,50 @@ router.get('/daily-task', authMiddleware, async (req, res) => {
   }
 });
 
+// Helper to evaluate and sync Leaderboard Rank 1 King Crown strictly to the #1 top scorer
+async function syncLeaderboardRank1Crown(io) {
+  try {
+    const topScoreDoc = await GameScore.findOne({})
+      .sort({ score: -1, level: -1, gamesPlayed: -1 })
+      .lean();
+
+    if (topScoreDoc && topScoreDoc.userId) {
+      const topUserId = topScoreDoc.userId;
+
+      // 1. Remove hasKingCrown from all users who are not currently #1
+      await User.updateMany(
+        { id: { $ne: topUserId }, hasKingCrown: true },
+        { $set: { hasKingCrown: false } }
+      );
+
+      // 2. Set hasKingCrown = true for the current Rank 1 Champion user
+      const updatedKing = await User.findOneAndUpdate(
+        { id: topUserId },
+        { $set: { hasKingCrown: true, kingCrownExpiresAt: new Date(Date.now() + 365 * 24 * 3600 * 1000) } },
+        { new: true }
+      ).lean();
+
+      if (io && updatedKing) {
+        io.emit('user_profile_updated', {
+          userId: topUserId,
+          hasKingCrown: true,
+          updates: { hasKingCrown: true }
+        });
+      }
+      return topUserId;
+    }
+  } catch (err) {
+    console.error('Error syncing rank 1 king crown:', err);
+  }
+  return null;
+}
+
 // Fetch Mini-Games Leaderboard permanently from MongoDB GameScore
 router.get('/leaderboard', authMiddleware, async (req, res) => {
   try {
+    const io = req.app.get('io');
+    const rank1UserId = await syncLeaderboardRank1Crown(io);
+
     const scores = await GameScore.find({})
       .sort({ score: -1, level: -1, gamesPlayed: -1 })
       .limit(30)
@@ -153,12 +194,8 @@ router.get('/leaderboard', authMiddleware, async (req, res) => {
 
     const leaderboardList = scores.map((s, idx) => {
       const uDoc = userMap.get(s.userId);
-      const hasCrown = Boolean(
-        uDoc &&
-        uDoc.hasKingCrown &&
-        uDoc.kingCrownExpiresAt &&
-        new Date(uDoc.kingCrownExpiresAt) > new Date()
-      );
+      const isRank1 = idx === 0 || (rank1UserId && s.userId === rank1UserId);
+      const hasCrown = isRank1 || Boolean(uDoc && uDoc.hasKingCrown);
 
       return {
         id: s.userId || `score_${idx}`,
@@ -169,7 +206,7 @@ router.get('/leaderboard', authMiddleware, async (req, res) => {
         level: s.level || 1,
         gamesPlayed: s.gamesPlayed || 1,
         hasKingCrown: hasCrown,
-        isDailyChampion: idx === 0,
+        isDailyChampion: isRank1,
         timestamp: s.updatedAt
       };
     });
@@ -247,17 +284,22 @@ router.post('/game-score', authMiddleware, async (req, res) => {
       });
     }
 
+    const io = req.app.get('io');
+
+    // Dynamically evaluate and transfer Rank 1 King Crown to whichever player is #1 on Leaderboard
+    const rank1UserId = await syncLeaderboardRank1Crown(io);
+    const isNowRank1 = rank1UserId === resolvedUserId;
+
     // Performance Sparks earned for playing
     let earnedSparks = Math.min(Math.floor(rawScore / 50), 50);
 
-    // Daily Gaming Task & 7-Day Streak Evaluation
+    // Daily Gaming Task & Streak Evaluation
     const todayStr = new Date().toISOString().split('T')[0];
     const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
     let taskCompletedToday = user.lastGamingTaskDate === todayStr;
     let dailyTaskSparks = 0;
     let newStreak = user.gamingStreakCount || 0;
-    let unlockedKingCrown = false;
 
     if (!taskCompletedToday) {
       taskCompletedToday = true;
@@ -269,34 +311,22 @@ router.post('/game-score', authMiddleware, async (req, res) => {
         newStreak = 1;
       }
 
-      if (newStreak >= 7) {
-        newStreak = 7;
-        unlockedKingCrown = true;
-        user.hasKingCrown = true;
-        user.kingCrownExpiresAt = new Date(Date.now() + 24 * 3600 * 1000); // 24 Hours King Crown on DP!
-      }
-
       user.lastGamingTaskDate = todayStr;
       user.gamingStreakCount = newStreak;
     }
 
-    // Check King Crown Expiry
-    if (user.hasKingCrown && user.kingCrownExpiresAt && new Date(user.kingCrownExpiresAt) <= new Date()) {
+    if (isNowRank1) {
+      user.hasKingCrown = true;
+      user.kingCrownExpiresAt = new Date(Date.now() + 365 * 24 * 3600 * 1000);
+    } else {
       user.hasKingCrown = false;
     }
 
     // Daily #1 Champion Reward (+100 Sparks)
     let dailyRankOneSparks = 0;
-    const currentLeaderboard = await GameScore.find({})
-      .sort({ score: -1, level: -1, gamesPlayed: -1 })
-      .limit(1)
-      .lean();
-
-    if (currentLeaderboard.length > 0 && currentLeaderboard[0].userId === resolvedUserId) {
-      if (user.claimedDailyFirstReward !== todayStr) {
-        dailyRankOneSparks = 100;
-        user.claimedDailyFirstReward = todayStr;
-      }
+    if (isNowRank1 && user.claimedDailyFirstReward !== todayStr) {
+      dailyRankOneSparks = 100;
+      user.claimedDailyFirstReward = todayStr;
     }
 
     const totalSparksGained = earnedSparks + dailyTaskSparks + dailyRankOneSparks;
@@ -319,12 +349,8 @@ router.post('/game-score', authMiddleware, async (req, res) => {
 
     const leaderboardList = topScores.map((s, idx) => {
       const uDoc = userMap.get(s.userId);
-      const hasCrown = Boolean(
-        uDoc &&
-        uDoc.hasKingCrown &&
-        uDoc.kingCrownExpiresAt &&
-        new Date(uDoc.kingCrownExpiresAt) > new Date()
-      );
+      const isRank1 = idx === 0 || s.userId === rank1UserId;
+      const hasCrown = isRank1 || Boolean(uDoc && uDoc.hasKingCrown);
 
       return {
         id: s.userId || `score_${idx}`,
@@ -335,18 +361,17 @@ router.post('/game-score', authMiddleware, async (req, res) => {
         level: s.level || 1,
         gamesPlayed: s.gamesPlayed || 1,
         hasKingCrown: hasCrown,
-        isDailyChampion: idx === 0,
+        isDailyChampion: isRank1,
         timestamp: s.updatedAt
       };
     });
 
-    const io = req.app.get('io');
     if (io) {
       io.emit('leaderboard_updated', leaderboardList);
       io.to(`user_${resolvedUserId}`).emit('user_profile_updated', {
         userId: resolvedUserId,
         pulseSparks: user.pulseSparks,
-        hasKingCrown: user.hasKingCrown,
+        hasKingCrown: isNowRank1,
         gamingStreakCount: user.gamingStreakCount
       });
     }
@@ -358,8 +383,8 @@ router.post('/game-score', authMiddleware, async (req, res) => {
       dailyRankOneBonus: dailyRankOneSparks,
       newSparksBalance: user.pulseSparks,
       streakDays: user.gamingStreakCount,
-      unlockedKingCrown,
-      hasKingCrown: Boolean(user.hasKingCrown && user.kingCrownExpiresAt && new Date(user.kingCrownExpiresAt) > new Date()),
+      unlockedKingCrown: isNowRank1,
+      hasKingCrown: isNowRank1,
       leaderboard: leaderboardList
     });
   } catch (err) {

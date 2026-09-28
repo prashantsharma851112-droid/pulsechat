@@ -336,6 +336,23 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
                 className={user?.isPro ? 'pro-neon-avatar pro-neon-avatar-lg' : ''}
                 style={{ position: 'relative', display: 'inline-block' }}
               >
+                {user?.hasKingCrown && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '-18px',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      fontSize: '1.6rem',
+                      filter: 'drop-shadow(0 2px 6px rgba(245, 158, 11, 0.9))',
+                      zIndex: 10,
+                      pointerEvents: 'none'
+                    }}
+                    title="👑 #1 Leaderboard King Champion"
+                  >
+                    👑
+                  </div>
+                )}
                 <img
                   src={avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}
                   alt="Current DP"
@@ -345,7 +362,7 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
                     height: '96px',
                     borderRadius: '50%',
                     objectFit: 'cover',
-                    border: user?.isPro ? 'none' : '3px solid var(--accent)',
+                    border: user?.hasKingCrown ? '3.5px solid #fbbf24' : (user?.isPro ? 'none' : '3px solid var(--accent)'),
                     boxShadow: user?.isPro ? 'none' : '0 8px 20px rgba(0,0,0,0.3)',
                     cursor: 'pointer'
                   }}
