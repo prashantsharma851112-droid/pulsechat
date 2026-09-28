@@ -157,6 +157,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
   const { socket } = useContext(SocketContext);
 
   const [mode, setMode] = useState('versus'); // 'versus' | 'coop'
+  const [level, setLevel] = useState(() => parseInt(localStorage.getItem('pulsechat_arrow_level') || '1', 10));
   const [grid, setGrid] = useState([]);
   const [gridRows, setGridRows] = useState(7);
   const [gridCols, setGridCols] = useState(7);
@@ -165,7 +166,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
   const [myScore, setMyScore] = useState(0);
   const [partnerScore, setPartnerScore] = useState(0);
   const [coopScore, setCoopScore] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(45);
+  const [timeLeft, setTimeLeft] = useState(60);
 
   const [gameStarted, setGameStarted] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
@@ -213,11 +214,20 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
   useEffect(() => { flyingIdsRef.current = flyingIds; }, [flyingIds]);
   useEffect(() => { gridRef.current = grid; }, [grid]);
 
+  // Level configuration helper (Grid size, arrow density, time limit scaling)
+  const getGridConfig = (lvl) => {
+    if (lvl <= 1) return { rows: 6, cols: 6, density: 0.78, time: 50 };
+    if (lvl <= 3) return { rows: 7, cols: 7, density: 0.82, time: 60 };
+    if (lvl <= 5) return { rows: 8, cols: 8, density: 0.85, time: 75 };
+    return { rows: 9, cols: 9, density: 0.88, time: 90 };
+  };
+
   // Generate a 100% guaranteed solvable Arrow Puzzle board in reverse order
-  const generateSolvableBoard = (rows = 7, cols = 7, density = 0.72) => {
+  const generateSolvableBoard = (rows = 7, cols = 7, density = 0.80) => {
     const board = Array.from({ length: rows }, () => Array(cols).fill(null));
     const placed = [];
     const maxArrows = Math.floor(rows * cols * density);
+    const tailTypes = ['curved_s', 'curved_z', 'loop_tail', 'bent_left', 'bent_right', 'wavy_long'];
 
     for (let i = 0; i < maxArrows; i++) {
       let candidateCells = [];
@@ -249,7 +259,8 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
 
       const pick = candidateCells[Math.floor(Math.random() * candidateCells.length)];
       const id = `arr_${pick.r}_${pick.c}_${i}`;
-      const arrowObj = { id, r: pick.r, c: pick.c, dir: pick.dir };
+      const tailType = tailTypes[Math.floor(Math.random() * tailTypes.length)];
+      const arrowObj = { id, r: pick.r, c: pick.c, dir: pick.dir, tailType };
       board[pick.r][pick.c] = arrowObj;
       placed.push(arrowObj);
     }
@@ -258,8 +269,14 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
   };
 
   // Start new game & broadcast to socket (Wait for Start Match button to trigger timer)
-  const startNewGame = (gameMode = mode) => {
-    const { board, total } = generateSolvableBoard(7, 7, 0.72);
+  const startNewGame = (gameMode = mode, targetLevel = level) => {
+    const { rows, cols, density, time } = getGridConfig(targetLevel);
+    setGridRows(rows);
+    setGridCols(cols);
+    setLevel(targetLevel);
+    localStorage.setItem('pulsechat_arrow_level', targetLevel.toString());
+
+    const { board, total } = generateSolvableBoard(rows, cols, density);
     setGrid(board);
     gridRef.current = board;
     setTotalArrows(total);
@@ -273,7 +290,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     partnerScoreRef.current = 0;
     setCoopScore(0);
     coopScoreRef.current = 0;
-    setTimeLeft(45);
+    setTimeLeft(time);
     setGameStarted(false);
     setIsGameOver(false);
     setWinner(null);
@@ -286,7 +303,11 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
         hostId: myId,
         mode: gameMode,
         board,
-        total
+        total,
+        rows,
+        cols,
+        level: targetLevel,
+        time
       });
     }
   };
@@ -306,6 +327,14 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     socket.emit('join_chat', chatId);
 
     const handleGameStart = (data) => {
+      if (data.rows && data.cols) {
+        setGridRows(data.rows);
+        setGridCols(data.cols);
+      }
+      if (data.level) {
+        setLevel(data.level);
+        localStorage.setItem('pulsechat_arrow_level', data.level.toString());
+      }
       setGrid(data.board);
       gridRef.current = data.board;
       setTotalArrows(data.total);
@@ -319,7 +348,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
       partnerScoreRef.current = 0;
       setCoopScore(0);
       coopScoreRef.current = 0;
-      setTimeLeft(45);
+      setTimeLeft(data.time || 60);
       setGameStarted(false);
       setIsGameOver(false);
       setWinner(null);
@@ -405,7 +434,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
   // Initial local setup if board is empty
   useEffect(() => {
     if (grid.length === 0) {
-      startNewGame('versus');
+      startNewGame('versus', level);
     }
   }, []);
 
@@ -432,6 +461,8 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
 
     const clearedSet = clearedIdsRef.current;
     const flyingSet = flyingIdsRef.current;
+    const rows = (currentBoard && currentBoard.length) || gridRows;
+    const cols = (currentBoard && currentBoard[0] && currentBoard[0].length) || gridCols;
 
     while (currR >= 0 && currR < gridRows && currC >= 0 && currC < gridCols) {
       const item = currentBoard[currR][currC];
@@ -542,6 +573,12 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
       if (updateUserProfile) updateUserProfile({ ...userRef.current, pulseSparks: curSparks + 50 });
     }
 
+    if (isMeWinner || clearedAll) {
+      const nextLvl = level + 1;
+      setLevel(nextLvl);
+      localStorage.setItem('pulsechat_arrow_level', nextLvl.toString());
+    }
+
     setWinner({ title: winnerTitle, details: winDetails, isMeWinner });
 
     const token = localStorage.getItem('pulsechat_token');
@@ -564,6 +601,35 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
         })
         .catch(() => {});
     }
+  };
+
+  const renderArrowSvg = (arrow) => {
+    const tailType = arrow.tailType || 'curved_s';
+    let pathD = "M 22 14 C 6 22, 38 32, 22 44";
+
+    if (tailType === 'curved_z') {
+      pathD = "M 22 14 C 38 20, 6 34, 22 44";
+    } else if (tailType === 'loop_tail') {
+      pathD = "M 22 14 C 38 18, 38 34, 22 30 C 10 26, 10 40, 22 44";
+    } else if (tailType === 'bent_left') {
+      pathD = "M 22 14 C 2 20, 6 36, 22 44";
+    } else if (tailType === 'bent_right') {
+      pathD = "M 22 14 C 42 20, 38 36, 22 44";
+    } else if (tailType === 'wavy_long') {
+      pathD = "M 22 14 C 2 22, 42 30, 22 46";
+    }
+
+    const svgSize = isMobile
+      ? (gridRows >= 8 ? '24' : '28')
+      : (gridRows >= 8 ? '26' : '30');
+
+    return (
+      <svg width={svgSize} height={svgSize} viewBox="0 0 44 48" style={{ overflow: 'visible' }}>
+        <path d={pathD} stroke="#38bdf8" strokeWidth="3.8" strokeLinecap="round" fill="none" />
+        <circle cx="22" cy="44" r="2.5" fill="#ec4899" />
+        <polygon points="22,2 10,16 34,16" fill="#38bdf8" />
+      </svg>
+    );
   };
 
   return (
@@ -630,7 +696,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
               </div>
               <div>
                 <h3 style={{ margin: 0, fontSize: isMobile ? '1.05rem' : '1.15rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  Live Arrow Battle ⚡ <span style={{ fontSize: '0.75rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.18)', padding: '2px 8px', borderRadius: '10px' }}>2-Player</span>
+                  Live Arrow Battle ⚡ <span style={{ fontSize: '0.75rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.18)', padding: '2px 8px', borderRadius: '10px' }}>Level {level}</span>
                 </h3>
                 <span style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.75)' }}>
                   Playing live with <strong>{partnerName}</strong>
@@ -645,7 +711,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
           {/* Mode Selector Tabs */}
           <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.35)', padding: '4px', borderRadius: '12px' }}>
             <button
-              onClick={() => startNewGame('versus')}
+              onClick={() => startNewGame('versus', level)}
               style={{
                 flex: 1,
                 padding: '8px',
@@ -665,7 +731,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
               <Swords size={14} /> 1v1 Versus Race
             </button>
             <button
-              onClick={() => startNewGame('coop')}
+              onClick={() => startNewGame('coop', level)}
               style={{
                 flex: 1,
                 padding: '8px',
@@ -715,11 +781,14 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', background: 'rgba(56,189,248,0.15)', padding: '3px 8px', borderRadius: '8px' }}>
+              🎯 {clearedIds.size}/{totalArrows}
+            </span>
             <span style={{ fontSize: '0.86rem', fontWeight: 900, color: !gameStarted ? '#fbbf24' : (timeLeft <= 10 ? '#ef4444' : '#10b981') }}>
               {!gameStarted ? '⏸️ Ready' : `⏳ ${timeLeft}s`}
             </span>
             <button
-              onClick={() => startNewGame(mode)}
+              onClick={() => startNewGame(mode, level)}
               style={{
                 background: 'rgba(255,255,255,0.12)',
                 color: '#fff',
@@ -741,7 +810,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
 
         {/* Game Canvas / Grid Wrapper */}
         <div style={{
-          padding: isMobile ? '12px' : '20px',
+          padding: isMobile ? '10px' : '16px',
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
@@ -752,20 +821,20 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
           background: 'radial-gradient(circle at center, #0f172a 0%, #050b18 100%)'
         }}>
 
-          {/* Interactive Arrow Grid (Bigger Board for Mobile) */}
+          {/* Interactive Arrow Grid */}
           <div style={{
             position: 'relative',
-            width: isMobile ? 'min(440px, 94vw)' : 'min(420px, 85vw)',
-            height: isMobile ? 'min(440px, 94vw)' : 'min(420px, 85vw)',
+            width: isMobile ? 'min(440px, 94vw)' : 'min(430px, 85vw)',
+            height: isMobile ? 'min(440px, 94vw)' : 'min(430px, 85vw)',
             background: 'linear-gradient(135deg, #0b1329 0%, #171e38 100%)',
             borderRadius: '24px',
             border: '2px solid rgba(255, 255, 255, 0.15)',
-            padding: isMobile ? '10px' : '12px',
+            padding: gridRows >= 8 ? (isMobile ? '6px' : '8px') : (isMobile ? '10px' : '12px'),
             boxShadow: 'inset 0 0 30px rgba(0,0,0,0.7), 0 10px 30px rgba(0,0,0,0.6)',
             display: 'grid',
             gridTemplateRows: `repeat(${gridRows}, 1fr)`,
             gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
-            gap: isMobile ? '5px' : '6px'
+            gap: gridRows >= 8 ? '3px' : (isMobile ? '4px' : '6px')
           }}>
             {!isGameOver && grid.map((rowArr, r) =>
               rowArr.map((arrow, c) => {
@@ -808,7 +877,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                       border: isShaking
                         ? '2px solid #ef4444'
                         : '1px solid rgba(255, 255, 255, 0.18)',
-                      borderRadius: isMobile ? '14px' : '16px',
+                      borderRadius: gridRows >= 8 ? (isMobile ? '10px' : '12px') : (isMobile ? '14px' : '16px'),
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
@@ -818,13 +887,11 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                       zIndex: isFlying ? 100 : 1,
                       animation: isShaking ? 'shake 0.4s ease' : 'none',
                       boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                      overflow: 'visible',
                       ...flightStyle
                     }}
                   >
-                    <svg width={isMobile ? '30' : '28'} height={isMobile ? '30' : '28'} viewBox="0 0 40 40">
-                      <line x1="20" y1="36" x2="20" y2="12" stroke="#38bdf8" strokeWidth="5" strokeLinecap="round" />
-                      <polygon points="20,2 8,18 32,18" fill="#38bdf8" />
-                    </svg>
+                    {renderArrowSvg(arrow)}
                   </button>
                 );
               })
@@ -861,11 +928,11 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                 </div>
 
                 <h2 style={{ margin: 0, fontSize: isMobile ? '1.25rem' : '1.4rem', fontWeight: 900, textAlign: 'center' }}>
-                  {mode === 'versus' ? '⚔️ 1v1 Arrow Race Ready!' : '🤝 Co-Op Arrow Quest Ready!'}
+                  {mode === 'versus' ? `⚔️ 1v1 Arrow Race (Level ${level})` : `🤝 Co-Op Arrow Quest (Level ${level})`}
                 </h2>
 
                 <p style={{ margin: 0, fontSize: '0.86rem', color: 'rgba(255,255,255,0.8)', textAlign: 'center', maxWidth: '280px' }}>
-                  Click below to start the timer and begin tapping arrows!
+                  {gridRows}x{gridCols} Grid with {totalArrows} Tangled Curved Arrows!
                 </p>
 
                 <button
@@ -978,29 +1045,29 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                   borderRadius: '20px',
                   border: '1px solid rgba(251, 191, 36, 0.3)'
                 }}>
-                  <Sparkles size={18} color="#fbbf24" /> +50 Pulse Sparks Credited!
+                  <Sparkles size={18} color="#fbbf24" /> Level {level} Unlocked! (+50 Sparks)
                 </div>
               </div>
 
-              <button
-                onClick={() => startNewGame(mode)}
-                className="btn-primary"
-                style={{
-                  marginTop: '16px',
-                  padding: '14px 36px',
-                  borderRadius: '18px',
-                  fontWeight: 900,
-                  fontSize: '1.1rem',
-                  background: 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
-                  boxShadow: '0 8px 30px rgba(236, 72, 153, 0.5)',
-                  border: 'none',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  zIndex: 20
-                }}
-              >
-                Play Next Round 🚀
-              </button>
+              <div style={{ display: 'flex', gap: '12px', zIndex: 20, marginTop: '16px' }}>
+                <button
+                  onClick={() => startNewGame(mode, level)}
+                  className="btn-primary"
+                  style={{
+                    padding: '14px 28px',
+                    borderRadius: '18px',
+                    fontWeight: 900,
+                    fontSize: '1.05rem',
+                    background: 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
+                    boxShadow: '0 8px 30px rgba(236, 72, 153, 0.5)',
+                    border: 'none',
+                    color: '#fff',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Play Level {level} 🚀
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -1008,3 +1075,4 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     </div>
   );
 }
+
