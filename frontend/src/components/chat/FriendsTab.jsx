@@ -756,6 +756,13 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                           className={friend.isPro ? 'pro-neon-avatar' : ''}
                           style={{ position: 'relative', flexShrink: 0 }}
                         >
+                          {friend.hasKingCrown ? (
+                            <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+                          ) : friend.hasSilverCrown ? (
+                            <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+                          ) : friend.hasStreakCrown ? (
+                            <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+                          ) : null}
                           <img
                             src={friend.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.username}`}
                             alt={friend.displayName}
@@ -764,7 +771,13 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                               height: '42px',
                               borderRadius: '50%',
                               objectFit: 'cover',
-                              border: friend.isPro ? 'none' : 'none'
+                              border: friend.hasKingCrown
+                                ? '2.5px solid #fbbf24'
+                                : friend.hasSilverCrown
+                                ? '2.5px solid #cbd5e1'
+                                : friend.hasStreakCrown
+                                ? '2.5px solid #f97316'
+                                : 'none'
                             }}
                             onClick={(e) => {
                               if (onOpenFullDp) {

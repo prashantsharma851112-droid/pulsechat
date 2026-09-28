@@ -134,6 +134,13 @@ export default function SettingsModal({
                 className={user?.isPro ? 'pro-neon-avatar' : ''}
                 style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
               >
+                {user?.hasKingCrown ? (
+                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+                ) : user?.hasSilverCrown ? (
+                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+                ) : user?.hasStreakCrown ? (
+                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+                ) : null}
                 <img
                   src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.username}`}
                   alt="DP"
@@ -146,7 +153,13 @@ export default function SettingsModal({
                     height: '48px',
                     borderRadius: '50%',
                     objectFit: 'cover',
-                    border: user?.isPro ? 'none' : '2px solid var(--accent)',
+                    border: user?.hasKingCrown
+                      ? '2.5px solid #fbbf24'
+                      : user?.hasSilverCrown
+                      ? '2.5px solid #cbd5e1'
+                      : user?.hasStreakCrown
+                      ? '2.5px solid #f97316'
+                      : (user?.isPro ? 'none' : '2px solid var(--accent)'),
                     cursor: 'pointer'
                   }}
                   title="Click to view full profile photo"

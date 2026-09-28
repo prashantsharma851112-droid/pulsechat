@@ -219,6 +219,13 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
               ? '0 0 12px rgba(245, 158, 11, 0.45)'
               : 'none'
           }}>
+            {user?.hasKingCrown ? (
+              <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+            ) : user?.hasSilverCrown ? (
+              <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+            ) : user?.hasStreakCrown ? (
+              <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+            ) : null}
             <img
               src={user?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.username || 'user'}`}
               alt="My Vibe"
@@ -284,6 +291,13 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
                   : '0 0 12px rgba(236, 72, 153, 0.45)',
                 animation: viewed ? 'none' : 'pulseGlow 2.5s infinite alternate'
               }}>
+                {group.hasKingCrown ? (
+                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+                ) : group.hasSilverCrown ? (
+                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+                ) : group.hasStreakCrown ? (
+                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+                ) : null}
                 <img
                   src={group.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${group.username || 'vibe'}`}
                   alt={group.displayName}

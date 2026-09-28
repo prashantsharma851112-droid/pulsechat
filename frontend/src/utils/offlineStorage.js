@@ -382,7 +382,10 @@ export function updateUserProfileInStorage(targetUserId, updates, currentUserId)
       ...(updates.customBadge !== undefined && { customBadge: updates.customBadge }),
       ...(updates.pulseSparks !== undefined && { pulseSparks: updates.pulseSparks }),
       ...(updates.hasUsed3DTrial !== undefined && { hasUsed3DTrial: updates.hasUsed3DTrial }),
-      ...(updates.claimedFreeSparks !== undefined && { claimedFreeSparks: updates.claimedFreeSparks })
+      ...(updates.claimedFreeSparks !== undefined && { claimedFreeSparks: updates.claimedFreeSparks }),
+      ...(updates.hasKingCrown !== undefined && { hasKingCrown: updates.hasKingCrown }),
+      ...(updates.hasSilverCrown !== undefined && { hasSilverCrown: updates.hasSilverCrown }),
+      ...(updates.hasStreakCrown !== undefined && { hasStreakCrown: updates.hasStreakCrown })
     };
   };
 

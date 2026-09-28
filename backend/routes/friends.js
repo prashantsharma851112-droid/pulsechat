@@ -19,7 +19,10 @@ const getSafeUser = (u) => {
     isPro: Boolean(u.isPro),
     proTier: u.proTier || null,
     customBadge: u.customBadge || null,
-    pulseSparks: u.pulseSparks || 0
+    pulseSparks: u.pulseSparks || 0,
+    hasKingCrown: Boolean(u.hasKingCrown),
+    hasSilverCrown: Boolean(u.hasSilverCrown),
+    hasStreakCrown: Boolean(u.hasStreakCrown)
   };
 };
 
@@ -67,7 +70,7 @@ router.get('/', authMiddleware, async (req, res) => {
         { _id: { $in: friendIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } }
       ]
     })
-      .select('id displayName username avatar status isEmailVerified isPro proTier customBadge pulseSparks')
+      .select('id displayName username avatar status isEmailVerified isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown')
       .lean();
 
     res.json({ friends: friends.map(getSafeUser) });

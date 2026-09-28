@@ -360,11 +360,11 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
                       left: '50%',
                       transform: 'translateX(-50%)',
                       fontSize: '1.6rem',
-                      filter: 'drop-shadow(0 2px 6px rgba(205, 127, 50, 0.95))',
+                      filter: 'drop-shadow(0 2px 6px rgba(203, 213, 225, 0.95))',
                       zIndex: 10,
                       pointerEvents: 'none'
                     }}
-                    title="👑 #2 Bronze Leaderboard Champion"
+                    title="👑 #2 Silver Leaderboard Champion"
                   >
                     👑
                   </div>
@@ -397,7 +397,7 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
                     border: user?.hasKingCrown
                       ? '3.5px solid #fbbf24'
                       : user?.hasSilverCrown
-                      ? '3.5px solid #cd7f32'
+                      ? '3.5px solid #cbd5e1'
                       : user?.hasStreakCrown
                       ? '3.5px solid #f97316'
                       : (user?.isPro ? 'none' : '3px solid var(--accent)'),

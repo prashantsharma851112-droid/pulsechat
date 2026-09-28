@@ -20,7 +20,7 @@ router.get('/', authMiddleware, async (req, res) => {
       ...(myUsername ? { username: { $ne: myUsername } } : {})
     })
       .sort({ createdAt: -1, _id: -1 })
-      .select('id username displayName avatar isEmailVerified status email createdAt isPro proTier customBadge pulseSparks')
+      .select('id username displayName avatar isEmailVerified status email createdAt isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown streakCrownExpiresAt kingCrownExpiresAt')
       .limit(200)
       .lean();
     res.json(results);
@@ -68,7 +68,7 @@ router.get('/search', authMiddleware, async (req, res) => {
       ]
     })
     .sort({ createdAt: -1, _id: -1 })
-    .select('id username displayName avatar isEmailVerified status email createdAt isPro proTier customBadge pulseSparks')
+    .select('id username displayName avatar isEmailVerified status email createdAt isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown streakCrownExpiresAt kingCrownExpiresAt')
     .limit(50)
     .lean();
 
@@ -151,7 +151,10 @@ router.put('/profile', authMiddleware, async (req, res) => {
         proTier: userWithoutPass.proTier,
         customBadge: userWithoutPass.customBadge,
         pulseSparks: userWithoutPass.pulseSparks,
-        hideOnlineStatus: userWithoutPass.hideOnlineStatus
+        hideOnlineStatus: userWithoutPass.hideOnlineStatus,
+        hasKingCrown: Boolean(userWithoutPass.hasKingCrown),
+        hasSilverCrown: Boolean(userWithoutPass.hasSilverCrown),
+        hasStreakCrown: Boolean(userWithoutPass.hasStreakCrown)
       });
 
       if (hideOnlineStatus !== undefined && typeof req.app.get('updateUserOnlinePrivacy') === 'function') {
@@ -260,7 +263,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
         ...(isObjectId ? [{ _id: targetId }] : []),
         { username: targetId }
       ]
-    }).select('id username displayName avatar isEmailVerified status createdAt isPro proTier customBadge pulseSparks').lean();
+    }).select('id username displayName avatar isEmailVerified status createdAt isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown streakCrownExpiresAt kingCrownExpiresAt').lean();
 
     if (!targetUser) {
       return res.status(404).json({ error: 'User not found' });

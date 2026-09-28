@@ -72,6 +72,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const [chatAvatar, setChatAvatar] = useState(() => activeChat?.avatar || '');
   const [chatDisplayName, setChatDisplayName] = useState(() => activeChat?.displayName || activeChat?.name || '');
+  const [chatHasKingCrown, setChatHasKingCrown] = useState(() => Boolean(activeChat?.hasKingCrown));
+  const [chatHasSilverCrown, setChatHasSilverCrown] = useState(() => Boolean(activeChat?.hasSilverCrown));
+  const [chatHasStreakCrown, setChatHasStreakCrown] = useState(() => Boolean(activeChat?.hasStreakCrown));
   const [chatIsPro, setChatIsPro] = useState(() => {
     if (activeChat?.isPro !== undefined) return Boolean(activeChat.isPro);
     if (user?.id) {
@@ -86,15 +89,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   useEffect(() => {
     setChatAvatar(activeChat?.avatar || '');
     setChatDisplayName(activeChat?.displayName || activeChat?.name || '');
+    setChatHasKingCrown(Boolean(activeChat?.hasKingCrown));
+    setChatHasSilverCrown(Boolean(activeChat?.hasSilverCrown));
+    setChatHasStreakCrown(Boolean(activeChat?.hasStreakCrown));
     let isProVal = activeChat?.isPro;
     if (isProVal === undefined && user?.id) {
       const cached = getCachedAllUsers(user.id)?.find(u =>
         u.id === activeChat?.id || u.id === activeChat?._id || (activeChat?.username && u.username === activeChat.username)
       );
-      if (cached?.isPro !== undefined) isProVal = cached.isPro;
+      if (cached) {
+        if (cached.isPro !== undefined) isProVal = cached.isPro;
+        if (cached.hasKingCrown !== undefined) setChatHasKingCrown(Boolean(cached.hasKingCrown));
+        if (cached.hasSilverCrown !== undefined) setChatHasSilverCrown(Boolean(cached.hasSilverCrown));
+        if (cached.hasStreakCrown !== undefined) setChatHasStreakCrown(Boolean(cached.hasStreakCrown));
+      }
     }
     setChatIsPro(Boolean(isProVal));
-  }, [activeChat?.id, activeChat?.avatar, activeChat?.displayName, activeChat?.name, activeChat?.isPro, user?.id]);
+  }, [activeChat?.id, activeChat?.avatar, activeChat?.displayName, activeChat?.name, activeChat?.isPro, activeChat?.hasKingCrown, activeChat?.hasSilverCrown, activeChat?.hasStreakCrown, user?.id]);
 
   // Fetch fresh profile on mount to guarantee VIP/Pro aura & badge are always up-to-date
   useEffect(() => {
@@ -118,6 +129,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               setChatDisplayName(userData.displayName);
               if (activeChat) activeChat.displayName = userData.displayName;
             }
+            if (userData.hasKingCrown !== undefined) {
+              setChatHasKingCrown(Boolean(userData.hasKingCrown));
+              if (activeChat) activeChat.hasKingCrown = Boolean(userData.hasKingCrown);
+            }
+            if (userData.hasSilverCrown !== undefined) {
+              setChatHasSilverCrown(Boolean(userData.hasSilverCrown));
+              if (activeChat) activeChat.hasSilverCrown = Boolean(userData.hasSilverCrown);
+            }
+            if (userData.hasStreakCrown !== undefined) {
+              setChatHasStreakCrown(Boolean(userData.hasStreakCrown));
+              if (activeChat) activeChat.hasStreakCrown = Boolean(userData.hasStreakCrown);
+            }
 
             // Sync with Sidebar recent chats and all users immediately (0ms)
             window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
@@ -132,7 +155,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   isPro: isProVal,
                   proTier: userData.proTier,
                   customBadge: userData.customBadge,
-                  pulseSparks: userData.pulseSparks
+                  pulseSparks: userData.pulseSparks,
+                  hasKingCrown: Boolean(userData.hasKingCrown),
+                  hasSilverCrown: Boolean(userData.hasSilverCrown),
+                  hasStreakCrown: Boolean(userData.hasStreakCrown)
                 }
               }
             }));
@@ -172,6 +198,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         }
         if (data.status) {
           if (activeChat) activeChat.status = data.status;
+        }
+        if (data.hasKingCrown !== undefined) {
+          setChatHasKingCrown(Boolean(data.hasKingCrown));
+          if (activeChat) activeChat.hasKingCrown = Boolean(data.hasKingCrown);
+        }
+        if (data.hasSilverCrown !== undefined) {
+          setChatHasSilverCrown(Boolean(data.hasSilverCrown));
+          if (activeChat) activeChat.hasSilverCrown = Boolean(data.hasSilverCrown);
+        }
+        if (data.hasStreakCrown !== undefined) {
+          setChatHasStreakCrown(Boolean(data.hasStreakCrown));
+          if (activeChat) activeChat.hasStreakCrown = Boolean(data.hasStreakCrown);
         }
 
         // Also instantly update message sender avatars in active chat
@@ -1638,6 +1676,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               className={!isGroup && chatIsPro ? 'pro-neon-avatar' : ''}
               style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
             >
+              {!isGroup && chatHasKingCrown ? (
+                <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+              ) : !isGroup && chatHasSilverCrown ? (
+                <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+              ) : !isGroup && chatHasStreakCrown ? (
+                <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+              ) : null}
               <img
                 src={chatAvatar || activeChat.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeChat.username || 'pulse'}`}
                 alt="Avatar"
@@ -1654,7 +1699,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   cursor: 'pointer',
                   objectFit: 'cover',
                   flexShrink: 0,
-                  border: (!isGroup && chatIsPro) ? 'none' : 'none'
+                  border: !isGroup && chatHasKingCrown
+                    ? '2.5px solid #fbbf24'
+                    : !isGroup && chatHasSilverCrown
+                    ? '2.5px solid #cbd5e1'
+                    : !isGroup && chatHasStreakCrown
+                    ? '2.5px solid #f97316'
+                    : (!isGroup && chatIsPro ? 'none' : 'none')
                 }}
                 title={isGroup ? 'Click for group details & members' : 'Click to view full screen DP'}
               />

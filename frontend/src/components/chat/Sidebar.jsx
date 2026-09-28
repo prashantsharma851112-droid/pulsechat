@@ -465,6 +465,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               if (fresh.isPro !== undefined) res.isPro = Boolean(fresh.isPro);
               if (fresh.proTier) res.proTier = fresh.proTier;
               if (fresh.customBadge !== undefined) res.customBadge = fresh.customBadge;
+              if (fresh.hasKingCrown !== undefined) res.hasKingCrown = Boolean(fresh.hasKingCrown);
+              if (fresh.hasSilverCrown !== undefined) res.hasSilverCrown = Boolean(fresh.hasSilverCrown);
+              if (fresh.hasStreakCrown !== undefined) res.hasStreakCrown = Boolean(fresh.hasStreakCrown);
             }
 
             const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
@@ -626,6 +629,18 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         }
         if (fresh.displayName && fresh.displayName !== item.displayName) {
           updated.displayName = fresh.displayName;
+          itemChanged = true;
+        }
+        if (fresh.hasKingCrown !== undefined && Boolean(fresh.hasKingCrown) !== Boolean(item.hasKingCrown)) {
+          updated.hasKingCrown = Boolean(fresh.hasKingCrown);
+          itemChanged = true;
+        }
+        if (fresh.hasSilverCrown !== undefined && Boolean(fresh.hasSilverCrown) !== Boolean(item.hasSilverCrown)) {
+          updated.hasSilverCrown = Boolean(fresh.hasSilverCrown);
+          itemChanged = true;
+        }
+        if (fresh.hasStreakCrown !== undefined && Boolean(fresh.hasStreakCrown) !== Boolean(item.hasStreakCrown)) {
+          updated.hasStreakCrown = Boolean(fresh.hasStreakCrown);
           itemChanged = true;
         }
         if (itemChanged) changed = true;
@@ -1168,11 +1183,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                   left: '50%',
                   transform: 'translateX(-50%)',
                   fontSize: '1.2rem',
-                  filter: 'drop-shadow(0 2px 5px rgba(205, 127, 50, 0.95))',
+                  filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))',
                   zIndex: 10,
                   pointerEvents: 'none'
                 }}
-                title="👑 #2 Bronze Leaderboard Champion"
+                title="👑 #2 Silver Leaderboard Champion"
               >
                 👑
               </div>
@@ -1208,7 +1223,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 border: user?.hasKingCrown
                   ? '2.5px solid #fbbf24'
                   : user?.hasSilverCrown
-                  ? '2.5px solid #cd7f32'
+                  ? '2.5px solid #cbd5e1'
                   : user?.hasStreakCrown
                   ? '2.5px solid #f97316'
                   : (user?.isPro ? 'none' : '2px solid var(--accent)'),
@@ -1902,6 +1917,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     className={!u.isGroup && u.isPro ? 'pro-neon-avatar' : ''}
                     style={{ position: 'relative', flexShrink: 0 }}
                   >
+                    {!u.isGroup && u.hasKingCrown ? (
+                      <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+                    ) : !u.isGroup && u.hasSilverCrown ? (
+                      <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+                    ) : !u.isGroup && u.hasStreakCrown ? (
+                      <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+                    ) : null}
                     <img
                       src={u.avatar || (u.isGroup
                         ? `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(u.name || 'Group')}`
@@ -1912,7 +1934,19 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                           ? `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(u.name || 'Group')}`
                           : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
                       }}
-                      style={{ width: '48px', height: '48px', borderRadius: u.isGroup ? '14px' : '50%', objectFit: 'cover' }}
+                      style={{
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: u.isGroup ? '14px' : '50%',
+                        objectFit: 'cover',
+                        border: !u.isGroup && u.hasKingCrown
+                          ? '2.5px solid #fbbf24'
+                          : !u.isGroup && u.hasSilverCrown
+                          ? '2.5px solid #cbd5e1'
+                          : !u.isGroup && u.hasStreakCrown
+                          ? '2.5px solid #f97316'
+                          : 'none'
+                      }}
                     />
                     {!u.isGroup && !silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
                   </div>
@@ -2039,6 +2073,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                       className={u.isPro ? 'pro-neon-avatar' : ''}
                       style={{ position: 'relative', flexShrink: 0 }}
                     >
+                      {u.hasKingCrown ? (
+                        <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+                      ) : u.hasSilverCrown ? (
+                        <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+                      ) : u.hasStreakCrown ? (
+                        <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+                      ) : null}
                       <img
                         src={u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`}
                         alt="Avatar"
@@ -2046,7 +2087,20 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                         onError={(e) => {
                           e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
                         }}
-                        style={{ width: '48px', height: '48px', borderRadius: '50%', cursor: 'pointer', objectFit: 'cover' }}
+                        style={{
+                          width: '48px',
+                          height: '48px',
+                          borderRadius: '50%',
+                          cursor: 'pointer',
+                          objectFit: 'cover',
+                          border: u.hasKingCrown
+                            ? '2.5px solid #fbbf24'
+                            : u.hasSilverCrown
+                            ? '2.5px solid #cbd5e1'
+                            : u.hasStreakCrown
+                            ? '2.5px solid #f97316'
+                            : 'none'
+                        }}
                         title="Click to view full screen DP"
                       />
                       {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
