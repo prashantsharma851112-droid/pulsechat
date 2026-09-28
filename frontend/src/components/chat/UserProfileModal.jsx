@@ -326,7 +326,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
             className={userToDisplay?.isPro ? 'pro-neon-avatar pro-neon-avatar-lg' : ''}
             style={{ position: 'relative', display: 'inline-block', marginBottom: '0.75rem' }}
           >
-            {userToDisplay?.hasKingCrown && (
+            {userToDisplay?.hasKingCrown ? (
               <div
                 style={{
                   position: 'absolute',
@@ -334,15 +334,47 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                   left: '50%',
                   transform: 'translateX(-50%)',
                   fontSize: '1.6rem',
-                  filter: 'drop-shadow(0 2px 6px rgba(245, 158, 11, 0.9))',
+                  filter: 'drop-shadow(0 2px 6px rgba(245, 158, 11, 0.95))',
                   zIndex: 10,
                   pointerEvents: 'none'
                 }}
-                title="👑 #1 Leaderboard King Champion"
+                title="👑 #1 Gold Leaderboard King"
               >
                 👑
               </div>
-            )}
+            ) : userToDisplay?.hasSilverCrown ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '-18px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  fontSize: '1.6rem',
+                  filter: 'drop-shadow(0 2px 6px rgba(205, 127, 50, 0.95))',
+                  zIndex: 10,
+                  pointerEvents: 'none'
+                }}
+                title="👑 #2 Bronze Leaderboard Champion"
+              >
+                👑
+              </div>
+            ) : userToDisplay?.hasStreakCrown ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '-18px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  fontSize: '1.6rem',
+                  filter: 'drop-shadow(0 2px 6px rgba(239, 68, 68, 0.95))',
+                  zIndex: 10,
+                  pointerEvents: 'none'
+                }}
+                title="👑 7-Day Gaming Streak Crown"
+              >
+                👑
+              </div>
+            ) : null}
             <img
               src={validAvatar}
               alt={userToDisplay.displayName}
@@ -352,7 +384,13 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                 height: '100px',
                 borderRadius: '50%',
                 objectFit: 'cover',
-                border: userToDisplay?.hasKingCrown ? '3.5px solid #fbbf24' : (userToDisplay?.isPro ? 'none' : '4px solid var(--bg-card)'),
+                border: userToDisplay?.hasKingCrown
+                  ? '3.5px solid #fbbf24'
+                  : userToDisplay?.hasSilverCrown
+                  ? '3.5px solid #cd7f32'
+                  : userToDisplay?.hasStreakCrown
+                  ? '3.5px solid #f97316'
+                  : (userToDisplay?.isPro ? 'none' : '4px solid var(--bg-card)'),
                 boxShadow: userToDisplay?.isPro ? 'none' : '0 8px 24px rgba(0,0,0,0.3)',
                 cursor: 'pointer',
                 transition: 'transform 0.2s ease'

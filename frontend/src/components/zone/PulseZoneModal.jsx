@@ -585,31 +585,55 @@ export default function PulseZoneModal({ onClose }) {
                       justifyContent: 'space-between',
                       padding: '12px 14px',
                       borderRadius: '16px',
-                      background: idx === 0 ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(234, 179, 8, 0.1) 100%)' : 'var(--hover-bg)',
-                      border: idx === 0 ? '1.5px solid rgba(245, 158, 11, 0.6)' : '1px solid var(--border)',
-                      boxShadow: idx === 0 ? '0 4px 18px rgba(245, 158, 11, 0.25)' : 'none'
+                      background: idx === 0
+                        ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(234, 179, 8, 0.1) 100%)'
+                        : idx === 1
+                        ? 'linear-gradient(135deg, rgba(205, 127, 50, 0.2) 0%, rgba(180, 83, 9, 0.1) 100%)'
+                        : 'var(--hover-bg)',
+                      border: idx === 0
+                        ? '1.5px solid rgba(245, 158, 11, 0.6)'
+                        : idx === 1
+                        ? '1.5px solid rgba(205, 127, 50, 0.6)'
+                        : '1px solid var(--border)',
+                      boxShadow: idx === 0
+                        ? '0 4px 18px rgba(245, 158, 11, 0.25)'
+                        : idx === 1
+                        ? '0 4px 18px rgba(205, 127, 50, 0.2)'
+                        : 'none'
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <span style={{ fontSize: '0.95rem', fontWeight: 900, color: idx === 0 ? '#f59e0b' : (idx === 1 ? '#94a3b8' : (idx === 2 ? '#b45309' : 'var(--text-muted)')), width: '22px' }}>
+                      <span style={{ fontSize: '0.95rem', fontWeight: 900, color: idx === 0 ? '#f59e0b' : (idx === 1 ? '#cd7f32' : (idx === 2 ? '#94a3b8' : 'var(--text-muted)')), width: '22px' }}>
                         #{idx + 1}
                       </span>
 
-                      {/* Avatar with King Crown Overlay */}
+                      {/* Avatar with King Crown (Gold) or Silver/Bronze Crown Overlay */}
                       <div style={{ position: 'relative' }}>
-                        {item.hasKingCrown && (
+                        {(item.hasKingCrown || idx === 0) ? (
                           <div style={{
                             position: 'absolute',
                             top: -12,
                             left: '50%',
                             transform: 'translateX(-50%)',
                             fontSize: '1.1rem',
-                            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))',
+                            filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))',
                             zIndex: 5
-                          }}>
+                          }} title="👑 #1 Gold King Champion">
                             👑
                           </div>
-                        )}
+                        ) : (item.hasSilverCrown || idx === 1) ? (
+                          <div style={{
+                            position: 'absolute',
+                            top: -12,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            fontSize: '1.1rem',
+                            filter: 'drop-shadow(0 2px 4px rgba(205, 127, 50, 0.95))',
+                            zIndex: 5
+                          }} title="👑 #2 Bronze/Silver Champion">
+                            👑
+                          </div>
+                        ) : null}
                         <img
                           src={item.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${item.displayName}`}
                           alt={item.displayName}
@@ -618,7 +642,11 @@ export default function PulseZoneModal({ onClose }) {
                             height: '38px',
                             borderRadius: '50%',
                             objectFit: 'cover',
-                            border: item.hasKingCrown ? '2px solid #fbbf24' : (idx === 0 ? '2px solid #f59e0b' : '1px solid rgba(255,255,255,0.2)')
+                            border: (item.hasKingCrown || idx === 0)
+                              ? '2px solid #fbbf24'
+                              : (item.hasSilverCrown || idx === 1)
+                              ? '2px solid #cd7f32'
+                              : '1px solid rgba(255,255,255,0.2)'
                           }}
                         />
                       </div>
@@ -628,7 +656,12 @@ export default function PulseZoneModal({ onClose }) {
                           <span>{item.displayName}</span>
                           {idx === 0 && (
                             <span style={{ fontSize: '0.66rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.2)', padding: '1px 6px', borderRadius: '8px', border: '1px solid rgba(251, 191, 36, 0.4)' }}>
-                              👑 #1 Champion (+100⚡)
+                              👑 #1 Gold Champion (+100⚡)
+                            </span>
+                          )}
+                          {idx === 1 && (
+                            <span style={{ fontSize: '0.66rem', color: '#cd7f32', background: 'rgba(205, 127, 50, 0.2)', padding: '1px 6px', borderRadius: '8px', border: '1px solid rgba(205, 127, 50, 0.4)' }}>
+                              👑 #2 Bronze Champion
                             </span>
                           )}
                         </div>

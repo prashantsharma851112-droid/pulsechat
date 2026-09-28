@@ -41,6 +41,9 @@ const userSchema = new mongoose.Schema({
   lastGamingTaskDate: { type: String, default: '' },
   hasKingCrown: { type: Boolean, default: false },
   kingCrownExpiresAt: { type: Date, default: null },
+  hasSilverCrown: { type: Boolean, default: false },
+  hasStreakCrown: { type: Boolean, default: false },
+  streakCrownExpiresAt: { type: Date, default: null },
   claimedDailyFirstReward: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });

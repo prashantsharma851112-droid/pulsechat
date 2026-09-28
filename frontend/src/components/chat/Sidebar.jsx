@@ -1144,7 +1144,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             }}
             title="Click to view full photo"
           >
-            {user?.hasKingCrown && (
+            {user?.hasKingCrown ? (
               <div
                 style={{
                   position: 'absolute',
@@ -1152,15 +1152,47 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                   left: '50%',
                   transform: 'translateX(-50%)',
                   fontSize: '1.2rem',
-                  filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.9))',
+                  filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))',
                   zIndex: 10,
                   pointerEvents: 'none'
                 }}
-                title="👑 #1 Leaderboard King Champion"
+                title="👑 #1 Gold Leaderboard King"
               >
                 👑
               </div>
-            )}
+            ) : user?.hasSilverCrown ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '-12px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  fontSize: '1.2rem',
+                  filter: 'drop-shadow(0 2px 5px rgba(205, 127, 50, 0.95))',
+                  zIndex: 10,
+                  pointerEvents: 'none'
+                }}
+                title="👑 #2 Bronze Leaderboard Champion"
+              >
+                👑
+              </div>
+            ) : user?.hasStreakCrown ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '-12px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  fontSize: '1.2rem',
+                  filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))',
+                  zIndex: 10,
+                  pointerEvents: 'none'
+                }}
+                title="👑 7-Day Gaming Streak Crown"
+              >
+                👑
+              </div>
+            ) : null}
             <img
               src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.username || 'Pulse')}`}
               alt="Profile"
@@ -1173,7 +1205,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 height: '44px',
                 borderRadius: '50%',
                 objectFit: 'cover',
-                border: user?.hasKingCrown ? '2.5px solid #fbbf24' : (user?.isPro ? 'none' : '2px solid var(--accent)'),
+                border: user?.hasKingCrown
+                  ? '2.5px solid #fbbf24'
+                  : user?.hasSilverCrown
+                  ? '2.5px solid #cd7f32'
+                  : user?.hasStreakCrown
+                  ? '2.5px solid #f97316'
+                  : (user?.isPro ? 'none' : '2px solid var(--accent)'),
                 cursor: 'pointer'
               }}
             />
