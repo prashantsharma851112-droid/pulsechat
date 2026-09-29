@@ -439,18 +439,16 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
               display: 'grid',
               gridTemplateRows: `repeat(${gridConfig.rows}, 1fr)`,
               gridTemplateColumns: `repeat(${gridConfig.cols}, 1fr)`,
-              gap: '0px',
+              gap: '4px',
               width: '100%',
               maxWidth: '380px',
               aspectRatio: '1',
-              background: theme === 'light' ? '#ffffff' : 'radial-gradient(circle at center, #0b1329 0%, #030712 100%)',
-              backgroundImage: theme === 'light'
-                ? 'linear-gradient(rgba(148, 163, 184, 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.3) 1px, transparent 1px)'
-                : 'linear-gradient(rgba(56, 189, 248, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(56, 189, 248, 0.06) 1px, transparent 1px)',
-              backgroundSize: gridConfig.rows >= 14 ? '14px 14px' : '20px 20px',
+              background: theme === 'light'
+                ? 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'
+                : 'linear-gradient(135deg, #0b1329 0%, #171e38 100%)',
               border: theme === 'light' ? '2px solid #cbd5e1' : '1.5px solid rgba(255,255,255,0.15)',
               borderRadius: '20px',
-              padding: '6px',
+              padding: '8px',
               boxShadow: theme === 'light' ? '0 10px 30px rgba(0,0,0,0.1)' : 'inset 0 0 30px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.6)',
               position: 'relative'
             }}>
@@ -473,24 +471,25 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                         width: '100%',
                         height: '100%',
                         background: isShaking
-                          ? 'rgba(239, 68, 68, 0.35)'
+                          ? 'rgba(239, 68, 68, 0.4)'
                           : isHinted
-                          ? 'rgba(245, 158, 11, 0.3)'
-                          : (theme === 'light' ? '#ffffff' : 'rgba(15, 23, 42, 0.8)'),
+                          ? 'rgba(245, 158, 11, 0.35)'
+                          : (theme === 'light'
+                              ? 'linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%)'
+                              : 'radial-gradient(circle, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)'),
                         border: isShaking
                           ? '2px solid #ef4444'
                           : isHinted
                           ? '2px solid #f59e0b'
-                          : (theme === 'light' ? '1px solid #cbd5e1' : '1px solid rgba(255, 255, 255, 0.12)'),
-                        borderRadius: gridConfig.rows >= 10 ? '4px' : '8px',
+                          : (theme === 'light' ? '1.5px solid #cbd5e1' : '1.5px solid rgba(255, 255, 255, 0.18)'),
+                        borderRadius: '8px',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        padding: '2px',
+                        padding: 0,
                         position: 'relative',
-                        overflow: 'hidden',
-                        boxShadow: theme === 'light' ? '0 1px 3px rgba(0,0,0,0.06)' : '0 2px 8px rgba(0,0,0,0.4)',
+                        boxShadow: theme === 'light' ? '0 2px 6px rgba(0,0,0,0.06)' : '0 4px 10px rgba(0,0,0,0.4)',
                         transform: isFlying
                           ? `translate(${flyX}px, ${flyY}px) scale(0.4)`
                           : isShaking
@@ -504,24 +503,9 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                         zIndex: isFlying ? 10 : 1
                       }}
                     >
-                      {/* SVG Crisp Vector Arrow with Winding Snake Tail */}
+                      {/* SVG Crisp Vector Arrow */}
                       {(() => {
-                        const tailType = cell.tailType || 'snake_z';
-                        let pathD = "M 20 36 L 20 15";
-
-                        if (tailType === 'snake_z') {
-                          pathD = "M 20 36 L 30 36 L 30 25 L 10 25 L 10 15 L 20 15";
-                        } else if (tailType === 'snake_s') {
-                          pathD = "M 20 36 L 10 36 L 10 25 L 30 25 L 30 15 L 20 15";
-                        } else if (tailType === 'staircase') {
-                          pathD = "M 20 36 L 10 36 L 10 28 L 20 28 L 20 20 L 30 20 L 30 15 L 20 15";
-                        } else if (tailType === 'loop_in') {
-                          pathD = "M 20 36 L 32 36 L 32 22 L 18 22 L 18 28 L 8 28 L 8 15 L 20 15";
-                        } else if (tailType === 'hook_bend') {
-                          pathD = "M 20 36 L 8 36 L 8 20 L 20 20 L 20 15";
-                        }
-
-                        const svgSize = gridConfig.rows >= 10 ? '24' : gridConfig.rows >= 7 ? '28' : '32';
+                        const svgSize = gridConfig.rows >= 10 ? '22' : gridConfig.rows >= 7 ? '26' : '30';
 
                         const strokeColor = isShaking
                           ? '#ef4444'
@@ -533,13 +517,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                           ? '#ef4444'
                           : isHinted
                           ? '#f59e0b'
-                          : (theme === 'light' ? '#0f172a' : '#00f0ff');
-
-                        const dotColor = isShaking
-                          ? '#ef4444'
-                          : isHinted
-                          ? '#f59e0b'
-                          : (theme === 'light' ? '#2563eb' : '#ec4899');
+                          : (theme === 'light' ? '#0f172a' : '#38bdf8');
 
                         return (
                           <svg
@@ -548,31 +526,17 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                             viewBox="0 0 40 40"
                             style={{
                               transform: `rotate(${deg}deg)`,
-                              overflow: 'hidden',
+                              overflow: 'visible',
                               display: 'block',
                               filter: isShaking
-                                ? 'drop-shadow(0 0 6px #ef4444)'
+                                ? 'drop-shadow(0 0 8px #ef4444)'
                                 : isHinted
-                                ? 'drop-shadow(0 0 6px #f59e0b)'
-                                : 'none'
+                                ? 'drop-shadow(0 0 8px #f59e0b)'
+                                : 'drop-shadow(0 2px 4px rgba(0,0,0,0.35))'
                             }}
                           >
-                            <circle cx="20" cy="36" r="2.5" fill={dotColor} />
-                            <path
-                              d={pathD}
-                              stroke={strokeColor}
-                              strokeWidth="3.2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              fill="none"
-                            />
-                            <polygon
-                              points="20,2 9,15 31,15"
-                              fill={headColor}
-                              stroke={headColor}
-                              strokeWidth="1"
-                              strokeLinejoin="round"
-                            />
+                            <line x1="20" y1="36" x2="20" y2="12" stroke={strokeColor} strokeWidth="4.5" strokeLinecap="round" />
+                            <polygon points="20,2 9,18 31,18" fill={headColor} />
                           </svg>
                         );
                       })()}
