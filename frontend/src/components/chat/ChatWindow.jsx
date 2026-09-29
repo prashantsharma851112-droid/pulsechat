@@ -63,7 +63,24 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showSolidThemeModal, setShowSolidThemeModal] = useState(false);
   const [showChatMusicPicker, setShowChatMusicPicker] = useState(false);
-  const [chatMusicSong, setChatMusicSong] = useState(null);
+  const [chatMusicSong, setChatMusicSong] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`pulsechat_music_${chatId}`);
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`pulsechat_music_${chatId}`);
+      setChatMusicSong(saved ? JSON.parse(saved) : null);
+    } catch (e) {
+      setChatMusicSong(null);
+    }
+  }, [chatId]);
+
   const [isChatMusicMuted, setIsChatMusicMuted] = useState(false);
   const chatAudioRef = useRef(null);
 
@@ -531,7 +548,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     const handleChatMusicUpdated = (e) => {
       if (e.detail?.chatId === chatId) {
-        setChatMusicSong(e.detail.song || null);
+        const song = e.detail.song || null;
+        setChatMusicSong(song);
+        try {
+          if (song) {
+            localStorage.setItem(`pulsechat_music_${chatId}`, JSON.stringify(song));
+          } else {
+            localStorage.removeItem(`pulsechat_music_${chatId}`);
+          }
+        } catch (err) {}
       }
     };
 
@@ -549,6 +574,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleUpdateChatMusic = (song) => {
     setChatMusicSong(song);
+    try {
+      if (song) {
+        localStorage.setItem(`pulsechat_music_${chatId}`, JSON.stringify(song));
+      } else {
+        localStorage.removeItem(`pulsechat_music_${chatId}`);
+      }
+    } catch (e) {}
+
     if (socket && chatId) {
       socket.emit('chat_music_changed', { chatId, song: song || null, senderId: user?.id });
     }
