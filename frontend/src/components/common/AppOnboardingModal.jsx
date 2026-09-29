@@ -5,90 +5,90 @@ const ONBOARDING_STEPS = [
   {
     step: 1,
     title: 'Welcome to PulseChat ⚡',
-    subtitle: 'Next-Gen Instant Messaging & Real-Time App',
+    subtitle: 'Fast, Fun & Private Messaging',
     icon: Sparkles,
     iconBg: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
     iconColor: '#fff',
-    location: '📱 App Home Dashboard',
-    description: 'PulseChat is designed for ultra-fast 0ms messaging with end-to-end privacy, custom live wallpapers, interactive polls, background soundscapes, and VIP perks.',
-    tip: 'Take this quick 30-second tour to discover all features and where to find them!'
+    location: '📱 Main Dashboard',
+    description: 'Connect instantly with friends, customize your chat space, listen to background music, share 24h vibe stories, and play mini-games.',
+    tip: 'Take this quick tour to learn where to find all your favorite features!'
   },
   {
     step: 2,
-    title: '4-Dot Action Drawer 🎛️',
+    title: '4-Dot Creative Drawer 🎛️',
     subtitle: 'All Creation Tools in One Tap',
     icon: Zap,
     iconBg: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
     iconColor: '#fff',
-    location: '📍 Chat Window > Tap (::) 4-Dot Button beside typing box',
-    description: 'Tap the 4-Dot button to access Animated 3D Text, Stealth Dust Notes, 3D Floating Emoji Bursts, Poll Creator, Emojis & Virtual Gifts.',
-    tip: 'Clicking 3D Text or Dust text lets you send instant self-destructing or animated messages!'
+    location: '📍 Inside Chat > Tap the 4-Dot (::) Button',
+    description: 'Open the 4-Dot drawer right next to the typing bar to send 3D animated text, self-destructing Dust Notes, custom polls, emojis, and virtual gifts.',
+    tip: 'Want to send a self-destructing message? Send a Dust Note—it disappears when touched!'
   },
   {
     step: 3,
-    title: 'Interactive Polls & Quiz Cards 📊',
-    subtitle: 'Polls & Animated Card Auras',
+    title: 'Polls & Trivia Quizzes 📊',
+    subtitle: 'Engage Your Friends',
     icon: BarChart2,
     iconBg: 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)',
     iconColor: '#fff',
-    location: '📍 Chat Window > 4-Dot Drawer > Create Poll',
-    description: 'Create opinion polls or secret quiz questions with correct answer reveal! Select from 6 Color Themes and 5 Animated Card Auras (Gold Stardust, Cyber Matrix, Inferno Blaze).',
-    tip: 'Quiz questions hide the correct answer until users vote in the chat!'
+    location: '📍 Chat > 4-Dot Drawer > Create Poll',
+    description: 'Ask questions, host group votes, or create fun trivia quizzes. Choose from vibrant card themes and glowing aura effects.',
+    tip: 'Quiz mode keeps the correct answer secret until your friends place their vote!'
   },
   {
     step: 4,
-    title: 'Aura Soundscapes & Live Wallpapers 🎵',
-    subtitle: 'Lofi Beats & 4K Dynamic Backgrounds',
+    title: 'Background Soundtracks & Wallpapers 🎵',
+    subtitle: 'Set the Vibe While You Chat',
     icon: Music,
     iconBg: 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)',
     iconColor: '#fff',
-    location: '📍 Active Chat > Top 3-Dot Menu (⋮) > Themes & Music',
-    description: 'Play relaxing Lofi Beats, Cyberpunk Rain or Space Nebula music in the background while chatting! Choose Matrix Rain, Starry Galaxy, Fireflies or custom image wallpapers.',
-    tip: 'You can adjust background music volume anytime using the music widget header.'
+    location: '📍 Active Chat > Top Menu (⋮) > Themes & Music',
+    description: 'Play relaxing Lofi beats, Cyberpunk rain, or ambient soundscapes while messaging. Pick dynamic wallpapers like Galaxy, Matrix Rain, or custom photos.',
+    tip: 'Easily adjust background music volume from the top bar controls.'
   },
   {
     step: 5,
-    title: 'Pulse 24h Vibe Stories ⚡',
-    subtitle: 'Share 24h Stories with Music & 3D Text',
+    title: '24h Vibe Stories ⚡',
+    subtitle: 'Share Moments with Songs & 3D Text',
     icon: Sparkles,
     iconBg: 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)',
     iconColor: '#fff',
-    location: '📍 Sidebar Top Tray > Pulse Vibes ⚡ (24h Stories)',
-    description: 'Post 24h Vibe stories with Lofi Beats, Cyberpunk Rain or Space Nebula soundtracks! Custom 3D Animated typography text, Live Matrix/Galaxy canvas wallpapers & Sparks tipping.',
-    tip: 'Viewed stories automatically change to subtle gray rings just like IG & WhatsApp!'
+    location: '📍 Top Tray > Pulse Vibes ⚡',
+    description: 'Post 24-hour stories paired with top trending songs, 3D text styling, dynamic backdrops, and interactive Sparks tipping.',
+    tip: 'Search millions of global music tracks to add the perfect soundtrack to your Vibe!'
   },
   {
     step: 6,
-    title: 'Pulse Zone Mini-Games & Leaderboard 🎮',
-    subtitle: 'Hot Arrow Puzzle & Speed Tapper',
+    title: 'Pulse Zone Games & Leaderboard 🎮',
+    subtitle: 'Play Mini-Games & Earn Crowns',
     icon: Rocket,
     iconBg: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
     iconColor: '#fff',
-    location: '📍 Sidebar Header > Game Controller Icon (Pulse Zone)',
-    description: 'Play hot Arrow Puzzle & Speed Tapper games 100% offline! Win Sparks rewards and climb the real-time community leaderboard.',
-    tip: 'Game scores update in 0ms using local storage sync!'
+    location: '📍 Sidebar Header > Controller Icon',
+    description: 'Play addicting games like Arrow Puzzle and Speed Tapper. Rank at the top of the community leaderboard to earn real crowns on your profile!',
+    tip: 'Reaching #1 on the leaderboard unlocks the Golden Crown badge across all your chats!'
   },
   {
     step: 7,
-    title: 'Ghost Mode & Privacy 👻',
-    subtitle: 'Maximum Privacy Controls',
+    title: 'Ghost Mode & Privacy Controls 👻',
+    subtitle: 'Chat on Your Own Terms',
     icon: EyeOff,
     iconBg: 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
     iconColor: '#fff',
-    location: '📍 Settings Modal & 4-Dot Action Drawer',
-    description: 'Enable Incognito Ghost Mode to hide online presence and read receipts (blue ticks) independently. Send Stealth Dust Notes that shatter into digital dust upon touch!',
-    tip: 'Ghost mode gives you complete stealth while reading messages.'
+    location: '📍 Settings & 4-Dot Drawer',
+    description: 'Turn on Ghost Mode to hide your online status and blue read receipts whenever you want total privacy.',
+    tip: 'Read incoming messages completely stealthily without triggering read receipts.'
   },
   {
     step: 8,
-    title: 'Pulse VIP Pro Perks 👑',
-    subtitle: 'Unlock 500MB Uploads & Pro Features',
+    title: 'Pulse VIP Perks 👑',
+    subtitle: 'Unlock Exclusive Privileges',
     icon: Crown,
     iconBg: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
     iconColor: '#fff',
-    location: '📍 Top Bar / Settings > VIP Pro Badge',
-    description: 'Get 500 MB file upload limit, Golden VIP Crest, 3D text effects, Live story wallpapers, Pro poll auras & 100% ad-free experience. Monthly VIP is 100% FREE!',
-    tip: 'Tap the Crown badge anytime in header to manage your VIP perks.'
+    location: '📍 Header / Settings > Crown Badge',
+    description: 'Enjoy 500 MB file attachments, a Golden VIP profile badge, custom 3D typography, premium wallpapers, and zero ads.',
+    tip: 'Tap your Crown badge anytime to manage your VIP perks!'
   }
 ];
 
