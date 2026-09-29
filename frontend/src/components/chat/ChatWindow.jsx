@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, Crown } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -18,6 +18,7 @@ import GiftPickerModal from './GiftPickerModal';
 import Animated3DTextModal from './Animated3DTextModal';
 import LiveArrowGameModal from './LiveArrowGameModal';
 import PulseVipBadge from '../common/PulseVipBadge';
+import MusicPickerModal from '../vibes/MusicPickerModal';
 import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
@@ -61,10 +62,45 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showSolidThemeModal, setShowSolidThemeModal] = useState(false);
+  const [showChatMusicPicker, setShowChatMusicPicker] = useState(false);
+  const [chatMusicSong, setChatMusicSong] = useState(null);
+  const [isChatMusicMuted, setIsChatMusicMuted] = useState(false);
+  const chatAudioRef = useRef(null);
+
   const [auraVolume, setAuraVolume] = useState(() => {
     const saved = localStorage.getItem('pulsechat_aura_volume');
     return saved !== null ? Number(saved) : 0.7;
   });
+
+  // Real Chat Background Music Player (iTunes Search Integration)
+  useEffect(() => {
+    if (chatAudioRef.current) {
+      chatAudioRef.current.pause();
+      chatAudioRef.current = null;
+    }
+
+    if (chatMusicSong?.audioUrl) {
+      const audio = new Audio(chatMusicSong.audioUrl);
+      audio.loop = true;
+      audio.volume = isChatMusicMuted ? 0 : auraVolume;
+      audio.play().catch(e => console.warn('Chat music playback prevented:', e));
+      chatAudioRef.current = audio;
+    }
+
+    return () => {
+      if (chatAudioRef.current) {
+        chatAudioRef.current.pause();
+        chatAudioRef.current = null;
+      }
+    };
+  }, [chatMusicSong?.audioUrl, chatId]);
+
+  useEffect(() => {
+    if (chatAudioRef.current) {
+      chatAudioRef.current.volume = isChatMusicMuted ? 0 : auraVolume;
+    }
+  }, [auraVolume, isChatMusicMuted]);
+
   const [chatTheme, setChatTheme] = useState(() => {
     return localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'default';
   });
@@ -1784,6 +1820,45 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               <Presentation size={19} color="var(--accent)" />
             </button>
 
+            {/* Active Real Music Playing Badge in Chat Header */}
+            {chatMusicSong && (
+              <div style={{
+                background: 'rgba(18, 18, 24, 0.88)',
+                backdropFilter: 'blur(12px)',
+                padding: '4px 10px',
+                borderRadius: '20px',
+                border: '1px solid rgba(245, 158, 11, 0.6)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 4px 14px rgba(0, 0, 0, 0.4)',
+                marginRight: '4px'
+              }}>
+                <img
+                  src={chatMusicSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${chatMusicSong.songTitle}`}
+                  alt="Track"
+                  style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover', animation: 'spin 4s linear infinite' }}
+                />
+                <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#fff', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {chatMusicSong.songTitle}
+                </span>
+                <button
+                  onClick={() => setIsChatMusicMuted(!isChatMusicMuted)}
+                  style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', padding: '1px' }}
+                  title={isChatMusicMuted ? "Unmute Music" : "Mute Music"}
+                >
+                  {isChatMusicMuted ? <VolumeX size={14} color="#ef4444" /> : <Volume2 size={14} color="#10b981" />}
+                </button>
+                <button
+                  onClick={() => setChatMusicSong(null)}
+                  style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', padding: '1px' }}
+                  title="Stop Music"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            )}
+
             {/* 3-Dots More Options Menu */}
             <div className="chat-header-more-container" style={{ position: 'relative' }}>
               <button
@@ -1892,43 +1967,101 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   gap: '4px'
                 }}>
                   <div style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-muted)', padding: '4px 8px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>🎵 Pulse Aura Soundscapes</span>
+                    <span>🎵 Background Music</span>
                     <button onClick={() => setShowAuraMenu(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
                       <X size={14} />
                     </button>
                   </div>
-                  {[
-                    { id: 'off', name: '🔇 Mute Aura Sound', isPro: false },
-                    { id: 'waves', name: '🌊 Ocean Waves (FREE)', isPro: false },
-                    { id: 'lofi', name: '🎧 Lofi Chill Beats', isPro: true },
-                    { id: 'rain', name: '🌧️ Cyberpunk Rain', isPro: true },
-                    { id: 'nebula', name: '🌌 Space Nebula Synth', isPro: true }
-                  ].map(a => (
-                    <button
-                      key={a.id}
-                      onClick={() => { handleSelectAura(a.id); setShowAuraMenu(false); }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '8px 10px',
-                        borderRadius: '8px',
-                        background: activeAura === a.id ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-                        color: activeAura === a.id ? 'var(--accent)' : 'var(--text-main)',
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: '0.82rem',
-                        fontWeight: activeAura === a.id ? 700 : 500,
-                        textAlign: 'left'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>{a.name}</span>
-                        {a.isPro && <Crown size={13} color="#f59e0b" />}
+
+                  {/* Search Music Button */}
+                  <button
+                    onClick={() => {
+                      setShowChatMusicPicker(true);
+                      setShowAuraMenu(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                      color: '#ffffff',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      textAlign: 'center',
+                      margin: '4px 0'
+                    }}
+                  >
+                    <Music size={16} />
+                    <span>{chatMusicSong ? '🎵 Change Song' : '🎵 Search & Play Music'}</span>
+                  </button>
+
+                  {/* Active Selected Song Badge if any */}
+                  {chatMusicSong && (
+                    <div style={{
+                      padding: '8px',
+                      borderRadius: '10px',
+                      background: 'rgba(99, 102, 241, 0.15)',
+                      border: '1px solid rgba(99, 102, 241, 0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '6px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                        <img
+                          src={chatMusicSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${chatMusicSong.songTitle}`}
+                          alt="Track"
+                          style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover', animation: 'spin 4s linear infinite' }}
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                          <span style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {chatMusicSong.songTitle}
+                          </span>
+                          <span style={{ fontSize: '0.64rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {chatMusicSong.artistName}
+                          </span>
+                        </div>
                       </div>
-                      {activeAura === a.id && <Check size={14} />}
-                    </button>
-                  ))}
+                      <button
+                        onClick={() => setChatMusicSong(null)}
+                        style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+                        title="Remove Music"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Mute Music / Sound Option */}
+                  <button
+                    onClick={() => {
+                      if (chatMusicSong) setChatMusicSong(null);
+                      handleSelectAura('off');
+                      setShowAuraMenu(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      background: 'transparent',
+                      color: 'var(--text-muted)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      textAlign: 'left'
+                    }}
+                  >
+                    <VolumeX size={14} color="#ef4444" />
+                    <span>Mute Music / Sound</span>
+                  </button>
 
                   {/* Volume Adjustment Control Slider */}
                   <div style={{
@@ -1943,7 +2076,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.74rem', color: 'var(--text-main)', fontWeight: 600 }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <Volume2 size={14} color="var(--accent)" /> Aura Volume
+                        <Volume2 size={14} color="var(--accent)" /> Music Volume
                       </span>
                       <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{Math.round(auraVolume * 100)}%</span>
                     </div>
@@ -3080,6 +3213,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         <LiveArrowGameModal
           activeChat={activeChat}
           onClose={() => setShowArrowGameModal(false)}
+        />
+      )}
+
+      {showChatMusicPicker && (
+        <MusicPickerModal
+          isOpen={showChatMusicPicker}
+          onClose={() => setShowChatMusicPicker(false)}
+          selectedSong={chatMusicSong}
+          onSelectSong={(song) => {
+            setChatMusicSong(song);
+            setShowChatMusicPicker(false);
+          }}
         />
       )}
     </div>

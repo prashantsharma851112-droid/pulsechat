@@ -33,12 +33,7 @@ const ANIMATED_BGS = [
   { id: 'love_hearts_live', label: '💖 Floating Hearts' }
 ];
 
-const SOUNDTRACKS = [
-  { id: 'lofi', name: '🎧 Lofi Chill Beats' },
-  { id: 'cyberpunk', name: '⚡ Cyberpunk Rain' },
-  { id: 'nebula', name: '🌌 Space Nebula' },
-  { id: 'none', name: '🔇 Silent' }
-];
+
 
 const compressImageToBase64 = (file) => {
   return new Promise((resolve) => {
@@ -361,56 +356,37 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   <X size={14} />
                 </button>
               </div>
-            ) : soundtrack !== 'none' ? (
-              <div style={{
-                position: 'absolute',
-                bottom: 12,
-                left: 12,
-                background: 'rgba(0,0,0,0.6)',
-                backdropFilter: 'blur(8px)',
-                padding: '4px 10px',
-                borderRadius: '12px',
-                fontSize: '0.72rem',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                zIndex: 4
-              }}>
-                <Music size={12} color="#f59e0b" />
-                <span>{SOUNDTRACKS.find(s => s.id === soundtrack)?.name}</span>
-              </div>
             ) : null}
           </div>
 
           {/* Controls Section */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             
-            {/* Instagram Music Search Trigger Button */}
+            {/* Music Search Trigger Button */}
             <div>
               <button
                 type="button"
                 onClick={() => setShowMusicPicker(true)}
                 style={{
                   width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '14px',
-                  background: selectedSong ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(236, 72, 153, 0.2))' : 'linear-gradient(135deg, #f59e0b, #ec4899)',
+                  padding: '11px 16px',
+                  borderRadius: '16px',
+                  background: selectedSong ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(236, 72, 153, 0.25))' : 'linear-gradient(135deg, #6366f1, #a855f7)',
                   border: selectedSong ? '1.5px solid #f59e0b' : 'none',
                   color: '#ffffff',
                   fontWeight: 800,
-                  fontSize: '0.86rem',
+                  fontSize: '0.88rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(245, 158, 11, 0.35)',
+                  boxShadow: selectedSong ? '0 4px 14px rgba(245, 158, 11, 0.3)' : '0 4px 16px rgba(99, 102, 241, 0.35)',
                   transition: 'all 0.2s ease'
                 }}
               >
                 <Music size={18} />
-                <span>{selectedSong ? `🎵 Selected: ${selectedSong.songTitle} (Change)` : '🎵 Add Instagram Music (Search Any Song)'}</span>
+                <span>{selectedSong ? `🎵 Selected: ${selectedSong.songTitle} (Change)` : '🎵 Add Music'}</span>
               </button>
             </div>
             
@@ -500,37 +476,6 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   }}
                 />
               ))}
-            </div>
-
-            {/* Soundtrack Selector */}
-            <div style={{ marginTop: '2px' }}>
-              <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px' }}>
-                <Music size={14} /> Background Soundtrack
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                {SOUNDTRACKS.map(s => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setSoundtrack(s.id)}
-                    style={{
-                      padding: '6px 8px',
-                      borderRadius: '10px',
-                      border: soundtrack === s.id ? '1.5px solid var(--accent)' : '1px solid var(--border)',
-                      background: soundtrack === s.id ? 'rgba(99, 102, 241, 0.15)' : 'rgba(0,0,0,0.2)',
-                      fontSize: '0.75rem',
-                      color: soundtrack === s.id ? '#fff' : 'var(--text-muted)',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}
-                  >
-                    {s.name}
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
 
