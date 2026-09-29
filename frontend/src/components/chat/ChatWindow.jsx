@@ -1832,12 +1832,54 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {/* Full Song YouTube Background Audio Engine for Chat */}
       {chatMusicSong?.youtubeId && !isChatMusicMuted && (
-        <iframe
-          key={`chat_yt_music_${chatId}_${chatMusicSong.youtubeId}`}
-          src={`https://www.youtube-nocookie.com/embed/${chatMusicSong.youtubeId}?autoplay=1&enablejsapi=1&loop=1&playlist=${chatMusicSong.youtubeId}`}
-          allow="autoplay; encrypted-media"
-          style={{ position: 'absolute', width: 1, height: 1, opacity: 0.001, pointerEvents: 'none', top: -9999, left: -9999 }}
-        />
+        <div style={{
+          position: 'relative',
+          zIndex: 10,
+          background: 'linear-gradient(135deg, rgba(18, 18, 24, 0.95), rgba(30, 27, 75, 0.95))',
+          backdropFilter: 'blur(12px)',
+          borderBottom: '1px solid rgba(245, 158, 11, 0.4)',
+          padding: '6px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '10px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.4)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+            <img
+              src={chatMusicSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${chatMusicSong.songTitle}`}
+              alt="Track"
+              style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', animation: 'spin 4s linear infinite', flexShrink: 0 }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+              <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                🎵 {chatMusicSong.songTitle}
+              </span>
+              <span style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {chatMusicSong.artistName || 'Full Song Audio'}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            {/* Visible Player Iframe (Unblocked Chrome Autoplay) */}
+            <div style={{ width: '130px', height: '36px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(245, 158, 11, 0.5)' }}>
+              <iframe
+                key={`chat_yt_music_${chatId}_${chatMusicSong.youtubeId}`}
+                src={`https://www.youtube-nocookie.com/embed/${chatMusicSong.youtubeId}?autoplay=1&enablejsapi=1&loop=1&playlist=${chatMusicSong.youtubeId}`}
+                allow="autoplay; encrypted-media; fullscreen"
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            </div>
+            <button
+              onClick={() => handleUpdateChatMusic(null)}
+              style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#ef4444', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              title="Close Music"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Header Bar */}

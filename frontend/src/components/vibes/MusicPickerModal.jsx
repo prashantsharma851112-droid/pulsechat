@@ -166,12 +166,37 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
       }}
     >
       {previewYtId && (
-        <iframe
-          key={`modal_yt_preview_${previewYtId}`}
-          src={`https://www.youtube-nocookie.com/embed/${previewYtId}?autoplay=1&enablejsapi=1`}
-          allow="autoplay; encrypted-media"
-          style={{ position: 'absolute', width: 1, height: 1, opacity: 0.001, pointerEvents: 'none', top: -999 }}
-        />
+        <div style={{
+          position: 'absolute',
+          top: '20px',
+          zIndex: 1300,
+          background: 'rgba(18, 18, 24, 0.95)',
+          border: '1.5px solid #f59e0b',
+          borderRadius: '16px',
+          padding: '6px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.8)'
+        }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Disc size={16} className="spin-slow" /> Playing Full Song:
+          </span>
+          <div style={{ width: '130px', height: '36px', borderRadius: '8px', overflow: 'hidden' }}>
+            <iframe
+              key={`modal_yt_preview_${previewYtId}`}
+              src={`https://www.youtube-nocookie.com/embed/${previewYtId}?autoplay=1&enablejsapi=1`}
+              allow="autoplay; encrypted-media; fullscreen"
+              style={{ width: '100%', height: '100%', border: 'none' }}
+            />
+          </div>
+          <button
+            onClick={() => setPreviewYtId(null)}
+            style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
       )}
       <div
         style={{

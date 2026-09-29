@@ -351,14 +351,29 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
           {error && <div className="error-banner">{error}</div>}
 
-          {/* Invisible YouTube Full Song Audio Player Engine */}
+          {/* YouTube Full Song Audio Player Engine */}
           {selectedSong?.youtubeId && (
-            <iframe
-              key={`yt_modal_preview_${selectedSong.youtubeId}_${songStartTime}`}
-              src={`https://www.youtube-nocookie.com/embed/${selectedSong.youtubeId}?autoplay=1&enablejsapi=1&start=${Math.floor(songStartTime)}`}
-              allow="autoplay"
-              style={{ position: 'absolute', width: 1, height: 1, opacity: 0.001, pointerEvents: 'none', top: -100 }}
-            />
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '6px 12px',
+              borderRadius: '12px',
+              background: 'rgba(18, 18, 24, 0.88)',
+              border: '1px solid rgba(245, 158, 11, 0.5)'
+            }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Disc size={16} className="spin-slow" /> 🎵 Full Song Preview:
+              </div>
+              <div style={{ width: '130px', height: '36px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
+                <iframe
+                  key={`yt_modal_preview_${selectedSong.youtubeId}_${songStartTime}`}
+                  src={`https://www.youtube-nocookie.com/embed/${selectedSong.youtubeId}?autoplay=1&enablejsapi=1&start=${Math.floor(songStartTime)}`}
+                  allow="autoplay; encrypted-media; fullscreen"
+                  style={{ width: '100%', height: '100%', border: 'none' }}
+                />
+              </div>
+            </div>
           )}
 
           {/* Live Card Preview (Interactive Drag & Drop Canvas) */}

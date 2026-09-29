@@ -476,12 +476,29 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
         >
           {/* Full Song YouTube Background Audio Engine */}
           {(currentVibe?.youtubeId || upgradedYtId) && !isAudioMuted && (
-            <iframe
-              key={`yt_player_${currentVibe.id}_${currentVibe.youtubeId || upgradedYtId}_${currentVibe.songStartTime || 0}`}
-              src={`https://www.youtube-nocookie.com/embed/${currentVibe.youtubeId || upgradedYtId}?autoplay=1&enablejsapi=1&loop=1&playlist=${currentVibe.youtubeId || upgradedYtId}&start=${Math.floor(currentVibe.songStartTime || 0)}`}
-              allow="autoplay; encrypted-media"
-              style={{ position: 'absolute', width: 1, height: 1, opacity: 0.001, pointerEvents: 'none', top: -100 }}
-            />
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: 'absolute',
+                bottom: '16px',
+                right: '16px',
+                zIndex: 15,
+                width: '140px',
+                height: '40px',
+                borderRadius: '10px',
+                overflow: 'hidden',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+                border: '1.5px solid rgba(245, 158, 11, 0.7)',
+                background: '#000000'
+              }}
+            >
+              <iframe
+                key={`yt_player_${currentVibe.id}_${currentVibe.youtubeId || upgradedYtId}_${currentVibe.songStartTime || 0}`}
+                src={`https://www.youtube-nocookie.com/embed/${currentVibe.youtubeId || upgradedYtId}?autoplay=1&enablejsapi=1&loop=1&playlist=${currentVibe.youtubeId || upgradedYtId}&start=${Math.floor(currentVibe.songStartTime || 0)}`}
+                allow="autoplay; encrypted-media; fullscreen"
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            </div>
           )}
 
           {/* Uploaded Image Layer with positioning & zoom */}
