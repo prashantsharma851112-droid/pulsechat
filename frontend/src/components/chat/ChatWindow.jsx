@@ -1867,16 +1867,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               <Zap size={19} color="#ec4899" />
             </button>
 
-            {/* Drawboard (Shared Whiteboard) */}
-            <button
-              onClick={() => setShowWhiteboard(true)}
-              className="icon-btn-ghost"
-              title="Shared Whiteboard Drawing Board"
-              style={{ width: '38px', height: '38px', borderRadius: '50%' }}
-            >
-              <Presentation size={19} color="var(--accent)" />
-            </button>
-
             {/* Active Real Music Playing Badge in Chat Header */}
             {chatMusicSong && (
               <div style={{
@@ -1915,6 +1905,22 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 </button>
               </div>
             )}
+
+            {/* Music Button directly next to 3-Dots Menu */}
+            <button
+              onClick={() => setShowChatMusicPicker(true)}
+              className="icon-btn-ghost"
+              title="Search & Play Full Song Background Music"
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                background: chatMusicSong ? 'rgba(245, 158, 11, 0.22)' : 'transparent',
+                border: chatMusicSong ? '1px solid rgba(245, 158, 11, 0.5)' : 'none'
+              }}
+            >
+              <Music size={19} color="#f59e0b" />
+            </button>
 
             {/* 3-Dots More Options Menu */}
             <div className="chat-header-more-container" style={{ position: 'relative' }}>
@@ -3285,14 +3291,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         />
       )}
 
-      {/* Hidden YouTube Full Song Audio Stream Player */}
+      {/* Hidden YouTube Full Song Audio Stream Player (layout-rendered off-screen so Chrome/Edge autoplay policy allows continuous full song streaming) */}
       {chatMusicSong?.youtubeId && !isChatMusicMuted && (
         <iframe
           key={chatMusicSong.youtubeId}
           id="chatYoutubeAudioPlayer"
           src={`https://www.youtube-nocookie.com/embed/${chatMusicSong.youtubeId}?autoplay=1&enablejsapi=1&loop=1&playlist=${chatMusicSong.youtubeId}&playsinline=1`}
-          style={{ display: 'none', width: '0px', height: '0px', opacity: 0, position: 'absolute', pointerEvents: 'none' }}
-          allow="autoplay"
+          style={{
+            position: 'fixed',
+            bottom: '-9999px',
+            right: '-9999px',
+            width: '200px',
+            height: '200px',
+            opacity: 0.01,
+            pointerEvents: 'none',
+            zIndex: -9999
+          }}
+          allow="autoplay; encrypted-media"
           title="Chat YouTube Audio Stream"
         />
       )}
