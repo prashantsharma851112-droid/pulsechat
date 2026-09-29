@@ -50,25 +50,33 @@ function StealthDustCard({ message, chatId, isMine, socket }) {
       }));
     }
 
+    const payload = {
+      chatId,
+      messageId: message.id,
+      messageMongoId: message._id,
+      clientTempId: message.clientTempId
+    };
+
     // Direct local event dispatch for 0ms disappearance
     window.dispatchEvent(new CustomEvent('pulsechat_stealth_dust_dissolved', {
-      detail: { chatId, messageId: message.id }
+      detail: payload
     }));
 
     if (socket) {
-      socket.emit('dissolve_stealth_dust', { chatId, messageId: message.id });
+      socket.emit('dissolve_stealth_dust', payload);
     }
 
     // Permanent REST endpoint fallback for DB deletion
     try {
       const rawToken = localStorage.getItem('pulsechat_token');
-      fetch(`${BACKEND_URL}/api/messages/dissolve-dust/${message.id}`, {
+      const targetId = message.id || message._id || message.clientTempId;
+      fetch(`${BACKEND_URL}/api/messages/dissolve-dust/${targetId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(rawToken ? { Authorization: `Bearer ${rawToken}` } : {})
         },
-        body: JSON.stringify({ chatId })
+        body: JSON.stringify({ chatId, messageId: message.id, messageMongoId: message._id, clientTempId: message.clientTempId })
       }).catch(() => {});
     } catch (e) {}
   };

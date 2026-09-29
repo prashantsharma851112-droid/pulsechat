@@ -98,7 +98,10 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       }
       if (song.audioUrl) {
         const audio = new Audio(song.audioUrl);
-        audio.currentTime = startTimeSec;
+        const validTime = Number(startTimeSec);
+        if (!isNaN(validTime) && isFinite(validTime) && validTime >= 0) {
+          try { audio.currentTime = validTime; } catch (e) {}
+        }
         audio.volume = 0.85;
         audio.play().catch(() => {});
         previewAudioRef.current = audio;
@@ -107,8 +110,9 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   };
 
   const formatSecs = (sec) => {
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
+    const validSec = Number(sec) || 0;
+    const m = Math.floor(validSec / 60);
+    const s = Math.floor(validSec % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
   const [textStyle3D, setTextStyle3D] = useState('none');

@@ -346,7 +346,6 @@ router.post('/react/:vibeId', authMiddleware, async (req, res) => {
             senderName: sender.displayName || sender.username || 'Pulse User',
             senderAvatar: sender.avatar || null
           });
-          io.to(`user_${resolvedSenderId}`).emit('new_message', createdMsg);
         }
       }
     }

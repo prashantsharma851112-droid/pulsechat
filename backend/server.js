@@ -562,18 +562,12 @@ io.on('connection', (socket) => {
         ackCallback({ success: true, message: newMsg });
       }
 
-      // 2. Immediate zero-latency emission to chat room AND all recipient rooms
+      // 2. Immediate zero-latency emission to chat room
       io.to(chatId).emit('new_message', newMsg);
 
-      const senderRooms = new Set([`user_${senderId}`, senderId]);
-      senderRooms.forEach(room => io.to(room).emit('new_message', newMsg));
-
+      // Notify recipient private room for badge/sound if they are outside the active chat room
       if (receiverId && !isGroup) {
-        const receiverRooms = new Set([`user_${receiverId}`, receiverId]);
-        receiverRooms.forEach(room => {
-          io.to(room).emit('new_message', newMsg);
-          io.to(room).emit('message_notification', newMsg);
-        });
+        io.to(`user_${receiverId}`).emit('message_notification', newMsg);
       }
 
       // 3. Concurrently save to MongoDB (zero blocking on emission)

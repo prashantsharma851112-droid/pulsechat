@@ -96,7 +96,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       chatAudioRef.current = null;
     }
 
-    if (chatMusicSong?.audioUrl) {
+    if (chatMusicSong?.audioUrl && !chatMusicSong?.youtubeId) {
       const audio = new Audio(chatMusicSong.audioUrl);
       audio.loop = true;
       audio.volume = isChatMusicMuted ? 0 : auraVolume;
@@ -110,7 +110,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         chatAudioRef.current = null;
       }
     };
-  }, [chatMusicSong?.audioUrl, chatId]);
+  }, [chatMusicSong?.audioUrl, chatMusicSong?.youtubeId, chatId]);
 
   useEffect(() => {
     if (chatAudioRef.current) {
@@ -473,8 +473,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const seen = new Set();
     const deduped = [];
     for (const m of messages) {
-      const pKey = m.id || m.clientTempId;
-      const tKey = m.clientTempId;
+      const pKey = m.id ? String(m.id) : (m._id ? String(m._id) : (m.clientTempId ? String(m.clientTempId) : null));
+      const tKey = m.clientTempId ? String(m.clientTempId) : null;
       if (pKey && seen.has(pKey)) continue;
       if (tKey && seen.has(tKey)) continue;
       if (pKey) seen.add(pKey);
@@ -534,10 +534,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     const handleStealthDissolved = (e) => {
-      if ((!e.detail?.chatId || e.detail?.chatId === chatId) && e.detail?.messageId) {
-        const targetId = e.detail.messageId;
+      const detail = e.detail || {};
+      const targetChatId = detail.chatId;
+      const isMatchChat = !targetChatId || targetChatId === chatId || (typeof targetChatId === 'string' && (targetChatId.includes(chatId) || chatId.includes(targetChatId)));
+      const idsToFilter = new Set([detail.messageId, detail.messageMongoId, detail.clientTempId].filter(Boolean).map(String));
+
+      if (isMatchChat && idsToFilter.size > 0) {
         setMessages(prev => {
-          const updated = prev.filter(m => m.id !== targetId);
+          const updated = prev.filter(m =>
+            !idsToFilter.has(String(m.id)) &&
+            !idsToFilter.has(String(m._id)) &&
+            (!m.clientTempId || !idsToFilter.has(String(m.clientTempId)))
+          );
           try {
             setCachedMessages(chatId, updated);
           } catch (err) {}
@@ -1025,8 +1033,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       if (isThisChat) {
         setMessages(prev => {
           const matchIdx = prev.findIndex(m =>
-            (msg.clientTempId && (m.id === msg.clientTempId || m.clientTempId === msg.clientTempId)) ||
-            m.id === msg.id
+            (msg.clientTempId && (String(m.id) === String(msg.clientTempId) || String(m.clientTempId) === String(msg.clientTempId))) ||
+            String(m.id) === String(msg.id) ||
+            (m._id && msg._id && String(m._id) === String(msg._id))
           );
           let updated;
           if (matchIdx !== -1) {
