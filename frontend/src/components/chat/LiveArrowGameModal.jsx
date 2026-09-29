@@ -609,35 +609,17 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
   };
 
   const renderArrowSvg = (arrow) => {
-    const tailType = arrow.tailType || 'snake_z';
-    let pathD = "M 20 36 L 20 15";
-
-    if (tailType === 'snake_z') {
-      pathD = "M 20 36 L 30 36 L 30 25 L 10 25 L 10 15 L 20 15";
-    } else if (tailType === 'snake_s') {
-      pathD = "M 20 36 L 10 36 L 10 25 L 30 25 L 30 15 L 20 15";
-    } else if (tailType === 'staircase') {
-      pathD = "M 20 36 L 10 36 L 10 28 L 20 28 L 20 20 L 30 20 L 30 15 L 20 15";
-    } else if (tailType === 'loop_in') {
-      pathD = "M 20 36 L 32 36 L 32 22 L 18 22 L 18 28 L 8 28 L 8 15 L 20 15";
-    } else if (tailType === 'hook_bend') {
-      pathD = "M 20 36 L 8 36 L 8 20 L 20 20 L 20 15";
-    }
-
-    const svgSize = isMobile
-      ? (gridRows >= 10 ? '24' : gridRows >= 7 ? '28' : '32')
-      : (gridRows >= 10 ? '28' : gridRows >= 7 ? '32' : '36');
-
     const isShaking = shakingId === arrow.id;
     const strokeColor = isShaking
       ? '#ef4444'
       : (theme === 'light' ? '#1e293b' : '#38bdf8');
     const headColor = isShaking
       ? '#ef4444'
-      : (theme === 'light' ? '#0f172a' : '#00f0ff');
-    const dotColor = isShaking
-      ? '#ef4444'
-      : (theme === 'light' ? '#2563eb' : '#ec4899');
+      : (theme === 'light' ? '#0f172a' : '#38bdf8');
+
+    const svgSize = isMobile
+      ? (gridRows >= 8 ? '22' : '26')
+      : (gridRows >= 8 ? '26' : '30');
 
     return (
       <svg
@@ -645,34 +627,15 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
         height={svgSize}
         viewBox="0 0 40 40"
         style={{
-          overflow: 'hidden',
+          overflow: 'visible',
           display: 'block',
           filter: isShaking
-            ? 'drop-shadow(0 0 6px #ef4444)'
-            : 'none'
+            ? 'drop-shadow(0 0 8px #ef4444)'
+            : 'drop-shadow(0 2px 4px rgba(0,0,0,0.35))'
         }}
       >
-        {/* Tail Base Glow Dot */}
-        <circle cx="20" cy="36" r="2.5" fill={dotColor} />
-
-        {/* Winding Snake Tail Shaft */}
-        <path
-          d={pathD}
-          stroke={strokeColor}
-          strokeWidth="3.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-        />
-
-        {/* Crystal Clear Sharp Arrow Head Triangle */}
-        <polygon
-          points="20,2 9,15 31,15"
-          fill={headColor}
-          stroke={headColor}
-          strokeWidth="1"
-          strokeLinejoin="round"
-        />
+        <line x1="20" y1="36" x2="20" y2="12" stroke={strokeColor} strokeWidth="4.5" strokeLinecap="round" />
+        <polygon points="20,2 9,18 31,18" fill={headColor} />
       </svg>
     );
   };
@@ -883,24 +846,22 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
           background: 'radial-gradient(circle at center, #0f172a 0%, #050b18 100%)'
         }}>
 
-          {/* Interactive Arrow Grid Canvas (Sleek Clean Grid) */}
+          {/* Interactive Arrow Grid Canvas (Clean Tile Board) */}
           <div style={{
             position: 'relative',
-            width: isMobile ? 'min(440px, 95vw)' : 'min(440px, 88vw)',
-            height: isMobile ? 'min(440px, 95vw)' : 'min(440px, 88vw)',
-            background: theme === 'light' ? '#f8fafc' : 'radial-gradient(circle at center, #0b1329 0%, #030712 100%)',
-            backgroundImage: theme === 'light'
-              ? 'linear-gradient(rgba(226, 232, 240, 0.8) 1px, transparent 1px), linear-gradient(90deg, rgba(226, 232, 240, 0.8) 1px, transparent 1px)'
-              : 'linear-gradient(rgba(56, 189, 248, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(56, 189, 248, 0.06) 1px, transparent 1px)',
-            backgroundSize: gridRows >= 10 ? '16px 16px' : '22px 22px',
+            width: isMobile ? 'min(410px, 94vw)' : 'min(420px, 86vw)',
+            height: isMobile ? 'min(410px, 94vw)' : 'min(420px, 86vw)',
+            background: theme === 'light'
+              ? 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'
+              : 'linear-gradient(135deg, #0b1329 0%, #171e38 100%)',
             borderRadius: '24px',
             border: theme === 'light' ? '2px solid #cbd5e1' : '2px solid rgba(255, 255, 255, 0.15)',
-            padding: '8px',
+            padding: '10px',
             boxShadow: theme === 'light' ? '0 10px 30px rgba(0,0,0,0.08)' : 'inset 0 0 30px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.6)',
             display: 'grid',
             gridTemplateRows: `repeat(${gridRows}, 1fr)`,
             gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
-            gap: gridRows >= 10 ? '2px' : '4px'
+            gap: isMobile ? '4px' : '6px'
           }}>
             {!isGameOver && grid.map((rowArr, r) =>
               rowArr.map((arrow, c) => {
@@ -938,20 +899,23 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                       width: '100%',
                       height: '100%',
                       background: isShaking
-                        ? 'rgba(239, 68, 68, 0.35)'
-                        : (theme === 'light' ? '#ffffff' : 'rgba(15, 23, 42, 0.8)'),
+                        ? 'rgba(239, 68, 68, 0.4)'
+                        : (theme === 'light'
+                            ? 'linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%)'
+                            : 'radial-gradient(circle, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)'),
                       border: isShaking
                         ? '2px solid #ef4444'
-                        : (theme === 'light' ? '1px solid #cbd5e1' : '1px solid rgba(255, 255, 255, 0.12)'),
-                      borderRadius: gridRows >= 10 ? '4px' : (isMobile ? '6px' : '10px'),
+                        : (theme === 'light' ? '1.5px solid #cbd5e1' : '1.5px solid rgba(255, 255, 255, 0.18)'),
+                      borderRadius: isMobile ? '8px' : '12px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      padding: '2px',
+                      padding: 0,
                       position: 'relative',
-                      overflow: 'hidden',
-                      boxShadow: theme === 'light' ? '0 1px 3px rgba(0,0,0,0.06)' : '0 2px 8px rgba(0,0,0,0.4)',
+                      zIndex: isFlying ? 100 : 1,
+                      animation: isShaking ? 'shake 0.4s ease' : 'none',
+                      boxShadow: theme === 'light' ? '0 2px 6px rgba(0,0,0,0.06)' : '0 4px 10px rgba(0,0,0,0.4)',
                       ...flightStyle
                     }}
                   >
