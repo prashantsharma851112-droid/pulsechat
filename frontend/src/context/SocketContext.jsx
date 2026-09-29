@@ -166,9 +166,25 @@ export function SocketProvider({ children }) {
         } catch (e) {}
       });
 
+      newSocket.on('chat_music_updated', (data) => {
+        try {
+          window.dispatchEvent(new CustomEvent('pulsechat_music_updated', { detail: data }));
+        } catch (e) {}
+      });
+
       newSocket.on('stealth_dust_dissolved', (data) => {
         try {
           window.dispatchEvent(new CustomEvent('pulsechat_stealth_dust_dissolved', { detail: data }));
+          if (data?.chatId && data?.messageId) {
+            const raw = localStorage.getItem(`pulsechat_msgs_${data.chatId}`);
+            if (raw) {
+              const msgs = JSON.parse(raw);
+              if (Array.isArray(msgs)) {
+                const updated = msgs.filter(m => m.id !== data.messageId);
+                localStorage.setItem(`pulsechat_msgs_${data.chatId}`, JSON.stringify(updated));
+              }
+            }
+          }
         } catch (e) {}
       });
 

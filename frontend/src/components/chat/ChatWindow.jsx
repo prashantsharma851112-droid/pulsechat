@@ -517,20 +517,42 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     const handleStealthDissolved = (e) => {
-      if (e.detail?.chatId === chatId && e.detail?.messageId) {
-        setMessages(prev => prev.filter(m => m.id !== e.detail.messageId));
+      if ((!e.detail?.chatId || e.detail?.chatId === chatId) && e.detail?.messageId) {
+        const targetId = e.detail.messageId;
+        setMessages(prev => {
+          const updated = prev.filter(m => m.id !== targetId);
+          try {
+            setCachedMessages(chatId, updated);
+          } catch (err) {}
+          return updated;
+        });
+      }
+    };
+
+    const handleChatMusicUpdated = (e) => {
+      if (e.detail?.chatId === chatId) {
+        setChatMusicSong(e.detail.song || null);
       }
     };
 
     window.addEventListener('pulsechat_aura_changed', handleAuraChange);
     window.addEventListener('pulsechat_stealth_dust_dissolved', handleStealthDissolved);
+    window.addEventListener('pulsechat_music_updated', handleChatMusicUpdated);
 
     return () => {
       window.removeEventListener('pulsechat_aura_changed', handleAuraChange);
       window.removeEventListener('pulsechat_stealth_dust_dissolved', handleStealthDissolved);
+      window.removeEventListener('pulsechat_music_updated', handleChatMusicUpdated);
       stopPulseAuraSound();
     };
   }, [chatId, auraVolume]);
+
+  const handleUpdateChatMusic = (song) => {
+    setChatMusicSong(song);
+    if (socket && chatId) {
+      socket.emit('chat_music_changed', { chatId, song: song || null, senderId: user?.id });
+    }
+  };
 
   const handleSelectAura = (auraId) => {
     if (auraId !== 'off' && auraId !== 'waves' && !user?.isPro) {
@@ -1850,7 +1872,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   {isChatMusicMuted ? <VolumeX size={14} color="#ef4444" /> : <Volume2 size={14} color="#10b981" />}
                 </button>
                 <button
-                  onClick={() => setChatMusicSong(null)}
+                  onClick={() => handleUpdateChatMusic(null)}
                   style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', padding: '1px' }}
                   title="Stop Music"
                 >
@@ -2028,7 +2050,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                         </div>
                       </div>
                       <button
-                        onClick={() => setChatMusicSong(null)}
+                        onClick={() => handleUpdateChatMusic(null)}
                         style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
                         title="Remove Music"
                       >
@@ -2040,7 +2062,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   {/* Mute Music / Sound Option */}
                   <button
                     onClick={() => {
-                      if (chatMusicSong) setChatMusicSong(null);
+                      if (chatMusicSong) handleUpdateChatMusic(null);
                       handleSelectAura('off');
                       setShowAuraMenu(false);
                     }}
@@ -3222,7 +3244,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           onClose={() => setShowChatMusicPicker(false)}
           selectedSong={chatMusicSong}
           onSelectSong={(song) => {
-            setChatMusicSong(song);
+            handleUpdateChatMusic(song);
             setShowChatMusicPicker(false);
           }}
         />

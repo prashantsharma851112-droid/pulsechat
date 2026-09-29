@@ -778,12 +778,34 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Stealth Dust Note Dissolve Handler
+  // Stealth Dust Note Dissolve Handler (Permanent Deletion)
   socket.on('dissolve_stealth_dust', async ({ chatId, messageId }) => {
     try {
-      await db.deleteMessage(messageId);
-    } catch (e) {}
-    io.to(chatId).emit('stealth_dust_dissolved', { chatId, messageId });
+      if (messageId) {
+        await Message.deleteMany({ $or: [{ id: messageId }, { _id: messageId }] });
+      }
+      if (chatId) {
+        await redis.deleteCachedMessages(chatId).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('Stealth dust deletion error:', e.message);
+    }
+    const payload = { chatId, messageId };
+    io.to(chatId).emit('stealth_dust_dissolved', payload);
+    if (chatId && chatId.includes('_')) {
+      const parts = chatId.split('_');
+      parts.forEach(uId => io.to(`user_${uId}`).emit('stealth_dust_dissolved', payload));
+    }
+  });
+
+  // Dual-Sided Real-Time Chat Music Track Synchronization
+  socket.on('chat_music_changed', ({ chatId, song, senderId }) => {
+    const payload = { chatId, song, senderId };
+    io.to(chatId).emit('chat_music_updated', payload);
+    if (chatId && chatId.includes('_')) {
+      const parts = chatId.split('_');
+      parts.forEach(uId => io.to(`user_${uId}`).emit('chat_music_updated', payload));
+    }
   });
 
   // 3D Live Emoji Particle Burst Handler

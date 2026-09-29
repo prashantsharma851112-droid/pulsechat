@@ -556,11 +556,28 @@ input, textarea {
 }
 
 /* Google Sign-In SDK button iframe normalization */
+#googleLoginBtn,
+#googleRegisterBtn {
+  width: 100% !important;
+  max-width: 360px !important;
+  margin: 0 auto !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  min-height: 44px;
+  overflow: visible !important;
+  box-sizing: border-box !important;
+}
+
+#googleLoginBtn > div,
+#googleRegisterBtn > div,
 #googleLoginBtn iframe,
 #googleRegisterBtn iframe {
   border-radius: 24px !important;
   margin: 0 auto !important;
-  background: transparent !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15) !important;
 }
 
 /* Modals */

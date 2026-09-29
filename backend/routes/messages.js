@@ -365,4 +365,34 @@ router.post('/auto-cleanup', authMiddleware, async (req, res) => {
   }
 });
 
+// Permanent Dissolve Stealth Dust Note Endpoint
+router.post('/dissolve-dust/:messageId', authMiddleware, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { chatId } = req.body;
+    const Message = require('../models/Message');
+    const redis = require('../utils/redis');
+
+    await Message.deleteMany({ $or: [{ id: messageId }, { _id: messageId }] });
+    if (chatId) {
+      await redis.deleteCachedMessages(chatId).catch(() => {});
+    }
+
+    const io = req.app.get('io');
+    if (io && chatId) {
+      const payload = { chatId, messageId };
+      io.to(chatId).emit('stealth_dust_dissolved', payload);
+      if (chatId.includes('_')) {
+        const parts = chatId.split('_');
+        parts.forEach(uId => io.to(`user_${uId}`).emit('stealth_dust_dissolved', payload));
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error in dissolve-dust route:', err);
+    res.status(500).json({ error: 'Failed to dissolve dust note' });
+  }
+});
+
 module.exports = router;
