@@ -2020,10 +2020,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     <Video size={16} color="var(--accent)" />
                     <span>{isGroup ? 'Group Video Call' : 'Video Call'}</span>
                   </button>
-                  <button onClick={handleOpenWhiteboard}>
-                    <Presentation size={16} color="var(--accent)" />
-                    <span>Live Drawboard</span>
-                  </button>
+
                   <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
                   <button onClick={() => { setShowMoreMenu(false); setShowThemeModal(true); }}>
                     <ImageIcon size={16} color="var(--accent)" />
@@ -3003,6 +3000,43 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   <BarChart2 size={20} />
                 </div>
                 <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Create Poll</span>
+              </button>
+
+              {/* Live Drawboard */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  handleOpenWhiteboard();
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)'
+                }}>
+                  <Presentation size={20} />
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Live Drawboard</span>
               </button>
 
               {/* 5. Emoji & Stickers */}
