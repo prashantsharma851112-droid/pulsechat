@@ -1944,12 +1944,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     <Video size={16} color="var(--accent)" />
                     <span>{isGroup ? 'Group Video Call' : 'Video Call'}</span>
                   </button>
-                  <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
-                  {/* Pulse Aura Background Soundscapes moved inside 3-dots menu */}
-                  <button onClick={() => { setShowMoreMenu(false); setShowAuraMenu(prev => !prev); }}>
-                    <Music size={16} color="#f59e0b" />
-                    <span>Pulse Aura Soundscapes {activeAura !== 'off' ? `(${activeAura})` : ''}</span>
+                  <button onClick={() => { setShowMoreMenu(false); setShowWhiteboard(true); }}>
+                    <Presentation size={16} color="var(--accent)" />
+                    <span>Whiteboard Drawing Board</span>
                   </button>
+                  <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
                   <button onClick={() => { setShowMoreMenu(false); setShowThemeModal(true); }}>
                     <ImageIcon size={16} color="var(--accent)" />
                     <span>Chat background</span>
@@ -1957,10 +1956,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   <button onClick={() => { setShowMoreMenu(false); setShowSolidThemeModal(true); }}>
                     <Palette size={16} color="var(--accent)" />
                     <span>Change Solid Theme</span>
-                  </button>
-                  <button onClick={() => { setShowMoreMenu(false); setShowWhiteboard(true); }}>
-                    <Presentation size={16} color="var(--accent)" />
-                    <span>Whiteboard Drawing Board</span>
                   </button>
                   <button onClick={() => { setShowMoreMenu(false); setIsMultiSelectMode(true); setSelectedMsgIds([]); }}>
                     <CheckSquare size={16} color="var(--accent)" />
