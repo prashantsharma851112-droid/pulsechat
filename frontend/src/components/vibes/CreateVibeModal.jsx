@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { X, Sparkles, Image as ImageIcon, Music, Palette, Send, Loader2, Type, Sparkle, ZoomIn, Sliders, Trash2, AlignCenter, AlignLeft, AlignRight } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';

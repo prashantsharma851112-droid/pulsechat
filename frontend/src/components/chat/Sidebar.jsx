@@ -37,19 +37,40 @@ import { parseSafeJson } from '../../utils/imageCompressor';
 class ModalErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
   }
   componentDidCatch(error, errorInfo) {
     console.error("ModalErrorBoundary caught error:", error, errorInfo);
-    if (typeof this.props.onReset === 'function') {
-      this.props.onReset();
-    }
   }
   render() {
-    if (this.state.hasError) return null;
+    if (this.state.hasError) {
+      return (
+        <div className="modal-overlay" style={{ zIndex: 1400 }} onClick={this.props.onReset}>
+          <div className="modal-card modal-responsive" style={{ maxWidth: '400px', padding: '20px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>
+              <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+            </div>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>Vibe Feature Error</h3>
+            <p style={{ margin: '0 0 16px 0', color: 'var(--text-muted)', fontSize: '0.84rem', lineHeight: 1.4 }}>
+              {this.state.error?.message || 'Unable to display story modal.'}
+            </p>
+            <button
+              className="btn-primary"
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                if (typeof this.props.onReset === 'function') this.props.onReset();
+              }}
+              style={{ padding: '8px 20px', borderRadius: '12px', fontSize: '0.88rem' }}
+            >
+              Close & Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
     return this.props.children;
   }
 }
