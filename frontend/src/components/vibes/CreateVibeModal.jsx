@@ -938,8 +938,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   style={{
                     padding: '3px 8px',
                     borderRadius: '10px',
-                    border: selectedStickers.includes(s) ? '1.5px solid #f59e0b' : '1px solid rgba(255,255,255,0.1)',
-                    background: selectedStickers.includes(s) ? 'rgba(245, 158, 11, 0.2)' : 'rgba(0,0,0,0.2)',
+                    border: (Array.isArray(selectedStickers) && selectedStickers.includes(s)) ? '1.5px solid #f59e0b' : '1px solid rgba(255,255,255,0.1)',
+                    background: (Array.isArray(selectedStickers) && selectedStickers.includes(s)) ? 'rgba(245, 158, 11, 0.2)' : 'rgba(0,0,0,0.2)',
                     fontSize: '0.85rem',
                     cursor: 'pointer',
                     flexShrink: 0

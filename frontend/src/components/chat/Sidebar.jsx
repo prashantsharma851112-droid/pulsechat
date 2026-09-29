@@ -34,7 +34,25 @@ import {
   restoreDeletedChatId
 } from '../../utils/offlineStorage';
 import { parseSafeJson } from '../../utils/imageCompressor';
-import { playSound } from '../../utils/audio';
+class ModalErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ModalErrorBoundary caught error:", error, errorInfo);
+    if (typeof this.props.onReset === 'function') {
+      this.props.onReset();
+    }
+  }
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
   const { user, logout, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
@@ -2334,21 +2352,25 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       )}
 
       {showCreateVibe && (
-        <CreateVibeModal
-          onClose={() => setShowCreateVibe(false)}
-          onCreated={() => {
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
-            }
-          }}
-        />
+        <ModalErrorBoundary key="create_vibe_boundary" onReset={() => setShowCreateVibe(false)}>
+          <CreateVibeModal
+            onClose={() => setShowCreateVibe(false)}
+            onCreated={() => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
+              }
+            }}
+          />
+        </ModalErrorBoundary>
       )}
 
       {selectedVibeGroup && (
-        <VibeViewerModal
-          vibeGroup={selectedVibeGroup}
-          onClose={() => setSelectedVibeGroup(null)}
-        />
+        <ModalErrorBoundary key="viewer_vibe_boundary" onReset={() => setSelectedVibeGroup(null)}>
+          <VibeViewerModal
+            vibeGroup={selectedVibeGroup}
+            onClose={() => setSelectedVibeGroup(null)}
+          />
+        </ModalErrorBoundary>
       )}
 
       {showPulseZone && (

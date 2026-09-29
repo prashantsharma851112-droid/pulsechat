@@ -60,12 +60,22 @@ class ErrorBoundary extends React.Component {
             <AlertTriangle size={32} color="#ef4444" />
           </div>
           <h2 style={{ marginBottom: '0.5rem', fontWeight: 700 }}>PulseChat recovered safely</h2>
-          <p style={{ color: 'var(--text-muted, #a1a1aa)', marginBottom: '1.5rem', maxWidth: '420px', fontSize: '0.9rem' }}>
+          <p style={{ color: 'var(--text-muted, #a1a1aa)', marginBottom: '1rem', maxWidth: '420px', fontSize: '0.9rem' }}>
             We protected your session from a blank screen. Click below to continue messaging.
           </p>
+          {this.state.error && (
+            <div style={{ background: '#18181b', color: '#f87171', padding: '12px', borderRadius: '10px', fontSize: '0.78rem', maxWidth: '90vw', overflowX: 'auto', textAlign: 'left', marginBottom: '1.5rem', border: '1px solid #7f1d1d' }}>
+              <strong>Error Details:</strong> {String(this.state.error?.message || this.state.error)}
+              {this.state.error?.stack && (
+                <pre style={{ marginTop: '8px', fontSize: '0.72rem', whiteSpace: 'pre-wrap', maxHeight: '160px', overflowY: 'auto', color: '#fda4af' }}>
+                  {this.state.error.stack}
+                </pre>
+              )}
+            </div>
+          )}
           <button
             onClick={() => {
-              this.setState({ hasError: false });
+              this.setState({ hasError: false, error: null });
               window.location.href = '/';
             }}
             style={{

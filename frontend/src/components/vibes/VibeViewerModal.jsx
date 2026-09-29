@@ -508,7 +508,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
           </div>
 
           {/* Floating Sticker Badges */}
-          {currentVibe.selectedStickers && currentVibe.selectedStickers.length > 0 && (
+          {Array.isArray(currentVibe.selectedStickers) && currentVibe.selectedStickers.length > 0 && (
             <div style={{
               position: 'absolute',
               bottom: currentVibe.mediaUrl && currentVibe.caption ? '145px' : '90px',
@@ -521,8 +521,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
               padding: '4px 10px',
               borderRadius: '20px'
             }}>
-              {currentVibe.selectedStickers.map(s => (
-                <span key={s} style={{ fontSize: '1.3rem', animation: 'bounce 2s infinite' }}>{s}</span>
+              {currentVibe.selectedStickers.map((s, idx) => (
+                <span key={idx} style={{ fontSize: '1.3rem', animation: 'bounce 2s infinite' }}>{s}</span>
               ))}
             </div>
           )}
@@ -818,7 +818,10 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
                     try {
                       const cached = getCachedAllUsers(user.id || user._id);
                       if (Array.isArray(cached)) {
-                        const m = cached.find(u => u.id === viewer.userId || u._id === viewer.userId || (u.username && viewer.username && u.username.toLowerCase() === viewer.username.toLowerCase()));
+                        const m = cached.find(u =>
+                          (viewer.userId && (u.id === viewer.userId || u._id === viewer.userId)) ||
+                          (u.username && viewer.username && String(u.username).toLowerCase() === String(viewer.username).toLowerCase())
+                        );
                         if (m) {
                           vKing = Boolean(m.hasKingCrown);
                           vSilver = Boolean(m.hasSilverCrown);
