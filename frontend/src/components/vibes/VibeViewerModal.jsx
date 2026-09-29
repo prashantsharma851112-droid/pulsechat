@@ -453,15 +453,31 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
             userSelect: 'none'
           }}
         >
+          {/* Full Song YouTube Background Audio Engine */}
+          {currentVibe?.youtubeId && !isAudioMuted && (
+            <iframe
+              key={`yt_player_${currentVibe.id}_${currentVibe.youtubeId}_${currentVibe.songStartTime || 0}`}
+              src={`https://www.youtube-nocookie.com/embed/${currentVibe.youtubeId}?autoplay=1&enablejsapi=1&loop=1&playlist=${currentVibe.youtubeId}&start=${Math.floor(currentVibe.songStartTime || 0)}`}
+              allow="autoplay"
+              style={{ position: 'absolute', width: 1, height: 1, opacity: 0.001, pointerEvents: 'none', top: -100 }}
+            />
+          )}
+
+          {/* Uploaded Image Layer with positioning & zoom */}
           {currentVibe.mediaUrl ? (
             <div style={{
-              width: '100%',
-              height: '100%',
+              position: 'absolute',
+              left: `${currentVibe.imagePos?.x ?? 50}%`,
+              top: `${currentVibe.imagePos?.y ?? 50}%`,
+              transform: `translate(-50%, -50%) scale(${currentVibe.imageZoom || 1.0})`,
+              width: currentVibe.imageFit === 'contain' ? '92%' : '100%',
+              height: currentVibe.imageFit === 'contain' ? '92%' : '100%',
+              borderRadius: currentVibe.imageFit === 'padded' ? '16px' : '0px',
+              overflow: 'hidden',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              borderRadius: currentVibe.imageFit === 'padded' ? '16px' : '0px',
-              overflow: 'hidden'
+              zIndex: 2
             }}>
               <img
                 src={currentVibe.mediaUrl}
@@ -470,7 +486,6 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
                   width: '100%',
                   height: '100%',
                   objectFit: currentVibe.imageFit === 'padded' ? 'contain' : (currentVibe.imageFit || 'contain'),
-                  transform: `scale(${currentVibe.imageZoom || 1.0})`,
                   filter: currentVibe.imageFilter === 'warm' ? 'saturate(1.4) contrast(1.15)' :
                           currentVibe.imageFilter === 'cyber' ? 'hue-rotate(180deg) saturate(1.5)' :
                           currentVibe.imageFilter === 'vintage' ? 'sepia(0.4) contrast(1.1)' :
@@ -481,18 +496,27 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
             </div>
           ) : null}
 
-          {/* 3D Text Card or Text Overlay */}
-          <div style={{ position: 'relative', zIndex: 4, width: '100%', display: 'flex', justifyContent: 'center' }}>
+          {/* 3D Text Card or Text Overlay positioned at user's textPos */}
+          <div style={{
+            position: 'absolute',
+            left: `${currentVibe.textPos?.x ?? 50}%`,
+            top: `${currentVibe.textPos?.y ?? 50}%`,
+            transform: 'translate(-50%, -50%)',
+            zIndex: 5,
+            width: '88%',
+            display: 'flex',
+            justifyContent: 'center'
+          }}>
             {currentVibe.textStyle3D && currentVibe.textStyle3D !== 'none' ? (
-              <div className={`animated-3d-stage ${currentVibe.textStyle3D}`} style={{ position: 'relative', zIndex: 4, maxWidth: '100%' }}>
-                <div className="animated-3d-card" style={{ padding: '12px 20px', background: 'transparent', boxShadow: 'none', border: 'none' }}>
+              <div className={`animated-3d-stage ${currentVibe.textStyle3D}`} style={{ position: 'relative', zIndex: 4, maxWidth: '100%', width: '100%' }}>
+                <div className="animated-3d-card" style={{ padding: '12px 20px', background: 'transparent', boxShadow: 'none', border: 'none', width: '100%' }}>
                   <div className="text-3d-content" style={{ fontSize: `${(currentVibe.textSize || 1.3) * 1.1}rem`, textAlign: currentVibe.textAlign || 'center' }}>
                     {currentVibe.caption}
                   </div>
                   <div className="text-3d-shadow" />
                 </div>
               </div>
-            ) : currentVibe.caption && !currentVibe.mediaUrl ? (
+            ) : currentVibe.caption ? (
               <h2 style={{
                 color: '#fff',
                 fontSize: `${(currentVibe.textSize || 1.3) * 1.15}rem`,
@@ -500,7 +524,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
                 textAlign: currentVibe.textAlign || 'center',
                 lineHeight: 1.4,
                 textShadow: '0 2px 10px rgba(0,0,0,0.85)',
-                padding: '0 10px'
+                padding: '0 10px',
+                margin: 0
               }}>
                 {currentVibe.caption}
               </h2>
@@ -511,7 +536,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
           {Array.isArray(currentVibe.selectedStickers) && currentVibe.selectedStickers.length > 0 && (
             <div style={{
               position: 'absolute',
-              bottom: currentVibe.mediaUrl && currentVibe.caption ? '145px' : '90px',
+              bottom: '90px',
               right: '20px',
               display: 'flex',
               gap: '6px',
@@ -527,36 +552,16 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
             </div>
           )}
 
-          {/* Caption Overlay if Media present */}
-          {currentVibe.mediaUrl && currentVibe.caption && (
-            <div style={{
-              position: 'absolute',
-              bottom: '80px',
-              left: '16px',
-              right: '16px',
-              background: 'rgba(0,0,0,0.65)',
-              backdropFilter: 'blur(8px)',
-              padding: '10px 14px',
-              borderRadius: '14px',
-              color: '#fff',
-              fontSize: '0.9rem',
-              fontWeight: 600,
-              textAlign: currentVibe.textAlign || 'center',
-              zIndex: 5
-            }}>
-              {currentVibe.caption}
-            </div>
-          )}
-
-          {/* Instagram Music Vinyl Sticker */}
+          {/* Instagram Music Vinyl Sticker positioned at user's musicPos */}
           {currentVibe?.songTitle && (
             <div
               onClick={(e) => e.stopPropagation()}
               style={{
                 position: 'absolute',
-                bottom: currentVibe.mediaUrl && currentVibe.caption ? '145px' : '90px',
-                left: '16px',
-                background: 'rgba(0, 0, 0, 0.78)',
+                left: `${currentVibe.musicPos?.x ?? 20}%`,
+                top: `${currentVibe.musicPos?.y ?? 15}%`,
+                transform: 'translate(-50%, -50%)',
+                background: 'rgba(0, 0, 0, 0.82)',
                 backdropFilter: 'blur(12px)',
                 padding: '6px 14px 6px 8px',
                 borderRadius: '24px',

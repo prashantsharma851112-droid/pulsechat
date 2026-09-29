@@ -13,10 +13,30 @@ const VibeSchema = new mongoose.Schema({
   artistName: { type: String, default: '' },
   albumArt: { type: String, default: '' },
   audioUrl: { type: String, default: '' },
+  youtubeId: { type: String, default: '' },
   songStartTime: { type: Number, default: 0 },
   bgGradient: { type: String, default: 'linear-gradient(135deg, #1e1b4b 0%, #311042 100%)' },
   textStyle3D: { type: String, default: 'none' },
   animatedBg: { type: String, default: 'none' },
+  textPos: {
+    x: { type: Number, default: 50 },
+    y: { type: Number, default: 50 }
+  },
+  musicPos: {
+    x: { type: Number, default: 20 },
+    y: { type: Number, default: 15 }
+  },
+  imagePos: {
+    x: { type: Number, default: 50 },
+    y: { type: Number, default: 50 }
+  },
+  imageFit: { type: String, default: 'contain' },
+  imageZoom: { type: Number, default: 1.0 },
+  imageFilter: { type: String, default: 'none' },
+  imageOpacity: { type: Number, default: 0.92 },
+  textSize: { type: Number, default: 1.2 },
+  textAlign: { type: String, default: 'center' },
+  selectedStickers: [{ type: String }],
   views: [{
     userId: String,
     displayName: String,

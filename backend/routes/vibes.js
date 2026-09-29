@@ -8,7 +8,11 @@ const User = require('../models/User');
 // Create a new 24-hour Vibe Story
 router.post('/create', authMiddleware, async (req, res) => {
   try {
-    const { mediaUrl, caption, soundtrack, songTitle, artistName, albumArt, audioUrl, songStartTime, bgGradient, textStyle3D, animatedBg } = req.body;
+    const {
+      mediaUrl, caption, soundtrack, songTitle, artistName, albumArt, audioUrl, youtubeId, songStartTime,
+      bgGradient, textStyle3D, animatedBg, textPos, musicPos, imagePos, imageFit, imageZoom,
+      imageFilter, imageOpacity, textSize, textAlign, selectedStickers
+    } = req.body;
     const targetUserId = req.userId || req.user?.id || req.user?.userId;
     const isObjectId = mongoose.Types.ObjectId.isValid(targetUserId);
 
@@ -36,15 +40,26 @@ router.post('/create', authMiddleware, async (req, res) => {
       avatar: user.avatar || '',
       mediaUrl: mediaUrl || null,
       caption: caption || '',
-      soundtrack: soundtrack || (audioUrl ? 'music_track' : 'lofi'),
+      soundtrack: soundtrack || (audioUrl || youtubeId ? 'music_track' : 'lofi'),
       songTitle: songTitle || '',
       artistName: artistName || '',
       albumArt: albumArt || '',
       audioUrl: audioUrl || '',
+      youtubeId: youtubeId || '',
       songStartTime: parseInt(songStartTime, 10) || 0,
       bgGradient: bgGradient || 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
       textStyle3D: textStyle3D || 'none',
       animatedBg: animatedBg || 'none',
+      textPos: textPos || { x: 50, y: 50 },
+      musicPos: musicPos || { x: 20, y: 15 },
+      imagePos: imagePos || { x: 50, y: 50 },
+      imageFit: imageFit || 'contain',
+      imageZoom: imageZoom || 1.0,
+      imageFilter: imageFilter || 'none',
+      imageOpacity: imageOpacity !== undefined ? imageOpacity : 0.92,
+      textSize: textSize || 1.2,
+      textAlign: textAlign || 'center',
+      selectedStickers: Array.isArray(selectedStickers) ? selectedStickers : [],
       expiresAt
     });
 

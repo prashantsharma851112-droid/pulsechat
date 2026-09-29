@@ -1,6 +1,6 @@
 import React, { useState, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Sparkles, Image as ImageIcon, Music, Palette, Send, Loader2, Type, Sparkle, ZoomIn, Sliders, Trash2, AlignCenter, AlignLeft, AlignRight } from 'lucide-react';
+import { X, Sparkles, Image as ImageIcon, Music, Palette, Send, Loader2, Type, Sparkle, ZoomIn, Sliders, Trash2, AlignCenter, AlignLeft, AlignRight, Move } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 
@@ -187,6 +187,35 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     );
   };
 
+  const [textPos, setTextPos] = useState({ x: 50, y: 50 });
+  const [musicPos, setMusicPos] = useState({ x: 20, y: 15 });
+  const [imagePos, setImagePos] = useState({ x: 50, y: 50 });
+  const [draggingElement, setDraggingElement] = useState(null);
+  const cardRef = useRef(null);
+
+  const handlePointerDown = (elementName, e) => {
+    e.stopPropagation();
+    setDraggingElement(elementName);
+  };
+
+  const handlePointerMove = (e) => {
+    if (!draggingElement || !cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    const x = Math.max(10, Math.min(90, Math.round(((clientX - rect.left) / rect.width) * 100)));
+    const y = Math.max(10, Math.min(90, Math.round(((clientY - rect.top) / rect.height) * 100)));
+
+    if (draggingElement === 'text') setTextPos({ x, y });
+    else if (draggingElement === 'music') setMusicPos({ x, y });
+    else if (draggingElement === 'image') setImagePos({ x, y });
+  };
+
+  const handlePointerUp = () => {
+    setDraggingElement(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!caption.trim() && !mediaUrl) {
@@ -210,10 +239,14 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       artistName: selectedSong ? selectedSong.artistName : '',
       albumArt: selectedSong ? selectedSong.albumArt : '',
       audioUrl: selectedSong ? selectedSong.audioUrl : '',
+      youtubeId: selectedSong ? selectedSong.youtubeId : '',
       songStartTime: selectedSong ? (songStartTime || 0) : 0,
       bgGradient: selectedGradient,
       textStyle3D,
       animatedBg,
+      textPos,
+      musicPos,
+      imagePos,
       imageFit,
       imageZoom,
       imageFilter,
@@ -243,10 +276,14 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             artistName: selectedSong ? selectedSong.artistName : '',
             albumArt: selectedSong ? selectedSong.albumArt : '',
             audioUrl: selectedSong ? selectedSong.audioUrl : '',
+            youtubeId: selectedSong ? selectedSong.youtubeId : '',
             songStartTime: selectedSong ? (songStartTime || 0) : 0,
             bgGradient: selectedGradient,
             textStyle3D,
             animatedBg,
+            textPos,
+            musicPos,
+            imagePos,
             imageFit,
             imageZoom,
             imageFilter,
@@ -314,38 +351,68 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
           {error && <div className="error-banner">{error}</div>}
 
-          {/* Live Card Preview (ALWAYS renders background gradient & live wallpaper even with uploaded image!) */}
-          <div style={{
-            position: 'relative',
-            height: '240px',
-            borderRadius: '20px',
-            background: selectedGradient,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: imageFit === 'padded' ? '24px' : '0px',
-            overflow: 'hidden',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-            border: '1px solid rgba(255,255,255,0.2)'
-          }}>
+          {/* Invisible YouTube Full Song Audio Player Engine */}
+          {selectedSong?.youtubeId && (
+            <iframe
+              key={`yt_modal_preview_${selectedSong.youtubeId}_${songStartTime}`}
+              src={`https://www.youtube-nocookie.com/embed/${selectedSong.youtubeId}?autoplay=1&enablejsapi=1&start=${Math.floor(songStartTime)}`}
+              allow="autoplay"
+              style={{ position: 'absolute', width: 1, height: 1, opacity: 0.001, pointerEvents: 'none', top: -100 }}
+            />
+          )}
+
+          {/* Live Card Preview (Interactive Drag & Drop Canvas) */}
+          <div
+            ref={cardRef}
+            onMouseMove={handlePointerMove}
+            onTouchMove={handlePointerMove}
+            onMouseUp={handlePointerUp}
+            onTouchEnd={handlePointerUp}
+            onMouseLeave={handlePointerUp}
+            style={{
+              position: 'relative',
+              height: '260px',
+              borderRadius: '20px',
+              background: selectedGradient,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: imageFit === 'padded' ? '24px' : '0px',
+              overflow: 'hidden',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              userSelect: 'none',
+              cursor: draggingElement ? 'grabbing' : 'default'
+            }}
+          >
             {/* Live Canvas Background ALWAYS rendered if selected */}
             {animatedBg !== 'none' && (
               <ChatLiveWallpaper wallpaperId={animatedBg} />
             )}
 
-            {/* Uploaded Image Layer with Fit, Zoom, Filter & Opacity adjustments */}
+            {/* Uploaded Image Layer with Drag & Drop Position, Fit, Zoom, Filter & Opacity */}
             {mediaUrl ? (
-              <div style={{
-                position: 'absolute',
-                inset: imageFit === 'padded' ? '16px' : '0px',
-                borderRadius: imageFit === 'padded' ? '14px' : '0px',
-                overflow: 'hidden',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 2
-              }}>
+              <div
+                onMouseDown={(e) => handlePointerDown('image', e)}
+                onTouchStart={(e) => handlePointerDown('image', e)}
+                style={{
+                  position: 'absolute',
+                  left: `${imagePos.x}%`,
+                  top: `${imagePos.y}%`,
+                  transform: `translate(-50%, -50%) scale(${imageZoom})`,
+                  width: imageFit === 'contain' ? '90%' : '100%',
+                  height: imageFit === 'contain' ? '90%' : '100%',
+                  borderRadius: imageFit === 'padded' ? '14px' : '0px',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 2,
+                  cursor: 'grab',
+                  touchAction: 'none'
+                }}
+              >
                 <img
                   src={mediaUrl}
                   alt="Vibe Media"
@@ -353,25 +420,39 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                     width: '100%',
                     height: '100%',
                     objectFit: imageFit === 'padded' ? 'contain' : imageFit,
-                    transform: `scale(${imageZoom})`,
                     filter: imageFilter === 'warm' ? 'saturate(1.4) contrast(1.15)' :
                             imageFilter === 'cyber' ? 'hue-rotate(180deg) saturate(1.5)' :
                             imageFilter === 'vintage' ? 'sepia(0.4) contrast(1.1)' :
                             imageFilter === 'bw' ? 'grayscale(0.85) contrast(1.2)' : 'none',
                     opacity: imageOpacity,
-                    transition: 'all 0.2s ease'
+                    pointerEvents: 'none'
                   }}
                 />
               </div>
             ) : null}
 
-            {/* 3D Text Card or Normal Textarea */}
-            <div style={{ position: 'relative', zIndex: 4, width: '100%', padding: '0 16px', display: 'flex', justifyContent: 'center' }}>
+            {/* Drag-and-Drop 3D Text Card or Textarea */}
+            <div
+              onMouseDown={(e) => handlePointerDown('text', e)}
+              onTouchStart={(e) => handlePointerDown('text', e)}
+              style={{
+                position: 'absolute',
+                left: `${textPos.x}%`,
+                top: `${textPos.y}%`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: 5,
+                width: '88%',
+                display: 'flex',
+                justifyContent: 'center',
+                cursor: 'grab',
+                touchAction: 'none'
+              }}
+            >
               {textStyle3D !== 'none' ? (
                 <div className={`animated-3d-stage ${textStyle3D}`} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
                   <div className="animated-3d-card" style={{ padding: '8px 12px', width: '100%', background: 'transparent', boxShadow: 'none', border: 'none' }}>
                     <textarea
-                      placeholder="Type 3D Vibe text..."
+                      placeholder="Type 3D Vibe text... (Drag to position)"
                       value={caption}
                       onChange={(e) => setCaption(e.target.value)}
                       className="text-3d-content"
@@ -391,7 +472,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 </div>
               ) : (
                 <textarea
-                  placeholder="What's your vibe today? Write something..."
+                  placeholder="What's your vibe today? Drag to position text anywhere!"
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
                   style={{
@@ -410,6 +491,54 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               )}
             </div>
 
+            {/* Drag-and-Drop Music Track Vinyl Sticker */}
+            {selectedSong ? (
+              <div
+                onMouseDown={(e) => handlePointerDown('music', e)}
+                onTouchStart={(e) => handlePointerDown('music', e)}
+                style={{
+                  position: 'absolute',
+                  left: `${musicPos.x}%`,
+                  top: `${musicPos.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                  background: 'rgba(0, 0, 0, 0.82)',
+                  backdropFilter: 'blur(10px)',
+                  padding: '5px 10px',
+                  borderRadius: '20px',
+                  border: '1.5px solid rgba(245, 158, 11, 0.7)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  zIndex: 6,
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
+                  cursor: 'grab',
+                  touchAction: 'none'
+                }}
+              >
+                <img
+                  src={selectedSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedSong.songTitle}`}
+                  alt="Track"
+                  style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover', animation: 'spin 4s linear infinite', pointerEvents: 'none' }}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '120px', pointerEvents: 'none' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    🎵 {selectedSong.songTitle}
+                  </span>
+                  <span style={{ fontSize: '0.62rem', color: '#f59e0b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {selectedSong.artistName}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setSelectedSong(null); }}
+                  style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', padding: '1px' }}
+                  title="Remove Song"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ) : null}
+
             {/* Floating Selected Sticker Badges */}
             {selectedStickers.length > 0 && (
               <div style={{
@@ -422,54 +551,14 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 background: 'rgba(0,0,0,0.4)',
                 backdropFilter: 'blur(8px)',
                 padding: '4px 8px',
-                borderRadius: '16px'
+                borderRadius: '16px',
+                pointerEvents: 'none'
               }}>
                 {selectedStickers.map(s => (
                   <span key={s} style={{ fontSize: '1.2rem', animation: 'bounce 2s infinite' }}>{s}</span>
                 ))}
               </div>
             )}
-
-            {/* Selected Music Track Vinyl Badge */}
-            {selectedSong ? (
-              <div style={{
-                position: 'absolute',
-                top: 12,
-                left: 12,
-                background: 'rgba(0, 0, 0, 0.78)',
-                backdropFilter: 'blur(10px)',
-                padding: '5px 10px',
-                borderRadius: '20px',
-                border: '1px solid rgba(245, 158, 11, 0.6)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                zIndex: 6,
-                boxShadow: '0 4px 14px rgba(0,0,0,0.4)'
-              }}>
-                <img
-                  src={selectedSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedSong.songTitle}`}
-                  alt="Track"
-                  style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover', animation: 'spin 4s linear infinite' }}
-                />
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '120px' }}>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    🎵 {selectedSong.songTitle}
-                  </span>
-                  <span style={{ fontSize: '0.62rem', color: '#f59e0b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {selectedSong.artistName}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedSong(null)}
-                  style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', padding: '1px' }}
-                  title="Remove Song"
-                >
-                  <X size={13} />
-                </button>
-              </div>
-            ) : null}
           </div>
 
           {/* Controls Section */}
@@ -516,7 +605,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <Sliders size={13} /> Adjust Song Portion (30s Snippet)
+                    <Sliders size={13} /> Full Song Trimmer (Choose Any 30s Part)
                   </span>
                   <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#fff', background: 'rgba(245, 158, 11, 0.25)', padding: '2px 8px', borderRadius: '10px' }}>
                     {formatSecs(songStartTime)} - {formatSecs(songStartTime + 30)}
@@ -526,8 +615,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 {/* Animated Waveform Visualizer & Seek Range Slider */}
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '34px', gap: '2px', background: 'rgba(0,0,0,0.5)', borderRadius: '10px', padding: '0 8px', overflow: 'hidden' }}>
                   {[40, 65, 85, 30, 95, 60, 75, 45, 90, 100, 50, 70, 80, 60, 40, 90, 85, 70, 95, 50, 80, 60, 40, 75, 90, 65, 80, 45, 95, 85].map((h, idx) => {
-                    const activeStartIdx = Math.floor((songStartTime / 150) * 30);
-                    const activeEndIdx = Math.floor(((songStartTime + 30) / 150) * 30);
+                    const activeStartIdx = Math.floor((songStartTime / 240) * 30);
+                    const activeEndIdx = Math.floor(((songStartTime + 30) / 240) * 30);
                     const isActive = idx >= activeStartIdx && idx <= activeEndIdx;
                     return (
                       <div
@@ -547,7 +636,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   <input
                     type="range"
                     min={0}
-                    max={120}
+                    max={240}
                     step={1}
                     value={songStartTime}
                     onChange={(e) => {
@@ -576,7 +665,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                     { label: '▶️ Intro (0:00)', sec: 0 },
                     { label: '🔥 Verse (0:30)', sec: 30 },
                     { label: '🎵 Chorus (1:00)', sec: 60 },
-                    { label: '⚡ Drop (1:30)', sec: 90 }
+                    { label: '⚡ Drop (1:30)', sec: 90 },
+                    { label: '🎸 Bridge (2:00)', sec: 120 }
                   ].map(preset => (
                     <button
                       key={preset.sec}
@@ -629,8 +719,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               </label>
             </div>
 
-            {/* 3. 4 Separate Category Tabs (3D Text, Live Canvas, BG Color, Image Controls) */}
-            <div style={{ display: 'grid', gridTemplateColumns: mediaUrl ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr', gap: '6px', marginTop: '2px' }}>
+            {/* 3. Category Tabs (3D Text, Position, Image, Live Canvas, BG Color) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px', marginTop: '2px' }}>
               <button
                 type="button"
                 onClick={() => setActiveCategoryTab('3d_text')}
@@ -651,6 +741,28 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 }}
               >
                 <Type size={13} color={activeCategoryTab === '3d_text' ? '#38bdf8' : '#888'} /> 3D Text
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveCategoryTab('position')}
+                style={{
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  border: activeCategoryTab === 'position' ? '1.5px solid #f59e0b' : '1px solid var(--border)',
+                  background: activeCategoryTab === 'position' ? 'rgba(245, 158, 11, 0.22)' : 'rgba(0,0,0,0.25)',
+                  color: activeCategoryTab === 'position' ? '#f59e0b' : 'var(--text-muted)',
+                  fontWeight: 700,
+                  fontSize: '0.76rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Move size={13} color={activeCategoryTab === 'position' ? '#f59e0b' : '#888'} /> 📍 Position
               </button>
 
               <button
@@ -733,6 +845,105 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               flexDirection: 'column',
               justifyContent: 'center'
             }}>
+              {activeCategoryTab === 'position' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#f59e0b', margin: 0 }}>
+                    🎯 Drag items directly on the card preview OR click presets below:
+                  </span>
+
+                  {/* Text Position */}
+                  <div>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                      📝 Text Alignment & Position
+                    </span>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      {[
+                        { label: '⬆️ Top', x: 50, y: 22 },
+                        { label: '🎯 Center', x: 50, y: 50 },
+                        { label: '⬇️ Bottom', x: 50, y: 78 },
+                        { label: '⬅️ Left', x: 28, y: 50 },
+                        { label: '➡️ Right', x: 72, y: 50 }
+                      ].map(btn => (
+                        <button
+                          key={btn.label}
+                          type="button"
+                          onClick={() => setTextPos({ x: btn.x, y: btn.y })}
+                          style={{
+                            flex: 1, padding: '4px 6px', borderRadius: '8px', fontSize: '0.68rem', fontWeight: 700,
+                            background: textPos.x === btn.x && textPos.y === btn.y ? 'rgba(245,158,11,0.3)' : 'rgba(255,255,255,0.08)',
+                            color: '#fff', border: textPos.x === btn.x && textPos.y === btn.y ? '1px solid #f59e0b' : '1px solid var(--border)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {btn.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Music Sticker Position */}
+                  {selectedSong && (
+                    <div>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#f59e0b', display: 'block', marginBottom: '4px' }}>
+                        🎵 Music Sticker Position
+                      </span>
+                      <div style={{ display: 'flex', gap: '5px' }}>
+                        {[
+                          { label: '↖️ Top-Left', x: 22, y: 15 },
+                          { label: '↗️ Top-Right', x: 78, y: 15 },
+                          { label: '↙️ Bottom-Left', x: 22, y: 82 },
+                          { label: '↘️ Bottom-Right', x: 78, y: 82 }
+                        ].map(btn => (
+                          <button
+                            key={btn.label}
+                            type="button"
+                            onClick={() => setMusicPos({ x: btn.x, y: btn.y })}
+                            style={{
+                              flex: 1, padding: '4px 6px', borderRadius: '8px', fontSize: '0.68rem', fontWeight: 700,
+                              background: musicPos.x === btn.x && musicPos.y === btn.y ? 'rgba(245,158,11,0.3)' : 'rgba(245,158,11,0.12)',
+                              color: '#f59e0b', border: musicPos.x === btn.x && musicPos.y === btn.y ? '1.5px solid #f59e0b' : '1px solid rgba(245,158,11,0.3)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {btn.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Image Position */}
+                  {mediaUrl && (
+                    <div>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#10b981', display: 'block', marginBottom: '4px' }}>
+                        🖼️ Image Layer Position
+                      </span>
+                      <div style={{ display: 'flex', gap: '5px' }}>
+                        {[
+                          { label: '🎯 Center', x: 50, y: 50 },
+                          { label: '⬆️ Up', x: 50, y: 38 },
+                          { label: '⬇️ Down', x: 50, y: 62 }
+                        ].map(btn => (
+                          <button
+                            key={btn.label}
+                            type="button"
+                            onClick={() => setImagePos({ x: btn.x, y: btn.y })}
+                            style={{
+                              flex: 1, padding: '4px 6px', borderRadius: '8px', fontSize: '0.68rem', fontWeight: 700,
+                              background: imagePos.x === btn.x && imagePos.y === btn.y ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.12)',
+                              color: '#10b981', border: imagePos.x === btn.x && imagePos.y === btn.y ? '1.5px solid #10b981' : '1px solid rgba(16,185,129,0.3)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {btn.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {activeCategoryTab === '3d_text' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <span style={{ fontSize: '0.73rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block' }}>
