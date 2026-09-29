@@ -13,6 +13,7 @@ const VibeSchema = new mongoose.Schema({
   artistName: { type: String, default: '' },
   albumArt: { type: String, default: '' },
   audioUrl: { type: String, default: '' },
+  songStartTime: { type: Number, default: 0 },
   bgGradient: { type: String, default: 'linear-gradient(135deg, #1e1b4b 0%, #311042 100%)' },
   textStyle3D: { type: String, default: 'none' },
   animatedBg: { type: String, default: 'none' },

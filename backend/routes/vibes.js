@@ -8,7 +8,7 @@ const User = require('../models/User');
 // Create a new 24-hour Vibe Story
 router.post('/create', authMiddleware, async (req, res) => {
   try {
-    const { mediaUrl, caption, soundtrack, songTitle, artistName, albumArt, audioUrl, bgGradient, textStyle3D, animatedBg } = req.body;
+    const { mediaUrl, caption, soundtrack, songTitle, artistName, albumArt, audioUrl, songStartTime, bgGradient, textStyle3D, animatedBg } = req.body;
     const targetUserId = req.userId || req.user?.id || req.user?.userId;
     const isObjectId = mongoose.Types.ObjectId.isValid(targetUserId);
 
@@ -41,6 +41,7 @@ router.post('/create', authMiddleware, async (req, res) => {
       artistName: artistName || '',
       albumArt: albumArt || '',
       audioUrl: audioUrl || '',
+      songStartTime: parseInt(songStartTime, 10) || 0,
       bgGradient: bgGradient || 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
       textStyle3D: textStyle3D || 'none',
       animatedBg: animatedBg || 'none',

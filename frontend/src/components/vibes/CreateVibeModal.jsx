@@ -86,7 +86,31 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [selectedGradient, setSelectedGradient] = useState(GRADIENTS[0].value);
   const [soundtrack, setSoundtrack] = useState('lofi');
   const [selectedSong, setSelectedSong] = useState(null);
+  const [songStartTime, setSongStartTime] = useState(0);
   const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const previewAudioRef = useRef(null);
+
+  const previewSongPart = (song, startTimeSec) => {
+    if (!song) return;
+    try {
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+      }
+      if (song.audioUrl) {
+        const audio = new Audio(song.audioUrl);
+        audio.currentTime = startTimeSec;
+        audio.volume = 0.85;
+        audio.play().catch(() => {});
+        previewAudioRef.current = audio;
+      }
+    } catch (e) {}
+  };
+
+  const formatSecs = (sec) => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
   const [textStyle3D, setTextStyle3D] = useState('none');
   const [animatedBg, setAnimatedBg] = useState('none');
   const [activeCategoryTab, setActiveCategoryTab] = useState('3d_text'); // '3d_text' | 'live_animated' | 'bg_color' | 'image_adjust'
@@ -182,6 +206,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       artistName: selectedSong ? selectedSong.artistName : '',
       albumArt: selectedSong ? selectedSong.albumArt : '',
       audioUrl: selectedSong ? selectedSong.audioUrl : '',
+      songStartTime: selectedSong ? (songStartTime || 0) : 0,
       bgGradient: selectedGradient,
       textStyle3D,
       animatedBg,
@@ -214,6 +239,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             artistName: selectedSong ? selectedSong.artistName : '',
             albumArt: selectedSong ? selectedSong.albumArt : '',
             audioUrl: selectedSong ? selectedSong.audioUrl : '',
+            songStartTime: selectedSong ? (songStartTime || 0) : 0,
             bgGradient: selectedGradient,
             textStyle3D,
             animatedBg,
@@ -472,6 +498,106 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 <span>{selectedSong ? `🎵 Selected: ${selectedSong.songTitle} (Change)` : '🎵 Add Music'}</span>
               </button>
             </div>
+
+            {/* Instagram-style Music Trimmer / Song Portion Adjuster Widget */}
+            {selectedSong && (
+              <div style={{
+                background: 'rgba(18, 18, 24, 0.88)',
+                border: '1.5px solid rgba(245, 158, 11, 0.5)',
+                borderRadius: '16px',
+                padding: '10px 12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <Sliders size={13} /> Adjust Song Portion (30s Snippet)
+                  </span>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#fff', background: 'rgba(245, 158, 11, 0.25)', padding: '2px 8px', borderRadius: '10px' }}>
+                    {formatSecs(songStartTime)} - {formatSecs(songStartTime + 30)}
+                  </span>
+                </div>
+
+                {/* Animated Waveform Visualizer & Seek Range Slider */}
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '34px', gap: '2px', background: 'rgba(0,0,0,0.5)', borderRadius: '10px', padding: '0 8px', overflow: 'hidden' }}>
+                  {[40, 65, 85, 30, 95, 60, 75, 45, 90, 100, 50, 70, 80, 60, 40, 90, 85, 70, 95, 50, 80, 60, 40, 75, 90, 65, 80, 45, 95, 85].map((h, idx) => {
+                    const activeStartIdx = Math.floor((songStartTime / 150) * 30);
+                    const activeEndIdx = Math.floor(((songStartTime + 30) / 150) * 30);
+                    const isActive = idx >= activeStartIdx && idx <= activeEndIdx;
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          flex: 1,
+                          height: `${h}%`,
+                          background: isActive
+                            ? 'linear-gradient(180deg, #f59e0b, #ec4899)'
+                            : 'rgba(255, 255, 255, 0.22)',
+                          borderRadius: '2px',
+                          transition: 'background 0.15s ease'
+                        }}
+                      />
+                    );
+                  })}
+                  <input
+                    type="range"
+                    min={0}
+                    max={120}
+                    step={1}
+                    value={songStartTime}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setSongStartTime(val);
+                      previewSongPart(selectedSong, val);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: '100%',
+                      height: '100%',
+                      opacity: 0,
+                      cursor: 'ew-resize',
+                      zIndex: 5
+                    }}
+                  />
+                </div>
+
+                {/* Quick Seek Presets */}
+                <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
+                  {[
+                    { label: '▶️ Intro (0:00)', sec: 0 },
+                    { label: '🔥 Verse (0:30)', sec: 30 },
+                    { label: '🎵 Chorus (1:00)', sec: 60 },
+                    { label: '⚡ Drop (1:30)', sec: 90 }
+                  ].map(preset => (
+                    <button
+                      key={preset.sec}
+                      type="button"
+                      onClick={() => {
+                        setSongStartTime(preset.sec);
+                        previewSongPart(selectedSong, preset.sec);
+                      }}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '10px',
+                        background: songStartTime === preset.sec ? 'linear-gradient(135deg, #f59e0b, #ec4899)' : 'rgba(255,255,255,0.08)',
+                        color: songStartTime === preset.sec ? '#ffffff' : 'var(--text-muted)',
+                        fontSize: '0.68rem',
+                        fontWeight: 700,
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* 2. Add Image Button (Directly below Add Music) */}
             <div>

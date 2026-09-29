@@ -106,6 +106,9 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     if (currentVibe?.audioUrl) {
       const audio = new Audio(currentVibe.audioUrl);
       audio.loop = true;
+      if (currentVibe?.songStartTime && currentVibe.songStartTime > 0) {
+        try { audio.currentTime = currentVibe.songStartTime; } catch (e) {}
+      }
       audio.volume = isAudioMuted ? 0 : 0.85;
       audio.play().catch(e => console.warn('Autoplay prevented:', e));
       audioRef.current = audio;
