@@ -18,6 +18,7 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [playingTrackId, setPlayingTrackId] = useState(null);
+  const [previewYtId, setPreviewYtId] = useState(null);
   const audioRef = useRef(null);
 
   // Stop audio on unmount or close
@@ -27,6 +28,7 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
         audioRef.current.pause();
         audioRef.current = null;
       }
+      setPreviewYtId(null);
     };
   }, []);
 
@@ -92,24 +94,32 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
         audioRef.current.pause();
       }
       setPlayingTrackId(null);
+      setPreviewYtId(null);
     } else {
       if (audioRef.current) {
         audioRef.current.pause();
       }
-      const newAudio = new Audio(song.audioUrl);
-      newAudio.volume = 0.85;
-      newAudio.play().catch(() => {});
-      newAudio.onended = () => setPlayingTrackId(null);
-      audioRef.current = newAudio;
-      setPlayingTrackId(song.trackId);
+      if (song.youtubeId) {
+        setPreviewYtId(song.youtubeId);
+        setPlayingTrackId(song.trackId);
+      } else if (song.audioUrl && !song.audioUrl.includes('youtube')) {
+        setPreviewYtId(null);
+        const newAudio = new Audio(song.audioUrl);
+        newAudio.volume = 0.85;
+        newAudio.play().catch(() => {});
+        newAudio.onended = () => setPlayingTrackId(null);
+        audioRef.current = newAudio;
+        setPlayingTrackId(song.trackId);
+      }
     }
   };
 
   const handleSelect = async (song) => {
     if (audioRef.current) {
       audioRef.current.pause();
-      setPlayingTrackId(null);
     }
+    setPlayingTrackId(null);
+    setPreviewYtId(null);
 
     let finalSong = { ...song };
     if (!finalSong.youtubeId && finalSong.songTitle) {
@@ -151,9 +161,18 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
       }}
       onClick={() => {
         if (audioRef.current) audioRef.current.pause();
+        setPreviewYtId(null);
         onClose();
       }}
     >
+      {previewYtId && (
+        <iframe
+          key={`modal_yt_preview_${previewYtId}`}
+          src={`https://www.youtube-nocookie.com/embed/${previewYtId}?autoplay=1&enablejsapi=1`}
+          allow="autoplay; encrypted-media"
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0.001, pointerEvents: 'none', top: -999 }}
+        />
+      )}
       <div
         style={{
           width: '100%',
@@ -196,10 +215,10 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)' }}>
-                Instagram Music 🎵
+                PulseChat Music 🎵
               </h3>
               <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                Search & attach any song to your Vibe Story
+                Search & attach any full song to your Chat & Vibe Story
               </p>
             </div>
           </div>

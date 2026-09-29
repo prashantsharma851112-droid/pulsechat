@@ -118,6 +118,27 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   }, [auraVolume, isChatMusicMuted]);
 
+  // Auto-upgrade chat background music to full YouTube audio if youtubeId is missing
+  useEffect(() => {
+    if (chatMusicSong && !chatMusicSong.youtubeId && chatMusicSong.songTitle) {
+      const q = `${chatMusicSong.songTitle} ${chatMusicSong.artistName || ''}`;
+      const rawToken = localStorage.getItem('pulsechat_token');
+      const authHeader = rawToken ? { Authorization: `Bearer ${rawToken}` } : {};
+      fetch(`${BACKEND_URL}/api/messages/youtube-search?q=${encodeURIComponent(q)}`, { headers: authHeader })
+        .then(r => r.json())
+        .then(ytData => {
+          if (Array.isArray(ytData) && ytData.length > 0 && ytData[0].youtubeId) {
+            const updated = { ...chatMusicSong, youtubeId: ytData[0].youtubeId, isFullSong: true };
+            setChatMusicSong(updated);
+            try {
+              localStorage.setItem(`pulsechat_music_${chatId}`, JSON.stringify(updated));
+            } catch (e) {}
+          }
+        })
+        .catch(() => {});
+    }
+  }, [chatMusicSong, chatId]);
+
   const [chatTheme, setChatTheme] = useState(() => {
     return localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'default';
   });
@@ -1808,6 +1829,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-chat)', overflow: 'hidden', position: 'relative' }}
     >
       <ChatLiveWallpaper wallpaperId={chatWallpaper} customImage={customWallpaper} />
+
+      {/* Full Song YouTube Background Audio Engine for Chat */}
+      {chatMusicSong?.youtubeId && !isChatMusicMuted && (
+        <iframe
+          key={`chat_yt_music_${chatId}_${chatMusicSong.youtubeId}`}
+          src={`https://www.youtube-nocookie.com/embed/${chatMusicSong.youtubeId}?autoplay=1&enablejsapi=1&loop=1&playlist=${chatMusicSong.youtubeId}`}
+          allow="autoplay; encrypted-media"
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0.001, pointerEvents: 'none', top: -9999, left: -9999 }}
+        />
+      )}
 
       {/* Header Bar */}
       <div style={{

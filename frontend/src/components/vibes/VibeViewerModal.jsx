@@ -132,6 +132,27 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     }
   }, [isAudioMuted]);
 
+  // Auto-upgrade Vibe Story music to full YouTube audio stream if youtubeId is missing
+  const [upgradedYtId, setUpgradedYtId] = useState(null);
+  useEffect(() => {
+    setUpgradedYtId(null);
+    if (currentVibe && !currentVibe.youtubeId && currentVibe.songTitle) {
+      const q = `${currentVibe.songTitle} ${currentVibe.artistName || ''}`;
+      const rawToken = localStorage.getItem('pulsechat_token');
+      const authHeader = rawToken ? { Authorization: `Bearer ${rawToken}` } : {};
+      fetch(`${BACKEND_URL}/api/messages/youtube-search?q=${encodeURIComponent(q)}`, { headers: authHeader })
+        .then(r => r.json())
+        .then(ytData => {
+          if (Array.isArray(ytData) && ytData.length > 0 && ytData[0].youtubeId) {
+            currentVibe.youtubeId = ytData[0].youtubeId;
+            currentVibe.isFullSong = true;
+            setUpgradedYtId(ytData[0].youtubeId);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [currentVibe?.id, currentVibe?.songTitle]);
+
   // Fetch live views for owner when modal opens
   const fetchLiveViews = async () => {
     if (token && currentVibe?.id) {
@@ -454,11 +475,11 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
           }}
         >
           {/* Full Song YouTube Background Audio Engine */}
-          {currentVibe?.youtubeId && !isAudioMuted && (
+          {(currentVibe?.youtubeId || upgradedYtId) && !isAudioMuted && (
             <iframe
-              key={`yt_player_${currentVibe.id}_${currentVibe.youtubeId}_${currentVibe.songStartTime || 0}`}
-              src={`https://www.youtube-nocookie.com/embed/${currentVibe.youtubeId}?autoplay=1&enablejsapi=1&loop=1&playlist=${currentVibe.youtubeId}&start=${Math.floor(currentVibe.songStartTime || 0)}`}
-              allow="autoplay"
+              key={`yt_player_${currentVibe.id}_${currentVibe.youtubeId || upgradedYtId}_${currentVibe.songStartTime || 0}`}
+              src={`https://www.youtube-nocookie.com/embed/${currentVibe.youtubeId || upgradedYtId}?autoplay=1&enablejsapi=1&loop=1&playlist=${currentVibe.youtubeId || upgradedYtId}&start=${Math.floor(currentVibe.songStartTime || 0)}`}
+              allow="autoplay; encrypted-media"
               style={{ position: 'absolute', width: 1, height: 1, opacity: 0.001, pointerEvents: 'none', top: -100 }}
             />
           )}
