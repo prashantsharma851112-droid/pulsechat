@@ -86,6 +86,7 @@ module.exports = {
     if (!chatOrContactId || !userId) return;
 
     let myVariants = [userId];
+    let otherVariants = [];
     try {
       const mongoose = require('mongoose');
       const me = await User.findOne({
@@ -103,20 +104,41 @@ module.exports = {
     } catch (e) {}
     myVariants = Array.from(new Set(myVariants.filter(Boolean)));
 
-    const chatConditions = [{ chatId: chatOrContactId }];
-    if (typeof chatOrContactId === 'string' && chatOrContactId.includes('_')) {
-      const parts = chatOrContactId.split('_');
-      const otherId = parts.find(id => !myVariants.includes(id)) || parts[0];
-      chatConditions.push(
-        { senderId: otherId, receiverId: { $in: myVariants } },
-        { chatId: [userId, otherId].sort().join('_') }
-      );
-    } else if (typeof chatOrContactId === 'string') {
-      chatConditions.push(
-        { chatId: [userId, chatOrContactId].sort().join('_') },
-        { senderId: chatOrContactId, receiverId: { $in: myVariants } }
-      );
-    }
+    try {
+      const mongoose = require('mongoose');
+      let targetIdToSearch = chatOrContactId;
+      if (typeof chatOrContactId === 'string' && chatOrContactId.includes('_')) {
+        const parts = chatOrContactId.split('_');
+        targetIdToSearch = parts.find(id => !myVariants.includes(id)) || parts[0];
+      }
+      if (targetIdToSearch) {
+        const other = await User.findOne({
+          $or: [
+            { id: targetIdToSearch },
+            { username: targetIdToSearch },
+            ...(mongoose.Types.ObjectId.isValid(targetIdToSearch) ? [{ _id: targetIdToSearch }] : [])
+          ]
+        }).select('id username _id').lean();
+        if (other) {
+          if (other.id) otherVariants.push(other.id);
+          if (other.username) otherVariants.push(other.username);
+          if (other._id) otherVariants.push(other._id.toString());
+        }
+      }
+    } catch (e) {}
+    if (typeof chatOrContactId === 'string') otherVariants.push(chatOrContactId);
+    otherVariants = Array.from(new Set(otherVariants.filter(Boolean)));
+
+    const chatConditions = [
+      { chatId: chatOrContactId },
+      { senderId: { $in: otherVariants }, receiverId: { $in: myVariants } }
+    ];
+
+    myVariants.forEach(m => {
+      otherVariants.forEach(o => {
+        chatConditions.push({ chatId: [m, o].sort().join('_') });
+      });
+    });
 
     const filter = {
       $or: chatConditions,
@@ -132,6 +154,17 @@ module.exports = {
     }
 
     await Message.updateMany(filter, updateDoc);
+
+    // Invalidate Redis RAM caches so unread count updates immediately across rest endpoints
+    try {
+      const redis = require('../utils/redis');
+      myVariants.forEach(v => redis.invalidateRecent(v).catch(() => {}));
+      otherVariants.forEach(v => redis.invalidateRecent(v).catch(() => {}));
+      redis.invalidateChat(chatOrContactId).catch(() => {});
+      chatConditions.forEach(c => {
+        if (c.chatId) redis.invalidateChat(c.chatId).catch(() => {});
+      });
+    } catch (e) {}
   },
 
   toggleReaction: async (messageId, emoji, userId) => {

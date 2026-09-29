@@ -400,17 +400,22 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               if (fresh.proTier) res.proTier = fresh.proTier;
               if (fresh.customBadge !== undefined) res.customBadge = fresh.customBadge;
             }
-            if (activeChatRef.current && (
-              res.id === activeChatRef.current.id ||
-              res._id === activeChatRef.current.id ||
-              (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username)
-            )) {
+            const isCurrentlyActive = Boolean(
+              activeChatRef.current && (
+                res.id === activeChatRef.current.id ||
+                res._id === activeChatRef.current.id ||
+                res.id === activeChatRef.current._id ||
+                res._id === activeChatRef.current._id ||
+                (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username)
+              )
+            );
+            if (isCurrentlyActive || res.unreadCount === 0) {
               res.unreadCount = 0;
             } else if (user?.id) {
               const cachedList = getCachedRecentChats(user.id) || [];
               const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
-              if (cachedMatch && cachedMatch.unreadCount) {
-                res.unreadCount = Math.max(res.unreadCount || 0, cachedMatch.unreadCount);
+              if (cachedMatch && cachedMatch.unreadCount === 0) {
+                res.unreadCount = 0;
               }
             }
             return res;
@@ -472,8 +477,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
             const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
             if (cachedMatch) {
-              if (cachedMatch.unreadCount) {
-                res.unreadCount = Math.max(res.unreadCount || 0, cachedMatch.unreadCount);
+              if (cachedMatch.unreadCount === 0) {
+                res.unreadCount = 0;
               }
               const cachedTime = new Date(cachedMatch.lastMessageTimestamp || cachedMatch.lastMessageTime || 0).getTime();
               const serverTime = new Date(res.lastMessageTimestamp || res.lastMessageTime || 0).getTime();
@@ -486,11 +491,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               }
             }
 
-            if (activeChatRef.current && (
-              res.id === activeChatRef.current.id ||
-              res._id === activeChatRef.current.id ||
-              (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username)
-            )) {
+            const isCurrentlyActive = Boolean(
+              activeChatRef.current && (
+                res.id === activeChatRef.current.id ||
+                res._id === activeChatRef.current.id ||
+                res.id === activeChatRef.current._id ||
+                res._id === activeChatRef.current._id ||
+                (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username)
+              )
+            );
+            if (isCurrentlyActive || res.unreadCount === 0) {
               res.unreadCount = 0;
             }
             return res;
@@ -867,13 +877,27 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
     // Instant local read update (0ms, no network roundtrip needed)
     const handleChatRead = ({ chatId: cId, userId }) => {
-      if (userId === user?.id && user?.id) {
+      const readerStr = String(userId || '');
+      const myIdStr = String(user?.id || '');
+      const myMongoStr = String(user?._id || '');
+      const myUserStr = String(user?.username || '');
+      const isMe = !userId || readerStr === myIdStr || readerStr === myMongoStr || readerStr === myUserStr;
+
+      if (isMe && user?.id) {
         clearUnreadCount(user.id, cId);
         setRecentChats(prev => prev.map(c => {
-          if (c.id === cId || (cId && typeof cId === 'string' && (cId.includes(c.id) || (c.username && cId.includes(c.username))))) {
-            return { ...c, unreadCount: 0 };
-          }
-          return c;
+          const isMatch = Boolean(
+            c.id === cId ||
+            c._id === cId ||
+            (c.username && c.username === cId) ||
+            (c.chatId && c.chatId === cId) ||
+            (typeof cId === 'string' && (
+              (c.id && cId.includes(c.id)) ||
+              (c._id && cId.includes(c._id)) ||
+              (c.username && cId.includes(c.username))
+            ))
+          );
+          return isMatch ? { ...c, unreadCount: 0 } : c;
         }));
       }
     };

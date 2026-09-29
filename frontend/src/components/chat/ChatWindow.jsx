@@ -824,8 +824,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
 
       // Zero out unread count immediately in cache and notify other components (0ms)
-      if (user?.id && activeChat?.id) {
-        clearUnreadCount(user.id, activeChat.id);
+      if (user?.id) {
+        if (activeChat?.id) clearUnreadCount(user.id, activeChat.id);
+        if (activeChat?._id) clearUnreadCount(user.id, activeChat._id);
+        if (activeChat?.username) clearUnreadCount(user.id, activeChat.username);
         if (chatId) clearUnreadCount(user.id, chatId);
         window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
       }

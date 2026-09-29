@@ -185,8 +185,19 @@ export function clearUnreadCount(userId, targetId) {
   let recent = getCachedRecentChats(userId);
   let updated = false;
   const newRecent = recent.map(c => {
-    if (c.id === targetId || (targetId.includes('_') && targetId.includes(c.id))) {
-      if (c.unreadCount > 0) {
+    const isMatch = Boolean(
+      c.id === targetId ||
+      c._id === targetId ||
+      (c.username && c.username === targetId) ||
+      (c.chatId && c.chatId === targetId) ||
+      (typeof targetId === 'string' && (
+        (c.id && targetId.includes(c.id)) ||
+        (c._id && targetId.includes(c._id)) ||
+        (c.username && targetId.includes(c.username))
+      ))
+    );
+    if (isMatch) {
+      if (c.unreadCount > 0 || c.unreadCount === undefined) {
         updated = true;
         return { ...c, unreadCount: 0 };
       }
