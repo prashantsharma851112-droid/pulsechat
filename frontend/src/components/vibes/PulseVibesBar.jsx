@@ -3,6 +3,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { Plus, Sparkles } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
+import { getCachedAllUsers } from '../../utils/offlineStorage';
 
 export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
   const { user, token } = useContext(AuthContext);
@@ -141,6 +142,36 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
   const myVibesGroup = groupedVibes.find(g => isMyId(g.userId));
   const otherVibesGroups = groupedVibes.filter(g => !isMyId(g.userId));
 
+  const getGroupCrowns = (group) => {
+    let king = Boolean(group?.hasKingCrown);
+    let silver = Boolean(group?.hasSilverCrown);
+    let streak = Boolean(group?.hasStreakCrown);
+
+    if (!king && !silver && !streak && user?.id) {
+      try {
+        const cachedUsers = getCachedAllUsers(user.id || user._id);
+        if (Array.isArray(cachedUsers)) {
+          const matched = cachedUsers.find(u =>
+            u.id === group?.userId ||
+            u._id === group?.userId ||
+            (u.username && group?.username && u.username.toLowerCase() === group.username.toLowerCase())
+          );
+          if (matched) {
+            king = Boolean(matched.hasKingCrown);
+            silver = Boolean(matched.hasSilverCrown);
+            streak = Boolean(matched.hasStreakCrown);
+          }
+        }
+      } catch (e) {}
+    }
+    return { king, silver, streak };
+  };
+
+  const myCrowns = getGroupCrowns(myVibesGroup);
+  const myHasKing = Boolean(user?.hasKingCrown || myVibesGroup?.hasKingCrown || myCrowns.king);
+  const myHasSilver = Boolean(user?.hasSilverCrown || myVibesGroup?.hasSilverCrown || myCrowns.silver);
+  const myHasStreak = Boolean(user?.hasStreakCrown || myVibesGroup?.hasStreakCrown || myCrowns.streak);
+
   return (
     <div style={{
       padding: '12px 14px 10px 14px',
@@ -219,11 +250,11 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
               ? '0 0 12px rgba(245, 158, 11, 0.45)'
               : 'none'
           }}>
-            {user?.hasKingCrown ? (
+            {myHasKing ? (
               <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
-            ) : user?.hasSilverCrown ? (
+            ) : myHasSilver ? (
               <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
-            ) : user?.hasStreakCrown ? (
+            ) : myHasStreak ? (
               <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
             ) : null}
             <img
@@ -263,6 +294,8 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
         {/* Other Users' / Friends' Stories */}
         {otherVibesGroups.map(group => {
           const viewed = isGroupViewed(group);
+          const crowns = getGroupCrowns(group);
+
           return (
             <div
               key={group.userId}
@@ -291,11 +324,11 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
                   : '0 0 12px rgba(236, 72, 153, 0.45)',
                 animation: viewed ? 'none' : 'pulseGlow 2.5s infinite alternate'
               }}>
-                {group.hasKingCrown ? (
+                {crowns.king ? (
                   <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
-                ) : group.hasSilverCrown ? (
+                ) : crowns.silver ? (
                   <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
-                ) : group.hasStreakCrown ? (
+                ) : crowns.streak ? (
                   <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
                 ) : null}
                 <img

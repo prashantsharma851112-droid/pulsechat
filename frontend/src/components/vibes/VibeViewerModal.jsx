@@ -3,7 +3,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
-import { updateRecentChatSnippet } from '../../utils/offlineStorage';
+import { updateRecentChatSnippet, getCachedAllUsers } from '../../utils/offlineStorage';
 
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 
@@ -24,6 +24,34 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
 
   const currentUserId = user?.id || user?._id || 'local_user';
   const isMine = currentVibe?.userId === currentUserId || vibeGroup?.userId === currentUserId;
+
+  const isKing = vibeGroup?.hasKingCrown || (isMine && user?.hasKingCrown);
+  const isSilver = vibeGroup?.hasSilverCrown || (isMine && user?.hasSilverCrown);
+  const isStreak = vibeGroup?.hasStreakCrown || (isMine && user?.hasStreakCrown);
+
+  let hasKing = Boolean(isKing);
+  let hasSilver = Boolean(isSilver);
+  let hasStreak = Boolean(isStreak);
+
+  if (!hasKing && !hasSilver && !hasStreak && user?.id) {
+    try {
+      const cachedUsers = getCachedAllUsers(user.id || user._id);
+      if (Array.isArray(cachedUsers)) {
+        const targetKey = vibeGroup?.userId || currentVibe?.userId;
+        const targetUsername = vibeGroup?.username || currentVibe?.username;
+        const matched = cachedUsers.find(u =>
+          u.id === targetKey ||
+          u._id === targetKey ||
+          (u.username && targetUsername && u.username.toLowerCase() === targetUsername.toLowerCase())
+        );
+        if (matched) {
+          hasKing = Boolean(matched.hasKingCrown);
+          hasSilver = Boolean(matched.hasSilverCrown);
+          hasStreak = Boolean(matched.hasStreakCrown);
+        }
+      }
+    } catch (e) {}
+  }
 
   // Mark current story as viewed in LocalStorage and send view ping to Backend
   useEffect(() => {
@@ -335,11 +363,20 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
           color: '#fff'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <img
-              src={vibeGroup?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${vibeGroup?.username || 'user'}`}
-              alt={vibeGroup?.displayName}
-              style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid #fff' }}
-            />
+            <div style={{ position: 'relative', width: '36px', height: '36px', flexShrink: 0 }}>
+              {hasKing ? (
+                <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.85rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+              ) : hasSilver ? (
+                <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.85rem', filter: 'drop-shadow(0 2px 4px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+              ) : hasStreak ? (
+                <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.85rem', filter: 'drop-shadow(0 2px 4px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+              ) : null}
+              <img
+                src={vibeGroup?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${vibeGroup?.username || 'user'}`}
+                alt={vibeGroup?.displayName}
+                style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid #fff' }}
+              />
+            </div>
             <div>
               <div style={{ fontSize: '0.86rem', fontWeight: 800, textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
                 {vibeGroup?.displayName || 'User'}
@@ -765,43 +802,72 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
                   <p style={{ fontSize: '0.78rem', opacity: 0.8, marginTop: '4px' }}>Share your story with friends!</p>
                 </div>
               ) : (
-                liveViews.map((viewer, idx) => (
-                  <div
-                    key={viewer.userId || idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 10px',
-                      borderRadius: '12px',
-                      background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.08)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <img
-                        src={viewer.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${viewer.username || viewer.displayName || 'user'}`}
-                        alt={viewer.displayName}
-                        style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #818cf8' }}
-                      />
-                      <div>
-                        <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#fff' }}>
-                          {viewer.displayName || viewer.username || 'User'}
+                liveViews.map((viewer, idx) => {
+                  let vKing = Boolean(viewer.hasKingCrown);
+                  let vSilver = Boolean(viewer.hasSilverCrown);
+                  let vStreak = Boolean(viewer.hasStreakCrown);
+
+                  if (!vKing && !vSilver && !vStreak && user?.id) {
+                    try {
+                      const cached = getCachedAllUsers(user.id || user._id);
+                      if (Array.isArray(cached)) {
+                        const m = cached.find(u => u.id === viewer.userId || u._id === viewer.userId || (u.username && viewer.username && u.username.toLowerCase() === viewer.username.toLowerCase()));
+                        if (m) {
+                          vKing = Boolean(m.hasKingCrown);
+                          vSilver = Boolean(m.hasSilverCrown);
+                          vStreak = Boolean(m.hasStreakCrown);
+                        }
+                      }
+                    } catch (e) {}
+                  }
+
+                  return (
+                    <div
+                      key={viewer.userId || idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 10px',
+                        borderRadius: '12px',
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(255,255,255,0.08)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ position: 'relative', width: '38px', height: '38px', flexShrink: 0 }}>
+                          {vKing ? (
+                            <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.85rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+                          ) : vSilver ? (
+                            <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.85rem', filter: 'drop-shadow(0 2px 4px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+                          ) : vStreak ? (
+                            <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.85rem', filter: 'drop-shadow(0 2px 4px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+                          ) : null}
+                          <img
+                            src={viewer.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${viewer.username || viewer.displayName || 'user'}`}
+                            alt={viewer.displayName}
+                            style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '1px solid #818cf8' }}
+                          />
                         </div>
-                        {viewer.username && (
-                          <div style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.6)' }}>
-                            @{viewer.username}
+                        <div>
+                          <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#fff' }}>
+                            {viewer.displayName || viewer.username || 'User'}
                           </div>
-                        )}
+                          {viewer.username && (
+                            <div style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.6)' }}>
+                              @{viewer.username}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
                     <span style={{ fontSize: '0.72rem', color: '#a5b4fc', background: 'rgba(99, 102, 241, 0.2)', padding: '2px 8px', borderRadius: '10px' }}>
                       Viewed
                     </span>
                   </div>
-                ))
-              )}
+                );
+              })
+            )}
             </div>
           </div>
         )}

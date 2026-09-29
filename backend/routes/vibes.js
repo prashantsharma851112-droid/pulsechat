@@ -81,16 +81,41 @@ router.get('/active', authMiddleware, async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
+    // Collect all user IDs/usernames to populate crown status & fresh avatar
+    const uKeys = activeVibes.map(v => v.userId).filter(Boolean);
+    const uNames = activeVibes.map(v => v.username).filter(Boolean);
+
+    const usersMap = new Map();
+    if (uKeys.length > 0 || uNames.length > 0) {
+      const users = await User.find({
+        $or: [
+          { id: { $in: uKeys } },
+          { username: { $in: uNames } }
+        ]
+      }).select('id _id username displayName avatar hasKingCrown hasSilverCrown hasStreakCrown').lean();
+
+      users.forEach(u => {
+        if (u.id) usersMap.set(u.id, u);
+        if (u._id) usersMap.set(u._id.toString(), u);
+        if (u.username) usersMap.set(u.username, u);
+      });
+    }
+
     // Group stories by userId
     const groupedMap = new Map();
     activeVibes.forEach(v => {
       const uKey = v.userId || (v.username ? `user_${v.username}` : 'unknown_user');
+      const matchedUser = usersMap.get(v.userId) || usersMap.get(v.username);
+
       if (!groupedMap.has(uKey)) {
         groupedMap.set(uKey, {
           userId: uKey,
-          displayName: v.displayName || v.username || 'Pulse User',
-          username: v.username || '',
-          avatar: v.avatar || '',
+          displayName: matchedUser?.displayName || v.displayName || v.username || 'Pulse User',
+          username: matchedUser?.username || v.username || '',
+          avatar: matchedUser?.avatar || v.avatar || '',
+          hasKingCrown: Boolean(matchedUser?.hasKingCrown),
+          hasSilverCrown: Boolean(matchedUser?.hasSilverCrown),
+          hasStreakCrown: Boolean(matchedUser?.hasStreakCrown),
           vibes: []
         });
       }
