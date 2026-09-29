@@ -40,9 +40,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
         const targetKey = vibeGroup?.userId || currentVibe?.userId;
         const targetUsername = vibeGroup?.username || currentVibe?.username;
         const matched = cachedUsers.find(u =>
-          u.id === targetKey ||
-          u._id === targetKey ||
-          (u.username && targetUsername && u.username.toLowerCase() === targetUsername.toLowerCase())
+          (targetKey && (u.id === targetKey || u._id === targetKey)) ||
+          (u.username && targetUsername && String(u.username).toLowerCase() === String(targetUsername).toLowerCase())
         );
         if (matched) {
           hasKing = Boolean(matched.hasKingCrown);
@@ -65,7 +64,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
         })
           .then(res => res.json())
           .then(data => {
-            if (data.success && data.views) {
+            if (data && data.success && data.views) {
               setLiveViews(data.views);
             }
           })
@@ -89,7 +88,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
         })
           .then(res => res.json())
           .then(data => {
-            if (data.views) setLiveViews(data.views);
+            if (data && data.views) setLiveViews(data.views);
           })
           .catch(() => {});
       }
@@ -106,8 +105,13 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     if (currentVibe?.audioUrl) {
       const audio = new Audio(currentVibe.audioUrl);
       audio.loop = true;
-      if (currentVibe?.songStartTime && currentVibe.songStartTime > 0) {
-        try { audio.currentTime = currentVibe.songStartTime; } catch (e) {}
+      const validTime = Number(currentVibe?.songStartTime || 0);
+      if (!isNaN(validTime) && isFinite(validTime) && validTime > 0) {
+        audio.addEventListener('loadedmetadata', () => {
+          try {
+            if (validTime < audio.duration) audio.currentTime = validTime;
+          } catch (e) {}
+        });
       }
       audio.volume = isAudioMuted ? 0 : 0.85;
       audio.play().catch(e => console.warn('Autoplay prevented:', e));

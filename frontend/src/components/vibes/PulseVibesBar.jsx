@@ -82,9 +82,10 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
       Object.values(localMap).forEach(localGrp => {
         const existingIdx = combinedGroups.findIndex(g => isMyId(g.userId) ? isMyId(localGrp.userId) : (g.userId === localGrp.userId || (g.username && g.username === localGrp.username)));
         if (existingIdx >= 0) {
-          const existingIds = new Set(combinedGroups[existingIdx].vibes.map(v => v.id));
+          const existingVibes = combinedGroups[existingIdx].vibes || [];
+          const existingIds = new Set(existingVibes.map(v => v.id));
           const newVibes = localGrp.vibes.filter(v => !existingIds.has(v.id));
-          combinedGroups[existingIdx].vibes = [...newVibes, ...combinedGroups[existingIdx].vibes];
+          combinedGroups[existingIdx].vibes = [...newVibes, ...existingVibes];
         } else {
           if (isMyId(localGrp.userId)) {
             combinedGroups.unshift(localGrp);
@@ -222,7 +223,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
         {/* User's own Story Item */}
         <div
           onClick={() => {
-            if (myVibesGroup && myVibesGroup.vibes.length > 0) {
+            if (myVibesGroup && Array.isArray(myVibesGroup.vibes) && myVibesGroup.vibes.length > 0) {
               onOpenVibeViewer(myVibesGroup);
             } else {
               onOpenCreateVibe();
@@ -243,10 +244,10 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
             height: '54px',
             borderRadius: '50%',
             padding: '2.5px',
-            background: myVibesGroup && myVibesGroup.vibes.length > 0
+            background: (myVibesGroup && Array.isArray(myVibesGroup.vibes) && myVibesGroup.vibes.length > 0)
               ? 'linear-gradient(135deg, #f59e0b, #ec4899, #6366f1)'
               : 'rgba(255,255,255,0.15)',
-            boxShadow: myVibesGroup && myVibesGroup.vibes.length > 0
+            boxShadow: (myVibesGroup && Array.isArray(myVibesGroup.vibes) && myVibesGroup.vibes.length > 0)
               ? '0 0 12px rgba(245, 158, 11, 0.45)'
               : 'none'
           }}>
@@ -293,6 +294,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
 
         {/* Other Users' / Friends' Stories */}
         {otherVibesGroups.map(group => {
+          if (!group || !Array.isArray(group.vibes) || group.vibes.length === 0) return null;
           const viewed = isGroupViewed(group);
           const crowns = getGroupCrowns(group);
 
