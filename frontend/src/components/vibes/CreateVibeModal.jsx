@@ -11,7 +11,10 @@ const GRADIENTS = [
   { id: 'g2', name: 'Cyber Gold', value: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)' },
   { id: 'g3', name: 'Mint Emerald', value: 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)' },
   { id: 'g4', name: 'Neon Rose', value: 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)' },
-  { id: 'g5', name: 'Midnight AMOLED', value: 'linear-gradient(135deg, #18181b 0%, #09090b 100%)' }
+  { id: 'g5', name: 'Midnight AMOLED', value: 'linear-gradient(135deg, #18181b 0%, #09090b 100%)' },
+  { id: 'g6', name: 'Sunset Crimson', value: 'linear-gradient(135deg, #ff4e50 0%, #f9d423 100%)' },
+  { id: 'g7', name: 'Royal Sapphire', value: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)' },
+  { id: 'g8', name: 'Cosmic Obsidian', value: 'linear-gradient(135deg, #0f0c29 0%, #24243e 100%)' }
 ];
 
 const TEXT_STYLES_3D = [
@@ -32,8 +35,6 @@ const ANIMATED_BGS = [
   { id: 'firefly_night_live', label: '💡 Firefly Glow' },
   { id: 'love_hearts_live', label: '💖 Floating Hearts' }
 ];
-
-
 
 const compressImageToBase64 = (file) => {
   return new Promise((resolve) => {
@@ -82,6 +83,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [showMusicPicker, setShowMusicPicker] = useState(false);
   const [textStyle3D, setTextStyle3D] = useState('none');
   const [animatedBg, setAnimatedBg] = useState('none');
+  const [activeCategoryTab, setActiveCategoryTab] = useState('3d_text'); // '3d_text' | 'live_animated' | 'bg_color'
   const [mediaUrl, setMediaUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -360,122 +362,230 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           </div>
 
           {/* Controls Section */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             
-            {/* Music Search Trigger Button */}
+            {/* 1. Music Search Trigger Button */}
             <div>
               <button
                 type="button"
                 onClick={() => setShowMusicPicker(true)}
                 style={{
                   width: '100%',
-                  padding: '11px 16px',
-                  borderRadius: '16px',
+                  padding: '10px 14px',
+                  borderRadius: '14px',
                   background: selectedSong ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(236, 72, 153, 0.25))' : 'linear-gradient(135deg, #6366f1, #a855f7)',
                   border: selectedSong ? '1.5px solid #f59e0b' : 'none',
                   color: '#ffffff',
                   fontWeight: 800,
-                  fontSize: '0.88rem',
+                  fontSize: '0.86rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px',
                   cursor: 'pointer',
-                  boxShadow: selectedSong ? '0 4px 14px rgba(245, 158, 11, 0.3)' : '0 4px 16px rgba(99, 102, 241, 0.35)',
+                  boxShadow: selectedSong ? '0 4px 14px rgba(245, 158, 11, 0.3)' : '0 4px 14px rgba(99, 102, 241, 0.3)',
                   transition: 'all 0.2s ease'
                 }}
               >
-                <Music size={18} />
+                <Music size={17} />
                 <span>{selectedSong ? `🎵 Selected: ${selectedSong.songTitle} (Change)` : '🎵 Add Music'}</span>
               </button>
             </div>
-            
-            {/* 3D Text Style Selector */}
-            <div>
-              <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px' }}>
-                <Type size={14} color="#3b82f6" /> 3D Text Style (VIP Feature)
-              </label>
-              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
-                {TEXT_STYLES_3D.map(st => (
-                  <button
-                    key={st.id}
-                    type="button"
-                    onClick={() => setTextStyle3D(st.id)}
-                    style={{
-                      padding: '5px 12px',
-                      borderRadius: '12px',
-                      border: textStyle3D === st.id ? '1.5px solid #3b82f6' : '1px solid var(--border)',
-                      background: textStyle3D === st.id ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-card)',
-                      color: textStyle3D === st.id ? '#38bdf8' : 'var(--text-muted)',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {st.label}
-                  </button>
-                ))}
-              </div>
-            </div>
 
-            {/* Live Animated Wallpaper Selector */}
+            {/* 2. Add Image Button (Directly below Add Music) */}
             <div>
-              <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px' }}>
-                <Sparkle size={14} color="#ec4899" /> Live Animated Canvas Background
-              </label>
-              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
-                {ANIMATED_BGS.map(bg => (
-                  <button
-                    key={bg.id}
-                    type="button"
-                    onClick={() => { setAnimatedBg(bg.id); setMediaUrl(''); }}
-                    style={{
-                      padding: '5px 12px',
-                      borderRadius: '12px',
-                      border: animatedBg === bg.id && !mediaUrl ? '1.5px solid #ec4899' : '1px solid var(--border)',
-                      background: animatedBg === bg.id && !mediaUrl ? 'rgba(236, 72, 153, 0.2)' : 'var(--bg-card)',
-                      color: animatedBg === bg.id && !mediaUrl ? '#f472b6' : 'var(--text-muted)',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {bg.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Background Gradients & Media Upload */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <Palette size={14} /> Background Color
-              </label>
-              <label style={{ cursor: 'pointer', fontSize: '0.78rem', color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <ImageIcon size={14} /> {uploading ? 'Processing...' : mediaUrl ? 'Change Image' : 'Add Image'}
+              <label style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '14px',
+                background: mediaUrl ? 'rgba(16, 185, 129, 0.2)' : 'linear-gradient(135deg, #10b981, #06b6d4)',
+                border: mediaUrl ? '1.5px solid #10b981' : 'none',
+                color: '#ffffff',
+                fontWeight: 800,
+                fontSize: '0.86rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                boxShadow: mediaUrl ? '0 4px 14px rgba(16, 185, 129, 0.3)' : '0 4px 14px rgba(16, 185, 129, 0.3)',
+                transition: 'all 0.2s ease',
+                boxSizing: 'border-box'
+              }}>
+                <ImageIcon size={17} />
+                <span>{uploading ? 'Processing Image...' : mediaUrl ? '🖼️ Image Attached (Click to Change)' : '🖼️ Add Image'}</span>
                 <input type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
               </label>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-              {GRADIENTS.map(g => (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={() => { setSelectedGradient(g.value); setAnimatedBg('none'); setMediaUrl(''); }}
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    background: g.value,
-                    border: selectedGradient === g.value && animatedBg === 'none' && !mediaUrl ? '2px solid #fff' : '1px solid rgba(255,255,255,0.2)',
-                    cursor: 'pointer',
-                    flexShrink: 0
-                  }}
-                />
-              ))}
+            {/* 3. 3 Separate Category Tabs (3D Text, Live Canvas, BG Color) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginTop: '2px' }}>
+              <button
+                type="button"
+                onClick={() => setActiveCategoryTab('3d_text')}
+                style={{
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  border: activeCategoryTab === '3d_text' ? '1.5px solid #3b82f6' : '1px solid var(--border)',
+                  background: activeCategoryTab === '3d_text' ? 'rgba(59, 130, 246, 0.22)' : 'rgba(0,0,0,0.25)',
+                  color: activeCategoryTab === '3d_text' ? '#38bdf8' : 'var(--text-muted)',
+                  fontWeight: 700,
+                  fontSize: '0.78rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Type size={14} color={activeCategoryTab === '3d_text' ? '#38bdf8' : '#888'} /> 3D Text
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveCategoryTab('live_animated')}
+                style={{
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  border: activeCategoryTab === 'live_animated' ? '1.5px solid #ec4899' : '1px solid var(--border)',
+                  background: activeCategoryTab === 'live_animated' ? 'rgba(236, 72, 153, 0.22)' : 'rgba(0,0,0,0.25)',
+                  color: activeCategoryTab === 'live_animated' ? '#f472b6' : 'var(--text-muted)',
+                  fontWeight: 700,
+                  fontSize: '0.78rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Sparkle size={14} color={activeCategoryTab === 'live_animated' ? '#f472b6' : '#888'} /> Live Canvas
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveCategoryTab('bg_color')}
+                style={{
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  border: activeCategoryTab === 'bg_color' ? '1.5px solid #10b981' : '1px solid var(--border)',
+                  background: activeCategoryTab === 'bg_color' ? 'rgba(16, 185, 129, 0.22)' : 'rgba(0,0,0,0.25)',
+                  color: activeCategoryTab === 'bg_color' ? '#34d399' : 'var(--text-muted)',
+                  fontWeight: 700,
+                  fontSize: '0.78rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Palette size={14} color={activeCategoryTab === 'bg_color' ? '#34d399' : '#888'} /> BG Color
+              </button>
+            </div>
+
+            {/* 4. Category Options Panel */}
+            <div style={{
+              padding: '10px 12px',
+              borderRadius: '14px',
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              minHeight: '62px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center'
+            }}>
+              {activeCategoryTab === '3d_text' && (
+                <div>
+                  <span style={{ fontSize: '0.73rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                    Select 3D Text Style (VIP Feature):
+                  </span>
+                  <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+                    {TEXT_STYLES_3D.map(st => (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => setTextStyle3D(st.id)}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: '12px',
+                          border: textStyle3D === st.id ? '1.5px solid #3b82f6' : '1px solid var(--border)',
+                          background: textStyle3D === st.id ? 'rgba(59, 130, 246, 0.25)' : 'var(--bg-card)',
+                          color: textStyle3D === st.id ? '#38bdf8' : 'var(--text-muted)',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeCategoryTab === 'live_animated' && (
+                <div>
+                  <span style={{ fontSize: '0.73rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                    Select Live Animated Background:
+                  </span>
+                  <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+                    {ANIMATED_BGS.map(bg => (
+                      <button
+                        key={bg.id}
+                        type="button"
+                        onClick={() => { setAnimatedBg(bg.id); setMediaUrl(''); }}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: '12px',
+                          border: animatedBg === bg.id && !mediaUrl ? '1.5px solid #ec4899' : '1px solid var(--border)',
+                          background: animatedBg === bg.id && !mediaUrl ? 'rgba(236, 72, 153, 0.25)' : 'var(--bg-card)',
+                          color: animatedBg === bg.id && !mediaUrl ? '#f472b6' : 'var(--text-muted)',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {bg.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeCategoryTab === 'bg_color' && (
+                <div>
+                  <span style={{ fontSize: '0.73rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                    Select Background Color Palette:
+                  </span>
+                  <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', alignItems: 'center' }}>
+                    {GRADIENTS.map(g => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => { setSelectedGradient(g.value); setAnimatedBg('none'); setMediaUrl(''); }}
+                        title={g.name}
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          background: g.value,
+                          border: selectedGradient === g.value && animatedBg === 'none' && !mediaUrl ? '2.5px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                          transition: 'transform 0.15s ease',
+                          transform: selectedGradient === g.value ? 'scale(1.1)' : 'scale(1)'
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
