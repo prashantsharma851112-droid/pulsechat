@@ -282,7 +282,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
           height: 'min(760px, 92dvh)',
           borderRadius: '24px',
           overflow: 'hidden',
-          background: currentVibe.mediaUrl ? '#000' : currentVibe.bgGradient,
+          background: currentVibe.bgGradient || 'linear-gradient(135deg, #6366f1, #a855f7)',
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
@@ -385,8 +385,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
           </div>
         </div>
 
-        {/* Live Canvas Background if selected */}
-        {currentVibe.animatedBg && currentVibe.animatedBg !== 'none' && !currentVibe.mediaUrl && (
+        {/* Live Canvas Background if selected (ALWAYS rendered even with media) */}
+        {currentVibe.animatedBg && currentVibe.animatedBg !== 'none' && (
           <ChatLiveWallpaper wallpaperId={currentVibe.animatedBg} />
         )}
 
@@ -404,38 +404,83 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '40px 20px',
+            padding: currentVibe.imageFit === 'padded' ? '50px 30px' : '40px 20px',
             cursor: 'pointer',
             userSelect: 'none'
           }}
         >
           {currentVibe.mediaUrl ? (
-            <img
-              src={currentVibe.mediaUrl}
-              alt="Vibe Content"
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            />
-          ) : currentVibe.textStyle3D && currentVibe.textStyle3D !== 'none' ? (
-            <div className={`animated-3d-stage ${currentVibe.textStyle3D}`} style={{ position: 'relative', zIndex: 3, maxWidth: '100%' }}>
-              <div className="animated-3d-card" style={{ padding: '12px 20px' }}>
-                <div className="text-3d-content" style={{ fontSize: '1.45rem' }}>
-                  {currentVibe.caption}
-                </div>
-                <div className="text-3d-shadow" />
-              </div>
-            </div>
-          ) : (
-            <h2 style={{
-              color: '#fff',
-              fontSize: '1.45rem',
-              fontWeight: 800,
-              textAlign: 'center',
-              lineHeight: 1.4,
-              textShadow: '0 2px 10px rgba(0,0,0,0.8)',
-              padding: '0 10px'
+            <div style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: currentVibe.imageFit === 'padded' ? '16px' : '0px',
+              overflow: 'hidden'
             }}>
-              {currentVibe.caption}
-            </h2>
+              <img
+                src={currentVibe.mediaUrl}
+                alt="Vibe Content"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: currentVibe.imageFit === 'padded' ? 'contain' : (currentVibe.imageFit || 'contain'),
+                  transform: `scale(${currentVibe.imageZoom || 1.0})`,
+                  filter: currentVibe.imageFilter === 'warm' ? 'saturate(1.4) contrast(1.15)' :
+                          currentVibe.imageFilter === 'cyber' ? 'hue-rotate(180deg) saturate(1.5)' :
+                          currentVibe.imageFilter === 'vintage' ? 'sepia(0.4) contrast(1.1)' :
+                          currentVibe.imageFilter === 'bw' ? 'grayscale(0.85) contrast(1.2)' : 'none',
+                  opacity: currentVibe.imageOpacity || 1.0
+                }}
+              />
+            </div>
+          ) : null}
+
+          {/* 3D Text Card or Text Overlay */}
+          <div style={{ position: 'relative', zIndex: 4, width: '100%', display: 'flex', justifyContent: 'center' }}>
+            {currentVibe.textStyle3D && currentVibe.textStyle3D !== 'none' ? (
+              <div className={`animated-3d-stage ${currentVibe.textStyle3D}`} style={{ position: 'relative', zIndex: 4, maxWidth: '100%' }}>
+                <div className="animated-3d-card" style={{ padding: '12px 20px', background: 'transparent', boxShadow: 'none', border: 'none' }}>
+                  <div className="text-3d-content" style={{ fontSize: `${(currentVibe.textSize || 1.3) * 1.1}rem`, textAlign: currentVibe.textAlign || 'center' }}>
+                    {currentVibe.caption}
+                  </div>
+                  <div className="text-3d-shadow" />
+                </div>
+              </div>
+            ) : currentVibe.caption && !currentVibe.mediaUrl ? (
+              <h2 style={{
+                color: '#fff',
+                fontSize: `${(currentVibe.textSize || 1.3) * 1.15}rem`,
+                fontWeight: 800,
+                textAlign: currentVibe.textAlign || 'center',
+                lineHeight: 1.4,
+                textShadow: '0 2px 10px rgba(0,0,0,0.85)',
+                padding: '0 10px'
+              }}>
+                {currentVibe.caption}
+              </h2>
+            ) : null}
+          </div>
+
+          {/* Floating Sticker Badges */}
+          {currentVibe.selectedStickers && currentVibe.selectedStickers.length > 0 && (
+            <div style={{
+              position: 'absolute',
+              bottom: currentVibe.mediaUrl && currentVibe.caption ? '145px' : '90px',
+              right: '20px',
+              display: 'flex',
+              gap: '6px',
+              zIndex: 7,
+              background: 'rgba(0,0,0,0.4)',
+              backdropFilter: 'blur(8px)',
+              padding: '4px 10px',
+              borderRadius: '20px'
+            }}>
+              {currentVibe.selectedStickers.map(s => (
+                <span key={s} style={{ fontSize: '1.3rem', animation: 'bounce 2s infinite' }}>{s}</span>
+              ))}
+            </div>
           )}
 
           {/* Caption Overlay if Media present */}
@@ -452,7 +497,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
               color: '#fff',
               fontSize: '0.9rem',
               fontWeight: 600,
-              textAlign: 'center'
+              textAlign: currentVibe.textAlign || 'center',
+              zIndex: 5
             }}>
               {currentVibe.caption}
             </div>

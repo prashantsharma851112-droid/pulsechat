@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Sparkles, Image as ImageIcon, Music, Palette, Send, Loader2, Type, Sparkle } from 'lucide-react';
+import { X, Sparkles, Image as ImageIcon, Music, Palette, Send, Loader2, Type, Sparkle, ZoomIn, Sliders, Trash2, AlignCenter, AlignLeft, AlignRight } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 
@@ -21,9 +21,13 @@ const TEXT_STYLES_3D = [
   { id: 'none', label: 'Standard', class: '' },
   { id: 'text-3d-neon', label: '⚡ Cyber Neon', class: 'text-3d-neon' },
   { id: 'text-3d-gold', label: '👑 Gold Deluxe', class: 'text-3d-gold' },
-  { id: 'text-3d-ruby', label: '💎 Blood Crimson', class: 'text-3d-ruby' },
-  { id: 'text-3d-matrix', label: '❇️ Emerald Matrix', class: 'text-3d-matrix' },
-  { id: 'text-3d-synthwave', label: '🌌 Tokyo Synth', class: 'text-3d-synthwave' },
+  { id: 'text-3d-flame', label: '🔥 Inferno Flame', class: 'text-3d-flame' },
+  { id: 'text-3d-cosmic', label: '🔮 Cosmic Nebula', class: 'text-3d-cosmic' },
+  { id: 'text-3d-diamond', label: '💎 Diamond Ice', class: 'text-3d-diamond' },
+  { id: 'text-3d-candy', label: '🍭 Bubble Candy', class: 'text-3d-candy' },
+  { id: 'text-3d-emerald', label: '❇️ Emerald Matrix', class: 'text-3d-emerald' },
+  { id: 'text-3d-crimson', label: '🩸 Blood Crimson', class: 'text-3d-crimson' },
+  { id: 'text-3d-tokyo', label: '🌌 Tokyo Synth', class: 'text-3d-tokyo' },
   { id: 'text-3d-platinum', label: '🏆 Royal Platinum', class: 'text-3d-platinum' }
 ];
 
@@ -35,6 +39,8 @@ const ANIMATED_BGS = [
   { id: 'firefly_night_live', label: '💡 Firefly Glow' },
   { id: 'love_hearts_live', label: '💖 Floating Hearts' }
 ];
+
+const STICKERS = ['🔥', '💖', '⚡', '👑', '🎵', '🌟', '🏆', '💎', '🎉', '🚀'];
 
 const compressImageToBase64 = (file) => {
   return new Promise((resolve) => {
@@ -83,11 +89,20 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [showMusicPicker, setShowMusicPicker] = useState(false);
   const [textStyle3D, setTextStyle3D] = useState('none');
   const [animatedBg, setAnimatedBg] = useState('none');
-  const [activeCategoryTab, setActiveCategoryTab] = useState('3d_text'); // '3d_text' | 'live_animated' | 'bg_color'
+  const [activeCategoryTab, setActiveCategoryTab] = useState('3d_text'); // '3d_text' | 'live_animated' | 'bg_color' | 'image_adjust'
   const [mediaUrl, setMediaUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Advanced Image & Text Controls State
+  const [imageFit, setImageFit] = useState('contain'); // 'contain' | 'cover' | 'padded'
+  const [imageZoom, setImageZoom] = useState(1.0);
+  const [imageFilter, setImageFilter] = useState('none');
+  const [imageOpacity, setImageOpacity] = useState(0.92);
+  const [textSize, setTextSize] = useState(1.2);
+  const [textAlign, setTextAlign] = useState('center');
+  const [selectedStickers, setSelectedStickers] = useState([]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -131,10 +146,17 @@ export default function CreateVibeModal({ onClose, onCreated }) {
 
     if (uploadedUrl) {
       setMediaUrl(uploadedUrl);
+      setActiveCategoryTab('image_adjust');
     } else {
       setError('Unable to load image.');
     }
     setUploading(false);
+  };
+
+  const toggleSticker = (st) => {
+    setSelectedStickers(prev => 
+      prev.includes(st) ? prev.filter(s => s !== st) : [...prev, st]
+    );
   };
 
   const handleSubmit = async (e) => {
@@ -163,6 +185,13 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       bgGradient: selectedGradient,
       textStyle3D,
       animatedBg,
+      imageFit,
+      imageZoom,
+      imageFilter,
+      imageOpacity,
+      textSize,
+      textAlign,
+      selectedStickers,
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       views: [],
@@ -187,7 +216,14 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             audioUrl: selectedSong ? selectedSong.audioUrl : '',
             bgGradient: selectedGradient,
             textStyle3D,
-            animatedBg
+            animatedBg,
+            imageFit,
+            imageZoom,
+            imageFilter,
+            imageOpacity,
+            textSize,
+            textAlign,
+            selectedStickers
           })
         });
       } catch (err) {
@@ -225,12 +261,12 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           overflow: 'hidden',
           background: 'var(--bg-card)',
           border: '1px solid rgba(255,255,255,0.15)',
-          maxHeight: '92dvh'
+          maxHeight: '94dvh'
         }}
       >
         {/* Header */}
         <div style={{
-          padding: '16px 20px',
+          padding: '14px 20px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -239,123 +275,168 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Sparkles size={18} color="#f59e0b" />
-            <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)' }}>Post 24h Vibe Story</h3>
+            <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-main)' }}>Post 24h Vibe Story</h3>
           </div>
           <button className="icon-btn-ghost" onClick={onClose}><X size={18} /></button>
         </div>
 
         {/* Scrollable Content */}
-        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
+        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
           {error && <div className="error-banner">{error}</div>}
 
-          {/* Live Card Preview */}
+          {/* Live Card Preview (ALWAYS renders background gradient & live wallpaper even with uploaded image!) */}
           <div style={{
             position: 'relative',
             height: '240px',
             borderRadius: '20px',
-            background: mediaUrl ? '#000' : selectedGradient,
+            background: selectedGradient,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '20px',
+            padding: imageFit === 'padded' ? '24px' : '0px',
             overflow: 'hidden',
             boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
             border: '1px solid rgba(255,255,255,0.2)'
           }}>
-            {/* Live Canvas Background if selected */}
-            {animatedBg !== 'none' && !mediaUrl && (
+            {/* Live Canvas Background ALWAYS rendered if selected */}
+            {animatedBg !== 'none' && (
               <ChatLiveWallpaper wallpaperId={animatedBg} />
             )}
 
+            {/* Uploaded Image Layer with Fit, Zoom, Filter & Opacity adjustments */}
             {mediaUrl ? (
-              <img src={mediaUrl} alt="Vibe Media" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', top: 0, left: 0 }} />
+              <div style={{
+                position: 'absolute',
+                inset: imageFit === 'padded' ? '16px' : '0px',
+                borderRadius: imageFit === 'padded' ? '14px' : '0px',
+                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 2
+              }}>
+                <img
+                  src={mediaUrl}
+                  alt="Vibe Media"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: imageFit === 'padded' ? 'contain' : imageFit,
+                    transform: `scale(${imageZoom})`,
+                    filter: imageFilter === 'warm' ? 'saturate(1.4) contrast(1.15)' :
+                            imageFilter === 'cyber' ? 'hue-rotate(180deg) saturate(1.5)' :
+                            imageFilter === 'vintage' ? 'sepia(0.4) contrast(1.1)' :
+                            imageFilter === 'bw' ? 'grayscale(0.85) contrast(1.2)' : 'none',
+                    opacity: imageOpacity,
+                    transition: 'all 0.2s ease'
+                  }}
+                />
+              </div>
             ) : null}
 
             {/* 3D Text Card or Normal Textarea */}
-            {textStyle3D !== 'none' && !mediaUrl ? (
-              <div className={`animated-3d-stage ${textStyle3D}`} style={{ position: 'relative', zIndex: 3, maxWidth: '100%' }}>
-                <div className="animated-3d-card" style={{ padding: '10px 16px' }}>
-                  <textarea
-                    placeholder="Type 3D Vibe text..."
-                    value={caption}
-                    onChange={(e) => setCaption(e.target.value)}
-                    className="text-3d-content"
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      outline: 'none',
-                      resize: 'none',
-                      width: '100%',
-                      fontSize: '1.15rem',
-                      textAlign: 'center',
-                      fontFamily: 'inherit'
-                    }}
-                  />
-                  <div className="text-3d-shadow" />
+            <div style={{ position: 'relative', zIndex: 4, width: '100%', padding: '0 16px', display: 'flex', justifyContent: 'center' }}>
+              {textStyle3D !== 'none' ? (
+                <div className={`animated-3d-stage ${textStyle3D}`} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+                  <div className="animated-3d-card" style={{ padding: '8px 12px', width: '100%', background: 'transparent', boxShadow: 'none', border: 'none' }}>
+                    <textarea
+                      placeholder="Type 3D Vibe text..."
+                      value={caption}
+                      onChange={(e) => setCaption(e.target.value)}
+                      className="text-3d-content"
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        outline: 'none',
+                        resize: 'none',
+                        width: '100%',
+                        fontSize: `${textSize}rem`,
+                        textAlign: textAlign,
+                        fontFamily: 'inherit'
+                      }}
+                    />
+                    <div className="text-3d-shadow" />
+                  </div>
                 </div>
+              ) : (
+                <textarea
+                  placeholder="What's your vibe today? Write something..."
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#fff',
+                    fontSize: `${textSize}rem`,
+                    fontWeight: 700,
+                    textAlign: textAlign,
+                    outline: 'none',
+                    resize: 'none',
+                    width: '100%',
+                    textShadow: '0 2px 10px rgba(0,0,0,0.85)'
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Floating Selected Sticker Badges */}
+            {selectedStickers.length > 0 && (
+              <div style={{
+                position: 'absolute',
+                bottom: 12,
+                right: 12,
+                display: 'flex',
+                gap: '6px',
+                zIndex: 6,
+                background: 'rgba(0,0,0,0.4)',
+                backdropFilter: 'blur(8px)',
+                padding: '4px 8px',
+                borderRadius: '16px'
+              }}>
+                {selectedStickers.map(s => (
+                  <span key={s} style={{ fontSize: '1.2rem', animation: 'bounce 2s infinite' }}>{s}</span>
+                ))}
               </div>
-            ) : (
-              <textarea
-                placeholder="What's your vibe today? Write something..."
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                style={{
-                  position: 'relative',
-                  zIndex: 2,
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#fff',
-                  fontSize: '1.1rem',
-                  fontWeight: 700,
-                  textAlign: 'center',
-                  outline: 'none',
-                  resize: 'none',
-                  width: '100%',
-                  height: '100%',
-                  textShadow: '0 2px 8px rgba(0,0,0,0.8)'
-                }}
-              />
             )}
 
-            {/* Selected Instagram Music Track Badge / Vinyl Sticker */}
+            {/* Selected Music Track Vinyl Badge */}
             {selectedSong ? (
               <div style={{
                 position: 'absolute',
-                top: 14,
-                left: 14,
-                background: 'rgba(0, 0, 0, 0.72)',
+                top: 12,
+                left: 12,
+                background: 'rgba(0, 0, 0, 0.78)',
                 backdropFilter: 'blur(10px)',
-                padding: '6px 12px',
+                padding: '5px 10px',
                 borderRadius: '20px',
-                border: '1px solid rgba(245, 158, 11, 0.5)',
+                border: '1px solid rgba(245, 158, 11, 0.6)',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                zIndex: 5,
-                boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
-                animation: 'pulseFadeIn 0.2s ease'
+                gap: '6px',
+                zIndex: 6,
+                boxShadow: '0 4px 14px rgba(0,0,0,0.4)'
               }}>
                 <img
                   src={selectedSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedSong.songTitle}`}
                   alt="Track"
-                  style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover', animation: 'spin 4s linear infinite' }}
+                  style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover', animation: 'spin 4s linear infinite' }}
                 />
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '140px' }}>
-                  <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '120px' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     🎵 {selectedSong.songTitle}
                   </span>
-                  <span style={{ fontSize: '0.64rem', color: '#f59e0b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: '0.62rem', color: '#f59e0b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {selectedSong.artistName}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedSong(null)}
-                  style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', padding: '2px', marginLeft: '2px' }}
+                  style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', padding: '1px' }}
                   title="Remove Song"
                 >
-                  <X size={14} />
+                  <X size={13} />
                 </button>
               </div>
             ) : null}
@@ -418,8 +499,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               </label>
             </div>
 
-            {/* 3. 3 Separate Category Tabs (3D Text, Live Canvas, BG Color) */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginTop: '2px' }}>
+            {/* 3. 4 Separate Category Tabs (3D Text, Live Canvas, BG Color, Image Controls) */}
+            <div style={{ display: 'grid', gridTemplateColumns: mediaUrl ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr', gap: '6px', marginTop: '2px' }}>
               <button
                 type="button"
                 onClick={() => setActiveCategoryTab('3d_text')}
@@ -430,7 +511,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   background: activeCategoryTab === '3d_text' ? 'rgba(59, 130, 246, 0.22)' : 'rgba(0,0,0,0.25)',
                   color: activeCategoryTab === '3d_text' ? '#38bdf8' : 'var(--text-muted)',
                   fontWeight: 700,
-                  fontSize: '0.78rem',
+                  fontSize: '0.76rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -439,7 +520,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   transition: 'all 0.2s ease'
                 }}
               >
-                <Type size={14} color={activeCategoryTab === '3d_text' ? '#38bdf8' : '#888'} /> 3D Text
+                <Type size={13} color={activeCategoryTab === '3d_text' ? '#38bdf8' : '#888'} /> 3D Text
               </button>
 
               <button
@@ -452,7 +533,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   background: activeCategoryTab === 'live_animated' ? 'rgba(236, 72, 153, 0.22)' : 'rgba(0,0,0,0.25)',
                   color: activeCategoryTab === 'live_animated' ? '#f472b6' : 'var(--text-muted)',
                   fontWeight: 700,
-                  fontSize: '0.78rem',
+                  fontSize: '0.76rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -461,7 +542,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   transition: 'all 0.2s ease'
                 }}
               >
-                <Sparkle size={14} color={activeCategoryTab === 'live_animated' ? '#f472b6' : '#888'} /> Live Canvas
+                <Sparkle size={13} color={activeCategoryTab === 'live_animated' ? '#f472b6' : '#888'} /> Canvas
               </button>
 
               <button
@@ -474,7 +555,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   background: activeCategoryTab === 'bg_color' ? 'rgba(16, 185, 129, 0.22)' : 'rgba(0,0,0,0.25)',
                   color: activeCategoryTab === 'bg_color' ? '#34d399' : 'var(--text-muted)',
                   fontWeight: 700,
-                  fontSize: '0.78rem',
+                  fontSize: '0.76rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -483,8 +564,32 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   transition: 'all 0.2s ease'
                 }}
               >
-                <Palette size={14} color={activeCategoryTab === 'bg_color' ? '#34d399' : '#888'} /> BG Color
+                <Palette size={13} color={activeCategoryTab === 'bg_color' ? '#34d399' : '#888'} /> BG Color
               </button>
+
+              {mediaUrl && (
+                <button
+                  type="button"
+                  onClick={() => setActiveCategoryTab('image_adjust')}
+                  style={{
+                    padding: '8px 4px',
+                    borderRadius: '12px',
+                    border: activeCategoryTab === 'image_adjust' ? '1.5px solid #f59e0b' : '1px solid var(--border)',
+                    background: activeCategoryTab === 'image_adjust' ? 'rgba(245, 158, 11, 0.22)' : 'rgba(0,0,0,0.25)',
+                    color: activeCategoryTab === 'image_adjust' ? '#fbbf24' : 'var(--text-muted)',
+                    fontWeight: 700,
+                    fontSize: '0.76rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <Sliders size={13} color={activeCategoryTab === 'image_adjust' ? '#fbbf24' : '#888'} /> Adjust
+                </button>
+              )}
             </div>
 
             {/* 4. Category Options Panel */}
@@ -499,9 +604,9 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               justifyContent: 'center'
             }}>
               {activeCategoryTab === '3d_text' && (
-                <div>
-                  <span style={{ fontSize: '0.73rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
-                    Select 3D Text Style (VIP Feature):
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <span style={{ fontSize: '0.73rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block' }}>
+                    Select 3D Text Style:
                   </span>
                   <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
                     {TEXT_STYLES_3D.map(st => (
@@ -525,6 +630,37 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                       </button>
                     ))}
                   </div>
+
+                  {/* Size & Alignment Bar */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Size:</span>
+                      {[1.0, 1.2, 1.5, 1.8].map(sz => (
+                        <button
+                          key={sz}
+                          type="button"
+                          onClick={() => setTextSize(sz)}
+                          style={{
+                            padding: '2px 7px',
+                            borderRadius: '8px',
+                            border: textSize === sz ? '1px solid var(--accent)' : 'none',
+                            background: textSize === sz ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+                            color: textSize === sz ? '#fff' : '#aaa',
+                            fontSize: '0.72rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {sz === 1.0 ? 'S' : sz === 1.2 ? 'M' : sz === 1.5 ? 'L' : 'XL'}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button type="button" onClick={() => setTextAlign('left')} style={{ background: 'transparent', border: 'none', color: textAlign === 'left' ? 'var(--accent)' : '#888', cursor: 'pointer', padding: '2px' }}><AlignLeft size={14} /></button>
+                      <button type="button" onClick={() => setTextAlign('center')} style={{ background: 'transparent', border: 'none', color: textAlign === 'center' ? 'var(--accent)' : '#888', cursor: 'pointer', padding: '2px' }}><AlignCenter size={14} /></button>
+                      <button type="button" onClick={() => setTextAlign('right')} style={{ background: 'transparent', border: 'none', color: textAlign === 'right' ? 'var(--accent)' : '#888', cursor: 'pointer', padding: '2px' }}><AlignRight size={14} /></button>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -538,13 +674,13 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                       <button
                         key={bg.id}
                         type="button"
-                        onClick={() => { setAnimatedBg(bg.id); setMediaUrl(''); }}
+                        onClick={() => setAnimatedBg(bg.id)}
                         style={{
                           padding: '5px 12px',
                           borderRadius: '12px',
-                          border: animatedBg === bg.id && !mediaUrl ? '1.5px solid #ec4899' : '1px solid var(--border)',
-                          background: animatedBg === bg.id && !mediaUrl ? 'rgba(236, 72, 153, 0.25)' : 'var(--bg-card)',
-                          color: animatedBg === bg.id && !mediaUrl ? '#f472b6' : 'var(--text-muted)',
+                          border: animatedBg === bg.id ? '1.5px solid #ec4899' : '1px solid var(--border)',
+                          background: animatedBg === bg.id ? 'rgba(236, 72, 153, 0.25)' : 'var(--bg-card)',
+                          color: animatedBg === bg.id ? '#f472b6' : 'var(--text-muted)',
                           fontSize: '0.75rem',
                           fontWeight: 700,
                           cursor: 'pointer',
@@ -568,14 +704,14 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                       <button
                         key={g.id}
                         type="button"
-                        onClick={() => { setSelectedGradient(g.value); setAnimatedBg('none'); setMediaUrl(''); }}
+                        onClick={() => setSelectedGradient(g.value)}
                         title={g.name}
                         style={{
                           width: '32px',
                           height: '32px',
                           borderRadius: '50%',
                           background: g.value,
-                          border: selectedGradient === g.value && animatedBg === 'none' && !mediaUrl ? '2.5px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+                          border: selectedGradient === g.value ? '2.5px solid #fff' : '1px solid rgba(255,255,255,0.2)',
                           cursor: 'pointer',
                           flexShrink: 0,
                           transition: 'transform 0.15s ease',
@@ -586,6 +722,102 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   </div>
                 </div>
               )}
+
+              {activeCategoryTab === 'image_adjust' && mediaUrl && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.73rem', fontWeight: 700, color: '#fbbf24' }}>
+                      Image Framing & Controls:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setMediaUrl(''); setActiveCategoryTab('3d_text'); }}
+                      style={{ background: 'transparent', border: 'none', color: '#ef4444', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}
+                    >
+                      <Trash2 size={12} /> Remove Image
+                    </button>
+                  </div>
+
+                  {/* Image Framing Mode Buttons */}
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {[
+                      { id: 'contain', label: '🖼️ Framed (BG Visible)' },
+                      { id: 'padded', label: '🔲 Padded' },
+                      { id: 'cover', label: '📐 Full Cover' }
+                    ].map(f => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setImageFit(f.id)}
+                        style={{
+                          flex: 1,
+                          padding: '4px 6px',
+                          borderRadius: '8px',
+                          border: imageFit === f.id ? '1px solid #f59e0b' : '1px solid var(--border)',
+                          background: imageFit === f.id ? 'rgba(245, 158, 11, 0.2)' : 'transparent',
+                          color: imageFit === f.id ? '#fbbf24' : '#aaa',
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Image Filter Preset Selectors */}
+                  <div style={{ display: 'flex', gap: '5px', overflowX: 'auto', paddingBottom: '2px' }}>
+                    {[
+                      { id: 'none', label: 'Normal' },
+                      { id: 'warm', label: '☀️ Warm' },
+                      { id: 'cyber', label: '⚡ Cyber' },
+                      { id: 'vintage', label: '📜 Vintage' },
+                      { id: 'bw', label: '🖤 B&W' }
+                    ].map(fl => (
+                      <button
+                        key={fl.id}
+                        type="button"
+                        onClick={() => setImageFilter(fl.id)}
+                        style={{
+                          padding: '3px 8px',
+                          borderRadius: '8px',
+                          border: imageFilter === fl.id ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.1)',
+                          background: imageFilter === fl.id ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+                          color: imageFilter === fl.id ? '#fff' : '#aaa',
+                          fontSize: '0.68rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {fl.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 5. Stickers Bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflowX: 'auto', padding: '4px 0' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, flexShrink: 0 }}>Stickers:</span>
+              {STICKERS.map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => toggleSticker(s)}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '10px',
+                    border: selectedStickers.includes(s) ? '1.5px solid #f59e0b' : '1px solid rgba(255,255,255,0.1)',
+                    background: selectedStickers.includes(s) ? 'rgba(245, 158, 11, 0.2)' : 'rgba(0,0,0,0.2)',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    flexShrink: 0
+                  }}
+                >
+                  {s}
+                </button>
+              ))}
             </div>
           </div>
 
