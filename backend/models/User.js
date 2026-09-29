@@ -45,6 +45,8 @@ const userSchema = new mongoose.Schema({
   hasStreakCrown: { type: Boolean, default: false },
   streakCrownExpiresAt: { type: Date, default: null },
   claimedDailyFirstReward: { type: String, default: '' },
+  dailyFileBytesUsed: { type: Number, default: 0 },
+  dailyFileBytesResetDate: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });
 

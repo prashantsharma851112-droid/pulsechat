@@ -22,6 +22,7 @@ const adminRoutes = require('./routes/admin');
 const vibeRoutes = require('./routes/vibes');
 const zoneRoutes = require('./routes/zone');
 const { uploadToCloudinary } = require('./utils/cloudinary');
+const { checkAndUpdateFileQuota } = require('./utils/fileQuota');
 const redis = require('./utils/redis');
 
 const app = express();
@@ -411,6 +412,30 @@ io.on('connection', (socket) => {
           });
           if (typeof ackCallback === 'function') ackCallback({ error: 'blocked' });
           return;
+        }
+      }
+
+      // 1.1 Enforce 5MB single file limit & 10MB 24h daily transfer quota
+      if (type === 'document' || type === 'image' || type === 'video' || type === 'voice' || mediaUrl || audioUrl) {
+        let estimatedBytes = 0;
+        if (typeof mediaUrl === 'string' && mediaUrl.startsWith('data:')) {
+          estimatedBytes = Math.ceil((mediaUrl.length * 3) / 4);
+        } else if (typeof audioUrl === 'string' && audioUrl.startsWith('data:')) {
+          estimatedBytes = Math.ceil((audioUrl.length * 3) / 4);
+        } else if (fileSize) {
+          const num = parseFloat(fileSize);
+          if (!isNaN(num)) {
+            estimatedBytes = String(fileSize).toLowerCase().includes('mb') ? Math.ceil(num * 1024 * 1024) : Math.ceil(num * 1024);
+          }
+        }
+
+        if (estimatedBytes > 0) {
+          const quotaResult = await checkAndUpdateFileQuota(senderId, estimatedBytes);
+          if (!quotaResult.success) {
+            socket.emit('file_limit_error', { chatId, error: quotaResult.error });
+            if (typeof ackCallback === 'function') ackCallback({ error: quotaResult.error });
+            return;
+          }
         }
       }
 

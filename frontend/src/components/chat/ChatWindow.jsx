@@ -870,6 +870,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
   }, [socket, chatId]);
 
+  // File Transfer Limit Error Socket Listener
+  useEffect(() => {
+    if (!socket) return;
+    const handleFileLimitError = (data) => {
+      if (data && data.error) {
+        alert(`⚠️ File Sharing Limit:\n\n${data.error}`);
+      }
+    };
+    socket.on('file_limit_error', handleFileLimitError);
+    return () => {
+      socket.off('file_limit_error', handleFileLimitError);
+    };
+  }, [socket]);
+
   // Fail-safe real-time message listener from lastNotification
   useEffect(() => {
     if (lastNotification && lastNotification.chatId === chatId) {
@@ -1603,16 +1617,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Dynamic File Limit: 25MB Free vs 500MB Pro
-    const isPro = Boolean(user?.isPro);
-    const maxLimitBytes = isPro ? 500 * 1024 * 1024 : 25 * 1024 * 1024;
-    if (file.size > maxLimitBytes) {
-      if (!isPro) {
-        setProModalTab('pro');
-        setShowProModal(true);
-      } else {
-        alert('File size exceeds the 500MB Pulse Pro limit.');
-      }
+    // Enforce 5MB single file limit
+    const MAX_SINGLE_FILE_BYTES = 5 * 1024 * 1024; // 5MB
+    if (file.size > MAX_SINGLE_FILE_BYTES) {
+      alert(`⚠️ File size exceeds 5MB limit (${(file.size / (1024 * 1024)).toFixed(2)}MB). You cannot send files larger than 5MB.`);
+      e.target.value = '';
+      return;
+    }
+
+    // Enforce 10MB 24-hour daily quota limit
+    const todayStr = new Date().toISOString().split('T')[0];
+    const storageKey = `pulsechat_daily_file_bytes_${user?.id || 'guest'}_${todayStr}`;
+    const todayUsed = parseInt(localStorage.getItem(storageKey) || '0', 10);
+    const MAX_DAILY_FILE_BYTES = 10 * 1024 * 1024; // 10MB
+
+    if (todayUsed + file.size > MAX_DAILY_FILE_BYTES) {
+      const usedMB = (todayUsed / (1024 * 1024)).toFixed(1);
+      alert(`⚠️ Daily file sharing limit of 10MB reached! (Used: ${usedMB}MB / 10MB). You cannot send more than 10MB total per day. Try again tomorrow!`);
       e.target.value = '';
       return;
     }
@@ -1624,6 +1645,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         type: isDoc ? 'document' : file.type,
         dataUrl: event.target.result,
         fileName: file.name,
+        rawSizeBytes: file.size,
         fileSize: (file.size / 1024 < 1024)
           ? `${(file.size / 1024).toFixed(1)} KB`
           : `${(file.size / (1024 * 1024)).toFixed(2)} MB`
@@ -1637,6 +1659,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const msgType = type === 'document'
       ? 'document'
       : (type?.startsWith('video/') ? 'video' : 'image');
+
+    if (pendingMedia?.rawSizeBytes) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const storageKey = `pulsechat_daily_file_bytes_${user?.id || 'guest'}_${todayStr}`;
+      const todayUsed = parseInt(localStorage.getItem(storageKey) || '0', 10);
+      localStorage.setItem(storageKey, String(todayUsed + pendingMedia.rawSizeBytes));
+    }
 
     socket.emit('send_message', {
       ...getSenderPayload(),
@@ -2974,44 +3003,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 </div>
                 <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Emojis</span>
               </button>
-
-              {/* 6. Live 2-Player Arrow Battle Game */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  setShowArrowGameModal(true);
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #ec4899, #8b5cf6)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(236, 72, 153, 0.4)'
-                }}>
-                  <Zap size={20} />
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ec4899' }}>Live Arrow</span>
-              </button>
-
             </div>
           )}
 
