@@ -782,16 +782,24 @@ io.on('connection', (socket) => {
   socket.on('dissolve_stealth_dust', async ({ chatId, messageId }) => {
     try {
       if (messageId) {
-        await Message.deleteMany({ $or: [{ id: messageId }, { _id: messageId }] });
+        await Message.deleteMany({ $or: [{ id: messageId }, { _id: messageId }, { clientTempId: messageId }] });
       }
       if (chatId) {
         await redis.deleteCachedMessages(chatId).catch(() => {});
+        if (chatId.includes('_')) {
+          const parts = chatId.split('_');
+          await redis.deleteCachedMessages([parts[1], parts[0]].join('_')).catch(() => {});
+          await redis.deleteCachedMessages(parts[0]).catch(() => {});
+          await redis.deleteCachedMessages(parts[1]).catch(() => {});
+          redis.invalidateRecent(parts[0]).catch(() => {});
+          redis.invalidateRecent(parts[1]).catch(() => {});
+        }
       }
     } catch (e) {
       console.warn('Stealth dust deletion error:', e.message);
     }
     const payload = { chatId, messageId };
-    io.to(chatId).emit('stealth_dust_dissolved', payload);
+    if (chatId) io.to(chatId).emit('stealth_dust_dissolved', payload);
     if (chatId && chatId.includes('_')) {
       const parts = chatId.split('_');
       parts.forEach(uId => io.to(`user_${uId}`).emit('stealth_dust_dissolved', payload));

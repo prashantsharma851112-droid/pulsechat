@@ -417,6 +417,8 @@ module.exports = {
           }
         } else if (lastMessage.type === '3d_text') {
           lastMsgText = `✨ 3D: ${lastMessage.content}`;
+        } else if (lastMessage.type === 'stealth_dust') {
+          lastMsgText = '⚡ Stealth Dust Text';
         } else if (lastMessage.type === 'gift') {
           lastMsgText = '🎁 Virtual Gift';
         } else if (lastMessage.type === 'call') {

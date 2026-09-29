@@ -3284,6 +3284,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           }}
         />
       )}
+
+      {/* Hidden YouTube Full Song Audio Stream Player */}
+      {chatMusicSong?.youtubeId && !isChatMusicMuted && (
+        <iframe
+          key={chatMusicSong.youtubeId}
+          id="chatYoutubeAudioPlayer"
+          src={`https://www.youtube-nocookie.com/embed/${chatMusicSong.youtubeId}?autoplay=1&enablejsapi=1&loop=1&playlist=${chatMusicSong.youtubeId}&playsinline=1`}
+          style={{ display: 'none', width: '0px', height: '0px', opacity: 0, position: 'absolute', pointerEvents: 'none' }}
+          allow="autoplay"
+          title="Chat YouTube Audio Stream"
+        />
+      )}
     </div>
   );
 }

@@ -365,6 +365,49 @@ router.post('/auto-cleanup', authMiddleware, async (req, res) => {
   }
 });
 
+// YouTube Full Song Search Endpoint (Extracts full length tracks)
+router.get('/youtube-search', authMiddleware, async (req, res) => {
+  try {
+    const q = req.query.q || '';
+    if (!q.trim()) return res.json([]);
+
+    const searchUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q.trim() + ' full song audio');
+    const response = await fetch(searchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    const html = await response.text();
+    const matches = [...html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)];
+    const videoIds = Array.from(new Set(matches.map(m => m[1]))).slice(0, 15);
+
+    const items = await Promise.all(videoIds.map(async (vId) => {
+      try {
+        const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vId}&format=json`);
+        if (!oembedRes.ok) return null;
+        const info = await oembedRes.json();
+        return {
+          trackId: `yt_${vId}`,
+          youtubeId: vId,
+          songTitle: info.title || 'YouTube Track',
+          artistName: info.author_name || 'YouTube Music',
+          albumArt: info.thumbnail_url || `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`,
+          audioUrl: `https://www.youtube-nocookie.com/embed/${vId}?autoplay=1&enablejsapi=1`,
+          isFullSong: true
+        };
+      } catch {
+        return null;
+      }
+    }));
+
+    const validItems = items.filter(Boolean);
+    res.json(validItems);
+  } catch (err) {
+    console.error('YouTube search error:', err);
+    res.status(500).json({ error: 'Failed to search YouTube audio' });
+  }
+});
+
 // Permanent Dissolve Stealth Dust Note Endpoint
 router.post('/dissolve-dust/:messageId', authMiddleware, async (req, res) => {
   try {
@@ -373,9 +416,17 @@ router.post('/dissolve-dust/:messageId', authMiddleware, async (req, res) => {
     const Message = require('../models/Message');
     const redis = require('../utils/redis');
 
-    await Message.deleteMany({ $or: [{ id: messageId }, { _id: messageId }] });
+    await Message.deleteMany({ $or: [{ id: messageId }, { _id: messageId }, { clientTempId: messageId }] });
     if (chatId) {
       await redis.deleteCachedMessages(chatId).catch(() => {});
+      if (chatId.includes('_')) {
+        const parts = chatId.split('_');
+        await redis.deleteCachedMessages([parts[1], parts[0]].join('_')).catch(() => {});
+        await redis.deleteCachedMessages(parts[0]).catch(() => {});
+        await redis.deleteCachedMessages(parts[1]).catch(() => {});
+        redis.invalidateRecent(parts[0]).catch(() => {});
+        redis.invalidateRecent(parts[1]).catch(() => {});
+      }
     }
 
     const io = req.app.get('io');

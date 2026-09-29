@@ -10,6 +10,8 @@ const PRESET_CATEGORIES = [
   { label: '🌟 Hollywood Pop', query: 'Taylor Swift The Weeknd' }
 ];
 
+const BACKEND_URL = typeof window !== 'undefined' && window.location.origin.includes('localhost') ? 'http://localhost:5000' : '';
+
 export default function MusicPickerModal({ isOpen, onClose, onSelectSong, selectedSong }) {
   const [query, setQuery] = useState('');
   const [songs, setSongs] = useState([]);
@@ -33,20 +35,32 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&media=music&limit=30`);
-      const data = await res.json();
-      if (data && data.results) {
-        const formatted = data.results.map(item => ({
+      const rawToken = localStorage.getItem('pulsechat_token');
+      const authHeader = rawToken ? { Authorization: `Bearer ${rawToken}` } : {};
+
+      const [itunesRes, ytRes] = await Promise.allSettled([
+        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&media=music&limit=25`).then(r => r.json()),
+        fetch(`${BACKEND_URL}/api/messages/youtube-search?q=${encodeURIComponent(searchTerm)}`, { headers: authHeader }).then(r => r.json())
+      ]);
+
+      let ytFormatted = [];
+      if (ytRes.status === 'fulfilled' && Array.isArray(ytRes.value)) {
+        ytFormatted = ytRes.value;
+      }
+
+      let itunesFormatted = [];
+      if (itunesRes.status === 'fulfilled' && itunesRes.value?.results) {
+        itunesFormatted = itunesRes.value.results.map(item => ({
           trackId: item.trackId,
           songTitle: item.trackName,
           artistName: item.artistName,
           albumArt: (item.artworkUrl100 || item.artworkUrl60 || '').replace('100x100bb', '300x300bb'),
           audioUrl: item.previewUrl
         })).filter(s => s.audioUrl);
-        setSongs(formatted);
-      } else {
-        setSongs([]);
       }
+
+      const combined = [...ytFormatted, ...itunesFormatted];
+      setSongs(combined);
     } catch (err) {
       console.error('Failed to search songs:', err);
       setError('Could not load songs. Check your internet connection.');
@@ -91,12 +105,28 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
     }
   };
 
-  const handleSelect = (song) => {
+  const handleSelect = async (song) => {
     if (audioRef.current) {
       audioRef.current.pause();
       setPlayingTrackId(null);
     }
-    onSelectSong(song);
+
+    let finalSong = { ...song };
+    if (!finalSong.youtubeId && finalSong.songTitle) {
+      try {
+        const rawToken = localStorage.getItem('pulsechat_token');
+        const authHeader = rawToken ? { Authorization: `Bearer ${rawToken}` } : {};
+        const q = `${finalSong.songTitle} ${finalSong.artistName || ''}`;
+        const res = await fetch(`${BACKEND_URL}/api/messages/youtube-search?q=${encodeURIComponent(q)}`, { headers: authHeader });
+        const ytData = await res.json();
+        if (Array.isArray(ytData) && ytData.length > 0 && ytData[0].youtubeId) {
+          finalSong.youtubeId = ytData[0].youtubeId;
+          finalSong.isFullSong = true;
+        }
+      } catch (e) {}
+    }
+
+    onSelectSong(finalSong);
     onClose();
   };
 

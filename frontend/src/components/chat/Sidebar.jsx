@@ -720,6 +720,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       let contentSnippet = msg.type === 'text'
         ? (msg.content || '')
         : (msg.type === '3d_text' ? `✨ 3D: ${msg.content}`
+        : msg.type === 'stealth_dust' ? '⚡ Stealth Dust Text'
         : msg.type === 'image' ? '📷 Photo'
         : msg.type === 'video' ? '🎥 Video'
         : msg.type === 'audio' || msg.type === 'voice' ? '🎤 Voice message'
