@@ -458,7 +458,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
             <Presentation size={20} color="var(--accent)" />
             <div>
               <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-main)' }}>
-                Whiteboard Drawing Board — {chatTitle || 'Board'}
+                Live Drawboard — {chatTitle || 'Board'}
               </h3>
               <span style={{ fontSize: '0.7rem', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                 <Sparkles size={11} /> Real-Time Multi-User Drawing, Shapes & Stickers

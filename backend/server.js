@@ -1184,6 +1184,23 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Real-time Auto-Open Modal Requests (Live Arrow Game & Live Drawboard)
+  socket.on('request_open_arrow_game', (data) => {
+    if (!data || !data.chatId) return;
+    io.to(data.chatId).emit('auto_open_arrow_game', data);
+    if (data.receiverId) {
+      io.to(`user_${data.receiverId}`).emit('auto_open_arrow_game', data);
+    }
+  });
+
+  socket.on('request_open_whiteboard', (data) => {
+    if (!data || !data.chatId) return;
+    io.to(data.chatId).emit('auto_open_whiteboard', data);
+    if (data.receiverId) {
+      io.to(`user_${data.receiverId}`).emit('auto_open_whiteboard', data);
+    }
+  });
+
   // Disconnect
   socket.on('disconnect', () => {
     if (socket.userId) {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2 } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -870,6 +870,29 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
   }, [socket, chatId]);
 
+  // Auto-Open Real-Time Features (Arrow Game & Live Drawboard) Socket Listener
+  useEffect(() => {
+    if (!socket) return;
+    const handleAutoOpenGame = (data) => {
+      if (data && (data.chatId === chatId || data.chatId?.includes(chatId) || chatId?.includes(data.chatId))) {
+        setShowArrowGameModal(true);
+      }
+    };
+    const handleAutoOpenWhiteboard = (data) => {
+      if (data && (data.chatId === chatId || data.chatId?.includes(chatId) || chatId?.includes(data.chatId))) {
+        setShowWhiteboard(true);
+      }
+    };
+
+    socket.on('auto_open_arrow_game', handleAutoOpenGame);
+    socket.on('auto_open_whiteboard', handleAutoOpenWhiteboard);
+
+    return () => {
+      socket.off('auto_open_arrow_game', handleAutoOpenGame);
+      socket.off('auto_open_whiteboard', handleAutoOpenWhiteboard);
+    };
+  }, [socket, chatId]);
+
   // File Transfer Limit Error Socket Listener
   useEffect(() => {
     if (!socket) return;
@@ -1597,6 +1620,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     playSound('sent');
   };
 
+  const handleOpenArrowGame = () => {
+    setShowArrowGameModal(true);
+    if (socket && chatId) {
+      socket.emit('request_open_arrow_game', { chatId, senderId: user?.id, receiverId: isGroup ? '' : activeChat?.id });
+    }
+  };
+
+  const handleOpenWhiteboard = () => {
+    setShowMoreMenu(false);
+    setShowWhiteboard(true);
+    if (socket && chatId) {
+      socket.emit('request_open_whiteboard', { chatId, senderId: user?.id, receiverId: isGroup ? '' : activeChat?.id });
+    }
+  };
+
   const handleSendDrawing = (mediaUrl) => {
     socket.emit('send_message', {
       ...getSenderPayload(),
@@ -1891,9 +1929,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           <div className="chat-header-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
             {/* Live 2-Player Arrow Battle Game Button in Top Header Bar */}
             <button
-              onClick={() => setShowArrowGameModal(true)}
+              onClick={handleOpenArrowGame}
               className="icon-btn-ghost"
-              title="Live 2-Player Arrow Battle Game"
+              title="Play Live Arrow Battle Game"
               style={{
                 width: '38px',
                 height: '38px',
@@ -1902,7 +1940,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 border: '1px solid rgba(236, 72, 153, 0.4)'
               }}
             >
-              <Zap size={19} color="#ec4899" />
+              <Gamepad2 size={19} color="#ec4899" />
             </button>
 
             {/* Active Real Music Playing Badge in Chat Header */}
@@ -1982,9 +2020,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     <Video size={16} color="var(--accent)" />
                     <span>{isGroup ? 'Group Video Call' : 'Video Call'}</span>
                   </button>
-                  <button onClick={() => { setShowMoreMenu(false); setShowWhiteboard(true); }}>
+                  <button onClick={handleOpenWhiteboard}>
                     <Presentation size={16} color="var(--accent)" />
-                    <span>Whiteboard Drawing Board</span>
+                    <span>Live Drawboard</span>
                   </button>
                   <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
                   <button onClick={() => { setShowMoreMenu(false); setShowThemeModal(true); }}>
