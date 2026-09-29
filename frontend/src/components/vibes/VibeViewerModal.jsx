@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Music, Trash2, Zap, Eye, Send, Users } from 'lucide-react';
+import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 import { updateRecentChatSnippet } from '../../utils/offlineStorage';
@@ -17,8 +17,10 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
   const [showViewersSheet, setShowViewersSheet] = useState(false);
   const [liveViews, setLiveViews] = useState([]);
   const [isPaused, setIsPaused] = useState(false);
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
   const currentVibe = vibes[currentIndex] || vibes[0];
   const timerRef = useRef(null);
+  const audioRef = useRef(null);
 
   const currentUserId = user?.id || user?._id || 'local_user';
   const isMine = currentVibe?.userId === currentUserId || vibeGroup?.userId === currentUserId;
@@ -65,6 +67,35 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
       }
     }
   }, [currentVibe?.id, token, isMine]);
+
+  // Auto-play Instagram Music Track / Story Background Audio
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    if (currentVibe?.audioUrl) {
+      const audio = new Audio(currentVibe.audioUrl);
+      audio.loop = true;
+      audio.volume = isAudioMuted ? 0 : 0.85;
+      audio.play().catch(e => console.warn('Autoplay prevented:', e));
+      audioRef.current = audio;
+    }
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, [currentVibe?.audioUrl, currentVibe?.id, currentIndex]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = isAudioMuted ? 0 : 0.85;
+    }
+  }, [isAudioMuted]);
 
   // Fetch live views for owner when modal opens
   const fetchLiveViews = async () => {
@@ -313,13 +344,27 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
               <div style={{ fontSize: '0.86rem', fontWeight: 800, textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
                 {vibeGroup?.displayName || 'User'}
               </div>
-              <div style={{ fontSize: '0.68rem', opacity: 0.8, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Music size={11} /> {currentVibe.soundtrack !== 'none' ? currentVibe.soundtrack : 'Vibe Story'}
+              <div style={{ fontSize: '0.68rem', opacity: 0.95, display: 'flex', alignItems: 'center', gap: '4px', color: '#f59e0b', fontWeight: 600 }}>
+                <Music size={11} /> {currentVibe.songTitle ? `🎵 ${currentVibe.songTitle} · ${currentVibe.artistName}` : currentVibe.soundtrack !== 'none' ? currentVibe.soundtrack : 'Vibe Story'}
               </div>
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {currentVibe?.audioUrl && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsAudioMuted(prev => !prev);
+                }}
+                className="icon-btn-ghost"
+                style={{ color: '#fff', background: 'rgba(0,0,0,0.4)', borderRadius: '50%', padding: '6px' }}
+                title={isAudioMuted ? "Unmute Story Music" : "Mute Story Music"}
+              >
+                {isAudioMuted ? <VolumeX size={16} color="#ef4444" /> : <Volume2 size={16} color="#f59e0b" />}
+              </button>
+            )}
             {isMine && (
               <button
                 onClick={handleDelete}
@@ -410,6 +455,59 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
               textAlign: 'center'
             }}>
               {currentVibe.caption}
+            </div>
+          )}
+
+          {/* Instagram Music Vinyl Sticker */}
+          {currentVibe?.songTitle && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: 'absolute',
+                bottom: currentVibe.mediaUrl && currentVibe.caption ? '145px' : '90px',
+                left: '16px',
+                background: 'rgba(0, 0, 0, 0.78)',
+                backdropFilter: 'blur(12px)',
+                padding: '6px 14px 6px 8px',
+                borderRadius: '24px',
+                border: '1px solid rgba(245, 158, 11, 0.6)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                zIndex: 6,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                maxWidth: '240px',
+                animation: 'pulseFadeIn 0.22s ease'
+              }}
+            >
+              <div style={{ position: 'relative', width: '28px', height: '28px', flexShrink: 0 }}>
+                <img
+                  src={currentVibe.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(currentVibe.songTitle)}`}
+                  alt="Track"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    animation: isAudioMuted ? 'none' : 'spin 3.5s linear infinite'
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  🎵 {currentVibe.songTitle}
+                </span>
+                <span style={{ fontSize: '0.66rem', color: '#f59e0b', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {currentVibe.artistName || 'Original Audio'}
+                </span>
+              </div>
+              {!isAudioMuted && (
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '12px', flexShrink: 0 }}>
+                  <span style={{ width: '2px', height: '100%', background: '#ec4899', borderRadius: '1px', animation: 'pulseGlow 0.4s infinite alternate' }} />
+                  <span style={{ width: '2px', height: '60%', background: '#f59e0b', borderRadius: '1px', animation: 'pulseGlow 0.7s infinite alternate' }} />
+                  <span style={{ width: '2px', height: '80%', background: '#6366f1', borderRadius: '1px', animation: 'pulseGlow 0.5s infinite alternate' }} />
+                </div>
+              )}
             </div>
           )}
 

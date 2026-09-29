@@ -4,6 +4,8 @@ import { X, Sparkles, Image as ImageIcon, Music, Palette, Send, Loader2, Type, S
 import { BACKEND_URL } from '../../utils/config';
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 
+import MusicPickerModal from './MusicPickerModal';
+
 const GRADIENTS = [
   { id: 'g1', name: 'Pulse Purple', value: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)' },
   { id: 'g2', name: 'Cyber Gold', value: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)' },
@@ -81,6 +83,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [caption, setCaption] = useState('');
   const [selectedGradient, setSelectedGradient] = useState(GRADIENTS[0].value);
   const [soundtrack, setSoundtrack] = useState('lofi');
+  const [selectedSong, setSelectedSong] = useState(null);
+  const [showMusicPicker, setShowMusicPicker] = useState(false);
   const [textStyle3D, setTextStyle3D] = useState('none');
   const [animatedBg, setAnimatedBg] = useState('none');
   const [mediaUrl, setMediaUrl] = useState('');
@@ -154,7 +158,11 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       avatar: user?.avatar,
       caption: caption.trim(),
       mediaUrl: mediaUrl || null,
-      soundtrack,
+      soundtrack: selectedSong ? 'music_track' : soundtrack,
+      songTitle: selectedSong ? selectedSong.songTitle : '',
+      artistName: selectedSong ? selectedSong.artistName : '',
+      albumArt: selectedSong ? selectedSong.albumArt : '',
+      audioUrl: selectedSong ? selectedSong.audioUrl : '',
       bgGradient: selectedGradient,
       textStyle3D,
       animatedBg,
@@ -175,7 +183,11 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           body: JSON.stringify({
             caption: caption.trim(),
             mediaUrl: mediaUrl || null,
-            soundtrack,
+            soundtrack: selectedSong ? 'music_track' : soundtrack,
+            songTitle: selectedSong ? selectedSong.songTitle : '',
+            artistName: selectedSong ? selectedSong.artistName : '',
+            albumArt: selectedSong ? selectedSong.albumArt : '',
+            audioUrl: selectedSong ? selectedSong.audioUrl : '',
             bgGradient: selectedGradient,
             textStyle3D,
             animatedBg
@@ -309,7 +321,47 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               />
             )}
 
-            {soundtrack !== 'none' && (
+            {/* Selected Instagram Music Track Badge / Vinyl Sticker */}
+            {selectedSong ? (
+              <div style={{
+                position: 'absolute',
+                top: 14,
+                left: 14,
+                background: 'rgba(0, 0, 0, 0.72)',
+                backdropFilter: 'blur(10px)',
+                padding: '6px 12px',
+                borderRadius: '20px',
+                border: '1px solid rgba(245, 158, 11, 0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                zIndex: 5,
+                boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+                animation: 'pulseFadeIn 0.2s ease'
+              }}>
+                <img
+                  src={selectedSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedSong.songTitle}`}
+                  alt="Track"
+                  style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover', animation: 'spin 4s linear infinite' }}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '140px' }}>
+                  <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    🎵 {selectedSong.songTitle}
+                  </span>
+                  <span style={{ fontSize: '0.64rem', color: '#f59e0b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {selectedSong.artistName}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSong(null)}
+                  style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', padding: '2px', marginLeft: '2px' }}
+                  title="Remove Song"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : soundtrack !== 'none' ? (
               <div style={{
                 position: 'absolute',
                 bottom: 12,
@@ -328,11 +380,39 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 <Music size={12} color="#f59e0b" />
                 <span>{SOUNDTRACKS.find(s => s.id === soundtrack)?.name}</span>
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Controls Section */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            
+            {/* Instagram Music Search Trigger Button */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowMusicPicker(true)}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '14px',
+                  background: selectedSong ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(236, 72, 153, 0.2))' : 'linear-gradient(135deg, #f59e0b, #ec4899)',
+                  border: selectedSong ? '1.5px solid #f59e0b' : 'none',
+                  color: '#ffffff',
+                  fontWeight: 800,
+                  fontSize: '0.86rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(245, 158, 11, 0.35)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Music size={18} />
+                <span>{selectedSong ? `🎵 Selected: ${selectedSong.songTitle} (Change)` : '🎵 Add Instagram Music (Search Any Song)'}</span>
+              </button>
+            </div>
             
             {/* 3D Text Style Selector */}
             <div>
@@ -477,6 +557,16 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           </div>
         </div>
       </div>
+
+      <MusicPickerModal
+        isOpen={showMusicPicker}
+        onClose={() => setShowMusicPicker(false)}
+        selectedSong={selectedSong}
+        onSelectSong={(song) => {
+          setSelectedSong(song);
+          setSoundtrack('music_track');
+        }}
+      />
     </div>
   );
 }
