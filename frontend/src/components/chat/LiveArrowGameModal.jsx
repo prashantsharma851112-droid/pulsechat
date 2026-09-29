@@ -469,7 +469,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
     const rows = (currentBoard && currentBoard.length) || gridRows;
     const cols = (currentBoard && currentBoard[0] && currentBoard[0].length) || gridCols;
 
-    while (currR >= 0 && currR < gridRows && currC >= 0 && currC < gridCols) {
+    while (currR >= 0 && currR < rows && currC >= 0 && currC < cols) {
       const item = currentBoard[currR][currC];
       if (item && !clearedSet.has(item.id) && !flyingSet.has(item.id)) {
         return false;
