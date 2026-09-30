@@ -1,10 +1,12 @@
-import React, { useState, useContext, useRef, useEffect } from 'react';
+import React, { useState, useContext, useRef, useEffect, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Sparkles, Image as ImageIcon, Music, Palette, Send, Loader2, Type, Sparkle, ZoomIn, Sliders, Trash2, AlignCenter, AlignLeft, AlignRight, Move, Disc } from 'lucide-react';
+import { 
+  X, Camera, SwitchCamera, Image as ImageIcon, Music, Palette, Sparkles, 
+  Send, Loader2, Type, Trash2, Smile, Disc, Check, FlipHorizontal, Sliders
+} from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
-
 import MusicPickerModal from './MusicPickerModal';
 
 const GRADIENTS = [
@@ -19,29 +21,27 @@ const GRADIENTS = [
 ];
 
 const TEXT_STYLES_3D = [
-  { id: 'none', label: 'Standard', class: '' },
-  { id: 'text-3d-neon', label: '⚡ Cyber Neon', class: 'text-3d-neon' },
-  { id: 'text-3d-gold', label: '👑 Gold Deluxe', class: 'text-3d-gold' },
-  { id: 'text-3d-flame', label: '🔥 Inferno Flame', class: 'text-3d-flame' },
-  { id: 'text-3d-cosmic', label: '🔮 Cosmic Nebula', class: 'text-3d-cosmic' },
-  { id: 'text-3d-diamond', label: '💎 Diamond Ice', class: 'text-3d-diamond' },
-  { id: 'text-3d-candy', label: '🍭 Bubble Candy', class: 'text-3d-candy' },
-  { id: 'text-3d-emerald', label: '❇️ Emerald Matrix', class: 'text-3d-emerald' },
-  { id: 'text-3d-crimson', label: '🩸 Blood Crimson', class: 'text-3d-crimson' },
-  { id: 'text-3d-tokyo', label: '🌌 Tokyo Synth', class: 'text-3d-tokyo' },
-  { id: 'text-3d-platinum', label: '🏆 Royal Platinum', class: 'text-3d-platinum' }
+  { id: 'none', label: 'Classic', class: '' },
+  { id: 'text-3d-neon', label: '⚡ Neon', class: 'text-3d-neon' },
+  { id: 'text-3d-gold', label: '👑 Gold', class: 'text-3d-gold' },
+  { id: 'text-3d-flame', label: '🔥 Flame', class: 'text-3d-flame' },
+  { id: 'text-3d-cosmic', label: '🔮 Cosmic', class: 'text-3d-cosmic' },
+  { id: 'text-3d-diamond', label: '💎 Ice', class: 'text-3d-diamond' },
+  { id: 'text-3d-candy', label: '🍭 Candy', class: 'text-3d-candy' },
+  { id: 'text-3d-emerald', label: '❇️ Matrix', class: 'text-3d-emerald' },
+  { id: 'text-3d-crimson', label: '🩸 Crimson', class: 'text-3d-crimson' }
 ];
 
 const ANIMATED_BGS = [
-  { id: 'none', label: 'Static Gradient' },
-  { id: 'matrix_code_live', label: '❇️ Matrix Rain' },
-  { id: 'starry_galaxy_live', label: '🌌 Starry Galaxy' },
-  { id: 'cyber_grid_live', label: '⚡ Cyber Grid' },
-  { id: 'firefly_night_live', label: '💡 Firefly Glow' },
-  { id: 'love_hearts_live', label: '💖 Floating Hearts' }
+  { id: 'none', label: 'Clean' },
+  { id: 'matrix_code_live', label: '❇️ Matrix' },
+  { id: 'starry_galaxy_live', label: '🌌 Stars' },
+  { id: 'cyber_grid_live', label: '⚡ Grid' },
+  { id: 'firefly_night_live', label: '💡 Firefly' },
+  { id: 'love_hearts_live', label: '💖 Hearts' }
 ];
 
-const STICKERS = ['🔥', '💖', '⚡', '👑', '🎵', '🌟', '🏆', '💎', '🎉', '🚀'];
+const STICKERS = ['🔥', '💖', '⚡', '👑', '🎵', '🌟', '🏆', '💎', '🎉', '🚀', '😍', '✨', '💯', '🌸', '😎'];
 
 const compressImageToBase64 = (file) => {
   return new Promise((resolve) => {
@@ -52,8 +52,8 @@ const compressImageToBase64 = (file) => {
       img.src = event.target.result;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 640;
-        const MAX_HEIGHT = 800;
+        const MAX_WIDTH = 900;
+        const MAX_HEIGHT = 1600;
         let width = img.width;
         let height = img.height;
 
@@ -73,7 +73,7 @@ const compressImageToBase64 = (file) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.72));
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
       };
       img.onerror = () => resolve(event.target.result);
     };
@@ -83,17 +83,98 @@ const compressImageToBase64 = (file) => {
 
 export default function CreateVibeModal({ onClose, onCreated }) {
   const { user, token } = useContext(AuthContext);
+
+  // Mode: 'camera' | 'editor'
+  const [viewMode, setViewMode] = useState('camera');
+  const [cameraActive, setCameraActive] = useState(false);
+  const [facingMode, setFacingMode] = useState('user'); // 'user' or 'environment'
+  const [hasCameraSupport, setHasCameraSupport] = useState(true);
+
+  // Story Elements
+  const [mediaUrl, setMediaUrl] = useState('');
   const [caption, setCaption] = useState('');
-  const [selectedGradient, setSelectedGradient] = useState(GRADIENTS[0].value);
-  const [soundtrack, setSoundtrack] = useState('lofi');
+  const [selectedGradientIndex, setSelectedGradientIndex] = useState(0);
+  const [animatedBgIndex, setAnimatedBgIndex] = useState(0);
+  const [textStyle3D, setTextStyle3D] = useState('none');
   const [selectedSong, setSelectedSong] = useState(null);
   const [songStartTime, setSongStartTime] = useState(0);
+  const [selectedStickers, setSelectedStickers] = useState([]);
+
+  // Modals & Panels
   const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const [showTextEditor, setShowTextEditor] = useState(false);
+  const [showStickerDrawer, setShowStickerDrawer] = useState(false);
+
+  // Drag Positions
+  const [textPos, setTextPos] = useState({ x: 50, y: 48 });
+  const [musicPos, setMusicPos] = useState({ x: 50, y: 22 });
+  const [draggingElement, setDraggingElement] = useState(null);
+
+  // Status
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  // Refs
+  const videoRef = useRef(null);
+  const cameraStreamRef = useRef(null);
+  const cardRef = useRef(null);
+  const fileInputRef = useRef(null);
   const previewAudioRef = useRef(null);
 
-  // Stop any playing audio when modal unmounts
+  const selectedGradient = GRADIENTS[selectedGradientIndex % GRADIENTS.length].value;
+  const animatedBg = ANIMATED_BGS[animatedBgIndex % ANIMATED_BGS.length].id;
+
+  // Stop camera helper
+  const stopCameraStream = useCallback(() => {
+    if (cameraStreamRef.current) {
+      try {
+        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+      } catch (e) {}
+      cameraStreamRef.current = null;
+    }
+    setCameraActive(false);
+  }, []);
+
+  // Start live camera
+  const startCamera = useCallback(async (facing = facingMode) => {
+    stopCameraStream();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setHasCameraSupport(false);
+      setViewMode('editor');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: facing,
+          width: { ideal: 1080 },
+          height: { ideal: 1920 }
+        },
+        audio: false
+      });
+      cameraStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        try {
+          await videoRef.current.play();
+        } catch (e) {}
+      }
+      setCameraActive(true);
+      setHasCameraSupport(true);
+    } catch (err) {
+      console.warn('Camera stream could not start:', err);
+      setHasCameraSupport(false);
+      setCameraActive(false);
+      // Fallback directly to story canvas
+      setViewMode('editor');
+    }
+  }, [facingMode, stopCameraStream]);
+
+  // Initial Camera Launch
   useEffect(() => {
+    startCamera('user');
     return () => {
+      stopCameraStream();
       if (previewAudioRef.current) {
         try {
           previewAudioRef.current.pause();
@@ -106,7 +187,9 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     };
   }, []);
 
+  // Handle Close Modal
   const handleCloseModal = () => {
+    stopCameraStream();
     if (previewAudioRef.current) {
       try {
         previewAudioRef.current.pause();
@@ -119,6 +202,78 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     onClose();
   };
 
+  // Switch Camera Front / Back
+  const handleToggleCameraFacing = () => {
+    const nextFacing = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(nextFacing);
+    startCamera(nextFacing);
+  };
+
+  // Capture Photo From Camera
+  const handleCapturePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 720;
+    canvas.height = video.videoHeight || 1280;
+    const ctx = canvas.getContext('2d');
+
+    // Mirror image for front selfie camera like Instagram
+    if (facingMode === 'user') {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    setMediaUrl(dataUrl);
+    stopCameraStream();
+    setViewMode('editor');
+  };
+
+  // Handle Photo Pick from Gallery
+  const handleFileChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 25 * 1024 * 1024) {
+      setError('File size exceeds limit.');
+      return;
+    }
+
+    stopCameraStream();
+    setError('');
+
+    let uploadedUrl = null;
+    if (token) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`${BACKEND_URL}/api/upload`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.url) uploadedUrl = data.url;
+        }
+      } catch (err) {}
+    }
+
+    if (!uploadedUrl) {
+      try {
+        uploadedUrl = await compressImageToBase64(file);
+      } catch (err) {}
+    }
+
+    if (uploadedUrl) {
+      setMediaUrl(uploadedUrl);
+      setViewMode('editor');
+    }
+  };
+
+  // Preview Song Snippet
   const previewSongPart = (song, startTimeSec) => {
     if (!song) return;
     try {
@@ -145,90 +300,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     } catch (e) {}
   };
 
-  const formatSecs = (sec) => {
-    const validSec = Number(sec) || 0;
-    const m = Math.floor(validSec / 60);
-    const s = Math.floor(validSec % 60);
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
-  const [textStyle3D, setTextStyle3D] = useState('none');
-  const [animatedBg, setAnimatedBg] = useState('none');
-  const [activeCategoryTab, setActiveCategoryTab] = useState('3d_text'); // '3d_text' | 'live_animated' | 'bg_color' | 'image_adjust'
-  const [mediaUrl, setMediaUrl] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-
-  // Advanced Image & Text Controls State
-  const [imageFit, setImageFit] = useState('contain'); // 'contain' | 'cover' | 'padded'
-  const [imageZoom, setImageZoom] = useState(1.0);
-  const [imageFilter, setImageFilter] = useState('none');
-  const [imageOpacity, setImageOpacity] = useState(0.92);
-  const [textSize, setTextSize] = useState(1.2);
-  const [textAlign, setTextAlign] = useState('center');
-  const [selectedStickers, setSelectedStickers] = useState([]);
-
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (file.size > 20 * 1024 * 1024) {
-      setError('File size exceeds 20MB limit.');
-      return;
-    }
-
-    setUploading(true);
-    setError('');
-
-    let uploadedUrl = null;
-
-    if (token) {
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch(`${BACKEND_URL}/api/upload`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.url) uploadedUrl = data.url;
-        }
-      } catch (err) {
-        console.warn('Server media upload offline, falling back to compressed local storage.');
-      }
-    }
-
-    if (!uploadedUrl) {
-      try {
-        uploadedUrl = await compressImageToBase64(file);
-      } catch (err) {
-        console.warn('Local compression failed:', err);
-      }
-    }
-
-    if (uploadedUrl) {
-      setMediaUrl(uploadedUrl);
-      setActiveCategoryTab('image_adjust');
-    } else {
-      setError('Unable to load image.');
-    }
-    setUploading(false);
-  };
-
-  const toggleSticker = (st) => {
-    setSelectedStickers(prev => 
-      prev.includes(st) ? prev.filter(s => s !== st) : [...prev, st]
-    );
-  };
-
-  const [textPos, setTextPos] = useState({ x: 50, y: 50 });
-  const [musicPos, setMusicPos] = useState({ x: 20, y: 15 });
-  const [imagePos, setImagePos] = useState({ x: 50, y: 50 });
-  const [draggingElement, setDraggingElement] = useState(null);
-  const cardRef = useRef(null);
-
+  // Dragging on the Canvas (Touch & Mouse)
   const handlePointerDown = (elementName, e) => {
     e.stopPropagation();
     setDraggingElement(elementName);
@@ -245,17 +317,31 @@ export default function CreateVibeModal({ onClose, onCreated }) {
 
     if (draggingElement === 'text') setTextPos({ x, y });
     else if (draggingElement === 'music') setMusicPos({ x, y });
-    else if (draggingElement === 'image') setImagePos({ x, y });
   };
 
   const handlePointerUp = () => {
     setDraggingElement(null);
   };
 
+  // Toggle Sticker
+  const handleToggleSticker = (st) => {
+    setSelectedStickers(prev => 
+      prev.includes(st) ? prev.filter(s => s !== st) : [...prev, st]
+    );
+  };
+
+  // Retake or Clear Photo
+  const handleRetake = () => {
+    setMediaUrl('');
+    setViewMode('camera');
+    startCamera(facingMode);
+  };
+
+  // Submit Story to Backend & LocalStorage
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!caption.trim() && !mediaUrl) {
-      setError('Please add a caption or upload media for your 24h Vibe.');
+    if (e && e.preventDefault) e.preventDefault();
+    if (!caption.trim() && !mediaUrl && !selectedSong) {
+      setError('Please add a photo, music, or text for your 24h Vibe.');
       return;
     }
 
@@ -270,7 +356,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       avatar: user?.avatar,
       caption: caption.trim(),
       mediaUrl: mediaUrl || null,
-      soundtrack: selectedSong ? 'music_track' : soundtrack,
+      soundtrack: selectedSong ? 'music_track' : 'lofi',
       songTitle: selectedSong ? selectedSong.songTitle : '',
       artistName: selectedSong ? selectedSong.artistName : '',
       albumArt: selectedSong ? selectedSong.albumArt : '',
@@ -282,13 +368,13 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       animatedBg,
       textPos,
       musicPos,
-      imagePos,
-      imageFit,
-      imageZoom,
-      imageFilter,
-      imageOpacity,
-      textSize,
-      textAlign,
+      imagePos: { x: 50, y: 50 },
+      imageFit: 'cover',
+      imageZoom: 1.0,
+      imageFilter: 'none',
+      imageOpacity: 1.0,
+      textSize: 1.3,
+      textAlign: 'center',
       selectedStickers,
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -307,7 +393,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           body: JSON.stringify({
             caption: caption.trim(),
             mediaUrl: mediaUrl || null,
-            soundtrack: selectedSong ? 'music_track' : soundtrack,
+            soundtrack: selectedSong ? 'music_track' : 'lofi',
             songTitle: selectedSong ? selectedSong.songTitle : '',
             artistName: selectedSong ? selectedSong.artistName : '',
             albumArt: selectedSong ? selectedSong.albumArt : '',
@@ -319,18 +405,18 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             animatedBg,
             textPos,
             musicPos,
-            imagePos,
-            imageFit,
-            imageZoom,
-            imageFilter,
-            imageOpacity,
-            textSize,
-            textAlign,
+            imagePos: { x: 50, y: 50 },
+            imageFit: 'cover',
+            imageZoom: 1.0,
+            imageFilter: 'none',
+            imageOpacity: 1.0,
+            textSize: 1.3,
+            textAlign: 'center',
             selectedStickers
           })
         });
       } catch (err) {
-        console.warn('Server offline, vibe saved in local storage.');
+        console.warn('Network story sync offline, cached locally.');
       }
     }
 
@@ -339,9 +425,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       const existing = raw ? JSON.parse(raw) : [];
       existing.unshift(newVibe);
       localStorage.setItem('pulsechat_local_vibes', JSON.stringify(existing));
-    } catch (err) {
-      console.warn('LocalStorage error:', err);
-    }
+    } catch (err) {}
 
     window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
 
@@ -351,199 +435,529 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={handleCloseModal} style={{ zIndex: 1350 }}>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1350,
+        background: '#000000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        userSelect: 'none'
+      }}
+    >
+      {/* Hidden File Picker for Gallery */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+      />
+
+      {/* Main Container - Fullscreen on mobile, Instagram frame on desktop */}
       <div
-        className="modal-card modal-responsive"
-        onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: '460px',
+          position: 'relative',
           width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          borderRadius: '24px',
+          maxWidth: '430px',
+          height: '100dvh',
+          maxHeight: '920px',
+          borderRadius: window.innerWidth > 500 ? '28px' : '0px',
           overflow: 'hidden',
-          background: 'var(--bg-card)',
-          border: '1px solid rgba(255,255,255,0.15)',
-          maxHeight: '94dvh'
+          background: '#09090b',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
+          border: window.innerWidth > 500 ? '1px solid rgba(255,255,255,0.12)' : 'none',
+          display: 'flex',
+          flexDirection: 'column'
         }}
       >
-        {/* Header */}
-        <div style={{
-          padding: '14px 20px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
-          background: 'rgba(0,0,0,0.2)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Sparkles size={18} color="#f59e0b" />
-            <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-main)' }}>Post 24h Vibe Story</h3>
-          </div>
-          <button className="icon-btn-ghost" onClick={handleCloseModal}><X size={18} /></button>
-        </div>
+        {/* =========================================================================
+            SCREEN 1: INSTAGRAM LIVE CAMERA
+        ========================================================================= */}
+        {viewMode === 'camera' && (
+          <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000' }}>
+            {/* Live Camera Viewfinder Video */}
+            <video
+              ref={videoRef}
+              playsInline
+              autoPlay
+              muted
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                transform: facingMode === 'user' ? 'scaleX(-1)' : 'none'
+              }}
+            />
 
-        {/* Scrollable Content */}
-        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
-          {error && <div className="error-banner">{error}</div>}
+            {/* Top Instagram Camera Toolbar */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                padding: '16px 18px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                zIndex: 20,
+                background: 'linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%)'
+              }}
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                style={{
+                  background: 'rgba(0,0,0,0.45)',
+                  border: 'none',
+                  color: '#fff',
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(8px)'
+                }}
+              >
+                <X size={22} />
+              </button>
 
-          {/* YouTube Full Song Audio Player Engine (Fallback ONLY when no direct audioUrl) */}
-          {!selectedSong?.audioUrl && selectedSong?.youtubeId && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '6px 12px',
-              borderRadius: '12px',
-              background: 'rgba(18, 18, 24, 0.88)',
-              border: '1px solid rgba(245, 158, 11, 0.5)'
-            }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Disc size={16} className="spin-slow" /> 🎵 Full Song Preview:
-              </div>
-              <div style={{ width: '130px', height: '36px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
-                <iframe
-                  key={`yt_modal_preview_${selectedSong.youtubeId}_${songStartTime}`}
-                  src={`https://www.youtube-nocookie.com/embed/${selectedSong.youtubeId}?autoplay=1&enablejsapi=1&start=${Math.floor(songStartTime)}`}
-                  allow="autoplay; encrypted-media; fullscreen"
-                  style={{ width: '100%', height: '100%', border: 'none' }}
-                />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {/* Switch to Text/Canvas Mode */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopCameraStream();
+                    setViewMode('editor');
+                  }}
+                  style={{
+                    background: 'rgba(0,0,0,0.45)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#fff',
+                    borderRadius: '20px',
+                    padding: '6px 14px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(8px)'
+                  }}
+                >
+                  <Type size={16} color="#f59e0b" /> Text Story
+                </button>
+
+                {/* Flip Front / Back Camera Button */}
+                <button
+                  type="button"
+                  onClick={handleToggleCameraFacing}
+                  style={{
+                    background: 'rgba(0,0,0,0.45)',
+                    border: 'none',
+                    color: '#fff',
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(8px)'
+                  }}
+                  title="Flip Camera"
+                >
+                  <SwitchCamera size={20} />
+                </button>
               </div>
             </div>
-          )}
 
-          {/* Live Card Preview (Interactive Drag & Drop Canvas) */}
+            {/* Bottom Instagram Camera Controls */}
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                padding: '24px 24px 34px 24px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '18px',
+                zIndex: 20,
+                background: 'linear-gradient(0deg, rgba(0,0,0,0.85) 0%, transparent 100%)'
+              }}
+            >
+              {/* Controls Row: Gallery - Shutter - Palette */}
+              <div
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-around'
+                }}
+              >
+                {/* Gallery Picker Button */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    background: 'rgba(255,255,255,0.15)',
+                    border: '1.5px solid rgba(255,255,255,0.35)',
+                    color: '#fff',
+                    width: '46px',
+                    height: '46px',
+                    borderRadius: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(10px)',
+                    transition: 'transform 0.15s ease'
+                  }}
+                  title="Choose from Gallery"
+                >
+                  <ImageIcon size={22} />
+                </button>
+
+                {/* Instagram Shutter Button */}
+                <button
+                  type="button"
+                  onClick={handleCapturePhoto}
+                  style={{
+                    width: '74px',
+                    height: '74px',
+                    borderRadius: '50%',
+                    background: 'transparent',
+                    border: '4px solid #ffffff',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 0 20px rgba(255,255,255,0.4)',
+                    outline: 'none'
+                  }}
+                  title="Take Photo"
+                >
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: '50%',
+                      background: '#ffffff',
+                      transition: 'transform 0.1s ease'
+                    }}
+                  />
+                </button>
+
+                {/* Flip Camera or Palette */}
+                <button
+                  type="button"
+                  onClick={handleToggleCameraFacing}
+                  style={{
+                    background: 'rgba(255,255,255,0.15)',
+                    border: '1.5px solid rgba(255,255,255,0.35)',
+                    color: '#fff',
+                    width: '46px',
+                    height: '46px',
+                    borderRadius: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(10px)'
+                  }}
+                  title="Flip Camera"
+                >
+                  <SwitchCamera size={22} />
+                </button>
+              </div>
+
+              {/* Bottom Mode Indicators */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                <span
+                  onClick={() => {
+                    stopCameraStream();
+                    setViewMode('editor');
+                  }}
+                  style={{
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    color: 'rgba(255,255,255,0.6)',
+                    cursor: 'pointer',
+                    letterSpacing: '0.05em'
+                  }}
+                >
+                  CREATE
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.86rem',
+                    fontWeight: 900,
+                    color: '#f59e0b',
+                    letterSpacing: '0.05em',
+                    textShadow: '0 0 10px rgba(245, 158, 11, 0.6)'
+                  }}
+                >
+                  CAMERA
+                </span>
+                <span
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    color: 'rgba(255,255,255,0.6)',
+                    cursor: 'pointer',
+                    letterSpacing: '0.05em'
+                  }}
+                >
+                  GALLERY
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            SCREEN 2: INSTAGRAM STORY CANVAS EDITOR
+        ========================================================================= */}
+        {viewMode === 'editor' && (
           <div
             ref={cardRef}
             onMouseMove={handlePointerMove}
             onTouchMove={handlePointerMove}
             onMouseUp={handlePointerUp}
             onTouchEnd={handlePointerUp}
-            onMouseLeave={handlePointerUp}
             style={{
               position: 'relative',
-              height: '260px',
-              borderRadius: '20px',
-              background: selectedGradient,
+              width: '100%',
+              height: '100%',
+              background: mediaUrl ? '#000000' : selectedGradient,
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: imageFit === 'padded' ? '24px' : '0px',
               overflow: 'hidden',
-              boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              userSelect: 'none',
               cursor: draggingElement ? 'grabbing' : 'default'
             }}
           >
-            {/* Live Canvas Background ALWAYS rendered if selected */}
-            {animatedBg !== 'none' && (
+            {/* Live Canvas Background effect if no mediaUrl */}
+            {!mediaUrl && animatedBg !== 'none' && (
               <ChatLiveWallpaper wallpaperId={animatedBg} />
             )}
 
-            {/* Uploaded Image Layer with Drag & Drop Position, Fit, Zoom, Filter & Opacity */}
-            {mediaUrl ? (
-              <div
-                onMouseDown={(e) => handlePointerDown('image', e)}
-                onTouchStart={(e) => handlePointerDown('image', e)}
+            {/* Media Image Layer */}
+            {mediaUrl && (
+              <img
+                src={mediaUrl}
+                alt="Story Media"
                 style={{
                   position: 'absolute',
-                  left: `${imagePos.x}%`,
-                  top: `${imagePos.y}%`,
-                  transform: `translate(-50%, -50%) scale(${imageZoom})`,
-                  width: imageFit === 'contain' ? '90%' : '100%',
-                  height: imageFit === 'contain' ? '90%' : '100%',
-                  borderRadius: imageFit === 'padded' ? '14px' : '0px',
-                  overflow: 'hidden',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: 2,
-                  cursor: 'grab',
-                  touchAction: 'none'
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  pointerEvents: 'none'
                 }}
-              >
-                <img
-                  src={mediaUrl}
-                  alt="Vibe Media"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: imageFit === 'padded' ? 'contain' : imageFit,
-                    filter: imageFilter === 'warm' ? 'saturate(1.4) contrast(1.15)' :
-                            imageFilter === 'cyber' ? 'hue-rotate(180deg) saturate(1.5)' :
-                            imageFilter === 'vintage' ? 'sepia(0.4) contrast(1.1)' :
-                            imageFilter === 'bw' ? 'grayscale(0.85) contrast(1.2)' : 'none',
-                    opacity: imageOpacity,
-                    pointerEvents: 'none'
-                  }}
-                />
-              </div>
-            ) : null}
+              />
+            )}
 
-            {/* Drag-and-Drop 3D Text Card or Textarea */}
+            {/* Subtle Vignette for top & bottom tool readability */}
             <div
-              onMouseDown={(e) => handlePointerDown('text', e)}
-              onTouchStart={(e) => handlePointerDown('text', e)}
               style={{
                 position: 'absolute',
-                left: `${textPos.x}%`,
-                top: `${textPos.y}%`,
-                transform: 'translate(-50%, -50%)',
-                zIndex: 5,
-                width: '88%',
+                inset: 0,
+                background: 'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, transparent 22%, transparent 75%, rgba(0,0,0,0.75) 100%)',
+                pointerEvents: 'none'
+              }}
+            />
+
+            {/* Floating Top Instagram Tools */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                padding: '16px 16px',
                 display: 'flex',
-                justifyContent: 'center',
-                cursor: 'grab',
-                touchAction: 'none'
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                zIndex: 30
               }}
             >
-              {textStyle3D !== 'none' ? (
-                <div className={`animated-3d-stage ${textStyle3D}`} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-                  <div className="animated-3d-card" style={{ padding: '8px 12px', width: '100%', background: 'transparent', boxShadow: 'none', border: 'none' }}>
-                    <textarea
-                      placeholder="Type 3D Vibe text... (Drag to position)"
-                      value={caption}
-                      onChange={(e) => setCaption(e.target.value)}
-                      className="text-3d-content"
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        outline: 'none',
-                        resize: 'none',
-                        width: '100%',
-                        fontSize: `${textSize}rem`,
-                        textAlign: textAlign,
-                        fontFamily: 'inherit'
-                      }}
-                    />
-                    <div className="text-3d-shadow" />
-                  </div>
-                </div>
-              ) : (
-                <textarea
-                  placeholder="What's your vibe today? Drag to position text anywhere!"
-                  value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
+              {/* Back / Retake / Close */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
                   style={{
-                    background: 'transparent',
+                    background: 'rgba(0,0,0,0.4)',
                     border: 'none',
                     color: '#fff',
-                    fontSize: `${textSize}rem`,
-                    fontWeight: 700,
-                    textAlign: textAlign,
-                    outline: 'none',
-                    resize: 'none',
-                    width: '100%',
-                    textShadow: '0 2px 10px rgba(0,0,0,0.85)'
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(8px)'
                   }}
-                />
-              )}
+                  title="Close"
+                >
+                  <X size={20} />
+                </button>
+
+                {mediaUrl && (
+                  <button
+                    type="button"
+                    onClick={handleRetake}
+                    style={{
+                      background: 'rgba(0,0,0,0.4)',
+                      border: 'none',
+                      color: '#fff',
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      backdropFilter: 'blur(8px)'
+                    }}
+                    title="Retake Photo"
+                  >
+                    <Camera size={19} />
+                  </button>
+                )}
+              </div>
+
+              {/* Floating Instagram Action Pills: Aa, 🎵, 🎨, ✨, 😊 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {/* 1. Text Tool (Aa) */}
+                <button
+                  type="button"
+                  onClick={() => setShowTextEditor(true)}
+                  style={{
+                    background: caption ? '#f59e0b' : 'rgba(0,0,0,0.45)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: caption ? '#000' : '#fff',
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(8px)',
+                    fontWeight: 900,
+                    fontSize: '1rem'
+                  }}
+                  title="Add or Edit Text (Aa)"
+                >
+                  Aa
+                </button>
+
+                {/* 2. Music Picker Tool (🎵) */}
+                <button
+                  type="button"
+                  onClick={() => setShowMusicPicker(true)}
+                  style={{
+                    background: selectedSong ? 'linear-gradient(135deg, #f59e0b, #ec4899)' : 'rgba(0,0,0,0.45)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#fff',
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(8px)',
+                    boxShadow: selectedSong ? '0 0 12px rgba(245, 158, 11, 0.6)' : 'none'
+                  }}
+                  title="Add Music Track"
+                >
+                  <Music size={18} />
+                </button>
+
+                {/* 3. Cycle Colors / Gradient (🎨) */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedGradientIndex(i => i + 1)}
+                  style={{
+                    background: 'rgba(0,0,0,0.45)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#fff',
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(8px)'
+                  }}
+                  title="Cycle Background Color"
+                >
+                  <Palette size={18} />
+                </button>
+
+                {/* 4. Cycle Live Aura Effects (✨) */}
+                <button
+                  type="button"
+                  onClick={() => setAnimatedBgIndex(i => i + 1)}
+                  style={{
+                    background: animatedBg !== 'none' ? 'rgba(99, 102, 241, 0.8)' : 'rgba(0,0,0,0.45)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#fff',
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(8px)'
+                  }}
+                  title="Cycle Live Aura Wallpaper"
+                >
+                  <Sparkles size={18} />
+                </button>
+
+                {/* 5. Stickers Tool (😊) */}
+                <button
+                  type="button"
+                  onClick={() => setShowStickerDrawer(s => !s)}
+                  style={{
+                    background: selectedStickers.length > 0 ? 'rgba(236, 72, 153, 0.8)' : 'rgba(0,0,0,0.45)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#fff',
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(8px)'
+                  }}
+                  title="Add Stickers"
+                >
+                  <Smile size={18} />
+                </button>
+              </div>
             </div>
 
-            {/* Drag-and-Drop Music Track Vinyl Sticker */}
-            {selectedSong ? (
+            {/* Draggable Music Sticker on Canvas (Instagram Style) */}
+            {selectedSong && (
               <div
                 onMouseDown={(e) => handlePointerDown('music', e)}
                 onTouchStart={(e) => handlePointerDown('music', e)}
@@ -552,698 +966,372 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   left: `${musicPos.x}%`,
                   top: `${musicPos.y}%`,
                   transform: 'translate(-50%, -50%)',
-                  background: 'rgba(0, 0, 0, 0.82)',
-                  backdropFilter: 'blur(10px)',
-                  padding: '5px 10px',
-                  borderRadius: '20px',
-                  border: '1.5px solid rgba(245, 158, 11, 0.7)',
+                  zIndex: 25,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  zIndex: 6,
-                  boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
+                  gap: '8px',
+                  background: 'rgba(18, 18, 24, 0.85)',
+                  backdropFilter: 'blur(16px)',
+                  WebkitBackdropFilter: 'blur(16px)',
+                  padding: '6px 14px 6px 8px',
+                  borderRadius: '24px',
+                  border: '1.5px solid rgba(245, 158, 11, 0.65)',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
                   cursor: 'grab',
-                  touchAction: 'none'
+                  maxWidth: '82%'
                 }}
               >
                 <img
                   src={selectedSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedSong.songTitle}`}
                   alt="Track"
-                  style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover', animation: 'spin 4s linear infinite', pointerEvents: 'none' }}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    animation: 'spin 4s linear infinite',
+                    flexShrink: 0
+                  }}
                 />
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '120px', pointerEvents: 'none' }}>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     🎵 {selectedSong.songTitle}
                   </span>
-                  <span style={{ fontSize: '0.62rem', color: '#f59e0b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {selectedSong.artistName}
+                  <span style={{ fontSize: '0.68rem', color: '#f59e0b', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {selectedSong.artistName || 'Full Song'}
                   </span>
                 </div>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setSelectedSong(null); }}
-                  style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', padding: '1px' }}
-                  title="Remove Song"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedSong(null);
+                    if (previewAudioRef.current) previewAudioRef.current.pause();
+                    stopGlobalMusicAudio();
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ef4444',
+                    padding: '2px',
+                    cursor: 'pointer',
+                    marginLeft: '4px'
+                  }}
+                  title="Remove Music"
                 >
-                  <X size={13} />
+                  <X size={14} />
                 </button>
               </div>
-            ) : null}
+            )}
 
-            {/* Floating Selected Sticker Badges */}
-            {selectedStickers.length > 0 && (
-              <div style={{
+            {/* Draggable Text / Caption on Canvas (Tap to edit) */}
+            <div
+              onMouseDown={(e) => handlePointerDown('text', e)}
+              onTouchStart={(e) => handlePointerDown('text', e)}
+              onClick={() => setShowTextEditor(true)}
+              style={{
                 position: 'absolute',
-                bottom: 12,
-                right: 12,
-                display: 'flex',
-                gap: '6px',
-                zIndex: 6,
-                background: 'rgba(0,0,0,0.4)',
-                backdropFilter: 'blur(8px)',
-                padding: '4px 8px',
+                left: `${textPos.x}%`,
+                top: `${textPos.y}%`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: 24,
+                cursor: 'grab',
+                padding: '10px 16px',
                 borderRadius: '16px',
-                pointerEvents: 'none'
-              }}>
-                {selectedStickers.map(s => (
-                  <span key={s} style={{ fontSize: '1.2rem', animation: 'bounce 2s infinite' }}>{s}</span>
+                textAlign: 'center',
+                maxWidth: '88%',
+                lineHeight: 1.35
+              }}
+            >
+              <div
+                className={textStyle3D !== 'none' ? textStyle3D : ''}
+                style={{
+                  fontSize: '1.45rem',
+                  fontWeight: 800,
+                  color: '#ffffff',
+                  textShadow: '0 2px 14px rgba(0,0,0,0.85)',
+                  wordBreak: 'break-word',
+                  whiteSpace: 'pre-wrap'
+                }}
+              >
+                {caption || "Tap to type your vibe..."}
+              </div>
+            </div>
+
+            {/* Draggable Stickers */}
+            {selectedStickers.length > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '90px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  zIndex: 25,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  background: 'rgba(0,0,0,0.5)',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  backdropFilter: 'blur(10px)'
+                }}
+              >
+                {selectedStickers.map((s, i) => (
+                  <span
+                    key={i}
+                    onClick={() => handleToggleSticker(s)}
+                    style={{ fontSize: '1.5rem', cursor: 'pointer' }}
+                    title="Click to remove"
+                  >
+                    {s}
+                  </span>
                 ))}
               </div>
             )}
-          </div>
 
-          {/* Controls Section */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            
-            {/* 1. Music Search Trigger Button */}
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowMusicPicker(true)}
+            {/* Sticker Drawer Sheet */}
+            {showStickerDrawer && (
+              <div
                 style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '14px',
-                  background: selectedSong ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(236, 72, 153, 0.25))' : 'linear-gradient(135deg, #6366f1, #a855f7)',
-                  border: selectedSong ? '1.5px solid #f59e0b' : 'none',
-                  color: '#ffffff',
-                  fontWeight: 800,
-                  fontSize: '0.86rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  cursor: 'pointer',
-                  boxShadow: selectedSong ? '0 4px 14px rgba(245, 158, 11, 0.3)' : '0 4px 14px rgba(99, 102, 241, 0.3)',
-                  transition: 'all 0.2s ease'
+                  position: 'absolute',
+                  bottom: '75px',
+                  left: '12px',
+                  right: '12px',
+                  zIndex: 40,
+                  background: 'rgba(18, 18, 24, 0.94)',
+                  backdropFilter: 'blur(20px)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '20px',
+                  padding: '12px 16px',
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.8)',
+                  animation: 'pulseFadeIn 0.2s ease'
                 }}
               >
-                <Music size={17} />
-                <span>{selectedSong ? `🎵 Selected: ${selectedSong.songTitle} (Change)` : '🎵 Add Music'}</span>
-              </button>
-            </div>
-
-            {/* Instagram-style Music Trimmer / Song Portion Adjuster Widget */}
-            {selectedSong && (
-              <div style={{
-                background: 'rgba(18, 18, 24, 0.88)',
-                border: '1.5px solid rgba(245, 158, 11, 0.5)',
-                borderRadius: '16px',
-                padding: '10px 12px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <Sliders size={13} /> Song Start Position (Full Track)
-                  </span>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#fff', background: 'rgba(245, 158, 11, 0.25)', padding: '2px 8px', borderRadius: '10px' }}>
-                    Plays from {formatSecs(songStartTime)}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#f59e0b' }}>Tap to Add Stickers</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowStickerDrawer(false)}
+                    style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}
+                  >
+                    <X size={15} />
+                  </button>
                 </div>
-
-                {/* Animated Waveform Visualizer & Seek Range Slider */}
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '34px', gap: '2px', background: 'rgba(0,0,0,0.5)', borderRadius: '10px', padding: '0 8px', overflow: 'hidden' }}>
-                  {[40, 65, 85, 30, 95, 60, 75, 45, 90, 100, 50, 70, 80, 60, 40, 90, 85, 70, 95, 50, 80, 60, 40, 75, 90, 65, 80, 45, 95, 85].map((h, idx) => {
-                    const activeStartIdx = Math.floor((songStartTime / 240) * 30);
-                    const activeEndIdx = Math.floor(((songStartTime + 30) / 240) * 30);
-                    const isActive = idx >= activeStartIdx && idx <= activeEndIdx;
-                    return (
-                      <div
-                        key={idx}
-                        style={{
-                          flex: 1,
-                          height: `${h}%`,
-                          background: isActive
-                            ? 'linear-gradient(180deg, #f59e0b, #ec4899)'
-                            : 'rgba(255, 255, 255, 0.22)',
-                          borderRadius: '2px',
-                          transition: 'background 0.15s ease'
-                        }}
-                      />
-                    );
-                  })}
-                  <input
-                    type="range"
-                    min={0}
-                    max={240}
-                    step={1}
-                    value={songStartTime}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10);
-                      setSongStartTime(val);
-                      previewSongPart(selectedSong, val);
-                    }}
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: '100%',
-                      height: '100%',
-                      opacity: 0,
-                      cursor: 'ew-resize',
-                      zIndex: 5
-                    }}
-                  />
-                </div>
-
-                {/* Quick Seek Presets */}
-                <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
-                  {[
-                    { label: '▶️ Intro (0:00)', sec: 0 },
-                    { label: '🔥 Verse (0:30)', sec: 30 },
-                    { label: '🎵 Chorus (1:00)', sec: 60 },
-                    { label: '⚡ Drop (1:30)', sec: 90 },
-                    { label: '🎸 Bridge (2:00)', sec: 120 }
-                  ].map(preset => (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center' }}>
+                  {STICKERS.map((st, i) => (
                     <button
-                      key={preset.sec}
+                      key={i}
                       type="button"
-                      onClick={() => {
-                        setSongStartTime(preset.sec);
-                        previewSongPart(selectedSong, preset.sec);
-                      }}
+                      onClick={() => handleToggleSticker(st)}
                       style={{
-                        padding: '3px 8px',
-                        borderRadius: '10px',
-                        background: songStartTime === preset.sec ? 'linear-gradient(135deg, #f59e0b, #ec4899)' : 'rgba(255,255,255,0.08)',
-                        color: songStartTime === preset.sec ? '#ffffff' : 'var(--text-muted)',
-                        fontSize: '0.68rem',
-                        fontWeight: 700,
-                        border: 'none',
+                        background: selectedStickers.includes(st) ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.08)',
+                        border: selectedStickers.includes(st) ? '1px solid #f59e0b' : '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '12px',
+                        fontSize: '1.5rem',
+                        padding: '6px 10px',
                         cursor: 'pointer'
                       }}
                     >
-                      {preset.label}
+                      {st}
                     </button>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* 2. Add Image Button (Directly below Add Music) */}
-            <div>
-              <label style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '14px',
-                background: mediaUrl ? 'rgba(16, 185, 129, 0.2)' : 'linear-gradient(135deg, #10b981, #06b6d4)',
-                border: mediaUrl ? '1.5px solid #10b981' : 'none',
-                color: '#ffffff',
-                fontWeight: 800,
-                fontSize: '0.86rem',
+            {/* Bottom Instagram Action Bar ("Your Story ⚡") */}
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                padding: '16px 20px 24px 20px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                cursor: 'pointer',
-                boxShadow: mediaUrl ? '0 4px 14px rgba(16, 185, 129, 0.3)' : '0 4px 14px rgba(16, 185, 129, 0.3)',
-                transition: 'all 0.2s ease',
-                boxSizing: 'border-box'
-              }}>
-                <ImageIcon size={17} />
-                <span>{uploading ? 'Processing Image...' : mediaUrl ? '🖼️ Image Attached (Click to Change)' : '🖼️ Add Image'}</span>
-                <input type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
-              </label>
-            </div>
-
-            {/* 3. Category Tabs (3D Text, Position, Image, Live Canvas, BG Color) */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px', marginTop: '2px' }}>
+                justifyContent: 'space-between',
+                zIndex: 30,
+                background: 'linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%)'
+              }}
+            >
+              {/* Cancel Button */}
               <button
                 type="button"
-                onClick={() => setActiveCategoryTab('3d_text')}
+                onClick={handleCloseModal}
                 style={{
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  border: activeCategoryTab === '3d_text' ? '1.5px solid #3b82f6' : '1px solid var(--border)',
-                  background: activeCategoryTab === '3d_text' ? 'rgba(59, 130, 246, 0.22)' : 'rgba(0,0,0,0.25)',
-                  color: activeCategoryTab === '3d_text' ? '#38bdf8' : 'var(--text-muted)',
+                  background: 'rgba(255,255,255,0.12)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: '#e2e8f0',
+                  padding: '10px 18px',
+                  borderRadius: '24px',
+                  fontSize: '0.86rem',
                   fontWeight: 700,
-                  fontSize: '0.76rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '4px',
                   cursor: 'pointer',
-                  transition: 'all 0.2s ease'
+                  backdropFilter: 'blur(8px)'
                 }}
               >
-                <Type size={13} color={activeCategoryTab === '3d_text' ? '#38bdf8' : '#888'} /> 3D Text
+                Cancel
               </button>
 
+              {/* Instagram Style "Your Story ⚡" Share Button */}
               <button
                 type="button"
-                onClick={() => setActiveCategoryTab('position')}
+                disabled={submitting}
+                onClick={handleSubmit}
                 style={{
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  border: activeCategoryTab === 'position' ? '1.5px solid #f59e0b' : '1px solid var(--border)',
-                  background: activeCategoryTab === 'position' ? 'rgba(245, 158, 11, 0.22)' : 'rgba(0,0,0,0.25)',
-                  color: activeCategoryTab === 'position' ? '#f59e0b' : 'var(--text-muted)',
-                  fontWeight: 700,
-                  fontSize: '0.76rem',
+                  background: 'linear-gradient(135deg, #6366f1 0%, #ec4899 50%, #f59e0b 100%)',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '10px 22px',
+                  borderRadius: '26px',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '4px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
+                  gap: '8px',
+                  fontSize: '0.94rem',
+                  fontWeight: 800,
+                  cursor: submitting ? 'wait' : 'pointer',
+                  boxShadow: '0 4px 20px rgba(236, 72, 153, 0.55)',
+                  transition: 'transform 0.15s ease'
                 }}
               >
-                <Move size={13} color={activeCategoryTab === 'position' ? '#f59e0b' : '#888'} /> 📍 Position
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveCategoryTab('live_animated')}
-                style={{
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  border: activeCategoryTab === 'live_animated' ? '1.5px solid #ec4899' : '1px solid var(--border)',
-                  background: activeCategoryTab === 'live_animated' ? 'rgba(236, 72, 153, 0.22)' : 'rgba(0,0,0,0.25)',
-                  color: activeCategoryTab === 'live_animated' ? '#f472b6' : 'var(--text-muted)',
-                  fontWeight: 700,
-                  fontSize: '0.76rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '4px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <Sparkle size={13} color={activeCategoryTab === 'live_animated' ? '#f472b6' : '#888'} /> Canvas
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveCategoryTab('bg_color')}
-                style={{
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  border: activeCategoryTab === 'bg_color' ? '1.5px solid #10b981' : '1px solid var(--border)',
-                  background: activeCategoryTab === 'bg_color' ? 'rgba(16, 185, 129, 0.22)' : 'rgba(0,0,0,0.25)',
-                  color: activeCategoryTab === 'bg_color' ? '#34d399' : 'var(--text-muted)',
-                  fontWeight: 700,
-                  fontSize: '0.76rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '4px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <Palette size={13} color={activeCategoryTab === 'bg_color' ? '#34d399' : '#888'} /> BG Color
-              </button>
-
-              {mediaUrl && (
-                <button
-                  type="button"
-                  onClick={() => setActiveCategoryTab('image_adjust')}
+                {/* User Avatar Circle */}
+                <div
                   style={{
-                    padding: '8px 4px',
-                    borderRadius: '12px',
-                    border: activeCategoryTab === 'image_adjust' ? '1.5px solid #f59e0b' : '1px solid var(--border)',
-                    background: activeCategoryTab === 'image_adjust' ? 'rgba(245, 158, 11, 0.22)' : 'rgba(0,0,0,0.25)',
-                    color: activeCategoryTab === 'image_adjust' ? '#fbbf24' : 'var(--text-muted)',
-                    fontWeight: 700,
-                    fontSize: '0.76rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '4px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <Sliders size={13} color={activeCategoryTab === 'image_adjust' ? '#fbbf24' : '#888'} /> Adjust
-                </button>
-              )}
-            </div>
-
-            {/* 4. Category Options Panel */}
-            <div style={{
-              padding: '10px 12px',
-              borderRadius: '14px',
-              background: 'rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              minHeight: '62px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center'
-            }}>
-              {activeCategoryTab === 'position' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#f59e0b', margin: 0 }}>
-                    🎯 Drag items directly on the card preview OR click presets below:
-                  </span>
-
-                  {/* Text Position */}
-                  <div>
-                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
-                      📝 Text Alignment & Position
-                    </span>
-                    <div style={{ display: 'flex', gap: '5px' }}>
-                      {[
-                        { label: '⬆️ Top', x: 50, y: 22 },
-                        { label: '🎯 Center', x: 50, y: 50 },
-                        { label: '⬇️ Bottom', x: 50, y: 78 },
-                        { label: '⬅️ Left', x: 28, y: 50 },
-                        { label: '➡️ Right', x: 72, y: 50 }
-                      ].map(btn => (
-                        <button
-                          key={btn.label}
-                          type="button"
-                          onClick={() => setTextPos({ x: btn.x, y: btn.y })}
-                          style={{
-                            flex: 1, padding: '4px 6px', borderRadius: '8px', fontSize: '0.68rem', fontWeight: 700,
-                            background: textPos.x === btn.x && textPos.y === btn.y ? 'rgba(245,158,11,0.3)' : 'rgba(255,255,255,0.08)',
-                            color: '#fff', border: textPos.x === btn.x && textPos.y === btn.y ? '1px solid #f59e0b' : '1px solid var(--border)',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          {btn.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Music Sticker Position */}
-                  {selectedSong && (
-                    <div>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#f59e0b', display: 'block', marginBottom: '4px' }}>
-                        🎵 Music Sticker Position
-                      </span>
-                      <div style={{ display: 'flex', gap: '5px' }}>
-                        {[
-                          { label: '↖️ Top-Left', x: 22, y: 15 },
-                          { label: '↗️ Top-Right', x: 78, y: 15 },
-                          { label: '↙️ Bottom-Left', x: 22, y: 82 },
-                          { label: '↘️ Bottom-Right', x: 78, y: 82 }
-                        ].map(btn => (
-                          <button
-                            key={btn.label}
-                            type="button"
-                            onClick={() => setMusicPos({ x: btn.x, y: btn.y })}
-                            style={{
-                              flex: 1, padding: '4px 6px', borderRadius: '8px', fontSize: '0.68rem', fontWeight: 700,
-                              background: musicPos.x === btn.x && musicPos.y === btn.y ? 'rgba(245,158,11,0.3)' : 'rgba(245,158,11,0.12)',
-                              color: '#f59e0b', border: musicPos.x === btn.x && musicPos.y === btn.y ? '1.5px solid #f59e0b' : '1px solid rgba(245,158,11,0.3)',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {btn.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Image Position */}
-                  {mediaUrl && (
-                    <div>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#10b981', display: 'block', marginBottom: '4px' }}>
-                        🖼️ Image Layer Position
-                      </span>
-                      <div style={{ display: 'flex', gap: '5px' }}>
-                        {[
-                          { label: '🎯 Center', x: 50, y: 50 },
-                          { label: '⬆️ Up', x: 50, y: 38 },
-                          { label: '⬇️ Down', x: 50, y: 62 }
-                        ].map(btn => (
-                          <button
-                            key={btn.label}
-                            type="button"
-                            onClick={() => setImagePos({ x: btn.x, y: btn.y })}
-                            style={{
-                              flex: 1, padding: '4px 6px', borderRadius: '8px', fontSize: '0.68rem', fontWeight: 700,
-                              background: imagePos.x === btn.x && imagePos.y === btn.y ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.12)',
-                              color: '#10b981', border: imagePos.x === btn.x && imagePos.y === btn.y ? '1.5px solid #10b981' : '1px solid rgba(16,185,129,0.3)',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {btn.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {activeCategoryTab === '3d_text' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <span style={{ fontSize: '0.73rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block' }}>
-                    Select 3D Text Style:
-                  </span>
-                  <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
-                    {TEXT_STYLES_3D.map(st => (
-                      <button
-                        key={st.id}
-                        type="button"
-                        onClick={() => setTextStyle3D(st.id)}
-                        style={{
-                          padding: '5px 12px',
-                          borderRadius: '12px',
-                          border: textStyle3D === st.id ? '1.5px solid #3b82f6' : '1px solid var(--border)',
-                          background: textStyle3D === st.id ? 'rgba(59, 130, 246, 0.25)' : 'var(--bg-card)',
-                          color: textStyle3D === st.id ? '#38bdf8' : 'var(--text-muted)',
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        {st.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Size & Alignment Bar */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '6px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Size:</span>
-                      {[1.0, 1.2, 1.5, 1.8].map(sz => (
-                        <button
-                          key={sz}
-                          type="button"
-                          onClick={() => setTextSize(sz)}
-                          style={{
-                            padding: '2px 7px',
-                            borderRadius: '8px',
-                            border: textSize === sz ? '1px solid var(--accent)' : 'none',
-                            background: textSize === sz ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
-                            color: textSize === sz ? '#fff' : '#aaa',
-                            fontSize: '0.72rem',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          {sz === 1.0 ? 'S' : sz === 1.2 ? 'M' : sz === 1.5 ? 'L' : 'XL'}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <button type="button" onClick={() => setTextAlign('left')} style={{ background: 'transparent', border: 'none', color: textAlign === 'left' ? 'var(--accent)' : '#888', cursor: 'pointer', padding: '2px' }}><AlignLeft size={14} /></button>
-                      <button type="button" onClick={() => setTextAlign('center')} style={{ background: 'transparent', border: 'none', color: textAlign === 'center' ? 'var(--accent)' : '#888', cursor: 'pointer', padding: '2px' }}><AlignCenter size={14} /></button>
-                      <button type="button" onClick={() => setTextAlign('right')} style={{ background: 'transparent', border: 'none', color: textAlign === 'right' ? 'var(--accent)' : '#888', cursor: 'pointer', padding: '2px' }}><AlignRight size={14} /></button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeCategoryTab === 'live_animated' && (
-                <div>
-                  <span style={{ fontSize: '0.73rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
-                    Select Live Animated Background:
-                  </span>
-                  <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
-                    {ANIMATED_BGS.map(bg => (
-                      <button
-                        key={bg.id}
-                        type="button"
-                        onClick={() => setAnimatedBg(bg.id)}
-                        style={{
-                          padding: '5px 12px',
-                          borderRadius: '12px',
-                          border: animatedBg === bg.id ? '1.5px solid #ec4899' : '1px solid var(--border)',
-                          background: animatedBg === bg.id ? 'rgba(236, 72, 153, 0.25)' : 'var(--bg-card)',
-                          color: animatedBg === bg.id ? '#f472b6' : 'var(--text-muted)',
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        {bg.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {activeCategoryTab === 'bg_color' && (
-                <div>
-                  <span style={{ fontSize: '0.73rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
-                    Select Background Color Palette:
-                  </span>
-                  <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', alignItems: 'center' }}>
-                    {GRADIENTS.map(g => (
-                      <button
-                        key={g.id}
-                        type="button"
-                        onClick={() => setSelectedGradient(g.value)}
-                        title={g.name}
-                        style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: '50%',
-                          background: g.value,
-                          border: selectedGradient === g.value ? '2.5px solid #fff' : '1px solid rgba(255,255,255,0.2)',
-                          cursor: 'pointer',
-                          flexShrink: 0,
-                          transition: 'transform 0.15s ease',
-                          transform: selectedGradient === g.value ? 'scale(1.1)' : 'scale(1)'
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {activeCategoryTab === 'image_adjust' && mediaUrl && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.73rem', fontWeight: 700, color: '#fbbf24' }}>
-                      Image Framing & Controls:
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => { setMediaUrl(''); setActiveCategoryTab('3d_text'); }}
-                      style={{ background: 'transparent', border: 'none', color: '#ef4444', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}
-                    >
-                      <Trash2 size={12} /> Remove Image
-                    </button>
-                  </div>
-
-                  {/* Image Framing Mode Buttons */}
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    {[
-                      { id: 'contain', label: '🖼️ Framed (BG Visible)' },
-                      { id: 'padded', label: '🔲 Padded' },
-                      { id: 'cover', label: '📐 Full Cover' }
-                    ].map(f => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setImageFit(f.id)}
-                        style={{
-                          flex: 1,
-                          padding: '4px 6px',
-                          borderRadius: '8px',
-                          border: imageFit === f.id ? '1px solid #f59e0b' : '1px solid var(--border)',
-                          background: imageFit === f.id ? 'rgba(245, 158, 11, 0.2)' : 'transparent',
-                          color: imageFit === f.id ? '#fbbf24' : '#aaa',
-                          fontSize: '0.7rem',
-                          fontWeight: 700,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Image Filter Preset Selectors */}
-                  <div style={{ display: 'flex', gap: '5px', overflowX: 'auto', paddingBottom: '2px' }}>
-                    {[
-                      { id: 'none', label: 'Normal' },
-                      { id: 'warm', label: '☀️ Warm' },
-                      { id: 'cyber', label: '⚡ Cyber' },
-                      { id: 'vintage', label: '📜 Vintage' },
-                      { id: 'bw', label: '🖤 B&W' }
-                    ].map(fl => (
-                      <button
-                        key={fl.id}
-                        type="button"
-                        onClick={() => setImageFilter(fl.id)}
-                        style={{
-                          padding: '3px 8px',
-                          borderRadius: '8px',
-                          border: imageFilter === fl.id ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.1)',
-                          background: imageFilter === fl.id ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
-                          color: imageFilter === fl.id ? '#fff' : '#aaa',
-                          fontSize: '0.68rem',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {fl.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 5. Stickers Bar */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflowX: 'auto', padding: '4px 0' }}>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, flexShrink: 0 }}>Stickers:</span>
-              {STICKERS.map(s => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => toggleSticker(s)}
-                  style={{
-                    padding: '3px 8px',
-                    borderRadius: '10px',
-                    border: (Array.isArray(selectedStickers) && selectedStickers.includes(s)) ? '1.5px solid #f59e0b' : '1px solid rgba(255,255,255,0.1)',
-                    background: (Array.isArray(selectedStickers) && selectedStickers.includes(s)) ? 'rgba(245, 158, 11, 0.2)' : 'rgba(0,0,0,0.2)',
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    overflow: 'hidden',
+                    border: '1.5px solid #fff',
                     flexShrink: 0
                   }}
                 >
-                  {s}
-                </button>
-              ))}
+                  <img
+                    src={user?.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.username || 'user'}`}
+                    alt="Me"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </div>
+                <span>{submitting ? 'Sharing...' : 'Your Vibe ⚡'}</span>
+                {submitting ? <Loader2 size={16} className="spin" /> : <Send size={15} />}
+              </button>
             </div>
           </div>
+        )}
 
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-            <button type="button" className="btn-secondary" onClick={handleCloseModal}>Cancel</button>
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={handleSubmit}
-              className="btn-primary"
-              style={{
-                padding: '8px 20px',
-                borderRadius: '12px',
-                fontWeight: 700,
-                fontSize: '0.88rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-            >
-              {submitting ? <Loader2 size={16} className="spin" /> : <Send size={15} />} Post 24h Vibe
-            </button>
+        {/* =========================================================================
+            SCREEN 3: INSTAGRAM DIRECT TEXT TYPING OVERLAY (Aa)
+        ========================================================================= */}
+        {showTextEditor && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 50,
+              background: 'rgba(0, 0, 0, 0.88)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              padding: '20px 20px 28px 20px',
+              animation: 'pulseFadeIn 0.2s ease'
+            }}
+          >
+            {/* Top Bar with Done */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setShowTextEditor(false)}
+                style={{
+                  background: '#f59e0b',
+                  border: 'none',
+                  color: '#000',
+                  padding: '7px 20px',
+                  borderRadius: '20px',
+                  fontWeight: 900,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Done
+              </button>
+            </div>
+
+            {/* Centered Large Textarea */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <textarea
+                autoFocus
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                placeholder="Type your vibe..."
+                rows={4}
+                className={textStyle3D !== 'none' ? textStyle3D : ''}
+                style={{
+                  width: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  color: '#ffffff',
+                  fontSize: '1.6rem',
+                  fontWeight: 800,
+                  textAlign: 'center',
+                  resize: 'none',
+                  lineHeight: 1.35
+                }}
+              />
+            </div>
+
+            {/* Bottom 3D Text Styles Selector */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'rgba(255,255,255,0.6)', textAlign: 'center' }}>
+                Select Text Style
+              </span>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  overflowX: 'auto',
+                  paddingBottom: '6px',
+                  scrollbarWidth: 'none'
+                }}
+              >
+                {TEXT_STYLES_3D.map(st => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => setTextStyle3D(st.id)}
+                    style={{
+                      background: textStyle3D === st.id ? '#ffffff' : 'rgba(255,255,255,0.1)',
+                      color: textStyle3D === st.id ? '#000000' : '#ffffff',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      borderRadius: '18px',
+                      padding: '6px 14px',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0
+                    }}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
+      {/* JioSaavn Full Song Music Picker Modal */}
       <MusicPickerModal
         isOpen={showMusicPicker}
         onClose={() => setShowMusicPicker(false)}
         selectedSong={selectedSong}
         onSelectSong={(song) => {
           setSelectedSong(song);
-          setSoundtrack('music_track');
+          setShowMusicPicker(false);
+          previewSongPart(song, 0);
         }}
       />
     </div>
