@@ -3,7 +3,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { 
   X, Camera, SwitchCamera, Image as ImageIcon, Music, Palette, Sparkles, 
   Send, Loader2, Type, Trash2, Smile, Disc, Check, FlipHorizontal, Sliders,
-  SlidersHorizontal, ZoomIn, Eye, Sparkle, RotateCcw, Volume2, Clock, Play, Pause, Scissors
+  SlidersHorizontal, ZoomIn, Eye, Sparkle, RotateCcw, Volume2, Clock, Play, Pause, Scissors, Plus, Minus, Move
 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
@@ -118,6 +118,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [storyDuration, setStoryDuration] = useState(15); // 15 | 30 | 60 seconds
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const [musicScale, setMusicScale] = useState(1.0); // 0.6 to 2.4
+  const [musicStyle, setMusicStyle] = useState('pill'); // 'pill' | 'card' | 'glass' | 'minimal'
 
   // Image FX State & Gestures
   const [imageFit, setImageFit] = useState('cover'); // 'cover' | 'contain' | 'padded'
@@ -126,18 +128,22 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [imageOpacity, setImageOpacity] = useState(1.0);
   const [imagePos, setImagePos] = useState({ x: 50, y: 50 });
 
-  // Emojis / Stickers
+  // Interactive Stickers / Emojis (Individual draggable & resizable objects!)
+  const [stickersList, setStickersList] = useState([]); // [{ id, emoji, x, y, scale }]
   const [selectedStickers, setSelectedStickers] = useState([]);
   const [activeEmojiCategory, setActiveEmojiCategory] = useState('smileys');
 
-  // Interactive Drag & Drop Positions
+  // Interactive Drag & Drop Positions & Element Selection
   const [textPos, setTextPos] = useState({ x: 50, y: 45 });
-  const [musicPos, setMusicPos] = useState({ x: 50, y: 18 });
+  const [musicPos, setMusicPos] = useState({ x: 50, y: 22 });
+  const [selectedElement, setSelectedElement] = useState(null); // 'music' | 'text' | 'image' | stickerId | null
   const [draggingElement, setDraggingElement] = useState(null);
+  const [isOverTrash, setIsOverTrash] = useState(false);
 
-  // Touch Gesture tracking for image pinch-to-zoom
+  // Touch Gesture tracking for image & sticker pinch-to-zoom / corner handle resize
   const touchStartDistRef = useRef(null);
-  const initialZoomRef = useRef(1.0);
+  const initialPinchScaleRef = useRef(1.0);
+  const resizingElementRef = useRef(null);
 
   // Status
   const [submitting, setSubmitting] = useState(false);
@@ -366,26 +372,101 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   };
 
   // Dragging Handlers & Pinch-to-Zoom Gestures
-  const handlePointerDown = (elementName, e) => {
+  const handleElementTouchStart = (elementId, e) => {
     if (e && e.stopPropagation) e.stopPropagation();
-    setDraggingElement(elementName);
+    setSelectedElement(elementId);
+
+    // Multi-touch pinch check
+    if (e.touches && e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      touchStartDistRef.current = dist;
+      if (elementId === 'music') initialPinchScaleRef.current = musicScale;
+      else if (elementId === 'text') initialPinchScaleRef.current = textSize;
+      else if (elementId === 'image') initialPinchScaleRef.current = imageZoom;
+      else if (typeof elementId === 'string' && elementId.startsWith('st_')) {
+        const st = stickersList.find(s => s.id === elementId);
+        initialPinchScaleRef.current = st ? (st.scale || 1.0) : 1.0;
+      }
+      setDraggingElement(null);
+      return;
+    }
+
+    setDraggingElement(elementId);
+  };
+
+  // Corner resize handle drag start (1-finger / mouse resize)
+  const handleResizeHandleDown = (elementId, e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    let initScale = 1.0;
+    if (elementId === 'music') initScale = musicScale;
+    else if (elementId === 'text') initScale = textSize;
+    else if (typeof elementId === 'string' && elementId.startsWith('st_')) {
+      const st = stickersList.find(s => s.id === elementId);
+      initScale = st ? (st.scale || 1.0) : 1.0;
+    }
+
+    resizingElementRef.current = {
+      id: elementId,
+      startX: clientX,
+      startY: clientY,
+      initialScale: initScale
+    };
   };
 
   const handlePointerMove = (e) => {
     if (!cardRef.current) return;
 
-    // Multi-touch pinch-to-zoom for image
+    // 1. Corner resize handle dragging
+    if (resizingElementRef.current) {
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const deltaX = clientX - resizingElementRef.current.startX;
+      const deltaY = clientY - resizingElementRef.current.startY;
+      const delta = (deltaX + deltaY) / 110;
+      const newScale = Number((resizingElementRef.current.initialScale + delta).toFixed(2));
+
+      const { id } = resizingElementRef.current;
+      if (id === 'music') {
+        setMusicScale(Math.min(2.4, Math.max(0.6, newScale)));
+      } else if (id === 'text') {
+        setTextSize(Math.min(2.8, Math.max(0.8, newScale)));
+      } else if (typeof id === 'string' && id.startsWith('st_')) {
+        setStickersList(prev => prev.map(s => s.id === id ? { ...s, scale: Math.min(3.0, Math.max(0.5, newScale)) } : s));
+      }
+      return;
+    }
+
+    // 2. Multi-touch pinch-to-zoom
     if (e.touches && e.touches.length === 2 && touchStartDistRef.current) {
       const currentDist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
-      const scaleRatio = currentDist / touchStartDistRef.current;
-      const newZoom = Math.min(3.5, Math.max(0.3, Number((initialZoomRef.current * scaleRatio).toFixed(2))));
-      setImageZoom(newZoom);
+      const ratio = currentDist / touchStartDistRef.current;
+
+      if (selectedElement === 'music') {
+        const nextScale = Number((initialPinchScaleRef.current * ratio).toFixed(2));
+        setMusicScale(Math.min(2.4, Math.max(0.6, nextScale)));
+      } else if (selectedElement === 'text') {
+        const nextScale = Number((initialPinchScaleRef.current * ratio).toFixed(2));
+        setTextSize(Math.min(2.8, Math.max(0.8, nextScale)));
+      } else if (selectedElement && typeof selectedElement === 'string' && selectedElement.startsWith('st_')) {
+        const nextScale = Number((initialPinchScaleRef.current * ratio).toFixed(2));
+        setStickersList(prev => prev.map(s => s.id === selectedElement ? { ...s, scale: Math.min(3.0, Math.max(0.5, nextScale)) } : s));
+      } else {
+        const nextZoom = Number((initialPinchScaleRef.current * ratio).toFixed(2));
+        setImageZoom(Math.min(3.5, Math.max(0.4, nextZoom)));
+      }
       return;
     }
 
+    // 3. Single-finger / mouse dragging
     if (!draggingElement) return;
     const rect = cardRef.current.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -394,27 +475,76 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     const x = Math.max(5, Math.min(95, Math.round(((clientX - rect.left) / rect.width) * 100)));
     const y = Math.max(5, Math.min(95, Math.round(((clientY - rect.top) / rect.height) * 100)));
 
+    // Trash can detection (bottom center: y > 78, x between 30 and 70)
+    if (y > 78 && x >= 30 && x <= 70) {
+      setIsOverTrash(true);
+    } else {
+      setIsOverTrash(false);
+    }
+
     if (draggingElement === 'text') setTextPos({ x, y });
     else if (draggingElement === 'music') setMusicPos({ x, y });
     else if (draggingElement === 'image') setImagePos({ x, y });
+    else if (typeof draggingElement === 'string' && draggingElement.startsWith('st_')) {
+      setStickersList(prev => prev.map(s => s.id === draggingElement ? { ...s, x, y } : s));
+    }
   };
 
   const handlePointerUp = () => {
+    // If dropped over trash can, delete that element!
+    if (isOverTrash && draggingElement) {
+      if (draggingElement === 'music') {
+        setSelectedSong(null);
+        if (previewAudioRef.current) previewAudioRef.current.pause();
+        stopGlobalMusicAudio();
+      } else if (draggingElement === 'text') {
+        setCaption('');
+      } else if (draggingElement === 'image') {
+        setMediaUrl('');
+      } else if (typeof draggingElement === 'string' && draggingElement.startsWith('st_')) {
+        setStickersList(prev => prev.filter(s => s.id !== draggingElement));
+      }
+      try {
+        if (window.navigator?.vibrate) window.navigator.vibrate(50);
+      } catch (e) {}
+    }
+
     setDraggingElement(null);
+    setIsOverTrash(false);
+    resizingElementRef.current = null;
     touchStartDistRef.current = null;
   };
 
   const handleWheel = (e) => {
-    if (mediaUrl) {
+    if (selectedElement === 'music' || draggingElement === 'music') {
+      const delta = e.deltaY < 0 ? 0.08 : -0.08;
+      setMusicScale(prev => Math.min(2.4, Math.max(0.6, Number((prev + delta).toFixed(2)))));
+    } else if (selectedElement && typeof selectedElement === 'string' && selectedElement.startsWith('st_')) {
+      const delta = e.deltaY < 0 ? 0.08 : -0.08;
+      setStickersList(prev => prev.map(s => s.id === selectedElement ? { ...s, scale: Math.min(3.0, Math.max(0.5, Number(((s.scale || 1) + delta).toFixed(2)))) } : s));
+    } else if (mediaUrl) {
       const zoomDelta = e.deltaY < 0 ? 0.08 : -0.08;
       setImageZoom(prev => Math.min(3.5, Math.max(0.3, Number((prev + zoomDelta).toFixed(2)))));
     }
   };
 
-  const handleToggleSticker = (st) => {
-    setSelectedStickers(prev => 
-      prev.includes(st) ? prev.filter(s => s !== st) : [...prev, st]
-    );
+  const handleAddEmojiSticker = (emoji) => {
+    const newSticker = {
+      id: 'st_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      emoji,
+      x: 50 + (Math.random() * 14 - 7),
+      y: 40 + (Math.random() * 14 - 7),
+      scale: 1.2
+    };
+    setStickersList(prev => [...prev, newSticker]);
+    setSelectedElement(newSticker.id);
+  };
+
+  const cycleMusicStyle = (e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    const styles = ['pill', 'card', 'glass', 'minimal'];
+    const nextIdx = (styles.indexOf(musicStyle) + 1) % styles.length;
+    setMusicStyle(styles[nextIdx]);
   };
 
   // Submit Vibe
@@ -422,8 +552,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     if (e && e.preventDefault) e.preventDefault();
     if (submitting) return; // Prevent double/triple click duplicate submission
 
-    if (!caption.trim() && !mediaUrl && !selectedSong) {
-      setError('Please add text, photo, or music to post your Vibe!');
+    if (!caption.trim() && !mediaUrl && !selectedSong && stickersList.length === 0) {
+      setError('Please add text, photo, music or stickers to post your Vibe!');
       return;
     }
 
@@ -452,6 +582,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       animatedBg,
       textPos,
       musicPos,
+      musicScale: Number(musicScale) || 1.0,
+      musicStyle: musicStyle || 'pill',
       imagePos: { x: imagePos.x, y: imagePos.y },
       imageFit,
       imageZoom,
@@ -459,7 +591,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       imageOpacity,
       textSize,
       textAlign,
-      selectedStickers,
+      selectedStickers: stickersList.map(s => s.emoji),
+      stickersData: stickersList,
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       views: [],
@@ -491,6 +624,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             animatedBg,
             textPos,
             musicPos,
+            musicScale: Number(musicScale) || 1.0,
+            musicStyle: musicStyle || 'pill',
             imagePos: { x: imagePos.x, y: imagePos.y },
             imageFit,
             imageZoom,
@@ -498,7 +633,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             imageOpacity,
             textSize,
             textAlign,
-            selectedStickers
+            selectedStickers: stickersList.map(s => s.emoji),
+            stickersData: stickersList
           })
         });
         if (res.ok) {
@@ -1103,12 +1239,38 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 </div>
               )}
 
-              {/* Draggable 3D Text / Caption - Only displayed if user entered caption or is actively editing in text panel */}
+              {/* Interactive Floating Gesture Hint Badge */}
+              <div style={{
+                position: 'absolute',
+                top: '16px',
+                zIndex: 20,
+                background: 'rgba(0, 0, 0, 0.55)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                color: 'rgba(255, 255, 255, 0.85)',
+                padding: '4px 12px',
+                borderRadius: '16px',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                pointerEvents: 'none'
+              }}>
+                <Move size={12} color="#f59e0b" />
+                <span>Drag & pinch to move & resize elements</span>
+              </div>
+
+              {/* Draggable 3D Text / Caption */}
               {(Boolean(caption?.trim()) || activePanel === 'text') && (
                 <div
-                  onMouseDown={(e) => handlePointerDown('text', e)}
-                  onTouchStart={(e) => handlePointerDown('text', e)}
-                  onClick={() => setActivePanel('text')}
+                  onMouseDown={(e) => handleElementTouchStart('text', e)}
+                  onTouchStart={(e) => handleElementTouchStart('text', e)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedElement('text');
+                    setActivePanel('text');
+                  }}
                   style={{
                     position: 'absolute',
                     left: `${textPos.x}%`,
@@ -1117,9 +1279,12 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                     zIndex: 25,
                     cursor: draggingElement === 'text' ? 'grabbing' : 'grab',
                     maxWidth: '88%',
-                    padding: '6px 12px',
+                    padding: '8px 14px',
                     textAlign: textAlign,
-                    userSelect: 'none'
+                    userSelect: 'none',
+                    border: selectedElement === 'text' ? '1.5px dashed rgba(99, 102, 241, 0.8)' : 'none',
+                    borderRadius: '16px',
+                    touchAction: 'none'
                   }}
                 >
                   {textStyle3D && textStyle3D !== 'none' ? (
@@ -1155,99 +1320,360 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                       {caption || (activePanel === 'text' ? 'Type text...' : '')}
                     </div>
                   )}
+
+                  {/* Corner Resize Handle for Text */}
+                  {selectedElement === 'text' && (
+                    <div
+                      onMouseDown={(e) => handleResizeHandleDown('text', e)}
+                      onTouchStart={(e) => handleResizeHandleDown('text', e)}
+                      style={{
+                        position: 'absolute',
+                        bottom: '-6px',
+                        right: '-6px',
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        background: '#6366f1',
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'nwse-resize',
+                        border: '1.5px solid #fff',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+                        zIndex: 10
+                      }}
+                      title="Drag to resize text"
+                    >
+                      <ZoomIn size={10} />
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Draggable Pulse Music Card Sticker */}
+              {/* Draggable & Resizable Instagram-Style Music Card Sticker */}
               {selectedSong && (
                 <div
-                  onMouseDown={(e) => handlePointerDown('music', e)}
-                  onTouchStart={(e) => handlePointerDown('music', e)}
-                  onClick={() => setActivePanel('music_trim')}
+                  onMouseDown={(e) => handleElementTouchStart('music', e)}
+                  onTouchStart={(e) => handleElementTouchStart('music', e)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedElement(selectedElement === 'music' ? null : 'music');
+                  }}
                   style={{
                     position: 'absolute',
                     left: `${musicPos.x}%`,
                     top: `${musicPos.y}%`,
-                    transform: 'translate(-50%, -50%)',
+                    transform: `translate(-50%, -50%) scale(${musicScale})`,
+                    transformOrigin: 'center center',
                     zIndex: 26,
-                    background: 'rgba(15, 15, 24, 0.92)',
-                    backdropFilter: 'blur(16px)',
-                    WebkitBackdropFilter: 'blur(16px)',
-                    border: '1.5px solid rgba(245, 158, 11, 0.7)',
-                    boxShadow: '0 8px 30px rgba(0,0,0,0.7)',
-                    borderRadius: '20px',
-                    padding: '6px 12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    maxWidth: '85%',
-                    cursor: 'grab'
+                    cursor: draggingElement === 'music' ? 'grabbing' : 'grab',
+                    touchAction: 'none',
+                    userSelect: 'none'
                   }}
                 >
-                  <img
-                    src={selectedSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedSong.songTitle}`}
-                    alt="Album"
+                  {/* Floating Micro-Toolbar when Music Sticker is Selected */}
+                  {selectedElement === 'music' && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        position: 'absolute',
+                        bottom: 'calc(100% + 8px)',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        background: 'rgba(15, 15, 24, 0.95)',
+                        border: '1px solid rgba(245, 158, 11, 0.6)',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.7)',
+                        borderRadius: '20px',
+                        padding: '3px 8px',
+                        zIndex: 35,
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setMusicScale(prev => Math.max(0.6, Number((prev - 0.15).toFixed(2))))}
+                        style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                        title="Smaller"
+                      >
+                        <Minus size={12} />
+                      </button>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#f59e0b', padding: '0 2px' }}>
+                        {Math.round(musicScale * 100)}%
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setMusicScale(prev => Math.min(2.4, Number((prev + 0.15).toFixed(2))))}
+                        style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                        title="Bigger"
+                      >
+                        <Plus size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cycleMusicStyle}
+                        style={{ background: 'rgba(245, 158, 11, 0.25)', border: '1px solid rgba(245, 158, 11, 0.5)', color: '#fbbf24', borderRadius: '12px', padding: '2px 8px', fontSize: '0.66rem', fontWeight: 800, cursor: 'pointer' }}
+                        title="Change Sticker Style"
+                      >
+                        🎨 {musicStyle.toUpperCase()}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActivePanel('music_trim')}
+                        style={{ background: 'rgba(16, 185, 129, 0.25)', border: '1px solid rgba(16, 185, 129, 0.5)', color: '#6ee7b7', borderRadius: '12px', padding: '2px 8px', fontSize: '0.66rem', fontWeight: 800, cursor: 'pointer' }}
+                        title="Trim Song Time"
+                      >
+                        ✂️ Trim
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedSong(null);
+                          if (previewAudioRef.current) previewAudioRef.current.pause();
+                          stopGlobalMusicAudio();
+                        }}
+                        style={{ background: 'rgba(239, 68, 68, 0.25)', border: '1px solid rgba(239, 68, 68, 0.5)', color: '#f87171', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                        title="Remove Song"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Main Music Sticker Body - Tap on body directly cycles style! */}
+                  <div
+                    onClick={cycleMusicStyle}
                     style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      objectFit: 'cover',
-                      animation: 'spin 4s linear infinite',
-                      border: '1px solid #f59e0b',
-                      flexShrink: 0
+                      position: 'relative',
+                      background: musicStyle === 'card'
+                        ? 'rgba(15, 15, 24, 0.95)'
+                        : musicStyle === 'glass'
+                        ? 'rgba(99, 102, 241, 0.25)'
+                        : 'rgba(15, 15, 24, 0.92)',
+                      backdropFilter: 'blur(16px)',
+                      WebkitBackdropFilter: 'blur(16px)',
+                      border: selectedElement === 'music'
+                        ? '2px solid #38bdf8'
+                        : musicStyle === 'glass'
+                        ? '1.5px solid rgba(168, 85, 247, 0.8)'
+                        : '1.5px solid rgba(245, 158, 11, 0.75)',
+                      boxShadow: selectedElement === 'music'
+                        ? '0 0 25px rgba(56, 189, 248, 0.65)'
+                        : '0 8px 30px rgba(0,0,0,0.7)',
+                      borderRadius: musicStyle === 'card' ? '18px' : '26px',
+                      padding: musicStyle === 'card' ? '12px' : '6px 14px 6px 8px',
+                      display: 'flex',
+                      flexDirection: musicStyle === 'card' ? 'column' : 'row',
+                      alignItems: 'center',
+                      gap: '8px',
+                      maxWidth: musicStyle === 'card' ? '160px' : '260px',
+                      transition: 'border 0.2s ease, box-shadow 0.2s ease'
                     }}
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      🎵 {selectedSong.songTitle}
-                    </span>
-                    <span style={{ fontSize: '0.66rem', color: '#f59e0b', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {selectedSong.artistName || 'Full Song Stream'}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedSong(null);
-                      if (previewAudioRef.current) previewAudioRef.current.pause();
-                      stopGlobalMusicAudio();
-                    }}
-                    style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px', marginLeft: '4px' }}
-                    title="Remove Song"
+                    title="Tap to change style • Drag to move • Pinch to resize"
                   >
-                    <X size={14} />
-                  </button>
+                    {/* Album Art Image (Spinning circle or big square card) */}
+                    <div style={{
+                      position: 'relative',
+                      width: musicStyle === 'card' ? '100px' : '32px',
+                      height: musicStyle === 'card' ? '100px' : '32px',
+                      flexShrink: 0
+                    }}>
+                      <img
+                        src={selectedSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedSong.songTitle}`}
+                        alt="Album"
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          borderRadius: musicStyle === 'card' ? '12px' : '50%',
+                          objectFit: 'cover',
+                          animation: musicStyle === 'card' ? 'none' : 'spin 4s linear infinite',
+                          border: '1.5px solid #f59e0b',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
+                        }}
+                      />
+                    </div>
+
+                    {/* Song Titles & Equalizer */}
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      minWidth: 0,
+                      flex: 1,
+                      textAlign: musicStyle === 'card' ? 'center' : 'left',
+                      width: '100%'
+                    }}>
+                      <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        🎵 {selectedSong.songTitle}
+                      </span>
+                      <span style={{ fontSize: '0.66rem', color: '#f59e0b', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedSong.artistName || 'Full Song Stream'}
+                      </span>
+                    </div>
+
+                    {/* Animated Equalizer Bars */}
+                    {musicStyle !== 'card' && (
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '12px', flexShrink: 0, paddingLeft: '2px' }}>
+                        <span style={{ width: '2px', height: '100%', background: '#ec4899', borderRadius: '1px', animation: 'pulseGlow 0.4s infinite alternate' }} />
+                        <span style={{ width: '2px', height: '60%', background: '#f59e0b', borderRadius: '1px', animation: 'pulseGlow 0.7s infinite alternate' }} />
+                        <span style={{ width: '2px', height: '85%', background: '#6366f1', borderRadius: '1px', animation: 'pulseGlow 0.5s infinite alternate' }} />
+                      </div>
+                    )}
+
+                    {/* Corner Resize Handle for 1-Finger / Mouse Drag Scaling */}
+                    <div
+                      onMouseDown={(e) => handleResizeHandleDown('music', e)}
+                      onTouchStart={(e) => handleResizeHandleDown('music', e)}
+                      style={{
+                        position: 'absolute',
+                        bottom: '-8px',
+                        right: '-8px',
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'nwse-resize',
+                        zIndex: 20,
+                        color: '#fff',
+                        border: '2px solid #ffffff'
+                      }}
+                      title="Drag to resize sticker"
+                    >
+                      <ZoomIn size={12} />
+                    </div>
+                  </div>
                 </div>
               )}
 
-              {/* Floating Stickers / Emojis on Stage */}
-              {selectedStickers.length > 0 && (
-                <div style={{
-                  position: 'absolute',
-                  bottom: '80px',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  zIndex: 26,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  background: 'rgba(0,0,0,0.6)',
-                  padding: '6px 14px',
-                  borderRadius: '24px',
-                  backdropFilter: 'blur(10px)',
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.5)'
-                }}>
-                  {selectedStickers.map((s, idx) => (
-                    <span
-                      key={idx}
-                      onClick={() => handleToggleSticker(s)}
-                      style={{ fontSize: '1.45rem', cursor: 'pointer' }}
-                      title="Tap to remove"
-                    >
-                      {s}
-                    </span>
-                  ))}
+              {/* Individual Draggable & Resizable Emoji Stickers */}
+              {stickersList.map((st) => {
+                const isSelected = selectedElement === st.id;
+                return (
+                  <div
+                    key={st.id}
+                    onMouseDown={(e) => handleElementTouchStart(st.id, e)}
+                    onTouchStart={(e) => handleElementTouchStart(st.id, e)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedElement(isSelected ? null : st.id);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      left: `${st.x}%`,
+                      top: `${st.y}%`,
+                      transform: `translate(-50%, -50%) scale(${st.scale || 1.2})`,
+                      transformOrigin: 'center center',
+                      zIndex: 25,
+                      cursor: draggingElement === st.id ? 'grabbing' : 'grab',
+                      touchAction: 'none',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <div style={{
+                      fontSize: '2.8rem',
+                      filter: 'drop-shadow(0 4px 14px rgba(0,0,0,0.6))',
+                      position: 'relative',
+                      border: isSelected ? '1.5px dashed rgba(255,255,255,0.85)' : 'none',
+                      borderRadius: '16px',
+                      padding: '4px'
+                    }}>
+                      {st.emoji}
+
+                      {/* Corner Handle & Remove Button when Selected */}
+                      {isSelected && (
+                        <>
+                          <div
+                            onMouseDown={(e) => handleResizeHandleDown(st.id, e)}
+                            onTouchStart={(e) => handleResizeHandleDown(st.id, e)}
+                            style={{
+                              position: 'absolute',
+                              bottom: '-6px',
+                              right: '-6px',
+                              width: '20px',
+                              height: '20px',
+                              borderRadius: '50%',
+                              background: '#3b82f6',
+                              color: '#fff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'nwse-resize',
+                              border: '1.5px solid #fff',
+                              boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+                              zIndex: 10
+                            }}
+                            title="Drag to resize emoji"
+                          >
+                            <ZoomIn size={10} />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setStickersList(prev => prev.filter(s => s.id !== st.id));
+                            }}
+                            style={{
+                              position: 'absolute',
+                              top: '-6px',
+                              right: '-6px',
+                              width: '20px',
+                              height: '20px',
+                              borderRadius: '50%',
+                              background: '#ef4444',
+                              color: '#fff',
+                              border: '1.5px solid #fff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              padding: 0,
+                              zIndex: 10
+                            }}
+                            title="Delete sticker"
+                          >
+                            <X size={12} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Instagram-Style Trash Can (Appears during dragging of ANY element) */}
+              {draggingElement && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: '24px',
+                    left: '50%',
+                    transform: `translateX(-50%) scale(${isOverTrash ? 1.25 : 1})`,
+                    zIndex: 60,
+                    background: isOverTrash ? 'rgba(239, 68, 68, 0.95)' : 'rgba(15, 15, 24, 0.88)',
+                    backdropFilter: 'blur(12px)',
+                    border: isOverTrash ? '2px solid #ffffff' : '1.5px solid rgba(239, 68, 68, 0.6)',
+                    boxShadow: isOverTrash ? '0 0 30px rgba(239, 68, 68, 0.9)' : '0 8px 24px rgba(0,0,0,0.6)',
+                    borderRadius: '30px',
+                    padding: '10px 22px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    color: '#fff',
+                    fontSize: '0.82rem',
+                    fontWeight: 800,
+                    transition: 'all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                    pointerEvents: 'none'
+                  }}
+                >
+                  <Trash2 size={20} color={isOverTrash ? '#fff' : '#f87171'} />
+                  <span>{isOverTrash ? '💥 Release to Delete' : 'Drag here to remove'}</span>
                 </div>
               )}
             </>
@@ -1595,10 +2021,10 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   <button
                     key={`${st}_${i}`}
                     type="button"
-                    onClick={() => handleToggleSticker(st)}
+                    onClick={() => handleAddEmojiSticker(st)}
                     style={{
-                      background: selectedStickers.includes(st) ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255,255,255,0.06)',
-                      border: selectedStickers.includes(st) ? '1px solid #facc15' : '1px solid transparent',
+                      background: stickersList.some(s => s.emoji === st) ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255,255,255,0.06)',
+                      border: stickersList.some(s => s.emoji === st) ? '1px solid #facc15' : '1px solid transparent',
                       borderRadius: '10px',
                       fontSize: '1.4rem',
                       padding: '4px',

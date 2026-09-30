@@ -27,6 +27,8 @@ const VibeSchema = new mongoose.Schema({
     x: { type: Number, default: 20 },
     y: { type: Number, default: 15 }
   },
+  musicScale: { type: Number, default: 1.0 },
+  musicStyle: { type: String, default: 'pill' },
   imagePos: {
     x: { type: Number, default: 50 },
     y: { type: Number, default: 50 }
@@ -38,6 +40,13 @@ const VibeSchema = new mongoose.Schema({
   textSize: { type: Number, default: 1.2 },
   textAlign: { type: String, default: 'center' },
   selectedStickers: [{ type: String }],
+  stickersData: [{
+    id: { type: String },
+    emoji: { type: String },
+    x: { type: Number, default: 50 },
+    y: { type: Number, default: 50 },
+    scale: { type: Number, default: 1.0 }
+  }],
   views: [{
     userId: String,
     displayName: String,

@@ -12,7 +12,8 @@ router.post('/create', authMiddleware, async (req, res) => {
       id,
       mediaUrl, caption, soundtrack, songTitle, artistName, albumArt, audioUrl, youtubeId, songStartTime,
       storyDuration, bgGradient, textStyle3D, animatedBg, textPos, musicPos, imagePos, imageFit, imageZoom,
-      imageFilter, imageOpacity, textSize, textAlign, selectedStickers
+      imageFilter, imageOpacity, textSize, textAlign, selectedStickers,
+      musicScale, musicStyle, stickersData
     } = req.body;
     const targetUserId = req.userId || req.user?.id || req.user?.userId;
     const isObjectId = mongoose.Types.ObjectId.isValid(targetUserId);
@@ -71,6 +72,8 @@ router.post('/create', authMiddleware, async (req, res) => {
       animatedBg: animatedBg || 'none',
       textPos: textPos || { x: 50, y: 50 },
       musicPos: musicPos || { x: 20, y: 15 },
+      musicScale: Number(musicScale) || 1.0,
+      musicStyle: musicStyle || 'pill',
       imagePos: imagePos || { x: 50, y: 50 },
       imageFit: imageFit || 'contain',
       imageZoom: imageZoom || 1.0,
@@ -79,6 +82,7 @@ router.post('/create', authMiddleware, async (req, res) => {
       textSize: textSize || 1.2,
       textAlign: textAlign || 'center',
       selectedStickers: Array.isArray(selectedStickers) ? selectedStickers : [],
+      stickersData: Array.isArray(stickersData) ? stickersData : [],
       expiresAt
     });
 
