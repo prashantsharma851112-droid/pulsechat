@@ -261,6 +261,16 @@ router.post('/view/:vibeId', authMiddleware, async (req, res) => {
         viewedAt: new Date()
       });
       await vibe.save();
+
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('vibe_view_updated', {
+          vibeId: vibe.id,
+          authorId: vibe.userId,
+          viewsCount: vibe.views.length,
+          views: vibe.views
+        });
+      }
     }
 
     res.json({ success: true, viewsCount: vibe.views.length, views: vibe.views });

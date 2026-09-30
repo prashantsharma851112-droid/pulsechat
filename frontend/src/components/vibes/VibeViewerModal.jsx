@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
+import { SocketContext } from '../../context/SocketContext';
 import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
@@ -9,6 +10,7 @@ import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 
 export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
+  const { socket } = useContext(SocketContext);
   
   // Strictly deduplicate and sort vibes: newest first (jo new lagaya vo aage), oldest last (jo pehle lagaya tha vo last)
   const vibes = React.useMemo(() => {
@@ -26,17 +28,33 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     clean.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return clean;
   }, [vibeGroup?.vibes]);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [sparksMsg, setSparksMsg] = useState('');
   const [replyText, setReplyText] = useState('');
   const [showViewersSheet, setShowViewersSheet] = useState(false);
-  const [liveViews, setLiveViews] = useState([]);
   const [isPaused, setIsPaused] = useState(false);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
+
+  // Per-story live views dictionary keyed by vibe ID
+  const [viewsByVibeId, setViewsByVibeId] = useState(() => {
+    const initial = {};
+    (vibeGroup?.vibes || []).forEach(v => {
+      if (v && v.id) {
+        initial[v.id] = Array.isArray(v.views) ? v.views : [];
+      }
+    });
+    return initial;
+  });
+
   const currentVibe = vibes[currentIndex] || vibes[0];
   const timerRef = useRef(null);
   const audioRef = useRef(null);
+
+  // Current story's specific viewers list & count
+  const currentStoryViews = viewsByVibeId[currentVibe?.id] ?? (Array.isArray(currentVibe?.views) ? currentVibe.views : []);
+  const viewCount = currentStoryViews.length;
 
   const currentUserId = user?.id || user?._id || 'local_user';
   const isMine = currentVibe?.userId === currentUserId || vibeGroup?.userId === currentUserId;
@@ -68,20 +86,40 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     } catch (e) {}
   }
 
+  // Real-time socket listener for live view updates for all vibes
+  useEffect(() => {
+    if (!socket) return;
+    const handleViewUpdate = (data) => {
+      if (data && data.vibeId) {
+        setViewsByVibeId(prev => ({
+          ...prev,
+          [data.vibeId]: Array.isArray(data.views) ? data.views : []
+        }));
+      }
+    };
+    socket.on('vibe_view_updated', handleViewUpdate);
+    return () => {
+      socket.off('vibe_view_updated', handleViewUpdate);
+    };
+  }, [socket]);
+
   // Mark current story as viewed in LocalStorage and send view ping to Backend
   useEffect(() => {
     if (currentVibe && currentVibe.id) {
-      setLiveViews(currentVibe.views || []);
+      const vId = currentVibe.id;
 
-      // Always fetch fresh live views for THIS specific story ID
-      if (token && currentVibe.id) {
-        fetch(`${BACKEND_URL}/api/vibes/views/${currentVibe.id}?t=${Date.now()}`, {
+      // Always fetch fresh live views specifically for THIS vibe ID
+      if (token) {
+        fetch(`${BACKEND_URL}/api/vibes/views/${vId}?t=${Date.now()}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
           .then(res => res.json())
           .then(data => {
-            if (data && data.success && data.views) {
-              setLiveViews(data.views);
+            if (data && data.success && Array.isArray(data.views)) {
+              setViewsByVibeId(prev => ({
+                ...prev,
+                [vId]: data.views
+              }));
             }
           })
           .catch(() => {});
@@ -90,21 +128,26 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
       try {
         const rawViewed = localStorage.getItem('pulsechat_viewed_vibes');
         const viewedSet = new Set(rawViewed ? JSON.parse(rawViewed) : []);
-        if (!viewedSet.has(currentVibe.id)) {
-          viewedSet.add(currentVibe.id);
+        if (!viewedSet.has(vId)) {
+          viewedSet.add(vId);
           localStorage.setItem('pulsechat_viewed_vibes', JSON.stringify(Array.from(viewedSet)));
           window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
         }
       } catch (e) {}
 
-      if (token && !isMine && currentVibe.id) {
-        fetch(`${BACKEND_URL}/api/vibes/view/${currentVibe.id}`, {
+      if (token && !isMine) {
+        fetch(`${BACKEND_URL}/api/vibes/view/${vId}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` }
         })
           .then(res => res.json())
           .then(data => {
-            if (data && data.views) setLiveViews(data.views);
+            if (data && Array.isArray(data.views)) {
+              setViewsByVibeId(prev => ({
+                ...prev,
+                [vId]: data.views
+              }));
+            }
           })
           .catch(() => {});
       }
@@ -180,7 +223,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     }
   }, [currentVibe?.id, currentVibe?.songTitle, currentVibe?.audioUrl]);
 
-  // Fetch live views for owner when modal opens
+  // Fetch live views for owner when modal opens or viewers button tapped
   const fetchLiveViews = async () => {
     if (token && currentVibe?.id) {
       try {
@@ -188,8 +231,11 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
-        if (data.success && data.views) {
-          setLiveViews(data.views);
+        if (data.success && Array.isArray(data.views)) {
+          setViewsByVibeId(prev => ({
+            ...prev,
+            [currentVibe.id]: data.views
+          }));
         }
       } catch (e) {}
     }
@@ -739,7 +785,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
                 }}
               >
                 <Eye size={16} color="#a5b4fc" />
-                <span>{(liveViews && liveViews.length) || (currentVibe.views && currentVibe.views.length) || 0} Viewers</span>
+                <span>{viewCount} {viewCount === 1 ? 'Viewer' : 'Viewers'}</span>
               </button>
 
               {currentVibe.sparksEarned > 0 && (
@@ -873,7 +919,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fff', fontWeight: 800, fontSize: '0.98rem' }}>
                 <Eye size={18} color="#818cf8" />
-                <span>Story Viewers ({liveViews.length})</span>
+                <span>Story Viewers ({viewCount})</span>
               </div>
               <button
                 onClick={() => setShowViewersSheet(false)}
@@ -885,14 +931,14 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {liveViews.length === 0 ? (
+              {currentStoryViews.length === 0 ? (
                 <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.6)', padding: '2rem 1rem', fontSize: '0.88rem' }}>
                   <Users size={32} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
-                  <p style={{ margin: 0 }}>No views yet.</p>
+                  <p style={{ margin: 0 }}>No views yet for this story.</p>
                   <p style={{ fontSize: '0.78rem', opacity: 0.8, marginTop: '4px' }}>Share your story with friends!</p>
                 </div>
               ) : (
-                liveViews.map((viewer, idx) => {
+                currentStoryViews.map((viewer, idx) => {
                   let vKing = Boolean(viewer.hasKingCrown);
                   let vSilver = Boolean(viewer.hasSilverCrown);
                   let vStreak = Boolean(viewer.hasStreakCrown);
