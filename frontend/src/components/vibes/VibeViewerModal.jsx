@@ -599,9 +599,9 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
                   <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #f59e0b, #ec4899)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>⚡</div>
                   <div>
                     <div style={{ fontSize: '0.86rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      Pulse Partner <span style={{ fontSize: '0.62rem', background: 'rgba(255,255,255,0.2)', padding: '1px 5px', borderRadius: '4px' }}>Ad</span>
+                      Pulse Story Transition <span style={{ fontSize: '0.62rem', background: 'rgba(255,255,255,0.2)', padding: '1px 5px', borderRadius: '4px' }}>AdMob Interstitial</span>
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Sponsored Story</div>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Sponsored Partner Story</div>
                   </div>
                 </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { ArrowLeft, RotateCcw, Heart, Lightbulb, Calendar, Award, Target, Sparkles, Check, Edit2, X, ChevronRight, Zap } from 'lucide-react';
-import { BACKEND_URL } from '../../utils/config';
+import { BACKEND_URL, ADMOB_CONFIG } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 
 // Web Audio API Sound Synthesizers for 0ms instant Audio Feedback
@@ -988,7 +988,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
             {/* Ad Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
               <span style={{ fontSize: '0.68rem', background: 'rgba(255,255,255,0.1)', color: '#94a3b8', padding: '3px 8px', borderRadius: '8px', fontWeight: 800 }}>
-                AdMob Rewarded Video
+                Pulse Arrow Revive • AdMob Rewarded
               </span>
               <span style={{ fontSize: '0.74rem', color: adRewardReady ? '#10b981' : '#f59e0b', fontWeight: 800 }}>
                 {adRewardReady ? '✓ Reward Ready' : `Reward in ${adSecondsLeft}s`}

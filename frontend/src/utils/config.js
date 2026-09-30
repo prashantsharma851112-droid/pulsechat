@@ -21,3 +21,10 @@ const getBackendUrl = () => {
 export const BACKEND_URL = getBackendUrl();
 export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '506857691919-p8rgd8v01840pmnrrc4n033faem9bgdi.apps.googleusercontent.com';
 
+// Official Google AdMob Configuration
+export const ADMOB_CONFIG = {
+  APP_ID: 'ca-app-pub-9694837576493381~3737412445',
+  REWARDED_ARROW_REVIVE_ID: 'ca-app-pub-9694837576493381/8823975753', // Pulse Arrow Revive (Rewarded)
+  INTERSTITIAL_STORY_TRANSITION_ID: 'ca-app-pub-9694837576493381/1786036526', // Pulse Story Transition (Interstitial)
+};
+
