@@ -747,85 +747,31 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             </div>
           </div>
 
-          {/* Mode Switcher Pills: Canvas vs Camera */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{
+          {/* Top Right: Exit Studio Button */}
+          <button
+            type="button"
+            onClick={handleCloseModal}
+            style={{
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              color: '#fff',
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
-              background: 'rgba(255,255,255,0.06)',
-              borderRadius: '20px',
-              padding: '2px',
-              border: '1px solid rgba(255,255,255,0.12)'
-            }}>
-              <button
-                type="button"
-                onClick={() => {
-                  stopCameraStream();
-                  setViewMode('canvas');
-                }}
-                style={{
-                  background: viewMode === 'canvas' ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'transparent',
-                  border: 'none',
-                  color: viewMode === 'canvas' ? '#fff' : 'rgba(255,255,255,0.6)',
-                  borderRadius: '16px',
-                  padding: '4px 10px',
-                  fontSize: '0.72rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <Palette size={12} /> Canvas
-              </button>
-
-              <button
-                type="button"
-                onClick={() => startCamera('user')}
-                style={{
-                  background: viewMode === 'camera' ? 'linear-gradient(135deg, #f59e0b, #ec4899)' : 'transparent',
-                  border: 'none',
-                  color: viewMode === 'camera' ? '#fff' : 'rgba(255,255,255,0.6)',
-                  borderRadius: '16px',
-                  padding: '4px 10px',
-                  fontSize: '0.72rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <Camera size={12} /> Camera
-              </button>
-            </div>
-
-            {/* Exit Studio Button */}
-            <button
-              type="button"
-              onClick={handleCloseModal}
-              style={{
-                background: 'rgba(255,255,255,0.08)',
-                border: 'none',
-                color: '#fff',
-                width: '30px',
-                height: '30px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer'
-              }}
-              title="Close"
-            >
-              <X size={16} />
-            </button>
-          </div>
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+            title="Close Studio"
+          >
+            <X size={16} />
+          </button>
         </div>
 
         {/* =========================================================================
-            PULSE STUDIO TOOL DOCK (Interactive Feature Selector)
+            PULSE STUDIO TOOL DOCK (All Options Simply Visible At A Glance)
         ========================================================================= */}
         <div
           style={{
@@ -840,76 +786,31 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             zIndex: 35
           }}
         >
-          {/* 1. 3D Text Tool Button */}
+          {/* 1. 3D Text Button */}
           <button
             type="button"
             onClick={() => setActivePanel(activePanel === 'text' ? null : 'text')}
             style={{
-              background: activePanel === 'text' ? 'rgba(99, 102, 241, 0.3)' : 'rgba(255,255,255,0.06)',
-              border: activePanel === 'text' ? '1px solid #6366f1' : '1px solid rgba(255,255,255,0.12)',
-              color: activePanel === 'text' ? '#a5b4fc' : '#fff',
+              background: activePanel === 'text' ? 'rgba(99, 102, 241, 0.35)' : 'rgba(255,255,255,0.06)',
+              border: activePanel === 'text' ? '1.5px solid #6366f1' : '1px solid rgba(255,255,255,0.12)',
+              color: activePanel === 'text' ? '#c7d2fe' : '#fff',
               borderRadius: '12px',
-              padding: '6px 12px',
-              fontSize: '0.76rem',
+              padding: '6px 13px',
+              fontSize: '0.78rem',
               fontWeight: 800,
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
-              flexShrink: 0
+              flexShrink: 0,
+              boxShadow: activePanel === 'text' ? '0 0 12px rgba(99, 102, 241, 0.4)' : 'none'
             }}
           >
-            <Type size={14} color="#6366f1" /> 3D Text
+            <Type size={14} color="#818cf8" /> Aa 3D Text
           </button>
 
-          {/* 2. BG Color / Gradient Palette Button */}
-          <button
-            type="button"
-            onClick={() => setActivePanel(activePanel === 'bg_color' ? null : 'bg_color')}
-            style={{
-              background: activePanel === 'bg_color' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.06)',
-              border: activePanel === 'bg_color' ? '1px solid #f59e0b' : '1px solid rgba(255,255,255,0.12)',
-              color: activePanel === 'bg_color' ? '#fcd34d' : '#fff',
-              borderRadius: '12px',
-              padding: '6px 12px',
-              fontSize: '0.76rem',
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              flexShrink: 0
-            }}
-          >
-            <Palette size={14} color="#f59e0b" /> BG Color
-          </button>
-
-          {/* 3. Live Animated Canvas Button */}
-          <button
-            type="button"
-            onClick={() => setActivePanel(activePanel === 'animated_bg' ? null : 'animated_bg')}
-            style={{
-              background: activePanel === 'animated_bg' ? 'rgba(236, 72, 153, 0.3)' : 'rgba(255,255,255,0.06)',
-              border: activePanel === 'animated_bg' ? '1px solid #ec4899' : '1px solid rgba(255,255,255,0.12)',
-              color: activePanel === 'animated_bg' ? '#f472b6' : '#fff',
-              borderRadius: '12px',
-              padding: '6px 12px',
-              fontSize: '0.76rem',
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              flexShrink: 0
-            }}
-          >
-            <Sparkles size={14} color="#ec4899" /> Live Canvas
-          </button>
-
-          {/* 4. Full Song Music Button */}
+          {/* 2. Music & Audio Crop Button */}
           <button
             type="button"
             onClick={() => {
@@ -921,24 +822,97 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             }}
             style={{
               background: activePanel === 'music_trim' ? 'rgba(16, 185, 129, 0.4)' : (selectedSong ? 'rgba(16, 185, 129, 0.22)' : 'rgba(255,255,255,0.06)'),
-              border: activePanel === 'music_trim' ? '1.5px solid #6ee7b7' : (selectedSong ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.12)'),
+              border: activePanel === 'music_trim' ? '1.5px solid #6ee7b7' : (selectedSong ? '1.5px solid #10b981' : '1px solid rgba(255,255,255,0.12)'),
               color: selectedSong ? '#6ee7b7' : '#fff',
               borderRadius: '12px',
-              padding: '6px 12px',
-              fontSize: '0.76rem',
+              padding: '6px 13px',
+              fontSize: '0.78rem',
               fontWeight: 800,
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
-              flexShrink: 0
+              flexShrink: 0,
+              boxShadow: (activePanel === 'music_trim' || selectedSong) ? '0 0 12px rgba(16, 185, 129, 0.35)' : 'none'
             }}
           >
-            <Music size={14} color="#10b981" /> {selectedSong ? '🎵 ' + selectedSong.songTitle.substring(0, 10) + '...' : 'Add Music'}
+            <Music size={14} color="#34d399" /> {selectedSong ? `🎵 ${selectedSong.songTitle.substring(0, 10)}... (Crop)` : '🎵 Music & Audio Crop'}
           </button>
 
-          {/* 5. Vibe Duration Selector Quick Button (15s / 30s / 60s) */}
+          {/* 3. Stickers / Emojis Button */}
+          <button
+            type="button"
+            onClick={() => setActivePanel(activePanel === 'stickers' ? null : 'stickers')}
+            style={{
+              background: activePanel === 'stickers' ? 'rgba(245, 158, 11, 0.35)' : 'rgba(255,255,255,0.06)',
+              border: activePanel === 'stickers' ? '1.5px solid #f59e0b' : '1px solid rgba(255,255,255,0.12)',
+              color: activePanel === 'stickers' ? '#fde68a' : '#fff',
+              borderRadius: '12px',
+              padding: '6px 13px',
+              fontSize: '0.78rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              boxShadow: activePanel === 'stickers' ? '0 0 12px rgba(245, 158, 11, 0.4)' : 'none'
+            }}
+          >
+            <Smile size={14} color="#fbbf24" /> 😊 Stickers / Emojis{selectedStickers.length > 0 ? ` (${selectedStickers.length})` : ''}
+          </button>
+
+          {/* 4. Canvas Background Gradients Button */}
+          <button
+            type="button"
+            onClick={() => setActivePanel(activePanel === 'bg_color' ? null : 'bg_color')}
+            style={{
+              background: activePanel === 'bg_color' ? 'rgba(249, 115, 22, 0.35)' : 'rgba(255,255,255,0.06)',
+              border: activePanel === 'bg_color' ? '1.5px solid #f97316' : '1px solid rgba(255,255,255,0.12)',
+              color: activePanel === 'bg_color' ? '#fdba74' : '#fff',
+              borderRadius: '12px',
+              padding: '6px 13px',
+              fontSize: '0.78rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              boxShadow: activePanel === 'bg_color' ? '0 0 12px rgba(249, 115, 22, 0.4)' : 'none'
+            }}
+          >
+            <Palette size={14} color="#fb923c" /> 🎨 Canvas Background Gradients
+          </button>
+
+          {/* 5. Live Animated Wallpapers Button */}
+          <button
+            type="button"
+            onClick={() => setActivePanel(activePanel === 'animated_bg' ? null : 'animated_bg')}
+            style={{
+              background: activePanel === 'animated_bg' ? 'rgba(236, 72, 153, 0.35)' : 'rgba(255,255,255,0.06)',
+              border: activePanel === 'animated_bg' ? '1.5px solid #ec4899' : '1px solid rgba(255,255,255,0.12)',
+              color: activePanel === 'animated_bg' ? '#fbcfe8' : '#fff',
+              borderRadius: '12px',
+              padding: '6px 13px',
+              fontSize: '0.78rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              boxShadow: activePanel === 'animated_bg' ? '0 0 12px rgba(236, 72, 153, 0.4)' : 'none'
+            }}
+          >
+            <Sparkles size={14} color="#f472b6" /> ✨ Live Animated Wallpapers
+          </button>
+
+          {/* 6. Story Duration Quick Toggle Button (15s / 30s / 60s) */}
           <button
             type="button"
             onClick={() => {
@@ -947,11 +921,11 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             }}
             style={{
               background: storyDuration > 15 ? 'rgba(245, 158, 11, 0.25)' : 'rgba(255,255,255,0.06)',
-              border: storyDuration > 15 ? '1px solid #f59e0b' : '1px solid rgba(255,255,255,0.12)',
-              color: storyDuration > 15 ? '#fbbf24' : '#fff',
+              border: storyDuration > 15 ? '1.5px solid #f59e0b' : '1px solid rgba(255,255,255,0.12)',
+              color: storyDuration > 15 ? '#fde68a' : '#fff',
               borderRadius: '12px',
-              padding: '6px 12px',
-              fontSize: '0.76rem',
+              padding: '6px 13px',
+              fontSize: '0.78rem',
               fontWeight: 800,
               display: 'flex',
               alignItems: 'center',
@@ -960,35 +934,68 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               whiteSpace: 'nowrap',
               flexShrink: 0
             }}
-            title="Toggle story duration (15s, 30s, 60s)"
+            title="Toggle duration: 15s / 30s / 60s"
           >
-            <Clock size={14} color={storyDuration > 15 ? '#f59e0b' : '#94a3b8'} /> ⏱️ {storyDuration}s
+            <Clock size={14} color={storyDuration > 15 ? '#fbbf24' : '#94a3b8'} /> ⏱️ Duration ({storyDuration}s)
           </button>
 
-          {/* 5. Gallery Pick Button */}
+          {/* 7. Gallery Button */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             style={{
               background: mediaUrl ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255,255,255,0.06)',
-              border: mediaUrl ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.12)',
-              color: mediaUrl ? '#7dd3fc' : '#fff',
+              border: mediaUrl ? '1.5px solid #38bdf8' : '1px solid rgba(255,255,255,0.12)',
+              color: mediaUrl ? '#bae6fd' : '#fff',
               borderRadius: '12px',
-              padding: '6px 12px',
-              fontSize: '0.76rem',
+              padding: '6px 13px',
+              fontSize: '0.78rem',
               fontWeight: 800,
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
-              flexShrink: 0
+              flexShrink: 0,
+              boxShadow: mediaUrl ? '0 0 12px rgba(56, 189, 248, 0.3)' : 'none'
             }}
           >
-            <ImageIcon size={14} color="#38bdf8" /> {mediaUrl ? 'Change Photo' : 'Gallery'}
+            <ImageIcon size={14} color="#38bdf8" /> {mediaUrl ? '🖼️ Change Photo' : '🖼️ Gallery'}
           </button>
 
-          {/* 6. Image FX Controls Button (Prominently shown when photo is present) */}
+          {/* 8. Camera Button (Viewfinder Active / Camera mode) */}
+          <button
+            type="button"
+            onClick={() => {
+              if (viewMode === 'camera') {
+                stopCameraStream();
+                setViewMode('canvas');
+              } else {
+                startCamera('user');
+              }
+            }}
+            style={{
+              background: viewMode === 'camera' ? 'rgba(239, 68, 68, 0.35)' : 'rgba(255,255,255,0.06)',
+              border: viewMode === 'camera' ? '1.5px solid #ef4444' : '1px solid rgba(255,255,255,0.12)',
+              color: viewMode === 'camera' ? '#fca5a5' : '#fff',
+              borderRadius: '12px',
+              padding: '6px 13px',
+              fontSize: '0.78rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              boxShadow: viewMode === 'camera' ? '0 0 12px rgba(239, 68, 68, 0.45)' : 'none'
+            }}
+          >
+            <Camera size={14} color={viewMode === 'camera' ? '#f87171' : '#f43f5e'} />
+            {viewMode === 'camera' ? '📷 Viewfinder Active' : '📷 Camera'}
+          </button>
+
+          {/* 9. Image FX Controls Button (Prominently shown when photo is present) */}
           {mediaUrl && (
             <button
               type="button"
@@ -1010,32 +1017,9 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 boxShadow: activePanel === 'image_adjust' ? '0 0 16px rgba(168, 85, 247, 0.6)' : '0 0 10px rgba(168, 85, 247, 0.35)'
               }}
             >
-              <SlidersHorizontal size={14} color="#d8b4fe" /> Image FX ✨
+              <SlidersHorizontal size={14} color="#d8b4fe" /> 🪄 Image FX & Zoom
             </button>
           )}
-
-          {/* 7. Emojis Button (Clean "Emojis" without 250+) */}
-          <button
-            type="button"
-            onClick={() => setActivePanel(activePanel === 'stickers' ? null : 'stickers')}
-            style={{
-              background: activePanel === 'stickers' ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255,255,255,0.06)',
-              border: activePanel === 'stickers' ? '1px solid #eab308' : '1px solid rgba(255,255,255,0.12)',
-              color: activePanel === 'stickers' ? '#fef08a' : '#fff',
-              borderRadius: '12px',
-              padding: '6px 12px',
-              fontSize: '0.76rem',
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              flexShrink: 0
-            }}
-          >
-            <Smile size={14} color="#eab308" /> Emojis{selectedStickers.length > 0 ? ` (${selectedStickers.length})` : ''}
-          </button>
         </div>
 
         {/* =========================================================================
