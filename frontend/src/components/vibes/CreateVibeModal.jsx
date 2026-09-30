@@ -95,8 +95,8 @@ const compressImageToBase64 = (file) => {
 export default function CreateVibeModal({ onClose, onCreated }) {
   const { user, token } = useContext(AuthContext);
 
-  // View Mode: 'camera' | 'canvas'
-  const [viewMode, setViewMode] = useState('canvas');
+  // View Mode: 'camera' | 'canvas' (defaults directly to live camera)
+  const [viewMode, setViewMode] = useState('camera');
   const [facingMode, setFacingMode] = useState('user'); // 'user' | 'environment'
   const [cameraActive, setCameraActive] = useState(false);
 
@@ -117,11 +117,12 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [songStartTime, setSongStartTime] = useState(0);
   const [showMusicPicker, setShowMusicPicker] = useState(false);
 
-  // Image FX State
+  // Image FX State & Gestures
   const [imageFit, setImageFit] = useState('cover'); // 'cover' | 'contain' | 'padded'
   const [imageZoom, setImageZoom] = useState(1.0);
   const [imageFilter, setImageFilter] = useState('none');
   const [imageOpacity, setImageOpacity] = useState(1.0);
+  const [imagePos, setImagePos] = useState({ x: 50, y: 50 });
 
   // Emojis / Stickers
   const [selectedStickers, setSelectedStickers] = useState([]);
@@ -131,6 +132,10 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [textPos, setTextPos] = useState({ x: 50, y: 45 });
   const [musicPos, setMusicPos] = useState({ x: 50, y: 18 });
   const [draggingElement, setDraggingElement] = useState(null);
+
+  // Touch Gesture tracking for image pinch-to-zoom
+  const touchStartDistRef = useRef(null);
+  const initialZoomRef = useRef(1.0);
 
   // Status
   const [submitting, setSubmitting] = useState(false);
@@ -154,7 +159,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     setCameraActive(false);
   }, []);
 
-  // Camera Launch
+  // Camera Launch with fallback constraints and robust video attachment
   const startCamera = useCallback(async (facing = facingMode) => {
     stopCameraStream();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -163,30 +168,58 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: facing,
-          width: { ideal: 1080 },
-          height: { ideal: 1920 }
-        },
-        audio: false
-      });
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: facing,
+            width: { ideal: 1080 },
+            height: { ideal: 1920 }
+          },
+          audio: false
+        });
+      } catch (err1) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: facing },
+            audio: false
+          });
+        } catch (err2) {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+        }
+      }
+
       cameraStreamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         try {
           await videoRef.current.play();
-        } catch (e) {}
+        } catch (e) {
+          if (videoRef.current) {
+            videoRef.current.muted = true;
+            try { await videoRef.current.play(); } catch (err) {}
+          }
+        }
       }
       setCameraActive(true);
       setViewMode('camera');
+      setError('');
       setActivePanel(null);
     } catch (err) {
       console.warn('Camera failed to start:', err);
-      setError('Camera permission denied or camera busy.');
+      setError('Camera access denied or device busy.');
       setViewMode('canvas');
     }
   }, [facingMode, stopCameraStream]);
+
+  // Auto-start camera on modal open
+  useEffect(() => {
+    startCamera('user');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Flip Camera
   const handleToggleCameraFacing = () => {
@@ -315,27 +348,50 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     } catch (e) {}
   };
 
-  // Dragging Handlers
+  // Dragging Handlers & Pinch-to-Zoom Gestures
   const handlePointerDown = (elementName, e) => {
-    e.stopPropagation();
+    if (e && e.stopPropagation) e.stopPropagation();
     setDraggingElement(elementName);
   };
 
   const handlePointerMove = (e) => {
-    if (!draggingElement || !cardRef.current) return;
+    if (!cardRef.current) return;
+
+    // Multi-touch pinch-to-zoom for image
+    if (e.touches && e.touches.length === 2 && touchStartDistRef.current) {
+      const currentDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const scaleRatio = currentDist / touchStartDistRef.current;
+      const newZoom = Math.min(3.5, Math.max(0.3, Number((initialZoomRef.current * scaleRatio).toFixed(2))));
+      setImageZoom(newZoom);
+      return;
+    }
+
+    if (!draggingElement) return;
     const rect = cardRef.current.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-    const x = Math.max(10, Math.min(90, Math.round(((clientX - rect.left) / rect.width) * 100)));
-    const y = Math.max(10, Math.min(90, Math.round(((clientY - rect.top) / rect.height) * 100)));
+    const x = Math.max(5, Math.min(95, Math.round(((clientX - rect.left) / rect.width) * 100)));
+    const y = Math.max(5, Math.min(95, Math.round(((clientY - rect.top) / rect.height) * 100)));
 
     if (draggingElement === 'text') setTextPos({ x, y });
     else if (draggingElement === 'music') setMusicPos({ x, y });
+    else if (draggingElement === 'image') setImagePos({ x, y });
   };
 
   const handlePointerUp = () => {
     setDraggingElement(null);
+    touchStartDistRef.current = null;
+  };
+
+  const handleWheel = (e) => {
+    if (mediaUrl) {
+      const zoomDelta = e.deltaY < 0 ? 0.08 : -0.08;
+      setImageZoom(prev => Math.min(3.5, Math.max(0.3, Number((prev + zoomDelta).toFixed(2)))));
+    }
   };
 
   const handleToggleSticker = (st) => {
@@ -375,7 +431,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       animatedBg,
       textPos,
       musicPos,
-      imagePos: { x: 50, y: 50 },
+      imagePos: { x: imagePos.x, y: imagePos.y },
       imageFit,
       imageZoom,
       imageFilter,
@@ -412,7 +468,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             animatedBg,
             textPos,
             musicPos,
-            imagePos: { x: 50, y: 50 },
+            imagePos: { x: imagePos.x, y: imagePos.y },
             imageFit,
             imageZoom,
             imageFilter,
@@ -785,6 +841,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           onTouchMove={handlePointerMove}
           onMouseUp={handlePointerUp}
           onTouchEnd={handlePointerUp}
+          onWheel={handleWheel}
           style={{
             flex: 1,
             position: 'relative',
@@ -793,7 +850,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            cursor: draggingElement ? 'grabbing' : 'default'
+            cursor: draggingElement ? 'grabbing' : 'default',
+            touchAction: 'none'
           }}
         >
           {error && (
@@ -815,9 +873,18 @@ export default function CreateVibeModal({ onClose, onCreated }) {
 
           {/* VIEW MODE 1: LIVE CAMERA VIEW */}
           {viewMode === 'camera' && (
-            <div style={{ position: 'absolute', inset: 0, background: '#000' }}>
+            <div style={{ position: 'absolute', inset: 0, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <video
-                ref={videoRef}
+                ref={(el) => {
+                  videoRef.current = el;
+                  if (el && cameraStreamRef.current && el.srcObject !== cameraStreamRef.current) {
+                    el.srcObject = cameraStreamRef.current;
+                    el.play().catch(() => {
+                      el.muted = true;
+                      el.play().catch(() => {});
+                    });
+                  }
+                }}
                 playsInline
                 autoPlay
                 muted
@@ -914,21 +981,42 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 <ChatLiveWallpaper wallpaperId={animatedBg} />
               )}
 
-              {/* Photo Image Layer */}
+              {/* Photo Image Layer - Draggable anywhere & pinch-to-zoomable */}
               {mediaUrl && (
-                <div style={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: imageFit === 'padded' ? '24px' : '0px',
-                  overflow: 'hidden',
-                  pointerEvents: 'none'
-                }}>
+                <div
+                  onMouseDown={(e) => handlePointerDown('image', e)}
+                  onTouchStart={(e) => {
+                    if (e.touches && e.touches.length === 2) {
+                      const dist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                      );
+                      touchStartDistRef.current = dist;
+                      initialZoomRef.current = imageZoom;
+                      setDraggingElement(null);
+                    } else {
+                      handlePointerDown('image', e);
+                    }
+                  }}
+                  style={{
+                    position: 'absolute',
+                    left: `${imagePos.x}%`,
+                    top: `${imagePos.y}%`,
+                    transform: 'translate(-50%, -50%)',
+                    width: imageFit === 'contain' ? '92%' : imageFit === 'padded' ? '82%' : '100%',
+                    height: imageFit === 'contain' ? '92%' : imageFit === 'padded' ? '82%' : '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: draggingElement === 'image' ? 'grabbing' : 'grab',
+                    zIndex: 5,
+                    touchAction: 'none'
+                  }}
+                >
                   <img
                     src={mediaUrl}
                     alt="Media"
+                    draggable={false}
                     style={{
                       width: '100%',
                       height: '100%',
@@ -936,7 +1024,10 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                       transform: `scale(${imageZoom})`,
                       filter: imageFilter !== 'none' ? imageFilter : 'none',
                       opacity: imageOpacity,
-                      borderRadius: imageFit === 'padded' ? '18px' : '0px'
+                      borderRadius: imageFit === 'padded' ? '18px' : '0px',
+                      pointerEvents: 'none',
+                      userSelect: 'none',
+                      WebkitUserDrag: 'none'
                     }}
                   />
                 </div>
@@ -953,26 +1044,45 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   top: `${textPos.y}%`,
                   transform: 'translate(-50%, -50%)',
                   zIndex: 25,
-                  cursor: 'grab',
-                  maxWidth: '86%',
-                  padding: '8px 14px',
+                  cursor: draggingElement === 'text' ? 'grabbing' : 'grab',
+                  maxWidth: '88%',
+                  padding: '6px 12px',
                   textAlign: textAlign,
                   userSelect: 'none'
                 }}
               >
-                <div
-                  className={textStyle3D !== 'none' ? textStyle3D : ''}
-                  style={{
-                    fontSize: `${textSize}rem`,
-                    fontWeight: 800,
-                    color: '#ffffff',
-                    lineHeight: 1.35,
-                    wordBreak: 'break-word',
-                    textShadow: textStyle3D === 'none' ? '0 3px 14px rgba(0,0,0,0.85)' : undefined
-                  }}
-                >
-                  {caption || "Tap here or '3D Text' to type..."}
-                </div>
+                {textStyle3D && textStyle3D !== 'none' ? (
+                  <div className={`animated-3d-stage ${textStyle3D}`} style={{ position: 'relative', zIndex: 4, maxWidth: '100%', width: '100%' }}>
+                    <div className="animated-3d-card" style={{ padding: '8px 14px', background: 'transparent', boxShadow: 'none', border: 'none', width: '100%' }}>
+                      <div
+                        className="text-3d-content"
+                        style={{
+                          fontSize: `${textSize}rem`,
+                          textAlign: textAlign,
+                          wordBreak: 'break-word',
+                          lineHeight: 1.2
+                        }}
+                      >
+                        {caption || "3D TEXT"}
+                      </div>
+                      <div className="text-3d-shadow" />
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      fontSize: `${textSize}rem`,
+                      fontWeight: 800,
+                      color: '#ffffff',
+                      lineHeight: 1.35,
+                      wordBreak: 'break-word',
+                      textAlign: textAlign,
+                      textShadow: '0 3px 14px rgba(0,0,0,0.85)'
+                    }}
+                  >
+                    {caption || "Tap here or '3D Text' to type..."}
+                  </div>
+                )}
               </div>
 
               {/* Draggable Pulse Music Card Sticker */}
@@ -1128,27 +1238,33 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700 }}>Choose 3D Style:</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
-                  {TEXT_STYLES_3D.map(st => (
-                    <button
-                      key={st.id}
-                      type="button"
-                      onClick={() => setTextStyle3D(st.id)}
-                      style={{
-                        background: textStyle3D === st.id ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'rgba(255,255,255,0.08)',
-                        border: textStyle3D === st.id ? '1px solid #a855f7' : '1px solid rgba(255,255,255,0.12)',
-                        color: textStyle3D === st.id ? '#ffffff' : '#e2e8f0',
-                        borderRadius: '16px',
-                        padding: '5px 12px',
-                        fontSize: '0.75rem',
-                        fontWeight: 800,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        flexShrink: 0
-                      }}
-                    >
-                      {st.label}
-                    </button>
-                  ))}
+                  {TEXT_STYLES_3D.map(st => {
+                    const isSelected = textStyle3D === st.id;
+                    return (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => setTextStyle3D(st.id)}
+                        style={{
+                          background: isSelected ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'rgba(255,255,255,0.08)',
+                          border: isSelected ? '1.5px solid #c084fc' : '1px solid rgba(255,255,255,0.12)',
+                          color: isSelected ? '#ffffff' : '#cbd5e1',
+                          borderRadius: '16px',
+                          padding: '6px 14px',
+                          fontSize: '0.78rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                          boxShadow: isSelected ? '0 0 16px rgba(168, 85, 247, 0.6)' : 'none',
+                          transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+                          transition: 'all 0.18s ease'
+                        }}
+                      >
+                        {st.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
