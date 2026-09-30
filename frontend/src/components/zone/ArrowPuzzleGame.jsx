@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { ArrowLeft, RotateCcw, Heart, Lightbulb, Calendar, Award } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Heart, Lightbulb, Calendar, Award, Target, Sparkles, Check, Edit2, X, ChevronRight, Zap } from 'lucide-react';
+import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 
 // Web Audio API Sound Synthesizers for 0ms instant Audio Feedback
@@ -66,8 +67,18 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
   const [screen, setScreen] = useState('main');
   const [theme, setTheme] = useState('light'); // 'light' (Notebook Paper) | 'dark' (Cyber)
   const [level, setLevel] = useState(() => {
-    return parseInt(localStorage.getItem('pulsechat_arrow_level') || '1', 10);
+    const saved = parseInt(localStorage.getItem('pulsechat_arrow_level') || '1', 10);
+    const maxSaved = parseInt(localStorage.getItem('pulsechat_arrow_max_level') || '1', 10);
+    return Math.max(saved, maxSaved, 1);
   });
+  const [maxUnlockedLevel, setMaxUnlockedLevel] = useState(() => {
+    const saved = parseInt(localStorage.getItem('pulsechat_arrow_level') || '1', 10);
+    const maxSaved = parseInt(localStorage.getItem('pulsechat_arrow_max_level') || '1', 10);
+    return Math.max(saved, maxSaved, 1);
+  });
+  const [showLevelPicker, setShowLevelPicker] = useState(false);
+  const [inputLevelValue, setInputLevelValue] = useState('');
+  const [restoreNotification, setRestoreNotification] = useState('');
   const [hearts, setHearts] = useState(3);
   const [grid, setGrid] = useState([]);
   const [gridConfig, setGridConfig] = useState(() => getGridConfig(1));
@@ -79,11 +90,46 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
   const [hintId, setHintId] = useState(null);
   const [isDailyChallenge, setIsDailyChallenge] = useState(false);
 
-  // Sync current saved Arrow Puzzle level on mount
+  // Sync current saved Arrow Puzzle level on mount & auto-recover from backend if available
   useEffect(() => {
     const savedLevel = parseInt(localStorage.getItem('pulsechat_arrow_level') || '1', 10);
+    const maxLevel = parseInt(localStorage.getItem('pulsechat_arrow_max_level') || '1', 10);
+    let initialBest = Math.max(savedLevel, maxLevel, 1);
+
+    // Auto-fetch best score & level from backend MongoDB
+    const token = localStorage.getItem('pulsechat_token');
+    if (token) {
+      fetch(`${BACKEND_URL}/api/zone/my-score`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.success && data.level) {
+            const backendLvl = parseInt(data.level, 10);
+            if (!isNaN(backendLvl) && backendLvl > 1) {
+              setLevel(prev => {
+                const highest = Math.max(prev, backendLvl);
+                if (highest > prev) {
+                  setRestoreNotification(`🎉 Restored your progress to Level ${highest}!`);
+                  setTimeout(() => setRestoreNotification(''), 5000);
+                }
+                try {
+                  localStorage.setItem('pulsechat_arrow_level', highest.toString());
+                  localStorage.setItem('pulsechat_arrow_max_level', highest.toString());
+                } catch (e) {}
+                return highest;
+              });
+              setMaxUnlockedLevel(prev => Math.max(prev, backendLvl));
+            }
+          }
+        })
+        .catch(() => {});
+    }
+
+    setLevel(initialBest);
+    setMaxUnlockedLevel(initialBest);
     if (onScoreUpdate) {
-      onScoreUpdate('Arrow Puzzle', 0, savedLevel);
+      onScoreUpdate('Arrow Puzzle', 0, initialBest);
     }
   }, []);
 
@@ -152,9 +198,51 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
   };
 
   const startLevel = (lvlNum, isDaily = false) => {
-    generatePuzzle(lvlNum, isDaily);
+    const target = Math.max(1, parseInt(lvlNum, 10) || 1);
+    setLevel(target);
+    setMaxUnlockedLevel(prev => {
+      const newMax = Math.max(prev, target);
+      try {
+        localStorage.setItem('pulsechat_arrow_max_level', newMax.toString());
+      } catch (e) {}
+      return newMax;
+    });
+    try {
+      localStorage.setItem('pulsechat_arrow_level', target.toString());
+    } catch (e) {}
+    generatePuzzle(target, isDaily);
     setScreen('playing');
     playSound('pop');
+  };
+
+  const handleJumpToLevel = (targetLvl) => {
+    const num = parseInt(targetLvl, 10);
+    if (isNaN(num) || num < 1) return;
+    setLevel(num);
+    setMaxUnlockedLevel(prev => Math.max(prev, num));
+    try {
+      localStorage.setItem('pulsechat_arrow_level', num.toString());
+      localStorage.setItem('pulsechat_arrow_max_level', Math.max(maxUnlockedLevel, num).toString());
+    } catch (e) {}
+
+    const token = localStorage.getItem('pulsechat_token');
+    if (token) {
+      fetch(`${BACKEND_URL}/api/zone/set-level`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ level: num })
+      }).catch(() => {});
+    }
+
+    if (onScoreUpdate) {
+      onScoreUpdate('Arrow Puzzle', num * 50, num);
+    }
+
+    setShowLevelPicker(false);
+    startLevel(num, false);
   };
 
   // Check if ray to boundary in arrow's direction is clear of un-cleared arrows
@@ -224,6 +312,13 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
     playSound('success');
     const nextLvl = level + 1;
     setLevel(nextLvl);
+    setMaxUnlockedLevel(prev => {
+      const newMax = Math.max(prev, nextLvl);
+      try {
+        localStorage.setItem('pulsechat_arrow_max_level', newMax.toString());
+      } catch (e) {}
+      return newMax;
+    });
     try {
       localStorage.setItem('pulsechat_arrow_level', nextLvl.toString());
     } catch (e) {}
@@ -341,6 +436,25 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
             </p>
           </div>
 
+          {/* Restore Notification */}
+          {restoreNotification && (
+            <div style={{
+              width: '100%',
+              maxWidth: '320px',
+              background: 'rgba(16, 185, 129, 0.2)',
+              border: '1px solid #10b981',
+              color: '#6ee7b7',
+              borderRadius: '16px',
+              padding: '10px 14px',
+              fontSize: '0.84rem',
+              fontWeight: 800,
+              textAlign: 'center',
+              boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)'
+            }}>
+              {restoreNotification}
+            </div>
+          )}
+
           {/* Buttons */}
           <div style={{ width: '100%', maxWidth: '320px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <button
@@ -365,21 +479,55 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
               <span style={{ fontSize: '0.74rem', opacity: 0.85, fontWeight: 600 }}>Level {level}</span>
             </button>
 
+            {/* Quick 1-Tap Restore if friend had reached a higher level */}
+            {maxUnlockedLevel > level && (
+              <button
+                onClick={() => handleJumpToLevel(maxUnlockedLevel)}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '20px',
+                  background: 'linear-gradient(90deg, #10b981, #06b6d4)',
+                  border: 'none',
+                  color: '#fff',
+                  fontWeight: 800,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)'
+                }}
+              >
+                <Zap size={16} /> Restore Back to Level {maxUnlockedLevel}
+              </button>
+            )}
+
+            {/* Jump to Level / Select Level Button */}
             <button
-              onClick={() => startLevel(1)}
+              onClick={() => {
+                setInputLevelValue(level.toString());
+                setShowLevelPicker(true);
+              }}
               style={{
                 width: '100%',
                 padding: '12px',
                 borderRadius: '20px',
                 background: 'rgba(255,255,255,0.06)',
                 border: '1.5px solid rgba(255,255,255,0.2)',
-                color: '#fff',
-                fontWeight: 700,
+                color: '#93c5fd',
+                fontWeight: 800,
                 fontSize: '0.9rem',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'all 0.2s ease'
               }}
             >
-              Restart Game (Level 1)
+              <Target size={16} /> Jump / Restore Level
             </button>
           </div>
         </div>
@@ -398,8 +546,32 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
               <ArrowLeft size={20} />
             </button>
 
-            <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#fff' }}>
-              Level {level}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#fff' }}>
+                Level {level}
+              </div>
+              <button
+                onClick={() => {
+                  setInputLevelValue(level.toString());
+                  setShowLevelPicker(true);
+                }}
+                style={{
+                  background: 'rgba(59, 130, 246, 0.25)',
+                  border: '1px solid rgba(59, 130, 246, 0.5)',
+                  color: '#93c5fd',
+                  borderRadius: '8px',
+                  padding: '2px 7px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  fontSize: '0.68rem',
+                  fontWeight: 800
+                }}
+                title="Jump or Set Level"
+              >
+                <Target size={11} /> Jump
+              </button>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(59, 130, 246, 0.2)', border: '1px solid #3b82f6', padding: '3px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 800, color: '#60a5fa' }}>
@@ -698,6 +870,196 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
             >
               Try Again 🔄
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 5. JUMP / RESTORE LEVEL MODAL */}
+      {showLevelPicker && (
+        <div
+          onClick={() => setShowLevelPicker(false)}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.88)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            zIndex: 30
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(145deg, #1e293b, #0f172a)',
+              border: '1.5px solid rgba(59, 130, 246, 0.4)',
+              borderRadius: '24px',
+              padding: '24px 20px',
+              maxWidth: '340px',
+              width: '100%',
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.85)',
+              position: 'relative'
+            }}
+          >
+            {/* Close Button */}
+            <button
+              onClick={() => setShowLevelPicker(false)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: 'none',
+                color: '#94a3b8',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <X size={18} />
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <Target size={22} color="#38bdf8" />
+              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#fff' }}>
+                Restore / Select Level
+              </h3>
+            </div>
+
+            <p style={{ margin: '0 0 18px 0', fontSize: '0.82rem', color: '#94a3b8', lineHeight: 1.4 }}>
+              Accidentally reset or lost your progress? Enter your previous level below to jump straight back!
+            </p>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleJumpToLevel(inputLevelValue);
+              }}
+              style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}
+            >
+              <input
+                type="number"
+                min="1"
+                max="9999"
+                value={inputLevelValue}
+                onChange={(e) => setInputLevelValue(e.target.value)}
+                placeholder="Enter level (e.g. 114)"
+                autoFocus
+                style={{
+                  flex: 1,
+                  background: 'rgba(15, 23, 42, 0.8)',
+                  border: '1.5px solid rgba(59, 130, 246, 0.5)',
+                  borderRadius: '14px',
+                  padding: '12px 14px',
+                  color: '#fff',
+                  fontSize: '1rem',
+                  fontWeight: 800,
+                  outline: 'none',
+                  textAlign: 'center'
+                }}
+              />
+              <button
+                type="submit"
+                style={{
+                  background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                  border: 'none',
+                  borderRadius: '14px',
+                  padding: '12px 18px',
+                  color: '#fff',
+                  fontWeight: 800,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                Go <ChevronRight size={18} />
+              </button>
+            </form>
+
+            {/* Quick Jumps / Chips */}
+            <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+              Quick Restore Options
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {maxUnlockedLevel > 1 && (
+                <button
+                  type="button"
+                  onClick={() => handleJumpToLevel(maxUnlockedLevel)}
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.2)',
+                    border: '1px solid #10b981',
+                    color: '#6ee7b7',
+                    borderRadius: '12px',
+                    padding: '6px 12px',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  ⚡ Highest: Lvl {maxUnlockedLevel}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleJumpToLevel(114)}
+                style={{
+                  background: 'rgba(245, 158, 11, 0.2)',
+                  border: '1px solid #f59e0b',
+                  color: '#fbbf24',
+                  borderRadius: '12px',
+                  padding: '6px 12px',
+                  fontSize: '0.8rem',
+                  fontWeight: 800,
+                  cursor: 'pointer'
+                }}
+              >
+                🔥 Level 114
+              </button>
+              <button
+                type="button"
+                onClick={() => handleJumpToLevel(50)}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#cbd5e1',
+                  borderRadius: '12px',
+                  padding: '6px 10px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                Lvl 50
+              </button>
+              <button
+                type="button"
+                onClick={() => handleJumpToLevel(100)}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#cbd5e1',
+                  borderRadius: '12px',
+                  padding: '6px 10px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                Lvl 100
+              </button>
+            </div>
           </div>
         </div>
       )}

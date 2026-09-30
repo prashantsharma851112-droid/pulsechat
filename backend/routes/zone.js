@@ -235,6 +235,70 @@ router.get('/leaderboard', authMiddleware, async (req, res) => {
   }
 });
 
+// Fetch Current User's Saved Game Score & Max Level
+router.get('/my-score', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userId || req.user?.id || req.user?.userId;
+    const isObjectId = mongoose.Types.ObjectId.isValid(userId);
+    const user = await User.findOne({
+      $or: [
+        { id: userId },
+        ...(isObjectId ? [{ _id: userId }] : []),
+        { username: userId }
+      ]
+    }).lean();
+
+    const resolvedUserId = user ? (user.id || (user._id ? user._id.toString() : userId)) : userId;
+    const scoreDoc = await GameScore.findOne({ userId: resolvedUserId }).lean();
+
+    res.json({
+      success: true,
+      level: scoreDoc?.level || 1,
+      score: scoreDoc?.score || 0,
+      gamesPlayed: scoreDoc?.gamesPlayed || 0
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch personal game score' });
+  }
+});
+
+// Set / Restore User's Level in Database
+router.post('/set-level', authMiddleware, async (req, res) => {
+  try {
+    const { level } = req.body;
+    const targetLevel = Math.max(1, parseInt(level || '1', 10));
+    const userId = req.userId || req.user?.id || req.user?.userId;
+    const isObjectId = mongoose.Types.ObjectId.isValid(userId);
+    const user = await User.findOne({
+      $or: [
+        { id: userId },
+        ...(isObjectId ? [{ _id: userId }] : []),
+        { username: userId }
+      ]
+    }).lean();
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const resolvedUserId = user.id || (user._id ? user._id.toString() : userId);
+
+    const doc = await GameScore.findOneAndUpdate(
+      { userId: resolvedUserId },
+      {
+        $set: {
+          displayName: user.displayName || user.username || 'Player',
+          gameName: 'Arrow Puzzle',
+          level: targetLevel,
+          updatedAt: new Date()
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({ success: true, level: doc.level });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update level' });
+  }
+});
+
 // Submit Mini-Game Score, Level & Earn Rewards / Streaks
 router.post('/game-score', authMiddleware, async (req, res) => {
   try {
