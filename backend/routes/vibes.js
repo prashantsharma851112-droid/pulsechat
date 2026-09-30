@@ -11,7 +11,7 @@ router.post('/create', authMiddleware, async (req, res) => {
     const {
       id,
       mediaUrl, caption, soundtrack, songTitle, artistName, albumArt, audioUrl, youtubeId, songStartTime,
-      bgGradient, textStyle3D, animatedBg, textPos, musicPos, imagePos, imageFit, imageZoom,
+      storyDuration, bgGradient, textStyle3D, animatedBg, textPos, musicPos, imagePos, imageFit, imageZoom,
       imageFilter, imageOpacity, textSize, textAlign, selectedStickers
     } = req.body;
     const targetUserId = req.userId || req.user?.id || req.user?.userId;
@@ -65,6 +65,7 @@ router.post('/create', authMiddleware, async (req, res) => {
       audioUrl: audioUrl || '',
       youtubeId: youtubeId || '',
       songStartTime: parseInt(songStartTime, 10) || 0,
+      storyDuration: parseInt(storyDuration, 10) || 15,
       bgGradient: bgGradient || 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
       textStyle3D: textStyle3D || 'none',
       animatedBg: animatedBg || 'none',

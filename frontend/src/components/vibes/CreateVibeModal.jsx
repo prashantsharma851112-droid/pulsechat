@@ -3,7 +3,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { 
   X, Camera, SwitchCamera, Image as ImageIcon, Music, Palette, Sparkles, 
   Send, Loader2, Type, Trash2, Smile, Disc, Check, FlipHorizontal, Sliders,
-  SlidersHorizontal, ZoomIn, Eye, Sparkle, RotateCcw, Volume2
+  SlidersHorizontal, ZoomIn, Eye, Sparkle, RotateCcw, Volume2, Clock, Play, Pause, Scissors
 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
@@ -112,9 +112,11 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [textSize, setTextSize] = useState(1.4);
   const [textAlign, setTextAlign] = useState('center');
 
-  // Music State
+  // Music & Duration State
   const [selectedSong, setSelectedSong] = useState(null);
   const [songStartTime, setSongStartTime] = useState(0);
+  const [storyDuration, setStoryDuration] = useState(15); // 15 | 30 | 60 seconds
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [showMusicPicker, setShowMusicPicker] = useState(false);
 
   // Image FX State & Gestures
@@ -320,6 +322,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       } catch (e) {}
     }
     stopGlobalMusicAudio();
+    setIsPlayingPreview(false);
     onClose();
   };
 
@@ -344,10 +347,22 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         }
         audio.volume = 0.85;
         registerGlobalMusicAudio(audio);
-        audio.play().catch(() => {});
+        audio.play().then(() => setIsPlayingPreview(true)).catch(() => setIsPlayingPreview(false));
+        audio.onended = () => setIsPlayingPreview(false);
+        audio.onpause = () => setIsPlayingPreview(false);
         previewAudioRef.current = audio;
       }
     } catch (e) {}
+  };
+
+  const togglePreviewAudio = () => {
+    if (!selectedSong) return;
+    if (previewAudioRef.current && !previewAudioRef.current.paused) {
+      previewAudioRef.current.pause();
+      setIsPlayingPreview(false);
+    } else {
+      previewSongPart(selectedSong, songStartTime);
+    }
   };
 
   // Dragging Handlers & Pinch-to-Zoom Gestures
@@ -431,6 +446,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       audioUrl: selectedSong ? selectedSong.audioUrl : '',
       youtubeId: selectedSong ? selectedSong.youtubeId : '',
       songStartTime: selectedSong ? (songStartTime || 0) : 0,
+      storyDuration: Number(storyDuration) || 15,
       bgGradient: selectedGradient,
       textStyle3D,
       animatedBg,
@@ -469,6 +485,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             audioUrl: selectedSong ? selectedSong.audioUrl : '',
             youtubeId: selectedSong ? selectedSong.youtubeId : '',
             songStartTime: selectedSong ? (songStartTime || 0) : 0,
+            storyDuration: Number(storyDuration) || 15,
             bgGradient: selectedGradient,
             textStyle3D,
             animatedBg,
@@ -759,10 +776,16 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           {/* 4. Full Song Music Button */}
           <button
             type="button"
-            onClick={() => setShowMusicPicker(true)}
+            onClick={() => {
+              if (selectedSong) {
+                setActivePanel(activePanel === 'music_trim' ? null : 'music_trim');
+              } else {
+                setShowMusicPicker(true);
+              }
+            }}
             style={{
-              background: selectedSong ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255,255,255,0.06)',
-              border: selectedSong ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.12)',
+              background: activePanel === 'music_trim' ? 'rgba(16, 185, 129, 0.4)' : (selectedSong ? 'rgba(16, 185, 129, 0.22)' : 'rgba(255,255,255,0.06)'),
+              border: activePanel === 'music_trim' ? '1.5px solid #6ee7b7' : (selectedSong ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.12)'),
               color: selectedSong ? '#6ee7b7' : '#fff',
               borderRadius: '12px',
               padding: '6px 12px',
@@ -777,6 +800,33 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             }}
           >
             <Music size={14} color="#10b981" /> {selectedSong ? '🎵 ' + selectedSong.songTitle.substring(0, 10) + '...' : 'Add Music'}
+          </button>
+
+          {/* 5. Vibe Duration Selector Quick Button (15s / 30s / 60s) */}
+          <button
+            type="button"
+            onClick={() => {
+              const nextDur = storyDuration === 15 ? 30 : (storyDuration === 30 ? 60 : 15);
+              setStoryDuration(nextDur);
+            }}
+            style={{
+              background: storyDuration > 15 ? 'rgba(245, 158, 11, 0.25)' : 'rgba(255,255,255,0.06)',
+              border: storyDuration > 15 ? '1px solid #f59e0b' : '1px solid rgba(255,255,255,0.12)',
+              color: storyDuration > 15 ? '#fbbf24' : '#fff',
+              borderRadius: '12px',
+              padding: '6px 12px',
+              fontSize: '0.76rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="Toggle story duration (15s, 30s, 60s)"
+          >
+            <Clock size={14} color={storyDuration > 15 ? '#f59e0b' : '#94a3b8'} /> ⏱️ {storyDuration}s
           </button>
 
           {/* 5. Gallery Pick Button */}
@@ -1053,63 +1103,67 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 </div>
               )}
 
-              {/* Draggable 3D Text / Caption */}
-              <div
-                onMouseDown={(e) => handlePointerDown('text', e)}
-                onTouchStart={(e) => handlePointerDown('text', e)}
-                onClick={() => setActivePanel('text')}
-                style={{
-                  position: 'absolute',
-                  left: `${textPos.x}%`,
-                  top: `${textPos.y}%`,
-                  transform: 'translate(-50%, -50%)',
-                  zIndex: 25,
-                  cursor: draggingElement === 'text' ? 'grabbing' : 'grab',
-                  maxWidth: '88%',
-                  padding: '6px 12px',
-                  textAlign: textAlign,
-                  userSelect: 'none'
-                }}
-              >
-                {textStyle3D && textStyle3D !== 'none' ? (
-                  <div className={`animated-3d-stage ${textStyle3D}`} style={{ position: 'relative', zIndex: 4, maxWidth: '100%', width: '100%' }}>
-                    <div className="animated-3d-card" style={{ padding: '8px 14px', background: 'transparent', boxShadow: 'none', border: 'none', width: '100%' }}>
-                      <div
-                        className="text-3d-content"
-                        style={{
-                          fontSize: `${textSize}rem`,
-                          textAlign: textAlign,
-                          wordBreak: 'break-word',
-                          lineHeight: 1.2
-                        }}
-                      >
-                        {caption || "3D TEXT"}
+              {/* Draggable 3D Text / Caption - Only displayed if user entered caption or is actively editing in text panel */}
+              {(Boolean(caption?.trim()) || activePanel === 'text') && (
+                <div
+                  onMouseDown={(e) => handlePointerDown('text', e)}
+                  onTouchStart={(e) => handlePointerDown('text', e)}
+                  onClick={() => setActivePanel('text')}
+                  style={{
+                    position: 'absolute',
+                    left: `${textPos.x}%`,
+                    top: `${textPos.y}%`,
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: 25,
+                    cursor: draggingElement === 'text' ? 'grabbing' : 'grab',
+                    maxWidth: '88%',
+                    padding: '6px 12px',
+                    textAlign: textAlign,
+                    userSelect: 'none'
+                  }}
+                >
+                  {textStyle3D && textStyle3D !== 'none' ? (
+                    <div className={`animated-3d-stage ${textStyle3D}`} style={{ position: 'relative', zIndex: 4, maxWidth: '100%', width: '100%' }}>
+                      <div className="animated-3d-card" style={{ padding: '8px 14px', background: 'transparent', boxShadow: 'none', border: 'none', width: '100%' }}>
+                        <div
+                          className="text-3d-content"
+                          style={{
+                            fontSize: `${textSize}rem`,
+                            textAlign: textAlign,
+                            wordBreak: 'break-word',
+                            lineHeight: 1.2
+                          }}
+                        >
+                          {caption || (activePanel === 'text' ? '✨ Type 3D Text...' : '')}
+                        </div>
+                        <div className="text-3d-shadow" />
                       </div>
-                      <div className="text-3d-shadow" />
                     </div>
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      fontSize: `${textSize}rem`,
-                      fontWeight: 800,
-                      color: '#ffffff',
-                      lineHeight: 1.35,
-                      wordBreak: 'break-word',
-                      textAlign: textAlign,
-                      textShadow: '0 3px 14px rgba(0,0,0,0.85)'
-                    }}
-                  >
-                    {caption || "Tap here or '3D Text' to type..."}
-                  </div>
-                )}
-              </div>
+                  ) : (
+                    <div
+                      style={{
+                        fontSize: `${textSize}rem`,
+                        fontWeight: 800,
+                        color: '#ffffff',
+                        lineHeight: 1.35,
+                        wordBreak: 'break-word',
+                        textAlign: textAlign,
+                        textShadow: '0 3px 14px rgba(0,0,0,0.85)',
+                        opacity: caption ? 1 : 0.6
+                      }}
+                    >
+                      {caption || (activePanel === 'text' ? 'Type text...' : '')}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Draggable Pulse Music Card Sticker */}
               {selectedSong && (
                 <div
                   onMouseDown={(e) => handlePointerDown('music', e)}
                   onTouchStart={(e) => handlePointerDown('music', e)}
+                  onClick={() => setActivePanel('music_trim')}
                   style={{
                     position: 'absolute',
                     left: `${musicPos.x}%`,
@@ -1669,6 +1723,264 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               </div>
             </div>
           )}
+
+          {/* DRAWER 6: MUSIC PREVIEW, CROP (START TIME) & DURATION CONTROLS */}
+          {activePanel === 'music_trim' && (
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 45,
+              background: 'rgba(15, 15, 24, 0.97)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              borderTop: '1px solid rgba(16, 185, 129, 0.4)',
+              borderRadius: '24px 24px 0 0',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+              boxShadow: '0 -10px 40px rgba(0,0,0,0.8)',
+              animation: 'pulseFadeIn 0.2s ease'
+            }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#6ee7b7', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Music size={16} /> Music & Vibe Duration Studio
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (previewAudioRef.current) previewAudioRef.current.pause();
+                    setIsPlayingPreview(false);
+                    setActivePanel(null);
+                  }}
+                  style={{ background: 'rgba(16, 185, 129, 0.25)', border: '1px solid rgba(16, 185, 129, 0.4)', color: '#fff', borderRadius: '12px', padding: '3px 10px', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Done ✓
+                </button>
+              </div>
+
+              {selectedSong ? (
+                <>
+                  {/* Song Info & Preview Player */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '16px',
+                    padding: '10px 12px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                      <img
+                        src={selectedSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedSong.songTitle}`}
+                        alt="Album"
+                        style={{
+                          width: '42px',
+                          height: '42px',
+                          borderRadius: '10px',
+                          objectFit: 'cover',
+                          border: '1px solid #10b981',
+                          flexShrink: 0
+                        }}
+                      />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedSong.songTitle}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedSong.artistName || 'Full Track'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Preview Play/Pause & Actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={togglePreviewAudio}
+                        style={{
+                          width: '38px',
+                          height: '38px',
+                          borderRadius: '50%',
+                          background: isPlayingPreview ? '#ef4444' : '#10b981',
+                          border: 'none',
+                          color: '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          boxShadow: isPlayingPreview ? '0 0 14px rgba(239, 68, 68, 0.6)' : '0 0 14px rgba(16, 185, 129, 0.6)'
+                        }}
+                        title={isPlayingPreview ? "Pause Preview" : "Play Preview"}
+                      >
+                        {isPlayingPreview ? <Pause size={18} /> : <Play size={18} style={{ marginLeft: '2px' }} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowMusicPicker(true)}
+                        style={{
+                          background: 'rgba(255,255,255,0.08)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          color: '#fff',
+                          borderRadius: '10px',
+                          padding: '6px 10px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Change
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Audio Trimmer / Start Point Slider */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.76rem' }}>
+                      <span style={{ color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700 }}>
+                        <Scissors size={13} color="#10b981" /> Crop Song Start Time:
+                      </span>
+                      <span style={{ color: '#10b981', fontWeight: 800, background: 'rgba(16, 185, 129, 0.15)', padding: '2px 8px', borderRadius: '8px' }}>
+                        Starts at {Math.floor(songStartTime / 60)}:{(songStartTime % 60) < 10 ? '0' : ''}{songStartTime % 60}
+                      </span>
+                    </div>
+
+                    <input
+                      type="range"
+                      min="0"
+                      max={Math.max(10, (selectedSong.duration || 240) - storyDuration)}
+                      step="1"
+                      value={songStartTime}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10) || 0;
+                        setSongStartTime(val);
+                        previewSongPart(selectedSong, val);
+                      }}
+                      style={{
+                        width: '100%',
+                        accentColor: '#10b981',
+                        cursor: 'pointer',
+                        height: '6px'
+                      }}
+                    />
+
+                    {/* Quick Jump Markers */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.68rem', color: '#64748b' }}>Quick Jump:</span>
+                      {[
+                        { label: '0:00 Intro', sec: 0 },
+                        { label: '0:30 Chorus', sec: 30 },
+                        { label: '0:60 Hook', sec: 60 },
+                        { label: '1:30 Drop', sec: 90 }
+                      ].map(mk => (
+                        <button
+                          key={mk.sec}
+                          type="button"
+                          onClick={() => {
+                            setSongStartTime(mk.sec);
+                            previewSongPart(selectedSong, mk.sec);
+                          }}
+                          style={{
+                            background: songStartTime === mk.sec ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.06)',
+                            border: songStartTime === mk.sec ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.08)',
+                            color: songStartTime === mk.sec ? '#6ee7b7' : '#94a3b8',
+                            borderRadius: '8px',
+                            padding: '2px 8px',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {mk.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                  <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: '10px' }}>
+                    No music added yet. Choose a song from Bollywood, Punjabi, Lofi or Hollywood hits!
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowMusicPicker(true)}
+                    style={{
+                      background: 'linear-gradient(135deg, #10b981, #06b6d4)',
+                      border: 'none',
+                      color: '#fff',
+                      borderRadius: '14px',
+                      padding: '8px 18px',
+                      fontSize: '0.8rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)'
+                    }}
+                  >
+                    <Music size={15} /> Select Song from Library
+                  </button>
+                </div>
+              )}
+
+              {/* Vibe Story Duration Selector (15s, 30s, 60s) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#cbd5e1', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <Clock size={14} color="#f59e0b" /> Story Duration (Play Length):
+                  </span>
+                  <span style={{ fontSize: '0.74rem', color: '#fbbf24', fontWeight: 800 }}>
+                    {storyDuration} Seconds
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  {[
+                    { sec: 15, label: '⚡ 15 sec', desc: 'Standard Story' },
+                    { sec: 30, label: '🔥 30 sec', desc: 'Extended Vibe' },
+                    { sec: 60, label: '🌟 60 sec', desc: 'Full Music Clip' }
+                  ].map(dur => (
+                    <button
+                      key={dur.sec}
+                      type="button"
+                      onClick={() => setStoryDuration(dur.sec)}
+                      style={{
+                        background: storyDuration === dur.sec
+                          ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.35), rgba(239, 68, 68, 0.25))'
+                          : 'rgba(255,255,255,0.05)',
+                        border: storyDuration === dur.sec
+                          ? '1.5px solid #f59e0b'
+                          : '1px solid rgba(255,255,255,0.1)',
+                        color: storyDuration === dur.sec ? '#fff' : '#94a3b8',
+                        borderRadius: '14px',
+                        padding: '8px 6px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '2px',
+                        cursor: 'pointer',
+                        boxShadow: storyDuration === dur.sec ? '0 0 14px rgba(245, 158, 11, 0.35)' : 'none',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <span style={{ fontSize: '0.82rem', fontWeight: 800, color: storyDuration === dur.sec ? '#fbbf24' : '#e2e8f0' }}>
+                        {dur.label}
+                      </span>
+                      <span style={{ fontSize: '0.62rem', color: storyDuration === dur.sec ? '#fef08a' : '#64748b' }}>
+                        {dur.desc}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* =========================================================================
@@ -1739,6 +2051,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         onSelectSong={(song) => {
           setSelectedSong(song);
           setShowMusicPicker(false);
+          setSongStartTime(0);
+          setActivePanel('music_trim');
           previewSongPart(song, 0);
         }}
       />

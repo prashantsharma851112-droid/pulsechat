@@ -254,7 +254,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     onClose();
   };
 
-  // Story Auto-Advance Progress Bar Timer (5s per story, pauses when viewers sheet is open)
+  // Story Auto-Advance Progress Bar Timer (respects currentVibe.storyDuration: 15s, 30s, 60s)
   useEffect(() => {
     if (isPaused || showViewersSheet) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -263,6 +263,9 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
 
     setProgress(0);
     if (timerRef.current) clearInterval(timerRef.current);
+
+    const durSeconds = Math.max(5, Number(currentVibe?.storyDuration || currentVibe?.duration || 15));
+    const step = 100 / (durSeconds * 10);
 
     timerRef.current = setInterval(() => {
       setProgress(prev => {
@@ -276,14 +279,14 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
             return 100;
           }
         }
-        return prev + 2;
+        return prev + step;
       });
     }, 100);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [currentIndex, vibes.length, onClose, isPaused, showViewersSheet]);
+  }, [currentIndex, vibes.length, onClose, isPaused, showViewersSheet, currentVibe?.id, currentVibe?.storyDuration]);
 
   const handleNext = () => {
     if (currentIndex < vibes.length - 1) {

@@ -15,6 +15,7 @@ const VibeSchema = new mongoose.Schema({
   audioUrl: { type: String, default: '' },
   youtubeId: { type: String, default: '' },
   songStartTime: { type: Number, default: 0 },
+  storyDuration: { type: Number, default: 15 }, // 15s | 30s | 60s
   bgGradient: { type: String, default: 'linear-gradient(135deg, #1e1b4b 0%, #311042 100%)' },
   textStyle3D: { type: String, default: 'none' },
   animatedBg: { type: String, default: 'none' },
