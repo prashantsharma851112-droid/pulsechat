@@ -87,6 +87,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
   const [flyingIds, setFlyingIds] = useState(new Set());
   const [clearedIds, setClearedIds] = useState(new Set());
   const [hintId, setHintId] = useState(null);
+  const [shakingId, setShakingId] = useState(null);
   const [isDailyChallenge, setIsDailyChallenge] = useState(false);
 
   // Rewarded Video Ad State (Watch Ad to Revive / Continue Level)
