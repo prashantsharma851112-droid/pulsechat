@@ -2380,45 +2380,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               <Gamepad2 size={19} color="#ec4899" />
             </button>
 
-            {/* Active Real Music Playing Badge in Chat Header */}
-            {chatMusicSong && (
-              <div style={{
-                background: 'rgba(18, 18, 24, 0.88)',
-                backdropFilter: 'blur(12px)',
-                padding: '4px 10px',
-                borderRadius: '20px',
-                border: '1px solid rgba(245, 158, 11, 0.6)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 4px 14px rgba(0, 0, 0, 0.4)',
-                marginRight: '4px'
-              }}>
-                <img
-                  src={chatMusicSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${chatMusicSong.songTitle}`}
-                  alt="Track"
-                  style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover', animation: 'spin 4s linear infinite' }}
-                />
-                <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#fff', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {chatMusicSong.songTitle}
-                </span>
-                <button
-                  onClick={() => setIsChatMusicMuted(!isChatMusicMuted)}
-                  style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', padding: '1px' }}
-                  title={isChatMusicMuted ? "Unmute Music" : "Mute Music"}
-                >
-                  {isChatMusicMuted ? <VolumeX size={14} color="#ef4444" /> : <Volume2 size={14} color="#10b981" />}
-                </button>
-                <button
-                  onClick={() => handleUpdateChatMusic(null)}
-                  style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', padding: '1px' }}
-                  title="Stop Music"
-                >
-                  <X size={13} />
-                </button>
-              </div>
-            )}
-
             {/* Music Button directly next to 3-Dots Menu */}
             <button
               onClick={() => setShowChatMusicPicker(true)}
