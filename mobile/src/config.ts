@@ -2,8 +2,8 @@ import { TestIds } from 'react-native-google-mobile-ads';
 
 export const CONFIG = {
   // Render Live Backend URL
-  API_BASE_URL: 'https://pulsechat-xzul.onrender.com/api',
-  SOCKET_URL: 'https://pulsechat-xzul.onrender.com',
+  API_BASE_URL: 'https://pulsechat-api-v2.onrender.com/api',
+  SOCKET_URL: 'https://pulsechat-api-v2.onrender.com',
 
   // Google AdMob Unit IDs (Official PulseChat Production Units)
   ADMOB: {

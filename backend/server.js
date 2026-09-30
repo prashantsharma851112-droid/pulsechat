@@ -1253,7 +1253,7 @@ mongoose.connect(config.MONGO_URI)
       console.log(`🚀 PulseChat Backend running on port ${config.PORT}`);
 
       // keep-alive ping
-      const renderUrl = process.env.RENDER_EXTERNAL_URL || process.env.SELF_PING_URL || 'https://pulsechat-xzul.onrender.com';
+      const renderUrl = process.env.RENDER_EXTERNAL_URL || process.env.SELF_PING_URL || 'https://pulsechat-api-v2.onrender.com';
       if (renderUrl) {
         console.log(`Keep-Alive activated for: ${renderUrl}`);
         setInterval(() => {
