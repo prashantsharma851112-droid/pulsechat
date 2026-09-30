@@ -9,7 +9,23 @@ import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 
 export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
-  const vibes = vibeGroup?.vibes || [];
+  
+  // Strictly deduplicate and sort vibes: newest first (jo new lagaya vo aage), oldest last (jo pehle lagaya tha vo last)
+  const vibes = React.useMemo(() => {
+    const raw = vibeGroup?.vibes || [];
+    const seen = new Set();
+    const clean = [];
+    raw.forEach(v => {
+      const contentKey = `${v.caption || ''}_${v.mediaUrl || ''}_${Math.floor(new Date(v.createdAt).getTime() / 25000)}`;
+      if (!seen.has(v.id) && !seen.has(contentKey)) {
+        seen.add(v.id);
+        seen.add(contentKey);
+        clean.push(v);
+      }
+    });
+    clean.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return clean;
+  }, [vibeGroup?.vibes]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [sparksMsg, setSparksMsg] = useState('');

@@ -82,10 +82,17 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
       Object.values(localMap).forEach(localGrp => {
         const existingIdx = combinedGroups.findIndex(g => isMyId(g.userId) ? isMyId(localGrp.userId) : (g.userId === localGrp.userId || (g.username && g.username === localGrp.username)));
         if (existingIdx >= 0) {
-          const existingVibes = combinedGroups[existingIdx].vibes || [];
-          const existingIds = new Set(existingVibes.map(v => v.id));
-          const newVibes = localGrp.vibes.filter(v => !existingIds.has(v.id));
-          combinedGroups[existingIdx].vibes = [...newVibes, ...existingVibes];
+          const currentList = combinedGroups[existingIdx].vibes || [];
+          const merged = [...localGrp.vibes, ...currentList];
+          const uniqueVibes = [];
+          merged.forEach(v => {
+            const isDup = uniqueVibes.some(uv => 
+              uv.id === v.id || 
+              (uv.caption === v.caption && uv.mediaUrl === v.mediaUrl && Math.abs(new Date(uv.createdAt).getTime() - new Date(v.createdAt).getTime()) < 25000)
+            );
+            if (!isDup) uniqueVibes.push(v);
+          });
+          combinedGroups[existingIdx].vibes = uniqueVibes;
         } else {
           if (isMyId(localGrp.userId)) {
             combinedGroups.unshift(localGrp);
@@ -96,6 +103,28 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
       });
     }
 
+    // STRICT DEDUPLICATION AND CHRONOLOGICAL SORTING FOR EVERY GROUP:
+    // Jo new lagaya vo aage (newest first, index 0), jo pehle lagaya tha vo last (oldest last)!
+    combinedGroups.forEach(grp => {
+      if (Array.isArray(grp.vibes)) {
+        const seen = new Set();
+        const cleanList = [];
+        grp.vibes.forEach(v => {
+          const contentKey = `${v.caption || ''}_${v.mediaUrl || ''}_${Math.floor(new Date(v.createdAt).getTime() / 25000)}`;
+          if (!seen.has(v.id) && !seen.has(contentKey)) {
+            seen.add(v.id);
+            seen.add(contentKey);
+            cleanList.push(v);
+          }
+        });
+        // Sort newest first (b.createdAt - a.createdAt)
+        cleanList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        grp.vibes = cleanList;
+      }
+    });
+
+    // Remove empty groups and ensure my group is at the top
+    combinedGroups = combinedGroups.filter(g => g.vibes && g.vibes.length > 0);
     setGroupedVibes(combinedGroups);
   };
 

@@ -9,6 +9,7 @@ const User = require('../models/User');
 router.post('/create', authMiddleware, async (req, res) => {
   try {
     const {
+      id,
       mediaUrl, caption, soundtrack, songTitle, artistName, albumArt, audioUrl, youtubeId, songStartTime,
       bgGradient, textStyle3D, animatedBg, textPos, musicPos, imagePos, imageFit, imageZoom,
       imageFilter, imageOpacity, textSize, textAlign, selectedStickers
@@ -30,7 +31,24 @@ router.post('/create', authMiddleware, async (req, res) => {
 
     const resolvedUserId = user.id || (user._id ? user._id.toString() : targetUserId);
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
-    const vibeId = 'vibe_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    const vibeId = id || ('vibe_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
+
+    // Duplicate guard: prevent duplicate submission within 15s
+    const existingRecent = await Vibe.findOne({
+      userId: resolvedUserId,
+      $or: [
+        { id: vibeId },
+        {
+          createdAt: { $gt: new Date(Date.now() - 15000) },
+          caption: (caption || '').trim(),
+          mediaUrl: mediaUrl || null
+        }
+      ]
+    }).lean();
+
+    if (existingRecent) {
+      return res.json({ success: true, vibe: existingRecent });
+    }
 
     const newVibe = await Vibe.create({
       id: vibeId,
@@ -117,7 +135,7 @@ router.get('/active', authMiddleware, async (req, res) => {
       });
     }
 
-    // Group stories by userId
+    // Group stories by userId and strictly deduplicate & sort
     const groupedMap = new Map();
     activeVibes.forEach(v => {
       const uKey = v.userId || (v.username ? `user_${v.username}` : 'unknown_user');
@@ -135,10 +153,23 @@ router.get('/active', authMiddleware, async (req, res) => {
           vibes: []
         });
       }
-      groupedMap.get(uKey).vibes.push(v);
+
+      const existingInGroup = groupedMap.get(uKey).vibes.some(ev => 
+        ev.id === v.id ||
+        (ev.caption === v.caption && ev.mediaUrl === v.mediaUrl && Math.abs(new Date(ev.createdAt).getTime() - new Date(v.createdAt).getTime()) < 20000)
+      );
+
+      if (!existingInGroup) {
+        groupedMap.get(uKey).vibes.push(v);
+      }
     });
 
-    const result = Array.from(groupedMap.values());
+    // Ensure vibes for every user are sorted: newest first (jo new lagaya vo aage), oldest last (jo pehle lagaya tha vo last)
+    groupedMap.forEach(grp => {
+      grp.vibes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    });
+
+    const result = Array.from(groupedMap.values()).filter(g => g.vibes && g.vibes.length > 0);
     res.json(result);
   } catch (err) {
     console.error('Error fetching active vibes:', err);
@@ -175,12 +206,25 @@ router.get('/user/:userId', authMiddleware, async (req, res) => {
       ]
     }).sort({ createdAt: -1 }).lean();
 
+    // Deduplicate and sort newest first
+    const seen = new Set();
+    const cleanVibes = [];
+    vibes.forEach(v => {
+      const contentKey = `${v.caption || ''}_${v.mediaUrl || ''}_${Math.floor(new Date(v.createdAt).getTime() / 20000)}`;
+      if (!seen.has(v.id) && !seen.has(contentKey)) {
+        seen.add(v.id);
+        seen.add(contentKey);
+        cleanVibes.push(v);
+      }
+    });
+    cleanVibes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
     res.json({
       userId: user?.id || userId,
       displayName: user?.displayName || user?.username || 'User',
       username: user?.username || '',
       avatar: user?.avatar || '',
-      vibes
+      vibes: cleanVibes
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch user vibes' });

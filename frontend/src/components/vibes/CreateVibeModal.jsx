@@ -403,6 +403,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   // Submit Vibe
   const handleSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
+    if (submitting) return; // Prevent double/triple click duplicate submission
+
     if (!caption.trim() && !mediaUrl && !selectedSong) {
       setError('Please add text, photo, or music to post your Vibe!');
       return;
@@ -411,8 +413,9 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     setSubmitting(true);
     setError('');
 
-    const newVibe = {
-      id: 'vibe_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+    const vibeId = 'vibe_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    let createdVibe = {
+      id: vibeId,
       userId: user?.id || user?._id || 'local_user',
       username: user?.username || 'you',
       displayName: user?.displayName || user?.username || 'You',
@@ -447,13 +450,14 @@ export default function CreateVibeModal({ onClose, onCreated }) {
 
     if (token) {
       try {
-        await fetch(`${BACKEND_URL}/api/vibes/create`, {
+        const res = await fetch(`${BACKEND_URL}/api/vibes/create`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`
           },
           body: JSON.stringify({
+            id: vibeId,
             caption: caption.trim(),
             mediaUrl: mediaUrl || null,
             soundtrack: selectedSong ? 'music_track' : 'lofi',
@@ -478,6 +482,12 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             selectedStickers
           })
         });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.vibe) {
+            createdVibe = data.vibe;
+          }
+        }
       } catch (err) {
         console.warn('Network story sync offline, cached locally.');
       }
@@ -486,8 +496,15 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     try {
       const raw = localStorage.getItem('pulsechat_local_vibes');
       const existing = raw ? JSON.parse(raw) : [];
-      existing.unshift(newVibe);
-      localStorage.setItem('pulsechat_local_vibes', JSON.stringify(existing));
+      // Deduplicate: filter out any vibe with the same ID or identical content within 25 seconds
+      const filtered = existing.filter(v => 
+        v.id !== createdVibe.id && 
+        !(v.userId === createdVibe.userId && v.caption === createdVibe.caption && v.mediaUrl === createdVibe.mediaUrl && Math.abs(new Date(v.createdAt).getTime() - new Date(createdVibe.createdAt).getTime()) < 25000)
+      );
+      filtered.unshift(createdVibe);
+      // Ensure newest first (jo new lagaya vo aage, jo pehle lagaya tha vo last)
+      filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      localStorage.setItem('pulsechat_local_vibes', JSON.stringify(filtered));
     } catch (err) {}
 
     window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
