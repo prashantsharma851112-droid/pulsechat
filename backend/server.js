@@ -21,6 +21,7 @@ const paymentRoutes = require('./routes/payments');
 const adminRoutes = require('./routes/admin');
 const vibeRoutes = require('./routes/vibes');
 const zoneRoutes = require('./routes/zone');
+const legalRoutes = require('./routes/legal');
 const { uploadToCloudinary } = require('./utils/cloudinary');
 const { checkAndUpdateFileQuota } = require('./utils/fileQuota');
 const redis = require('./utils/redis');
@@ -59,6 +60,8 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/vibes', vibeRoutes);
 app.use('/api/zone', zoneRoutes);
+app.use('/', legalRoutes); // Public Google Play URLs: /privacy, /terms
+app.use('/api', legalRoutes);
 
 // Health check endpoint for uptime monitoring & 0ms keep-alive
 app.get('/api/health', (req, res) => {
