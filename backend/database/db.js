@@ -598,6 +598,9 @@ module.exports = {
         query.receiverId = { $nin: disabledIds };
       }
 
+      // Purge messages matching the auto-cleanup query
+      const result = await Message.deleteMany(query);
+
       // Also purge expired 24h vibes automatically
       try {
         const Vibe = require('../models/Vibe');
@@ -610,8 +613,8 @@ module.exports = {
         });
       } catch (ve) {}
 
-      console.log(`[Auto-Cleanup Job] Successfully purged ${result.deletedCount || 0} old messages (${days}+ days old).`);
-      return { success: true, deletedCount: result.deletedCount || 0 };
+      console.log(`[Auto-Cleanup Job] Successfully purged ${result?.deletedCount || 0} old messages (${days}+ days old).`);
+      return { success: true, deletedCount: result?.deletedCount || 0 };
     } catch (err) {
       console.error('[Auto-Cleanup Job] Error performing cleanup:', err);
       return { success: false, error: err.message, deletedCount: 0 };
