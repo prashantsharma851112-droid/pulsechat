@@ -247,6 +247,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     setMediaUrl(dataUrl);
     stopCameraStream();
     setViewMode('canvas');
+    setActivePanel('image_adjust');
   };
 
   // File Upload from Gallery
@@ -288,6 +289,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     if (uploadedUrl) {
       setMediaUrl(uploadedUrl);
       setViewMode('canvas');
+      setActivePanel('image_adjust');
     }
   };
 
@@ -777,30 +779,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             <Music size={14} color="#10b981" /> {selectedSong ? '🎵 ' + selectedSong.songTitle.substring(0, 10) + '...' : 'Add Music'}
           </button>
 
-          {/* 5. 250+ Emojis Button */}
-          <button
-            type="button"
-            onClick={() => setActivePanel(activePanel === 'stickers' ? null : 'stickers')}
-            style={{
-              background: activePanel === 'stickers' ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255,255,255,0.06)',
-              border: activePanel === 'stickers' ? '1px solid #eab308' : '1px solid rgba(255,255,255,0.12)',
-              color: activePanel === 'stickers' ? '#fef08a' : '#fff',
-              borderRadius: '12px',
-              padding: '6px 12px',
-              fontSize: '0.76rem',
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              flexShrink: 0
-            }}
-          >
-            <Smile size={14} color="#eab308" /> Emojis ({selectedStickers.length || '250+'})
-          </button>
-
-          {/* 6. Gallery Pick Button */}
+          {/* 5. Gallery Pick Button */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -823,30 +802,54 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             <ImageIcon size={14} color="#38bdf8" /> {mediaUrl ? 'Change Photo' : 'Gallery'}
           </button>
 
-          {/* 7. Image FX Controls Button (when media exists) */}
+          {/* 6. Image FX Controls Button (Prominently shown when photo is present) */}
           {mediaUrl && (
             <button
               type="button"
               onClick={() => setActivePanel(activePanel === 'image_adjust' ? null : 'image_adjust')}
               style={{
-                background: activePanel === 'image_adjust' ? 'rgba(168, 85, 247, 0.3)' : 'rgba(255,255,255,0.06)',
-                border: activePanel === 'image_adjust' ? '1px solid #a855f7' : '1px solid rgba(255,255,255,0.12)',
-                color: activePanel === 'image_adjust' ? '#d8b4fe' : '#fff',
+                background: activePanel === 'image_adjust' ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.45), rgba(236, 72, 153, 0.35))' : 'rgba(168, 85, 247, 0.22)',
+                border: activePanel === 'image_adjust' ? '1.5px solid #d8b4fe' : '1.5px solid #a855f7',
+                color: '#fff',
                 borderRadius: '12px',
-                padding: '6px 12px',
-                fontSize: '0.76rem',
+                padding: '6px 14px',
+                fontSize: '0.78rem',
                 fontWeight: 800,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
-                flexShrink: 0
+                flexShrink: 0,
+                boxShadow: activePanel === 'image_adjust' ? '0 0 16px rgba(168, 85, 247, 0.6)' : '0 0 10px rgba(168, 85, 247, 0.35)'
               }}
             >
-              <SlidersHorizontal size={14} color="#a855f7" /> Image FX
+              <SlidersHorizontal size={14} color="#d8b4fe" /> Image FX ✨
             </button>
           )}
+
+          {/* 7. Emojis Button (Clean "Emojis" without 250+) */}
+          <button
+            type="button"
+            onClick={() => setActivePanel(activePanel === 'stickers' ? null : 'stickers')}
+            style={{
+              background: activePanel === 'stickers' ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255,255,255,0.06)',
+              border: activePanel === 'stickers' ? '1px solid #eab308' : '1px solid rgba(255,255,255,0.12)',
+              color: activePanel === 'stickers' ? '#fef08a' : '#fff',
+              borderRadius: '12px',
+              padding: '6px 12px',
+              fontSize: '0.76rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+          >
+            <Smile size={14} color="#eab308" /> Emojis{selectedStickers.length > 0 ? ` (${selectedStickers.length})` : ''}
+          </button>
         </div>
 
         {/* =========================================================================
