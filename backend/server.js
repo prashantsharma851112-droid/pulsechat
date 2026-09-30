@@ -800,18 +800,39 @@ io.on('connection', (socket) => {
   });
 
   // Stealth Dust Note Dissolve Handler (Permanent Deletion)
-  socket.on('dissolve_stealth_dust', async ({ chatId, messageId }) => {
+  socket.on('dissolve_stealth_dust', async ({ chatId, messageId, messageMongoId, clientTempId }) => {
     try {
+      const orConditions = [];
       if (messageId) {
-        await Message.deleteMany({ $or: [{ id: messageId }, { _id: messageId }, { clientTempId: messageId }] });
+        orConditions.push({ id: String(messageId) });
+        orConditions.push({ clientTempId: String(messageId) });
+        if (mongoose.Types.ObjectId.isValid(String(messageId))) {
+          orConditions.push({ _id: new mongoose.Types.ObjectId(String(messageId)) });
+        }
       }
+      if (clientTempId) {
+        orConditions.push({ id: String(clientTempId) });
+        orConditions.push({ clientTempId: String(clientTempId) });
+        if (mongoose.Types.ObjectId.isValid(String(clientTempId))) {
+          orConditions.push({ _id: new mongoose.Types.ObjectId(String(clientTempId)) });
+        }
+      }
+      if (messageMongoId && mongoose.Types.ObjectId.isValid(String(messageMongoId))) {
+        orConditions.push({ _id: new mongoose.Types.ObjectId(String(messageMongoId)) });
+      }
+
+      if (orConditions.length > 0) {
+        await Message.deleteMany({ $or: orConditions });
+      }
+
       if (chatId) {
-        await redis.deleteCachedMessages(chatId).catch(() => {});
+        await redis.invalidateChat(chatId).catch(() => {});
         if (chatId.includes('_')) {
           const parts = chatId.split('_');
-          await redis.deleteCachedMessages([parts[1], parts[0]].join('_')).catch(() => {});
-          await redis.deleteCachedMessages(parts[0]).catch(() => {});
-          await redis.deleteCachedMessages(parts[1]).catch(() => {});
+          const revChatId = [parts[1], parts[0]].join('_');
+          await redis.invalidateChat(revChatId).catch(() => {});
+          await redis.invalidateChat(parts[0]).catch(() => {});
+          await redis.invalidateChat(parts[1]).catch(() => {});
           redis.invalidateRecent(parts[0]).catch(() => {});
           redis.invalidateRecent(parts[1]).catch(() => {});
         }
@@ -819,7 +840,7 @@ io.on('connection', (socket) => {
     } catch (e) {
       console.warn('Stealth dust deletion error:', e.message);
     }
-    const payload = { chatId, messageId };
+    const payload = { chatId, messageId, messageMongoId, clientTempId };
     if (chatId) io.to(chatId).emit('stealth_dust_dissolved', payload);
     if (chatId && chatId.includes('_')) {
       const parts = chatId.split('_');

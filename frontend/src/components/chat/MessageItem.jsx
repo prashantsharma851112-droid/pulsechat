@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
+import { BACKEND_URL } from '../../utils/config';
 import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
@@ -15,35 +16,44 @@ function StealthDustCard({ message, chatId, isMine, socket }) {
   const [countdown, setCountdown] = useState(5);
   const [isDissolving, setIsDissolving] = useState(false);
   const timerRef = useRef(null);
+  const isRevealingRef = useRef(false);
+  const isDissolvingRef = useRef(false);
 
-  const startReveal = () => {
-    if (isDissolving) return;
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  const startReveal = (e) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    if (isDissolvingRef.current || isRevealingRef.current) return;
+    isRevealingRef.current = true;
     setIsRevealing(true);
-    if (!timerRef.current) {
-      timerRef.current = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            dissolve();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-  };
+    setCountdown(5);
 
-  const endReveal = () => {
-    if (isRevealing) {
-      dissolve();
-    }
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          dissolve();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   };
 
   const dissolve = () => {
-    if (isDissolving) return;
+    if (isDissolvingRef.current) return;
+    isDissolvingRef.current = true;
     setIsDissolving(true);
     if (timerRef.current) clearInterval(timerRef.current);
-    
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
         detail: { emoji: '⚡', count: 25 }
@@ -76,61 +86,94 @@ function StealthDustCard({ message, chatId, isMine, socket }) {
           'Content-Type': 'application/json',
           ...(rawToken ? { Authorization: `Bearer ${rawToken}` } : {})
         },
-        body: JSON.stringify({ chatId, messageId: message.id, messageMongoId: message._id, clientTempId: message.clientTempId })
+        body: JSON.stringify(payload)
       }).catch(() => {});
     } catch (e) {}
   };
 
   if (isDissolving) {
     return (
-      <div style={{ opacity: 0.3, filter: 'blur(8px)', transition: 'all 0.5s ease', padding: '10px 14px', fontStyle: 'italic', fontSize: '0.8rem', color: '#f59e0b' }}>
-        ⚡ Dissolving into digital dust...
+      <div style={{ opacity: 0.4, filter: 'blur(8px)', transition: 'all 0.5s ease', padding: '12px 16px', fontStyle: 'italic', fontSize: '0.8rem', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        ⚡ Dissolved into digital dust...
       </div>
     );
   }
 
   return (
     <div
-      onMouseDown={startReveal}
-      onMouseUp={endReveal}
-      onTouchStart={startReveal}
-      onTouchEnd={endReveal}
+      onClick={!isRevealing ? startReveal : undefined}
       style={{
-        background: 'rgba(15, 23, 42, 0.95)',
-        border: '1px solid rgba(245, 158, 11, 0.4)',
-        boxShadow: isRevealing ? '0 0 16px rgba(245, 158, 11, 0.6)' : '0 2px 8px rgba(0,0,0,0.3)',
-        borderRadius: '12px',
-        padding: '10px 12px',
+        background: isRevealing ? 'rgba(15, 23, 42, 0.98)' : 'rgba(15, 23, 42, 0.92)',
+        border: isRevealing ? '1px solid rgba(245, 158, 11, 0.8)' : '1px solid rgba(245, 158, 11, 0.4)',
+        boxShadow: isRevealing ? '0 0 20px rgba(245, 158, 11, 0.5), inset 0 0 12px rgba(245, 158, 11, 0.1)' : '0 2px 10px rgba(0,0,0,0.3)',
+        borderRadius: '14px',
+        padding: '12px 14px',
         color: '#fff',
         userSelect: 'none',
         WebkitUserSelect: 'none',
-        cursor: 'pointer',
-        transition: 'all 0.2s ease',
-        minWidth: '190px'
+        cursor: isRevealing ? 'default' : 'pointer',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        minWidth: '220px',
+        maxWidth: '320px',
+        position: 'relative',
+        overflow: 'hidden'
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '4px' }}>
-        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+        <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '5px', letterSpacing: '0.5px' }}>
           ⚡ DUST TEXT
         </span>
-        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#94a3b8', background: 'rgba(255,255,255,0.1)', padding: '1px 6px', borderRadius: '8px' }}>
-          {isRevealing ? `${countdown}s` : 'HOLD TO REVEAL'}
+        <span style={{
+          fontSize: '0.68rem',
+          fontWeight: 700,
+          color: isRevealing ? '#ef4444' : '#fbbf24',
+          background: isRevealing ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+          border: isRevealing ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
+          padding: '2px 8px',
+          borderRadius: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px'
+        }}>
+          {isRevealing ? `💥 ${countdown}s` : '🔒 TAP TO REVEAL'}
         </span>
       </div>
 
+      {/* Progress Bar when revealing */}
+      {isRevealing && (
+        <div style={{ height: '3px', width: '100%', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden', marginBottom: '8px' }}>
+          <div style={{
+            height: '100%',
+            width: `${(countdown / 5) * 100}%`,
+            background: 'linear-gradient(90deg, #f59e0b, #ef4444)',
+            transition: 'width 1s linear'
+          }} />
+        </div>
+      )}
+
+      {/* Secret Message Content */}
       <div style={{
-        filter: isRevealing ? 'none' : 'blur(6px)',
-        transition: 'filter 0.2s ease',
-        fontSize: '0.9rem',
+        filter: isRevealing ? 'none' : 'blur(7px)',
+        transition: 'filter 0.3s ease',
+        fontSize: '0.92rem',
+        lineHeight: 1.4,
         wordBreak: 'break-word',
-        fontFamily: isRevealing ? 'inherit' : 'monospace'
+        fontFamily: isRevealing ? 'inherit' : 'monospace',
+        padding: '2px 0',
+        minHeight: '22px'
       }}>
         {message.content}
       </div>
 
-      {!isRevealing && (
-        <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '6px', textAlign: 'center', fontStyle: 'italic' }}>
-          👁️ Press & Hold to unblur (Self-destructs after reveal)
+      {/* Bottom Hint */}
+      {!isRevealing ? (
+        <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '8px', textAlign: 'center', fontStyle: 'italic', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+          👁️ Tap to read (Self-destructs in 5s once opened)
+        </div>
+      ) : (
+        <div style={{ fontSize: '0.65rem', color: '#ef4444', marginTop: '6px', textAlign: 'right', fontWeight: 600 }}>
+          Self-destructing in {countdown}s...
         </div>
       )}
     </div>

@@ -175,14 +175,28 @@ export function SocketProvider({ children }) {
       newSocket.on('stealth_dust_dissolved', (data) => {
         try {
           window.dispatchEvent(new CustomEvent('pulsechat_stealth_dust_dissolved', { detail: data }));
-          if (data?.chatId && data?.messageId) {
-            const raw = localStorage.getItem(`pulsechat_msgs_${data.chatId}`);
-            if (raw) {
-              const msgs = JSON.parse(raw);
-              if (Array.isArray(msgs)) {
-                const updated = msgs.filter(m => m.id !== data.messageId);
-                localStorage.setItem(`pulsechat_msgs_${data.chatId}`, JSON.stringify(updated));
+          if (data?.chatId) {
+            const targetIds = [data.messageId, data.messageMongoId, data.clientTempId].filter(Boolean).map(String);
+            if (targetIds.length > 0) {
+              const keys = [`pulsechat_msgs_${data.chatId}`];
+              if (data.chatId.includes('_')) {
+                const parts = data.chatId.split('_');
+                keys.push(`pulsechat_msgs_${parts[1]}_${parts[0]}`);
               }
+              keys.forEach(k => {
+                const raw = localStorage.getItem(k);
+                if (raw) {
+                  const msgs = JSON.parse(raw);
+                  if (Array.isArray(msgs)) {
+                    const updated = msgs.filter(m =>
+                      !targetIds.includes(String(m.id)) &&
+                      !targetIds.includes(String(m._id)) &&
+                      (!m.clientTempId || !targetIds.includes(String(m.clientTempId)))
+                    );
+                    localStorage.setItem(k, JSON.stringify(updated));
+                  }
+                }
+              });
             }
           }
         } catch (e) {}

@@ -106,6 +106,11 @@ const redis = {
     await this.del(`pulse_chat_msgs:${chatId}`);
   },
 
+  // delete cached messages (alias for invalidateChat)
+  async deleteCachedMessages(chatId) {
+    return await this.invalidateChat(chatId);
+  },
+
   // get cached recent chats
   async getCachedRecent(userId) {
     if (!userId) return null;

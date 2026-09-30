@@ -472,26 +472,50 @@ router.get('/youtube-search', authMiddleware, async (req, res) => {
 router.post('/dissolve-dust/:messageId', authMiddleware, async (req, res) => {
   try {
     const { messageId } = req.params;
-    const { chatId } = req.body;
+    const { chatId, messageMongoId, clientTempId } = req.body || {};
     const Message = require('../models/Message');
     const redis = require('../utils/redis');
+    const mongoose = require('mongoose');
 
-    await Message.deleteMany({ $or: [{ id: messageId }, { _id: messageId }, { clientTempId: messageId }] });
+    const orConditions = [];
+    if (messageId) {
+      orConditions.push({ id: String(messageId) });
+      orConditions.push({ clientTempId: String(messageId) });
+      if (mongoose.Types.ObjectId.isValid(String(messageId))) {
+        orConditions.push({ _id: new mongoose.Types.ObjectId(String(messageId)) });
+      }
+    }
+    if (clientTempId) {
+      orConditions.push({ id: String(clientTempId) });
+      orConditions.push({ clientTempId: String(clientTempId) });
+      if (mongoose.Types.ObjectId.isValid(String(clientTempId))) {
+        orConditions.push({ _id: new mongoose.Types.ObjectId(String(clientTempId)) });
+      }
+    }
+    if (messageMongoId && mongoose.Types.ObjectId.isValid(String(messageMongoId))) {
+      orConditions.push({ _id: new mongoose.Types.ObjectId(String(messageMongoId)) });
+    }
+
+    if (orConditions.length > 0) {
+      await Message.deleteMany({ $or: orConditions });
+    }
+
     if (chatId) {
-      await redis.deleteCachedMessages(chatId).catch(() => {});
+      await redis.invalidateChat(chatId).catch(() => {});
       if (chatId.includes('_')) {
         const parts = chatId.split('_');
-        await redis.deleteCachedMessages([parts[1], parts[0]].join('_')).catch(() => {});
-        await redis.deleteCachedMessages(parts[0]).catch(() => {});
-        await redis.deleteCachedMessages(parts[1]).catch(() => {});
+        const revChatId = [parts[1], parts[0]].join('_');
+        await redis.invalidateChat(revChatId).catch(() => {});
+        await redis.invalidateChat(parts[0]).catch(() => {});
+        await redis.invalidateChat(parts[1]).catch(() => {});
         redis.invalidateRecent(parts[0]).catch(() => {});
         redis.invalidateRecent(parts[1]).catch(() => {});
       }
     }
 
     const io = req.app.get('io');
+    const payload = { chatId, messageId, messageMongoId, clientTempId };
     if (io && chatId) {
-      const payload = { chatId, messageId };
       io.to(chatId).emit('stealth_dust_dissolved', payload);
       if (chatId.includes('_')) {
         const parts = chatId.split('_');

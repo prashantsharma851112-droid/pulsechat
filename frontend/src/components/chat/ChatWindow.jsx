@@ -780,6 +780,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           );
           try {
             setCachedMessages(chatId, updated);
+            localStorage.setItem(`pulsechat_msgs_${chatId}`, JSON.stringify(updated));
+            if (chatId.includes('_')) {
+              const parts = chatId.split('_');
+              localStorage.setItem(`pulsechat_msgs_${parts[1]}_${parts[0]}`, JSON.stringify(updated));
+            }
+            if (updated.length > 0 && user?.id) {
+              const lastMsg = updated[updated.length - 1];
+              updateRecentChatSnippet(user.id, chatId, lastMsg, activeChat);
+            }
           } catch (err) {}
           return updated;
         });
