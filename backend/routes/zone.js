@@ -262,11 +262,11 @@ router.get('/my-score', authMiddleware, async (req, res) => {
   }
 });
 
-// Set / Restore User's Level in Database
+// Set / Restore User's Level in Database (Strictly verified and capped to max unlocked level)
 router.post('/set-level', authMiddleware, async (req, res) => {
   try {
     const { level } = req.body;
-    const targetLevel = Math.max(1, parseInt(level || '1', 10));
+    const requestedLevel = Math.max(1, parseInt(level || '1', 10));
     const userId = req.userId || req.user?.id || req.user?.userId;
     const isObjectId = mongoose.Types.ObjectId.isValid(userId);
     const user = await User.findOne({
@@ -280,18 +280,34 @@ router.post('/set-level', authMiddleware, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
     const resolvedUserId = user.id || (user._id ? user._id.toString() : userId);
 
+    const existingScoreDoc = await GameScore.findOne({ userId: resolvedUserId }).lean();
+    const maxUnlocked = existingScoreDoc ? Math.max(1, existingScoreDoc.level || 1) : 1;
+
+    // Anti-cheat verification: User CANNOT jump to a level they haven't unlocked yet
+    if (requestedLevel > maxUnlocked) {
+      return res.status(403).json({
+        error: `Aap sirf apne verified unlocked level (${maxUnlocked}) tak hi select/restore kar sakte hain! Aage ke level khel kar unlock karein.`,
+        maxUnlocked
+      });
+    }
+
     const doc = await GameScore.findOneAndUpdate(
       { userId: resolvedUserId },
       {
         $set: {
           displayName: user.displayName || user.username || 'Player',
           gameName: 'Arrow Puzzle',
-          level: targetLevel,
+          level: requestedLevel,
           updatedAt: new Date()
         }
       },
       { upsert: true, new: true }
     );
+
+    const io = req.app.get('io');
+    if (io) {
+      await syncLeaderboardRankCrowns(io);
+    }
 
     res.json({ success: true, level: doc.level });
   } catch (err) {
@@ -334,7 +350,9 @@ router.post('/game-score', authMiddleware, async (req, res) => {
 
     if (existingScoreDoc) {
       newTotalScore = Math.max(existingScoreDoc.score + rawScore, rawScore);
-      newLevel = Math.max(existingScoreDoc.level || 1, rawLevel);
+      // Anti-cheat verification: Level can at most advance by 1 level per completed game
+      const maxAllowedLevel = (existingScoreDoc.level || 1) + 1;
+      newLevel = Math.min(Math.max(existingScoreDoc.level || 1, rawLevel), maxAllowedLevel);
       newGamesCount = (existingScoreDoc.gamesPlayed || 1) + 1;
 
       await GameScore.findOneAndUpdate(
