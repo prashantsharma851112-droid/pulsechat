@@ -146,17 +146,20 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
       })
         .then(r => r.json())
         .then(data => {
-          if (data && data.success && data.level) {
+          if (data && data.success) {
             const backendLvl = parseInt(data.level, 10);
+            const backendMax = parseInt(data.maxUnlockedLevel || data.level, 10);
+            if (!isNaN(backendMax) && backendMax >= 1) {
+              setMaxUnlockedLevel(backendMax);
+              try {
+                localStorage.setItem('pulsechat_arrow_max_level', backendMax.toString());
+              } catch (e) {}
+            }
             if (!isNaN(backendLvl) && backendLvl >= 1) {
-              // Server is the authoritative source of truth for max unlocked level
               setLevel(backendLvl);
-              setMaxUnlockedLevel(backendLvl);
               try {
                 localStorage.setItem('pulsechat_arrow_level', backendLvl.toString());
-                localStorage.setItem('pulsechat_arrow_max_level', backendLvl.toString());
               } catch (e) {}
-              return;
             }
           }
         })
@@ -255,17 +258,16 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
   const handleJumpToLevel = (targetLvl) => {
     const rawNum = parseInt(targetLvl, 10);
     if (isNaN(rawNum) || rawNum < 1) return;
-    const num = Math.min(rawNum, 500);
 
+    // Strict Anti-Cheat Verification: User CANNOT jump beyond verified max unlocked level
+    if (rawNum > maxUnlockedLevel) {
+      setRestoreNotification(`⚠️ Aap sirf apne verified level (${maxUnlockedLevel}) tak hi select/restore kar sakte hain! Aage ke levels khel kar unlock karein.`);
+      setTimeout(() => setRestoreNotification(''), 4500);
+      return;
+    }
+
+    const num = rawNum;
     setLevel(num);
-    setMaxUnlockedLevel(prev => {
-      const nextMax = Math.max(prev, num);
-      try {
-        localStorage.setItem('pulsechat_arrow_max_level', nextMax.toString());
-      } catch (e) {}
-      return nextMax;
-    });
-
     try {
       localStorage.setItem('pulsechat_arrow_level', num.toString());
     } catch (e) {}
@@ -285,6 +287,12 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
           if (resData.error) {
             setRestoreNotification(`⚠️ ${resData.error}`);
             setTimeout(() => setRestoreNotification(''), 4000);
+          }
+          if (resData.maxUnlockedLevel) {
+            setMaxUnlockedLevel(resData.maxUnlockedLevel);
+            try {
+              localStorage.setItem('pulsechat_arrow_max_level', resData.maxUnlockedLevel.toString());
+            } catch (e) {}
           }
         })
         .catch(() => {});
@@ -1131,7 +1139,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
             </div>
 
             <p style={{ margin: '0 0 14px 0', fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.4 }}>
-              Apna koi bhi level (1 se 500) enter karke continue karein ya neeche quick options par tap karein:
+              Aap sirf apne verified unlocked levels (1 se {maxUnlockedLevel}) tak hi select/restore kar sakte hain:
             </p>
 
             <form
@@ -1144,10 +1152,10 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
               <input
                 type="number"
                 min="1"
-                max="500"
+                max={maxUnlockedLevel}
                 value={inputLevelValue}
                 onChange={(e) => setInputLevelValue(e.target.value)}
-                placeholder="Enter level (1 - 500)"
+                placeholder={`1 - ${maxUnlockedLevel}`}
                 autoFocus
                 style={{
                   flex: 1,
@@ -1184,7 +1192,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
 
             {/* Quick Jumps / Verified Options */}
             <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
-              Quick Select Options
+              Verified Unlocked Options
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -1205,58 +1213,83 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                 🔄 Level 1
               </button>
 
-              <button
-                type="button"
-                onClick={() => handleJumpToLevel(50)}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: '#cbd5e1',
-                  borderRadius: '12px',
-                  padding: '6px 12px',
-                  fontSize: '0.8rem',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                Lvl 50
-              </button>
+              {level > 1 && level !== maxUnlockedLevel && (
+                <button
+                  type="button"
+                  onClick={() => handleJumpToLevel(level)}
+                  style={{
+                    background: 'rgba(59, 130, 246, 0.2)',
+                    border: '1px solid #3b82f6',
+                    color: '#93c5fd',
+                    borderRadius: '12px',
+                    padding: '6px 12px',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  📍 Current: Lvl {level}
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => handleJumpToLevel(100)}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: '#cbd5e1',
-                  borderRadius: '12px',
-                  padding: '6px 12px',
-                  fontSize: '0.8rem',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                Lvl 100
-              </button>
+              {maxUnlockedLevel >= 50 && (
+                <button
+                  type="button"
+                  onClick={() => handleJumpToLevel(50)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#cbd5e1',
+                    borderRadius: '12px',
+                    padding: '6px 12px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Lvl 50
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => handleJumpToLevel(114)}
-                style={{
-                  background: 'rgba(245, 158, 11, 0.2)',
-                  border: '1px solid #f59e0b',
-                  color: '#fbbf24',
-                  borderRadius: '12px',
-                  padding: '6px 12px',
-                  fontSize: '0.8rem',
-                  fontWeight: 800,
-                  cursor: 'pointer'
-                }}
-              >
-                🔥 Level 114
-              </button>
+              {maxUnlockedLevel >= 100 && (
+                <button
+                  type="button"
+                  onClick={() => handleJumpToLevel(100)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#cbd5e1',
+                    borderRadius: '12px',
+                    padding: '6px 12px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Lvl 100
+                </button>
+              )}
 
-              {maxUnlockedLevel > 1 && maxUnlockedLevel !== 114 && (
+              {maxUnlockedLevel >= 114 && (
+                <button
+                  type="button"
+                  onClick={() => handleJumpToLevel(114)}
+                  style={{
+                    background: 'rgba(245, 158, 11, 0.2)',
+                    border: '1px solid #f59e0b',
+                    color: '#fbbf24',
+                    borderRadius: '12px',
+                    padding: '6px 12px',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  🔥 Level 114
+                </button>
+              )}
+
+              {maxUnlockedLevel > 1 && (
                 <button
                   type="button"
                   onClick={() => handleJumpToLevel(maxUnlockedLevel)}

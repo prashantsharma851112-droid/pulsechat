@@ -254,6 +254,7 @@ router.get('/my-score', authMiddleware, async (req, res) => {
     res.json({
       success: true,
       level: scoreDoc?.level || 1,
+      maxUnlockedLevel: scoreDoc?.maxUnlockedLevel || scoreDoc?.level || 1,
       score: scoreDoc?.score || 0,
       gamesPlayed: scoreDoc?.gamesPlayed || 0
     });
@@ -262,7 +263,7 @@ router.get('/my-score', authMiddleware, async (req, res) => {
   }
 });
 
-// Set / Restore User's Level in Database (Safe cap up to 500 to allow restoring progress)
+// Set / Restore User's Level in Database (Strictly verified and capped to max verified unlocked level)
 router.post('/set-level', authMiddleware, async (req, res) => {
   try {
     const { level } = req.body;
@@ -280,8 +281,16 @@ router.post('/set-level', authMiddleware, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
     const resolvedUserId = user.id || (user._id ? user._id.toString() : userId);
 
-    // Safe ceiling (500) to allow genuine progress / restores while preventing absurd 99999 exploits
-    const safeTargetLevel = Math.min(requestedLevel, 500);
+    const existingScoreDoc = await GameScore.findOne({ userId: resolvedUserId }).lean();
+    const maxUnlocked = existingScoreDoc ? Math.max(1, existingScoreDoc.maxUnlockedLevel || existingScoreDoc.level || 1) : 1;
+
+    // Anti-cheat verification: User CANNOT jump beyond their verified unlocked level
+    if (requestedLevel > maxUnlocked) {
+      return res.status(403).json({
+        error: `Aap sirf apne verified unlocked level (${maxUnlocked}) tak hi select/restore kar sakte hain! Aage ke level khel kar unlock karein.`,
+        maxUnlocked
+      });
+    }
 
     const doc = await GameScore.findOneAndUpdate(
       { userId: resolvedUserId },
@@ -289,7 +298,8 @@ router.post('/set-level', authMiddleware, async (req, res) => {
         $set: {
           displayName: user.displayName || user.username || 'Player',
           gameName: 'Arrow Puzzle',
-          level: safeTargetLevel,
+          level: requestedLevel,
+          maxUnlockedLevel: maxUnlocked,
           updatedAt: new Date()
         }
       },
@@ -301,7 +311,7 @@ router.post('/set-level', authMiddleware, async (req, res) => {
       await syncLeaderboardRankCrowns(io);
     }
 
-    res.json({ success: true, level: doc.level });
+    res.json({ success: true, level: doc.level, maxUnlockedLevel: doc.maxUnlockedLevel || maxUnlocked });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update level' });
   }
@@ -341,8 +351,11 @@ router.post('/game-score', authMiddleware, async (req, res) => {
     let newGamesCount = 1;
 
     if (existingScoreDoc) {
-      // Advance level cleanly based on played level (capped up to 500)
-      newLevel = Math.min(Math.max(existingScoreDoc.level || 1, rawLevel), 500);
+      const currentMax = Math.max(existingScoreDoc.maxUnlockedLevel || 1, existingScoreDoc.level || 1);
+      // Anti-cheat verification: Player can at most advance by 1 level per completed game
+      const maxAllowedLevel = currentMax + 1;
+      newLevel = Math.min(Math.max(existingScoreDoc.level || 1, rawLevel), maxAllowedLevel);
+      const newMax = Math.max(currentMax, newLevel);
       newGamesCount = (existingScoreDoc.gamesPlayed || 1) + 1;
 
       await GameScore.findOneAndUpdate(
@@ -353,6 +366,7 @@ router.post('/game-score', authMiddleware, async (req, res) => {
           gameName: gameName || existingScoreDoc.gameName || 'Arrow Puzzle',
           score: newTotalScore,
           level: newLevel,
+          maxUnlockedLevel: newMax,
           gamesPlayed: newGamesCount,
           updatedAt: new Date()
         }
