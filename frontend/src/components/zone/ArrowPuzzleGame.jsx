@@ -86,9 +86,50 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
   const [totalArrows, setTotalArrows] = useState(0);
   const [flyingIds, setFlyingIds] = useState(new Set());
   const [clearedIds, setClearedIds] = useState(new Set());
-  const [shakingId, setShakingId] = useState(null);
   const [hintId, setHintId] = useState(null);
   const [isDailyChallenge, setIsDailyChallenge] = useState(false);
+
+  // Rewarded Video Ad State (Watch Ad to Revive / Continue Level)
+  const [adModalOpen, setAdModalOpen] = useState(false);
+  const [adSecondsLeft, setAdSecondsLeft] = useState(5);
+  const [adRewardReady, setAdRewardReady] = useState(false);
+
+  useEffect(() => {
+    if (!adModalOpen) return;
+    setAdSecondsLeft(5);
+    setAdRewardReady(false);
+    const timer = setInterval(() => {
+      setAdSecondsLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setAdRewardReady(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [adModalOpen]);
+
+  const handleClaimRevive = () => {
+    setHearts(3);
+    setScreen('playing');
+    setAdModalOpen(false);
+    setRestoreNotification('🎉 Revived! +3 Hearts Refilled & +15 Bonus Sparks Granted!');
+    setTimeout(() => setRestoreNotification(''), 4500);
+
+    const token = localStorage.getItem('pulsechat_token');
+    if (token) {
+      fetch(`${BACKEND_URL}/api/zone/claim-ad-reward`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ rewardType: 'revive_hearts' })
+      }).catch(() => {});
+    }
+  };
 
   // Sync current saved Arrow Puzzle level on mount & auto-recover from backend if available
   useEffect(() => {
@@ -846,35 +887,158 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
             background: 'linear-gradient(135deg, #1e293b, #0f172a)',
             border: '2px solid #ef4444',
             borderRadius: '24px',
-            padding: '28px 20px',
+            padding: '26px 20px',
             textAlign: 'center',
-            maxWidth: '300px',
+            maxWidth: '310px',
             width: '100%',
             boxShadow: '0 20px 50px rgba(0,0,0,0.8)'
           }}>
-            <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#ef4444', fontWeight: 900 }}>
+            <h2 style={{ margin: 0, fontSize: '1.45rem', color: '#ef4444', fontWeight: 900 }}>
               💔 Out of Hearts!
             </h2>
-            <p style={{ margin: '8px 0 20px 0', fontSize: '0.86rem', color: '#94a3b8' }}>
-              Be careful not to tap blocked arrows!
+            <p style={{ margin: '8px 0 16px 0', fontSize: '0.84rem', color: '#94a3b8' }}>
+              Lost your 3 lives on this puzzle.
             </p>
 
+            {/* Primary Action: Watch Ad to Revive & Keep Progress */}
             <button
-              onClick={() => startLevel(level, isDailyChallenge)}
+              type="button"
+              onClick={() => setAdModalOpen(true)}
               style={{
                 width: '100%',
-                padding: '12px',
+                padding: '13px 14px',
                 borderRadius: '16px',
-                background: 'linear-gradient(90deg, #ef4444, #f59e0b)',
+                background: 'linear-gradient(135deg, #10b981, #06b6d4)',
                 border: 'none',
                 color: '#fff',
                 fontWeight: 900,
-                fontSize: '0.95rem',
+                fontSize: '0.94rem',
+                cursor: 'pointer',
+                marginBottom: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: '0 0 20px rgba(16, 185, 129, 0.45)'
+              }}
+            >
+              <span>🎬</span> Watch Ad to Revive (+3 ❤️)
+            </button>
+            <div style={{ fontSize: '0.72rem', color: '#6ee7b7', fontWeight: 700, marginBottom: '16px' }}>
+              ⚡ Resumes current puzzle + 15 Sparks!
+            </div>
+
+            {/* Secondary Action: Restart Level from Beginning */}
+            <button
+              type="button"
+              onClick={() => startLevel(level, isDailyChallenge)}
+              style={{
+                width: '100%',
+                padding: '11px',
+                borderRadius: '14px',
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#cbd5e1',
+                fontWeight: 700,
+                fontSize: '0.86rem',
                 cursor: 'pointer'
               }}
             >
-              Try Again 🔄
+              Restart Level 🔄
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* REWARDED VIDEO AD OVERLAY */}
+      {adModalOpen && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(10, 10, 16, 0.96)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+          zIndex: 40
+        }}>
+          <div style={{
+            background: 'linear-gradient(145deg, #1e1e2f, #0d0d17)',
+            border: '1.5px solid rgba(16, 185, 129, 0.5)',
+            borderRadius: '24px',
+            padding: '24px 20px',
+            maxWidth: '340px',
+            width: '100%',
+            textAlign: 'center',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.85)',
+            position: 'relative'
+          }}>
+            {/* Ad Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <span style={{ fontSize: '0.68rem', background: 'rgba(255,255,255,0.1)', color: '#94a3b8', padding: '3px 8px', borderRadius: '8px', fontWeight: 800 }}>
+                AdMob Rewarded Video
+              </span>
+              <span style={{ fontSize: '0.74rem', color: adRewardReady ? '#10b981' : '#f59e0b', fontWeight: 800 }}>
+                {adRewardReady ? '✓ Reward Ready' : `Reward in ${adSecondsLeft}s`}
+              </span>
+            </div>
+
+            {/* Ad Media Showcase Card */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(236, 72, 153, 0.25))',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: '16px',
+              padding: '22px 16px',
+              marginBottom: '18px'
+            }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>🚀</div>
+              <h3 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', color: '#fff', fontWeight: 900 }}>
+                Pulse VIP Pro
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+                Unlock Unlimited 3D Text, 4K Live Wallpapers, Custom Aura Badges & 100% Ad-Free Chatting!
+              </p>
+            </div>
+
+            {/* Progress Bar */}
+            <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '10px', overflow: 'hidden', marginBottom: '18px' }}>
+              <div style={{
+                height: '100%',
+                width: `${((5 - adSecondsLeft) / 5) * 100}%`,
+                background: 'linear-gradient(90deg, #10b981, #06b6d4)',
+                transition: 'width 0.9s linear'
+              }} />
+            </div>
+
+            {/* Claim Button */}
+            {adRewardReady ? (
+              <button
+                type="button"
+                onClick={handleClaimRevive}
+                style={{
+                  width: '100%',
+                  padding: '13px',
+                  borderRadius: '16px',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  border: 'none',
+                  color: '#fff',
+                  fontWeight: 900,
+                  fontSize: '0.95rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 0 20px rgba(16, 185, 129, 0.6)'
+                }}
+              >
+                🎁 Claim +3 Hearts & Resume!
+              </button>
+            ) : (
+              <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 700 }}>
+                Please wait {adSecondsLeft}s to claim your reward...
+              </div>
+            )}
           </div>
         </div>
       )}

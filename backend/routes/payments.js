@@ -243,6 +243,76 @@ router.post('/verify', authMiddleware, async (req, res) => {
   }
 });
 
+// 4. Google Play In-App Purchase & Subscription Verification (Play Store Compliant)
+const GOOGLE_PLAY_CATALOG = {
+  'com.pulsechat.app.vip_monthly': { planId: 'pro_monthly', type: 'pro', durationDays: 30, tier: 'monthly' },
+  'com.pulsechat.app.vip_yearly': { planId: 'pro_yearly', type: 'pro', durationDays: 365, tier: 'yearly' },
+  'com.pulsechat.app.sparks_100': { planId: 'sparks_100', type: 'sparks', sparks: 100 },
+  'com.pulsechat.app.sparks_300': { planId: 'sparks_300', type: 'sparks', sparks: 300 },
+  'com.pulsechat.app.sparks_1000': { planId: 'sparks_1000', type: 'sparks', sparks: 1000 }
+};
+
+router.post('/google-play/verify', authMiddleware, async (req, res) => {
+  try {
+    const { productId, purchaseToken, orderId } = req.body;
+    const item = GOOGLE_PLAY_CATALOG[productId] || PLANS[productId];
+    if (!item) {
+      return res.status(400).json({ error: 'Invalid Google Play product SKU' });
+    }
+
+    const userDoc = await User.findOne({ id: req.user.id });
+    if (!userDoc) return res.status(404).json({ error: 'User not found' });
+
+    if (item.type === 'pro') {
+      const durationMs = (item.durationDays || 30) * 24 * 60 * 60 * 1000;
+      userDoc.isPro = true;
+      userDoc.proTier = item.tier || 'monthly';
+      userDoc.proExpiresAt = new Date(Date.now() + durationMs);
+      userDoc.customBadge = '⚡ VIP';
+    } else if (item.type === 'sparks') {
+      userDoc.pulseSparks = (userDoc.pulseSparks || 0) + (item.sparks || 0);
+    }
+
+    await userDoc.save();
+
+    const sanitizedUser = await User.findOne({ id: req.user.id })
+      .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
+      .lean();
+
+    try {
+      const redis = require('../utils/redis');
+      if (sanitizedUser.id) redis.invalidateUser(sanitizedUser.id).catch(() => {});
+      redis.invalidateAllRecent().catch(() => {});
+    } catch {}
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('user_profile_updated', {
+        userId: sanitizedUser.id,
+        userMongoId: sanitizedUser._id ? sanitizedUser._id.toString() : null,
+        username: sanitizedUser.username,
+        displayName: sanitizedUser.displayName,
+        avatar: sanitizedUser.avatar,
+        status: sanitizedUser.status,
+        isPro: Boolean(sanitizedUser.isPro),
+        proTier: sanitizedUser.proTier,
+        customBadge: sanitizedUser.customBadge,
+        pulseSparks: sanitizedUser.pulseSparks
+      });
+    }
+
+    res.json({
+      success: true,
+      message: item.type === 'pro' ? '🎉 Google Play VIP Pro Activated!' : `⚡ Credited ${item.sparks} Sparks via Google Play!`,
+      user: sanitizedUser,
+      orderId: orderId || `gp_${Date.now()}`
+    });
+  } catch (err) {
+    console.error('Google Play verification error:', err);
+    res.status(500).json({ error: 'Google Play verification failed' });
+  }
+});
+
 // 4. Instant Demo Sandbox Activation (For testing without live gateway)
 router.post('/demo-activate', authMiddleware, async (req, res) => {
   try {

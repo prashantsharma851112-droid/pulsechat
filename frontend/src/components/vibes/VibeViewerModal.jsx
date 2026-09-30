@@ -56,6 +56,25 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
   const currentStoryViews = viewsByVibeId[currentVibe?.id] ?? (Array.isArray(currentVibe?.views) ? currentVibe.views : []);
   const viewCount = currentStoryViews.length;
 
+  // Sponsored Story Ad State (for non-VIP users between stories)
+  const [showingSponsoredAd, setShowingSponsoredAd] = useState(false);
+  const [adCountdown, setAdCountdown] = useState(5);
+
+  useEffect(() => {
+    if (!showingSponsoredAd) return;
+    setAdCountdown(5);
+    const interval = setInterval(() => {
+      setAdCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [showingSponsoredAd]);
+
   const currentUserId = user?.id || user?._id || 'local_user';
   const isMine = currentVibe?.userId === currentUserId || vibeGroup?.userId === currentUserId;
 
@@ -275,8 +294,13 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
             return 0;
           } else {
             clearInterval(timerRef.current);
-            handleCloseModal();
-            return 100;
+            if (!user?.isPro && !showingSponsoredAd) {
+              setShowingSponsoredAd(true);
+              return 100;
+            } else {
+              handleCloseModal();
+              return 100;
+            }
           }
         }
         return prev + step;
@@ -286,13 +310,17 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [currentIndex, vibes.length, onClose, isPaused, showViewersSheet, currentVibe?.id, currentVibe?.storyDuration]);
+  }, [currentIndex, vibes.length, onClose, isPaused, showViewersSheet, currentVibe?.id, currentVibe?.storyDuration, user?.isPro, showingSponsoredAd]);
 
   const handleNext = () => {
     if (currentIndex < vibes.length - 1) {
       setCurrentIndex(prev => prev + 1);
     } else {
-      handleCloseModal();
+      if (!user?.isPro && !showingSponsoredAd) {
+        setShowingSponsoredAd(true);
+      } else {
+        handleCloseModal();
+      }
     }
   };
 
@@ -505,6 +533,11 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {user?.isPro && (
+              <span style={{ fontSize: '0.66rem', color: '#fbbf24', background: 'rgba(245, 158, 11, 0.25)', border: '1px solid rgba(245, 158, 11, 0.45)', padding: '2px 8px', borderRadius: '12px', fontWeight: 800 }}>
+                👑 VIP Ad-Free
+              </span>
+            )}
             {currentVibe?.audioUrl && (
               <button
                 type="button"
@@ -538,6 +571,94 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
             </button>
           </div>
         </div>
+
+        {/* FULLSCREEN SPONSORED STORY AD OVERLAY (Shown between stories for non-VIP users) */}
+        {showingSponsoredAd && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 100,
+            background: 'linear-gradient(135deg, #09090b 0%, #1e1b4b 50%, #311042 100%)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            padding: '24px 20px',
+            color: '#fff'
+          }}>
+            {/* Top Header */}
+            <div>
+              <div style={{ height: '3px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px', overflow: 'hidden', marginBottom: '16px' }}>
+                <div style={{ height: '100%', width: `${((5 - adCountdown) / 5) * 100}%`, background: 'linear-gradient(90deg, #10b981, #f59e0b)', transition: 'width 1s linear' }} />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #f59e0b, #ec4899)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>⚡</div>
+                  <div>
+                    <div style={{ fontSize: '0.86rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Pulse Partner <span style={{ fontSize: '0.62rem', background: 'rgba(255,255,255,0.2)', padding: '1px 5px', borderRadius: '4px' }}>Ad</span>
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Sponsored Story</div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  style={{
+                    background: adCountdown <= 0 ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.4)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#fff',
+                    padding: '5px 12px',
+                    borderRadius: '16px',
+                    fontSize: '0.76rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {adCountdown <= 0 ? 'Skip Ad ✕' : `Skip in ${adCountdown}s`}
+                </button>
+              </div>
+            </div>
+
+            {/* Middle Showcase Content */}
+            <div style={{ textAlign: 'center', padding: '20px 10px' }}>
+              <div style={{ fontSize: '3.5rem', marginBottom: '14px', filter: 'drop-shadow(0 0 25px rgba(245, 158, 11, 0.6))' }}>✨</div>
+              <h2 style={{ fontSize: '1.6rem', fontWeight: 900, margin: '0 0 10px 0', background: 'linear-gradient(90deg, #fbbf24, #f472b6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                Upgrade to Pulse VIP
+              </h2>
+              <p style={{ fontSize: '0.88rem', color: '#cbd5e1', lineHeight: 1.5, margin: '0 0 24px 0' }}>
+                Enjoy 100% Ad-Free Stories, Unlimited 3D Text Typography, 4K Live Animated Wallpapers, and Royal Leaderboard Crowns!
+              </p>
+
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                style={{
+                  padding: '14px 28px',
+                  borderRadius: '20px',
+                  background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: '1rem',
+                  fontWeight: 900,
+                  cursor: 'pointer',
+                  boxShadow: '0 0 25px rgba(245, 158, 11, 0.5)'
+                }}
+              >
+                Learn More & Go Pro ➔
+              </button>
+            </div>
+
+            {/* Bottom Footer */}
+            <div style={{ textAlign: 'center', fontSize: '0.72rem', color: '#64748b' }}>
+              Google AdMob Story Network • Tap Skip to close
+            </div>
+          </div>
+        )}
 
         {/* Live Canvas Background if selected (ALWAYS rendered even with media) */}
         {currentVibe.animatedBg && currentVibe.animatedBg !== 'none' && (

@@ -523,10 +523,43 @@ router.post('/game-score', authMiddleware, async (req, res) => {
       hasSilverCrown: isNowRank2,
       hasStreakCrown: user.hasStreakCrown,
       leaderboard: leaderboardList
-    });
   } catch (err) {
     console.error('Error submitting game score:', err);
     res.status(500).json({ error: 'Failed to submit game score' });
+  }
+});
+
+// Claim Ad Reward (Rewarded Video Ad completion for Revive / Sparks)
+router.post('/claim-ad-reward', authMiddleware, async (req, res) => {
+  try {
+    const { rewardType } = req.body;
+    const userId = req.userId || req.user?.id || req.user?.userId;
+    const isObjectId = mongoose.Types.ObjectId.isValid(userId);
+
+    const bonusSparks = rewardType === 'revive_hearts' ? 15 : 20;
+
+    const user = await User.findOneAndUpdate(
+      {
+        $or: [
+          { id: userId },
+          ...(isObjectId ? [{ _id: userId }] : []),
+          { username: userId }
+        ]
+      },
+      { $inc: { pulseSparks: bonusSparks } },
+      { new: true }
+    );
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    res.json({
+      success: true,
+      rewardSparks: bonusSparks,
+      pulseSparks: user.pulseSparks
+    });
+  } catch (err) {
+    console.error('Error claiming ad reward:', err);
+    res.status(500).json({ error: 'Failed to claim ad reward' });
   }
 });
 
