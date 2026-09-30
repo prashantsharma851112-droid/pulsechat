@@ -2,12 +2,14 @@ import React, { useState, useContext, useRef, useEffect, useCallback } from 'rea
 import { AuthContext } from '../../context/AuthContext';
 import { 
   X, Camera, SwitchCamera, Image as ImageIcon, Music, Palette, Sparkles, 
-  Send, Loader2, Type, Trash2, Smile, Disc, Check, FlipHorizontal, Sliders
+  Send, Loader2, Type, Trash2, Smile, Disc, Check, FlipHorizontal, Sliders,
+  SlidersHorizontal, ZoomIn, Eye, Sparkle, RotateCcw, Volume2
 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 import MusicPickerModal from './MusicPickerModal';
+import { EMOJI_CATEGORIES, ALL_EMOJIS } from '../chat/EmojiPicker';
 
 const GRADIENTS = [
   { id: 'g1', name: 'Pulse Purple', value: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)' },
@@ -22,26 +24,35 @@ const GRADIENTS = [
 
 const TEXT_STYLES_3D = [
   { id: 'none', label: 'Classic', class: '' },
-  { id: 'text-3d-neon', label: '⚡ Neon', class: 'text-3d-neon' },
-  { id: 'text-3d-gold', label: '👑 Gold', class: 'text-3d-gold' },
-  { id: 'text-3d-flame', label: '🔥 Flame', class: 'text-3d-flame' },
-  { id: 'text-3d-cosmic', label: '🔮 Cosmic', class: 'text-3d-cosmic' },
-  { id: 'text-3d-diamond', label: '💎 Ice', class: 'text-3d-diamond' },
-  { id: 'text-3d-candy', label: '🍭 Candy', class: 'text-3d-candy' },
-  { id: 'text-3d-emerald', label: '❇️ Matrix', class: 'text-3d-emerald' },
-  { id: 'text-3d-crimson', label: '🩸 Crimson', class: 'text-3d-crimson' }
+  { id: 'text-3d-neon', label: '⚡ Cyber Neon', class: 'text-3d-neon' },
+  { id: 'text-3d-gold', label: '👑 Gold Deluxe', class: 'text-3d-gold' },
+  { id: 'text-3d-flame', label: '🔥 Inferno Flame', class: 'text-3d-flame' },
+  { id: 'text-3d-cosmic', label: '🔮 Cosmic Nebula', class: 'text-3d-cosmic' },
+  { id: 'text-3d-diamond', label: '💎 Diamond Ice', class: 'text-3d-diamond' },
+  { id: 'text-3d-candy', label: '🍭 Bubble Candy', class: 'text-3d-candy' },
+  { id: 'text-3d-emerald', label: '❇️ Emerald Matrix', class: 'text-3d-emerald' },
+  { id: 'text-3d-crimson', label: '🩸 Blood Crimson', class: 'text-3d-crimson' },
+  { id: 'text-3d-tokyo', label: '🌌 Tokyo Synth', class: 'text-3d-tokyo' },
+  { id: 'text-3d-platinum', label: '🏆 Royal Platinum', class: 'text-3d-platinum' }
 ];
 
 const ANIMATED_BGS = [
-  { id: 'none', label: 'Clean' },
-  { id: 'matrix_code_live', label: '❇️ Matrix' },
-  { id: 'starry_galaxy_live', label: '🌌 Stars' },
-  { id: 'cyber_grid_live', label: '⚡ Grid' },
-  { id: 'firefly_night_live', label: '💡 Firefly' },
-  { id: 'love_hearts_live', label: '💖 Hearts' }
+  { id: 'none', label: '✨ Clean Static' },
+  { id: 'matrix_code_live', label: '❇️ Matrix Rain' },
+  { id: 'starry_galaxy_live', label: '🌌 Starry Galaxy' },
+  { id: 'cyber_grid_live', label: '⚡ Cyber Grid' },
+  { id: 'firefly_night_live', label: '💡 Firefly Glow' },
+  { id: 'love_hearts_live', label: '💖 Floating Hearts' }
 ];
 
-const STICKERS = ['🔥', '💖', '⚡', '👑', '🎵', '🌟', '🏆', '💎', '🎉', '🚀', '😍', '✨', '💯', '🌸', '😎'];
+const IMAGE_FILTERS = [
+  { id: 'none', label: 'Normal' },
+  { id: 'contrast(1.2) saturate(1.4) hue-rotate(15deg)', label: '⚡ Cyberpunk' },
+  { id: 'contrast(1.1) brightness(1.15) saturate(1.2)', label: '💎 Diamond' },
+  { id: 'sepia(0.35) contrast(1.1) brightness(1.05)', label: '🔥 Warm Film' },
+  { id: 'grayscale(1) contrast(1.3)', label: '🖤 B&W Noir' },
+  { id: 'saturate(1.9) contrast(1.15)', label: '🌈 Vivid Pop' }
+];
 
 const compressImageToBase64 = (file) => {
   return new Promise((resolve) => {
@@ -84,30 +95,41 @@ const compressImageToBase64 = (file) => {
 export default function CreateVibeModal({ onClose, onCreated }) {
   const { user, token } = useContext(AuthContext);
 
-  // Mode: 'camera' | 'editor'
-  const [viewMode, setViewMode] = useState('camera');
+  // View Mode: 'camera' | 'canvas'
+  const [viewMode, setViewMode] = useState('canvas');
+  const [facingMode, setFacingMode] = useState('user'); // 'user' | 'environment'
   const [cameraActive, setCameraActive] = useState(false);
-  const [facingMode, setFacingMode] = useState('user'); // 'user' or 'environment'
-  const [hasCameraSupport, setHasCameraSupport] = useState(true);
 
-  // Story Elements
+  // Active Tool Panel: null | 'text' | 'bg_color' | 'animated_bg' | 'stickers' | 'image_adjust'
+  const [activePanel, setActivePanel] = useState(null);
+
+  // Story Content
   const [mediaUrl, setMediaUrl] = useState('');
   const [caption, setCaption] = useState('');
-  const [selectedGradientIndex, setSelectedGradientIndex] = useState(0);
-  const [animatedBgIndex, setAnimatedBgIndex] = useState(0);
+  const [selectedGradient, setSelectedGradient] = useState(GRADIENTS[0].value);
+  const [animatedBg, setAnimatedBg] = useState('none');
   const [textStyle3D, setTextStyle3D] = useState('none');
+  const [textSize, setTextSize] = useState(1.4);
+  const [textAlign, setTextAlign] = useState('center');
+
+  // Music State
   const [selectedSong, setSelectedSong] = useState(null);
   const [songStartTime, setSongStartTime] = useState(0);
-  const [selectedStickers, setSelectedStickers] = useState([]);
-
-  // Modals & Panels
   const [showMusicPicker, setShowMusicPicker] = useState(false);
-  const [showTextEditor, setShowTextEditor] = useState(false);
-  const [showStickerDrawer, setShowStickerDrawer] = useState(false);
 
-  // Drag Positions
-  const [textPos, setTextPos] = useState({ x: 50, y: 48 });
-  const [musicPos, setMusicPos] = useState({ x: 50, y: 22 });
+  // Image FX State
+  const [imageFit, setImageFit] = useState('cover'); // 'cover' | 'contain' | 'padded'
+  const [imageZoom, setImageZoom] = useState(1.0);
+  const [imageFilter, setImageFilter] = useState('none');
+  const [imageOpacity, setImageOpacity] = useState(1.0);
+
+  // Emojis / Stickers
+  const [selectedStickers, setSelectedStickers] = useState([]);
+  const [activeEmojiCategory, setActiveEmojiCategory] = useState('smileys');
+
+  // Interactive Drag & Drop Positions
+  const [textPos, setTextPos] = useState({ x: 50, y: 45 });
+  const [musicPos, setMusicPos] = useState({ x: 50, y: 18 });
   const [draggingElement, setDraggingElement] = useState(null);
 
   // Status
@@ -115,16 +137,13 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [error, setError] = useState('');
 
   // Refs
+  const cardRef = useRef(null);
   const videoRef = useRef(null);
   const cameraStreamRef = useRef(null);
-  const cardRef = useRef(null);
   const fileInputRef = useRef(null);
   const previewAudioRef = useRef(null);
 
-  const selectedGradient = GRADIENTS[selectedGradientIndex % GRADIENTS.length].value;
-  const animatedBg = ANIMATED_BGS[animatedBgIndex % ANIMATED_BGS.length].id;
-
-  // Stop camera helper
+  // Camera Teardown
   const stopCameraStream = useCallback(() => {
     if (cameraStreamRef.current) {
       try {
@@ -135,12 +154,12 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     setCameraActive(false);
   }, []);
 
-  // Start live camera
+  // Camera Launch
   const startCamera = useCallback(async (facing = facingMode) => {
     stopCameraStream();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setHasCameraSupport(false);
-      setViewMode('editor');
+      setError('Camera not supported on this device.');
+      setViewMode('canvas');
       return;
     }
     try {
@@ -160,56 +179,23 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         } catch (e) {}
       }
       setCameraActive(true);
-      setHasCameraSupport(true);
+      setViewMode('camera');
+      setActivePanel(null);
     } catch (err) {
-      console.warn('Camera stream could not start:', err);
-      setHasCameraSupport(false);
-      setCameraActive(false);
-      // Fallback directly to story canvas
-      setViewMode('editor');
+      console.warn('Camera failed to start:', err);
+      setError('Camera permission denied or camera busy.');
+      setViewMode('canvas');
     }
   }, [facingMode, stopCameraStream]);
 
-  // Initial Camera Launch
-  useEffect(() => {
-    startCamera('user');
-    return () => {
-      stopCameraStream();
-      if (previewAudioRef.current) {
-        try {
-          previewAudioRef.current.pause();
-          previewAudioRef.current.currentTime = 0;
-          previewAudioRef.current.src = '';
-          previewAudioRef.current = null;
-        } catch (e) {}
-      }
-      stopGlobalMusicAudio();
-    };
-  }, []);
-
-  // Handle Close Modal
-  const handleCloseModal = () => {
-    stopCameraStream();
-    if (previewAudioRef.current) {
-      try {
-        previewAudioRef.current.pause();
-        previewAudioRef.current.currentTime = 0;
-        previewAudioRef.current.src = '';
-        previewAudioRef.current = null;
-      } catch (e) {}
-    }
-    stopGlobalMusicAudio();
-    onClose();
-  };
-
-  // Switch Camera Front / Back
+  // Flip Camera
   const handleToggleCameraFacing = () => {
     const nextFacing = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(nextFacing);
     startCamera(nextFacing);
   };
 
-  // Capture Photo From Camera
+  // Capture Photo
   const handleCapturePhoto = () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
@@ -218,7 +204,6 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     canvas.height = video.videoHeight || 1280;
     const ctx = canvas.getContext('2d');
 
-    // Mirror image for front selfie camera like Instagram
     if (facingMode === 'user') {
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
@@ -228,16 +213,16 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
     setMediaUrl(dataUrl);
     stopCameraStream();
-    setViewMode('editor');
+    setViewMode('canvas');
   };
 
-  // Handle Photo Pick from Gallery
+  // File Upload from Gallery
   const handleFileChange = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
 
     if (file.size > 25 * 1024 * 1024) {
-      setError('File size exceeds limit.');
+      setError('File size exceeds 25MB limit.');
       return;
     }
 
@@ -269,11 +254,41 @@ export default function CreateVibeModal({ onClose, onCreated }) {
 
     if (uploadedUrl) {
       setMediaUrl(uploadedUrl);
-      setViewMode('editor');
+      setViewMode('canvas');
     }
   };
 
-  // Preview Song Snippet
+  // Unmount & Exit Audio / Camera Cleanup
+  useEffect(() => {
+    return () => {
+      stopCameraStream();
+      if (previewAudioRef.current) {
+        try {
+          previewAudioRef.current.pause();
+          previewAudioRef.current.currentTime = 0;
+          previewAudioRef.current.src = '';
+          previewAudioRef.current = null;
+        } catch (e) {}
+      }
+      stopGlobalMusicAudio();
+    };
+  }, [stopCameraStream]);
+
+  const handleCloseModal = () => {
+    stopCameraStream();
+    if (previewAudioRef.current) {
+      try {
+        previewAudioRef.current.pause();
+        previewAudioRef.current.currentTime = 0;
+        previewAudioRef.current.src = '';
+        previewAudioRef.current = null;
+      } catch (e) {}
+    }
+    stopGlobalMusicAudio();
+    onClose();
+  };
+
+  // Preview Music
   const previewSongPart = (song, startTimeSec) => {
     if (!song) return;
     try {
@@ -300,7 +315,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     } catch (e) {}
   };
 
-  // Dragging on the Canvas (Touch & Mouse)
+  // Dragging Handlers
   const handlePointerDown = (elementName, e) => {
     e.stopPropagation();
     setDraggingElement(elementName);
@@ -323,25 +338,17 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     setDraggingElement(null);
   };
 
-  // Toggle Sticker
   const handleToggleSticker = (st) => {
     setSelectedStickers(prev => 
       prev.includes(st) ? prev.filter(s => s !== st) : [...prev, st]
     );
   };
 
-  // Retake or Clear Photo
-  const handleRetake = () => {
-    setMediaUrl('');
-    setViewMode('camera');
-    startCamera(facingMode);
-  };
-
-  // Submit Story to Backend & LocalStorage
+  // Submit Vibe
   const handleSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!caption.trim() && !mediaUrl && !selectedSong) {
-      setError('Please add a photo, music, or text for your 24h Vibe.');
+      setError('Please add text, photo, or music to post your Vibe!');
       return;
     }
 
@@ -369,12 +376,12 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       textPos,
       musicPos,
       imagePos: { x: 50, y: 50 },
-      imageFit: 'cover',
-      imageZoom: 1.0,
-      imageFilter: 'none',
-      imageOpacity: 1.0,
-      textSize: 1.3,
-      textAlign: 'center',
+      imageFit,
+      imageZoom,
+      imageFilter,
+      imageOpacity,
+      textSize,
+      textAlign,
       selectedStickers,
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -406,12 +413,12 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             textPos,
             musicPos,
             imagePos: { x: 50, y: 50 },
-            imageFit: 'cover',
-            imageZoom: 1.0,
-            imageFilter: 'none',
-            imageOpacity: 1.0,
-            textSize: 1.3,
-            textAlign: 'center',
+            imageFit,
+            imageZoom,
+            imageFilter,
+            imageOpacity,
+            textSize,
+            textAlign,
             selectedStickers
           })
         });
@@ -440,7 +447,9 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         position: 'fixed',
         inset: 0,
         zIndex: 1350,
-        background: '#000000',
+        background: 'rgba(5, 5, 8, 0.95)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -448,7 +457,6 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         userSelect: 'none'
       }}
     >
-      {/* Hidden File Picker for Gallery */}
       <input
         ref={fileInputRef}
         type="file"
@@ -457,183 +465,409 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         style={{ display: 'none' }}
       />
 
-      {/* Main Container - Fullscreen on mobile, Instagram frame on desktop */}
+      {/* Main Studio Frame */}
       <div
         style={{
           position: 'relative',
           width: '100%',
           maxWidth: '430px',
           height: '100dvh',
-          maxHeight: '920px',
-          borderRadius: window.innerWidth > 500 ? '28px' : '0px',
+          maxHeight: '900px',
+          borderRadius: window.innerWidth > 500 ? '24px' : '0px',
           overflow: 'hidden',
-          background: '#09090b',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
-          border: window.innerWidth > 500 ? '1px solid rgba(255,255,255,0.12)' : 'none',
+          background: '#0a0a0f',
+          boxShadow: '0 25px 70px rgba(0,0,0,0.85), 0 0 35px rgba(99, 102, 241, 0.25)',
+          border: window.innerWidth > 500 ? '1px solid rgba(255,255,255,0.15)' : 'none',
           display: 'flex',
           flexDirection: 'column'
         }}
       >
         {/* =========================================================================
-            SCREEN 1: INSTAGRAM LIVE CAMERA
+            TOP PULSE STUDIO HUB (Branded Header + Live Switcher)
         ========================================================================= */}
-        {viewMode === 'camera' && (
-          <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000' }}>
-            {/* Live Camera Viewfinder Video */}
-            <video
-              ref={videoRef}
-              playsInline
-              autoPlay
-              muted
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                transform: facingMode === 'user' ? 'scaleX(-1)' : 'none'
-              }}
-            />
+        <div
+          style={{
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'rgba(14, 14, 22, 0.95)',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            zIndex: 40,
+            backdropFilter: 'blur(12px)'
+          }}
+        >
+          {/* Brand Logo & Title */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '8px',
+              background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              boxShadow: '0 0 10px rgba(168, 85, 247, 0.5)'
+            }}>
+              <Sparkles size={16} />
+            </div>
+            <div>
+              <span style={{ fontSize: '0.88rem', fontWeight: 900, color: '#ffffff', letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                Pulse Vibe Studio <span style={{ fontSize: '0.62rem', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '1px 6px', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.4)' }}>24h</span>
+              </span>
+            </div>
+          </div>
 
-            {/* Top Instagram Camera Toolbar */}
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                padding: '16px 18px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                zIndex: 20,
-                background: 'linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%)'
-              }}
-            >
-              {/* Close Button */}
+          {/* Mode Switcher Pills: Canvas vs Camera */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: 'rgba(255,255,255,0.06)',
+              borderRadius: '20px',
+              padding: '2px',
+              border: '1px solid rgba(255,255,255,0.12)'
+            }}>
               <button
                 type="button"
-                onClick={handleCloseModal}
+                onClick={() => {
+                  stopCameraStream();
+                  setViewMode('canvas');
+                }}
                 style={{
-                  background: 'rgba(0,0,0,0.45)',
+                  background: viewMode === 'canvas' ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'transparent',
                   border: 'none',
-                  color: '#fff',
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '50%',
+                  color: viewMode === 'canvas' ? '#fff' : 'rgba(255,255,255,0.6)',
+                  borderRadius: '16px',
+                  padding: '4px 10px',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(8px)'
+                  gap: '4px'
                 }}
               >
-                <X size={22} />
+                <Palette size={12} /> Canvas
               </button>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                {/* Switch to Text/Canvas Mode */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    stopCameraStream();
-                    setViewMode('editor');
-                  }}
-                  style={{
-                    background: 'rgba(0,0,0,0.45)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    color: '#fff',
-                    borderRadius: '20px',
-                    padding: '6px 14px',
-                    fontSize: '0.82rem',
-                    fontWeight: 700,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    cursor: 'pointer',
-                    backdropFilter: 'blur(8px)'
-                  }}
-                >
-                  <Type size={16} color="#f59e0b" /> Text Story
-                </button>
-
-                {/* Flip Front / Back Camera Button */}
-                <button
-                  type="button"
-                  onClick={handleToggleCameraFacing}
-                  style={{
-                    background: 'rgba(0,0,0,0.45)',
-                    border: 'none',
-                    color: '#fff',
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    backdropFilter: 'blur(8px)'
-                  }}
-                  title="Flip Camera"
-                >
-                  <SwitchCamera size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* Bottom Instagram Camera Controls */}
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                padding: '24px 24px 34px 24px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '18px',
-                zIndex: 20,
-                background: 'linear-gradient(0deg, rgba(0,0,0,0.85) 0%, transparent 100%)'
-              }}
-            >
-              {/* Controls Row: Gallery - Shutter - Palette */}
-              <div
+              <button
+                type="button"
+                onClick={() => startCamera('user')}
                 style={{
-                  width: '100%',
+                  background: viewMode === 'camera' ? 'linear-gradient(135deg, #f59e0b, #ec4899)' : 'transparent',
+                  border: 'none',
+                  color: viewMode === 'camera' ? '#fff' : 'rgba(255,255,255,0.6)',
+                  borderRadius: '16px',
+                  padding: '4px 10px',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-around'
+                  gap: '4px'
                 }}
               >
-                {/* Gallery Picker Button */}
+                <Camera size={12} /> Camera
+              </button>
+            </div>
+
+            {/* Exit Studio Button */}
+            <button
+              type="button"
+              onClick={handleCloseModal}
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: 'none',
+                color: '#fff',
+                width: '30px',
+                height: '30px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+              title="Close"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* =========================================================================
+            PULSE STUDIO TOOL DOCK (Interactive Feature Selector)
+        ========================================================================= */}
+        <div
+          style={{
+            padding: '8px 12px',
+            background: 'rgba(10, 10, 16, 0.95)',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            overflowX: 'auto',
+            scrollbarWidth: 'none',
+            zIndex: 35
+          }}
+        >
+          {/* 1. 3D Text Tool Button */}
+          <button
+            type="button"
+            onClick={() => setActivePanel(activePanel === 'text' ? null : 'text')}
+            style={{
+              background: activePanel === 'text' ? 'rgba(99, 102, 241, 0.3)' : 'rgba(255,255,255,0.06)',
+              border: activePanel === 'text' ? '1px solid #6366f1' : '1px solid rgba(255,255,255,0.12)',
+              color: activePanel === 'text' ? '#a5b4fc' : '#fff',
+              borderRadius: '12px',
+              padding: '6px 12px',
+              fontSize: '0.76rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+          >
+            <Type size={14} color="#6366f1" /> 3D Text
+          </button>
+
+          {/* 2. BG Color / Gradient Palette Button */}
+          <button
+            type="button"
+            onClick={() => setActivePanel(activePanel === 'bg_color' ? null : 'bg_color')}
+            style={{
+              background: activePanel === 'bg_color' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.06)',
+              border: activePanel === 'bg_color' ? '1px solid #f59e0b' : '1px solid rgba(255,255,255,0.12)',
+              color: activePanel === 'bg_color' ? '#fcd34d' : '#fff',
+              borderRadius: '12px',
+              padding: '6px 12px',
+              fontSize: '0.76rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+          >
+            <Palette size={14} color="#f59e0b" /> BG Color
+          </button>
+
+          {/* 3. Live Animated Canvas Button */}
+          <button
+            type="button"
+            onClick={() => setActivePanel(activePanel === 'animated_bg' ? null : 'animated_bg')}
+            style={{
+              background: activePanel === 'animated_bg' ? 'rgba(236, 72, 153, 0.3)' : 'rgba(255,255,255,0.06)',
+              border: activePanel === 'animated_bg' ? '1px solid #ec4899' : '1px solid rgba(255,255,255,0.12)',
+              color: activePanel === 'animated_bg' ? '#f472b6' : '#fff',
+              borderRadius: '12px',
+              padding: '6px 12px',
+              fontSize: '0.76rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+          >
+            <Sparkles size={14} color="#ec4899" /> Live Canvas
+          </button>
+
+          {/* 4. Full Song Music Button */}
+          <button
+            type="button"
+            onClick={() => setShowMusicPicker(true)}
+            style={{
+              background: selectedSong ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255,255,255,0.06)',
+              border: selectedSong ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.12)',
+              color: selectedSong ? '#6ee7b7' : '#fff',
+              borderRadius: '12px',
+              padding: '6px 12px',
+              fontSize: '0.76rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+          >
+            <Music size={14} color="#10b981" /> {selectedSong ? '🎵 ' + selectedSong.songTitle.substring(0, 10) + '...' : 'Add Music'}
+          </button>
+
+          {/* 5. 250+ Emojis Button */}
+          <button
+            type="button"
+            onClick={() => setActivePanel(activePanel === 'stickers' ? null : 'stickers')}
+            style={{
+              background: activePanel === 'stickers' ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255,255,255,0.06)',
+              border: activePanel === 'stickers' ? '1px solid #eab308' : '1px solid rgba(255,255,255,0.12)',
+              color: activePanel === 'stickers' ? '#fef08a' : '#fff',
+              borderRadius: '12px',
+              padding: '6px 12px',
+              fontSize: '0.76rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+          >
+            <Smile size={14} color="#eab308" /> Emojis ({selectedStickers.length || '250+'})
+          </button>
+
+          {/* 6. Gallery Pick Button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              background: mediaUrl ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255,255,255,0.06)',
+              border: mediaUrl ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.12)',
+              color: mediaUrl ? '#7dd3fc' : '#fff',
+              borderRadius: '12px',
+              padding: '6px 12px',
+              fontSize: '0.76rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+          >
+            <ImageIcon size={14} color="#38bdf8" /> {mediaUrl ? 'Change Photo' : 'Gallery'}
+          </button>
+
+          {/* 7. Image FX Controls Button (when media exists) */}
+          {mediaUrl && (
+            <button
+              type="button"
+              onClick={() => setActivePanel(activePanel === 'image_adjust' ? null : 'image_adjust')}
+              style={{
+                background: activePanel === 'image_adjust' ? 'rgba(168, 85, 247, 0.3)' : 'rgba(255,255,255,0.06)',
+                border: activePanel === 'image_adjust' ? '1px solid #a855f7' : '1px solid rgba(255,255,255,0.12)',
+                color: activePanel === 'image_adjust' ? '#d8b4fe' : '#fff',
+                borderRadius: '12px',
+                padding: '6px 12px',
+                fontSize: '0.76rem',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                flexShrink: 0
+              }}
+            >
+              <SlidersHorizontal size={14} color="#a855f7" /> Image FX
+            </button>
+          )}
+        </div>
+
+        {/* =========================================================================
+            MAIN CANVAS / VIEWFINDER STAGE
+        ========================================================================= */}
+        <div
+          ref={cardRef}
+          onMouseMove={handlePointerMove}
+          onTouchMove={handlePointerMove}
+          onMouseUp={handlePointerUp}
+          onTouchEnd={handlePointerUp}
+          style={{
+            flex: 1,
+            position: 'relative',
+            background: mediaUrl ? '#050508' : selectedGradient,
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: draggingElement ? 'grabbing' : 'default'
+          }}
+        >
+          {error && (
+            <div style={{
+              position: 'absolute',
+              top: '12px',
+              zIndex: 50,
+              background: 'rgba(239, 68, 68, 0.95)',
+              color: '#fff',
+              padding: '6px 14px',
+              borderRadius: '20px',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              boxShadow: '0 4px 15px rgba(0,0,0,0.5)'
+            }}>
+              {error}
+            </div>
+          )}
+
+          {/* VIEW MODE 1: LIVE CAMERA VIEW */}
+          {viewMode === 'camera' && (
+            <div style={{ position: 'absolute', inset: 0, background: '#000' }}>
+              <video
+                ref={videoRef}
+                playsInline
+                autoPlay
+                muted
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  transform: facingMode === 'user' ? 'scaleX(-1)' : 'none'
+                }}
+              />
+
+              {/* Camera Shutter Bar */}
+              <div style={{
+                position: 'absolute',
+                bottom: '16px',
+                left: 0,
+                right: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-around',
+                padding: '0 30px',
+                zIndex: 20
+              }}>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   style={{
-                    background: 'rgba(255,255,255,0.15)',
-                    border: '1.5px solid rgba(255,255,255,0.35)',
+                    background: 'rgba(0,0,0,0.5)',
+                    border: '1px solid rgba(255,255,255,0.3)',
                     color: '#fff',
-                    width: '46px',
-                    height: '46px',
-                    borderRadius: '14px',
+                    borderRadius: '50%',
+                    width: '44px',
+                    height: '44px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    cursor: 'pointer',
-                    backdropFilter: 'blur(10px)',
-                    transition: 'transform 0.15s ease'
+                    cursor: 'pointer'
                   }}
-                  title="Choose from Gallery"
+                  title="Gallery"
                 >
-                  <ImageIcon size={22} />
+                  <ImageIcon size={20} />
                 </button>
 
-                {/* Instagram Shutter Button */}
+                {/* Shutter */}
                 <button
                   type="button"
                   onClick={handleCapturePhoto}
                   style={{
-                    width: '74px',
-                    height: '74px',
+                    width: '72px',
+                    height: '72px',
                     borderRadius: '50%',
                     background: 'transparent',
                     border: '4px solid #ffffff',
@@ -642,685 +876,723 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    boxShadow: '0 0 20px rgba(255,255,255,0.4)',
-                    outline: 'none'
+                    boxShadow: '0 0 25px rgba(255,255,255,0.5)'
                   }}
-                  title="Take Photo"
+                  title="Click Photo"
                 >
-                  <div
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      borderRadius: '50%',
-                      background: '#ffffff',
-                      transition: 'transform 0.1s ease'
-                    }}
-                  />
+                  <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: '#fff' }} />
                 </button>
 
-                {/* Flip Camera or Palette */}
                 <button
                   type="button"
                   onClick={handleToggleCameraFacing}
                   style={{
-                    background: 'rgba(255,255,255,0.15)',
-                    border: '1.5px solid rgba(255,255,255,0.35)',
+                    background: 'rgba(0,0,0,0.5)',
+                    border: '1px solid rgba(255,255,255,0.3)',
                     color: '#fff',
-                    width: '46px',
-                    height: '46px',
-                    borderRadius: '14px',
+                    borderRadius: '50%',
+                    width: '44px',
+                    height: '44px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    cursor: 'pointer',
-                    backdropFilter: 'blur(10px)'
+                    cursor: 'pointer'
                   }}
                   title="Flip Camera"
                 >
-                  <SwitchCamera size={22} />
+                  <SwitchCamera size={20} />
                 </button>
               </div>
-
-              {/* Bottom Mode Indicators */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-                <span
-                  onClick={() => {
-                    stopCameraStream();
-                    setViewMode('editor');
-                  }}
-                  style={{
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    color: 'rgba(255,255,255,0.6)',
-                    cursor: 'pointer',
-                    letterSpacing: '0.05em'
-                  }}
-                >
-                  CREATE
-                </span>
-                <span
-                  style={{
-                    fontSize: '0.86rem',
-                    fontWeight: 900,
-                    color: '#f59e0b',
-                    letterSpacing: '0.05em',
-                    textShadow: '0 0 10px rgba(245, 158, 11, 0.6)'
-                  }}
-                >
-                  CAMERA
-                </span>
-                <span
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    color: 'rgba(255,255,255,0.6)',
-                    cursor: 'pointer',
-                    letterSpacing: '0.05em'
-                  }}
-                >
-                  GALLERY
-                </span>
-              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* =========================================================================
-            SCREEN 2: INSTAGRAM STORY CANVAS EDITOR
-        ========================================================================= */}
-        {viewMode === 'editor' && (
-          <div
-            ref={cardRef}
-            onMouseMove={handlePointerMove}
-            onTouchMove={handlePointerMove}
-            onMouseUp={handlePointerUp}
-            onTouchEnd={handlePointerUp}
-            style={{
-              position: 'relative',
-              width: '100%',
-              height: '100%',
-              background: mediaUrl ? '#000000' : selectedGradient,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              cursor: draggingElement ? 'grabbing' : 'default'
-            }}
-          >
-            {/* Live Canvas Background effect if no mediaUrl */}
-            {!mediaUrl && animatedBg !== 'none' && (
-              <ChatLiveWallpaper wallpaperId={animatedBg} />
-            )}
+          {/* VIEW MODE 2: CANVAS / ARTWORK / PHOTO STAGE */}
+          {viewMode === 'canvas' && (
+            <>
+              {/* Live Canvas Animated Wallpaper */}
+              {animatedBg !== 'none' && (
+                <ChatLiveWallpaper wallpaperId={animatedBg} />
+              )}
 
-            {/* Media Image Layer */}
-            {mediaUrl && (
-              <img
-                src={mediaUrl}
-                alt="Story Media"
-                style={{
+              {/* Photo Image Layer */}
+              {mediaUrl && (
+                <div style={{
                   position: 'absolute',
                   inset: 0,
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: imageFit === 'padded' ? '24px' : '0px',
+                  overflow: 'hidden',
                   pointerEvents: 'none'
-                }}
-              />
-            )}
-
-            {/* Subtle Vignette for top & bottom tool readability */}
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                background: 'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, transparent 22%, transparent 75%, rgba(0,0,0,0.75) 100%)',
-                pointerEvents: 'none'
-              }}
-            />
-
-            {/* Floating Top Instagram Tools */}
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                padding: '16px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                zIndex: 30
-              }}
-            >
-              {/* Back / Retake / Close */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  style={{
-                    background: 'rgba(0,0,0,0.4)',
-                    border: 'none',
-                    color: '#fff',
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    backdropFilter: 'blur(8px)'
-                  }}
-                  title="Close"
-                >
-                  <X size={20} />
-                </button>
-
-                {mediaUrl && (
-                  <button
-                    type="button"
-                    onClick={handleRetake}
+                }}>
+                  <img
+                    src={mediaUrl}
+                    alt="Media"
                     style={{
-                      background: 'rgba(0,0,0,0.4)',
-                      border: 'none',
-                      color: '#fff',
-                      width: '38px',
-                      height: '38px',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      backdropFilter: 'blur(8px)'
+                      width: '100%',
+                      height: '100%',
+                      objectFit: imageFit === 'padded' ? 'contain' : imageFit,
+                      transform: `scale(${imageZoom})`,
+                      filter: imageFilter !== 'none' ? imageFilter : 'none',
+                      opacity: imageOpacity,
+                      borderRadius: imageFit === 'padded' ? '18px' : '0px'
                     }}
-                    title="Retake Photo"
-                  >
-                    <Camera size={19} />
-                  </button>
-                )}
-              </div>
+                  />
+                </div>
+              )}
 
-              {/* Floating Instagram Action Pills: Aa, 🎵, 🎨, ✨, 😊 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {/* 1. Text Tool (Aa) */}
-                <button
-                  type="button"
-                  onClick={() => setShowTextEditor(true)}
-                  style={{
-                    background: caption ? '#f59e0b' : 'rgba(0,0,0,0.45)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    color: caption ? '#000' : '#fff',
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    backdropFilter: 'blur(8px)',
-                    fontWeight: 900,
-                    fontSize: '1rem'
-                  }}
-                  title="Add or Edit Text (Aa)"
-                >
-                  Aa
-                </button>
-
-                {/* 2. Music Picker Tool (🎵) */}
-                <button
-                  type="button"
-                  onClick={() => setShowMusicPicker(true)}
-                  style={{
-                    background: selectedSong ? 'linear-gradient(135deg, #f59e0b, #ec4899)' : 'rgba(0,0,0,0.45)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    color: '#fff',
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    backdropFilter: 'blur(8px)',
-                    boxShadow: selectedSong ? '0 0 12px rgba(245, 158, 11, 0.6)' : 'none'
-                  }}
-                  title="Add Music Track"
-                >
-                  <Music size={18} />
-                </button>
-
-                {/* 3. Cycle Colors / Gradient (🎨) */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedGradientIndex(i => i + 1)}
-                  style={{
-                    background: 'rgba(0,0,0,0.45)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    color: '#fff',
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    backdropFilter: 'blur(8px)'
-                  }}
-                  title="Cycle Background Color"
-                >
-                  <Palette size={18} />
-                </button>
-
-                {/* 4. Cycle Live Aura Effects (✨) */}
-                <button
-                  type="button"
-                  onClick={() => setAnimatedBgIndex(i => i + 1)}
-                  style={{
-                    background: animatedBg !== 'none' ? 'rgba(99, 102, 241, 0.8)' : 'rgba(0,0,0,0.45)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    color: '#fff',
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    backdropFilter: 'blur(8px)'
-                  }}
-                  title="Cycle Live Aura Wallpaper"
-                >
-                  <Sparkles size={18} />
-                </button>
-
-                {/* 5. Stickers Tool (😊) */}
-                <button
-                  type="button"
-                  onClick={() => setShowStickerDrawer(s => !s)}
-                  style={{
-                    background: selectedStickers.length > 0 ? 'rgba(236, 72, 153, 0.8)' : 'rgba(0,0,0,0.45)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    color: '#fff',
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    backdropFilter: 'blur(8px)'
-                  }}
-                  title="Add Stickers"
-                >
-                  <Smile size={18} />
-                </button>
-              </div>
-            </div>
-
-            {/* Draggable Music Sticker on Canvas (Instagram Style) */}
-            {selectedSong && (
+              {/* Draggable 3D Text / Caption */}
               <div
-                onMouseDown={(e) => handlePointerDown('music', e)}
-                onTouchStart={(e) => handlePointerDown('music', e)}
+                onMouseDown={(e) => handlePointerDown('text', e)}
+                onTouchStart={(e) => handlePointerDown('text', e)}
+                onClick={() => setActivePanel('text')}
                 style={{
                   position: 'absolute',
-                  left: `${musicPos.x}%`,
-                  top: `${musicPos.y}%`,
+                  left: `${textPos.x}%`,
+                  top: `${textPos.y}%`,
                   transform: 'translate(-50%, -50%)',
                   zIndex: 25,
+                  cursor: 'grab',
+                  maxWidth: '86%',
+                  padding: '8px 14px',
+                  textAlign: textAlign,
+                  userSelect: 'none'
+                }}
+              >
+                <div
+                  className={textStyle3D !== 'none' ? textStyle3D : ''}
+                  style={{
+                    fontSize: `${textSize}rem`,
+                    fontWeight: 800,
+                    color: '#ffffff',
+                    lineHeight: 1.35,
+                    wordBreak: 'break-word',
+                    textShadow: textStyle3D === 'none' ? '0 3px 14px rgba(0,0,0,0.85)' : undefined
+                  }}
+                >
+                  {caption || "Tap here or '3D Text' to type..."}
+                </div>
+              </div>
+
+              {/* Draggable Pulse Music Card Sticker */}
+              {selectedSong && (
+                <div
+                  onMouseDown={(e) => handlePointerDown('music', e)}
+                  onTouchStart={(e) => handlePointerDown('music', e)}
+                  style={{
+                    position: 'absolute',
+                    left: `${musicPos.x}%`,
+                    top: `${musicPos.y}%`,
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: 26,
+                    background: 'rgba(15, 15, 24, 0.92)',
+                    backdropFilter: 'blur(16px)',
+                    WebkitBackdropFilter: 'blur(16px)',
+                    border: '1.5px solid rgba(245, 158, 11, 0.7)',
+                    boxShadow: '0 8px 30px rgba(0,0,0,0.7)',
+                    borderRadius: '20px',
+                    padding: '6px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    maxWidth: '85%',
+                    cursor: 'grab'
+                  }}
+                >
+                  <img
+                    src={selectedSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedSong.songTitle}`}
+                    alt="Album"
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                      animation: 'spin 4s linear infinite',
+                      border: '1px solid #f59e0b',
+                      flexShrink: 0
+                    }}
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      🎵 {selectedSong.songTitle}
+                    </span>
+                    <span style={{ fontSize: '0.66rem', color: '#f59e0b', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {selectedSong.artistName || 'Full Song Stream'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedSong(null);
+                      if (previewAudioRef.current) previewAudioRef.current.pause();
+                      stopGlobalMusicAudio();
+                    }}
+                    style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px', marginLeft: '4px' }}
+                    title="Remove Song"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
+              {/* Floating Stickers / Emojis on Stage */}
+              {selectedStickers.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: '80px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  zIndex: 26,
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  background: 'rgba(18, 18, 24, 0.85)',
-                  backdropFilter: 'blur(16px)',
-                  WebkitBackdropFilter: 'blur(16px)',
-                  padding: '6px 14px 6px 8px',
+                  background: 'rgba(0,0,0,0.6)',
+                  padding: '6px 14px',
                   borderRadius: '24px',
-                  border: '1.5px solid rgba(245, 158, 11, 0.65)',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
-                  cursor: 'grab',
-                  maxWidth: '82%'
-                }}
-              >
-                <img
-                  src={selectedSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedSong.songTitle}`}
-                  alt="Track"
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    objectFit: 'cover',
-                    animation: 'spin 4s linear infinite',
-                    flexShrink: 0
-                  }}
-                />
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    🎵 {selectedSong.songTitle}
-                  </span>
-                  <span style={{ fontSize: '0.68rem', color: '#f59e0b', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {selectedSong.artistName || 'Full Song'}
-                  </span>
+                  backdropFilter: 'blur(10px)',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.5)'
+                }}>
+                  {selectedStickers.map((s, idx) => (
+                    <span
+                      key={idx}
+                      onClick={() => handleToggleSticker(s)}
+                      style={{ fontSize: '1.45rem', cursor: 'pointer' }}
+                      title="Tap to remove"
+                    >
+                      {s}
+                    </span>
+                  ))}
                 </div>
+              )}
+            </>
+          )}
+
+          {/* =========================================================================
+              SLIDE-UP INTERACTIVE CONTROL DRAWERS
+          ========================================================================= */}
+
+          {/* DRAWER 1: 3D TEXT & CAPTION CONTROLS */}
+          {activePanel === 'text' && (
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 45,
+              background: 'rgba(15, 15, 24, 0.96)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              borderTop: '1px solid rgba(99, 102, 241, 0.4)',
+              borderRadius: '24px 24px 0 0',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 -10px 40px rgba(0,0,0,0.7)',
+              animation: 'pulseFadeIn 0.2s ease'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#a5b4fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Type size={16} /> 3D Text Studio
+                </span>
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedSong(null);
-                    if (previewAudioRef.current) previewAudioRef.current.pause();
-                    stopGlobalMusicAudio();
-                  }}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#ef4444',
-                    padding: '2px',
-                    cursor: 'pointer',
-                    marginLeft: '4px'
-                  }}
-                  title="Remove Music"
+                  onClick={() => setActivePanel(null)}
+                  style={{ background: 'rgba(99, 102, 241, 0.25)', border: '1px solid rgba(99, 102, 241, 0.4)', color: '#fff', borderRadius: '12px', padding: '3px 10px', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer' }}
                 >
-                  <X size={14} />
+                  Done ✓
                 </button>
               </div>
-            )}
 
-            {/* Draggable Text / Caption on Canvas (Tap to edit) */}
-            <div
-              onMouseDown={(e) => handlePointerDown('text', e)}
-              onTouchStart={(e) => handlePointerDown('text', e)}
-              onClick={() => setShowTextEditor(true)}
-              style={{
-                position: 'absolute',
-                left: `${textPos.x}%`,
-                top: `${textPos.y}%`,
-                transform: 'translate(-50%, -50%)',
-                zIndex: 24,
-                cursor: 'grab',
-                padding: '10px 16px',
-                borderRadius: '16px',
-                textAlign: 'center',
-                maxWidth: '88%',
-                lineHeight: 1.35
-              }}
-            >
-              <div
-                className={textStyle3D !== 'none' ? textStyle3D : ''}
+              {/* Text Input */}
+              <input
+                type="text"
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                placeholder="Type your vibe text..."
                 style={{
-                  fontSize: '1.45rem',
-                  fontWeight: 800,
-                  color: '#ffffff',
-                  textShadow: '0 2px 14px rgba(0,0,0,0.85)',
-                  wordBreak: 'break-word',
-                  whiteSpace: 'pre-wrap'
-                }}
-              >
-                {caption || "Tap to type your vibe..."}
-              </div>
-            </div>
-
-            {/* Draggable Stickers */}
-            {selectedStickers.length > 0 && (
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: '90px',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  zIndex: 25,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  background: 'rgba(0,0,0,0.5)',
-                  padding: '6px 14px',
-                  borderRadius: '20px',
-                  backdropFilter: 'blur(10px)'
-                }}
-              >
-                {selectedStickers.map((s, i) => (
-                  <span
-                    key={i}
-                    onClick={() => handleToggleSticker(s)}
-                    style={{ fontSize: '1.5rem', cursor: 'pointer' }}
-                    title="Click to remove"
-                  >
-                    {s}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Sticker Drawer Sheet */}
-            {showStickerDrawer && (
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: '75px',
-                  left: '12px',
-                  right: '12px',
-                  zIndex: 40,
-                  background: 'rgba(18, 18, 24, 0.94)',
-                  backdropFilter: 'blur(20px)',
+                  width: '100%',
+                  background: 'rgba(255,255,255,0.08)',
                   border: '1px solid rgba(255,255,255,0.15)',
-                  borderRadius: '20px',
-                  padding: '12px 16px',
-                  boxShadow: '0 12px 32px rgba(0,0,0,0.8)',
-                  animation: 'pulseFadeIn 0.2s ease'
+                  borderRadius: '12px',
+                  padding: '10px 14px',
+                  color: '#ffffff',
+                  fontSize: '0.94rem',
+                  outline: 'none'
                 }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#f59e0b' }}>Tap to Add Stickers</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowStickerDrawer(false)}
-                    style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}
-                  >
-                    <X size={15} />
-                  </button>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center' }}>
-                  {STICKERS.map((st, i) => (
+              />
+
+              {/* 3D Styles Horizontal Scroll */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700 }}>Choose 3D Style:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
+                  {TEXT_STYLES_3D.map(st => (
                     <button
-                      key={i}
+                      key={st.id}
                       type="button"
-                      onClick={() => handleToggleSticker(st)}
+                      onClick={() => setTextStyle3D(st.id)}
                       style={{
-                        background: selectedStickers.includes(st) ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.08)',
-                        border: selectedStickers.includes(st) ? '1px solid #f59e0b' : '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '12px',
-                        fontSize: '1.5rem',
-                        padding: '6px 10px',
-                        cursor: 'pointer'
+                        background: textStyle3D === st.id ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'rgba(255,255,255,0.08)',
+                        border: textStyle3D === st.id ? '1px solid #a855f7' : '1px solid rgba(255,255,255,0.12)',
+                        color: textStyle3D === st.id ? '#ffffff' : '#e2e8f0',
+                        borderRadius: '16px',
+                        padding: '5px 12px',
+                        fontSize: '0.75rem',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0
                       }}
                     >
-                      {st}
+                      {st.label}
                     </button>
                   ))}
                 </div>
               </div>
-            )}
 
-            {/* Bottom Instagram Action Bar ("Your Story ⚡") */}
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                padding: '16px 20px 24px 20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                zIndex: 30,
-                background: 'linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%)'
-              }}
-            >
-              {/* Cancel Button */}
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                style={{
-                  background: 'rgba(255,255,255,0.12)',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  color: '#e2e8f0',
-                  padding: '10px 18px',
-                  borderRadius: '24px',
-                  fontSize: '0.86rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(8px)'
-                }}
-              >
-                Cancel
-              </button>
-
-              {/* Instagram Style "Your Story ⚡" Share Button */}
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={handleSubmit}
-                style={{
-                  background: 'linear-gradient(135deg, #6366f1 0%, #ec4899 50%, #f59e0b 100%)',
-                  border: 'none',
-                  color: '#ffffff',
-                  padding: '10px 22px',
-                  borderRadius: '26px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '0.94rem',
-                  fontWeight: 800,
-                  cursor: submitting ? 'wait' : 'pointer',
-                  boxShadow: '0 4px 20px rgba(236, 72, 153, 0.55)',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                {/* User Avatar Circle */}
-                <div
-                  style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    overflow: 'hidden',
-                    border: '1.5px solid #fff',
-                    flexShrink: 0
-                  }}
-                >
-                  <img
-                    src={user?.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.username || 'user'}`}
-                    alt="Me"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              {/* Size Slider & Alignment */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700 }}>Size:</span>
+                  <input
+                    type="range"
+                    min="0.9"
+                    max="2.5"
+                    step="0.1"
+                    value={textSize}
+                    onChange={(e) => setTextSize(Number(e.target.value))}
+                    style={{ flex: 1, accentColor: '#6366f1', height: '4px', cursor: 'pointer' }}
                   />
                 </div>
-                <span>{submitting ? 'Sharing...' : 'Your Vibe ⚡'}</span>
-                {submitting ? <Loader2 size={16} className="spin" /> : <Send size={15} />}
-              </button>
-            </div>
-          </div>
-        )}
 
-        {/* =========================================================================
-            SCREEN 3: INSTAGRAM DIRECT TEXT TYPING OVERLAY (Aa)
-        ========================================================================= */}
-        {showTextEditor && (
-          <div
-            style={{
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  {['left', 'center', 'right'].map(align => (
+                    <button
+                      key={align}
+                      type="button"
+                      onClick={() => setTextAlign(align)}
+                      style={{
+                        background: textAlign === align ? '#6366f1' : 'rgba(255,255,255,0.08)',
+                        border: 'none',
+                        color: '#fff',
+                        borderRadius: '6px',
+                        padding: '4px 8px',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        textTransform: 'capitalize'
+                      }}
+                    >
+                      {align}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* DRAWER 2: BG COLOR / GRADIENT SELECTOR */}
+          {activePanel === 'bg_color' && (
+            <div style={{
               position: 'absolute',
-              inset: 0,
-              zIndex: 50,
-              background: 'rgba(0, 0, 0, 0.88)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 45,
+              background: 'rgba(15, 15, 24, 0.96)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              borderTop: '1px solid rgba(245, 158, 11, 0.4)',
+              borderRadius: '24px 24px 0 0',
+              padding: '16px',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'space-between',
-              padding: '20px 20px 28px 20px',
+              gap: '12px',
+              boxShadow: '0 -10px 40px rgba(0,0,0,0.7)',
               animation: 'pulseFadeIn 0.2s ease'
-            }}
-          >
-            {/* Top Bar with Done */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                onClick={() => setShowTextEditor(false)}
-                style={{
-                  background: '#f59e0b',
-                  border: 'none',
-                  color: '#000',
-                  padding: '7px 20px',
-                  borderRadius: '20px',
-                  fontWeight: 900,
-                  fontSize: '0.9rem',
-                  cursor: 'pointer'
-                }}
-              >
-                Done
-              </button>
-            </div>
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Palette size={16} /> Select Background Gradient
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActivePanel(null)}
+                  style={{ background: 'rgba(245, 158, 11, 0.25)', border: '1px solid rgba(245, 158, 11, 0.4)', color: '#fff', borderRadius: '12px', padding: '3px 10px', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Done ✓
+                </button>
+              </div>
 
-            {/* Centered Large Textarea */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-              <textarea
-                autoFocus
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                placeholder="Type your vibe..."
-                rows={4}
-                className={textStyle3D !== 'none' ? textStyle3D : ''}
-                style={{
-                  width: '100%',
-                  background: 'transparent',
-                  border: 'none',
-                  outline: 'none',
-                  color: '#ffffff',
-                  fontSize: '1.6rem',
-                  fontWeight: 800,
-                  textAlign: 'center',
-                  resize: 'none',
-                  lineHeight: 1.35
-                }}
-              />
+              {/* Swatches Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                {GRADIENTS.map(g => {
+                  const isSelected = selectedGradient === g.value;
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedGradient(g.value);
+                        setMediaUrl('');
+                      }}
+                      style={{
+                        background: g.value,
+                        height: '52px',
+                        borderRadius: '14px',
+                        border: isSelected ? '3px solid #ffffff' : '1px solid rgba(255,255,255,0.2)',
+                        boxShadow: isSelected ? '0 0 15px rgba(255,255,255,0.6)' : 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '4px'
+                      }}
+                    >
+                      <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#ffffff', textShadow: '0 1px 4px rgba(0,0,0,0.8)', textAlign: 'center' }}>
+                        {g.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+          )}
 
-            {/* Bottom 3D Text Styles Selector */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'rgba(255,255,255,0.6)', textAlign: 'center' }}>
-                Select Text Style
-              </span>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  overflowX: 'auto',
-                  paddingBottom: '6px',
-                  scrollbarWidth: 'none'
-                }}
-              >
-                {TEXT_STYLES_3D.map(st => (
+          {/* DRAWER 3: LIVE CANVAS ANIMATED WALLPAPER SELECTOR */}
+          {activePanel === 'animated_bg' && (
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 45,
+              background: 'rgba(15, 15, 24, 0.96)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              borderTop: '1px solid rgba(236, 72, 153, 0.4)',
+              borderRadius: '24px 24px 0 0',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 -10px 40px rgba(0,0,0,0.7)',
+              animation: 'pulseFadeIn 0.2s ease'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#ec4899', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Sparkles size={16} /> Live Canvas Animations
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActivePanel(null)}
+                  style={{ background: 'rgba(236, 72, 153, 0.25)', border: '1px solid rgba(236, 72, 153, 0.4)', color: '#fff', borderRadius: '12px', padding: '3px 10px', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Done ✓
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                {ANIMATED_BGS.map(a => {
+                  const isSelected = animatedBg === a.id;
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => setAnimatedBg(a.id)}
+                      style={{
+                        background: isSelected ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.35), rgba(99, 102, 241, 0.35))' : 'rgba(255,255,255,0.06)',
+                        border: isSelected ? '1.5px solid #ec4899' : '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '14px',
+                        padding: '10px 14px',
+                        color: isSelected ? '#ffffff' : '#cbd5e1',
+                        fontSize: '0.8rem',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}
+                    >
+                      <span>{a.label}</span>
+                      {isSelected && <Check size={16} color="#ec4899" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* DRAWER 4: 250+ CATEGORIZED EMOJIS & STICKERS */}
+          {activePanel === 'stickers' && (
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: '320px',
+              zIndex: 45,
+              background: 'rgba(15, 15, 24, 0.98)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              borderTop: '1px solid rgba(234, 179, 8, 0.4)',
+              borderRadius: '24px 24px 0 0',
+              padding: '14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              boxShadow: '0 -10px 40px rgba(0,0,0,0.7)',
+              animation: 'pulseFadeIn 0.2s ease'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#facc15', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Smile size={16} /> Tap Emojis to Add to Story
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActivePanel(null)}
+                  style={{ background: 'rgba(234, 179, 8, 0.25)', border: '1px solid rgba(234, 179, 8, 0.4)', color: '#fff', borderRadius: '12px', padding: '3px 10px', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Done ✓
+                </button>
+              </div>
+
+              {/* Emoji Category Tabs */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '6px' }}>
+                {EMOJI_CATEGORIES.map(cat => {
+                  const Icon = cat.icon;
+                  const isAct = activeEmojiCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setActiveEmojiCategory(cat.id)}
+                      style={{
+                        background: isAct ? 'rgba(234, 179, 8, 0.3)' : 'transparent',
+                        border: isAct ? '1px solid #facc15' : '1px solid transparent',
+                        color: isAct ? '#facc15' : '#94a3b8',
+                        borderRadius: '8px',
+                        padding: '4px 8px',
+                        cursor: 'pointer',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Icon size={14} /> {cat.name.split(' ')[0]}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Emoji Grid */}
+              <div style={{
+                flex: 1,
+                overflowY: 'auto',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, 1fr)',
+                gap: '8px',
+                alignContent: 'start',
+                scrollbarWidth: 'thin'
+              }}>
+                {(EMOJI_CATEGORIES.find(c => c.id === activeEmojiCategory)?.emojis || ALL_EMOJIS).map((st, i) => (
                   <button
-                    key={st.id}
+                    key={`${st}_${i}`}
                     type="button"
-                    onClick={() => setTextStyle3D(st.id)}
+                    onClick={() => handleToggleSticker(st)}
                     style={{
-                      background: textStyle3D === st.id ? '#ffffff' : 'rgba(255,255,255,0.1)',
-                      color: textStyle3D === st.id ? '#000000' : '#ffffff',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      borderRadius: '18px',
-                      padding: '6px 14px',
-                      fontSize: '0.8rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      flexShrink: 0
+                      background: selectedStickers.includes(st) ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255,255,255,0.06)',
+                      border: selectedStickers.includes(st) ? '1px solid #facc15' : '1px solid transparent',
+                      borderRadius: '10px',
+                      fontSize: '1.4rem',
+                      padding: '4px',
+                      cursor: 'pointer'
                     }}
                   >
-                    {st.label}
+                    {st}
                   </button>
                 ))}
               </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* DRAWER 5: IMAGE FX & FIT ADJUST CONTROLS */}
+          {activePanel === 'image_adjust' && mediaUrl && (
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 45,
+              background: 'rgba(15, 15, 24, 0.96)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              borderTop: '1px solid rgba(168, 85, 247, 0.4)',
+              borderRadius: '24px 24px 0 0',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 -10px 40px rgba(0,0,0,0.7)',
+              animation: 'pulseFadeIn 0.2s ease'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#c084fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <SlidersHorizontal size={16} /> Image Adjustment & Filters
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActivePanel(null)}
+                  style={{ background: 'rgba(168, 85, 247, 0.25)', border: '1px solid rgba(168, 85, 247, 0.4)', color: '#fff', borderRadius: '12px', padding: '3px 10px', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Done ✓
+                </button>
+              </div>
+
+              {/* Fit Modes */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 700 }}>Fit:</span>
+                {['cover', 'contain', 'padded'].map(fit => (
+                  <button
+                    key={fit}
+                    type="button"
+                    onClick={() => setImageFit(fit)}
+                    style={{
+                      background: imageFit === fit ? '#a855f7' : 'rgba(255,255,255,0.08)',
+                      border: 'none',
+                      color: '#fff',
+                      borderRadius: '8px',
+                      padding: '4px 10px',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      textTransform: 'capitalize'
+                    }}
+                  >
+                    {fit}
+                  </button>
+                ))}
+              </div>
+
+              {/* Filters Scroll */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '4px' }}>
+                {IMAGE_FILTERS.map(f => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setImageFilter(f.id)}
+                    style={{
+                      background: imageFilter === f.id ? 'rgba(168, 85, 247, 0.4)' : 'rgba(255,255,255,0.06)',
+                      border: imageFilter === f.id ? '1px solid #c084fc' : '1px solid rgba(255,255,255,0.1)',
+                      color: imageFilter === f.id ? '#ffffff' : '#cbd5e1',
+                      borderRadius: '12px',
+                      padding: '4px 10px',
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Zoom & Opacity Sliders */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700 }}>Zoom:</span>
+                  <input
+                    type="range"
+                    min="0.8"
+                    max="2.2"
+                    step="0.1"
+                    value={imageZoom}
+                    onChange={(e) => setImageZoom(Number(e.target.value))}
+                    style={{ flex: 1, accentColor: '#a855f7', height: '4px', cursor: 'pointer' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700 }}>Opacity:</span>
+                  <input
+                    type="range"
+                    min="0.2"
+                    max="1.0"
+                    step="0.05"
+                    value={imageOpacity}
+                    onChange={(e) => setImageOpacity(Number(e.target.value))}
+                    style={{ flex: 1, accentColor: '#a855f7', height: '4px', cursor: 'pointer' }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* =========================================================================
+            BOTTOM PULSE STUDIO ACTION BAR (Publish / Cancel)
+        ========================================================================= */}
+        <div
+          style={{
+            padding: '12px 18px',
+            background: 'rgba(12, 12, 18, 0.95)',
+            borderTop: '1px solid rgba(255,255,255,0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            zIndex: 40,
+            backdropFilter: 'blur(12px)'
+          }}
+        >
+          {/* Cancel Button */}
+          <button
+            type="button"
+            onClick={handleCloseModal}
+            style={{
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              color: '#cbd5e1',
+              borderRadius: '20px',
+              padding: '8px 18px',
+              fontSize: '0.84rem',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            Cancel
+          </button>
+
+          {/* Glowing Publish Vibe Button */}
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={handleSubmit}
+            style={{
+              background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #f59e0b 100%)',
+              border: 'none',
+              color: '#ffffff',
+              borderRadius: '24px',
+              padding: '9px 24px',
+              fontSize: '0.9rem',
+              fontWeight: 900,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              cursor: submitting ? 'wait' : 'pointer',
+              boxShadow: '0 4px 20px rgba(99, 102, 241, 0.5), 0 0 12px rgba(245, 158, 11, 0.4)',
+              transition: 'transform 0.15s ease'
+            }}
+          >
+            {submitting ? <Loader2 size={16} className="spin" /> : <Send size={15} />}
+            <span>{submitting ? 'Posting...' : 'Publish Vibe ⚡'}</span>
+          </button>
+        </div>
       </div>
 
       {/* JioSaavn Full Song Music Picker Modal */}
