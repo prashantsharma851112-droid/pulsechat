@@ -365,12 +365,73 @@ router.post('/auto-cleanup', authMiddleware, async (req, res) => {
   }
 });
 
-// YouTube Full Song Search Endpoint (Extracts full length tracks)
+// YouTube / Full Song Audio Search Endpoint (Extracts full length direct audio tracks)
 router.get('/youtube-search', authMiddleware, async (req, res) => {
   try {
     const q = req.query.q || '';
     if (!q.trim()) return res.json([]);
 
+    const endpoints = [
+      'https://jiosaavn-api-tan.vercel.app/api/search/songs?query=',
+      'https://saavn.dev/api/search/songs?query=',
+      'https://jiosaavn-api-private-us.vercel.app/api/search/songs?query='
+    ];
+
+    let fullSongItems = [];
+
+    for (const ep of endpoints) {
+      try {
+        const fetchRes = await fetch(ep + encodeURIComponent(q.trim()));
+        if (fetchRes.ok) {
+          const data = await fetchRes.json();
+          const results = data.data?.results || data.results;
+          if (Array.isArray(results) && results.length > 0) {
+            fullSongItems = results.map(song => {
+              const audioObj = Array.isArray(song.downloadUrl)
+                ? (song.downloadUrl.find(d => d.quality === '320kbps') || song.downloadUrl.find(d => d.quality === '160kbps') || song.downloadUrl[song.downloadUrl.length - 1])
+                : null;
+              const audioUrl = audioObj?.url || (typeof song.downloadUrl === 'string' ? song.downloadUrl : null);
+
+              const imgObj = Array.isArray(song.image)
+                ? (song.image.find(i => i.quality === '500x500') || song.image[song.image.length - 1])
+                : null;
+              const albumArt = imgObj?.url || (typeof song.image === 'string' ? song.image : null);
+
+              const artist = Array.isArray(song.artists?.primary) && song.artists.primary.length > 0
+                ? song.artists.primary.map(a => a.name).join(', ')
+                : (song.primaryArtists || 'PulseChat Music');
+
+              const title = (song.name || song.title || 'Full Song')
+                .replace(/&quot;/g, '"')
+                .replace(/&amp;/g, '&')
+                .replace(/&#039;/g, "'");
+
+              if (!audioUrl) return null;
+
+              return {
+                trackId: `full_${song.id || Math.random().toString(36).substr(2, 6)}`,
+                songTitle: title,
+                artistName: artist,
+                albumArt: albumArt || '',
+                audioUrl: audioUrl,
+                duration: song.duration ? Number(song.duration) : 240,
+                isFullSong: true
+              };
+            }).filter(Boolean);
+
+            if (fullSongItems.length > 0) break;
+          }
+        }
+      } catch (e) {
+        console.warn('Saavn search endpoint error:', e.message);
+      }
+    }
+
+    if (fullSongItems.length > 0) {
+      return res.json(fullSongItems);
+    }
+
+    // YouTube Fallback Scraper if Saavn API yields zero items
     const searchUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q.trim() + ' full song audio');
     const response = await fetch(searchUrl, {
       headers: {
@@ -379,9 +440,9 @@ router.get('/youtube-search', authMiddleware, async (req, res) => {
     });
     const html = await response.text();
     const matches = [...html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)];
-    const videoIds = Array.from(new Set(matches.map(m => m[1]))).slice(0, 15);
+    const videoIds = Array.from(new Set(matches.map(m => m[1]))).slice(0, 10);
 
-    const items = await Promise.all(videoIds.map(async (vId) => {
+    const ytItems = await Promise.all(videoIds.map(async (vId) => {
       try {
         const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vId}&format=json`);
         if (!oembedRes.ok) return null;
@@ -400,11 +461,10 @@ router.get('/youtube-search', authMiddleware, async (req, res) => {
       }
     }));
 
-    const validItems = items.filter(Boolean);
-    res.json(validItems);
+    res.json(ytItems.filter(Boolean));
   } catch (err) {
-    console.error('YouTube search error:', err);
-    res.status(500).json({ error: 'Failed to search YouTube audio' });
+    console.error('Full song search error:', err);
+    res.status(500).json({ error: 'Failed to search full song audio' });
   }
 });
 

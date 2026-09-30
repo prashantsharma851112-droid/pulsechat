@@ -99,16 +99,16 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
       if (audioRef.current) {
         audioRef.current.pause();
       }
-      if (song.youtubeId) {
-        setPreviewYtId(song.youtubeId);
-        setPlayingTrackId(song.trackId);
-      } else if (song.audioUrl && !song.audioUrl.includes('youtube')) {
+      if (song.audioUrl && !song.audioUrl.includes('youtube')) {
         setPreviewYtId(null);
         const newAudio = new Audio(song.audioUrl);
         newAudio.volume = 0.85;
-        newAudio.play().catch(() => {});
+        newAudio.play().catch(e => console.warn('Preview audio failed:', e));
         newAudio.onended = () => setPlayingTrackId(null);
         audioRef.current = newAudio;
+        setPlayingTrackId(song.trackId);
+      } else if (song.youtubeId) {
+        setPreviewYtId(song.youtubeId);
         setPlayingTrackId(song.trackId);
       }
     }

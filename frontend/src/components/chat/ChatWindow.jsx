@@ -96,7 +96,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       chatAudioRef.current = null;
     }
 
-    if (chatMusicSong?.audioUrl && !chatMusicSong?.youtubeId) {
+    if (chatMusicSong?.audioUrl && !chatMusicSong.audioUrl.includes('youtube')) {
       const audio = new Audio(chatMusicSong.audioUrl);
       audio.loop = true;
       audio.volume = isChatMusicMuted ? 0 : auraVolume;

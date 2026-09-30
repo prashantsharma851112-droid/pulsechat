@@ -102,7 +102,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
       audioRef.current = null;
     }
 
-    if (currentVibe?.audioUrl && !currentVibe?.youtubeId) {
+    if (currentVibe?.audioUrl && !currentVibe.audioUrl.includes('youtube')) {
       const audio = new Audio(currentVibe.audioUrl);
       audio.loop = true;
       const validTime = Number(currentVibe?.songStartTime || 0);

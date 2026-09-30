@@ -96,7 +96,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       if (previewAudioRef.current) {
         previewAudioRef.current.pause();
       }
-      if (song.audioUrl && !song.youtubeId) {
+      if (song.audioUrl && !song.audioUrl.includes('youtube')) {
         const audio = new Audio(song.audioUrl);
         const validTime = Number(startTimeSec);
         if (!isNaN(validTime) && isFinite(validTime) && validTime >= 0) {
