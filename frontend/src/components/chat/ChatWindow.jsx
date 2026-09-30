@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2 } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2 } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -89,7 +89,174 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     return saved !== null ? Number(saved) : 0.7;
   });
 
-  // Real Chat Background Music Player
+  const handleUpdateChatMusic = useCallback((song) => {
+    setChatMusicSong(song);
+    try {
+      if (song) {
+        localStorage.setItem(`pulsechat_music_${chatId}`, JSON.stringify(song));
+      } else {
+        localStorage.removeItem(`pulsechat_music_${chatId}`);
+      }
+    } catch (e) {}
+
+    if (socket && chatId) {
+      socket.emit('chat_music_changed', { chatId, song: song || null, senderId: user?.id });
+    }
+  }, [chatId, socket, user?.id]);
+
+  const similarSongsQueueRef = useRef([]);
+  const [songProgress, setSongProgress] = useState(0);
+  const [songDuration, setSongDuration] = useState(0);
+  const [isSongPlaying, setIsSongPlaying] = useState(true);
+  const [isAutoNextLoading, setIsAutoNextLoading] = useState(false);
+
+  const formatSongTime = (secs) => {
+    if (!secs || isNaN(secs) || !isFinite(secs)) return '0:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const fetchSimilarSongs = useCallback(async (currentSong) => {
+    if (!currentSong) return;
+    try {
+      const q = currentSong.artistName || currentSong.songTitle || 'Bollywood trending';
+      const res = await fetch(`https://jiosaavn-api-tan.vercel.app/api/search/songs?query=${encodeURIComponent(q)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const saavnData = data.data?.results || data.results || [];
+      if (Array.isArray(saavnData)) {
+        const fullTracks = saavnData.map(song => {
+          const audioObj = Array.isArray(song.downloadUrl)
+            ? (song.downloadUrl.find(d => d.quality === '320kbps') || song.downloadUrl.find(d => d.quality === '160kbps') || song.downloadUrl[song.downloadUrl.length - 1])
+            : null;
+          const audioUrl = audioObj?.url || (typeof song.downloadUrl === 'string' ? song.downloadUrl : null);
+          const imgObj = Array.isArray(song.image)
+            ? (song.image.find(i => i.quality === '500x500') || song.image[song.image.length - 1])
+            : null;
+          const albumArt = imgObj?.url || (typeof song.image === 'string' ? song.image : null);
+          const artist = Array.isArray(song.artists?.primary) && song.artists.primary.length > 0
+            ? song.artists.primary.map(a => a.name).join(', ')
+            : (song.primaryArtists || 'PulseChat Music');
+          const title = (song.name || song.title || 'Full Song')
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/&#039;/g, "'");
+
+          if (!audioUrl) return null;
+          return {
+            trackId: `full_${song.id || Math.random().toString(36).substr(2, 6)}`,
+            songTitle: title,
+            artistName: artist,
+            albumArt: albumArt || '',
+            audioUrl: audioUrl,
+            duration: song.duration ? Number(song.duration) : 240,
+            isFullSong: true
+          };
+        }).filter(Boolean);
+
+        const currentTitleLower = (currentSong.songTitle || '').toLowerCase();
+        const filtered = fullTracks.filter(t => 
+          (t.songTitle || '').toLowerCase() !== currentTitleLower &&
+          t.audioUrl !== currentSong.audioUrl
+        );
+
+        similarSongsQueueRef.current = filtered;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch similar songs queue:', err);
+    }
+  }, []);
+
+  const handlePlayNextSong = useCallback(async () => {
+    setIsAutoNextLoading(true);
+    let nextTrack = null;
+
+    if (similarSongsQueueRef.current && similarSongsQueueRef.current.length > 0) {
+      nextTrack = similarSongsQueueRef.current.shift();
+    } else if (chatMusicSong) {
+      try {
+        const q = chatMusicSong.artistName || chatMusicSong.songTitle || 'Bollywood trending';
+        const res = await fetch(`https://jiosaavn-api-tan.vercel.app/api/search/songs?query=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        const saavnData = data.data?.results || data.results || [];
+        if (Array.isArray(saavnData)) {
+          const list = saavnData.map(song => {
+            const audioObj = Array.isArray(song.downloadUrl)
+              ? (song.downloadUrl.find(d => d.quality === '320kbps') || song.downloadUrl.find(d => d.quality === '160kbps') || song.downloadUrl[song.downloadUrl.length - 1])
+              : null;
+            const audioUrl = audioObj?.url || (typeof song.downloadUrl === 'string' ? song.downloadUrl : null);
+            const imgObj = Array.isArray(song.image)
+              ? (song.image.find(i => i.quality === '500x500') || song.image[song.image.length - 1])
+              : null;
+            const albumArt = imgObj?.url || (typeof song.image === 'string' ? song.image : null);
+            const artist = Array.isArray(song.artists?.primary) && song.artists.primary.length > 0
+              ? song.artists.primary.map(a => a.name).join(', ')
+              : (song.primaryArtists || 'PulseChat Music');
+            const title = (song.name || song.title || 'Full Song')
+              .replace(/&quot;/g, '"')
+              .replace(/&amp;/g, '&')
+              .replace(/&#039;/g, "'");
+
+            if (!audioUrl) return null;
+            return {
+              trackId: `full_${song.id || Math.random().toString(36).substr(2, 6)}`,
+              songTitle: title,
+              artistName: artist,
+              albumArt: albumArt || '',
+              audioUrl: audioUrl,
+              duration: song.duration ? Number(song.duration) : 240,
+              isFullSong: true
+            };
+          }).filter(Boolean);
+
+          const currentTitleLower = (chatMusicSong?.songTitle || '').toLowerCase();
+          const filtered = list.filter(t => 
+            (t.songTitle || '').toLowerCase() !== currentTitleLower &&
+            t.audioUrl !== chatMusicSong?.audioUrl
+          );
+          if (filtered.length > 0) {
+            nextTrack = filtered[0];
+            similarSongsQueueRef.current = filtered.slice(1);
+          }
+        }
+      } catch (e) {}
+    }
+
+    setIsAutoNextLoading(false);
+    if (nextTrack) {
+      handleUpdateChatMusic(nextTrack);
+    }
+  }, [chatMusicSong, handleUpdateChatMusic]);
+
+  const handleSeekSong = (e) => {
+    const newTime = Number(e.target.value);
+    setSongProgress(newTime);
+    if (chatAudioRef.current) {
+      chatAudioRef.current.currentTime = newTime;
+    }
+  };
+
+  const handleSkipTime = (seconds) => {
+    if (!chatAudioRef.current) return;
+    const current = chatAudioRef.current.currentTime || 0;
+    const dur = chatAudioRef.current.duration || songDuration || 240;
+    const newTime = Math.max(0, Math.min(dur, current + seconds));
+    chatAudioRef.current.currentTime = newTime;
+    setSongProgress(newTime);
+  };
+
+  const handleTogglePlayPause = () => {
+    if (!chatAudioRef.current) return;
+    if (chatAudioRef.current.paused) {
+      chatAudioRef.current.play().then(() => setIsSongPlaying(true)).catch(() => {});
+    } else {
+      chatAudioRef.current.pause();
+      setIsSongPlaying(false);
+    }
+  };
+
+  // Real Chat Background Music Player with Auto-Next & Seek Tracking
   useEffect(() => {
     stopGlobalMusicAudio();
     if (chatAudioRef.current) {
@@ -101,13 +268,46 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       } catch (e) {}
     }
 
+    setSongProgress(0);
+    setSongDuration(chatMusicSong?.duration || 0);
+
     if (chatMusicSong?.audioUrl && !chatMusicSong.audioUrl.includes('youtube')) {
       const audio = new Audio(chatMusicSong.audioUrl);
-      audio.loop = true;
       audio.volume = isChatMusicMuted ? 0 : auraVolume;
+
+      audio.addEventListener('loadedmetadata', () => {
+        if (audio.duration && !isNaN(audio.duration)) {
+          setSongDuration(audio.duration);
+        }
+      });
+
+      audio.addEventListener('timeupdate', () => {
+        setSongProgress(audio.currentTime);
+        if (audio.duration && !isNaN(audio.duration)) {
+          setSongDuration(audio.duration);
+        }
+      });
+
+      audio.addEventListener('play', () => setIsSongPlaying(true));
+      audio.addEventListener('pause', () => setIsSongPlaying(false));
+
+      audio.addEventListener('ended', () => {
+        setIsSongPlaying(false);
+        // Automatic next song when song finishes!
+        handlePlayNextSong();
+      });
+
       registerGlobalMusicAudio(audio);
-      audio.play().catch(e => console.warn('Chat music playback prevented:', e));
+      audio.play().then(() => {
+        setIsSongPlaying(true);
+      }).catch(e => {
+        console.warn('Chat music playback prevented:', e);
+        setIsSongPlaying(false);
+      });
       chatAudioRef.current = audio;
+
+      // Pre-fetch similar songs for instant next song transition
+      fetchSimilarSongs(chatMusicSong);
     }
 
     return () => {
@@ -121,7 +321,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
       stopGlobalMusicAudio();
     };
-  }, [chatMusicSong?.audioUrl, chatMusicSong?.youtubeId, chatId]);
+  }, [chatMusicSong?.audioUrl, chatId]);
 
   useEffect(() => {
     if (chatAudioRef.current) {
@@ -611,21 +811,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       stopPulseAuraSound();
     };
   }, [chatId, auraVolume]);
-
-  const handleUpdateChatMusic = (song) => {
-    setChatMusicSong(song);
-    try {
-      if (song) {
-        localStorage.setItem(`pulsechat_music_${chatId}`, JSON.stringify(song));
-      } else {
-        localStorage.removeItem(`pulsechat_music_${chatId}`);
-      }
-    } catch (e) {}
-
-    if (socket && chatId) {
-      socket.emit('chat_music_changed', { chatId, song: song || null, senderId: user?.id });
-    }
-  };
 
   const handleSelectAura = (auraId) => {
     if (auraId !== 'off' && auraId !== 'waves' && !user?.isPro) {
@@ -1841,56 +2026,222 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     >
       <ChatLiveWallpaper wallpaperId={chatWallpaper} customImage={customWallpaper} />
 
-      {/* Full Song Background Audio Banner for Chat */}
+      {/* Full Song Background Audio Banner for Chat with Seek Adjust & Next Song Controls */}
       {chatMusicSong && !isChatMusicMuted && (
         <div style={{
           position: 'relative',
           zIndex: 10,
-          background: 'linear-gradient(135deg, rgba(18, 18, 24, 0.95), rgba(30, 27, 75, 0.95))',
-          backdropFilter: 'blur(12px)',
+          background: 'linear-gradient(135deg, rgba(15, 15, 22, 0.96), rgba(26, 22, 60, 0.96))',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
           borderBottom: '1px solid rgba(245, 158, 11, 0.4)',
-          padding: '6px 14px',
+          padding: '6px 14px 8px 14px',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '10px',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.4)'
+          flexDirection: 'column',
+          gap: '5px',
+          boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
+          animation: 'pulseFadeIn 0.25s ease'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-            <img
-              src={chatMusicSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${chatMusicSong.songTitle}`}
-              alt="Track"
-              style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', animation: 'spin 4s linear infinite', flexShrink: 0 }}
-            />
-            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-              <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                🎵 {chatMusicSong.songTitle}
-              </span>
-              <span style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {chatMusicSong.artistName || 'Full Song Audio'}
-              </span>
+          {/* Main Top Row: Info & Controls */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '10px'
+          }}>
+            {/* Song Info */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+              <img
+                src={chatMusicSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${chatMusicSong.songTitle}`}
+                alt="Track"
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  animation: isSongPlaying ? 'spin 4s linear infinite' : 'none',
+                  flexShrink: 0,
+                  border: '1.5px solid #f59e0b'
+                }}
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    🎵 {chatMusicSong.songTitle}
+                  </span>
+                  <span style={{ fontSize: '0.62rem', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '1px 5px', borderRadius: '6px', fontWeight: 700, border: '1px solid rgba(245, 158, 11, 0.4)', whiteSpace: 'nowrap' }}>
+                    Auto-Next ⚡
+                  </span>
+                </div>
+                <span style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {chatMusicSong.artistName || 'PulseChat Full Music'}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Buttons: Play/Pause, -10s, +10s, Next, Mute, Close */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+              {/* -10s Quick Jump */}
+              <button
+                type="button"
+                onClick={() => handleSkipTime(-10)}
+                title="Rewind 10 seconds"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#e2e8f0',
+                  borderRadius: '8px',
+                  padding: '3px 7px',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                -10s
+              </button>
+
+              {/* Play / Pause Toggle Button */}
+              <button
+                type="button"
+                onClick={handleTogglePlayPause}
+                style={{
+                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                  border: 'none',
+                  color: '#ffffff',
+                  borderRadius: '50%',
+                  width: '30px',
+                  height: '30px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)'
+                }}
+                title={isSongPlaying ? 'Pause' : 'Play'}
+              >
+                {isSongPlaying ? <Pause size={15} /> : <Play size={15} style={{ marginLeft: '2px' }} />}
+              </button>
+
+              {/* +10s Quick Jump */}
+              <button
+                type="button"
+                onClick={() => handleSkipTime(10)}
+                title="Forward 10 seconds"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#e2e8f0',
+                  borderRadius: '8px',
+                  padding: '3px 7px',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                +10s
+              </button>
+
+              {/* Next Song Button */}
+              <button
+                type="button"
+                onClick={handlePlayNextSong}
+                disabled={isAutoNextLoading}
+                style={{
+                  background: 'rgba(99, 102, 241, 0.22)',
+                  border: '1px solid rgba(99, 102, 241, 0.5)',
+                  color: '#a5b4fc',
+                  borderRadius: '8px',
+                  padding: '4px 8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  cursor: isAutoNextLoading ? 'wait' : 'pointer'
+                }}
+                title="Play Next Similar Song"
+              >
+                {isAutoNextLoading ? <Loader2 size={14} className="spin" /> : <SkipForward size={14} />}
+                <span>Next</span>
+              </button>
+
+              {/* Mute Button */}
+              <button
+                type="button"
+                onClick={() => setIsChatMusicMuted(m => !m)}
+                style={{
+                  background: isChatMusicMuted ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                  border: isChatMusicMuted ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(255, 255, 255, 0.15)',
+                  color: isChatMusicMuted ? '#ef4444' : '#e2e8f0',
+                  borderRadius: '50%',
+                  width: '28px',
+                  height: '28px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+                title={isChatMusicMuted ? 'Unmute' : 'Mute'}
+              >
+                {isChatMusicMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+              </button>
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => handleUpdateChatMusic(null)}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.18)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  color: '#ef4444',
+                  borderRadius: '50%',
+                  width: '28px',
+                  height: '28px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+                title="Close Music"
+              >
+                <X size={14} />
+              </button>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-            {/* Fallback YouTube iframe ONLY if no direct audioUrl */}
-            {!chatMusicSong.audioUrl && chatMusicSong.youtubeId && (
-              <div style={{ width: '130px', height: '36px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(245, 158, 11, 0.5)' }}>
-                <iframe
-                  key={`chat_yt_music_${chatId}_${chatMusicSong.youtubeId}`}
-                  src={`https://www.youtube-nocookie.com/embed/${chatMusicSong.youtubeId}?autoplay=1&enablejsapi=1&loop=1&playlist=${chatMusicSong.youtubeId}`}
-                  allow="autoplay; encrypted-media; fullscreen"
-                  style={{ width: '100%', height: '100%', border: 'none' }}
-                />
-              </div>
-            )}
-            <button
-              onClick={() => handleUpdateChatMusic(null)}
-              style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#ef4444', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-              title="Close Music"
-            >
-              <X size={14} />
-            </button>
+          {/* Interactive Seek Bar & Duration Row */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            paddingTop: '2px',
+            userSelect: 'none'
+          }}>
+            <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontVariantNumeric: 'tabular-nums', minWidth: '30px' }}>
+              {formatSongTime(songProgress)}
+            </span>
+            <input
+              type="range"
+              min="0"
+              max={songDuration || 100}
+              step="1"
+              value={songProgress}
+              onChange={handleSeekSong}
+              style={{
+                flex: 1,
+                accentColor: '#f59e0b',
+                height: '4px',
+                cursor: 'pointer',
+                borderRadius: '2px'
+              }}
+            />
+            <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontVariantNumeric: 'tabular-nums', minWidth: '30px', textAlign: 'right' }}>
+              {formatSongTime(songDuration)}
+            </span>
           </div>
         </div>
       )}
