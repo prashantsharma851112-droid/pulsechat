@@ -771,16 +771,17 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         </div>
 
         {/* =========================================================================
-            PULSE STUDIO TOOL DOCK (All Options Simply Visible At A Glance)
+            PULSE STUDIO TOOL DOCK (Pure Symbols / Icons Only - Instagram Stories Style)
         ========================================================================= */}
         <div
           style={{
-            padding: '8px 12px',
+            padding: '8px 14px',
             background: 'rgba(10, 10, 16, 0.95)',
             borderBottom: '1px solid rgba(255,255,255,0.08)',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
+            justifyContent: 'center',
+            gap: '10px',
             overflowX: 'auto',
             scrollbarWidth: 'none',
             zIndex: 35
@@ -791,23 +792,23 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             type="button"
             onClick={() => setActivePanel(activePanel === 'text' ? null : 'text')}
             style={{
-              background: activePanel === 'text' ? 'rgba(99, 102, 241, 0.35)' : 'rgba(255,255,255,0.06)',
-              border: activePanel === 'text' ? '1.5px solid #6366f1' : '1px solid rgba(255,255,255,0.12)',
-              color: activePanel === 'text' ? '#c7d2fe' : '#fff',
-              borderRadius: '12px',
-              padding: '6px 13px',
-              fontSize: '0.78rem',
-              fontWeight: 800,
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: activePanel === 'text' ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255,255,255,0.08)',
+              border: activePanel === 'text' ? '2px solid #818cf8' : '1px solid rgba(255,255,255,0.15)',
+              color: '#fff',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              justifyContent: 'center',
               cursor: 'pointer',
-              whiteSpace: 'nowrap',
               flexShrink: 0,
-              boxShadow: activePanel === 'text' ? '0 0 12px rgba(99, 102, 241, 0.4)' : 'none'
+              boxShadow: activePanel === 'text' ? '0 0 14px rgba(99, 102, 241, 0.5)' : 'none',
+              transition: 'all 0.15s ease'
             }}
+            title="Aa 3D Text"
           >
-            <Type size={14} color="#818cf8" /> Aa 3D Text
+            <Type size={18} color={activePanel === 'text' ? '#c7d2fe' : '#818cf8'} />
           </button>
 
           {/* 2. Music & Audio Crop Button */}
@@ -821,23 +822,23 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               }
             }}
             style={{
-              background: activePanel === 'music_trim' ? 'rgba(16, 185, 129, 0.4)' : (selectedSong ? 'rgba(16, 185, 129, 0.22)' : 'rgba(255,255,255,0.06)'),
-              border: activePanel === 'music_trim' ? '1.5px solid #6ee7b7' : (selectedSong ? '1.5px solid #10b981' : '1px solid rgba(255,255,255,0.12)'),
-              color: selectedSong ? '#6ee7b7' : '#fff',
-              borderRadius: '12px',
-              padding: '6px 13px',
-              fontSize: '0.78rem',
-              fontWeight: 800,
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: (activePanel === 'music_trim' || selectedSong) ? 'rgba(16, 185, 129, 0.35)' : 'rgba(255,255,255,0.08)',
+              border: (activePanel === 'music_trim' || selectedSong) ? '2px solid #34d399' : '1px solid rgba(255,255,255,0.15)',
+              color: '#fff',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              justifyContent: 'center',
               cursor: 'pointer',
-              whiteSpace: 'nowrap',
               flexShrink: 0,
-              boxShadow: (activePanel === 'music_trim' || selectedSong) ? '0 0 12px rgba(16, 185, 129, 0.35)' : 'none'
+              boxShadow: (activePanel === 'music_trim' || selectedSong) ? '0 0 14px rgba(16, 185, 129, 0.45)' : 'none',
+              transition: 'all 0.15s ease'
             }}
+            title={selectedSong ? `Music: ${selectedSong.songTitle}` : 'Music & Audio Crop'}
           >
-            <Music size={14} color="#34d399" /> {selectedSong ? `🎵 ${selectedSong.songTitle.substring(0, 10)}... (Crop)` : '🎵 Music & Audio Crop'}
+            <Music size={18} color={(activePanel === 'music_trim' || selectedSong) ? '#6ee7b7' : '#34d399'} />
           </button>
 
           {/* 3. Stickers / Emojis Button */}
@@ -845,23 +846,23 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             type="button"
             onClick={() => setActivePanel(activePanel === 'stickers' ? null : 'stickers')}
             style={{
-              background: activePanel === 'stickers' ? 'rgba(245, 158, 11, 0.35)' : 'rgba(255,255,255,0.06)',
-              border: activePanel === 'stickers' ? '1.5px solid #f59e0b' : '1px solid rgba(255,255,255,0.12)',
-              color: activePanel === 'stickers' ? '#fde68a' : '#fff',
-              borderRadius: '12px',
-              padding: '6px 13px',
-              fontSize: '0.78rem',
-              fontWeight: 800,
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: activePanel === 'stickers' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(255,255,255,0.08)',
+              border: activePanel === 'stickers' ? '2px solid #fbbf24' : '1px solid rgba(255,255,255,0.15)',
+              color: '#fff',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              justifyContent: 'center',
               cursor: 'pointer',
-              whiteSpace: 'nowrap',
               flexShrink: 0,
-              boxShadow: activePanel === 'stickers' ? '0 0 12px rgba(245, 158, 11, 0.4)' : 'none'
+              boxShadow: activePanel === 'stickers' ? '0 0 14px rgba(245, 158, 11, 0.5)' : 'none',
+              transition: 'all 0.15s ease'
             }}
+            title="Stickers / Emojis"
           >
-            <Smile size={14} color="#fbbf24" /> 😊 Stickers / Emojis{selectedStickers.length > 0 ? ` (${selectedStickers.length})` : ''}
+            <Smile size={18} color={activePanel === 'stickers' ? '#fde68a' : '#fbbf24'} />
           </button>
 
           {/* 4. Canvas Background Gradients Button */}
@@ -869,23 +870,23 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             type="button"
             onClick={() => setActivePanel(activePanel === 'bg_color' ? null : 'bg_color')}
             style={{
-              background: activePanel === 'bg_color' ? 'rgba(249, 115, 22, 0.35)' : 'rgba(255,255,255,0.06)',
-              border: activePanel === 'bg_color' ? '1.5px solid #f97316' : '1px solid rgba(255,255,255,0.12)',
-              color: activePanel === 'bg_color' ? '#fdba74' : '#fff',
-              borderRadius: '12px',
-              padding: '6px 13px',
-              fontSize: '0.78rem',
-              fontWeight: 800,
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: activePanel === 'bg_color' ? 'rgba(249, 115, 22, 0.4)' : 'rgba(255,255,255,0.08)',
+              border: activePanel === 'bg_color' ? '2px solid #fb923c' : '1px solid rgba(255,255,255,0.15)',
+              color: '#fff',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              justifyContent: 'center',
               cursor: 'pointer',
-              whiteSpace: 'nowrap',
               flexShrink: 0,
-              boxShadow: activePanel === 'bg_color' ? '0 0 12px rgba(249, 115, 22, 0.4)' : 'none'
+              boxShadow: activePanel === 'bg_color' ? '0 0 14px rgba(249, 115, 22, 0.5)' : 'none',
+              transition: 'all 0.15s ease'
             }}
+            title="Canvas Background Gradients"
           >
-            <Palette size={14} color="#fb923c" /> 🎨 Canvas Background Gradients
+            <Palette size={18} color={activePanel === 'bg_color' ? '#fdba74' : '#fb923c'} />
           </button>
 
           {/* 5. Live Animated Wallpapers Button */}
@@ -893,23 +894,23 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             type="button"
             onClick={() => setActivePanel(activePanel === 'animated_bg' ? null : 'animated_bg')}
             style={{
-              background: activePanel === 'animated_bg' ? 'rgba(236, 72, 153, 0.35)' : 'rgba(255,255,255,0.06)',
-              border: activePanel === 'animated_bg' ? '1.5px solid #ec4899' : '1px solid rgba(255,255,255,0.12)',
-              color: activePanel === 'animated_bg' ? '#fbcfe8' : '#fff',
-              borderRadius: '12px',
-              padding: '6px 13px',
-              fontSize: '0.78rem',
-              fontWeight: 800,
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: activePanel === 'animated_bg' ? 'rgba(236, 72, 153, 0.4)' : 'rgba(255,255,255,0.08)',
+              border: activePanel === 'animated_bg' ? '2px solid #f472b6' : '1px solid rgba(255,255,255,0.15)',
+              color: '#fff',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              justifyContent: 'center',
               cursor: 'pointer',
-              whiteSpace: 'nowrap',
               flexShrink: 0,
-              boxShadow: activePanel === 'animated_bg' ? '0 0 12px rgba(236, 72, 153, 0.4)' : 'none'
+              boxShadow: activePanel === 'animated_bg' ? '0 0 14px rgba(236, 72, 153, 0.5)' : 'none',
+              transition: 'all 0.15s ease'
             }}
+            title="Live Animated Wallpapers"
           >
-            <Sparkles size={14} color="#f472b6" /> ✨ Live Animated Wallpapers
+            <Sparkles size={18} color={activePanel === 'animated_bg' ? '#fbcfe8' : '#f472b6'} />
           </button>
 
           {/* 6. Story Duration Quick Toggle Button (15s / 30s / 60s) */}
@@ -920,23 +921,26 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               setStoryDuration(nextDur);
             }}
             style={{
-              background: storyDuration > 15 ? 'rgba(245, 158, 11, 0.25)' : 'rgba(255,255,255,0.06)',
-              border: storyDuration > 15 ? '1.5px solid #f59e0b' : '1px solid rgba(255,255,255,0.12)',
-              color: storyDuration > 15 ? '#fde68a' : '#fff',
-              borderRadius: '12px',
-              padding: '6px 13px',
-              fontSize: '0.78rem',
-              fontWeight: 800,
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: storyDuration > 15 ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.08)',
+              border: storyDuration > 15 ? '2px solid #fbbf24' : '1px solid rgba(255,255,255,0.15)',
+              color: '#fff',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              justifyContent: 'center',
               cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              flexShrink: 0
+              flexShrink: 0,
+              position: 'relative',
+              transition: 'all 0.15s ease'
             }}
-            title="Toggle duration: 15s / 30s / 60s"
+            title={`Duration: ${storyDuration}s (Tap to toggle 15s / 30s / 60s)`}
           >
-            <Clock size={14} color={storyDuration > 15 ? '#fbbf24' : '#94a3b8'} /> ⏱️ Duration ({storyDuration}s)
+            <Clock size={18} color={storyDuration > 15 ? '#fbbf24' : '#94a3b8'} />
+            <span style={{ position: 'absolute', bottom: '-4px', fontSize: '0.55rem', fontWeight: 900, background: '#1e1b4b', color: '#fbbf24', padding: '0 3px', borderRadius: '4px', border: '1px solid rgba(251, 191, 36, 0.4)' }}>
+              {storyDuration}s
+            </span>
           </button>
 
           {/* 7. Gallery Button */}
@@ -944,23 +948,23 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             style={{
-              background: mediaUrl ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255,255,255,0.06)',
-              border: mediaUrl ? '1.5px solid #38bdf8' : '1px solid rgba(255,255,255,0.12)',
-              color: mediaUrl ? '#bae6fd' : '#fff',
-              borderRadius: '12px',
-              padding: '6px 13px',
-              fontSize: '0.78rem',
-              fontWeight: 800,
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: mediaUrl ? 'rgba(56, 189, 248, 0.3)' : 'rgba(255,255,255,0.08)',
+              border: mediaUrl ? '2px solid #38bdf8' : '1px solid rgba(255,255,255,0.15)',
+              color: '#fff',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              justifyContent: 'center',
               cursor: 'pointer',
-              whiteSpace: 'nowrap',
               flexShrink: 0,
-              boxShadow: mediaUrl ? '0 0 12px rgba(56, 189, 248, 0.3)' : 'none'
+              boxShadow: mediaUrl ? '0 0 14px rgba(56, 189, 248, 0.4)' : 'none',
+              transition: 'all 0.15s ease'
             }}
+            title={mediaUrl ? 'Change Photo' : 'Gallery / Upload Photo'}
           >
-            <ImageIcon size={14} color="#38bdf8" /> {mediaUrl ? '🖼️ Change Photo' : '🖼️ Gallery'}
+            <ImageIcon size={18} color={mediaUrl ? '#7dd3fc' : '#38bdf8'} />
           </button>
 
           {/* 8. Camera Button (Viewfinder Active / Camera mode) */}
@@ -975,24 +979,23 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               }
             }}
             style={{
-              background: viewMode === 'camera' ? 'rgba(239, 68, 68, 0.35)' : 'rgba(255,255,255,0.06)',
-              border: viewMode === 'camera' ? '1.5px solid #ef4444' : '1px solid rgba(255,255,255,0.12)',
-              color: viewMode === 'camera' ? '#fca5a5' : '#fff',
-              borderRadius: '12px',
-              padding: '6px 13px',
-              fontSize: '0.78rem',
-              fontWeight: 800,
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: viewMode === 'camera' ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255,255,255,0.08)',
+              border: viewMode === 'camera' ? '2px solid #ef4444' : '1px solid rgba(255,255,255,0.15)',
+              color: '#fff',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              justifyContent: 'center',
               cursor: 'pointer',
-              whiteSpace: 'nowrap',
               flexShrink: 0,
-              boxShadow: viewMode === 'camera' ? '0 0 12px rgba(239, 68, 68, 0.45)' : 'none'
+              boxShadow: viewMode === 'camera' ? '0 0 14px rgba(239, 68, 68, 0.5)' : 'none',
+              transition: 'all 0.15s ease'
             }}
+            title={viewMode === 'camera' ? 'Close Camera Viewfinder' : 'Open Camera'}
           >
-            <Camera size={14} color={viewMode === 'camera' ? '#f87171' : '#f43f5e'} />
-            {viewMode === 'camera' ? '📷 Viewfinder Active' : '📷 Camera'}
+            <Camera size={18} color={viewMode === 'camera' ? '#f87171' : '#f43f5e'} />
           </button>
 
           {/* 9. Image FX Controls Button (Prominently shown when photo is present) */}
@@ -1001,23 +1004,23 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               type="button"
               onClick={() => setActivePanel(activePanel === 'image_adjust' ? null : 'image_adjust')}
               style={{
-                background: activePanel === 'image_adjust' ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.45), rgba(236, 72, 153, 0.35))' : 'rgba(168, 85, 247, 0.22)',
-                border: activePanel === 'image_adjust' ? '1.5px solid #d8b4fe' : '1.5px solid #a855f7',
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                background: activePanel === 'image_adjust' ? 'rgba(168, 85, 247, 0.5)' : 'rgba(168, 85, 247, 0.25)',
+                border: activePanel === 'image_adjust' ? '2px solid #d8b4fe' : '1.5px solid #a855f7',
                 color: '#fff',
-                borderRadius: '12px',
-                padding: '6px 14px',
-                fontSize: '0.78rem',
-                fontWeight: 800,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                justifyContent: 'center',
                 cursor: 'pointer',
-                whiteSpace: 'nowrap',
                 flexShrink: 0,
-                boxShadow: activePanel === 'image_adjust' ? '0 0 16px rgba(168, 85, 247, 0.6)' : '0 0 10px rgba(168, 85, 247, 0.35)'
+                boxShadow: activePanel === 'image_adjust' ? '0 0 16px rgba(168, 85, 247, 0.6)' : 'none',
+                transition: 'all 0.15s ease'
               }}
+              title="Image FX & Zoom"
             >
-              <SlidersHorizontal size={14} color="#d8b4fe" /> 🪄 Image FX & Zoom
+              <SlidersHorizontal size={18} color="#d8b4fe" />
             </button>
           )}
         </div>
