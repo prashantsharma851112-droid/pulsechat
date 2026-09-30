@@ -598,7 +598,18 @@ module.exports = {
         query.receiverId = { $nin: disabledIds };
       }
 
-      const result = await Message.deleteMany(query);
+      // Also purge expired 24h vibes automatically
+      try {
+        const Vibe = require('../models/Vibe');
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        await Vibe.deleteMany({
+          $or: [
+            { expiresAt: { $lte: new Date() } },
+            { createdAt: { $lte: oneDayAgo } }
+          ]
+        });
+      } catch (ve) {}
+
       console.log(`[Auto-Cleanup Job] Successfully purged ${result.deletedCount || 0} old messages (${days}+ days old).`);
       return { success: true, deletedCount: result.deletedCount || 0 };
     } catch (err) {

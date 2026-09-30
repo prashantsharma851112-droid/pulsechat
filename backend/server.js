@@ -473,7 +473,9 @@ io.on('connection', (socket) => {
       } catch (e) {}
 
       const isDisappearing = Boolean(chatSetting && chatSetting.disappearingEnabled);
-      const expiresAt = isDisappearing ? new Date(Date.now() + (chatSetting.disappearingDuration || 86400) * 1000) : null;
+      const expiresAt = isDisappearing
+        ? new Date(Date.now() + (chatSetting.disappearingDuration || 86400) * 1000)
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30-day lifetime free storage rule
 
       // Cloudinary Auto-Upload: Offload heavy Base64 media to Cloudinary CDN
       let finalMediaUrl = mediaUrl || null;

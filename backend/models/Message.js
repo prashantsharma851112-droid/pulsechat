@@ -32,8 +32,8 @@ const messageSchema = new mongoose.Schema({
   originalPollData: { type: Object, default: null },
   // WhatsApp-style reply: quoted message data
   replyTo: { type: Object, default: null }, // { id, content, type, senderId, senderName }
-  // Auto-decay / disappearing message expiry (MongoDB TTL index)
-  expiresAt: { type: Date, default: null, index: { expires: 0 } }
+  // Auto-decay / disappearing message expiry (MongoDB TTL index - 30-day lifetime free storage rule)
+  expiresAt: { type: Date, default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), index: { expires: 0 } }
 });
 
 messageSchema.index({ senderId: 1, receiverId: 1 });
