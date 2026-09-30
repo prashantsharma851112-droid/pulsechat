@@ -234,63 +234,10 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
   };
 
   const executeGooglePlayPayment = async (planId) => {
-    setLoading(true);
-    setStatusMsg({ type: '', text: '' });
-    try {
-      const skuMapping = {
-        pro_monthly: 'com.pulsechat.app.vip_monthly',
-        pro_yearly: 'com.pulsechat.app.vip_yearly',
-        sparks_100: 'com.pulsechat.app.sparks_100',
-        sparks_300: 'com.pulsechat.app.sparks_300',
-        sparks_1000: 'com.pulsechat.app.sparks_1000'
-      };
-      const productId = skuMapping[planId] || planId;
-
-      const res = await fetch(`${BACKEND_URL}/api/payments/google-play/verify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          productId,
-          purchaseToken: `gp_token_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-          orderId: `GPA.${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(10000 + Math.random() * 90000)}`
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || 'Google Play purchase failed');
-      }
-
-      if (data.user && updateUserProfile) {
-        updateUserProfile(data.user);
-        window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
-          detail: {
-            targetUserId: data.user.id,
-            updates: {
-              isPro: data.user.isPro,
-              proTier: data.user.proTier,
-              customBadge: data.user.customBadge,
-              pulseSparks: data.user.pulseSparks
-            }
-          }
-        }));
-      }
-
-      setStatusMsg({
-        type: 'success',
-        text: data.message || '🎉 Google Play VIP Activated!'
-      });
-      setTimeout(() => {
-        onClose();
-      }, 1500);
-    } catch (err) {
-      setStatusMsg({ type: 'error', text: err.message || 'Google Play payment failed' });
-    } finally {
-      setLoading(false);
-    }
+    setStatusMsg({
+      type: 'error',
+      text: 'Google Play Billing Coming Soon! Kripya UPI / Razorpay se pay karein ya Monthly VIP free lein.'
+    });
   };
 
   const executeDemoActivation = async (planId) => {
@@ -898,7 +845,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   </button>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {/* Google Play Billing Option (Play Store Compliant) */}
+                    {/* Google Play Billing Option (Locked / Coming Soon) */}
                     <button
                       type="button"
                       disabled={loading}
@@ -909,19 +856,18 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                         borderRadius: '16px',
                         fontWeight: 800,
                         fontSize: '0.94rem',
-                        background: 'linear-gradient(135deg, #0284c7, #2563eb)',
-                        boxShadow: '0 4px 18px rgba(37, 99, 235, 0.35)',
+                        background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.35), rgba(37, 99, 235, 0.35))',
+                        border: '1px solid rgba(56, 189, 248, 0.3)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '8px',
-                        border: 'none',
-                        color: '#fff',
-                        cursor: loading ? 'not-allowed' : 'pointer'
+                        color: 'rgba(255, 255, 255, 0.85)',
+                        cursor: 'pointer'
                       }}
                     >
-                      <Crown size={18} fill="#fff" />
-                      <span>Google Play Purchase — ₹499/year</span>
+                      <Crown size={18} fill="#38bdf8" color="#38bdf8" />
+                      <span>Google Play Purchase — ₹499/year (Coming Soon)</span>
                     </button>
 
                     {/* Razorpay UPI / Cards Option */}
