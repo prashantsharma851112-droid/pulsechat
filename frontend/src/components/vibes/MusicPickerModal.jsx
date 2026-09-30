@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Search, Play, Pause, Music, Sparkles, Check, Flame, Disc, Radio } from 'lucide-react';
+import { registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 
 const PRESET_CATEGORIES = [
   { label: '🔥 Trending', query: 'Bollywood trending 2026' },
@@ -25,12 +26,49 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
   useEffect(() => {
     return () => {
       if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
+        try {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          audioRef.current.src = '';
+          audioRef.current = null;
+        } catch (e) {}
       }
+      setPlayingTrackId(null);
       setPreviewYtId(null);
+      stopGlobalMusicAudio();
     };
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          audioRef.current.src = '';
+          audioRef.current = null;
+        } catch (e) {}
+      }
+      setPlayingTrackId(null);
+      setPreviewYtId(null);
+      stopGlobalMusicAudio();
+    }
+  }, [isOpen]);
+
+  const handleCloseModal = () => {
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = '';
+        audioRef.current = null;
+      } catch (e) {}
+    }
+    setPlayingTrackId(null);
+    setPreviewYtId(null);
+    stopGlobalMusicAudio();
+    onClose();
+  };
 
   const searchSongs = async (searchTerm) => {
     if (!searchTerm.trim()) return;
@@ -120,20 +158,36 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
     e.stopPropagation();
     if (playingTrackId === song.trackId) {
       if (audioRef.current) {
-        audioRef.current.pause();
+        try {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          audioRef.current.src = '';
+          audioRef.current = null;
+        } catch (e) {}
       }
+      stopGlobalMusicAudio();
       setPlayingTrackId(null);
       setPreviewYtId(null);
     } else {
+      stopGlobalMusicAudio();
       if (audioRef.current) {
-        audioRef.current.pause();
+        try {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          audioRef.current.src = '';
+          audioRef.current = null;
+        } catch (e) {}
       }
       if (song.audioUrl && !song.audioUrl.includes('youtube')) {
         setPreviewYtId(null);
         const newAudio = new Audio(song.audioUrl);
         newAudio.volume = 0.85;
+        registerGlobalMusicAudio(newAudio);
         newAudio.play().catch(e => console.warn('Preview audio failed:', e));
-        newAudio.onended = () => setPlayingTrackId(null);
+        newAudio.onended = () => {
+          setPlayingTrackId(null);
+          stopGlobalMusicAudio();
+        };
         audioRef.current = newAudio;
         setPlayingTrackId(song.trackId);
       } else if (song.youtubeId) {
@@ -145,8 +199,14 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
 
   const handleSelect = async (song) => {
     if (audioRef.current) {
-      audioRef.current.pause();
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = '';
+        audioRef.current = null;
+      } catch (e) {}
     }
+    stopGlobalMusicAudio();
     setPlayingTrackId(null);
     setPreviewYtId(null);
 
@@ -173,11 +233,7 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
         padding: '1rem',
         animation: 'pulseFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
       }}
-      onClick={() => {
-        if (audioRef.current) audioRef.current.pause();
-        setPreviewYtId(null);
-        onClose();
-      }}
+      onClick={handleCloseModal}
     >
       {previewYtId && (
         <div style={{
@@ -262,10 +318,7 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
             </div>
           </div>
           <button
-            onClick={() => {
-              if (audioRef.current) audioRef.current.pause();
-              onClose();
-            }}
+            onClick={handleCloseModal}
             className="icon-btn-ghost"
             style={{ width: '32px', height: '32px', borderRadius: '50%' }}
           >

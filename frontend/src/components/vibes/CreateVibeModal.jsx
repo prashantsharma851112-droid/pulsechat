@@ -1,7 +1,8 @@
-import React, { useState, useContext, useRef } from 'react';
+import React, { useState, useContext, useRef, useEffect } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Sparkles, Image as ImageIcon, Music, Palette, Send, Loader2, Type, Sparkle, ZoomIn, Sliders, Trash2, AlignCenter, AlignLeft, AlignRight, Move } from 'lucide-react';
+import { X, Sparkles, Image as ImageIcon, Music, Palette, Send, Loader2, Type, Sparkle, ZoomIn, Sliders, Trash2, AlignCenter, AlignLeft, AlignRight, Move, Disc } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
+import { registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 
 import MusicPickerModal from './MusicPickerModal';
@@ -90,11 +91,45 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [showMusicPicker, setShowMusicPicker] = useState(false);
   const previewAudioRef = useRef(null);
 
+  // Stop any playing audio when modal unmounts
+  useEffect(() => {
+    return () => {
+      if (previewAudioRef.current) {
+        try {
+          previewAudioRef.current.pause();
+          previewAudioRef.current.currentTime = 0;
+          previewAudioRef.current.src = '';
+          previewAudioRef.current = null;
+        } catch (e) {}
+      }
+      stopGlobalMusicAudio();
+    };
+  }, []);
+
+  const handleCloseModal = () => {
+    if (previewAudioRef.current) {
+      try {
+        previewAudioRef.current.pause();
+        previewAudioRef.current.currentTime = 0;
+        previewAudioRef.current.src = '';
+        previewAudioRef.current = null;
+      } catch (e) {}
+    }
+    stopGlobalMusicAudio();
+    onClose();
+  };
+
   const previewSongPart = (song, startTimeSec) => {
     if (!song) return;
     try {
+      stopGlobalMusicAudio();
       if (previewAudioRef.current) {
-        previewAudioRef.current.pause();
+        try {
+          previewAudioRef.current.pause();
+          previewAudioRef.current.currentTime = 0;
+          previewAudioRef.current.src = '';
+          previewAudioRef.current = null;
+        } catch (e) {}
       }
       if (song.audioUrl && !song.audioUrl.includes('youtube')) {
         const audio = new Audio(song.audioUrl);
@@ -103,6 +138,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           try { audio.currentTime = validTime; } catch (e) {}
         }
         audio.volume = 0.85;
+        registerGlobalMusicAudio(audio);
         audio.play().catch(() => {});
         previewAudioRef.current = audio;
       }
@@ -311,11 +347,11 @@ export default function CreateVibeModal({ onClose, onCreated }) {
 
     setSubmitting(false);
     if (onCreated) onCreated();
-    onClose();
+    handleCloseModal();
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1350 }}>
+    <div className="modal-overlay" onClick={handleCloseModal} style={{ zIndex: 1350 }}>
       <div
         className="modal-card modal-responsive"
         onClick={(e) => e.stopPropagation()}
@@ -344,15 +380,15 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             <Sparkles size={18} color="#f59e0b" />
             <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-main)' }}>Post 24h Vibe Story</h3>
           </div>
-          <button className="icon-btn-ghost" onClick={onClose}><X size={18} /></button>
+          <button className="icon-btn-ghost" onClick={handleCloseModal}><X size={18} /></button>
         </div>
 
         {/* Scrollable Content */}
         <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
           {error && <div className="error-banner">{error}</div>}
 
-          {/* YouTube Full Song Audio Player Engine */}
-          {selectedSong?.youtubeId && (
+          {/* YouTube Full Song Audio Player Engine (Fallback ONLY when no direct audioUrl) */}
+          {!selectedSong?.audioUrl && selectedSong?.youtubeId && (
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -1179,7 +1215,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
 
           {/* Action Buttons */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-            <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn-secondary" onClick={handleCloseModal}>Cancel</button>
             <button
               type="button"
               disabled={submitting}

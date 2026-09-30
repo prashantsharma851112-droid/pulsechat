@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
-import { playSound } from '../../utils/audio';
+import { playSound, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import { updateRecentChatSnippet, getCachedAllUsers } from '../../utils/offlineStorage';
 
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
@@ -97,9 +97,14 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
 
   // Auto-play Instagram Music Track / Story Background Audio
   useEffect(() => {
+    stopGlobalMusicAudio();
     if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = '';
+        audioRef.current = null;
+      } catch (e) {}
     }
 
     if (currentVibe?.audioUrl && !currentVibe.audioUrl.includes('youtube')) {
@@ -114,15 +119,21 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
         });
       }
       audio.volume = isAudioMuted ? 0 : 0.85;
+      registerGlobalMusicAudio(audio);
       audio.play().catch(e => console.warn('Autoplay prevented:', e));
       audioRef.current = audio;
     }
 
     return () => {
       if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
+        try {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          audioRef.current.src = '';
+          audioRef.current = null;
+        } catch (e) {}
       }
+      stopGlobalMusicAudio();
     };
   }, [currentVibe?.audioUrl, currentVibe?.id, currentIndex]);
 
@@ -132,11 +143,11 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     }
   }, [isAudioMuted]);
 
-  // Auto-upgrade Vibe Story music to full YouTube audio stream if youtubeId is missing
+  // Auto-upgrade Vibe Story music to full YouTube audio stream ONLY if no direct audioUrl exists
   const [upgradedYtId, setUpgradedYtId] = useState(null);
   useEffect(() => {
     setUpgradedYtId(null);
-    if (currentVibe && !currentVibe.youtubeId && currentVibe.songTitle) {
+    if (currentVibe && !currentVibe.audioUrl && !currentVibe.youtubeId && currentVibe.songTitle) {
       const q = `${currentVibe.songTitle} ${currentVibe.artistName || ''}`;
       const rawToken = localStorage.getItem('pulsechat_token');
       const authHeader = rawToken ? { Authorization: `Bearer ${rawToken}` } : {};
@@ -151,7 +162,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
         })
         .catch(() => {});
     }
-  }, [currentVibe?.id, currentVibe?.songTitle]);
+  }, [currentVibe?.id, currentVibe?.songTitle, currentVibe?.audioUrl]);
 
   // Fetch live views for owner when modal opens
   const fetchLiveViews = async () => {
@@ -166,6 +177,19 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
         }
       } catch (e) {}
     }
+  };
+
+  const handleCloseModal = () => {
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = '';
+        audioRef.current = null;
+      } catch (e) {}
+    }
+    stopGlobalMusicAudio();
+    onClose();
   };
 
   // Story Auto-Advance Progress Bar Timer (5s per story, pauses when viewers sheet is open)
@@ -186,7 +210,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
             return 0;
           } else {
             clearInterval(timerRef.current);
-            onClose();
+            handleCloseModal();
             return 100;
           }
         }
@@ -203,7 +227,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     if (currentIndex < vibes.length - 1) {
       setCurrentIndex(prev => prev + 1);
     } else {
-      onClose();
+      handleCloseModal();
     }
   };
 
@@ -323,7 +347,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     }
 
     if (onRefresh) onRefresh();
-    onClose();
+    handleCloseModal();
   };
 
   if (!currentVibe) return null;
@@ -441,7 +465,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
               </button>
             )}
             <button
-              onClick={onClose}
+              onClick={handleCloseModal}
               className="icon-btn-ghost"
               style={{ color: '#fff', background: 'rgba(0,0,0,0.4)', borderRadius: '50%' }}
             >
@@ -474,8 +498,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
             userSelect: 'none'
           }}
         >
-          {/* Full Song YouTube Background Audio Engine */}
-          {(currentVibe?.youtubeId || upgradedYtId) && !isAudioMuted && (
+          {/* Full Song YouTube Background Audio Engine (Fallback ONLY when no direct audioUrl) */}
+          {!currentVibe?.audioUrl && (currentVibe?.youtubeId || upgradedYtId) && !isAudioMuted && (
             <div
               onClick={(e) => e.stopPropagation()}
               style={{

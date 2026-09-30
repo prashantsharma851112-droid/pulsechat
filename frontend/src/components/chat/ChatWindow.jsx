@@ -19,7 +19,7 @@ import Animated3DTextModal from './Animated3DTextModal';
 import LiveArrowGameModal from './LiveArrowGameModal';
 import PulseVipBadge from '../common/PulseVipBadge';
 import MusicPickerModal from '../vibes/MusicPickerModal';
-import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume } from '../../utils/audio';
+import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
 import {
@@ -89,26 +89,37 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     return saved !== null ? Number(saved) : 0.7;
   });
 
-  // Real Chat Background Music Player (iTunes Search Integration)
+  // Real Chat Background Music Player
   useEffect(() => {
+    stopGlobalMusicAudio();
     if (chatAudioRef.current) {
-      chatAudioRef.current.pause();
-      chatAudioRef.current = null;
+      try {
+        chatAudioRef.current.pause();
+        chatAudioRef.current.currentTime = 0;
+        chatAudioRef.current.src = '';
+        chatAudioRef.current = null;
+      } catch (e) {}
     }
 
     if (chatMusicSong?.audioUrl && !chatMusicSong.audioUrl.includes('youtube')) {
       const audio = new Audio(chatMusicSong.audioUrl);
       audio.loop = true;
       audio.volume = isChatMusicMuted ? 0 : auraVolume;
+      registerGlobalMusicAudio(audio);
       audio.play().catch(e => console.warn('Chat music playback prevented:', e));
       chatAudioRef.current = audio;
     }
 
     return () => {
       if (chatAudioRef.current) {
-        chatAudioRef.current.pause();
-        chatAudioRef.current = null;
+        try {
+          chatAudioRef.current.pause();
+          chatAudioRef.current.currentTime = 0;
+          chatAudioRef.current.src = '';
+          chatAudioRef.current = null;
+        } catch (e) {}
       }
+      stopGlobalMusicAudio();
     };
   }, [chatMusicSong?.audioUrl, chatMusicSong?.youtubeId, chatId]);
 
@@ -118,9 +129,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   }, [auraVolume, isChatMusicMuted]);
 
-  // Auto-upgrade chat background music to full YouTube audio if youtubeId is missing
+  // Auto-upgrade chat background music to full YouTube audio ONLY if no direct audioUrl exists
   useEffect(() => {
-    if (chatMusicSong && !chatMusicSong.youtubeId && chatMusicSong.songTitle) {
+    if (chatMusicSong && !chatMusicSong.audioUrl && !chatMusicSong.youtubeId && chatMusicSong.songTitle) {
       const q = `${chatMusicSong.songTitle} ${chatMusicSong.artistName || ''}`;
       const rawToken = localStorage.getItem('pulsechat_token');
       const authHeader = rawToken ? { Authorization: `Bearer ${rawToken}` } : {};
@@ -1830,8 +1841,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     >
       <ChatLiveWallpaper wallpaperId={chatWallpaper} customImage={customWallpaper} />
 
-      {/* Full Song YouTube Background Audio Engine for Chat */}
-      {chatMusicSong?.youtubeId && !isChatMusicMuted && (
+      {/* Full Song Background Audio Banner for Chat */}
+      {chatMusicSong && !isChatMusicMuted && (
         <div style={{
           position: 'relative',
           zIndex: 10,
@@ -1862,15 +1873,17 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-            {/* Visible Player Iframe (Unblocked Chrome Autoplay) */}
-            <div style={{ width: '130px', height: '36px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(245, 158, 11, 0.5)' }}>
-              <iframe
-                key={`chat_yt_music_${chatId}_${chatMusicSong.youtubeId}`}
-                src={`https://www.youtube-nocookie.com/embed/${chatMusicSong.youtubeId}?autoplay=1&enablejsapi=1&loop=1&playlist=${chatMusicSong.youtubeId}`}
-                allow="autoplay; encrypted-media; fullscreen"
-                style={{ width: '100%', height: '100%', border: 'none' }}
-              />
-            </div>
+            {/* Fallback YouTube iframe ONLY if no direct audioUrl */}
+            {!chatMusicSong.audioUrl && chatMusicSong.youtubeId && (
+              <div style={{ width: '130px', height: '36px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(245, 158, 11, 0.5)' }}>
+                <iframe
+                  key={`chat_yt_music_${chatId}_${chatMusicSong.youtubeId}`}
+                  src={`https://www.youtube-nocookie.com/embed/${chatMusicSong.youtubeId}?autoplay=1&enablejsapi=1&loop=1&playlist=${chatMusicSong.youtubeId}`}
+                  allow="autoplay; encrypted-media; fullscreen"
+                  style={{ width: '100%', height: '100%', border: 'none' }}
+                />
+              </div>
+            )}
             <button
               onClick={() => handleUpdateChatMusic(null)}
               style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#ef4444', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
@@ -3428,27 +3441,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             handleUpdateChatMusic(song);
             setShowChatMusicPicker(false);
           }}
-        />
-      )}
-
-      {/* Hidden YouTube Full Song Audio Stream Player (layout-rendered off-screen so Chrome/Edge autoplay policy allows continuous full song streaming) */}
-      {chatMusicSong?.youtubeId && !isChatMusicMuted && (
-        <iframe
-          key={chatMusicSong.youtubeId}
-          id="chatYoutubeAudioPlayer"
-          src={`https://www.youtube-nocookie.com/embed/${chatMusicSong.youtubeId}?autoplay=1&enablejsapi=1&loop=1&playlist=${chatMusicSong.youtubeId}&playsinline=1`}
-          style={{
-            position: 'fixed',
-            bottom: '-9999px',
-            right: '-9999px',
-            width: '200px',
-            height: '200px',
-            opacity: 0.01,
-            pointerEvents: 'none',
-            zIndex: -9999
-          }}
-          allow="autoplay; encrypted-media"
-          title="Chat YouTube Audio Stream"
         />
       )}
     </div>

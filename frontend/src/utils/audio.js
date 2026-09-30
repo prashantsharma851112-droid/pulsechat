@@ -272,3 +272,40 @@ export function getCurrentAuraId() {
   return currentAuraId;
 }
 
+// Global Music Track Audio Manager (Prevents audio overlap & handles clean shutdown)
+let activeMusicAudio = null;
+
+export function registerGlobalMusicAudio(audioInstance) {
+  if (activeMusicAudio && activeMusicAudio !== audioInstance) {
+    try {
+      activeMusicAudio.pause();
+      activeMusicAudio.currentTime = 0;
+      activeMusicAudio.src = '';
+    } catch (e) {}
+  }
+  activeMusicAudio = audioInstance;
+}
+
+export function stopGlobalMusicAudio() {
+  if (activeMusicAudio) {
+    try {
+      activeMusicAudio.pause();
+      activeMusicAudio.currentTime = 0;
+      activeMusicAudio.src = '';
+    } catch (e) {}
+    activeMusicAudio = null;
+  }
+  if (typeof document !== 'undefined') {
+    try {
+      const allAudio = document.querySelectorAll('audio');
+      allAudio.forEach(el => {
+        try {
+          el.pause();
+          el.currentTime = 0;
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
+}
+
+
