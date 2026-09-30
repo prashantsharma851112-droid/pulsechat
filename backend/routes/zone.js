@@ -513,6 +513,7 @@ router.post('/game-score', authMiddleware, async (req, res) => {
       hasSilverCrown: isNowRank2,
       hasStreakCrown: user.hasStreakCrown,
       leaderboard: leaderboardList
+    });
   } catch (err) {
     console.error('Error submitting game score:', err);
     res.status(500).json({ error: 'Failed to submit game score' });
