@@ -166,9 +166,6 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
 
     setLevel(initialBest);
     setMaxUnlockedLevel(initialBest);
-    if (onScoreUpdate) {
-      onScoreUpdate('Arrow Puzzle', 0, initialBest);
-    }
   }, []);
 
   // Generate a 100% guaranteed solvable Arrow Puzzle grid

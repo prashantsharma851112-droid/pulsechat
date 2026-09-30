@@ -356,7 +356,10 @@ router.post('/game-score', authMiddleware, async (req, res) => {
       const maxAllowedLevel = currentMax + 1;
       newLevel = Math.min(Math.max(existingScoreDoc.level || 1, rawLevel), maxAllowedLevel);
       const newMax = Math.max(currentMax, newLevel);
-      newGamesCount = (existingScoreDoc.gamesPlayed || 1) + 1;
+      
+      // Cumulative score progression: Add earned game score to existing total score (score never drops)
+      newTotalScore = (existingScoreDoc.score || 0) + (rawScore > 0 ? rawScore : 0);
+      newGamesCount = (existingScoreDoc.gamesPlayed || 1) + (rawScore > 0 ? 1 : 0);
 
       await GameScore.findOneAndUpdate(
         { userId: resolvedUserId },
