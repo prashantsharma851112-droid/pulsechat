@@ -10,7 +10,7 @@ const PRESET_CATEGORIES = [
   { label: '🌟 Hollywood Pop', query: 'Taylor Swift The Weeknd' }
 ];
 
-const BACKEND_URL = typeof window !== 'undefined' && window.location.origin.includes('localhost') ? 'http://localhost:5000' : '';
+import { BACKEND_URL } from '../../utils/config';
 
 export default function MusicPickerModal({ isOpen, onClose, onSelectSong, selectedSong }) {
   const [query, setQuery] = useState('');
@@ -40,29 +40,58 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
       const rawToken = localStorage.getItem('pulsechat_token');
       const authHeader = rawToken ? { Authorization: `Bearer ${rawToken}` } : {};
 
-      const [itunesRes, ytRes] = await Promise.allSettled([
-        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&media=music&limit=25`).then(r => r.json()),
+      // 1. Direct JioSaavn 100% Full Song Streaming API (320kbps / 160kbps complete tracks)
+      // 2. PulseChat Backend Fallback
+      const [saavnRes, backendRes] = await Promise.allSettled([
+        fetch(`https://jiosaavn-api-tan.vercel.app/api/search/songs?query=${encodeURIComponent(searchTerm)}`).then(r => r.json()),
         fetch(`${BACKEND_URL}/api/messages/youtube-search?q=${encodeURIComponent(searchTerm)}`, { headers: authHeader }).then(r => r.json())
       ]);
 
-      let ytFormatted = [];
-      if (ytRes.status === 'fulfilled' && Array.isArray(ytRes.value)) {
-        ytFormatted = ytRes.value;
+      let fullTracks = [];
+
+      if (saavnRes.status === 'fulfilled' && saavnRes.value) {
+        const saavnData = saavnRes.value.data?.results || saavnRes.value.results || [];
+        if (Array.isArray(saavnData)) {
+          fullTracks = saavnData.map(song => {
+            const audioObj = Array.isArray(song.downloadUrl)
+              ? (song.downloadUrl.find(d => d.quality === '320kbps') || song.downloadUrl.find(d => d.quality === '160kbps') || song.downloadUrl[song.downloadUrl.length - 1])
+              : null;
+            const audioUrl = audioObj?.url || (typeof song.downloadUrl === 'string' ? song.downloadUrl : null);
+
+            const imgObj = Array.isArray(song.image)
+              ? (song.image.find(i => i.quality === '500x500') || song.image[song.image.length - 1])
+              : null;
+            const albumArt = imgObj?.url || (typeof song.image === 'string' ? song.image : null);
+
+            const artist = Array.isArray(song.artists?.primary) && song.artists.primary.length > 0
+              ? song.artists.primary.map(a => a.name).join(', ')
+              : (song.primaryArtists || 'PulseChat Music');
+
+            const title = (song.name || song.title || 'Full Song')
+              .replace(/&quot;/g, '"')
+              .replace(/&amp;/g, '&')
+              .replace(/&#039;/g, "'");
+
+            if (!audioUrl) return null;
+
+            return {
+              trackId: `full_${song.id || Math.random().toString(36).substr(2, 6)}`,
+              songTitle: title,
+              artistName: artist,
+              albumArt: albumArt || '',
+              audioUrl: audioUrl,
+              duration: song.duration ? Number(song.duration) : 240,
+              isFullSong: true
+            };
+          }).filter(Boolean);
+        }
       }
 
-      let itunesFormatted = [];
-      if (itunesRes.status === 'fulfilled' && itunesRes.value?.results) {
-        itunesFormatted = itunesRes.value.results.map(item => ({
-          trackId: item.trackId,
-          songTitle: item.trackName,
-          artistName: item.artistName,
-          albumArt: (item.artworkUrl100 || item.artworkUrl60 || '').replace('100x100bb', '300x300bb'),
-          audioUrl: item.previewUrl
-        })).filter(s => s.audioUrl);
+      if (fullTracks.length === 0 && backendRes.status === 'fulfilled' && Array.isArray(backendRes.value)) {
+        fullTracks = backendRes.value;
       }
 
-      const combined = [...ytFormatted, ...itunesFormatted];
-      setSongs(combined);
+      setSongs(fullTracks);
     } catch (err) {
       console.error('Failed to search songs:', err);
       setError('Could not load songs. Check your internet connection.');
@@ -121,22 +150,7 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
     setPlayingTrackId(null);
     setPreviewYtId(null);
 
-    let finalSong = { ...song };
-    if (!finalSong.youtubeId && finalSong.songTitle) {
-      try {
-        const rawToken = localStorage.getItem('pulsechat_token');
-        const authHeader = rawToken ? { Authorization: `Bearer ${rawToken}` } : {};
-        const q = `${finalSong.songTitle} ${finalSong.artistName || ''}`;
-        const res = await fetch(`${BACKEND_URL}/api/messages/youtube-search?q=${encodeURIComponent(q)}`, { headers: authHeader });
-        const ytData = await res.json();
-        if (Array.isArray(ytData) && ytData.length > 0 && ytData[0].youtubeId) {
-          finalSong.youtubeId = ytData[0].youtubeId;
-          finalSong.isFullSong = true;
-        }
-      } catch (e) {}
-    }
-
-    onSelectSong(finalSong);
+    onSelectSong(song);
     onClose();
   };
 
@@ -387,7 +401,7 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
                             cursor: 'pointer',
                             transition: 'background 0.15s ease'
                           }}
-                          title={isPreviewing ? "Pause Preview" : "Listen Preview (30s)"}
+                          title={isPreviewing ? "Pause" : "Play Full Song"}
                         >
                           {isPreviewing ? <Pause size={18} color="#ec4899" /> : <Play size={18} fill="#ffffff" />}
                         </button>
@@ -412,12 +426,17 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
                           whiteSpace: 'nowrap',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '4px'
+                          gap: '6px'
                         }}>
                           <span>{song.artistName}</span>
+                          {song.duration && (
+                            <span style={{ color: '#10b981', fontWeight: 700, fontSize: '0.68rem', background: 'rgba(16, 185, 129, 0.15)', padding: '1px 5px', borderRadius: '4px' }}>
+                              {Math.floor(song.duration / 60)}:{(song.duration % 60) < 10 ? '0' : ''}{song.duration % 60} Full Song
+                            </span>
+                          )}
                           {isPreviewing && (
                             <span style={{ color: '#ec4899', fontWeight: 700, fontSize: '0.7rem' }}>
-                              · 🎵 Playing...
+                              · 🎵 Playing Full Song...
                             </span>
                           )}
                         </div>

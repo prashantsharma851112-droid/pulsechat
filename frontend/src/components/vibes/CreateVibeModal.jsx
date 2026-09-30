@@ -620,10 +620,10 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <Sliders size={13} /> Full Song Trimmer (Choose Any 30s Part)
+                    <Sliders size={13} /> Song Start Position (Full Track)
                   </span>
                   <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#fff', background: 'rgba(245, 158, 11, 0.25)', padding: '2px 8px', borderRadius: '10px' }}>
-                    {formatSecs(songStartTime)} - {formatSecs(songStartTime + 30)}
+                    Plays from {formatSecs(songStartTime)}
                   </span>
                 </div>
 
