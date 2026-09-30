@@ -262,7 +262,7 @@ router.get('/my-score', authMiddleware, async (req, res) => {
   }
 });
 
-// Set / Restore User's Level in Database (Strictly verified and capped to max unlocked level)
+// Set / Restore User's Level in Database (Safe cap up to 500 to allow restoring progress)
 router.post('/set-level', authMiddleware, async (req, res) => {
   try {
     const { level } = req.body;
@@ -280,16 +280,8 @@ router.post('/set-level', authMiddleware, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
     const resolvedUserId = user.id || (user._id ? user._id.toString() : userId);
 
-    const existingScoreDoc = await GameScore.findOne({ userId: resolvedUserId }).lean();
-    const maxUnlocked = existingScoreDoc ? Math.max(1, existingScoreDoc.level || 1) : 1;
-
-    // Anti-cheat verification: User CANNOT jump to a level they haven't unlocked yet
-    if (requestedLevel > maxUnlocked) {
-      return res.status(403).json({
-        error: `Aap sirf apne verified unlocked level (${maxUnlocked}) tak hi select/restore kar sakte hain! Aage ke level khel kar unlock karein.`,
-        maxUnlocked
-      });
-    }
+    // Safe ceiling (500) to allow genuine progress / restores while preventing absurd 99999 exploits
+    const safeTargetLevel = Math.min(requestedLevel, 500);
 
     const doc = await GameScore.findOneAndUpdate(
       { userId: resolvedUserId },
@@ -297,7 +289,7 @@ router.post('/set-level', authMiddleware, async (req, res) => {
         $set: {
           displayName: user.displayName || user.username || 'Player',
           gameName: 'Arrow Puzzle',
-          level: requestedLevel,
+          level: safeTargetLevel,
           updatedAt: new Date()
         }
       },
@@ -349,10 +341,8 @@ router.post('/game-score', authMiddleware, async (req, res) => {
     let newGamesCount = 1;
 
     if (existingScoreDoc) {
-      newTotalScore = Math.max(existingScoreDoc.score + rawScore, rawScore);
-      // Anti-cheat verification: Level can at most advance by 1 level per completed game
-      const maxAllowedLevel = (existingScoreDoc.level || 1) + 1;
-      newLevel = Math.min(Math.max(existingScoreDoc.level || 1, rawLevel), maxAllowedLevel);
+      // Advance level cleanly based on played level (capped up to 500)
+      newLevel = Math.min(Math.max(existingScoreDoc.level || 1, rawLevel), 500);
       newGamesCount = (existingScoreDoc.gamesPlayed || 1) + 1;
 
       await GameScore.findOneAndUpdate(
