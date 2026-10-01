@@ -14,7 +14,7 @@ const OFFICIAL_UPI_NAME = 'PulseChat';
 
 // Supported Plans & Catalog
 const PLANS = {
-  pro_trial: { name: 'Pulse VIP (3-Day Free Trial)', amount: 0, currency: 'INR', type: 'pro', durationDays: 3, tier: 'trial' },
+  pro_trial: { name: 'Pulse VIP (7-Day Free Trial)', amount: 0, currency: 'INR', type: 'pro', durationDays: 7, tier: 'trial' },
   pro_monthly: { name: 'Pulse Pro (Monthly)', amount: 99, currency: 'INR', type: 'pro', durationDays: 30, tier: 'monthly' },
   pro_yearly: { name: 'Pulse Pro (Yearly)', amount: 999, currency: 'INR', type: 'pro', durationDays: 365, tier: 'yearly' },
   sparks_100: { name: '100 Pulse Sparks', amount: 19, currency: 'INR', type: 'sparks', sparks: 100 },
@@ -369,11 +369,11 @@ const GOOGLE_PLAY_CATALOG = {
 
 router.post('/google-play/verify', authMiddleware, async (req, res) => {
   return res.status(400).json({
-    error: 'Google Play Billing Coming Soon! Kripya UPI / Razorpay se pay karein ya 3-Day Free Trial lein.'
+    error: 'Google Play Billing Coming Soon! Kripya UPI se pay karein ya 7-Day Free Trial lein.'
   });
 });
 
-// 4. Claim 3-Day VIP Free Trial
+// 4. Claim 7-Day VIP Free Trial
 router.post('/claim-vip-trial', authMiddleware, async (req, res) => {
   try {
     const userDoc = await User.findOne({ id: req.user.id });
@@ -381,7 +381,7 @@ router.post('/claim-vip-trial', authMiddleware, async (req, res) => {
 
     if (userDoc.hasUsedVipTrial) {
       return res.status(400).json({
-        error: 'Aapne 3-Day VIP Free Trial pehle hi claim kar liya hai. Kripya Monthly (₹99) ya Annual (₹999) plan lein.'
+        error: 'Aapne 7-Day VIP Free Trial pehle hi claim kar liya hai. Kripya Monthly (₹99) ya Annual (₹999) plan lein.'
       });
     }
 
@@ -392,7 +392,7 @@ router.post('/claim-vip-trial', authMiddleware, async (req, res) => {
 
     userDoc.isPro = true;
     userDoc.proTier = 'monthly';
-    userDoc.proExpiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // 3 Days Free Trial
+    userDoc.proExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 Days Free Trial
     userDoc.customBadge = '⚡ VIP';
     userDoc.hasUsedVipTrial = true;
     await userDoc.save();
@@ -425,12 +425,12 @@ router.post('/claim-vip-trial', authMiddleware, async (req, res) => {
 
     res.json({
       success: true,
-      message: '🎉 3-Day VIP Free Trial Activated! Enjoy all VIP perks.',
+      message: '🎉 7-Day VIP Free Trial Activated! Enjoy all VIP perks.',
       user: sanitizedUser
     });
   } catch (err) {
     console.error('Trial activation error:', err);
-    res.status(500).json({ error: 'Failed to activate 3-Day Free Trial' });
+    res.status(500).json({ error: 'Failed to activate 7-Day Free Trial' });
   }
 });
 
@@ -446,7 +446,7 @@ router.post('/demo-activate', authMiddleware, async (req, res) => {
 
     if (plan.type === 'pro') {
       return res.status(400).json({
-        error: 'Monthly (₹99) and Annual (₹999) VIP are paid memberships. Kripya UPI / Razorpay se pay karein ya 3-Day Free Trial claim karein.'
+        error: 'Monthly (₹99) and Annual (₹999) VIP are paid memberships. Kripya UPI se pay karein ya 7-Day Free Trial claim karein.'
       });
     } else if (plan.type === 'sparks') {
       // ONLY 100 Sparks is free 1x / 24h. 300 and 1000 sparks require payment

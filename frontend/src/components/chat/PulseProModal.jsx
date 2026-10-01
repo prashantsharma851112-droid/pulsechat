@@ -146,7 +146,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        throw new Error(data.error || 'Failed to claim 3-day free trial');
+        throw new Error(data.error || 'Failed to claim 7-day free trial');
       }
       if (data.user && updateUserProfile) {
         updateUserProfile(data.user);
@@ -163,7 +163,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
       }
       setStatusMsg({
         type: 'success',
-        text: data.message || '🎉 3-Day VIP Free Trial Activated!'
+        text: data.message || '🎉 7-Day VIP Free Trial Activated!'
       });
       setTimeout(() => {
         onClose();
@@ -713,7 +713,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                 </div>
               </div>
 
-              {/* 3-Day VIP Free Trial Banner */}
+              {/* 7-Day VIP Free Trial Banner */}
               {!isUserPro && !user?.hasUsedVipTrial && (
                 <div style={{
                   background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(99, 102, 241, 0.16))',
@@ -741,10 +741,10 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                     </div>
                     <div>
                       <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        🎁 3-Day VIP Free Trial
+                        🎁 7-Day VIP Free Trial
                       </div>
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                        Zero cost • Unlock all VIP features for 3 days
+                        Zero cost • Unlock all VIP features for 7 days
                       </div>
                     </div>
                   </div>

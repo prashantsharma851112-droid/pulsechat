@@ -36,7 +36,7 @@ const userSchema = new mongoose.Schema({
   pulseSparks: { type: Number, default: 50 }, // 50 Free Sparks on signup
   claimedFreeSparks: { type: Object, default: {} }, // { [planId]: ISO string timestamp of last 24h claim }
   hasUsed3DTrial: { type: Boolean, default: false }, // Tracks if 1st free 3D text trial was used
-  hasUsedVipTrial: { type: Boolean, default: false }, // Tracks if 3-Day VIP Free Trial was claimed
+  hasUsedVipTrial: { type: Boolean, default: false }, // Tracks if 7-Day VIP Free Trial was claimed
   isAdmin: { type: Boolean, default: false }, // Stealth Master Admin status
   gamingStreakCount: { type: Number, default: 0 },
   lastGamingTaskDate: { type: String, default: '' },

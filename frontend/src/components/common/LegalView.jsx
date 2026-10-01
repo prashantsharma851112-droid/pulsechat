@@ -468,7 +468,7 @@ function PricingContent() {
             ₹99 <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 400 }}>/ 30 days</span>
           </div>
           <ul style={{ paddingLeft: '18px', fontSize: '0.85rem', color: '#cbd5e1', flex: 1, margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <li>3-Day Free Trial included</li>
+            <li>7-Day Free Trial included</li>
             <li>👑 Exclusive Glowing VIP Crown Badge</li>
             <li>✨ 3D Text & Dust-Dissolving Text Effects</li>
             <li>💥 3D Emoji Particle Bursts & Reactions</li>
