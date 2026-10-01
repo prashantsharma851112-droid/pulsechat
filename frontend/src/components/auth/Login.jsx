@@ -493,12 +493,11 @@ export default function Login({ switchToRegister }) {
                   <AtSign size={17} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                   <input
                     type="text"
-                    className="form-input"
+                    className="form-input input-with-icon"
                     value={identifier}
                     onChange={e => setIdentifier(e.target.value)}
                     required
                     placeholder="alex_dev or alex@gmail.com"
-                    style={{ paddingLeft: '2.4rem' }}
                   />
                 </div>
               </div>
@@ -509,12 +508,11 @@ export default function Login({ switchToRegister }) {
                 <Lock size={17} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 <input
                   type="password"
-                  className="form-input"
+                  className="form-input input-with-icon"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
                   placeholder="••••••••"
-                  style={{ paddingLeft: '2.4rem' }}
                 />
               </div>
             </div>
@@ -595,12 +593,11 @@ export default function Login({ switchToRegister }) {
               <Mail size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="email"
-                className="form-input"
+                className="form-input input-with-icon"
                 value={forgotEmail}
                 onChange={e => setForgotEmail(e.target.value)}
                 required
                 placeholder="your-email@gmail.com"
-                style={{ paddingLeft: '2.6rem' }}
                 autoFocus
               />
             </div>
@@ -673,12 +670,11 @@ export default function Login({ switchToRegister }) {
               <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="password"
-                className="form-input"
+                className="form-input input-with-icon"
                 value={newPassword}
                 onChange={e => setNewPassword(e.target.value)}
                 required
                 placeholder="At least 6 characters"
-                style={{ paddingLeft: '2.6rem' }}
               />
             </div>
           </div>
@@ -690,12 +686,11 @@ export default function Login({ switchToRegister }) {
               <KeyRound size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="password"
-                className="form-input"
+                className="form-input input-with-icon"
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
                 required
                 placeholder="Repeat new password"
-                style={{ paddingLeft: '2.6rem' }}
               />
             </div>
           </div>

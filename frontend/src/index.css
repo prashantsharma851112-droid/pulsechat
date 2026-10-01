@@ -330,6 +330,15 @@ input, textarea {
   border-color: var(--accent);
 }
 
+/* Inputs with Leading or Trailing Icon */
+.input-with-icon {
+  padding-left: 2.75rem !important;
+}
+
+.input-with-icon-right {
+  padding-right: 2.75rem !important;
+}
+
 .btn-primary {
   background: var(--accent);
   color: #ffffff;
@@ -590,8 +599,17 @@ input, textarea {
     padding: 0 !important;
   }
   .form-input {
-    padding: 0.55rem 0.8rem !important;
+    padding-top: 0.55rem !important;
+    padding-bottom: 0.55rem !important;
+    padding-right: 0.8rem !important;
+    padding-left: 0.8rem;
     font-size: 0.86rem !important;
+  }
+  .input-with-icon {
+    padding-left: 2.75rem !important;
+  }
+  .input-with-icon-right {
+    padding-right: 2.75rem !important;
   }
   .form-label {
     font-size: 0.76rem !important;

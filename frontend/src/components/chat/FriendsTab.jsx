@@ -1061,8 +1061,8 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                 value={addSearchQuery}
                 onChange={e => setAddSearchQuery(e.target.value)}
                 placeholder="Tune into @username or name..."
-                className="form-input"
-                style={{ paddingLeft: '2.4rem', borderRadius: '20px', fontSize: '0.88rem' }}
+                className="form-input input-with-icon"
+                style={{ borderRadius: '20px', fontSize: '0.88rem' }}
                 autoFocus
               />
             </div>

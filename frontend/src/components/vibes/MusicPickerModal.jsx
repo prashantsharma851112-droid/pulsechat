@@ -335,9 +335,8 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search artist, song name, album..."
-              className="form-input"
+              className="form-input input-with-icon"
               style={{
-                paddingLeft: '2.5rem',
                 borderRadius: '24px',
                 fontSize: '0.92rem',
                 paddingBlock: '0.65rem',

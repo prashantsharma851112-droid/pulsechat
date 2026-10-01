@@ -1898,8 +1898,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search or start new chat..."
-              className="form-input"
-              style={{ paddingLeft: '2.5rem', borderRadius: '24px', fontSize: '0.92rem', paddingBlock: '0.65rem' }}
+              className="form-input input-with-icon"
+              style={{ borderRadius: '24px', fontSize: '0.92rem', paddingBlock: '0.65rem' }}
             />
           </div>
         </div>
