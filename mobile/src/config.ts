@@ -8,8 +8,8 @@ export const CONFIG = {
   // Google AdMob Unit IDs (Official PulseChat Production Units)
   ADMOB: {
     APP_ID: 'ca-app-pub-9694837576493381~3737412445',
-    REWARDED_ID: 'ca-app-pub-9694837576493381/8823975753', // Pulse Arrow Revive
-    INTERSTITIAL_ID: 'ca-app-pub-9694837576493381/1786036526', // Pulse Story Transition
+    REWARDED_ID: 'ca-app-pub-8527648187361885/3025989630', // Pulse Arrow Revive (Rewarded)
+    INTERSTITIAL_ID: 'ca-app-pub-8527648187361885/1001538089', // Pulse Story Transition (Interstitial)
     BANNER_ID: TestIds.BANNER,
   },
 
