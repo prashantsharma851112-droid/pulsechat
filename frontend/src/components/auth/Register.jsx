@@ -522,7 +522,8 @@ export default function Register({ switchToLogin }) {
 
       {/* Compliance & Legal Policy Footer */}
       <div style={{
-        marginTop: '18px',
+        marginTop: '20px',
+        marginBottom: '24px',
         textAlign: 'center',
         fontSize: '0.78rem',
         color: 'rgba(255, 255, 255, 0.45)',
@@ -530,10 +531,11 @@ export default function Register({ switchToLogin }) {
         flexWrap: 'wrap',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: '10px',
-        maxWidth: '460px',
-        lineHeight: '1.5',
-        padding: '0 12px',
+        gap: '8px 12px',
+        maxWidth: '440px',
+        width: '100%',
+        lineHeight: '1.6',
+        padding: '0 8px',
         boxSizing: 'border-box'
       }}>
         <a
@@ -542,51 +544,51 @@ export default function Register({ switchToLogin }) {
             e.preventDefault();
             window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'privacy' } }));
           }}
-          style={{ color: 'rgba(255, 255, 255, 0.65)', textDecoration: 'none' }}
+          style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', padding: '2px 4px' }}
         >
           Privacy Policy
         </a>
-        <span>•</span>
+        <span style={{ opacity: 0.4 }}>•</span>
         <a
           href="/terms"
           onClick={(e) => {
             e.preventDefault();
             window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'terms' } }));
           }}
-          style={{ color: 'rgba(255, 255, 255, 0.65)', textDecoration: 'none' }}
+          style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', padding: '2px 4px' }}
         >
           Terms of Service
         </a>
-        <span>•</span>
+        <span style={{ opacity: 0.4 }}>•</span>
         <a
           href="/refund"
           onClick={(e) => {
             e.preventDefault();
             window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'refund' } }));
           }}
-          style={{ color: 'rgba(255, 255, 255, 0.65)', textDecoration: 'none' }}
+          style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', padding: '2px 4px' }}
         >
           Refund & Cancellation
         </a>
-        <span>•</span>
+        <span style={{ opacity: 0.4 }}>•</span>
         <a
           href="/pricing"
           onClick={(e) => {
             e.preventDefault();
             window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'pricing' } }));
           }}
-          style={{ color: 'rgba(255, 255, 255, 0.65)', textDecoration: 'none' }}
+          style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', padding: '2px 4px' }}
         >
           Pricing
         </a>
-        <span>•</span>
+        <span style={{ opacity: 0.4 }}>•</span>
         <a
           href="/contact"
           onClick={(e) => {
             e.preventDefault();
             window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'contact' } }));
           }}
-          style={{ color: 'rgba(255, 255, 255, 0.65)', textDecoration: 'none' }}
+          style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', padding: '2px 4px' }}
         >
           Contact Us
         </a>
