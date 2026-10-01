@@ -443,9 +443,6 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   </span>
                 )}
               </div>
-              <p style={{ margin: '3px 0 0 0', fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.78)' }}>
-                High-capacity 500MB media, custom pulse themes & exclusive frequency perks
-              </p>
               {isUserPro && (
                 <div style={{
                   marginTop: '10px',
