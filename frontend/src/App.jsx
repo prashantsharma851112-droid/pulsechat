@@ -18,6 +18,8 @@ import FullDpModal from './components/common/FullDpModal';
 import Toast from './components/common/Toast';
 import EmojiParticleBurst from './components/common/EmojiParticleBurst';
 import AppOnboardingModal from './components/common/AppOnboardingModal';
+import LegalView from './components/common/LegalView';
+import LegalModal from './components/common/LegalModal';
 import { BACKEND_URL } from './utils/config';
 import { updateUserProfileInStorage, clearUnreadCount, getCachedAllUsers } from './utils/offlineStorage';
 import { Zap, AlertTriangle } from 'lucide-react';
@@ -108,6 +110,26 @@ export default function App() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [fullDpData, setFullDpData] = useState(null); // { imageUrl, name, username }
+
+  // Compliance & Legal Pages Direct Route Support (/privacy, /terms, /refund, /pricing, /contact)
+  const [standaloneLegalTab, setStandaloneLegalTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const p = window.location.pathname.toLowerCase().replace('/', '');
+      if (['privacy', 'terms', 'refund', 'pricing', 'contact'].includes(p)) {
+        return p;
+      }
+    }
+    return null;
+  });
+  const [legalModalTab, setLegalModalTab] = useState(null);
+
+  useEffect(() => {
+    const handleOpenLegal = (e) => {
+      setLegalModalTab(e.detail?.tab || 'privacy');
+    };
+    window.addEventListener('pulsechat_open_legal', handleOpenLegal);
+    return () => window.removeEventListener('pulsechat_open_legal', handleOpenLegal);
+  }, []);
 
   // Auto-trigger feature walkthrough tour for new users
   useEffect(() => {
@@ -516,6 +538,19 @@ export default function App() {
     setIncomingGroupCallData(null);
   };
 
+  if (standaloneLegalTab) {
+    return (
+      <LegalView
+        initialTab={standaloneLegalTab}
+        isStandalone={true}
+        onClose={() => {
+          window.history.pushState(null, '', '/');
+          setStandaloneLegalTab(null);
+        }}
+      />
+    );
+  }
+
   if (loading) {
     return (
       <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-main)', color: 'var(--text-main)' }}>
@@ -525,10 +560,20 @@ export default function App() {
   }
 
   if (!user) {
-    return isRegisterView ? (
-      <Register switchToLogin={() => setIsRegisterView(false)} />
-    ) : (
-      <Login switchToRegister={() => setIsRegisterView(true)} />
+    return (
+      <>
+        {isRegisterView ? (
+          <Register switchToLogin={() => setIsRegisterView(false)} />
+        ) : (
+          <Login switchToRegister={() => setIsRegisterView(true)} />
+        )}
+        {legalModalTab && (
+          <LegalModal
+            initialTab={legalModalTab}
+            onClose={() => setLegalModalTab(null)}
+          />
+        )}
+      </>
     );
   }
 
@@ -711,6 +756,14 @@ export default function App() {
 
       {/* Global 3D Floating Emoji Particle Burst Engine */}
       <EmojiParticleBurst />
+
+      {/* Compliance & Legal Modal */}
+      {legalModalTab && (
+        <LegalModal
+          initialTab={legalModalTab}
+          onClose={() => setLegalModalTab(null)}
+        />
+      )}
       </div>
     </ErrorBoundary>
   );

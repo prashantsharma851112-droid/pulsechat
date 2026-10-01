@@ -518,6 +518,78 @@ export default function Register({ switchToLogin }) {
           </form>
         )}
       </div>
+
+      {/* Compliance & Legal Policy Footer */}
+      <div style={{
+        marginTop: '18px',
+        textAlign: 'center',
+        fontSize: '0.78rem',
+        color: 'rgba(255, 255, 255, 0.45)',
+        display: 'flex',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: '10px',
+        maxWidth: '460px',
+        lineHeight: '1.5',
+        padding: '0 12px',
+        boxSizing: 'border-box'
+      }}>
+        <a
+          href="/privacy"
+          onClick={(e) => {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'privacy' } }));
+          }}
+          style={{ color: 'rgba(255, 255, 255, 0.65)', textDecoration: 'none' }}
+        >
+          Privacy Policy
+        </a>
+        <span>•</span>
+        <a
+          href="/terms"
+          onClick={(e) => {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'terms' } }));
+          }}
+          style={{ color: 'rgba(255, 255, 255, 0.65)', textDecoration: 'none' }}
+        >
+          Terms of Service
+        </a>
+        <span>•</span>
+        <a
+          href="/refund"
+          onClick={(e) => {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'refund' } }));
+          }}
+          style={{ color: 'rgba(255, 255, 255, 0.65)', textDecoration: 'none' }}
+        >
+          Refund & Cancellation
+        </a>
+        <span>•</span>
+        <a
+          href="/pricing"
+          onClick={(e) => {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'pricing' } }));
+          }}
+          style={{ color: 'rgba(255, 255, 255, 0.65)', textDecoration: 'none' }}
+        >
+          Pricing
+        </a>
+        <span>•</span>
+        <a
+          href="/contact"
+          onClick={(e) => {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'contact' } }));
+          }}
+          style={{ color: 'rgba(255, 255, 255, 0.65)', textDecoration: 'none' }}
+        >
+          Contact Us
+        </a>
+      </div>
     </div>
   );
 }

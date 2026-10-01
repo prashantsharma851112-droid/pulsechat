@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { ThemeContext } from '../../context/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, Sparkles, Bell, BellOff, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2, Crown, Lock } from 'lucide-react';
+import { X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, Sparkles, Bell, BellOff, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2, Crown, Lock, Shield, FileText, HelpCircle } from 'lucide-react';
 import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
 import { BACKEND_URL } from '../../utils/config';
 import PulseProModal from '../chat/PulseProModal';
@@ -864,6 +864,95 @@ export default function SettingsModal({
                 }}
               >
                 <Plus size={16} /> Add / Log in Another Account
+              </button>
+            </div>
+          </div>
+
+          {/* Legal & Compliance Center */}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: '4px' }}>
+            <span className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+              <Shield size={15} color="#818cf8" /> Legal & Policies
+            </span>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'privacy' } }))}
+                style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-main)',
+                  padding: '8px 10px',
+                  borderRadius: '10px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Shield size={13} color="#818cf8" /> Privacy Policy
+              </button>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'terms' } }))}
+                style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-main)',
+                  padding: '8px 10px',
+                  borderRadius: '10px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <FileText size={13} color="#818cf8" /> Terms of Service
+              </button>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'refund' } }))}
+                style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-main)',
+                  padding: '8px 10px',
+                  borderRadius: '10px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <RefreshCw size={13} color="#818cf8" /> Refund Policy
+              </button>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'contact' } }))}
+                style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-main)',
+                  padding: '8px 10px',
+                  borderRadius: '10px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <HelpCircle size={13} color="#818cf8" /> Support & Contact
               </button>
             </div>
           </div>
