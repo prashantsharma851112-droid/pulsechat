@@ -389,7 +389,8 @@ export default function Login({ switchToRegister }) {
 
   return (
     <div className="auth-page-container">
-      <div className="auth-card">
+      <div className="auth-wrapper">
+        <div className="auth-card">
         {/* 1. Normal Sign In View */}
         {viewMode === 'login' && (
           <div>
@@ -872,6 +873,7 @@ export default function Login({ switchToRegister }) {
         >
           Contact Us
         </a>
+      </div>
       </div>
     </div>
   );

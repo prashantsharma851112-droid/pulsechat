@@ -551,19 +551,20 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
           {activeTab === 'pro' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               {/* Feature Grid - 12 Complete VIP Perks */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
                 <div style={{
                   padding: '12px',
                   background: 'var(--hover-bg)',
                   borderRadius: '14px',
                   border: '1px solid var(--border)',
                   display: 'flex',
-                  gap: '10px'
+                  gap: '10px',
+                  boxSizing: 'border-box'
                 }}>
                   <div style={{ color: '#f59e0b', flexShrink: 0 }}><Crown size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Pulse VIP Crest</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Glowing golden VIP crest badge across all chats & profile.</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Glowing VIP Crown</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Exclusive golden VIP badge on your avatar, profile & chats.</div>
                   </div>
                 </div>
 
@@ -573,27 +574,13 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   borderRadius: '14px',
                   border: '1px solid var(--border)',
                   display: 'flex',
-                  gap: '10px'
-                }}>
-                  <div style={{ color: '#8b5cf6', flexShrink: 0 }}><BarChart2 size={20} /></div>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>VIP Poll Themes & Auras</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Pro poll themes & animated card decorations (Gold Stardust, Cyber Matrix, Inferno Blaze).</div>
-                  </div>
-                </div>
-
-                <div style={{
-                  padding: '12px',
-                  background: 'var(--hover-bg)',
-                  borderRadius: '14px',
-                  border: '1px solid var(--border)',
-                  display: 'flex',
-                  gap: '10px'
+                  gap: '10px',
+                  boxSizing: 'border-box'
                 }}>
                   <div style={{ color: '#06b6d4', flexShrink: 0 }}><Type size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>3D Text in Stories & Chat</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Pro 3D Typography: Cyber Neon, Gold Deluxe, Blood Crimson, Emerald Matrix & Tokyo Synth.</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>3D & Dust Text Effects</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Send glowing 3D embossed messages & dust-dissolving text.</div>
                   </div>
                 </div>
 
@@ -603,12 +590,29 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   borderRadius: '14px',
                   border: '1px solid var(--border)',
                   display: 'flex',
-                  gap: '10px'
+                  gap: '10px',
+                  boxSizing: 'border-box'
+                }}>
+                  <div style={{ color: '#f43f5e', flexShrink: 0 }}><Zap size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>3D Burst Emoji Reactions</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Floating 3D emoji particle bursts & interactive reactions.</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px',
+                  boxSizing: 'border-box'
                 }}>
                   <div style={{ color: '#ec4899', flexShrink: 0 }}><Sparkles size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Live Story Wallpapers</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Animated Canvas backgrounds for Stories: Matrix Rain, Galaxy, Cyber Grid & Fireflies.</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Live Animated Themes</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Matrix Rain, Starry Galaxy, Floating Hearts & Fireflies.</div>
                   </div>
                 </div>
 
@@ -618,56 +622,12 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   borderRadius: '14px',
                   border: '1px solid var(--border)',
                   display: 'flex',
-                  gap: '10px'
-                }}>
-                  <div style={{ color: '#f59e0b', flexShrink: 0 }}><Gamepad2 size={20} /></div>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Pulse Zone Mini-Games</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Play Arrow Puzzle & Speed Tapper offline, earn Sparks & rank on Leaderboard.</div>
-                  </div>
-                </div>
-
-                <div style={{
-                  padding: '12px',
-                  background: 'var(--hover-bg)',
-                  borderRadius: '14px',
-                  border: '1px solid var(--border)',
-                  display: 'flex',
-                  gap: '10px'
-                }}>
-                  <div style={{ color: '#ec4899', flexShrink: 0 }}><Music size={20} /></div>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Aura Soundscapes</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Lofi Beats, Cyberpunk Rain & Space Nebula background music.</div>
-                  </div>
-                </div>
-
-                <div style={{
-                  padding: '12px',
-                  background: 'var(--hover-bg)',
-                  borderRadius: '14px',
-                  border: '1px solid var(--border)',
-                  display: 'flex',
-                  gap: '10px'
-                }}>
-                  <div style={{ color: '#10b981', flexShrink: 0 }}><Sparkles size={20} /></div>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>4K Live Wallpapers</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Matrix Rain, Starry Galaxy, Fireflies, Floating Hearts & Custom Uploads.</div>
-                  </div>
-                </div>
-
-                <div style={{
-                  padding: '12px',
-                  background: 'var(--hover-bg)',
-                  borderRadius: '14px',
-                  border: '1px solid var(--border)',
-                  display: 'flex',
-                  gap: '10px'
+                  gap: '10px',
+                  boxSizing: 'border-box'
                 }}>
                   <div style={{ color: '#a855f7', flexShrink: 0 }}><Palette size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>VIP Solid Themes</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>All 12 AMOLED Themes</div>
                     <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Royal Gold Aura, Cosmic Nebula, Cyber Pulse & Tokyo Synth.</div>
                   </div>
                 </div>
@@ -678,12 +638,45 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   borderRadius: '14px',
                   border: '1px solid var(--border)',
                   display: 'flex',
-                  gap: '10px'
+                  gap: '10px',
+                  boxSizing: 'border-box'
+                }}>
+                  <div style={{ color: '#ec4899', flexShrink: 0 }}><Music size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Chat Background Music</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>In-chat lo-fi beats, ambient soundscapes & music player.</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px',
+                  boxSizing: 'border-box'
+                }}>
+                  <div style={{ color: '#6366f1', flexShrink: 0 }}><EyeOff size={20} /></div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Offline Stealth Indicator</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Hide your online green dot & active indicator completely.</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: 'var(--hover-bg)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px',
+                  boxSizing: 'border-box'
                 }}>
                   <div style={{ color: '#0ea5e9', flexShrink: 0 }}><Rocket size={20} /></div>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>500 MB File Limits</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Upload massive 4K videos & zip archives (Free: 25 MB).</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Upload massive 4K videos & large zip archives (Free: 25 MB).</div>
                   </div>
                 </div>
 
@@ -693,27 +686,13 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   borderRadius: '14px',
                   border: '1px solid var(--border)',
                   display: 'flex',
-                  gap: '10px'
-                }}>
-                  <div style={{ color: '#6366f1', flexShrink: 0 }}><EyeOff size={20} /></div>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Incognito Ghost Mode</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Hide read receipts & online visibility independently.</div>
-                  </div>
-                </div>
-
-                <div style={{
-                  padding: '12px',
-                  background: 'var(--hover-bg)',
-                  borderRadius: '14px',
-                  border: '1px solid var(--border)',
-                  display: 'flex',
-                  gap: '10px'
+                  gap: '10px',
+                  boxSizing: 'border-box'
                 }}>
                   <div style={{ color: '#10b981', flexShrink: 0 }}><ShieldCheck size={20} /></div>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>100% Ad-Free Priority</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Zero ads, zero interruptions, priority high-speed socket.</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Zero ads, zero interruptions, priority high-speed connection.</div>
                   </div>
                 </div>
 
@@ -723,12 +702,13 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   borderRadius: '14px',
                   border: '1px solid var(--border)',
                   display: 'flex',
-                  gap: '10px'
+                  gap: '10px',
+                  boxSizing: 'border-box'
                 }}>
                   <div style={{ color: '#fbbf24', flexShrink: 0 }}><Diamond size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Daily Bonus Sparks</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Higher daily free claim allowance for virtual gifts & rewards.</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Daily Sparks Refill</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>100 free sparks refill every 24 hours for games & animations.</div>
                   </div>
                 </div>
               </div>
@@ -865,6 +845,78 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   </div>
                   <div style={{ fontSize: '0.74rem', color: activeTier === 'yearly' ? '#10b981' : 'var(--text-muted)', fontWeight: 600 }}>
                     {activeTier === 'yearly' ? `Expires ${expiryDateFormatted}` : '12 Months Full VIP Access'}
+                  </div>
+                </div>
+              </div>
+
+              {/* VIP Included Perks Checklist Card */}
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '16px',
+                padding: '14px 16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+              }}>
+                <div style={{
+                  fontSize: '0.82rem',
+                  fontWeight: 800,
+                  color: '#f59e0b',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <Crown size={15} color="#f59e0b" /> Included in VIP {billingCycle === 'yearly' ? 'Annual' : 'Monthly'}:
+                </div>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                  gap: '8px',
+                  fontSize: '0.8rem',
+                  color: 'var(--text-main)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
+                    <span>👑 Exclusive Glowing VIP Badge</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
+                    <span>✨ 3D Text & Dust Text Effects</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
+                    <span>💥 3D Emoji Particle Bursts</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
+                    <span>🌌 Live Animated Chat Wallpapers</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
+                    <span>🎨 All 12 AMOLED App Themes</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
+                    <span>🎵 Chat Background Music Player</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
+                    <span>🕵️ Offline / Online Stealth Indicator</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
+                    <span>🚀 500 MB High-Capacity Media</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
+                    <span>🛡️ 100% Ad-Free Priority Experience</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
+                    <span>⚡ 100 Free Daily Sparks Refill</span>
                   </div>
                 </div>
               </div>

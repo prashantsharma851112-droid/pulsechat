@@ -285,7 +285,8 @@ export default function Register({ switchToLogin }) {
 
   return (
     <div className="auth-page-container">
-      <div className="auth-card">
+      <div className="auth-wrapper">
+        <div className="auth-card">
         {step === 'form' ? (
           <div>
             <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
@@ -589,6 +590,7 @@ export default function Register({ switchToLogin }) {
         >
           Contact Us
         </a>
+      </div>
       </div>
     </div>
   );

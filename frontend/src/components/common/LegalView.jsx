@@ -32,19 +32,21 @@ export default function LegalView({ initialTab = 'privacy', onClose, isStandalon
         position: 'sticky',
         top: 0,
         zIndex: 50,
-        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+        backgroundColor: 'rgba(15, 23, 42, 0.95)',
         backdropFilter: 'blur(12px)',
         borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-        padding: '14px 20px',
+        padding: '12px 16px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '8px',
         maxWidth: '1100px',
         width: '100%',
         margin: '0 auto',
         boxSizing: 'border-box'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {onClose ? (
             <button
               onClick={onClose}
@@ -53,16 +55,16 @@ export default function LegalView({ initialTab = 'privacy', onClose, isStandalon
                 border: '1px solid rgba(255, 255, 255, 0.12)',
                 color: '#fff',
                 borderRadius: '10px',
-                padding: '8px 12px',
+                padding: '6px 12px',
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                fontSize: '0.85rem',
+                fontSize: '0.82rem',
                 fontWeight: 600
               }}
             >
-              <ArrowLeft size={16} /> Back to App
+              <ArrowLeft size={16} /> Back
             </button>
           ) : (
             <a
@@ -72,32 +74,49 @@ export default function LegalView({ initialTab = 'privacy', onClose, isStandalon
                 border: '1px solid rgba(255, 255, 255, 0.12)',
                 color: '#fff',
                 borderRadius: '10px',
-                padding: '8px 12px',
+                padding: '6px 12px',
                 textDecoration: 'none',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                fontSize: '0.85rem',
+                fontSize: '0.82rem',
                 fontWeight: 600
               }}
             >
               <ArrowLeft size={16} /> Home
             </a>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '1.25rem' }}>⚡</span>
-            <span style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em', background: 'linear-gradient(135deg, #6366f1, #ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '1.15rem' }}>⚡</span>
+            <span style={{ fontWeight: 800, fontSize: '1.05rem', letterSpacing: '-0.02em', background: 'linear-gradient(135deg, #6366f1, #ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               PulseChat
             </span>
-            <span style={{ fontSize: '0.75rem', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
-              Legal Center
+            <span style={{ fontSize: '0.72rem', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', padding: '2px 7px', borderRadius: '10px', fontWeight: 600 }}>
+              Legal
             </span>
           </div>
         </div>
 
-        <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-          Last Updated: October 2026
-        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            style={{
+              background: 'rgba(239, 68, 68, 0.15)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: '#f87171',
+              borderRadius: '8px',
+              padding: '5px 12px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '0.8rem',
+              fontWeight: 600
+            }}
+          >
+            ✕ Close
+          </button>
+        )}
       </header>
 
       {/* Main Content Area */}
@@ -105,11 +124,11 @@ export default function LegalView({ initialTab = 'privacy', onClose, isStandalon
         maxWidth: '1100px',
         width: '100%',
         margin: '0 auto',
-        padding: '24px 20px 60px 20px',
+        padding: '16px 12px 60px 12px',
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        gap: '24px',
+        gap: '16px',
         flex: 1
       }}>
         {/* Navigation Tabs */}
@@ -117,8 +136,10 @@ export default function LegalView({ initialTab = 'privacy', onClose, isStandalon
           display: 'flex',
           gap: '8px',
           overflowX: 'auto',
-          paddingBottom: '6px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
+          paddingBottom: '8px',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none'
         }}>
           {LEGAL_TABS.map(tab => {
             const Icon = tab.icon;
@@ -136,19 +157,20 @@ export default function LegalView({ initialTab = 'privacy', onClose, isStandalon
                   background: isActive ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(236, 72, 153, 0.2))' : 'rgba(255, 255, 255, 0.04)',
                   border: isActive ? '1px solid #6366f1' : '1px solid rgba(255, 255, 255, 0.08)',
                   color: isActive ? '#fff' : '#94a3b8',
-                  padding: '10px 16px',
+                  padding: '8px 14px',
                   borderRadius: '12px',
                   cursor: 'pointer',
                   fontWeight: isActive ? 700 : 500,
-                  fontSize: '0.88rem',
+                  fontSize: '0.84rem',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px',
+                  gap: '6px',
                   whiteSpace: 'nowrap',
-                  transition: 'all 0.2s'
+                  transition: 'all 0.2s',
+                  flexShrink: 0
                 }}
               >
-                <Icon size={16} color={isActive ? '#818cf8' : '#94a3b8'} />
+                <Icon size={15} color={isActive ? '#818cf8' : '#94a3b8'} />
                 {tab.label}
               </button>
             );
@@ -157,12 +179,13 @@ export default function LegalView({ initialTab = 'privacy', onClose, isStandalon
 
         {/* Content Card */}
         <div style={{
-          background: 'rgba(15, 23, 42, 0.6)',
+          background: 'rgba(15, 23, 42, 0.75)',
           border: '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius: '18px',
-          padding: '32px 28px',
+          borderRadius: '16px',
+          padding: '20px 16px',
           lineHeight: '1.7',
-          color: '#cbd5e1'
+          color: '#cbd5e1',
+          boxSizing: 'border-box'
         }}>
           {activeTab === 'privacy' && <PrivacyContent />}
           {activeTab === 'terms' && <TermsContent />}
@@ -444,12 +467,18 @@ function PricingContent() {
           <div style={{ fontSize: '2rem', fontWeight: 800, color: '#fff', marginBottom: '14px' }}>
             ₹99 <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 400 }}>/ 30 days</span>
           </div>
-          <ul style={{ paddingLeft: '18px', fontSize: '0.88rem', color: '#cbd5e1', flex: 1, margin: 0 }}>
+          <ul style={{ paddingLeft: '18px', fontSize: '0.85rem', color: '#cbd5e1', flex: 1, margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <li>3-Day Free Trial included</li>
-            <li>Exclusive Glowing VIP Crown Badge</li>
-            <li>Chat Background Music Player</li>
-            <li>All 12 AMOLED Premium Themes</li>
-            <li>100% Ad-Free Experience</li>
+            <li>👑 Exclusive Glowing VIP Crown Badge</li>
+            <li>✨ 3D Text & Dust-Dissolving Text Effects</li>
+            <li>💥 3D Emoji Particle Bursts & Reactions</li>
+            <li>🌌 All Live Animated Chat Wallpapers</li>
+            <li>🎨 All 12 AMOLED Premium App Themes</li>
+            <li>🎵 Chat Background Music Player</li>
+            <li>🕵️ Offline Stealth Mode (Hide Online Indicator)</li>
+            <li>🚀 500 MB High-Capacity Media Uploads</li>
+            <li>🛡️ 100% Ad-Free Priority Experience</li>
+            <li>⚡ 100 Free Daily Sparks Refill</li>
           </ul>
         </div>
 
@@ -466,11 +495,11 @@ function PricingContent() {
           <div style={{ fontSize: '2rem', fontWeight: 800, color: '#f59e0b', marginBottom: '14px' }}>
             ₹999 <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 400 }}>/ 365 days</span>
           </div>
-          <ul style={{ paddingLeft: '18px', fontSize: '0.88rem', color: '#94a3b8', flex: 1, margin: 0 }}>
+          <ul style={{ paddingLeft: '18px', fontSize: '0.85rem', color: '#cbd5e1', flex: 1, margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <li>Save over ₹189 compared to monthly</li>
-            <li>All VIP Monthly benefits for 1 year</li>
-            <li>Priority Customer Support</li>
-            <li>Early access to future features</li>
+            <li>All VIP Monthly features included for 365 Days</li>
+            <li>Priority Customer Support (VIP SLA)</li>
+            <li>Early access to future VIP beta features</li>
           </ul>
         </div>
       </div>
