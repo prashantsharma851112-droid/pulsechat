@@ -131,6 +131,48 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
     }
   };
 
+  const handleClaimTrial = async () => {
+    setLoading(true);
+    setStatusMsg({ type: '', text: '' });
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/payments/claim-vip-trial`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to claim 3-day free trial');
+      }
+      if (data.user && updateUserProfile) {
+        updateUserProfile(data.user);
+        window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+          detail: {
+            targetUserId: data.user.id,
+            updates: {
+              isPro: data.user.isPro,
+              proTier: data.user.proTier,
+              customBadge: data.user.customBadge
+            }
+          }
+        }));
+      }
+      setStatusMsg({
+        type: 'success',
+        text: data.message || '🎉 3-Day VIP Free Trial Activated!'
+      });
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err) {
+      setStatusMsg({ type: 'error', text: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCheckout = async (planId) => {
     if (planId === 'pro_monthly') {
       if (isUserPro && activeTier === 'monthly') {
@@ -147,7 +189,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
         });
         return;
       }
-      await executeDemoActivation(planId);
+      await initiateRazorpay('pro_monthly');
       return;
     }
 
@@ -159,33 +201,27 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
         });
         return;
       }
-      if (!razorpayConfig.isLive) {
-        setStatusMsg({
-          type: 'error',
-          text: 'Annual VIP (₹499/year) ke liye online payment gateway integrate ho raha hai. Abhi ke liye aap Monthly VIP 100% FREE le sakte hain!'
-        });
-        return;
-      }
-      await initiateRazorpay(planId);
+      await initiateRazorpay('pro_yearly');
       return;
     }
 
     // Sparks Pack
-    if (planId.startsWith('sparks_')) {
-      const cooldown = getPackCooldownInfo(planId);
+    if (planId === 'sparks_100') {
+      const cooldown = getPackCooldownInfo('sparks_100');
       if (cooldown) {
         setStatusMsg({
           type: 'error',
-          text: `Aapne ye pack pehle hi claim kar liya hai. 24 ghante baad (${cooldown.text} baki) dubara free claim kar sakte hain.`
+          text: `Aapne 100 Free Sparks aaj claim kar liya hai. 24 ghante baad (${cooldown.text} baki) dubara free claim kar sakte hain.`
         });
         return;
       }
+      await executeDemoActivation('sparks_100');
+      return;
     }
 
-    if (razorpayConfig.isLive) {
+    if (planId === 'sparks_300' || planId === 'sparks_1000') {
       await initiateRazorpay(planId);
-    } else {
-      await executeDemoActivation(planId);
+      return;
     }
   };
 
@@ -666,6 +702,63 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                 </div>
               </div>
 
+              {/* 3-Day VIP Free Trial Banner */}
+              {!isUserPro && !user?.hasUsedVipTrial && (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(99, 102, 241, 0.16))',
+                  border: '1.5px solid #10b981',
+                  borderRadius: '16px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '10px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '10px',
+                      background: 'rgba(16, 185, 129, 0.25)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#10b981',
+                      flexShrink: 0
+                    }}>
+                      <Sparkles size={20} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        🎁 3-Day VIP Free Trial
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        Zero cost • Unlock all VIP features for 3 days
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={handleClaimTrial}
+                    style={{
+                      background: 'linear-gradient(135deg, #10b981, #059669)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '12px',
+                      padding: '8px 14px',
+                      fontWeight: 800,
+                      fontSize: '0.8rem',
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      whiteSpace: 'nowrap',
+                      boxShadow: '0 2px 10px rgba(16, 185, 129, 0.4)'
+                    }}
+                  >
+                    {loading ? <Loader2 size={14} className="spin" /> : 'Claim Free'}
+                  </button>
+                </div>
+              )}
+
               {/* Pricing Cards Selector */}
               <div style={{ display: 'flex', gap: '10px' }}>
                 <div
@@ -686,22 +779,23 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                     position: 'absolute',
                     top: '-9px',
                     right: '12px',
-                    background: activeTier === 'monthly' ? '#3b82f6' : '#10b981',
+                    background: activeTier === 'monthly' ? '#10b981' : '#3b82f6',
                     color: '#fff',
                     fontSize: '0.65rem',
                     fontWeight: 800,
                     padding: '1px 8px',
                     borderRadius: '10px'
                   }}>
-                    {activeTier === 'monthly' ? '✓ ACTIVE' : '100% FREE'}
+                    {activeTier === 'monthly' ? '✓ ACTIVE' : 'POPULAR'}
                   </span>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Monthly VIP</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', margin: '4px 0' }}>
-                    <span style={{ fontSize: '1.15rem', textDecoration: 'line-through', opacity: 0.5, color: 'var(--text-muted)' }}>₹49</span>
-                    <span style={{ fontSize: '1.45rem', fontWeight: 900, color: '#10b981' }}>FREE</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', margin: '4px 0' }}>
+                    <span style={{ fontSize: '1.05rem', textDecoration: 'line-through', opacity: 0.5, color: 'var(--text-muted)' }}>₹149</span>
+                    <span style={{ fontSize: '1.45rem', fontWeight: 900, color: 'var(--text-main)' }}>₹99</span>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>/ mo</span>
                   </div>
-                  <div style={{ fontSize: '0.74rem', color: activeTier === 'monthly' ? 'var(--text-main)' : '#10b981', fontWeight: 600 }}>
-                    {activeTier === 'monthly' ? `Expires ${expiryDateFormatted}` : 'Free Beta Access (₹0)'}
+                  <div style={{ fontSize: '0.74rem', color: activeTier === 'monthly' ? '#10b981' : 'var(--text-muted)', fontWeight: 600 }}>
+                    {activeTier === 'monthly' ? `Expires ${expiryDateFormatted}` : '30 Days Full VIP Access'}
                   </div>
                 </div>
 
@@ -733,9 +827,10 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                     {activeTier === 'yearly' ? '✓ ACTIVE' : 'SAVE 16%'}
                   </span>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Annual VIP</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', margin: '4px 0' }}>
-                    <span style={{ fontSize: '1.45rem', fontWeight: 900, color: 'var(--text-main)' }}>₹499</span>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>/ year</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', margin: '4px 0' }}>
+                    <span style={{ fontSize: '1.05rem', textDecoration: 'line-through', opacity: 0.5, color: 'var(--text-muted)' }}>₹1188</span>
+                    <span style={{ fontSize: '1.45rem', fontWeight: 900, color: 'var(--text-main)' }}>₹999</span>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>/ yr</span>
                   </div>
                   <div style={{ fontSize: '0.74rem', color: activeTier === 'yearly' ? '#10b981' : 'var(--text-muted)', fontWeight: 600 }}>
                     {activeTier === 'yearly' ? `Expires ${expiryDateFormatted}` : '12 Months Full VIP Access'}
@@ -839,9 +934,9 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                     {loading ? (
                       <Loader2 size={18} className="spin" />
                     ) : (
-                      <Zap size={18} fill="#fff" />
+                      <Crown size={18} fill="#fff" />
                     )}
-                    ⚡ Activate Monthly VIP — 100% FREE
+                    💳 Pay ₹99 / month via UPI / Cards (Razorpay)
                   </button>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -867,7 +962,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                       }}
                     >
                       <Crown size={18} fill="#38bdf8" color="#38bdf8" />
-                      <span>Google Play Purchase — ₹499/year (Coming Soon)</span>
+                      <span>Google Play Purchase — ₹999/year (Coming Soon)</span>
                     </button>
 
                     {/* Razorpay UPI / Cards Option */}
@@ -877,12 +972,13 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                       onClick={() => handleCheckout('pro_yearly')}
                       style={{
                         width: '100%',
-                        padding: '11px',
+                        padding: '12px',
                         borderRadius: '16px',
-                        fontWeight: 700,
-                        fontSize: '0.86rem',
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        fontWeight: 800,
+                        fontSize: '0.92rem',
+                        background: 'linear-gradient(90deg, #f59e0b 0%, #ec4899 100%)',
+                        boxShadow: '0 4px 18px rgba(245, 158, 11, 0.35)',
+                        border: 'none',
                         color: '#fff',
                         display: 'flex',
                         alignItems: 'center',
@@ -891,7 +987,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                         cursor: loading ? 'not-allowed' : 'pointer'
                       }}
                     >
-                      <span>💳 Pay via UPI / QR / Cards (Razorpay)</span>
+                      <span>💳 Pay ₹999 / year via UPI / QR / Cards (Razorpay)</span>
                     </button>
                   </div>
                 )}
@@ -926,12 +1022,12 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {[
-                  { id: 'sparks_100', amount: 100, price: 19, tag: 'Starter' },
-                  { id: 'sparks_300', amount: 300, price: 49, tag: 'Most Popular', highlight: true },
-                  { id: 'sparks_1000', amount: 1000, price: 149, tag: 'Best Value' }
+                  { id: 'sparks_100', amount: 100, price: 19, isFree: true, tag: 'Starter • 1x / 24h Free' },
+                  { id: 'sparks_300', amount: 300, price: 49, originalPrice: 69, isFree: false, tag: 'Most Popular • Instant Boost', highlight: true },
+                  { id: 'sparks_1000', amount: 1000, price: 149, originalPrice: 199, isFree: false, tag: 'Best Value • Mega Spark Pack' }
                 ].map((pack) => {
                   const isSelected = selectedSparksPack === pack.id;
-                  const cooldown = getPackCooldownInfo(pack.id);
+                  const cooldown = pack.isFree ? getPackCooldownInfo(pack.id) : null;
                   return (
                     <div
                       key={pack.id}
@@ -946,7 +1042,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         transition: 'all 0.2s',
-                        opacity: cooldown ? 0.75 : 1
+                        opacity: (pack.isFree && cooldown) ? 0.75 : 1
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -954,54 +1050,79 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                           width: '36px',
                           height: '36px',
                           borderRadius: '10px',
-                          background: cooldown ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.2)',
+                          background: (pack.isFree && cooldown) ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.2)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           color: '#f59e0b'
                         }}>
-                          {cooldown ? <Clock size={18} /> : <Zap size={18} fill="#f59e0b" />}
+                          {(pack.isFree && cooldown) ? <Clock size={18} /> : <Zap size={18} fill="#f59e0b" />}
                         </div>
                         <div>
                           <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span>{pack.amount} Pulse Sparks</span>
-                            {cooldown ? (
-                              <span style={{
-                                fontSize: '0.66rem',
-                                fontWeight: 800,
-                                padding: '2px 8px',
-                                borderRadius: '8px',
-                                background: 'rgba(245, 158, 11, 0.18)',
-                                color: '#f59e0b',
-                                border: '1px solid rgba(245, 158, 11, 0.3)'
-                              }}>
-                                ⏳ Resets in {cooldown.text}
-                              </span>
+                            {pack.isFree ? (
+                              cooldown ? (
+                                <span style={{
+                                  fontSize: '0.66rem',
+                                  fontWeight: 800,
+                                  padding: '2px 8px',
+                                  borderRadius: '8px',
+                                  background: 'rgba(245, 158, 11, 0.18)',
+                                  color: '#f59e0b',
+                                  border: '1px solid rgba(245, 158, 11, 0.3)'
+                                }}>
+                                  ⏳ Resets in {cooldown.text}
+                                </span>
+                              ) : (
+                                <span style={{
+                                  fontSize: '0.66rem',
+                                  fontWeight: 800,
+                                  padding: '2px 8px',
+                                  borderRadius: '8px',
+                                  background: 'rgba(16, 185, 129, 0.18)',
+                                  color: '#10b981',
+                                  border: '1px solid rgba(16, 185, 129, 0.3)'
+                                }}>
+                                  ✓ 1x / 24h Free
+                                </span>
+                              )
                             ) : (
                               <span style={{
                                 fontSize: '0.66rem',
                                 fontWeight: 800,
                                 padding: '2px 8px',
                                 borderRadius: '8px',
-                                background: 'rgba(16, 185, 129, 0.18)',
-                                color: '#10b981',
-                                border: '1px solid rgba(16, 185, 129, 0.3)'
+                                background: pack.highlight ? 'rgba(245, 158, 11, 0.2)' : 'rgba(99, 102, 241, 0.2)',
+                                color: pack.highlight ? '#f59e0b' : '#818cf8',
+                                border: '1px solid rgba(245, 158, 11, 0.3)'
                               }}>
-                                ✓ 1x / 24h Free
+                                {pack.highlight ? 'HOT DEAL' : 'BEST VALUE'}
                               </span>
                             )}
                           </div>
                           <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                            {cooldown ? 'Aapne aaj claim kar liya hai. 24h baad reset ho jayega.' : pack.tag}
+                            {pack.isFree ? (cooldown ? 'Aapne aaj claim kar liya hai. 24h baad reset ho jayega.' : pack.tag) : pack.tag}
                           </div>
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
-                          <span style={{ fontSize: '0.88rem', textDecoration: 'line-through', opacity: 0.5, color: 'var(--text-muted)' }}>₹{pack.price}</span>
-                          <span style={{ fontWeight: 900, fontSize: '1.05rem', color: cooldown ? 'var(--text-muted)' : '#10b981' }}>
-                            {cooldown ? 'CLAIMED' : 'FREE'}
-                          </span>
+                          {pack.isFree ? (
+                            <>
+                              <span style={{ fontSize: '0.88rem', textDecoration: 'line-through', opacity: 0.5, color: 'var(--text-muted)' }}>₹{pack.price}</span>
+                              <span style={{ fontWeight: 900, fontSize: '1.05rem', color: cooldown ? 'var(--text-muted)' : '#10b981' }}>
+                                {cooldown ? 'CLAIMED' : 'FREE'}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span style={{ fontSize: '0.88rem', textDecoration: 'line-through', opacity: 0.5, color: 'var(--text-muted)' }}>₹{pack.originalPrice}</span>
+                              <span style={{ fontWeight: 900, fontSize: '1.05rem', color: '#f59e0b' }}>
+                                ₹{pack.price}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1010,17 +1131,17 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
               </div>
 
               {(() => {
-                const selectedCooldown = getPackCooldownInfo(selectedSparksPack);
                 const selectedPackData = [
-                  { id: 'sparks_100', amount: 100 },
-                  { id: 'sparks_300', amount: 300 },
-                  { id: 'sparks_1000', amount: 1000 }
+                  { id: 'sparks_100', amount: 100, price: 19, isFree: true },
+                  { id: 'sparks_300', amount: 300, price: 49, isFree: false },
+                  { id: 'sparks_1000', amount: 1000, price: 149, isFree: false }
                 ].find(p => p.id === selectedSparksPack);
+                const selectedCooldown = selectedPackData?.isFree ? getPackCooldownInfo('sparks_100') : null;
 
                 return (
                   <button
                     type="button"
-                    disabled={loading || !!selectedCooldown}
+                    disabled={loading || (selectedPackData?.isFree && !!selectedCooldown)}
                     onClick={() => handleCheckout(selectedSparksPack)}
                     className="btn-primary"
                     style={{
@@ -1029,32 +1150,39 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                       borderRadius: '16px',
                       fontWeight: 800,
                       fontSize: '0.96rem',
-                      background: selectedCooldown
+                      background: (selectedPackData?.isFree && selectedCooldown)
                         ? 'rgba(255, 255, 255, 0.08)'
-                        : 'linear-gradient(90deg, #10b981 0%, #f59e0b 100%)',
-                      boxShadow: selectedCooldown
+                        : selectedPackData?.isFree
+                        ? 'linear-gradient(90deg, #10b981 0%, #059669 100%)'
+                        : 'linear-gradient(90deg, #f59e0b 0%, #ec4899 100%)',
+                      boxShadow: (selectedPackData?.isFree && selectedCooldown)
                         ? 'none'
-                        : '0 4px 18px rgba(16, 185, 129, 0.35)',
-                      color: selectedCooldown ? 'var(--text-muted)' : '#fff',
-                      border: selectedCooldown ? '1px solid rgba(255, 255, 255, 0.15)' : 'none',
+                        : '0 4px 18px rgba(245, 158, 11, 0.35)',
+                      color: (selectedPackData?.isFree && selectedCooldown) ? 'var(--text-muted)' : '#fff',
+                      border: (selectedPackData?.isFree && selectedCooldown) ? '1px solid rgba(255, 255, 255, 0.15)' : 'none',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '8px',
-                      cursor: (loading || !!selectedCooldown) ? 'not-allowed' : 'pointer'
+                      cursor: (loading || (selectedPackData?.isFree && !!selectedCooldown)) ? 'not-allowed' : 'pointer'
                     }}
                   >
                     {loading ? (
                       <Loader2 size={18} className="spin" />
-                    ) : selectedCooldown ? (
+                    ) : (selectedPackData?.isFree && selectedCooldown) ? (
                       <>
                         <Clock size={18} />
                         Claimed (Resets in {selectedCooldown.text})
                       </>
+                    ) : selectedPackData?.isFree ? (
+                      <>
+                        <Zap size={18} fill="#fff" />
+                        ⚡ Claim 100 Sparks — 100% FREE
+                      </>
                     ) : (
                       <>
                         <Zap size={18} fill="#fff" />
-                        ⚡ Claim {selectedPackData?.amount || ''} Sparks — 100% FREE
+                        💳 Buy {selectedPackData?.amount} Sparks — ₹{selectedPackData?.price} (Razorpay)
                       </>
                     )}
                   </button>

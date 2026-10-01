@@ -10,8 +10,9 @@ const webpush = require('../utils/webpush');
 
 // Supported Plans & Catalog
 const PLANS = {
-  pro_monthly: { name: 'Pulse Pro (Monthly)', amount: 49, currency: 'INR', type: 'pro', durationDays: 30, tier: 'monthly' },
-  pro_yearly: { name: 'Pulse Pro (Yearly)', amount: 499, currency: 'INR', type: 'pro', durationDays: 365, tier: 'yearly' },
+  pro_trial: { name: 'Pulse VIP (3-Day Free Trial)', amount: 0, currency: 'INR', type: 'pro', durationDays: 3, tier: 'trial' },
+  pro_monthly: { name: 'Pulse Pro (Monthly)', amount: 99, currency: 'INR', type: 'pro', durationDays: 30, tier: 'monthly' },
+  pro_yearly: { name: 'Pulse Pro (Yearly)', amount: 999, currency: 'INR', type: 'pro', durationDays: 365, tier: 'yearly' },
   sparks_100: { name: '100 Pulse Sparks', amount: 19, currency: 'INR', type: 'sparks', sparks: 100 },
   sparks_300: { name: '300 Pulse Sparks', amount: 49, currency: 'INR', type: 'sparks', sparks: 300 },
   sparks_1000: { name: '1000 Pulse Sparks', amount: 149, currency: 'INR', type: 'sparks', sparks: 1000 }
@@ -254,59 +255,93 @@ const GOOGLE_PLAY_CATALOG = {
 
 router.post('/google-play/verify', authMiddleware, async (req, res) => {
   return res.status(400).json({
-    error: 'Google Play Billing Coming Soon! Kripya UPI / Razorpay se pay karein ya Monthly VIP free lein.'
+    error: 'Google Play Billing Coming Soon! Kripya UPI / Razorpay se pay karein ya 3-Day Free Trial lein.'
   });
 });
 
-// 4. Instant Demo Sandbox Activation (For testing without live gateway)
+// 4. Claim 3-Day VIP Free Trial
+router.post('/claim-vip-trial', authMiddleware, async (req, res) => {
+  try {
+    const userDoc = await User.findOne({ id: req.user.id });
+    if (!userDoc) return res.status(404).json({ error: 'User not found' });
+
+    if (userDoc.hasUsedVipTrial) {
+      return res.status(400).json({
+        error: 'Aapne 3-Day VIP Free Trial pehle hi claim kar liya hai. Kripya Monthly (₹99) ya Annual (₹999) plan lein.'
+      });
+    }
+
+    const now = new Date();
+    if (userDoc.isPro && userDoc.proExpiresAt && new Date(userDoc.proExpiresAt) > now) {
+      return res.status(400).json({ error: 'Aapka VIP plan pehle se active hai.' });
+    }
+
+    userDoc.isPro = true;
+    userDoc.proTier = 'monthly';
+    userDoc.proExpiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // 3 Days Free Trial
+    userDoc.customBadge = '⚡ VIP';
+    userDoc.hasUsedVipTrial = true;
+    await userDoc.save();
+
+    const sanitizedUser = await User.findOne({ id: req.user.id })
+      .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
+      .lean();
+
+    try {
+      const redis = require('../utils/redis');
+      if (sanitizedUser.id) redis.invalidateUser(sanitizedUser.id).catch(() => {});
+      redis.invalidateAllRecent().catch(() => {});
+    } catch {}
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('user_profile_updated', {
+        userId: sanitizedUser.id,
+        userMongoId: sanitizedUser._id ? sanitizedUser._id.toString() : null,
+        username: sanitizedUser.username,
+        displayName: sanitizedUser.displayName,
+        avatar: sanitizedUser.avatar,
+        status: sanitizedUser.status,
+        isPro: true,
+        proTier: 'monthly',
+        customBadge: '⚡ VIP',
+        pulseSparks: sanitizedUser.pulseSparks
+      });
+    }
+
+    res.json({
+      success: true,
+      message: '🎉 3-Day VIP Free Trial Activated! Enjoy all VIP perks.',
+      user: sanitizedUser
+    });
+  } catch (err) {
+    console.error('Trial activation error:', err);
+    res.status(500).json({ error: 'Failed to activate 3-Day Free Trial' });
+  }
+});
+
+// 5. Free 100 Sparks Daily Claim (24h cooldown reset)
 router.post('/demo-activate', authMiddleware, async (req, res) => {
   try {
     const { planId } = req.body;
-    const plan = PLANS[planId] || PLANS.pro_monthly;
+    const plan = PLANS[planId];
+    if (!plan) return res.status(400).json({ error: 'Invalid plan selected' });
 
     const userDoc = await User.findOne({ id: req.user.id });
     if (!userDoc) return res.status(404).json({ error: 'User not found' });
 
     if (plan.type === 'pro') {
-      // Annual plan is NOT free! Only Monthly VIP is free beta access
-      if (plan.tier === 'yearly' || planId === 'pro_yearly') {
-        return res.status(400).json({
-          error: 'Annual VIP is a paid membership (₹499/year). Only Monthly VIP is currently available for free access.'
-        });
-      }
-
-      const now = new Date();
-      const isCurrentlyActive = Boolean(userDoc.isPro && userDoc.proExpiresAt && new Date(userDoc.proExpiresAt) > now);
-
-      // Cannot activate same plan if already active
-      if (isCurrentlyActive && userDoc.proTier === plan.tier) {
-        const expiryFormatted = new Date(userDoc.proExpiresAt).toLocaleDateString('en-IN', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric'
-        });
-        return res.status(400).json({
-          error: `Aapka Monthly VIP plan pehle se active hai (${expiryFormatted} tak). Expire hone se pehle dubara activate nahi kiya ja sakta.`
-        });
-      }
-
-      if (isCurrentlyActive && userDoc.proTier === 'yearly') {
-        const expiryFormatted = new Date(userDoc.proExpiresAt).toLocaleDateString('en-IN', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric'
-        });
-        return res.status(400).json({
-          error: `Aapke paas pehle se Annual VIP active hai (${expiryFormatted} tak).`
-        });
-      }
-
-      const durationMs = (plan.durationDays || 30) * 24 * 60 * 60 * 1000;
-      userDoc.isPro = true;
-      userDoc.proTier = 'monthly';
-      userDoc.proExpiresAt = new Date(Date.now() + durationMs);
-      userDoc.customBadge = '⚡ VIP';
+      return res.status(400).json({
+        error: 'Monthly (₹99) and Annual (₹999) VIP are paid memberships. Kripya UPI / Razorpay se pay karein ya 3-Day Free Trial claim karein.'
+      });
     } else if (plan.type === 'sparks') {
+      // ONLY 100 Sparks is free 1x / 24h. 300 and 1000 sparks require payment
+      if (planId !== 'sparks_100') {
+        return res.status(400).json({
+          error: `Sirf 100 Sparks pack 24 ghante me 1 baar free milta hai. ${plan.name} ke liye kripya Razorpay se pay karein.`
+        });
+      }
+
       const now = Date.now();
       const cooldownMs = 24 * 60 * 60 * 1000;
       const lastClaimedStr = userDoc.claimedFreeSparks?.[planId];
@@ -318,7 +353,7 @@ router.post('/demo-activate', authMiddleware, async (req, res) => {
           const remainingHours = Math.floor(remainingMs / (60 * 60 * 1000));
           const remainingMins = Math.ceil((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
           return res.status(400).json({
-            error: `Aapne ye ${plan.name} pehle hi claim kar liya hai. 24 ghante baad (${remainingHours}h ${remainingMins}m baki) dubara free claim kar sakte hain.`
+            error: `Aapne 100 Free Sparks aaj claim kar liya hai. 24 ghante baad (${remainingHours}h ${remainingMins}m baki) dubara free claim kar sakte hain.`
           });
         }
       }

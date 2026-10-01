@@ -2389,20 +2389,43 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               <Gamepad2 size={19} color="#ec4899" />
             </button>
 
-            {/* Music Button directly next to 3-Dots Menu */}
+            {/* Music Button directly next to 3-Dots Menu (VIP Exclusive) */}
             <button
-              onClick={() => setShowChatMusicPicker(true)}
+              onClick={() => {
+                if (!user?.isPro) {
+                  setProModalTab('pro');
+                  setShowProModal(true);
+                  return;
+                }
+                setShowChatMusicPicker(true);
+              }}
               className="icon-btn-ghost"
-              title="Search & Play Full Song Background Music"
+              title={user?.isPro ? "Search & Play Full Song Background Music" : "🎵 Background Music (VIP Exclusive) - Click to Unlock"}
               style={{
                 width: '38px',
                 height: '38px',
                 borderRadius: '50%',
+                position: 'relative',
                 background: chatMusicSong ? 'rgba(245, 158, 11, 0.22)' : 'transparent',
                 border: chatMusicSong ? '1px solid rgba(245, 158, 11, 0.5)' : 'none'
               }}
             >
               <Music size={19} color="#f59e0b" />
+              <span style={{
+                position: 'absolute',
+                top: '-3px',
+                right: '-3px',
+                background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
+                color: '#fff',
+                fontSize: '0.52rem',
+                fontWeight: 900,
+                padding: '1px 4px',
+                borderRadius: '5px',
+                lineHeight: 1,
+                boxShadow: '0 0 6px rgba(245, 158, 11, 0.6)'
+              }}>
+                VIP
+              </span>
             </button>
 
             {/* 3-Dots More Options Menu */}
@@ -2511,9 +2534,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     </button>
                   </div>
 
-                  {/* Search Music Button */}
+                  {/* Search Music Button (VIP Exclusive) */}
                   <button
                     onClick={() => {
+                      if (!user?.isPro) {
+                        setShowAuraMenu(false);
+                        setProModalTab('pro');
+                        setShowProModal(true);
+                        return;
+                      }
                       setShowChatMusicPicker(true);
                       setShowAuraMenu(false);
                     }}
@@ -2536,6 +2565,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   >
                     <Music size={16} />
                     <span>{chatMusicSong ? '🎵 Change Song' : '🎵 Search & Play Music'}</span>
+                    <span style={{
+                      fontSize: '0.58rem',
+                      background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
+                      color: '#fff',
+                      padding: '1px 5px',
+                      borderRadius: '5px',
+                      fontWeight: 900
+                    }}>
+                      VIP
+                    </span>
                   </button>
 
                   {/* Active Selected Song Badge if any */}
