@@ -23,7 +23,7 @@ export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '506857
 
 // Official Google AdMob Configuration
 export const ADMOB_CONFIG = {
-  APP_ID: 'ca-app-pub-9694837576493381~3737412445',
+  APP_ID: 'ca-app-pub-8527648187361885~3463130025',
   REWARDED_ARROW_REVIVE_ID: 'ca-app-pub-8527648187361885/3025989630', // Pulse Arrow Revive (Rewarded)
   INTERSTITIAL_STORY_TRANSITION_ID: 'ca-app-pub-8527648187361885/1001538089', // Pulse Story Transition (Interstitial)
 };
