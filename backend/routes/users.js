@@ -17,7 +17,10 @@ router.get('/', authMiddleware, async (req, res) => {
 
     const results = await User.find({
       id: { $nin: excludeIds },
-      ...(myUsername ? { username: { $ne: myUsername } } : {})
+      ...(myUsername ? { username: { $ne: myUsername } } : {}),
+      isHidden: { $ne: true },
+      username: { $ne: 'reviewer' },
+      email: { $ne: 'reviewer@pulsechat.app' }
     })
       .sort({ createdAt: -1, _id: -1 })
       .select('id username displayName avatar isEmailVerified status email createdAt isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown streakCrownExpiresAt kingCrownExpiresAt')
@@ -61,6 +64,9 @@ router.get('/search', authMiddleware, async (req, res) => {
     const results = await User.find({
       id: { $nin: excludeIds },
       ...(myUsername ? { username: { $ne: myUsername } } : {}),
+      isHidden: { $ne: true },
+      username: { $ne: 'reviewer' },
+      email: { $ne: 'reviewer@pulsechat.app' },
       $or: [
         { username: { $regex: escapedQuery, $options: 'i' } },
         { displayName: { $regex: escapedQuery, $options: 'i' } },
