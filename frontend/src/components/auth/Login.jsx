@@ -394,24 +394,24 @@ export default function Login({ switchToRegister }) {
         {/* 1. Normal Sign In View */}
         {viewMode === 'login' && (
           <div>
-            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
-                <AppLogo size={56} />
+            <div style={{ textAlign: 'center', marginBottom: '0.9rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.45rem' }}>
+                <AppLogo size={46} />
               </div>
-              <h2 style={{ fontSize: '1.65rem', fontWeight: 700, margin: '0 0 0.35rem 0', color: 'var(--text-main)', letterSpacing: '-0.3px' }}>
+              <h2 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '0 0 0.2rem 0', color: 'var(--text-main)', letterSpacing: '-0.3px' }}>
                 Welcome to PulseChat
               </h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: 0 }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: 0 }}>
                 Sign in with Google or Email
               </p>
             </div>
 
             {/* Google Sign-In Section */}
-            <div style={{ width: '100%', marginBottom: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+            <div style={{ width: '100%', marginBottom: '0.75rem', display: 'flex', justifyContent: 'center' }}>
               <div
                 id="googleLoginBtn"
                 style={{
-                  minHeight: isGoogleBtnRendered ? '44px' : '0',
+                  minHeight: isGoogleBtnRendered ? '40px' : '0',
                   display: isGoogleBtnRendered ? 'flex' : 'none',
                   width: '100%',
                   maxWidth: '360px',
@@ -439,21 +439,21 @@ export default function Login({ switchToRegister }) {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '12px',
-                    padding: '0.75rem 1.25rem',
-                    fontSize: '0.92rem',
+                    gap: '10px',
+                    padding: '0.6rem 1.1rem',
+                    fontSize: '0.88rem',
                     fontWeight: 600,
                     borderRadius: '24px',
                     background: '#ffffff',
                     color: '#3c4043',
                     border: '1px solid #dadce0',
-                    boxShadow: '0 3px 12px rgba(0, 0, 0, 0.25)',
+                    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
                     boxSizing: 'border-box'
                   }}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
@@ -464,33 +464,33 @@ export default function Login({ switchToRegister }) {
               )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', margin: '1rem 0 1.25rem 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', margin: '0.65rem 0 0.85rem 0' }}>
               <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
-              <span style={{ padding: '0 10px', fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <span style={{ padding: '0 10px', fontSize: '0.74rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 or with credentials
               </span>
               <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
             </div>
 
             {successMsg && (
-              <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#10b981', padding: '0.65rem 0.85rem', borderRadius: '12px', fontSize: '0.84rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#10b981', padding: '0.55rem 0.75rem', borderRadius: '10px', fontSize: '0.82rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
                 <span>{successMsg}</span>
               </div>
             )}
 
             {error && (
-              <div className="error-banner" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem', borderRadius: '12px' }}>
+              <div className="error-banner" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.75rem', borderRadius: '10px', padding: '0.55rem 0.75rem', fontSize: '0.82rem' }}>
                 <AlertCircle size={16} style={{ flexShrink: 0 }} />
                 <span>{error}</span>
               </div>
             )}
 
             <form onSubmit={handleLoginSubmit}>
-              <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ marginBottom: '0.75rem' }}>
                 <label className="form-label">Email or @Username</label>
                 <div style={{ position: 'relative' }}>
-                  <AtSign size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <AtSign size={17} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                   <input
                     type="text"
                     className="form-input"
@@ -498,15 +498,15 @@ export default function Login({ switchToRegister }) {
                     onChange={e => setIdentifier(e.target.value)}
                     required
                     placeholder="alex_dev or alex@gmail.com"
-                    style={{ paddingLeft: '2.6rem' }}
+                    style={{ paddingLeft: '2.4rem' }}
                   />
                 </div>
               </div>
 
-            <div style={{ marginBottom: '0.5rem' }}>
+            <div style={{ marginBottom: '0.35rem' }}>
               <label className="form-label">Password</label>
               <div style={{ position: 'relative' }}>
-                <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <Lock size={17} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 <input
                   type="password"
                   className="form-input"
@@ -514,13 +514,13 @@ export default function Login({ switchToRegister }) {
                   onChange={e => setPassword(e.target.value)}
                   required
                   placeholder="••••••••"
-                  style={{ paddingLeft: '2.6rem' }}
+                  style={{ paddingLeft: '2.4rem' }}
                 />
               </div>
             </div>
 
             {/* Forgot Password Link */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.4rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.85rem' }}>
               <button
                 type="button"
                 onClick={() => {
@@ -533,7 +533,7 @@ export default function Login({ switchToRegister }) {
                   background: 'none',
                   border: 'none',
                   color: 'var(--accent)',
-                  fontSize: '0.84rem',
+                  fontSize: '0.82rem',
                   fontWeight: 600,
                   cursor: 'pointer',
                   padding: '2px 0',
@@ -544,11 +544,11 @@ export default function Login({ switchToRegister }) {
               </button>
             </div>
 
-            <button type="submit" className="btn-primary" style={{ width: '100%', padding: '0.85rem' }} disabled={loading}>
+            <button type="submit" className="btn-primary" style={{ width: '100%', padding: '0.72rem' }} disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
 
-            <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+            <p style={{ textAlign: 'center', marginTop: '0.85rem', fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: 0 }}>
               Don't have an account?{' '}
               <span onClick={switchToRegister} style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}>
                 Create Account
@@ -805,20 +805,20 @@ export default function Login({ switchToRegister }) {
 
       {/* Compliance & Legal Policy Footer */}
       <div style={{
-        marginTop: '20px',
-        marginBottom: '24px',
+        marginTop: '10px',
+        marginBottom: '4px',
         textAlign: 'center',
-        fontSize: '0.78rem',
+        fontSize: '0.72rem',
         color: 'rgba(255, 255, 255, 0.45)',
         display: 'flex',
         flexWrap: 'wrap',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: '8px 12px',
-        maxWidth: '440px',
+        gap: '4px 10px',
+        maxWidth: '420px',
         width: '100%',
-        lineHeight: '1.6',
-        padding: '0 8px',
+        lineHeight: '1.4',
+        padding: '0 4px',
         boxSizing: 'border-box'
       }}>
         <a
