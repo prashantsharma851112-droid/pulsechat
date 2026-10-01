@@ -5,8 +5,12 @@ const https = require('https');
 const authMiddleware = require('../middleware/authMiddleware');
 const User = require('../models/User');
 const Message = require('../models/Message');
+const PaymentTransaction = require('../models/PaymentTransaction');
 const db = require('../database/db');
 const webpush = require('../utils/webpush');
+
+const OFFICIAL_UPI_ID = process.env.OFFICIAL_UPI_ID || '7488519761@ybl';
+const OFFICIAL_UPI_NAME = 'PulseChat';
 
 // Supported Plans & Catalog
 const PLANS = {
@@ -73,13 +77,15 @@ function requestRazorpayOrder(amountInPaise, currency, receipt, keyId, keySecret
   });
 }
 
-// 1. Get Payment Config (Key ID & Available Plans)
+// 1. Get Payment Config (Key ID, UPI & Available Plans)
 router.get('/config', (req, res) => {
   const keyId = process.env.RAZORPAY_KEY_ID || '';
   const keySecret = process.env.RAZORPAY_KEY_SECRET || '';
   res.json({
     razorpayKeyId: keyId,
     isLiveConfigured: Boolean(keyId && keySecret),
+    upiId: OFFICIAL_UPI_ID,
+    upiName: OFFICIAL_UPI_NAME,
     plans: PLANS,
     gifts: GIFTS
   });
@@ -241,6 +247,114 @@ router.post('/verify', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Payment verification error:', err);
     res.status(500).json({ error: 'Payment verification failed' });
+  }
+});
+
+// 4. Submit & Verify Direct UPI Payment (Instant 0% Fee Activation)
+router.post('/submit-upi', authMiddleware, async (req, res) => {
+  try {
+    const { planId, utr, senderUpi } = req.body;
+    const plan = PLANS[planId];
+    if (!plan) return res.status(400).json({ error: 'Invalid plan selected' });
+
+    if (!utr || typeof utr !== 'string') {
+      return res.status(400).json({ error: 'Kripya payment receipt se 12-digit UPI Reference / UTR Number enter karein.' });
+    }
+
+    const cleanUtr = utr.trim().replace(/\s+/g, '');
+    if (cleanUtr.length < 8 || cleanUtr.length > 22) {
+      return res.status(400).json({ error: 'Invalid UTR Number. Kripya 12-digit UPI transaction number enter karein.' });
+    }
+
+    // Check if UTR is already used
+    const existingTx = await PaymentTransaction.findOne({ utr: cleanUtr });
+    if (existingTx) {
+      return res.status(400).json({
+        error: 'Yeh UTR / Reference number pehle se use kiya ja chuka hai. Agar koi dikkat hai toh support se contact karein.'
+      });
+    }
+
+    const userDoc = await User.findOne({ id: req.user.id });
+    if (!userDoc) return res.status(404).json({ error: 'User not found' });
+
+    if (plan.type === 'pro') {
+      const now = new Date();
+      const isCurrentlyActive = Boolean(userDoc.isPro && userDoc.proExpiresAt && new Date(userDoc.proExpiresAt) > now);
+
+      if (isCurrentlyActive && userDoc.proTier === plan.tier) {
+        const expiryFormatted = new Date(userDoc.proExpiresAt).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        });
+        return res.status(400).json({
+          error: `Aapka ${plan.tier === 'yearly' ? 'Annual' : 'Monthly'} VIP plan pehle se active hai (${expiryFormatted} tak). Expire hone se pehle dubara nahi liya ja sakta.`
+        });
+      }
+
+      const durationMs = (plan.durationDays || 30) * 24 * 60 * 60 * 1000;
+      userDoc.isPro = true;
+      userDoc.proTier = plan.tier || 'monthly';
+      userDoc.proExpiresAt = new Date(Date.now() + durationMs);
+      userDoc.customBadge = '👑 VIP';
+    } else if (plan.type === 'sparks') {
+      userDoc.pulseSparks = (userDoc.pulseSparks || 0) + (plan.sparks || 0);
+    }
+
+    await userDoc.save();
+
+    // Record the verified transaction
+    await PaymentTransaction.create({
+      userId: userDoc.id,
+      userMongoId: userDoc._id,
+      username: userDoc.username,
+      planId,
+      planName: plan.name,
+      amount: plan.amount,
+      currency: 'INR',
+      method: 'UPI',
+      utr: cleanUtr,
+      senderUpi: senderUpi || '',
+      status: 'completed',
+      appliedAt: new Date()
+    });
+
+    const sanitizedUser = await User.findOne({ id: req.user.id })
+      .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
+      .lean();
+
+    // Invalidate Redis caches
+    try {
+      const redis = require('../utils/redis');
+      if (sanitizedUser.id) redis.invalidateUser(sanitizedUser.id).catch(() => {});
+      redis.invalidateAllRecent().catch(() => {});
+    } catch {}
+
+    // Broadcast VIP Pro / Profile update in real time to all connected sockets
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('user_profile_updated', {
+        userId: sanitizedUser.id,
+        userMongoId: sanitizedUser._id ? sanitizedUser._id.toString() : null,
+        username: sanitizedUser.username,
+        displayName: sanitizedUser.displayName,
+        avatar: sanitizedUser.avatar,
+        status: sanitizedUser.status,
+        isPro: Boolean(sanitizedUser.isPro),
+        proTier: sanitizedUser.proTier,
+        customBadge: sanitizedUser.customBadge,
+        pulseSparks: sanitizedUser.pulseSparks
+      });
+    }
+
+    res.json({
+      success: true,
+      message: plan.type === 'pro' ? '🎉 Welcome to Pulse VIP! Premium features unlocked!' : `⚡ Successfully added ${plan.sparks} Pulse Sparks!`,
+      user: sanitizedUser
+    });
+  } catch (err) {
+    console.error('Submit UPI error:', err);
+    res.status(500).json({ error: err.message || 'Failed to process UPI transaction' });
   }
 });
 

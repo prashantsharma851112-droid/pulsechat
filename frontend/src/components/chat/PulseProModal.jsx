@@ -2,6 +2,7 @@ import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { X, Sparkles, Check, Crown, Zap, ShieldCheck, Flame, Coffee, Heart, Rocket, Diamond, Award, ArrowRight, Loader2, Clock, Music, EyeOff, Palette, BarChart2, Type, Gamepad2 } from 'lucide-react';
 import PulseVipBadge from '../common/PulseVipBadge';
+import UpiCheckoutModal from './UpiCheckoutModal';
 import { BACKEND_URL } from '../../utils/config';
 
 export default function PulseProModal({ onClose, initialTab = 'pro' }) {
@@ -12,6 +13,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [razorpayConfig, setRazorpayConfig] = useState({ keyId: '', isLive: false });
+  const [upiCheckoutPlan, setUpiCheckoutPlan] = useState(null);
 
   useEffect(() => {
     if (initialTab) {
@@ -189,7 +191,13 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
         });
         return;
       }
-      await initiateRazorpay('pro_monthly');
+      setUpiCheckoutPlan({
+        id: 'pro_monthly',
+        name: 'Pulse VIP (Monthly)',
+        amount: 99,
+        type: 'pro',
+        description: '30 Days VIP Perks'
+      });
       return;
     }
 
@@ -201,7 +209,13 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
         });
         return;
       }
-      await initiateRazorpay('pro_yearly');
+      setUpiCheckoutPlan({
+        id: 'pro_yearly',
+        name: 'Pulse VIP (Annual)',
+        amount: 999,
+        type: 'pro',
+        description: '365 Days VIP Perks'
+      });
       return;
     }
 
@@ -219,8 +233,25 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
       return;
     }
 
-    if (planId === 'sparks_300' || planId === 'sparks_1000') {
-      await initiateRazorpay(planId);
+    if (planId === 'sparks_300') {
+      setUpiCheckoutPlan({
+        id: 'sparks_300',
+        name: '300 Pulse Sparks',
+        amount: 49,
+        type: 'sparks',
+        description: '300 Sparks for game revives & animations'
+      });
+      return;
+    }
+
+    if (planId === 'sparks_1000') {
+      setUpiCheckoutPlan({
+        id: 'sparks_1000',
+        name: '1000 Pulse Sparks',
+        amount: 149,
+        type: 'sparks',
+        description: '1000 Sparks for game revives & animations'
+      });
       return;
     }
   };
@@ -936,7 +967,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                     ) : (
                       <Crown size={18} fill="#fff" />
                     )}
-                    💳 Pay ₹99 / month via UPI / Cards (Razorpay)
+                    <span>⚡ Pay ₹99 / month via Instant UPI (GPay/PhonePe/QR)</span>
                   </button>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -987,7 +1018,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                         cursor: loading ? 'not-allowed' : 'pointer'
                       }}
                     >
-                      <span>💳 Pay ₹999 / year via UPI / QR / Cards (Razorpay)</span>
+                      <span>⚡ Pay ₹999 / year via Instant UPI (Save ₹189)</span>
                     </button>
                   </div>
                 )}
@@ -1182,7 +1213,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                     ) : (
                       <>
                         <Zap size={18} fill="#fff" />
-                        💳 Buy {selectedPackData?.amount} Sparks — ₹{selectedPackData?.price} (Razorpay)
+                        ⚡ Buy {selectedPackData?.amount} Sparks — ₹{selectedPackData?.price} via Instant UPI
                       </>
                     )}
                   </button>
@@ -1192,6 +1223,18 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
           )}
         </div>
       </div>
+
+      {/* Instant UPI Checkout Modal */}
+      {upiCheckoutPlan && (
+        <UpiCheckoutModal
+          plan={upiCheckoutPlan}
+          onClose={() => setUpiCheckoutPlan(null)}
+          onSuccess={() => {
+            setUpiCheckoutPlan(null);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 }
