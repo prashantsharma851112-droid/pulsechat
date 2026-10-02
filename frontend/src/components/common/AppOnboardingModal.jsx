@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Sparkles, ChevronRight, ChevronLeft, BarChart2, Music, EyeOff, Crown, Zap, Smile, Check, MapPin, Lightbulb, Rocket } from 'lucide-react';
+import { useBackHandler } from '../../utils/backNavigation';
 
 const ONBOARDING_STEPS = [
   {
@@ -103,9 +104,14 @@ export default function AppOnboardingModal({ onClose, userId }) {
       const storageKey = userId ? `pulsechat_onboarding_${userId}` : 'pulsechat_onboarding_completed';
       localStorage.setItem(storageKey, 'true');
       localStorage.setItem('pulsechat_onboarding_completed', 'true');
+      if (userId) {
+        localStorage.setItem(`pulsechat_feature_tour_completed_${userId}`, 'true');
+      }
     }
     onClose();
   };
+
+  useBackHandler(handleFinish, true);
 
   const handleNext = () => {
     if (isLastStep) {
@@ -163,7 +169,7 @@ export default function AppOnboardingModal({ onClose, userId }) {
             }}>
               Step {currentStep.step} of {totalSteps}
             </span>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>App Feature Tour</span>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Feature Tour Guide</span>
           </div>
 
           <button

@@ -530,7 +530,7 @@ export default function SettingsModal({
                     </div>
                     <div>
                       <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                        App Feature Tour
+                        Feature Tour Guide
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                         Visual guide showing all features & button locations
@@ -1378,7 +1378,7 @@ export default function SettingsModal({
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Compass size={18} color="var(--accent)" />
-                  <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>Explore App Feature Tour</span>
+                  <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>Feature Tour Guide</span>
                 </div>
                 <ChevronRight size={16} color="var(--accent)" />
               </button>

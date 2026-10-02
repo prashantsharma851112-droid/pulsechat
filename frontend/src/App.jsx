@@ -132,10 +132,11 @@ export default function App() {
     return () => window.removeEventListener('pulsechat_open_legal', handleOpenLegal);
   }, []);
 
-  // Auto-trigger feature walkthrough tour for new users
+  // Auto-trigger feature walkthrough tour for new users (Strictly FIRST TIME ONLY)
   useEffect(() => {
     if (user?.id) {
       const isCompleted = localStorage.getItem(`pulsechat_onboarding_${user.id}`) === 'true' ||
+                          localStorage.getItem(`pulsechat_feature_tour_completed_${user.id}`) === 'true' ||
                           localStorage.getItem('pulsechat_onboarding_completed') === 'true';
       if (!isCompleted) {
         const timer = setTimeout(() => {
@@ -779,11 +780,18 @@ export default function App() {
           />
         ))}
       </div>
-      {/* Interactive App Features Walkthrough Onboarding Modal */}
+      {/* Interactive App Features Walkthrough Onboarding Modal (First time only) */}
       {showOnboardingModal && (
         <AppOnboardingModal
           userId={user?.id}
-          onClose={() => setShowOnboardingModal(false)}
+          onClose={() => {
+            if (user?.id) {
+              localStorage.setItem(`pulsechat_onboarding_${user.id}`, 'true');
+              localStorage.setItem(`pulsechat_feature_tour_completed_${user.id}`, 'true');
+            }
+            localStorage.setItem('pulsechat_onboarding_completed', 'true');
+            setShowOnboardingModal(false);
+          }}
         />
       )}
 

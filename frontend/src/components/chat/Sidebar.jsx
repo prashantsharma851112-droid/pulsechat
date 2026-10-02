@@ -1724,7 +1724,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 )}
               </button>
 
-              {/* App Feature Tour */}
+              {/* Feature Tour Guide */}
               <button
                 onClick={() => {
                   setShowTopMenu(false);
@@ -1749,7 +1749,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 }}
               >
                 <Compass size={17} color="#38bdf8" />
-                <span>App Feature Tour</span>
+                <span>Feature Tour Guide</span>
               </button>
 
               {/* Create New Group */}

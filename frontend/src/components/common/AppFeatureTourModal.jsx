@@ -171,7 +171,7 @@ export default function AppFeatureTourModal({ onClose, onOpenPro }) {
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>App Feature Tour</span>
+                <span>Feature Tour Guide</span>
                 <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
                   Visual Guide
                 </span>
