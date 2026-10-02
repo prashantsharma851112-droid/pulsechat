@@ -1025,6 +1025,18 @@ io.on('connection', (socket) => {
     socket.to(chatId).emit('wb_text_update', textItems);
   });
 
+  socket.on('wb_board_color', ({ chatId, boardColor }) => {
+    socket.to(chatId).emit('wb_board_color', { boardColor });
+  });
+
+  socket.on('wb_sticker_update', ({ chatId, stickerItems }) => {
+    socket.to(chatId).emit('wb_sticker_update', stickerItems);
+  });
+
+  socket.on('wb_undo', ({ chatId, boardDataUrl }) => {
+    socket.to(chatId).emit('wb_undo', { boardDataUrl });
+  });
+
   // Real-Time Live Arrow Battle Game Socket Handlers
   socket.on('arrow_game_start', (data) => {
     if (data && data.chatId) {

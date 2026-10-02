@@ -1,10 +1,11 @@
-import React, { useRef, useState, useEffect, useContext, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useContext, useMemo, useCallback } from 'react';
 import {
   X, Eraser, RotateCcw, RotateCw, Paintbrush, Send, Sparkles,
-  Square, Circle, Minus, MoveUpRight, Triangle, Smile, Sliders, Undo2, Download, Presentation,
-  Type, Trash2, Edit3, Search, Plus
+  Square, Circle, Minus, MoveUpRight, Triangle, Smile, Sliders, Undo2, Redo2, Download, Presentation,
+  Type, Trash2, Edit3, Search, Plus, Palette, Layers, Check, RefreshCw
 } from 'lucide-react';
 import { SocketContext } from '../../context/SocketContext';
+import { useBackHandler } from '../../utils/backNavigation';
 import { EMOJI_CATEGORIES, ALL_EMOJIS } from './EmojiPicker';
 
 const PALETTE_COLORS = [
@@ -13,7 +14,14 @@ const PALETTE_COLORS = [
   '#ffffff', '#94a3b8', '#000000'
 ];
 
-const STICKERS = ['🔥', '😘', '🤗', '😌', '🫠', '🧐', '🥹', '😃', '😂', '🥰', '😍', '🤔', '🤨' ,'❤️', '⭐', '🚀', '🎉', '💡', '🐼', '👑', '🎯', '💯', '👻', '🎨', '⚡', '👍'];
+const BOARD_BG_PRESETS = [
+  { id: 'slate', name: 'Dark Slate', color: '#0f172a' },
+  { id: 'black', name: 'Pitch Black', color: '#000000' },
+  { id: 'chalkboard', name: 'Chalkboard', color: '#13382c' },
+  { id: 'white', name: 'Whiteboard', color: '#ffffff' },
+  { id: 'blueprint', name: 'Blueprint Navy', color: '#1e293b' },
+  { id: 'cream', name: 'Parchment', color: '#fef3c7' }
+];
 
 const SHAPES = [
   { id: 'rectangle', name: 'Rectangle', icon: Square },
@@ -29,13 +37,23 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
   const isDrawingRef = useRef(false);
   const lastPosRef = useRef({ xRatio: 0, yRatio: 0 });
   const startPosRef = useRef({ x: 0, y: 0, xRatio: 0, yRatio: 0 });
+  const strokePointsRef = useRef([]);
   const snapshotRef = useRef(null);
   const clearedDataUrlRef = useRef(null);
 
   const containerRef = useRef(null);
   const dragStateRef = useRef(null);
   const textElementsRef = useRef([]);
+  const stickerElementsRef = useRef([]);
+  const boardColorRef = useRef('#0f172a');
+  const undoStackRef = useRef([]);
+  const redoStackRef = useRef([]);
 
+  // Board Background Color State
+  const [boardColor, setBoardColor] = useState('#0f172a');
+  const [showBoardColorMenu, setShowBoardColorMenu] = useState(false);
+
+  // Drawing Tools State
   const [color, setColor] = useState('#6366f1');
   const [lineWidth, setLineWidth] = useState(4);
   const [tool, setTool] = useState('pen'); // 'pen' | 'eraser' | 'shape' | 'sticker' | 'text'
@@ -43,8 +61,10 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
   const [selectedSticker, setSelectedSticker] = useState('🔥');
   const [showStickersMenu, setShowStickersMenu] = useState(false);
   const [showShapesMenu, setShowShapesMenu] = useState(false);
-  const [canRestore, setCanRestore] = useState(false);
+  const [canRestoreClear, setCanRestoreClear] = useState(false);
   const [savedToDevice, setSavedToDevice] = useState(false);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
   // Text Tool State
   const [textElements, setTextElements] = useState([]);
@@ -54,14 +74,70 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
   const [textFontSize, setTextFontSize] = useState(24);
   const [isTextBold, setIsTextBold] = useState(true);
 
-  // Unlimited Emojis State
-  const [stickerSize, setStickerSize] = useState(36);
+  // Stickers / Emojis State
+  const [stickerElements, setStickerElements] = useState([]);
+  const [selectedStickerId, setSelectedStickerId] = useState(null);
+  const [stickerSize, setStickerSize] = useState(40);
   const [emojiCategory, setEmojiCategory] = useState('all');
   const [emojiSearch, setEmojiSearch] = useState('');
 
+  // Accidental Close / Backup Recovery State
+  const [savedDraftExists, setSavedDraftExists] = useState(false);
+  const [draftInfo, setDraftInfo] = useState(null);
+  const [restoredToast, setRestoredToast] = useState(false);
+
+  // Update refs to latest values
   useEffect(() => {
     textElementsRef.current = textElements;
   }, [textElements]);
+
+  useEffect(() => {
+    stickerElementsRef.current = stickerElements;
+  }, [stickerElements]);
+
+  useEffect(() => {
+    boardColorRef.current = boardColor;
+  }, [boardColor]);
+
+  // Auto-Save Draft to LocalStorage
+  const saveDraft = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !chatId) return;
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      const draft = {
+        boardColor: boardColorRef.current,
+        dataUrl,
+        textElements: textElementsRef.current,
+        stickerElements: stickerElementsRef.current,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(`pulse_wb_draft_${chatId}`, JSON.stringify(draft));
+    } catch (e) {
+      console.warn('Could not auto-save whiteboard draft:', e);
+    }
+  }, [chatId]);
+
+  // Hardware Back Handler: Safely close and auto-save draft
+  useBackHandler(() => {
+    saveDraft();
+    onClose();
+  }, true);
+
+  // Check for previous saved draft on mount
+  useEffect(() => {
+    if (!chatId) return;
+    try {
+      const raw = localStorage.getItem(`pulse_wb_draft_${chatId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && (parsed.dataUrl || parsed.textElements?.length || parsed.stickerElements?.length)) {
+          setSavedDraftExists(true);
+          setDraftInfo(parsed);
+        }
+      }
+    } catch (e) {}
+  }, [chatId]);
 
   // Filtered unlimited emojis for sticker picker
   const displayedEmojis = useMemo(() => {
@@ -76,6 +152,156 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     return cat ? cat.emojis : ALL_EMOJIS;
   }, [emojiCategory, emojiSearch]);
 
+  // Restore Draft Function
+  const handleRestoreDraft = () => {
+    if (!draftInfo) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (draftInfo.boardColor) {
+      setBoardColor(draftInfo.boardColor);
+      if (socket && chatId) {
+        socket.emit('wb_board_color', { chatId, boardColor: draftInfo.boardColor });
+      }
+    }
+
+    if (Array.isArray(draftInfo.textElements)) {
+      setTextElements(draftInfo.textElements);
+      if (socket && chatId) {
+        socket.emit('wb_text_update', { chatId, textItems: draftInfo.textElements });
+      }
+    }
+
+    if (Array.isArray(draftInfo.stickerElements)) {
+      setStickerElements(draftInfo.stickerElements);
+      if (socket && chatId) {
+        socket.emit('wb_sticker_update', { chatId, stickerItems: draftInfo.stickerElements });
+      }
+    }
+
+    if (draftInfo.dataUrl) {
+      const img = new Image();
+      img.onload = () => {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        pushUndoSnapshot();
+        if (socket && chatId) {
+          socket.emit('wb_restore', { chatId, boardDataUrl: draftInfo.dataUrl });
+        }
+      };
+      img.src = draftInfo.dataUrl;
+    }
+
+    setSavedDraftExists(false);
+    setRestoredToast(true);
+    setTimeout(() => setRestoredToast(false), 2500);
+  };
+
+  const handleDiscardDraft = () => {
+    if (chatId) {
+      localStorage.removeItem(`pulse_wb_draft_${chatId}`);
+    }
+    setSavedDraftExists(false);
+    setDraftInfo(null);
+  };
+
+  // Undo / Redo for Canvas Drawing & Shapes
+  const pushUndoSnapshot = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    try {
+      const snap = canvas.toDataURL('image/png');
+      undoStackRef.current.push(snap);
+      if (undoStackRef.current.length > 25) {
+        undoStackRef.current.shift();
+      }
+      redoStackRef.current = [];
+      setCanUndo(true);
+      setCanRedo(false);
+      saveDraft();
+    } catch (e) {}
+  };
+
+  const handleUndo = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || undoStackRef.current.length === 0) return;
+    const currentSnap = canvas.toDataURL('image/png');
+    redoStackRef.current.push(currentSnap);
+
+    const prevSnap = undoStackRef.current.pop();
+    setCanUndo(undoStackRef.current.length > 0);
+    setCanRedo(true);
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (prevSnap) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        if (socket && chatId) {
+          socket.emit('wb_undo', { chatId, boardDataUrl: prevSnap });
+        }
+        saveDraft();
+      };
+      img.src = prevSnap;
+    } else {
+      if (socket && chatId) {
+        socket.emit('wb_clear', { chatId });
+      }
+      saveDraft();
+    }
+  };
+
+  const handleRedo = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || redoStackRef.current.length === 0) return;
+    const nextSnap = redoStackRef.current.pop();
+    undoStackRef.current.push(canvas.toDataURL('image/png'));
+    setCanUndo(true);
+    setCanRedo(redoStackRef.current.length > 0);
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (nextSnap) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        if (socket && chatId) {
+          socket.emit('wb_restore', { chatId, boardDataUrl: nextSnap });
+        }
+        saveDraft();
+      };
+      img.src = nextSnap;
+    }
+  };
+
+  // Keyboard shortcut Ctrl+Z / Cmd+Z for undo
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Board Background Color Changer
+  const handleSelectBoardColor = (newColor) => {
+    setBoardColor(newColor);
+    setShowBoardColorMenu(false);
+    if (socket && chatId) {
+      socket.emit('wb_board_color', { chatId, boardColor: newColor });
+    }
+    saveDraft();
+  };
+
+  // Composite Export Function
   const getExportDataUrl = () => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -85,10 +311,25 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
       tempCanvas.height = canvas.height;
       const ctx = tempCanvas.getContext('2d');
 
-      // 1. Draw existing canvas background and strokes
+      // 1. Fill background with chosen board color
+      ctx.fillStyle = boardColor;
+      ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+      // 2. Draw existing transparent canvas strokes and shapes
       ctx.drawImage(canvas, 0, 0);
 
-      // 2. Draw all draggable text elements onto the export image
+      // 3. Draw all interactive sticker emojis
+      stickerElements.forEach(item => {
+        const x = item.xRatio * canvas.width;
+        const y = item.yRatio * canvas.height;
+        const size = item.size || 40;
+        ctx.font = `${size}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(item.emoji, x, y);
+      });
+
+      // 4. Draw all draggable text elements
       textElements.forEach(item => {
         const x = item.xRatio * canvas.width;
         const y = item.yRatio * canvas.height;
@@ -119,7 +360,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
       if (!dataUrl) return;
       const a = document.createElement('a');
       a.href = dataUrl;
-      a.download = `pulsechat_whiteboard_${Date.now()}.png`;
+      a.download = `pulsechat_drawboard_${Date.now()}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -132,6 +373,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
 
   // Draw shape onto canvas context
   const drawShapeOnContext = (ctx, shapeType, x0, y0, x1, y1, strokeColor, strokeWidth) => {
+    ctx.save();
     ctx.beginPath();
     ctx.strokeStyle = strokeColor;
     ctx.lineWidth = strokeWidth;
@@ -153,7 +395,6 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
       ctx.lineTo(x1, y1);
       ctx.stroke();
 
-      // Draw Arrow Head
       const angle = Math.atan2(y1 - y0, x1 - x0);
       const headLen = Math.max(12, strokeWidth * 3);
       ctx.beginPath();
@@ -169,14 +410,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
       ctx.closePath();
       ctx.stroke();
     }
-  };
-
-  // Draw sticker emoji onto canvas context
-  const drawStickerOnContext = (ctx, emoji, x, y, size = 36) => {
-    ctx.font = `${size}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(emoji, x, y);
+    ctx.restore();
   };
 
   // Initialize Canvas & Socket listeners
@@ -190,10 +424,9 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
       const parentWidth = c.parentElement.clientWidth || 640;
       const isMobile = window.innerWidth < 640;
       const targetHeight = isMobile
-        ? Math.max(250, Math.min(340, Math.floor(window.innerHeight * 0.40)))
-        : 420;
+        ? Math.max(260, Math.min(360, Math.floor(window.innerHeight * 0.42)))
+        : 440;
 
-      // If canvas already has drawings, preserve them during resize
       if (c.width > 0 && c.height > 0) {
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = c.width;
@@ -204,15 +437,13 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
         c.width = parentWidth;
         c.height = targetHeight;
         const ctx = c.getContext('2d');
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.clearRect(0, 0, c.width, c.height);
         ctx.drawImage(tempCanvas, 0, 0, c.width, c.height);
       } else {
         c.width = parentWidth;
         c.height = targetHeight;
         const ctx = c.getContext('2d');
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.clearRect(0, 0, c.width, c.height);
       }
     };
 
@@ -229,15 +460,23 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
         const w = c.width;
         const h = c.height;
 
-        context.beginPath();
-        context.strokeStyle = stroke.tool === 'eraser' ? '#0f172a' : stroke.color;
-        context.lineWidth = stroke.tool === 'eraser' ? stroke.lineWidth * 3 : stroke.lineWidth;
+        context.save();
+        if (stroke.tool === 'eraser') {
+          context.globalCompositeOperation = 'destination-out';
+          context.lineWidth = stroke.lineWidth * 3;
+        } else {
+          context.globalCompositeOperation = 'source-over';
+          context.strokeStyle = stroke.color;
+          context.lineWidth = stroke.lineWidth;
+        }
         context.lineCap = 'round';
         context.lineJoin = 'round';
 
+        context.beginPath();
         context.moveTo(stroke.x0 * w, stroke.y0 * h);
         context.lineTo(stroke.x1 * w, stroke.y1 * h);
         context.stroke();
+        context.restore();
       };
 
       const handleRemoteShape = (shape) => {
@@ -259,19 +498,16 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
         );
       };
 
-      const handleRemoteSticker = (sticker) => {
-        const c = canvasRef.current;
-        if (!c) return;
-        const context = c.getContext('2d');
-        const w = c.width;
-        const h = c.height;
-
-        drawStickerOnContext(context, sticker.emoji, sticker.xRatio * w, sticker.yRatio * h, sticker.size || 36);
+      const handleRemoteBoardColor = ({ boardColor: incomingColor }) => {
+        if (incomingColor) {
+          setBoardColor(incomingColor);
+        }
       };
 
-      const handleRemoteText = (textItem) => {
-        if (!textItem) return;
-        setTextElements(prev => [...prev.filter(t => t.id !== textItem.id), textItem]);
+      const handleRemoteStickerUpdate = (stickerItems) => {
+        if (Array.isArray(stickerItems)) {
+          setStickerElements(stickerItems);
+        }
       };
 
       const handleRemoteTextUpdate = (textItems) => {
@@ -284,9 +520,9 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
         const c = canvasRef.current;
         if (!c) return;
         const context = c.getContext('2d');
-        context.fillStyle = '#0f172a';
-        context.fillRect(0, 0, c.width, c.height);
+        context.clearRect(0, 0, c.width, c.height);
         setTextElements([]);
+        setStickerElements([]);
       };
 
       const handleRemoteRestore = ({ boardDataUrl }) => {
@@ -296,28 +532,45 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
         const img = new Image();
         img.onload = () => {
           const context = c.getContext('2d');
+          context.clearRect(0, 0, c.width, c.height);
           context.drawImage(img, 0, 0, c.width, c.height);
         };
         img.src = boardDataUrl;
       };
 
+      const handleRemoteUndo = ({ boardDataUrl }) => {
+        const c = canvasRef.current;
+        if (!c) return;
+        const context = c.getContext('2d');
+        context.clearRect(0, 0, c.width, c.height);
+        if (boardDataUrl) {
+          const img = new Image();
+          img.onload = () => {
+            context.drawImage(img, 0, 0, c.width, c.height);
+          };
+          img.src = boardDataUrl;
+        }
+      };
+
       socket.on('wb_draw', handleRemoteDraw);
       socket.on('wb_shape', handleRemoteShape);
-      socket.on('wb_sticker', handleRemoteSticker);
-      socket.on('wb_text', handleRemoteText);
+      socket.on('wb_board_color', handleRemoteBoardColor);
+      socket.on('wb_sticker_update', handleRemoteStickerUpdate);
       socket.on('wb_text_update', handleRemoteTextUpdate);
       socket.on('wb_clear', handleRemoteClear);
       socket.on('wb_restore', handleRemoteRestore);
+      socket.on('wb_undo', handleRemoteUndo);
 
       return () => {
         window.removeEventListener('resize', updateCanvasDimensions);
         socket.off('wb_draw', handleRemoteDraw);
         socket.off('wb_shape', handleRemoteShape);
-        socket.off('wb_sticker', handleRemoteSticker);
-        socket.off('wb_text', handleRemoteText);
+        socket.off('wb_board_color', handleRemoteBoardColor);
+        socket.off('wb_sticker_update', handleRemoteStickerUpdate);
         socket.off('wb_text_update', handleRemoteTextUpdate);
         socket.off('wb_clear', handleRemoteClear);
         socket.off('wb_restore', handleRemoteRestore);
+        socket.off('wb_undo', handleRemoteUndo);
       };
     }
 
@@ -327,23 +580,6 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
   }, [socket, chatId]);
 
   const drawLineLocallyAndEmit = (x0Ratio, y0Ratio, x1Ratio, y1Ratio, strokeTool, strokeColor, strokeWidth) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-
-    const w = canvas.width;
-    const h = canvas.height;
-
-    ctx.beginPath();
-    ctx.strokeStyle = strokeTool === 'eraser' ? '#0f172a' : strokeColor;
-    ctx.lineWidth = strokeTool === 'eraser' ? strokeWidth * 3 : strokeWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    ctx.moveTo(x0Ratio * w, y0Ratio * h);
-    ctx.lineTo(x1Ratio * w, y1Ratio * h);
-    ctx.stroke();
-
     if (socket && chatId) {
       socket.emit('wb_draw', {
         chatId,
@@ -384,6 +620,62 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     };
   };
 
+  // Add Interactive Draggable Sticker (Emoji)
+  const handleAddStickerAt = (xRatio, yRatio, emoji) => {
+    const newId = 'wb_stk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    const newSticker = {
+      id: newId,
+      emoji: emoji || selectedSticker,
+      xRatio: Math.max(0.04, Math.min(0.92, xRatio)),
+      yRatio: Math.max(0.04, Math.min(0.92, yRatio)),
+      size: stickerSize || 40
+    };
+
+    setStickerElements(prev => {
+      const updated = [...prev, newSticker];
+      if (socket && chatId) {
+        socket.emit('wb_sticker_update', { chatId, stickerItems: updated });
+      }
+      return updated;
+    });
+
+    setSelectedStickerId(newId);
+    setSelectedTextId(null);
+    saveDraft();
+  };
+
+  const handleDeleteSticker = (id, e) => {
+    if (e) e.stopPropagation();
+    setStickerElements(prev => {
+      const updated = prev.filter(s => s.id !== id);
+      if (socket && chatId) {
+        socket.emit('wb_sticker_update', { chatId, stickerItems: updated });
+      }
+      return updated;
+    });
+    if (selectedStickerId === id) setSelectedStickerId(null);
+    saveDraft();
+  };
+
+  const handleUpdateStickerSize = (id, delta, e) => {
+    if (e) e.stopPropagation();
+    setStickerElements(prev => {
+      const updated = prev.map(s => {
+        if (s.id === id) {
+          const newSize = Math.max(20, Math.min(90, (s.size || 40) + delta));
+          return { ...s, size: newSize };
+        }
+        return s;
+      });
+      if (socket && chatId) {
+        socket.emit('wb_sticker_update', { chatId, stickerItems: updated });
+      }
+      return updated;
+    });
+    saveDraft();
+  };
+
+  // Add Interactive Draggable Text
   const handleAddTextAt = (xRatio, yRatio, customText = '') => {
     const textToAdd = customText || textInput.trim() || 'Double-tap to edit';
     const newId = 'wb_txt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
@@ -400,13 +692,15 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     setTextElements(prev => {
       const updated = [...prev, newTextItem];
       if (socket && chatId) {
-        socket.emit('wb_text', { chatId, textItem: newTextItem });
+        socket.emit('wb_text_update', { chatId, textItems: updated });
       }
       return updated;
     });
 
     setSelectedTextId(newId);
+    setSelectedStickerId(null);
     setTextInput('');
+    saveDraft();
   };
 
   const handleUpdateText = (id, newProps) => {
@@ -417,6 +711,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
       }
       return updated;
     });
+    saveDraft();
   };
 
   const handleDeleteText = (id, e) => {
@@ -430,14 +725,24 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     });
     if (selectedTextId === id) setSelectedTextId(null);
     if (editingTextId === id) setEditingTextId(null);
+    saveDraft();
   };
 
-  const handleTextPointerDown = (e, item) => {
+  // Dragging handlers for Text and Stickers
+  const handleItemPointerDown = (e, item, type) => {
     e.stopPropagation();
-    setSelectedTextId(item.id);
+    if (type === 'text') {
+      setSelectedTextId(item.id);
+      setSelectedStickerId(null);
+    } else {
+      setSelectedStickerId(item.id);
+      setSelectedTextId(null);
+    }
+
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     dragStateRef.current = {
+      type,
       id: item.id,
       startX: clientX,
       startY: clientY,
@@ -451,7 +756,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     if (!dragStateRef.current || !containerRef.current) return;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const { id, startX, startY, initialXRatio, initialYRatio } = dragStateRef.current;
+    const { type, id, startX, startY, initialXRatio, initialYRatio } = dragStateRef.current;
 
     const rect = containerRef.current.getBoundingClientRect();
     const deltaXRatio = (clientX - startX) / rect.width;
@@ -464,18 +769,28 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     const newXRatio = Math.max(0.01, Math.min(0.92, initialXRatio + deltaXRatio));
     const newYRatio = Math.max(0.01, Math.min(0.92, initialYRatio + deltaYRatio));
 
-    setTextElements(prev => prev.map(t => t.id === id ? { ...t, xRatio: newXRatio, yRatio: newYRatio } : t));
+    if (type === 'text') {
+      setTextElements(prev => prev.map(t => t.id === id ? { ...t, xRatio: newXRatio, yRatio: newYRatio } : t));
+    } else if (type === 'sticker') {
+      setStickerElements(prev => prev.map(s => s.id === id ? { ...s, xRatio: newXRatio, yRatio: newYRatio } : s));
+    }
   };
 
   const handleContainerPointerUp = () => {
     if (dragStateRef.current) {
       if (dragStateRef.current.hasMoved && socket && chatId) {
-        socket.emit('wb_text_update', { chatId, textItems: textElementsRef.current });
+        if (dragStateRef.current.type === 'text') {
+          socket.emit('wb_text_update', { chatId, textItems: textElementsRef.current });
+        } else if (dragStateRef.current.type === 'sticker') {
+          socket.emit('wb_sticker_update', { chatId, stickerItems: stickerElementsRef.current });
+        }
       }
       dragStateRef.current = null;
+      saveDraft();
     }
   };
 
+  // Silky Smooth Canvas Drawing (Bezier Curves & Round Caps)
   const startDrawing = (e) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -487,30 +802,37 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     }
 
     if (tool === 'sticker') {
-      const ctx = canvas.getContext('2d');
-      drawStickerOnContext(ctx, selectedSticker, coords.x, coords.y, stickerSize);
-
-      if (socket && chatId) {
-        socket.emit('wb_sticker', {
-          chatId,
-          sticker: {
-            xRatio: coords.xRatio,
-            yRatio: coords.yRatio,
-            emoji: selectedSticker,
-            size: stickerSize
-          }
-        });
-      }
+      handleAddStickerAt(coords.xRatio, coords.yRatio, selectedSticker);
       return;
     }
+
+    setSelectedTextId(null);
+    setSelectedStickerId(null);
 
     isDrawingRef.current = true;
     lastPosRef.current = coords;
     startPosRef.current = coords;
+    strokePointsRef.current = [coords];
 
+    const ctx = canvas.getContext('2d');
     if (tool === 'shape') {
-      const ctx = canvas.getContext('2d');
       snapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    } else {
+      // Draw smooth start cap/dot
+      ctx.save();
+      if (tool === 'eraser') {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.beginPath();
+        ctx.arc(coords.x, coords.y, Math.max(2, (lineWidth * 3) / 2), 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(coords.x, coords.y, Math.max(1, lineWidth / 2), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
   };
 
@@ -522,19 +844,49 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     const currentCoords = getCanvasCoords(e);
 
     if (tool === 'pen' || tool === 'eraser') {
-      const prevCoords = lastPosRef.current;
-      drawLineLocallyAndEmit(
-        prevCoords.xRatio,
-        prevCoords.yRatio,
-        currentCoords.xRatio,
-        currentCoords.yRatio,
-        tool,
-        color,
-        lineWidth
-      );
+      strokePointsRef.current.push(currentCoords);
+      const pts = strokePointsRef.current;
+
+      if (pts.length >= 2) {
+        const p1 = pts[pts.length - 2];
+        const p2 = pts[pts.length - 1];
+        const midPoint = {
+          x: (p1.x + p2.x) / 2,
+          y: (p1.y + p2.y) / 2,
+          xRatio: (p1.xRatio + p2.xRatio) / 2,
+          yRatio: (p1.yRatio + p2.yRatio) / 2
+        };
+
+        ctx.save();
+        if (tool === 'eraser') {
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.lineWidth = lineWidth * 3;
+        } else {
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.strokeStyle = color;
+          ctx.lineWidth = lineWidth;
+        }
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.quadraticCurveTo(p1.x, p1.y, midPoint.x, midPoint.y);
+        ctx.stroke();
+        ctx.restore();
+
+        drawLineLocallyAndEmit(
+          p1.xRatio,
+          p1.yRatio,
+          midPoint.xRatio,
+          midPoint.yRatio,
+          tool,
+          color,
+          lineWidth
+        );
+      }
       lastPosRef.current = currentCoords;
     } else if (tool === 'shape' && snapshotRef.current) {
-      // Live preview shape during drag
       ctx.putImageData(snapshotRef.current, 0, 0);
       drawShapeOnContext(
         ctx,
@@ -591,28 +943,32 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
         });
       }
     }
+
     snapshotRef.current = null;
+    strokePointsRef.current = [];
+    pushUndoSnapshot();
   };
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
     if (canvas) {
-      // Save backup snapshot before wiping canvas
-      clearedDataUrlRef.current = getExportDataUrl();
-      setCanRestore(true);
+      clearedDataUrlRef.current = canvas.toDataURL('image/png');
+      setCanRestoreClear(true);
 
       const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       setTextElements([]);
+      setStickerElements([]);
+      pushUndoSnapshot();
     }
     if (socket && chatId) {
       socket.emit('wb_clear', { chatId });
       socket.emit('wb_text_update', { chatId, textItems: [] });
+      socket.emit('wb_sticker_update', { chatId, stickerItems: [] });
     }
   };
 
-  const restoreCanvas = () => {
+  const restoreClearCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas || !clearedDataUrlRef.current) return;
 
@@ -620,14 +976,16 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     const img = new Image();
     img.onload = () => {
       const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      pushUndoSnapshot();
 
       if (socket && chatId) {
         socket.emit('wb_restore', { chatId, boardDataUrl: dataUrl });
       }
     };
     img.src = dataUrl;
-    setCanRestore(false);
+    setCanRestoreClear(false);
   };
 
   const handleSendToChat = () => {
@@ -639,7 +997,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card modal-responsive" style={{ maxWidth: '760px', width: '96vw', maxHeight: '94dvh', display: 'flex', flexDirection: 'column', margin: 'auto' }}>
+      <div className="modal-card modal-responsive" style={{ maxWidth: '780px', width: '96vw', maxHeight: '95dvh', display: 'flex', flexDirection: 'column', margin: 'auto' }}>
         {/* Modal Header */}
         <div className="modal-header" style={{ padding: '0.75rem 1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -649,14 +1007,100 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                 Live Drawboard — {chatTitle || 'Board'}
               </h3>
               <span style={{ fontSize: '0.7rem', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <Sparkles size={11} /> Real-Time Multi-User Drawing, Shapes & Stickers
+                <Sparkles size={11} /> Smooth Drawing, Custom Boards, Shapes & Stickers
               </span>
             </div>
           </div>
-          <button className="icon-btn-ghost" onClick={onClose}><X size={20} /></button>
+          <button
+            className="icon-btn-ghost"
+            onClick={() => {
+              saveDraft();
+              onClose();
+            }}
+          >
+            <X size={20} />
+          </button>
         </div>
 
         <div style={{ padding: '0.65rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, overflowY: 'auto' }}>
+          {/* Previous Drawing Recovery Banner */}
+          {savedDraftExists && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%)',
+              border: '1.5px solid rgba(99, 102, 241, 0.4)',
+              borderRadius: '12px',
+              padding: '8px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '10px',
+              animation: 'pulseModalPop 0.2s ease',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sparkles size={16} color="var(--accent)" />
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-main)', fontWeight: 600 }}>
+                  Found previous drawing saved from this chat!
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button
+                  type="button"
+                  onClick={handleRestoreDraft}
+                  style={{
+                    background: 'var(--accent, #6366f1)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '5px 12px',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)'
+                  }}
+                >
+                  <RotateCw size={13} /> Restore Drawing
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDiscardDraft}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    color: 'var(--text-muted)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '5px 9px',
+                    fontSize: '0.78rem',
+                    cursor: 'pointer'
+                  }}
+                  title="Discard saved draft"
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Restored Toast */}
+          {restoredToast && (
+            <div style={{
+              background: '#10b981',
+              color: '#fff',
+              borderRadius: '8px',
+              padding: '6px 12px',
+              textAlign: 'center',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)',
+              animation: 'pulseModalPop 0.15s ease'
+            }}>
+              ✨ Drawing and elements restored successfully!
+            </div>
+          )}
+
           {/* Main Toolbar */}
           <div style={{
             display: 'flex',
@@ -667,80 +1111,116 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
             borderRadius: '12px',
             border: '1px solid var(--border)'
           }}>
-            {/* Row 1: Tools (Pen, Eraser, Shapes, Stickers) */}
+            {/* Row 1: Tools (Pen, Eraser, Shapes, Text, Stickers, Board Color) */}
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
               gap: '6px',
-              flexWrap: 'wrap'
+              flexWrap: 'wrap',
+              width: '100%'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', width: '100%' }}>
-                <button
-                  type="button"
-                  className={`icon-btn-ghost ${tool === 'pen' ? 'active-mic' : ''}`}
-                  onClick={() => { setTool('pen'); setShowShapesMenu(false); setShowStickersMenu(false); }}
-                  title="Pen Tool"
-                  style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center' }}
-                >
-                  <Paintbrush size={15} /> <span>Pen</span>
-                </button>
+              <button
+                type="button"
+                className={`icon-btn-ghost ${tool === 'pen' ? 'active-mic' : ''}`}
+                onClick={() => { setTool('pen'); setShowShapesMenu(false); setShowStickersMenu(false); setShowBoardColorMenu(false); }}
+                title="Pen Tool (Smooth Drawing)"
+                style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center' }}
+              >
+                <Paintbrush size={15} /> <span>Pen</span>
+              </button>
 
-                <button
-                  type="button"
-                  className={`icon-btn-ghost ${tool === 'eraser' ? 'active-mic' : ''}`}
-                  onClick={() => { setTool('eraser'); setShowShapesMenu(false); setShowStickersMenu(false); }}
-                  title="Eraser Tool"
-                  style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center' }}
-                >
-                  <Eraser size={15} /> <span>Eraser</span>
-                </button>
+              <button
+                type="button"
+                className={`icon-btn-ghost ${tool === 'eraser' ? 'active-mic' : ''}`}
+                onClick={() => { setTool('eraser'); setShowShapesMenu(false); setShowStickersMenu(false); setShowBoardColorMenu(false); }}
+                title="Eraser Tool"
+                style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center' }}
+              >
+                <Eraser size={15} /> <span>Eraser</span>
+              </button>
 
-                <button
-                  type="button"
-                  className={`icon-btn-ghost ${tool === 'shape' ? 'active-mic' : ''}`}
-                  onClick={() => {
-                    setTool('shape');
-                    setShowShapesMenu(!showShapesMenu);
-                    setShowStickersMenu(false);
-                  }}
-                  title="Shapes Tool"
-                  style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center' }}
-                >
-                  <Square size={15} /> <span>Shapes</span>
-                </button>
+              <button
+                type="button"
+                className={`icon-btn-ghost ${tool === 'shape' ? 'active-mic' : ''}`}
+                onClick={() => {
+                  setTool('shape');
+                  setShowShapesMenu(!showShapesMenu);
+                  setShowStickersMenu(false);
+                  setShowBoardColorMenu(false);
+                }}
+                title="Shapes Tool"
+                style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center' }}
+              >
+                <Square size={15} /> <span>Shapes</span>
+              </button>
 
-                <button
-                  type="button"
-                  className={`icon-btn-ghost ${tool === 'text' ? 'active-mic' : ''}`}
-                  onClick={() => {
-                    setTool('text');
-                    setShowShapesMenu(false);
-                    setShowStickersMenu(false);
-                  }}
-                  title="Text Tool — Type & Drag Text"
-                  style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center' }}
-                >
-                  <Type size={15} /> <span>Text</span>
-                </button>
+              <button
+                type="button"
+                className={`icon-btn-ghost ${tool === 'text' ? 'active-mic' : ''}`}
+                onClick={() => {
+                  setTool('text');
+                  setShowShapesMenu(false);
+                  setShowStickersMenu(false);
+                  setShowBoardColorMenu(false);
+                }}
+                title="Text Tool — Type, Drag & Delete"
+                style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center' }}
+              >
+                <Type size={15} /> <span>Text</span>
+              </button>
 
-                <button
-                  type="button"
-                  className={`icon-btn-ghost ${tool === 'sticker' ? 'active-mic' : ''}`}
-                  onClick={() => {
-                    setTool('sticker');
-                    setShowStickersMenu(!showStickersMenu);
-                    setShowShapesMenu(false);
-                  }}
-                  title="Unlimited Emojis & Stickers"
-                  style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center', whiteSpace: 'nowrap' }}
-                >
-                  <Smile size={15} /> <span>Stickers</span> <span style={{ fontSize: '1rem', lineHeight: 1 }}>{selectedSticker}</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                className={`icon-btn-ghost ${tool === 'sticker' ? 'active-mic' : ''}`}
+                onClick={() => {
+                  setTool('sticker');
+                  setShowStickersMenu(!showStickersMenu);
+                  setShowShapesMenu(false);
+                  setShowBoardColorMenu(false);
+                }}
+                title="Stickers & Unlimited Emojis"
+                style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center', whiteSpace: 'nowrap' }}
+              >
+                <Smile size={15} /> <span>Stickers</span> <span style={{ fontSize: '1rem', lineHeight: 1 }}>{selectedSticker}</span>
+              </button>
+
+              {/* Board Theme / Color Button */}
+              <button
+                type="button"
+                className={`icon-btn-ghost ${showBoardColorMenu ? 'active-mic' : ''}`}
+                onClick={() => {
+                  setShowBoardColorMenu(!showBoardColorMenu);
+                  setShowShapesMenu(false);
+                  setShowStickersMenu(false);
+                }}
+                title="Change Board Background Color"
+                style={{
+                  borderRadius: '8px',
+                  padding: '6px 10px',
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  flex: '1 1 auto',
+                  justifyContent: 'center',
+                  background: showBoardColorMenu ? 'var(--accent)' : 'rgba(255, 255, 255, 0.05)',
+                  color: showBoardColorMenu ? '#fff' : 'var(--text-main)'
+                }}
+              >
+                <Palette size={15} />
+                <span>Board Color</span>
+                <span style={{
+                  width: '14px',
+                  height: '14px',
+                  borderRadius: '50%',
+                  background: boardColor,
+                  border: '1px solid #fff',
+                  display: 'inline-block'
+                }} />
+              </button>
             </div>
 
-            {/* Row 2: Stroke Width Slider, Clear, Save, Send */}
+            {/* Row 2: Undo, Redo, Size Slider, Clear, Save, Send */}
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -748,15 +1228,58 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
               gap: '6px',
               flexWrap: 'wrap'
             }}>
-              {/* Left Group: Size Slider & Clear / Restore */}
+              {/* Left Group: Undo / Redo & Stroke Size */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                <button
+                  type="button"
+                  className="icon-btn-ghost"
+                  onClick={handleUndo}
+                  disabled={!canUndo}
+                  title="Undo last stroke or shape (Ctrl+Z)"
+                  style={{
+                    padding: '5px 8px',
+                    borderRadius: '8px',
+                    opacity: canUndo ? 1 : 0.4,
+                    cursor: canUndo ? 'pointer' : 'default',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    fontSize: '0.74rem'
+                  }}
+                >
+                  <Undo2 size={15} />
+                  <span>Undo</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="icon-btn-ghost"
+                  onClick={handleRedo}
+                  disabled={!canRedo}
+                  title="Redo (Ctrl+Shift+Z)"
+                  style={{
+                    padding: '5px 8px',
+                    borderRadius: '8px',
+                    opacity: canRedo ? 1 : 0.4,
+                    cursor: canRedo ? 'pointer' : 'default',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    fontSize: '0.74rem'
+                  }}
+                >
+                  <Redo2 size={15} />
+                  <span>Redo</span>
+                </button>
+
+                {/* Size Slider */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: 'var(--text-muted)', marginLeft: '4px' }}>
                   <Sliders size={13} />
                   <span>Size:</span>
                   <input
                     type="range"
                     min="1"
-                    max="20"
+                    max="22"
                     value={lineWidth}
                     onChange={e => setLineWidth(Number(e.target.value))}
                     style={{ width: '48px', accentColor: 'var(--accent)', cursor: 'pointer' }}
@@ -764,20 +1287,48 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                   <span style={{ fontWeight: 600, color: 'var(--text-main)', minWidth: '14px', fontSize: '0.75rem' }}>{lineWidth}px</span>
                 </div>
 
+                {/* Selected Item Delete Button (if any text or sticker is selected) */}
+                {(selectedTextId || selectedStickerId) && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      if (selectedTextId) handleDeleteText(selectedTextId, e);
+                      if (selectedStickerId) handleDeleteSticker(selectedStickerId, e);
+                    }}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.2)',
+                      color: '#ef4444',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      borderRadius: '8px',
+                      padding: '4px 8px',
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      cursor: 'pointer'
+                    }}
+                    title="Delete selected item"
+                  >
+                    <Trash2 size={13} /> Delete Selected
+                  </button>
+                )}
+
+                {/* Clear Board & Undo Clear */}
                 <button
                   type="button"
                   className="icon-btn-ghost"
                   onClick={clearCanvas}
-                  title="Clear Board"
+                  title="Clear entire board"
                   style={{ color: '#ef4444', padding: '5px' }}
                 >
                   <RotateCcw size={16} />
                 </button>
 
-                {canRestore && (
+                {canRestoreClear && (
                   <button
                     type="button"
-                    onClick={restoreCanvas}
+                    onClick={restoreClearCanvas}
                     style={{
                       background: 'rgba(16, 185, 129, 0.15)',
                       color: '#10b981',
@@ -793,7 +1344,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                     }}
                     title="Undo Clear"
                   >
-                    <RotateCw size={12} /> Undo
+                    <RotateCw size={12} /> Undo Clear
                   </button>
                 )}
               </div>
@@ -846,6 +1397,80 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
             </div>
           </div>
 
+          {/* Board Background Color Sub-Bar */}
+          {showBoardColorMenu && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'var(--bg-sidebar)',
+              padding: '8px 12px',
+              borderRadius: '10px',
+              border: '1px solid var(--border)',
+              flexWrap: 'wrap',
+              animation: 'pulseModalPop 0.15s ease'
+            }}>
+              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                Board Color:
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                {BOARD_BG_PRESETS.map(b => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => handleSelectBoardColor(b.color)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      background: boardColor === b.color ? 'var(--accent)' : 'rgba(255, 255, 255, 0.06)',
+                      color: boardColor === b.color ? '#fff' : 'var(--text-main)',
+                      border: boardColor === b.color ? '1px solid #fff' : '1px solid var(--border)',
+                      borderRadius: '8px',
+                      padding: '4px 9px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span style={{
+                      width: '14px',
+                      height: '14px',
+                      borderRadius: '50%',
+                      background: b.color,
+                      border: '1px solid rgba(255,255,255,0.4)',
+                      display: 'inline-block'
+                    }} />
+                    {b.name}
+                  </button>
+                ))}
+
+                {/* Custom Color Input for Board Background */}
+                <label
+                  style={{
+                    position: 'relative',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)'
+                  }}
+                  title="Pick Custom Board Color"
+                >
+                  <input
+                    type="color"
+                    value={boardColor}
+                    onChange={e => handleSelectBoardColor(e.target.value)}
+                    style={{ width: '24px', height: '24px', borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'transparent' }}
+                  />
+                  <span>Custom</span>
+                </label>
+              </div>
+            </div>
+          )}
+
           {/* Shapes Selection Sub-Bar */}
           {showShapesMenu && (
             <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-sidebar)', padding: '6px 10px', borderRadius: '10px', border: '1px solid var(--border)', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -897,103 +1522,85 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                   </span>
                 </div>
                 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  💡 Click on board to place, or drag any text to move!
+                  💡 Click board to place • Drag to move • Double-tap to edit • Tap ✕ to delete
                 </span>
               </div>
 
-              {/* Text Input Row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <div style={{
-                  flex: 1,
-                  minWidth: '180px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  background: 'rgba(0, 0, 0, 0.25)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  borderRadius: '8px',
-                  padding: '4px 10px'
-                }}>
-                  <input
-                    type="text"
-                    placeholder="Type your text here..."
-                    value={textInput}
-                    onChange={e => setTextInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && textInput.trim()) {
-                        handleAddTextAt(0.35, 0.35, textInput.trim());
-                      }
-                    }}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: color || '#fff',
-                      fontSize: '0.85rem',
-                      fontWeight: 600,
-                      outline: 'none',
-                      width: '100%'
-                    }}
-                  />
-                  {textInput && (
-                    <button
-                      type="button"
-                      onClick={() => setTextInput('')}
-                      style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-
-                {/* Font Size Selector */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>Size:</span>
-                  {[16, 22, 28, 36, 48].map(s => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setTextFontSize(s)}
-                      style={{
-                        padding: '3px 7px',
-                        borderRadius: '6px',
-                        background: textFontSize === s ? 'var(--accent)' : 'rgba(255,255,255,0.06)',
-                        color: textFontSize === s ? '#fff' : 'var(--text-muted)',
-                        border: 'none',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Add Text Button */}
-                <button
-                  type="button"
-                  onClick={() => handleAddTextAt(0.35, 0.35, textInput.trim() || 'Text')}
+                <input
+                  type="text"
+                  placeholder="Type your message, note, or label..."
+                  value={textInput}
+                  onChange={e => setTextInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && textInput.trim()) {
+                      handleAddTextAt(0.2, 0.3, textInput.trim());
+                    }
+                  }}
                   style={{
-                    background: 'var(--accent)',
-                    color: '#fff',
-                    border: 'none',
+                    flex: '1 1 200px',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
                     borderRadius: '8px',
                     padding: '6px 12px',
+                    color: 'var(--text-main)',
+                    fontSize: '0.85rem',
+                    outline: 'none'
+                  }}
+                />
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  <span>Size:</span>
+                  <input
+                    type="range"
+                    min="14"
+                    max="48"
+                    value={textFontSize}
+                    onChange={e => setTextFontSize(Number(e.target.value))}
+                    style={{ width: '45px', accentColor: 'var(--accent)', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontWeight: 600, color: 'var(--text-main)', minWidth: '16px' }}>{textFontSize}px</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsTextBold(!isTextBold)}
+                  style={{
+                    padding: '5px 9px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border)',
+                    background: isTextBold ? 'var(--accent)' : 'var(--bg-card)',
+                    color: isTextBold ? '#fff' : 'var(--text-main)',
+                    fontWeight: 800,
                     fontSize: '0.78rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
+                    cursor: 'pointer'
+                  }}
+                  title="Toggle Bold"
+                >
+                  B
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleAddTextAt(0.25, 0.35, textInput.trim() || 'New Text')}
+                  className="btn-primary"
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: '8px',
+                    fontSize: '0.78rem',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
-                    whiteSpace: 'nowrap'
+                    cursor: 'pointer'
                   }}
                 >
-                  <Plus size={14} /> <span>Place Text</span>
+                  <Plus size={14} /> Add Text
                 </button>
               </div>
             </div>
           )}
 
-          {/* Stickers & Unlimited Emojis Sub-Bar */}
+          {/* Stickers / Unlimited Emojis Picker Sub-Bar */}
           {showStickersMenu && (
             <div style={{
               display: 'flex',
@@ -1006,46 +1613,35 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
               boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
               animation: 'pulseModalPop 0.18s ease'
             }}>
-              {/* Header & Size */}
+              {/* Header and Size Controls */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Smile size={16} color="var(--accent)" />
                   <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-main)' }}>
                     Unlimited Emojis & Stickers
                   </span>
-                  <span style={{
-                    fontSize: '0.72rem',
-                    padding: '2px 8px',
-                    borderRadius: '10px',
-                    background: 'rgba(245, 158, 11, 0.2)',
-                    color: '#f59e0b',
-                    fontWeight: 700,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}>
-                    Stamp: <span style={{ fontSize: '1rem', lineHeight: 1 }}>{selectedSticker}</span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    (Drag, resize & delete anywhere!)
                   </span>
                 </div>
 
-                {/* Stamp Size Selector */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                  <span>Size:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Sticker Size:</span>
                   {[
-                    { label: 'S', size: 28 },
-                    { label: 'M', size: 38 },
-                    { label: 'L', size: 52 }
+                    { label: 'S', val: 28 },
+                    { label: 'M', val: 40 },
+                    { label: 'L', val: 56 }
                   ].map(s => (
                     <button
                       key={s.label}
                       type="button"
-                      onClick={() => setStickerSize(s.size)}
+                      onClick={() => setStickerSize(s.val)}
                       style={{
-                        padding: '2px 7px',
+                        padding: '2px 8px',
                         borderRadius: '6px',
-                        background: stickerSize === s.size ? 'var(--accent)' : 'rgba(255,255,255,0.08)',
-                        color: stickerSize === s.size ? '#fff' : 'var(--text-muted)',
-                        border: 'none',
+                        border: '1px solid var(--border)',
+                        background: stickerSize === s.val ? 'var(--accent)' : 'var(--bg-card)',
+                        color: stickerSize === s.val ? '#fff' : 'var(--text-main)',
                         cursor: 'pointer',
                         fontWeight: 700,
                         fontSize: '0.74rem'
@@ -1059,7 +1655,6 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
 
               {/* Search & Categories Bar */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                {/* Search Input */}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -1095,7 +1690,6 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                   )}
                 </div>
 
-                {/* Category Pills */}
                 <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '2px', flex: '2 1 auto' }}>
                   {[
                     { id: 'all', label: 'All 🌟' },
@@ -1131,7 +1725,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                 </div>
               </div>
 
-              {/* Scrollable Emojis Grid (Unlimited Emojis!) */}
+              {/* Scrollable Emojis Grid */}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(36px, 1fr))',
@@ -1149,6 +1743,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                     onClick={() => {
                       setSelectedSticker(emoji);
                       setTool('sticker');
+                      handleAddStickerAt(0.5, 0.45, emoji);
                     }}
                     style={{
                       background: selectedSticker === emoji && tool === 'sticker' ? 'var(--accent)' : 'rgba(255, 255, 255, 0.05)',
@@ -1162,7 +1757,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                       justifyContent: 'center',
                       transition: 'transform 0.12s ease'
                     }}
-                    title={`Stamp ${emoji} on board`}
+                    title={`Add ${emoji} to board`}
                   >
                     {emoji}
                   </button>
@@ -1171,9 +1766,9 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
             </div>
           )}
 
-          {/* Expanded Colors Palette */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', padding: '4px 0' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', marginRight: '4px' }}>Colors:</span>
+          {/* Stroke Colors Palette */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', padding: '2px 0' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', marginRight: '4px' }}>Draw Color:</span>
             {PALETTE_COLORS.map(c => (
               <div
                 key={c}
@@ -1191,8 +1786,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
               />
             ))}
 
-            {/* Custom Color Input Picker */}
-            <label style={{ position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', marginLeft: '4px' }} title="Custom Color Picker">
+            <label style={{ position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', marginLeft: '4px' }} title="Custom Drawing Color">
               <input
                 type="color"
                 value={color}
@@ -1202,32 +1796,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
             </label>
           </div>
 
-          {/* Accidental Clear Restore Banner */}
-          {canRestore && (
-            <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '10px', padding: '6px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#f87171' }}>
-              <span>⚠️ Board was cleared. Want to bring back your drawing?</span>
-              <button
-                onClick={restoreCanvas}
-                style={{
-                  background: '#10b981',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '4px 12px',
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <RotateCw size={13} /> Restore Drawing
-              </button>
-            </div>
-          )}
-
-          {/* Canvas Board Container with Draggable Text Overlay */}
+          {/* Canvas Board Container with Dynamic Background Color */}
           <div
             ref={containerRef}
             onPointerMove={handleContainerPointerMove}
@@ -1235,11 +1804,13 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
             style={{
               position: 'relative',
               width: '100%',
-              borderRadius: '12px',
+              borderRadius: '14px',
               overflow: 'hidden',
-              border: '1px solid var(--border)',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-              userSelect: 'none'
+              backgroundColor: boardColor,
+              border: '1.5px solid var(--border)',
+              boxShadow: '0 6px 20px rgba(0,0,0,0.4)',
+              userSelect: 'none',
+              transition: 'background-color 0.25s ease'
             }}
           >
             <canvas
@@ -1255,11 +1826,129 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                 cursor: tool === 'eraser' ? 'cell' : tool === 'sticker' ? 'pointer' : tool === 'text' ? 'text' : 'crosshair',
                 display: 'block',
                 touchAction: 'none',
-                width: '100%'
+                width: '100%',
+                background: 'transparent'
               }}
             />
 
-            {/* Draggable Text Items Layer */}
+            {/* Draggable & Deletable Interactive Stickers (Emojis) */}
+            {stickerElements.map(item => {
+              const isSelected = selectedStickerId === item.id;
+              const size = item.size || 40;
+
+              return (
+                <div
+                  key={item.id}
+                  onPointerDown={(e) => handleItemPointerDown(e, item, 'sticker')}
+                  style={{
+                    position: 'absolute',
+                    left: `${item.xRatio * 100}%`,
+                    top: `${item.yRatio * 100}%`,
+                    cursor: 'move',
+                    userSelect: 'none',
+                    touchAction: 'none',
+                    zIndex: isSelected ? 30 : 16,
+                    transform: 'translate(-50%, -50%)',
+                    padding: '4px',
+                    borderRadius: '12px',
+                    border: isSelected ? '2px dashed #f59e0b' : '2px solid transparent',
+                    background: isSelected ? 'rgba(0, 0, 0, 0.45)' : 'transparent',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: dragStateRef.current?.id === item.id ? 'none' : 'box-shadow 0.15s ease'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedStickerId(item.id);
+                    setSelectedTextId(null);
+                  }}
+                >
+                  <span style={{ fontSize: `${size}px`, lineHeight: 1, pointerEvents: 'none' }}>
+                    {item.emoji}
+                  </span>
+
+                  {/* Selected Sticker Floating Controls (Resize & Delete) */}
+                  {isSelected && (
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '-28px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      background: 'rgba(0, 0, 0, 0.9)',
+                      borderRadius: '8px',
+                      padding: '2px 6px',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.6)',
+                      zIndex: 35
+                    }}>
+                      <button
+                        type="button"
+                        onClick={(e) => handleUpdateStickerSize(item.id, -6, e)}
+                        title="Smaller"
+                        style={{
+                          background: 'rgba(255,255,255,0.1)',
+                          border: 'none',
+                          color: '#fff',
+                          borderRadius: '4px',
+                          width: '18px',
+                          height: '18px',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleUpdateStickerSize(item.id, 6, e)}
+                        title="Larger"
+                        style={{
+                          background: 'rgba(255,255,255,0.1)',
+                          border: 'none',
+                          color: '#fff',
+                          borderRadius: '4px',
+                          width: '18px',
+                          height: '18px',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteSticker(item.id, e)}
+                        title="Delete Emoji Sticker"
+                        style={{
+                          background: '#ef4444',
+                          border: 'none',
+                          color: '#fff',
+                          borderRadius: '4px',
+                          width: '18px',
+                          height: '18px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Draggable & Editable Interactive Text Items */}
             {textElements.map(item => {
               const isSelected = selectedTextId === item.id;
               const isEditing = editingTextId === item.id;
@@ -1267,7 +1956,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
               return (
                 <div
                   key={item.id}
-                  onPointerDown={(e) => handleTextPointerDown(e, item)}
+                  onPointerDown={(e) => handleItemPointerDown(e, item, 'text')}
                   style={{
                     position: 'absolute',
                     left: `${item.xRatio * 100}%`,
@@ -1289,6 +1978,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedTextId(item.id);
+                    setSelectedStickerId(null);
                   }}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
@@ -1333,14 +2023,14 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                     </span>
                   )}
 
-                  {/* Selected Item Floating Controls */}
+                  {/* Selected Text Floating Controls (Edit & Delete) */}
                   {isSelected && !isEditing && (
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '3px',
+                      gap: '4px',
                       marginLeft: '6px',
-                      background: 'rgba(0,0,0,0.8)',
+                      background: 'rgba(0,0,0,0.85)',
                       borderRadius: '6px',
                       padding: '2px 4px',
                       border: '1px solid rgba(255,255,255,0.15)'
@@ -1368,15 +2058,16 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                         onClick={(e) => handleDeleteText(item.id, e)}
                         title="Delete text"
                         style={{
-                          background: 'transparent',
+                          background: '#ef4444',
                           border: 'none',
-                          color: '#ef4444',
+                          color: '#fff',
+                          borderRadius: '3px',
                           cursor: 'pointer',
                           padding: '2px',
                           display: 'flex'
                         }}
                       >
-                        <X size={14} />
+                        <Trash2 size={12} />
                       </button>
                     </div>
                   )}
