@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { X, Zap, ArrowDownLeft, ArrowUpRight, Sparkles, Clock, RefreshCw, Gift, Flame, CheckCircle2, ShoppingBag } from 'lucide-react';
@@ -11,7 +11,18 @@ export default function SparksWalletModal({ onClose }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
 
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  const updateUserProfileRef = useRef(updateUserProfile);
+  useEffect(() => {
+    updateUserProfileRef.current = updateUserProfile;
+  }, [updateUserProfile]);
+
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [walletData, setWalletData] = useState({
     balance: user?.pulseSparks || 50,
     totalEarned: 0,
@@ -30,10 +41,12 @@ export default function SparksWalletModal({ onClose }) {
   useBackHandler(() => setShowBuySparksModal(false), showBuySparksModal);
   useBackHandler(onClose, !showBuySparksModal);
 
-  const fetchWallet = useCallback(async () => {
+  const fetchWallet = useCallback(async (isManual = false) => {
     if (!token) return;
     try {
-      setLoading(true);
+      if (isManual) {
+        setRefreshing(true);
+      }
       const res = await fetch(`${BACKEND_URL}/api/sparks/wallet`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -41,7 +54,7 @@ export default function SparksWalletModal({ onClose }) {
         const data = await res.json();
         if (data.success) {
           setWalletData({
-            balance: typeof data.balance === 'number' ? data.balance : (user?.pulseSparks || 50),
+            balance: typeof data.balance === 'number' ? data.balance : (userRef.current?.pulseSparks || 50),
             totalEarned: data.totalEarned || 0,
             totalSpent: data.totalSpent || 0,
             transactions: data.transactions || [],
@@ -49,8 +62,9 @@ export default function SparksWalletModal({ onClose }) {
             dailyRewardAmount: data.dailyRewardAmount || 15,
             nextClaimInMs: data.nextClaimInMs || 0
           });
-          if (updateUserProfile && typeof data.balance === 'number') {
-            updateUserProfile({ ...user, pulseSparks: data.balance });
+          const currentUser = userRef.current;
+          if (updateUserProfileRef.current && typeof data.balance === 'number' && currentUser && currentUser.pulseSparks !== data.balance) {
+            updateUserProfileRef.current({ ...currentUser, pulseSparks: data.balance });
           }
         }
       }
@@ -58,11 +72,12 @@ export default function SparksWalletModal({ onClose }) {
       console.warn('Failed to fetch sparks wallet:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [token, user, updateUserProfile]);
+  }, [token]);
 
   useEffect(() => {
-    fetchWallet();
+    fetchWallet(false);
   }, [fetchWallet]);
 
   // Real-time socket listener for incoming sparks
@@ -75,17 +90,18 @@ export default function SparksWalletModal({ onClose }) {
           ...prev,
           balance: data.pulseSparks
         }));
-        if (updateUserProfile) {
-          updateUserProfile({ ...user, pulseSparks: data.pulseSparks });
+        const currentUser = userRef.current;
+        if (updateUserProfileRef.current && currentUser && currentUser.pulseSparks !== data.pulseSparks) {
+          updateUserProfileRef.current({ ...currentUser, pulseSparks: data.pulseSparks });
         }
-        // Refresh wallet history in background
-        fetchWallet();
+        // Refresh wallet history silently in background without spinner
+        fetchWallet(false);
       }
     };
 
     socket.on('sparks_updated', handleSparksUpdated);
     return () => socket.off('sparks_updated', handleSparksUpdated);
-  }, [socket, fetchWallet, updateUserProfile, user]);
+  }, [socket, fetchWallet]);
 
   const handleClaimDaily = async () => {
     if (!walletData.canClaimDaily || claimingDaily || !token) return;
@@ -110,8 +126,9 @@ export default function SparksWalletModal({ onClose }) {
           totalEarned: prev.totalEarned + (data.addedAmount || 15),
           transactions: data.transaction ? [data.transaction, ...prev.transactions] : prev.transactions
         }));
-        if (updateUserProfile) {
-          updateUserProfile({ ...user, pulseSparks: data.balance });
+        const currentUser = userRef.current;
+        if (updateUserProfileRef.current && currentUser) {
+          updateUserProfileRef.current({ ...currentUser, pulseSparks: data.balance });
         }
         setTimeout(() => setClaimToast(''), 3500);
       } else {
@@ -218,7 +235,7 @@ export default function SparksWalletModal({ onClose }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
               type="button"
-              onClick={fetchWallet}
+              onClick={() => fetchWallet(true)}
               title="Refresh Balance"
               style={{
                 background: 'rgba(255, 255, 255, 0.06)',
@@ -233,7 +250,7 @@ export default function SparksWalletModal({ onClose }) {
                 cursor: 'pointer'
               }}
             >
-              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+              <RefreshCw size={15} className={(refreshing || loading) ? 'animate-spin' : ''} />
             </button>
             <button
               type="button"
@@ -474,7 +491,7 @@ export default function SparksWalletModal({ onClose }) {
           </div>
 
           {/* Transaction Ledger List */}
-          {loading ? (
+          {loading && walletData.transactions.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '36px 0', color: 'var(--text-muted)' }}>
               <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 10px auto' }} />
               <p style={{ margin: 0, fontSize: '0.85rem' }}>Loading Sparks transactions...</p>
