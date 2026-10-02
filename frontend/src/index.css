@@ -2293,6 +2293,36 @@ input, textarea {
   }
 }
 
+/* Floating Reaction Bar Responsive Layout */
+.floating-reaction-bar {
+  max-width: calc(100vw - 20px);
+  box-sizing: border-box;
+  scrollbar-width: none;
+}
+.floating-reaction-bar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .floating-reaction-bar {
+    padding: 3px 6px !important;
+    gap: 3px !important;
+    top: -44px !important;
+  }
+  .floating-reaction-bar .reaction-emoji-btn {
+    font-size: 1.25rem !important;
+    padding: 1px 2px !important;
+  }
+  .floating-reaction-bar .reaction-action-btn {
+    width: 25px !important;
+    height: 25px !important;
+  }
+  .floating-reaction-bar .reaction-action-btn svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+}
+
 
 
 

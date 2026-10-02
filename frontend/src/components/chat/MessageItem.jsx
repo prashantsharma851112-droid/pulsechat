@@ -1363,7 +1363,7 @@ export default function MessageItem({
           style={{
             position: 'absolute',
             top: '-50px',
-            [isMine ? 'right' : 'left']: '4px',
+            [isMine ? 'right' : 'left']: '0px',
             background: '#0f172a',
             border: '1.5px solid rgba(255, 255, 255, 0.22)',
             borderRadius: '30px',
@@ -1374,7 +1374,9 @@ export default function MessageItem({
             zIndex: 9999,
             boxShadow: '0 12px 36px rgba(0,0,0,0.7)',
             userSelect: 'none',
-            pointerEvents: 'auto'
+            pointerEvents: 'auto',
+            maxWidth: 'calc(100vw - 20px)',
+            boxSizing: 'border-box'
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -1382,6 +1384,7 @@ export default function MessageItem({
             <button
               key={em}
               type="button"
+              className="reaction-emoji-btn"
               onClick={(e) => {
                 e.stopPropagation();
                 handleReact(em);
@@ -1397,7 +1400,8 @@ export default function MessageItem({
                 justifyContent: 'center',
                 transition: 'transform 0.15s ease',
                 lineHeight: 1,
-                pointerEvents: 'auto'
+                pointerEvents: 'auto',
+                flexShrink: 0
               }}
               onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.35)'}
               onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
@@ -1406,11 +1410,12 @@ export default function MessageItem({
             </button>
           ))}
 
-          <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.22)', margin: '0 2px' }} />
+          <div className="reaction-divider" style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.22)', margin: '0 2px', flexShrink: 0 }} />
 
           {/* Plus button for Unlimited Emojis */}
           <button
             type="button"
+            className="reaction-action-btn"
             onClick={(e) => {
               e.stopPropagation();
               if (onOpenUnlimitedEmoji) onOpenUnlimitedEmoji(message);
@@ -1428,7 +1433,8 @@ export default function MessageItem({
               justifyContent: 'center',
               cursor: 'pointer',
               transition: 'all 0.15s ease',
-              pointerEvents: 'auto'
+              pointerEvents: 'auto',
+              flexShrink: 0
             }}
             onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent)'}
             onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)'}
@@ -1439,6 +1445,7 @@ export default function MessageItem({
           {/* Customize / Set Default Emojis Button */}
           <button
             type="button"
+            className="reaction-action-btn"
             onClick={(e) => {
               e.stopPropagation();
               if (onOpenCustomizeReactions) onOpenCustomizeReactions();
@@ -1456,7 +1463,8 @@ export default function MessageItem({
               justifyContent: 'center',
               cursor: 'pointer',
               transition: 'all 0.15s ease',
-              pointerEvents: 'auto'
+              pointerEvents: 'auto',
+              flexShrink: 0
             }}
             onMouseEnter={(e) => { e.currentTarget.style.color = '#f59e0b'; e.currentTarget.style.background = 'rgba(245, 158, 11, 0.15)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'; }}
