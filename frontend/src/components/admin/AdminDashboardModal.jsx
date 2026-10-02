@@ -32,6 +32,7 @@ export default function AdminDashboardModal({ onClose }) {
   const [error, setError] = useState('');
   const [requiresPasscode, setRequiresPasscode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [userStatusFilter, setUserStatusFilter] = useState('all'); // 'all' | 'online' | 'stealth'
   const [actionLoadingId, setActionLoadingId] = useState(null);
 
   // Support Tickets States
@@ -271,6 +272,8 @@ export default function AdminDashboardModal({ onClose }) {
   };
 
   const filteredUsers = stats?.users?.filter(u => {
+    if (userStatusFilter === 'online' && !u.isLiveOnline) return false;
+    if (userStatusFilter === 'stealth' && !(u.isLiveOnline && u.hideOnlineStatus)) return false;
     if (!searchQuery.trim()) return true;
     const q = searchQuery.trim().toLowerCase();
     return (
@@ -454,11 +457,29 @@ export default function AdminDashboardModal({ onClose }) {
                     </span>
                     <Wifi size={16} color="#10b981" />
                   </div>
-                  <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#10b981', marginTop: '4px' }}>
-                    {loading ? '...' : (stats?.liveOnlineCount ?? 0)}
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '4px' }}>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#10b981' }}>
+                      {loading ? '...' : (stats?.liveOnlineCount ?? 0)}
+                    </div>
+                    {stats?.stealthOnlineCount > 0 && (
+                      <span
+                        style={{
+                          fontSize: '0.7rem',
+                          color: '#c084fc',
+                          fontWeight: 700,
+                          background: 'rgba(168, 85, 247, 0.2)',
+                          padding: '2px 7px',
+                          borderRadius: '6px',
+                          border: '1px solid rgba(168, 85, 247, 0.35)'
+                        }}
+                        title={`${stats.stealthOnlineCount} live users have hidden their online indicator`}
+                      >
+                        🕵️ {stats.stealthOnlineCount} Stealth
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: '0.72rem', color: '#10b981', opacity: 0.9, marginTop: '2px' }}>
-                    Active Live Sockets Right Now
+                    Total Connected Users (Includes Hidden Mode)
                   </div>
                 </div>
 
@@ -495,7 +516,7 @@ export default function AdminDashboardModal({ onClose }) {
               <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                   <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-main)' }}>
-                    Registered Users Management ({filteredUsers.length}{searchQuery ? ` of ${stats?.totalUsers || 0}` : ''})
+                    Registered Users Management ({filteredUsers.length}{searchQuery || userStatusFilter !== 'all' ? ` of ${stats?.totalUsers || 0}` : ''})
                   </h4>
                   <button
                     onClick={fetchStats}
@@ -507,41 +528,70 @@ export default function AdminDashboardModal({ onClose }) {
                   </button>
                 </div>
 
-                {/* Search Bar */}
-                <div style={{ position: 'relative' }}>
-                  <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Search by name, @username, or email..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ paddingLeft: '36px', width: '100%', fontSize: '0.84rem' }}
-                  />
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchQuery('')}
-                      style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem' }}
-                    >
-                      ✕ Clear
-                    </button>
-                  )}
+                {/* Search Bar & Status Filter Chips */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Search by name, @username, or email..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      style={{ paddingLeft: '36px', width: '100%', fontSize: '0.84rem' }}
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem' }}
+                      >
+                        ✕ Clear
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+                    {[
+                      { id: 'all', label: `All (${stats?.totalUsers || 0})` },
+                      { id: 'online', label: `🟢 Live Online (${stats?.liveOnlineCount || 0})` },
+                      { id: 'stealth', label: `🕵️ Hidden/Stealth (${stats?.stealthOnlineCount || 0})` }
+                    ].map(f => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setUserStatusFilter(f.id)}
+                        style={{
+                          padding: '3px 9px',
+                          borderRadius: '8px',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          border: userStatusFilter === f.id ? '1px solid var(--accent)' : '1px solid var(--border)',
+                          background: userStatusFilter === f.id ? 'rgba(99, 102, 241, 0.2)' : 'var(--bg-card)',
+                          color: userStatusFilter === f.id ? 'var(--accent)' : 'var(--text-muted)',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Users List */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
                   {filteredUsers.length === 0 ? (
                     <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.84rem' }}>
-                      {searchQuery ? (
+                      {searchQuery || userStatusFilter !== 'all' ? (
                         <>
-                          <div>No users matching "<strong>{searchQuery}</strong>".</div>
+                          <div>No users matching current filters.</div>
                           <button
                             type="button"
-                            onClick={() => setSearchQuery('')}
+                            onClick={() => { setSearchQuery(''); setUserStatusFilter('all'); }}
                             style={{ marginTop: '8px', border: 'none', background: 'var(--accent)', color: '#fff', padding: '4px 10px', borderRadius: '6px', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer' }}
                           >
-                            View All {stats?.totalUsers || 0} Registered Users
+                            Reset Filters (View All {stats?.totalUsers || 0})
                           </button>
                         </>
                       ) : (
@@ -578,16 +628,34 @@ export default function AdminDashboardModal({ onClose }) {
                                 height: '10px',
                                 borderRadius: '50%',
                                 background: u.isLiveOnline ? '#10b981' : '#6b7280',
-                                border: '2px solid var(--bg-card)'
+                                border: '2px solid var(--bg-card)',
+                                boxShadow: u.isLiveOnline ? '0 0 6px rgba(16, 185, 129, 0.8)' : 'none'
                               }}
-                              title={u.isLiveOnline ? 'Online Now' : 'Offline'}
+                              title={u.isLiveOnline ? (u.hideOnlineStatus ? 'Online Now (Stealth / Hidden Indicator)' : 'Online Now') : 'Offline'}
                             />
                           </div>
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
                               <span>{u.displayName || u.username}</span>
                               {u.isPro && <Crown size={13} color="#f59e0b" title="VIP Pro Member" />}
                               {u.isAdmin && <span style={{ fontSize: '0.62rem', padding: '1px 5px', borderRadius: '4px', background: 'rgba(99, 102, 241, 0.2)', color: 'var(--accent)', fontWeight: 800 }}>ADMIN</span>}
+                              {u.isLiveOnline && u.hideOnlineStatus && (
+                                <span
+                                  style={{
+                                    fontSize: '0.62rem',
+                                    padding: '1px 6px',
+                                    borderRadius: '4px',
+                                    background: 'rgba(168, 85, 247, 0.22)',
+                                    color: '#c084fc',
+                                    border: '1px solid rgba(168, 85, 247, 0.45)',
+                                    fontWeight: 800,
+                                    letterSpacing: '0.02em'
+                                  }}
+                                  title="This user has hidden their online status from other users, but is live right now"
+                                >
+                                  🕵️ HIDDEN (ONLINE)
+                                </span>
+                              )}
                             </div>
                             <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
                               @{u.username} {u.email ? `• ${u.email}` : ''}

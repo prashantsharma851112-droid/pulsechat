@@ -60,51 +60,81 @@ router.get('/stats', authMiddleware, adminOnly, async (req, res) => {
     const now = Date.now();
     const isFreshRequested = req.query.fresh === 'true';
 
+    const getLiveDetails = req.app.get('getLiveOnlineUsersDetails');
+    const getOnlineMap = req.app.get('getRawOnlineUsersMap');
+
+    let liveOnlineUserIds = [];
+    let hiddenUserIds = [];
+
+    if (typeof getLiveDetails === 'function') {
+      const details = getLiveDetails();
+      liveOnlineUserIds = details.rawOnlineIds || [];
+      hiddenUserIds = details.hiddenUserIds || [];
+    } else if (typeof getOnlineMap === 'function') {
+      const onlineMap = getOnlineMap();
+      liveOnlineUserIds = onlineMap ? Array.from(onlineMap.keys()) : [];
+    }
+
+    const onlineSet = new Set(liveOnlineUserIds.map(String));
+    const hiddenSet = new Set(hiddenUserIds.map(String));
+
     // Serve from memory cache if less than 3s old
     if (!isFreshRequested && cachedStatsPayload && (now - lastStatsCacheTimestamp < STATS_CACHE_TTL)) {
-      const getOnlineMap = req.app.get('getRawOnlineUsersMap');
-      const onlineMap = typeof getOnlineMap === 'function' ? getOnlineMap() : null;
-      const liveOnlineUserIds = onlineMap ? Array.from(onlineMap.keys()) : [];
-      const onlineSet = new Set(liveOnlineUserIds);
+      const usersWithOnlineStatus = cachedStatsPayload.users.map(u => {
+        const uId = u.id ? String(u.id) : '';
+        const uMongoId = u.mongoId ? String(u.mongoId) : '';
+        const uUsername = u.username ? String(u.username) : '';
 
-      const usersWithOnlineStatus = cachedStatsPayload.users.map(u => ({
-        ...u,
-        isLiveOnline: onlineSet.has(u.id) || onlineSet.has(u.mongoId) || onlineSet.has(u.username)
-      }));
+        // Live connection check (counts ALL online users, even if stealth/hidden!)
+        const isOnline = onlineSet.has(uId) || (uMongoId && onlineSet.has(uMongoId)) || (uUsername && onlineSet.has(uUsername));
+        const isStealth = Boolean(u.hideOnlineStatus) || hiddenSet.has(uId) || (uMongoId && hiddenSet.has(uMongoId)) || (uUsername && hiddenSet.has(uUsername));
+
+        return {
+          ...u,
+          hideOnlineStatus: isStealth,
+          isLiveOnline: isOnline
+        };
+      });
 
       const liveOnlineCount = usersWithOnlineStatus.filter(u => u.isLiveOnline).length;
+      const stealthOnlineCount = usersWithOnlineStatus.filter(u => u.isLiveOnline && u.hideOnlineStatus).length;
 
       return res.json({
         ...cachedStatsPayload,
         liveOnlineCount,
+        stealthOnlineCount,
         users: usersWithOnlineStatus
       });
     }
-
-    const getOnlineMap = req.app.get('getRawOnlineUsersMap');
-    const onlineMap = typeof getOnlineMap === 'function' ? getOnlineMap() : null;
-    const liveOnlineUserIds = onlineMap ? Array.from(onlineMap.keys()) : [];
 
     const [totalMessages, totalGroups, rawUsersList] = await Promise.all([
       Message.estimatedDocumentCount().catch(() => Message.countDocuments()),
       Group.estimatedDocumentCount().catch(() => Group.countDocuments()),
       User.find({})
         .sort({ createdAt: -1 })
-        .select('id _id username displayName email avatar isEmailVerified isPro proTier isAdmin status createdAt')
+        .select('id _id username displayName email avatar isEmailVerified isPro proTier isAdmin status hideOnlineStatus createdAt')
         .lean()
     ]);
 
-    const onlineSet = new Set(liveOnlineUserIds);
-
     const formattedUsersList = rawUsersList.map(u => {
-      const uStrId = u.id || (u._id ? u._id.toString() : '');
+      const uStrId = u.id ? String(u.id) : (u._id ? u._id.toString() : '');
+      const mongoIdStr = u._id ? u._id.toString() : '';
+      const usernameStr = u.username ? String(u.username) : '';
+
+      // User is physically connected right now
       const isOnline = onlineSet.has(uStrId) ||
-        (u.username && onlineSet.has(u.username)) ||
-        (u._id && onlineSet.has(u._id.toString()));
+        (mongoIdStr && onlineSet.has(mongoIdStr)) ||
+        (usernameStr && onlineSet.has(usernameStr));
+
+      // User has enabled stealth / hide online indicator
+      const isStealth = Boolean(u.hideOnlineStatus) ||
+        hiddenSet.has(uStrId) ||
+        (mongoIdStr && hiddenSet.has(mongoIdStr)) ||
+        (usernameStr && hiddenSet.has(usernameStr));
 
       return {
         id: uStrId,
-        mongoId: u._id ? u._id.toString() : '',
+        mongoId: mongoIdStr,
         username: u.username || 'user',
         displayName: u.displayName || u.username || 'User',
         email: u.email || '',
@@ -113,16 +143,20 @@ router.get('/stats', authMiddleware, adminOnly, async (req, res) => {
         isAdmin: Boolean(u.isAdmin),
         proTier: u.proTier || 'none',
         createdAt: u.createdAt,
+        hideOnlineStatus: isStealth,
         isLiveOnline: isOnline
       };
     });
 
+    // Total online count includes ALL online users (whether stealth or normal)
     const liveOnlineCount = formattedUsersList.filter(u => u.isLiveOnline).length;
+    const stealthOnlineCount = formattedUsersList.filter(u => u.isLiveOnline && u.hideOnlineStatus).length;
 
     const payload = {
       success: true,
       totalUsers: formattedUsersList.length,
       liveOnlineCount,
+      stealthOnlineCount,
       totalMessages,
       totalGroups,
       users: formattedUsersList

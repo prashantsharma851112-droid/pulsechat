@@ -145,6 +145,34 @@ const getPublicOnlineUsers = () => {
   return Array.from(onlineUsers.keys()).filter(id => !hiddenOnlineUsers.has(id));
 };
 
+const getLiveOnlineUsersDetails = () => {
+  const rawOnlineIds = new Set();
+
+  // 1. Direct active sockets on the server
+  if (io && io.sockets && io.sockets.sockets) {
+    for (const [sId, s] of io.sockets.sockets) {
+      if (s.connected && s.userId) {
+        rawOnlineIds.add(String(s.userId));
+        if (s.userCustomId) rawOnlineIds.add(String(s.userCustomId));
+        if (s.userMongoId) rawOnlineIds.add(String(s.userMongoId));
+        if (s.userUsername) rawOnlineIds.add(String(s.userUsername));
+      }
+    }
+  }
+
+  // 2. Active onlineUsers map (verify socket is still alive)
+  for (const [uId, sId] of onlineUsers.entries()) {
+    if (io && io.sockets && io.sockets.sockets && io.sockets.sockets.has(sId)) {
+      rawOnlineIds.add(String(uId));
+    }
+  }
+
+  return {
+    rawOnlineIds: Array.from(rawOnlineIds),
+    hiddenUserIds: Array.from(hiddenOnlineUsers)
+  };
+};
+
 const updateUserOnlinePrivacy = (userId, hideOnlineStatus) => {
   if (hideOnlineStatus) {
     hiddenOnlineUsers.add(userId);
@@ -163,6 +191,7 @@ const updateUserOnlinePrivacy = (userId, hideOnlineStatus) => {
 
 app.set('updateUserOnlinePrivacy', updateUserOnlinePrivacy);
 app.set('getRawOnlineUsersMap', () => onlineUsers);
+app.set('getLiveOnlineUsersDetails', getLiveOnlineUsersDetails);
 
 io.on('connection', (socket) => {
   console.log('⚡ Socket Connected:', socket.id);
@@ -171,7 +200,8 @@ io.on('connection', (socket) => {
   socket.on('user_offline', (userId) => {
     const id = userId || socket.userId;
     if (id) {
-      onlineUsers.delete(id);
+      const toDelete = [id, socket.userId, socket.userCustomId, socket.userMongoId, socket.userUsername].filter(Boolean);
+      toDelete.forEach(k => onlineUsers.delete(String(k)));
       if (!hiddenOnlineUsers.has(id)) {
         io.emit('user_status', { userId: id, status: 'offline', lastSeen: new Date().toISOString() });
       }
@@ -206,6 +236,9 @@ io.on('connection', (socket) => {
       }).select('id _id username hideOnlineStatus').lean();
 
       if (uDoc) {
+        socket.userMongoId = uDoc._id ? uDoc._id.toString() : null;
+        socket.userUsername = uDoc.username || null;
+        socket.userCustomId = uDoc.id || null;
         if (uDoc.hideOnlineStatus) {
           hiddenOnlineUsers.add(userId);
           if (uDoc.id) hiddenOnlineUsers.add(uDoc.id);
@@ -1240,13 +1273,12 @@ io.on('connection', (socket) => {
 
   // Disconnect
   socket.on('disconnect', () => {
-    if (socket.userId) {
-      onlineUsers.delete(socket.userId);
-      if (!hiddenOnlineUsers.has(socket.userId)) {
-        io.emit('user_status', { userId: socket.userId, status: 'offline', lastSeen: new Date().toISOString() });
-      }
-      io.emit('online_users_list', getPublicOnlineUsers());
+    const toDelete = [socket.userId, socket.userCustomId, socket.userMongoId, socket.userUsername].filter(Boolean);
+    toDelete.forEach(id => onlineUsers.delete(String(id)));
+    if (socket.userId && !hiddenOnlineUsers.has(socket.userId)) {
+      io.emit('user_status', { userId: socket.userId, status: 'offline', lastSeen: new Date().toISOString() });
     }
+    io.emit('online_users_list', getPublicOnlineUsers());
     console.log('⚡ Socket Disconnected:', socket.id);
   });
 });
