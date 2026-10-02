@@ -4,7 +4,9 @@ const authMiddleware = require('../middleware/authMiddleware');
 const User = require('../models/User');
 const Message = require('../models/Message');
 const Group = require('../models/Group');
+const SupportTicket = require('../models/SupportTicket');
 const db = require('../database/db');
+const { sendSupportReplyEmail } = require('../utils/mailer');
 
 // In-memory stats cache for instant 0ms responses
 let cachedStatsPayload = null;
@@ -287,6 +289,111 @@ router.delete('/delete-user/:targetUserId', authMiddleware, adminOnly, async (re
   } catch (err) {
     console.error('Delete user error:', err);
     res.status(500).json({ error: 'Failed to delete user account: ' + err.message });
+  }
+});
+
+// ==========================================
+// USER SUPPORT QUERIES & TICKETS
+// ==========================================
+
+// 1. Submit User Support Query (Any authenticated user)
+router.post('/support/submit', authMiddleware, async (req, res) => {
+  try {
+    const { subject, message, email: customEmail } = req.body;
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Please enter a message description.' });
+    }
+
+    const userId = req.user?.id || req.user?._id;
+    const user = await User.findOne({
+      $or: [
+        ...(userId ? [{ id: userId }] : []),
+        ...(req.user?.username ? [{ username: req.user.username }] : [])
+      ]
+    }).lean();
+
+    const userEmail = (customEmail && customEmail.trim()) || user?.email || req.user?.email;
+    if (!userEmail) {
+      return res.status(400).json({ error: 'A valid email address is required to receive support replies.' });
+    }
+
+    const ticketId = 'ticket_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+
+    const ticket = new SupportTicket({
+      id: ticketId,
+      userId: String(userId || 'guest'),
+      username: user?.username || req.user?.username || 'user',
+      displayName: user?.displayName || req.user?.displayName || 'User',
+      email: userEmail.toLowerCase().trim(),
+      subject: subject || 'General Inquiry / Help',
+      message: message.trim(),
+      status: 'pending',
+      createdAt: new Date()
+    });
+
+    await ticket.save();
+
+    res.json({
+      success: true,
+      ticketId,
+      email: userEmail,
+      message: `Your query has been submitted successfully to the Admin Dashboard! You will receive a direct reply on your registered email: ${userEmail}.`
+    });
+  } catch (err) {
+    console.error('Submit support ticket error:', err);
+    res.status(500).json({ error: 'Failed to submit query: ' + err.message });
+  }
+});
+
+// 2. Get All Support Tickets (Admin Only)
+router.get('/support/tickets', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const tickets = await SupportTicket.find().sort({ createdAt: -1 }).limit(100).lean();
+    res.json({ success: true, tickets });
+  } catch (err) {
+    console.error('Fetch support tickets error:', err);
+    res.status(500).json({ error: 'Failed to fetch tickets: ' + err.message });
+  }
+});
+
+// 3. Admin Reply to Support Ticket & Send Email (Admin Only)
+router.post('/support/reply/:ticketId', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+    const { replyMessage } = req.body;
+
+    if (!replyMessage || !replyMessage.trim()) {
+      return res.status(400).json({ error: 'Please enter a reply message.' });
+    }
+
+    const ticket = await SupportTicket.findOne({ id: ticketId });
+    if (!ticket) {
+      return res.status(404).json({ error: 'Support ticket not found.' });
+    }
+
+    ticket.adminReply = replyMessage.trim();
+    ticket.status = 'replied';
+    ticket.repliedAt = new Date();
+    await ticket.save();
+
+    // Send email to user's registered email
+    const mailResult = await sendSupportReplyEmail(
+      ticket.email,
+      ticket.displayName || ticket.username,
+      ticket.subject,
+      ticket.message,
+      replyMessage.trim()
+    );
+
+    res.json({
+      success: true,
+      message: `Reply sent successfully to user's registered email (${ticket.email})!`,
+      delivered: mailResult?.delivered,
+      ticket
+    });
+  } catch (err) {
+    console.error('Reply support ticket error:', err);
+    res.status(500).json({ error: 'Failed to send reply: ' + err.message });
   }
 });
 

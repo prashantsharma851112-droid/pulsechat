@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, Shield, Users, Wifi, MessageSquare, PlusCircle, RefreshCw, Crown, Lock, CheckCircle2, AlertCircle, Search, Sparkles, Trash2 } from 'lucide-react';
+import { 
+  X, Shield, Users, Wifi, MessageSquare, PlusCircle, RefreshCw, Crown, 
+  Lock, CheckCircle2, AlertCircle, Search, Sparkles, Trash2, Mail, Send, 
+  Clock, Check, HelpCircle, Loader2 
+} from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 
 export default function AdminDashboardModal({ onClose }) {
@@ -12,6 +16,9 @@ export default function AdminDashboardModal({ onClose }) {
   const [claimLoading, setClaimLoading] = useState(false);
   const [claimMsg, setClaimMsg] = useState('');
   const [claimError, setClaimError] = useState('');
+
+  // Active Tab: 'overview' | 'support'
+  const [activeTab, setActiveTab] = useState('overview');
 
   const [stats, setStats] = useState(() => {
     try {
@@ -26,6 +33,14 @@ export default function AdminDashboardModal({ onClose }) {
   const [requiresPasscode, setRequiresPasscode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState(null);
+
+  // Support Tickets States
+  const [tickets, setTickets] = useState([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
+  const [ticketsError, setTicketsError] = useState('');
+  const [ticketFilter, setTicketFilter] = useState('all'); // 'all' | 'pending' | 'replied'
+  const [replyTexts, setReplyTexts] = useState({});
+  const [sendingReplyId, setSendingReplyId] = useState(null);
 
   const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('pulsechat_token') : null);
 
@@ -59,9 +74,70 @@ export default function AdminDashboardModal({ onClose }) {
     }
   };
 
+  const fetchTickets = async (showSpinner = false) => {
+    if (!activeToken) return;
+    if (showSpinner) setLoadingTickets(true);
+    try {
+      setTicketsError('');
+      const res = await fetch(`${BACKEND_URL}/api/admin/support/tickets`, {
+        headers: { Authorization: `Bearer ${activeToken}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTickets(data.tickets || []);
+      } else {
+        setTicketsError(data.error || 'Failed to load support tickets.');
+      }
+    } catch (err) {
+      setTicketsError('Network error loading support tickets.');
+    } finally {
+      setLoadingTickets(false);
+    }
+  };
+
+  const handleReplyTicket = async (ticketId) => {
+    const text = (replyTexts[ticketId] || '').trim();
+    if (!text) {
+      alert('Please enter a reply message before sending.');
+      return;
+    }
+    setSendingReplyId(ticketId);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/support/reply/${ticketId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${activeToken}`
+        },
+        body: JSON.stringify({ replyMessage: text })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTickets(prev => prev.map(t => t.id === ticketId ? {
+          ...t,
+          status: 'replied',
+          adminReply: text,
+          repliedAt: new Date()
+        } : t));
+        setReplyTexts(prev => ({ ...prev, [ticketId]: '' }));
+        alert(`✅ Reply delivered successfully to user's registered email (${data.ticket?.email || 'user'})!`);
+      } else {
+        alert(data.error || 'Failed to send reply: ' + (data.error || ''));
+      }
+    } catch (err) {
+      alert('Network error sending reply to user email.');
+    } finally {
+      setSendingReplyId(null);
+    }
+  };
+
   useEffect(() => {
     fetchStats(!stats);
-    const interval = setInterval(() => fetchStats(false), 8000);
+    fetchTickets(false);
+    const interval = setInterval(() => {
+      fetchStats(false);
+      fetchTickets(false);
+    }, 8000);
 
     if (socket) {
       let debounceTimer;
@@ -292,8 +368,70 @@ export default function AdminDashboardModal({ onClose }) {
                 </div>
               )}
 
-              {/* 4 Cards Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+              {/* Navigation Tabs */}
+              <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)', paddingBottom: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('overview')}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    border: activeTab === 'overview' ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                    background: activeTab === 'overview' ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-card)',
+                    color: activeTab === 'overview' ? 'var(--accent)' : 'var(--text-muted)',
+                    fontWeight: 700,
+                    fontSize: '0.84rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Users size={15} /> Overview & Users
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('support'); fetchTickets(true); }}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    border: activeTab === 'support' ? '1.5px solid #f59e0b' : '1px solid var(--border)',
+                    background: activeTab === 'support' ? 'rgba(245, 158, 11, 0.15)' : 'var(--bg-card)',
+                    color: activeTab === 'support' ? '#f59e0b' : 'var(--text-muted)',
+                    fontWeight: 700,
+                    fontSize: '0.84rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Mail size={15} /> User Queries & Support
+                  {tickets.filter(t => t.status === 'pending').length > 0 && (
+                    <span style={{
+                      background: '#ef4444',
+                      color: '#fff',
+                      fontSize: '0.68rem',
+                      fontWeight: 800,
+                      padding: '1px 6px',
+                      borderRadius: '10px'
+                    }}>
+                      {tickets.filter(t => t.status === 'pending').length}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {activeTab === 'overview' && (
+                <>
+                  {/* 4 Cards Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
                 {/* 1. Total Registered Users */}
                 <div style={{ padding: '14px', borderRadius: '16px', background: 'var(--bg-card)', border: '1px solid var(--border)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600 }}>
@@ -511,6 +649,221 @@ export default function AdminDashboardModal({ onClose }) {
               </div>
             </>
           )}
+
+          {activeTab === 'support' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Support Subheader & Filters */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {[
+                    { id: 'all', label: `All (${tickets.length})` },
+                    { id: 'pending', label: `Pending (${tickets.filter(t => t.status === 'pending').length})` },
+                    { id: 'replied', label: `Replied (${tickets.filter(t => t.status === 'replied').length})` }
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setTicketFilter(f.id)}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '8px',
+                        fontSize: '0.76rem',
+                        fontWeight: 700,
+                        border: ticketFilter === f.id ? '1px solid var(--accent)' : '1px solid var(--border)',
+                        background: ticketFilter === f.id ? 'rgba(99, 102, 241, 0.2)' : 'var(--bg-card)',
+                        color: ticketFilter === f.id ? 'var(--accent)' : 'var(--text-muted)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => fetchTickets(true)}
+                  className="icon-btn-ghost"
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: 'var(--accent)' }}
+                  title="Refresh support tickets"
+                >
+                  <RefreshCw size={14} className={loadingTickets ? 'animate-spin' : ''} /> Refresh
+                </button>
+              </div>
+
+              {ticketsError && (
+                <div style={{ padding: '10px 14px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '12px', fontSize: '0.82rem' }}>
+                  ⚠️ {ticketsError}
+                </div>
+              )}
+
+              {/* Tickets List */}
+              {loadingTickets && tickets.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.86rem' }}>
+                  <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 8px auto', display: 'block', color: 'var(--accent)' }} />
+                  Loading user queries...
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {tickets
+                    .filter(t => {
+                      if (ticketFilter === 'pending') return t.status === 'pending';
+                      if (ticketFilter === 'replied') return t.status === 'replied';
+                      return true;
+                    })
+                    .length === 0 ? (
+                    <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-card)', borderRadius: '14px', border: '1px solid var(--border)', fontSize: '0.84rem' }}>
+                      No queries found in this category.
+                    </div>
+                  ) : (
+                    tickets
+                      .filter(t => {
+                        if (ticketFilter === 'pending') return t.status === 'pending';
+                        if (ticketFilter === 'replied') return t.status === 'replied';
+                        return true;
+                      })
+                      .map(t => (
+                        <div
+                          key={t.id}
+                          style={{
+                            background: 'var(--bg-card)',
+                            border: t.status === 'pending' ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border)',
+                            borderRadius: '16px',
+                            padding: '14px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '10px',
+                            boxShadow: '0 2px 10px rgba(0,0,0,0.15)'
+                          }}
+                        >
+                          {/* Ticket Header */}
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: '0.82rem' }}>
+                                {(t.displayName || t.username || 'U').charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span>{t.displayName || t.username}</span>
+                                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>@{t.username}</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                                  <span style={{ fontSize: '0.72rem', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.12)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                                    ✉ {t.email}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{
+                                fontSize: '0.7rem',
+                                fontWeight: 800,
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                background: t.status === 'replied' ? 'rgba(16, 185, 129, 0.18)' : 'rgba(245, 158, 11, 0.18)',
+                                color: t.status === 'replied' ? '#10b981' : '#f59e0b',
+                                border: t.status === 'replied' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)'
+                              }}>
+                                {t.status === 'replied' ? '✅ REPLIED' : '⏳ PENDING'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Query Subject & Date */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.74rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', paddingBottom: '6px' }}>
+                            <span style={{ fontWeight: 700, color: 'var(--accent)' }}>
+                              Topic: {t.subject}
+                            </span>
+                            <span>
+                              {new Date(t.createdAt).toLocaleDateString()} {new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+
+                          {/* User's Original Message */}
+                          <div style={{ background: 'rgba(255, 255, 255, 0.04)', borderRadius: '10px', padding: '10px 12px', borderLeft: '3px solid var(--accent)', fontSize: '0.84rem', color: 'var(--text-main)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>
+                              User Query Message:
+                            </div>
+                            {t.message}
+                          </div>
+
+                          {/* Previous Admin Reply if any */}
+                          {t.adminReply && (
+                            <div style={{ background: 'rgba(16, 185, 129, 0.08)', borderRadius: '10px', padding: '10px 12px', borderLeft: '3px solid #10b981', fontSize: '0.82rem', color: 'var(--text-main)' }}>
+                              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                                <CheckCircle2 size={13} /> Admin Reply Sent to {t.email} {t.repliedAt && `(${new Date(t.repliedAt).toLocaleDateString()} ${new Date(t.repliedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`}
+                              </div>
+                              <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+                                {t.adminReply}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Reply Input Box */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+                            <textarea
+                              value={replyTexts[t.id] !== undefined ? replyTexts[t.id] : ''}
+                              onChange={(e) => setReplyTexts(prev => ({ ...prev, [t.id]: e.target.value }))}
+                              placeholder={t.status === 'replied' ? `Send an updated reply to ${t.email}...` : `Type response to send directly to ${t.email}...`}
+                              rows={2}
+                              style={{
+                                width: '100%',
+                                padding: '8px 10px',
+                                borderRadius: '8px',
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                border: '1px solid var(--border)',
+                                color: 'var(--text-main)',
+                                fontSize: '0.8rem',
+                                outline: 'none',
+                                resize: 'vertical',
+                                boxSizing: 'border-box'
+                              }}
+                            />
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                ✉ Reply will be emailed to: <strong style={{ color: '#38bdf8' }}>{t.email}</strong>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleReplyTicket(t.id)}
+                                disabled={sendingReplyId === t.id || !(replyTexts[t.id]?.trim())}
+                                style={{
+                                  padding: '6px 14px',
+                                  borderRadius: '8px',
+                                  background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                                  color: '#fff',
+                                  border: 'none',
+                                  fontSize: '0.78rem',
+                                  fontWeight: 700,
+                                  cursor: (sendingReplyId === t.id || !(replyTexts[t.id]?.trim())) ? 'not-allowed' : 'pointer',
+                                  opacity: (sendingReplyId === t.id || !(replyTexts[t.id]?.trim())) ? 0.5 : 1,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '5px'
+                                }}
+                              >
+                                {sendingReplyId === t.id ? (
+                                  <>
+                                    <Loader2 size={13} className="animate-spin" /> Sending to Email...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Send size={13} /> {t.status === 'replied' ? 'Update & Email' : 'Reply & Send Email'}
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
         </div>
       </div>
     </div>

@@ -374,7 +374,85 @@ async function sendOtpEmail(recipientEmail, otpCode, displayName = 'PulseChat Us
   };
 }
 
+/**
+ * Send Support Query Response to User's Registered Email
+ */
+async function sendSupportReplyEmail(recipientEmail, displayName, querySubject, originalMessage, adminReplyText) {
+  const subject = `[PulseChat Support] Re: ${querySubject || 'Your Support Request'}`;
+  const actionText = `Our support team has responded to your query regarding: <strong>${querySubject || 'General Support'}</strong>`;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0b0f19; color: #f8fafc; margin: 0; padding: 20px; }
+        .card { max-width: 580px; margin: 0 auto; background: #131b2e; border: 1px solid #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .header { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); padding: 24px; text-align: center; }
+        .header h1 { margin: 0; color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+        .content { padding: 28px 24px; }
+        .greeting { font-size: 16px; font-weight: 600; color: #e2e8f0; margin-top: 0; }
+        .info { font-size: 14px; color: #94a3b8; line-height: 1.6; margin-bottom: 16px; }
+        .reply-box { background: rgba(99, 102, 241, 0.1); border-left: 4px solid #6366f1; border-radius: 8px; padding: 16px; margin: 20px 0; color: #ffffff; font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+        .original-box { background: rgba(255, 255, 255, 0.04); border-radius: 8px; padding: 12px 14px; margin: 16px 0; color: #94a3b8; font-size: 13px; line-height: 1.5; border: 1px solid rgba(255, 255, 255, 0.08); }
+        .footer { border-top: 1px solid #1e293b; padding: 20px; text-align: center; font-size: 12px; color: #64748b; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <h1>⚡ PulseChat Support</h1>
+        </div>
+        <div class="content">
+          <p class="greeting">Hello ${displayName || 'User'},</p>
+          <p class="info">${actionText}</p>
+          
+          <div style="font-size: 13px; font-weight: 700; color: #818cf8; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 10px;">Support Response:</div>
+          <div class="reply-box">
+            ${(adminReplyText || '').replace(/\n/g, '<br>')}
+          </div>
+
+          <div style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-top: 16px;">Your Original Message:</div>
+          <div class="original-box">
+            ${(originalMessage || '').replace(/\n/g, '<br>')}
+          </div>
+
+          <p class="info" style="margin-top: 20px;">If you have any further questions, you can reply directly from PulseChat Settings &gt; App Info &amp; Legal &gt; Contact Us.</p>
+        </div>
+        <div class="footer">
+          &copy; ${new Date().getFullYear()} PulseChat Support Team &bull; Real-Time Messaging
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const textContent = `Hello ${displayName || 'User'},\n\nOur support team has responded to your query regarding: ${querySubject || 'General Support'}\n\nSupport Response:\n${adminReplyText}\n\nYour Original Message:\n${originalMessage}\n\nBest regards,\nPulseChat Support Team`;
+
+  const configStatus = getMailConfigStatus();
+
+  if (configStatus.brevo) {
+    const brevoRes = await sendViaBrevo(recipientEmail, '', displayName, htmlContent, textContent, subject);
+    if (brevoRes.success) return brevoRes;
+  }
+
+  if (configStatus.resend) {
+    const resendRes = await sendViaResend(recipientEmail, '', displayName, htmlContent, textContent, subject);
+    if (resendRes.success) return resendRes;
+  }
+
+  if (configStatus.smtp) {
+    const smtpRes = await sendViaSmtp(recipientEmail, '', displayName, htmlContent, textContent, subject);
+    if (smtpRes.success) return smtpRes;
+  }
+
+  console.log(`[PulseChat Support Mailer] Delivery logged for ${recipientEmail}. Reply: "${adminReplyText}"`);
+  return { success: true, delivered: false, mock: true };
+}
+
 module.exports = {
   sendOtpEmail,
+  sendSupportReplyEmail,
   getMailConfigStatus
 };

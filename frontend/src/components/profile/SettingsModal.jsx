@@ -5,7 +5,7 @@ import {
   X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, 
   Sparkles, Bell, BellOff, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2, 
   Crown, Lock, Shield, FileText, HelpCircle, RefreshCw, AlertTriangle, Loader2,
-  ChevronRight, ArrowLeft, HardDrive, Palette, Info, Mail, Compass
+  ChevronRight, ArrowLeft, HardDrive, Palette, Info, Mail, Compass, Send, CheckCircle2, MessageSquare
 } from 'lucide-react';
 import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
 import { BACKEND_URL } from '../../utils/config';
@@ -75,6 +75,57 @@ export default function SettingsModal({
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+
+  // In-App Support Message Query States
+  const [supportSubject, setSupportSubject] = useState('General Query');
+  const [supportMessage, setSupportMessage] = useState('');
+  const [supportEmail, setSupportEmail] = useState(user?.email || '');
+  const [supportSubmitting, setSupportSubmitting] = useState(false);
+  const [supportSuccessMsg, setSupportSuccessMsg] = useState('');
+  const [supportError, setSupportError] = useState('');
+
+  const handleSupportSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!supportMessage.trim()) {
+      setSupportError('Please describe your query or problem before sending.');
+      return;
+    }
+    const finalEmail = (supportEmail || user?.email || '').trim();
+    if (!finalEmail) {
+      setSupportError('Please provide a valid registered email address so we can reply.');
+      return;
+    }
+
+    setSupportSubmitting(true);
+    setSupportError('');
+    setSupportSuccessMsg('');
+    try {
+      const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('pulsechat_token') : null);
+      const res = await fetch(`${BACKEND_URL}/api/admin/support/submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${activeToken}`
+        },
+        body: JSON.stringify({
+          subject: supportSubject,
+          message: supportMessage.trim(),
+          email: finalEmail
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSupportSuccessMsg(`✅ Query submitted successfully to Admin Dashboard!\n\nOur team will review your message and reply directly to your registered email: ${finalEmail}.`);
+        setSupportMessage('');
+      } else {
+        setSupportError(data.error || 'Failed to submit query. Please try again.');
+      }
+    } catch (err) {
+      setSupportError('Network error submitting query. Please check your connection.');
+    } finally {
+      setSupportSubmitting(false);
+    }
+  };
 
   // Hardware/Swipe Back button hierarchy:
   // Sub-modals -> Active category section -> Close Settings modal
@@ -542,6 +593,44 @@ export default function SettingsModal({
                   </div>
                   <ChevronRight size={18} color="var(--accent)" />
                 </div>
+
+                {/* Master Admin Dashboard Button */}
+                {openAdminModal && (
+                  <div
+                    onClick={() => { onClose(); openAdminModal(); }}
+                    className="user-select-card"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(99, 102, 241, 0.12))',
+                      border: '1px solid rgba(245, 158, 11, 0.35)',
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #f59e0b, #6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                        <ShieldAlert size={18} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          Master Admin Dashboard
+                          {user?.isAdmin && (
+                            <span style={{ fontSize: '0.62rem', padding: '1px 6px', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontWeight: 800 }}>
+                              ACTIVE
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          Live user metrics, support queries & VIP controls
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronRight size={18} color="#f59e0b" />
+                  </div>
+                )}
               </div>
 
               {/* Account Management & Logout */}
@@ -1323,43 +1412,207 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* Contact Us Card */}
+              {/* Direct Support Message Form */}
               <div style={{
                 background: 'var(--bg-card)',
                 border: '1px solid var(--border)',
-                borderRadius: '14px',
-                padding: '14px',
+                borderRadius: '16px',
+                padding: '16px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '8px'
+                gap: '12px'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Mail size={16} color="var(--accent)" />
-                  <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                    Contact Us & Support
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(99, 102, 241, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <MessageSquare size={16} color="var(--accent)" />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)', display: 'block' }}>
+                        Direct Support & Helpdesk
+                      </span>
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                        Send a message directly to Admin Dashboard
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                  For queries, bugs, refunds, or suggestions, email us directly:
+
+                {/* Important Notice: Response to Registered Email */}
+                <div style={{
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  background: 'rgba(56, 189, 248, 0.1)',
+                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                  fontSize: '0.78rem',
+                  color: 'var(--text-main)',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '8px'
+                }}>
+                  <Info size={15} color="#38bdf8" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#38bdf8', marginBottom: '2px' }}>
+                      Official Email Response Guarantee
+                    </div>
+                    <div>
+                      When you submit your query, our Admin will review it and send the response directly to your registered email address.
+                    </div>
+                  </div>
                 </div>
-                <a
-                  href="mailto:support@pulsechat.app?subject=PulseChat Support Request"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    padding: '8px 12px',
+
+                {/* Success Message Banner */}
+                {supportSuccessMsg && (
+                  <div style={{
+                    padding: '12px',
                     borderRadius: '10px',
-                    background: 'rgba(99, 102, 241, 0.15)',
-                    color: 'var(--accent)',
-                    textDecoration: 'none',
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    border: '1px solid rgba(16, 185, 129, 0.35)',
+                    color: '#10b981',
+                    fontSize: '0.8rem',
                     fontWeight: 600,
-                    fontSize: '0.82rem'
-                  }}
-                >
-                  <Mail size={14} /> support@pulsechat.app
-                </a>
+                    lineHeight: 1.4,
+                    whiteSpace: 'pre-line'
+                  }}>
+                    {supportSuccessMsg}
+                  </div>
+                )}
+
+                {/* Error Banner */}
+                {supportError && (
+                  <div style={{
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    color: '#ef4444',
+                    fontSize: '0.78rem',
+                    fontWeight: 600
+                  }}>
+                    ⚠️ {supportError}
+                  </div>
+                )}
+
+                {/* Form Fields */}
+                <form onSubmit={handleSupportSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {/* Registered Email Confirmation */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px' }}>
+                      Registered Email (where reply will be received):
+                    </label>
+                    <input
+                      type="email"
+                      value={supportEmail}
+                      onChange={(e) => setSupportEmail(e.target.value)}
+                      placeholder="your.registered.email@example.com"
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-main)',
+                        fontSize: '0.82rem',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+
+                  {/* Topic / Subject Selection */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px' }}>
+                      Query Topic / Category:
+                    </label>
+                    <select
+                      value={supportSubject}
+                      onChange={(e) => setSupportSubject(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-main)',
+                        fontSize: '0.82rem',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="General Query">💬 General Query / Help</option>
+                      <option value="Bug Report / App Issue">🐛 Bug Report / App Issue</option>
+                      <option value="Account & Login Support">🔐 Account & Login Support</option>
+                      <option value="Pulse VIP / Subscription">👑 Pulse VIP / Subscription Query</option>
+                      <option value="Refund & Billing">💳 Refund & Billing</option>
+                      <option value="Feature Suggestion">💡 Feature Suggestion</option>
+                      <option value="Other Inquiry">📝 Other Inquiry</option>
+                    </select>
+                  </div>
+
+                  {/* Message Description */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px' }}>
+                      Describe your problem or question:
+                    </label>
+                    <textarea
+                      value={supportMessage}
+                      onChange={(e) => setSupportMessage(e.target.value)}
+                      placeholder="Write your question, issue or feedback here in detail..."
+                      rows={4}
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        borderRadius: '8px',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-main)',
+                        fontSize: '0.82rem',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        resize: 'vertical',
+                        lineHeight: 1.4
+                      }}
+                    />
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    disabled={supportSubmitting}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontWeight: 700,
+                      fontSize: '0.86rem',
+                      cursor: supportSubmitting ? 'not-allowed' : 'pointer',
+                      opacity: supportSubmitting ? 0.7 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {supportSubmitting ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        <span>Submitting to Admin Dashboard...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send size={15} />
+                        <span>Submit Message to Admin</span>
+                      </>
+                    )}
+                  </button>
+                </form>
               </div>
 
               {/* App Feature Tour Trigger */}
