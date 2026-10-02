@@ -593,44 +593,6 @@ export default function SettingsModal({
                   </div>
                   <ChevronRight size={18} color="var(--accent)" />
                 </div>
-
-                {/* Master Admin Dashboard Button */}
-                {openAdminModal && (
-                  <div
-                    onClick={() => { onClose(); openAdminModal(); }}
-                    className="user-select-card"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(99, 102, 241, 0.12))',
-                      border: '1px solid rgba(245, 158, 11, 0.35)',
-                      padding: '12px 14px',
-                      borderRadius: '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #f59e0b, #6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                        <ShieldAlert size={18} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          Master Admin Dashboard
-                          {user?.isAdmin && (
-                            <span style={{ fontSize: '0.62rem', padding: '1px 6px', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontWeight: 800 }}>
-                              ACTIVE
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          Live user metrics, support queries & VIP controls
-                        </div>
-                      </div>
-                    </div>
-                    <ChevronRight size={18} color="#f59e0b" />
-                  </div>
-                )}
               </div>
 
               {/* Account Management & Logout */}
@@ -1727,6 +1689,49 @@ export default function SettingsModal({
                   </button>
                 </div>
               </div>
+
+              {/* Master Admin Dashboard (Discreetly placed inside App Info & Legal) */}
+              {openAdminModal && (
+                <div style={{ marginTop: '6px', borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => { onClose(); openAdminModal(); }}
+                    className="user-select-card"
+                    style={{
+                      width: '100%',
+                      background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(99, 102, 241, 0.1))',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      textAlign: 'left'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'linear-gradient(135deg, #f59e0b, #6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                        <ShieldAlert size={17} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          Master Admin Dashboard
+                          {user?.isAdmin && (
+                            <span style={{ fontSize: '0.62rem', padding: '1px 6px', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontWeight: 800 }}>
+                              ACTIVE
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                          System control panel, metrics & support desk
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronRight size={17} color="#f59e0b" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
