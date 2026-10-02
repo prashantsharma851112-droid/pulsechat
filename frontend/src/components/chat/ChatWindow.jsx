@@ -731,6 +731,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [clearedBackup, setClearedBackup] = useState([]);
   const [clearedUndoSecs, setClearedUndoSecs] = useState(0);
   const [multiDeleteBackupIds, setMultiDeleteBackupIds] = useState([]);
+  const [multiDeleteUndoSecs, setMultiDeleteUndoSecs] = useState(0);
   // WhatsApp-Style Message Selection, Context Bar & Reactions states
   const [selectedActionMessage, setSelectedActionMessage] = useState(null);
   const [starredMsgIds, setStarredMsgIds] = useState(() => {
