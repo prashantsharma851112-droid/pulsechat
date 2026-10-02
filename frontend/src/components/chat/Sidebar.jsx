@@ -456,14 +456,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username)
               )
             );
-            if (isCurrentlyActive || res.unreadCount === 0) {
+            if (isCurrentlyActive) {
               res.unreadCount = 0;
             } else if (user?.id) {
               const cachedList = getCachedRecentChats(user.id) || [];
               const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
-              if (cachedMatch && cachedMatch.unreadCount === 0) {
-                res.unreadCount = 0;
-              }
+              res.unreadCount = Math.max(Number(res.unreadCount) || 0, Number(cachedMatch?.unreadCount) || 0);
+            } else {
+              res.unreadCount = Number(res.unreadCount) || 0;
             }
             return res;
           });
@@ -524,9 +524,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
             const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
             if (cachedMatch) {
-              if (cachedMatch.unreadCount === 0) {
-                res.unreadCount = 0;
-              }
               const cachedTime = new Date(cachedMatch.lastMessageTimestamp || cachedMatch.lastMessageTime || 0).getTime();
               const serverTime = new Date(res.lastMessageTimestamp || res.lastMessageTime || 0).getTime();
               if (cachedTime > serverTime) {
@@ -547,8 +544,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username)
               )
             );
-            if (isCurrentlyActive || res.unreadCount === 0) {
+            if (isCurrentlyActive) {
               res.unreadCount = 0;
+            } else {
+              res.unreadCount = Math.max(Number(res.unreadCount) || 0, Number(cachedMatch?.unreadCount) || 0);
             }
             return res;
           });
@@ -797,18 +796,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       }
 
       setRecentChats(prevChats => {
-        const existingIdx = prevChats.findIndex(c =>
-          c.id === targetId ||
-          c._id === targetId ||
-          (c.username && (c.username === targetId || (msg.senderUsername && c.username === msg.senderUsername) || (msg.senderName && c.username === msg.senderName))) ||
-          c.id === msg.chatId ||
-          c._id === msg.chatId ||
-          (msg.chatId && typeof msg.chatId === 'string' && (
-            (c.id && msg.chatId.includes(c.id)) ||
-            (c._id && msg.chatId.includes(c._id)) ||
-            (c.username && msg.chatId.includes(c.username))
-          ))
-        );
+        const existingIdx = prevChats.findIndex(c => {
+          if (msg.isGroup) {
+            return c.id === msg.chatId || c._id === msg.chatId || c.id === targetId;
+          }
+          return (
+            (targetId && (c.id === targetId || c._id === targetId)) ||
+            (msg.senderUsername && c.username === msg.senderUsername) ||
+            (c.username && (c.username === targetId || (msg.senderName && c.username === msg.senderName)))
+          );
+        });
 
         let targetChat;
         if (existingIdx !== -1) {
@@ -860,15 +857,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
         const isCurrentlyViewing = Boolean(
           activeChatRef.current && (
-            activeChatRef.current.id === targetChat.id ||
-            activeChatRef.current._id === targetChat.id ||
-            activeChatRef.current.id === msg.chatId ||
-            activeChatRef.current.chatId === msg.chatId ||
-            (activeChatRef.current.username && (activeChatRef.current.username === targetChat.username || activeChatRef.current.username === msg.senderName || activeChatRef.current.username === msg.senderUsername)) ||
-            (msg.chatId && typeof msg.chatId === 'string' && (
-              (activeChatRef.current.id && msg.chatId.includes(activeChatRef.current.id)) ||
-              (activeChatRef.current._id && msg.chatId.includes(activeChatRef.current._id)) ||
-              (activeChatRef.current.username && msg.chatId.includes(activeChatRef.current.username))
+            (msg.isGroup && (activeChatRef.current.id === msg.chatId || activeChatRef.current.id === targetId)) ||
+            (!msg.isGroup && (
+              activeChatRef.current.id === targetId ||
+              activeChatRef.current._id === targetId ||
+              (activeChatRef.current.username && (
+                activeChatRef.current.username === targetId ||
+                activeChatRef.current.username === msg.senderUsername ||
+                activeChatRef.current.username === msg.senderName
+              ))
             ))
           )
         );
@@ -903,10 +900,94 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         }
         return reordered;
       });
+
+      // Also update groups list if group message
+      if (msg.isGroup) {
+        const isCurrentlyViewingGroup = Boolean(
+          activeChatRef.current && (activeChatRef.current.id === msg.chatId || activeChatRef.current.id === targetId)
+        );
+        setGroups(prevGroups => prevGroups.map(g => {
+          if (g.id === (msg.chatId || targetId)) {
+            const currentUnread = g.unreadCount || 0;
+            const newUnread = (isMyMsg || isCurrentlyViewingGroup) ? 0 : currentUnread + 1;
+            return {
+              ...g,
+              lastMessage: contentSnippet,
+              lastMessageTime: msg.timestamp || new Date().toISOString(),
+              unreadCount: newUnread
+            };
+          }
+          return g;
+        }));
+      }
     };
 
     socket.on('new_message', handleSidebarNewMessage);
     socket.on('message_notification', handleSidebarNewMessage);
+
+    // Emoji Reaction update in chat list
+    const handleReactionUpdated = (data) => {
+      if (!data || !data.emoji) return;
+      const { chatId: cId, emoji, userId: reactorId, isAdded } = data;
+      const isMe = Boolean(
+        user?.id && (reactorId === user.id || (user._id && reactorId === user._id) || (user.username && reactorId === user.username))
+      );
+      if (isMe || !isAdded) return;
+
+      const isCurrentlyViewing = Boolean(
+        activeChatRef.current && (
+          activeChatRef.current.id === cId ||
+          activeChatRef.current.chatId === cId ||
+          activeChatRef.current.id === reactorId ||
+          (cId && typeof cId === 'string' && cId.includes('_') && (
+            cId.split('_').includes(activeChatRef.current.id) ||
+            (activeChatRef.current.username && cId.split('_').includes(activeChatRef.current.username))
+          ))
+        )
+      );
+
+      const reactionSnippet = `Reacted ${emoji}`;
+      setRecentChats(prev => {
+        let found = false;
+        const updated = prev.map(c => {
+          const isMatch = Boolean(
+            c.id === cId ||
+            c.id === reactorId ||
+            c._id === reactorId ||
+            (c.username && c.username === reactorId) ||
+            (cId && typeof cId === 'string' && cId.includes('_') && c.id && cId.split('_').includes(c.id))
+          );
+          if (isMatch) {
+            found = true;
+            const currentUnread = c.unreadCount || 0;
+            return {
+              ...c,
+              lastMessage: reactionSnippet,
+              lastMessageTime: new Date().toISOString(),
+              lastMessageTimestamp: new Date().toISOString(),
+              lastMessageFromMe: false,
+              unreadCount: isCurrentlyViewing ? 0 : currentUnread + 1
+            };
+          }
+          return c;
+        });
+
+        if (found) {
+          const sorted = [...updated].sort((a, b) => {
+            const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
+            const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
+            return tB - tA;
+          });
+          if (user?.id) setCachedRecentChats(user.id, sorted);
+          if (!isCurrentlyViewing) {
+            try { playSound('received'); } catch {}
+          }
+          return sorted;
+        }
+        return prev;
+      });
+    };
+    socket.on('reaction_updated', handleReactionUpdated);
 
     // Instant delivery tick update in chat list
     const handleDeliveryUpdate = ({ messageId, chatId: cId, status }) => {
@@ -951,6 +1032,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           );
           return isMatch ? { ...c, unreadCount: 0 } : c;
         }));
+        setGroups(prev => prev.map(g => g.id === cId ? { ...g, unreadCount: 0 } : g));
       }
     };
     socket.on('chat_read_update', handleChatRead);
@@ -1079,6 +1161,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     return () => {
       socket.off('new_message', handleSidebarNewMessage);
       socket.off('message_notification', handleSidebarNewMessage);
+      socket.off('reaction_updated', handleReactionUpdated);
       socket.off('message_delivered_update', handleDeliveryUpdate);
       socket.off('messages_delivered');
       socket.off('chat_read_update', handleChatRead);
@@ -1869,9 +1952,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           }}
         >
           <span>GROUPS</span>
-          <span style={{ fontSize: '0.75rem', background: 'var(--hover-bg)', padding: '2px 7px', borderRadius: '10px', color: 'var(--text-muted)' }}>
-            {groups.length}
-          </span>
+          {groups.reduce((acc, g) => acc + (g.unreadCount || 0), 0) > 0 ? (
+            <span className="unread-badge" style={{ fontSize: '0.72rem', padding: '1px 6px', height: '18px' }}>
+              {groups.reduce((acc, g) => acc + (g.unreadCount || 0), 0)}
+            </span>
+          ) : (
+            <span style={{ fontSize: '0.75rem', background: 'var(--hover-bg)', padding: '2px 7px', borderRadius: '10px', color: 'var(--text-muted)' }}>
+              {groups.length}
+            </span>
+          )}
         </button>
 
         <button
@@ -2137,9 +2226,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     style={{ width: '48px', height: '48px', borderRadius: '14px', objectFit: 'cover', flexShrink: 0 }}
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</h4>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <h4 style={{ fontSize: '1rem', fontWeight: g.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</h4>
+                      {g.unreadCount > 0 && (
+                        <span className="unread-badge">
+                          {g.unreadCount}
+                        </span>
+                      )}
+                    </div>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {g.description || `${g.members?.length || 0} members`}
+                      {g.lastMessage || g.description || `${g.members?.length || 0} members`}
                     </p>
                   </div>
                 </div>
@@ -2169,7 +2265,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 {recentChats.map(u => (
                   <div
                     key={u.id}
-                    onClick={() => handleSelectUser(u)}
+                    onClick={() => u.isGroup ? handleSelectGroup(u) : handleSelectUser(u)}
                     className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
                     style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
                   >

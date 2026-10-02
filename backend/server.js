@@ -640,6 +640,10 @@ io.on('connection', (socket) => {
       if (resolvedReceiverId && !isGroup) {
         io.to(`user_${resolvedReceiverId}`).emit('new_message', newMsg);
         io.to(`user_${resolvedReceiverId}`).emit('message_notification', newMsg);
+        redis.invalidateRecent(resolvedReceiverId).catch(() => {});
+        redis.invalidateRecent(senderId).catch(() => {});
+      } else if (isGroup) {
+        redis.invalidateAllRecent().catch(() => {});
       }
 
       // 3. Concurrently save to MongoDB (zero blocking on emission)
@@ -937,6 +941,9 @@ io.on('connection', (socket) => {
         }
       }
     }
+    if (readerId) {
+      redis.invalidateRecent(readerId).catch(() => {});
+    }
   });
 
   // Toggle Disappearing Messages via Socket
@@ -972,10 +979,13 @@ io.on('connection', (socket) => {
       const userReactions = updatedMsg.reactions?.[emoji] || [];
       const isAdded = userReactions.includes(userId);
 
-      io.to(chatId).emit('reaction_updated', { messageId, reactions: updatedMsg.reactions, emoji, userId, isAdded });
+      io.to(chatId).emit('reaction_updated', { messageId, chatId, reactions: updatedMsg.reactions, emoji, userId, isAdded });
       if (chatId && chatId.includes('_')) {
         const parts = chatId.split('_');
-        parts.forEach(uId => io.to(`user_${uId}`).emit('reaction_updated', { messageId, reactions: updatedMsg.reactions, emoji, userId, isAdded }));
+        parts.forEach(uId => {
+          io.to(`user_${uId}`).emit('reaction_updated', { messageId, chatId, reactions: updatedMsg.reactions, emoji, userId, isAdded });
+          redis.invalidateRecent(uId).catch(() => {});
+        });
       }
     }
   });

@@ -3927,42 +3927,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Live Drawboard</span>
               </button>
 
-              {/* 5. Emoji & Stickers */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  setShowEmoji(prev => !prev);
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.35)'
-                }}>
-                  <Smile size={20} />
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Emojis</span>
-              </button>
             </div>
           )}
 
@@ -4056,6 +4020,36 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 <circle cx="7" cy="17" r="2.5" />
                 <circle cx="17" cy="17" r="2.5" />
               </svg>
+            </button>
+          )}
+
+          {/* Emoji Button Beside 4-Dot Button */}
+          {!showRecorder && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowEmoji(prev => !prev);
+                setShowActionGrid(false);
+              }}
+              className="icon-btn-ghost"
+              title="Emoji Picker"
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                background: showEmoji ? 'rgba(245, 158, 11, 0.22)' : 'var(--bg-card)',
+                color: showEmoji ? '#f59e0b' : 'var(--text-muted)',
+                border: showEmoji ? '1px solid rgba(245, 158, 11, 0.6)' : '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                transition: 'all 0.15s ease',
+                cursor: 'pointer',
+                boxShadow: showEmoji ? '0 0 10px rgba(245, 158, 11, 0.35)' : 'none'
+              }}
+            >
+              <Smile size={20} />
             </button>
           )}
 
