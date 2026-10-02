@@ -358,7 +358,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
   const currentSparks = user?.pulseSparks ?? 50;
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1300 }}>
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 30000 }}>
       <div
         className="modal-card modal-responsive modal-card-animated"
         onClick={(e) => e.stopPropagation()}

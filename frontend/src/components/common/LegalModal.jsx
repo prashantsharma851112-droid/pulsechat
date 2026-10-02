@@ -12,7 +12,7 @@ export default function LegalModal({ initialTab = 'privacy', onClose }) {
       right: 0,
       bottom: 0,
       backgroundColor: '#0a0d14',
-      zIndex: 9999,
+      zIndex: 40000,
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden'

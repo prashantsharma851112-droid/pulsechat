@@ -12,6 +12,7 @@ import { BACKEND_URL } from '../../utils/config';
 import PulseProModal from '../chat/PulseProModal';
 import PulseVipBadge from '../common/PulseVipBadge';
 import AppFeatureTourModal from '../common/AppFeatureTourModal';
+import LegalModal from '../common/LegalModal';
 import { useBackHandler } from '../../utils/backNavigation';
 
 const THEMES = [
@@ -55,6 +56,7 @@ export default function SettingsModal({
   const [loadingBlocked, setLoadingBlocked] = useState(false);
   const [showProModal, setShowProModal] = useState(false);
   const [showTourModal, setShowTourModal] = useState(false);
+  const [legalViewTab, setLegalViewTab] = useState(null);
 
   // Storage Cleanup States
   const [cleaningStorage, setCleaningStorage] = useState(false);
@@ -77,6 +79,7 @@ export default function SettingsModal({
   // Hardware/Swipe Back button hierarchy:
   // Sub-modals -> Active category section -> Close Settings modal
   useBackHandler(() => {
+    if (legalViewTab) { setLegalViewTab(null); return; }
     if (showDeleteModal) { setShowDeleteModal(false); return; }
     if (showBlockedModal) { setShowBlockedModal(false); return; }
     if (showTourModal) { setShowTourModal(false); return; }
@@ -193,7 +196,7 @@ export default function SettingsModal({
   const currentThemeObj = THEMES.find(t => t.id === theme) || THEMES[0];
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 12000 }}>
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 10000 }}>
       <div
         className="modal-card modal-responsive modal-card-animated"
         onClick={e => e.stopPropagation()}
@@ -1391,7 +1394,7 @@ export default function SettingsModal({
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   <button
                     type="button"
-                    onClick={() => window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'privacy' } }))}
+                    onClick={() => setLegalViewTab('privacy')}
                     style={{
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border)',
@@ -1411,7 +1414,7 @@ export default function SettingsModal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'terms' } }))}
+                    onClick={() => setLegalViewTab('terms')}
                     style={{
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border)',
@@ -1431,7 +1434,7 @@ export default function SettingsModal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'refund' } }))}
+                    onClick={() => setLegalViewTab('refund')}
                     style={{
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border)',
@@ -1451,7 +1454,7 @@ export default function SettingsModal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'contact' } }))}
+                    onClick={() => setLegalViewTab('contact')}
                     style={{
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border)',
@@ -1733,6 +1736,14 @@ export default function SettingsModal({
           <PulseProModal
             initialTab="pro"
             onClose={() => setShowProModal(false)}
+          />
+        )}
+
+        {/* Legal Policies Modal (Privacy, Terms, Refund, Contact) */}
+        {legalViewTab && (
+          <LegalModal
+            initialTab={legalViewTab}
+            onClose={() => setLegalViewTab(null)}
           />
         )}
       </div>

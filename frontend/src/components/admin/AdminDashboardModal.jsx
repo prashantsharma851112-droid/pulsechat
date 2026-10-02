@@ -205,7 +205,7 @@ export default function AdminDashboardModal({ onClose }) {
   }) || [];
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1300 }}>
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 25000 }}>
       <div
         className="modal-card modal-responsive modal-card-animated"
         onClick={(e) => e.stopPropagation()}

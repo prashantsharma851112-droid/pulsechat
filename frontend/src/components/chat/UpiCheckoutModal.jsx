@@ -107,7 +107,7 @@ export default function UpiCheckoutModal({ plan, onClose, onSuccess }) {
       bottom: 0,
       backgroundColor: 'rgba(0, 0, 0, 0.88)',
       backdropFilter: 'blur(10px)',
-      zIndex: 10001,
+      zIndex: 35000,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
