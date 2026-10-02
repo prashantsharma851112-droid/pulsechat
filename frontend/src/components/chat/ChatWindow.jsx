@@ -763,6 +763,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [showEmoji, setShowEmoji] = useState(false);
   const [showCreatePoll, setShowCreatePoll] = useState(false);
   const [showWhiteboard, setShowWhiteboard] = useState(false);
+  const [whiteboardInitialImage, setWhiteboardInitialImage] = useState(null);
+  const [whiteboardInitialData, setWhiteboardInitialData] = useState(null);
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   const [showGroupProfileModal, setShowGroupProfileModal] = useState(false);
   const [showProModal, setShowProModal] = useState(false);
@@ -1988,10 +1990,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleOpenWhiteboard = () => {
     setShowMoreMenu(false);
+    setWhiteboardInitialImage(null);
+    setWhiteboardInitialData(null);
     setShowWhiteboard(true);
     if (socket && chatId) {
       socket.emit('request_open_whiteboard', { chatId, senderId: user?.id, receiverId: isGroup ? '' : activeChat?.id });
     }
+  };
+
+  const handleOpenWhiteboardForEdit = (drawingUrl, whiteboardData) => {
+    setWhiteboardInitialImage(drawingUrl);
+    setWhiteboardInitialData(whiteboardData || null);
+    setShowWhiteboard(true);
   };
 
   const handleSendDrawing = (mediaUrl) => {
@@ -2004,10 +2014,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       mediaUrl,
       type: 'image',
       content: '🎨 Whiteboard Drawing',
-      fileName: `pulsechat_drawing_${Date.now()}.png`
+      fileName: `pulsechat_drawing_${Date.now()}.png`,
+      isDrawing: true
     });
     playSound('sent');
     setShowWhiteboard(false);
+    setWhiteboardInitialImage(null);
+    setWhiteboardInitialData(null);
   };
 
   const handleFileSelect = (e) => {
@@ -3424,6 +3437,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 }}
                 onOpenStory={handleOpenStory}
                 onOpenSparksWallet={() => setShowSparksWallet(true)}
+                onEditDrawing={handleOpenWhiteboardForEdit}
               />
             </React.Fragment>
           );
@@ -4205,10 +4219,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {showWhiteboard && (
         <WhiteboardModal
-          onClose={() => setShowWhiteboard(false)}
+          onClose={() => {
+            setShowWhiteboard(false);
+            setWhiteboardInitialImage(null);
+            setWhiteboardInitialData(null);
+          }}
           chatTitle={activeChat.displayName}
           chatId={chatId}
           onSendDrawing={handleSendDrawing}
+          initialImage={whiteboardInitialImage}
+          initialData={whiteboardInitialData}
         />
       )}
 

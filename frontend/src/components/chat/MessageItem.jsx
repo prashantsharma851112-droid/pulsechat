@@ -503,7 +503,8 @@ export default function MessageItem({
   onOpenCustomizeReactions,
   onDismissAction,
   onOpenStory,
-  onOpenSparksWallet
+  onOpenSparksWallet,
+  onEditDrawing
 }) {
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
@@ -1167,7 +1168,7 @@ export default function MessageItem({
                     cursor: 'pointer'
                   }}
                 />
-                {/* Floating Download & Fullscreen Controls */}
+                {/* Floating Download, Edit & Fullscreen Controls */}
                 <div style={{
                   position: 'absolute',
                   top: '8px',
@@ -1177,6 +1178,36 @@ export default function MessageItem({
                   gap: '6px',
                   zIndex: 10
                 }}>
+                  {onEditDrawing && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditDrawing(message.mediaUrl, message.whiteboardData);
+                      }}
+                      style={{
+                        background: 'rgba(99, 102, 241, 0.88)',
+                        backdropFilter: 'blur(8px)',
+                        color: '#fff',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '20px',
+                        padding: '5px 10px',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)',
+                        transition: 'all 0.2s ease'
+                      }}
+                      title="Edit this drawing on Live Drawboard"
+                    >
+                      <Edit3 size={12} />
+                      <span>Edit</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={(e) => {
@@ -1837,6 +1868,33 @@ export default function MessageItem({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {onEditDrawing && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowImagePreview(false);
+                    onEditDrawing(message.mediaUrl, message.whiteboardData);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'var(--accent, #6366f1)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '8px 14px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)'
+                  }}
+                  title="Open and edit on Live Drawboard"
+                >
+                  <Edit3 size={15} />
+                  <span>Edit Drawing ✏️</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={(e) => handleDownloadMedia(

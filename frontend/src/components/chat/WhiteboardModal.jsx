@@ -2,7 +2,8 @@ import React, { useRef, useState, useEffect, useContext, useMemo, useCallback } 
 import {
   X, Eraser, RotateCcw, RotateCw, Paintbrush, Send, Sparkles,
   Square, Circle, Minus, MoveUpRight, Triangle, Smile, Sliders, Undo2, Redo2, Download, Presentation,
-  Type, Trash2, Edit3, Search, Plus, Palette, Layers, Check, RefreshCw
+  Type, Trash2, Edit3, Search, Plus, Palette, Layers, Check, RefreshCw,
+  Diamond, Zap, Star, Pentagon, Hexagon, Octagon, Heart, Moon, Sun, Shield, MessageSquare, Cloud, Database, Box, ArrowLeftRight
 } from 'lucide-react';
 import { SocketContext } from '../../context/SocketContext';
 import { useBackHandler } from '../../utils/backNavigation';
@@ -23,15 +24,71 @@ const BOARD_BG_PRESETS = [
   { id: 'cream', name: 'Parchment', color: '#fef3c7' }
 ];
 
-const SHAPES = [
-  { id: 'rectangle', name: 'Rectangle', icon: Square },
-  { id: 'circle', name: 'Circle', icon: Circle },
-  { id: 'line', name: 'Line', icon: Minus },
-  { id: 'arrow', name: 'Arrow', icon: MoveUpRight },
-  { id: 'triangle', name: 'Triangle', icon: Triangle }
+const SHAPE_CATEGORIES = [
+  { id: 'all', label: 'All ✨' },
+  { id: 'basic', label: 'Basic 🔲' },
+  { id: 'lines', label: 'Lines & Arrows ➔' },
+  { id: 'polygons', label: 'Polygons ⬡' },
+  { id: 'symbols', label: 'Symbols ❤️' },
+  { id: 'callouts', label: 'Callouts 💬' },
+  { id: 'diagram', label: '3D & Flow 📦' }
 ];
 
-export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDrawing }) {
+const ALL_SHAPES = [
+  // Basic
+  { id: 'rectangle', name: 'Rectangle', category: 'basic', icon: Square },
+  { id: 'rounded_rectangle', name: 'Rounded Rect', category: 'basic', icon: Square },
+  { id: 'square', name: 'Square', category: 'basic', icon: Square },
+  { id: 'circle', name: 'Circle', category: 'basic', icon: Circle },
+  { id: 'ellipse', name: 'Ellipse / Oval', category: 'basic', icon: Circle },
+  { id: 'triangle', name: 'Triangle', category: 'basic', icon: Triangle },
+  { id: 'right_triangle', name: 'Right Triangle', category: 'basic', icon: Triangle },
+  { id: 'diamond', name: 'Diamond / Rhombus', category: 'basic', icon: Diamond },
+  { id: 'parallelogram', name: 'Parallelogram', category: 'basic', icon: Square },
+  { id: 'trapezoid', name: 'Trapezoid', category: 'basic', icon: Triangle },
+
+  // Lines & Arrows
+  { id: 'line', name: 'Solid Line', category: 'lines', icon: Minus },
+  { id: 'dashed_line', name: 'Dashed Line', category: 'lines', icon: Minus },
+  { id: 'dotted_line', name: 'Dotted Line', category: 'lines', icon: Minus },
+  { id: 'arrow', name: 'Single Arrow', category: 'lines', icon: MoveUpRight },
+  { id: 'double_arrow', name: 'Double Arrow', category: 'lines', icon: ArrowLeftRight },
+  { id: 'lightning', name: 'Lightning Bolt ⚡', category: 'lines', icon: Zap },
+
+  // Polygons & Stars
+  { id: 'star5', name: '5-Point Star ⭐', category: 'polygons', icon: Star },
+  { id: 'star4', name: '4-Point Sparkle ✦', category: 'polygons', icon: Sparkles },
+  { id: 'star6', name: '6-Point Star ✡', category: 'polygons', icon: Star },
+  { id: 'pentagon', name: 'Pentagon (5)', category: 'polygons', icon: Pentagon },
+  { id: 'hexagon', name: 'Hexagon (6)', category: 'polygons', icon: Hexagon },
+  { id: 'octagon', name: 'Octagon (8)', category: 'polygons', icon: Octagon },
+
+  // Symbols
+  { id: 'heart', name: 'Heart ❤️', category: 'symbols', icon: Heart },
+  { id: 'crescent_moon', name: 'Crescent Moon 🌙', category: 'symbols', icon: Moon },
+  { id: 'sun', name: 'Sunburst ☀️', category: 'symbols', icon: Sun },
+  { id: 'cross', name: 'Cross / Plus ➕', category: 'symbols', icon: Plus },
+  { id: 'check', name: 'Checkmark ✔️', category: 'symbols', icon: Check },
+  { id: 'shield', name: 'Shield 🛡️', category: 'symbols', icon: Shield },
+
+  // Callouts
+  { id: 'speech_bubble', name: 'Speech Bubble 💬', category: 'callouts', icon: MessageSquare },
+  { id: 'thought_bubble', name: 'Thought Cloud 💭', category: 'callouts', icon: Cloud },
+  { id: 'cloud', name: 'Cloud ☁️', category: 'callouts', icon: Cloud },
+
+  // Diagram & 3D
+  { id: 'cylinder', name: 'Cylinder 🛢️', category: 'diagram', icon: Database },
+  { id: 'cube', name: '3D Box / Cube 📦', category: 'diagram', icon: Box }
+];
+
+export default function WhiteboardModal({
+  onClose,
+  chatTitle,
+  chatId,
+  onSendDrawing,
+  initialImage,
+  initialData
+}) {
   const { socket } = useContext(SocketContext);
   const canvasRef = useRef(null);
   const isDrawingRef = useRef(false);
@@ -50,7 +107,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
   const redoStackRef = useRef([]);
 
   // Board Background Color State
-  const [boardColor, setBoardColor] = useState('#0f172a');
+  const [boardColor, setBoardColor] = useState(initialData?.boardColor || '#0f172a');
   const [showBoardColorMenu, setShowBoardColorMenu] = useState(false);
 
   // Drawing Tools State
@@ -66,8 +123,12 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
+  // Shapes Category & Search State (Unlimited Shapes!)
+  const [shapeCategory, setShapeCategory] = useState('all');
+  const [shapeSearch, setShapeSearch] = useState('');
+
   // Text Tool State
-  const [textElements, setTextElements] = useState([]);
+  const [textElements, setTextElements] = useState(initialData?.textElements || []);
   const [selectedTextId, setSelectedTextId] = useState(null);
   const [editingTextId, setEditingTextId] = useState(null);
   const [textInput, setTextInput] = useState('');
@@ -75,7 +136,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
   const [isTextBold, setIsTextBold] = useState(true);
 
   // Stickers / Emojis State
-  const [stickerElements, setStickerElements] = useState([]);
+  const [stickerElements, setStickerElements] = useState(initialData?.stickerElements || []);
   const [selectedStickerId, setSelectedStickerId] = useState(null);
   const [stickerSize, setStickerSize] = useState(40);
   const [emojiCategory, setEmojiCategory] = useState('all');
@@ -124,9 +185,9 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     onClose();
   }, true);
 
-  // Check for previous saved draft on mount
+  // Check for previous saved draft on mount (only if not editing an existing chat drawing)
   useEffect(() => {
-    if (!chatId) return;
+    if (!chatId || initialImage) return;
     try {
       const raw = localStorage.getItem(`pulse_wb_draft_${chatId}`);
       if (raw) {
@@ -137,7 +198,20 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
         }
       }
     } catch (e) {}
-  }, [chatId]);
+  }, [chatId, initialImage]);
+
+  // Filtered unlimited shapes
+  const displayedShapes = useMemo(() => {
+    let list = ALL_SHAPES;
+    if (shapeCategory !== 'all') {
+      list = list.filter(s => s.category === shapeCategory);
+    }
+    if (shapeSearch.trim()) {
+      const q = shapeSearch.trim().toLowerCase();
+      list = list.filter(s => s.name.toLowerCase().includes(q));
+    }
+    return list;
+  }, [shapeCategory, shapeSearch]);
 
   // Filtered unlimited emojis for sticker picker
   const displayedEmojis = useMemo(() => {
@@ -151,6 +225,23 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     const cat = EMOJI_CATEGORIES.find(c => c.id === emojiCategory);
     return cat ? cat.emojis : ALL_EMOJIS;
   }, [emojiCategory, emojiSearch]);
+
+  // Load initialImage when editing an existing drawing from chat
+  useEffect(() => {
+    if (!initialImage) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      pushUndoSnapshot();
+    };
+    img.src = initialImage;
+  }, [initialImage]);
 
   // Restore Draft Function
   const handleRestoreDraft = () => {
@@ -371,7 +462,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     }
   };
 
-  // Draw shape onto canvas context
+  // Comprehensive Mathematical Renderer for 30+ Unlimited Shapes
   const drawShapeOnContext = (ctx, shapeType, x0, y0, x1, y1, strokeColor, strokeWidth) => {
     ctx.save();
     ctx.beginPath();
@@ -380,36 +471,407 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    if (shapeType === 'rectangle') {
-      ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
-    } else if (shapeType === 'circle') {
-      const radius = Math.sqrt(Math.pow(x1 - x0, 2) + Math.pow(y1 - y0, 2));
-      ctx.arc(x0, y0, radius, 0, 2 * Math.PI);
-      ctx.stroke();
-    } else if (shapeType === 'line') {
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
-    } else if (shapeType === 'arrow') {
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
+    const minX = Math.min(x0, x1);
+    const maxX = Math.max(x0, x1);
+    const minY = Math.min(y0, y1);
+    const maxY = Math.max(y0, y1);
+    const w = Math.max(2, maxX - minX);
+    const h = Math.max(2, maxY - minY);
+    const midX = (x0 + x1) / 2;
+    const midY = (y0 + y1) / 2;
 
-      const angle = Math.atan2(y1 - y0, x1 - x0);
-      const headLen = Math.max(12, strokeWidth * 3);
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x1 - headLen * Math.cos(angle - Math.PI / 6), y1 - headLen * Math.sin(angle - Math.PI / 6));
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x1 - headLen * Math.cos(angle + Math.PI / 6), y1 - headLen * Math.sin(angle + Math.PI / 6));
-      ctx.stroke();
-    } else if (shapeType === 'triangle') {
-      ctx.moveTo(x0, y1);
-      ctx.lineTo((x0 + x1) / 2, y0);
-      ctx.lineTo(x1, y1);
-      ctx.closePath();
-      ctx.stroke();
+    switch (shapeType) {
+      case 'rectangle':
+        ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+        break;
+
+      case 'rounded_rectangle': {
+        const r = Math.min(16, w / 4, h / 4);
+        if (ctx.roundRect) {
+          ctx.roundRect(minX, minY, w, h, r);
+          ctx.stroke();
+        } else {
+          ctx.strokeRect(minX, minY, w, h);
+        }
+        break;
+      }
+
+      case 'square': {
+        const sSize = Math.min(w, h);
+        const sx = x1 >= x0 ? x0 : x0 - sSize;
+        const sy = y1 >= y0 ? y0 : y0 - sSize;
+        ctx.strokeRect(sx, sy, sSize, sSize);
+        break;
+      }
+
+      case 'circle': {
+        const radius = Math.sqrt(Math.pow(x1 - x0, 2) + Math.pow(y1 - y0, 2));
+        ctx.arc(x0, y0, radius, 0, 2 * Math.PI);
+        ctx.stroke();
+        break;
+      }
+
+      case 'ellipse': {
+        const rx = Math.max(1, w / 2);
+        const ry = Math.max(1, h / 2);
+        ctx.ellipse(midX, midY, rx, ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+
+      case 'triangle':
+        ctx.moveTo(x0, y1);
+        ctx.lineTo(midX, y0);
+        ctx.lineTo(x1, y1);
+        ctx.closePath();
+        ctx.stroke();
+        break;
+
+      case 'right_triangle':
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x0, y1);
+        ctx.lineTo(x1, y1);
+        ctx.closePath();
+        ctx.stroke();
+        break;
+
+      case 'diamond':
+        ctx.moveTo(midX, y0);
+        ctx.lineTo(x1, midY);
+        ctx.lineTo(midX, y1);
+        ctx.lineTo(x0, midY);
+        ctx.closePath();
+        ctx.stroke();
+        break;
+
+      case 'parallelogram': {
+        const offset = (x1 - x0) * 0.25;
+        ctx.moveTo(x0 + offset, y0);
+        ctx.lineTo(x1, y0);
+        ctx.lineTo(x1 - offset, y1);
+        ctx.lineTo(x0, y1);
+        ctx.closePath();
+        ctx.stroke();
+        break;
+      }
+
+      case 'trapezoid': {
+        const topOffset = (x1 - x0) * 0.2;
+        ctx.moveTo(x0 + topOffset, y0);
+        ctx.lineTo(x1 - topOffset, y0);
+        ctx.lineTo(x1, y1);
+        ctx.lineTo(x0, y1);
+        ctx.closePath();
+        ctx.stroke();
+        break;
+      }
+
+      case 'pentagon': {
+        const radius = Math.max(w, h) / 2;
+        for (let i = 0; i < 5; i++) {
+          const angle = (i * 2 * Math.PI) / 5 - Math.PI / 2;
+          const px = midX + radius * Math.cos(angle);
+          const py = midY + radius * Math.sin(angle);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        break;
+      }
+
+      case 'hexagon': {
+        const radius = Math.max(w, h) / 2;
+        for (let i = 0; i < 6; i++) {
+          const angle = (i * 2 * Math.PI) / 6;
+          const px = midX + radius * Math.cos(angle);
+          const py = midY + radius * Math.sin(angle);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        break;
+      }
+
+      case 'octagon': {
+        const radius = Math.max(w, h) / 2;
+        for (let i = 0; i < 8; i++) {
+          const angle = (i * 2 * Math.PI) / 8 + Math.PI / 8;
+          const px = midX + radius * Math.cos(angle);
+          const py = midY + radius * Math.sin(angle);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        break;
+      }
+
+      case 'star5': {
+        const outerR = Math.max(w, h) / 2;
+        const innerR = outerR * 0.42;
+        for (let i = 0; i < 10; i++) {
+          const angle = (i * Math.PI) / 5 - Math.PI / 2;
+          const r = i % 2 === 0 ? outerR : innerR;
+          const px = midX + r * Math.cos(angle);
+          const py = midY + r * Math.sin(angle);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        break;
+      }
+
+      case 'star4': {
+        const outerR = Math.max(w, h) / 2;
+        const innerR = outerR * 0.22;
+        for (let i = 0; i < 8; i++) {
+          const angle = (i * Math.PI) / 4 - Math.PI / 2;
+          const r = i % 2 === 0 ? outerR : innerR;
+          const px = midX + r * Math.cos(angle);
+          const py = midY + r * Math.sin(angle);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        break;
+      }
+
+      case 'star6': {
+        const outerR = Math.max(w, h) / 2;
+        const innerR = outerR * 0.52;
+        for (let i = 0; i < 12; i++) {
+          const angle = (i * Math.PI) / 6 - Math.PI / 2;
+          const r = i % 2 === 0 ? outerR : innerR;
+          const px = midX + r * Math.cos(angle);
+          const py = midY + r * Math.sin(angle);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        break;
+      }
+
+      case 'line':
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        break;
+
+      case 'dashed_line':
+        ctx.setLineDash([strokeWidth * 3, strokeWidth * 2]);
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        break;
+
+      case 'dotted_line':
+        ctx.setLineDash([strokeWidth, strokeWidth * 2]);
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        break;
+
+      case 'arrow': {
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        const angle = Math.atan2(y1 - y0, x1 - x0);
+        const headLen = Math.max(12, strokeWidth * 3);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 - headLen * Math.cos(angle - Math.PI / 6), y1 - headLen * Math.sin(angle - Math.PI / 6));
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 - headLen * Math.cos(angle + Math.PI / 6), y1 - headLen * Math.sin(angle + Math.PI / 6));
+        ctx.stroke();
+        break;
+      }
+
+      case 'double_arrow': {
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        const angle = Math.atan2(y1 - y0, x1 - x0);
+        const headLen = Math.max(12, strokeWidth * 3);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 - headLen * Math.cos(angle - Math.PI / 6), y1 - headLen * Math.sin(angle - Math.PI / 6));
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 - headLen * Math.cos(angle + Math.PI / 6), y1 - headLen * Math.sin(angle + Math.PI / 6));
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x0 + headLen * Math.cos(angle - Math.PI / 6), y0 + headLen * Math.sin(angle - Math.PI / 6));
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x0 + headLen * Math.cos(angle + Math.PI / 6), y0 + headLen * Math.sin(angle + Math.PI / 6));
+        ctx.stroke();
+        break;
+      }
+
+      case 'lightning': {
+        const dx = x1 - x0;
+        const dy = y1 - y0;
+        ctx.moveTo(x0 + dx * 0.45, y0);
+        ctx.lineTo(x0 + dx * 0.15, y0 + dy * 0.45);
+        ctx.lineTo(x0 + dx * 0.45, y0 + dy * 0.45);
+        ctx.lineTo(x0 + dx * 0.25, y1);
+        ctx.lineTo(x0 + dx * 0.85, y0 + dy * 0.42);
+        ctx.lineTo(x0 + dx * 0.55, y0 + dy * 0.42);
+        ctx.closePath();
+        ctx.stroke();
+        break;
+      }
+
+      case 'heart': {
+        const bw = x1 - x0;
+        const bh = y1 - y0;
+        const topY = y0 + bh * 0.28;
+        ctx.moveTo(x0 + bw / 2, y1);
+        ctx.bezierCurveTo(x0 - bw * 0.1, y0 + bh * 0.6, x0, topY, x0 + bw / 4, y0);
+        ctx.bezierCurveTo(x0 + bw / 2, y0, x0 + bw / 2, topY, x0 + bw / 2, topY);
+        ctx.bezierCurveTo(x0 + bw / 2, topY, x0 + bw / 2, y0, x0 + (3 * bw) / 4, y0);
+        ctx.bezierCurveTo(x1, topY, x1 + bw * 0.1, y0 + bh * 0.6, x0 + bw / 2, y1);
+        ctx.stroke();
+        break;
+      }
+
+      case 'crescent_moon': {
+        const r = Math.max(w, h) / 2;
+        ctx.arc(midX, midY, r, 0.4 * Math.PI, 1.6 * Math.PI);
+        ctx.bezierCurveTo(midX + r * 0.5, midY - r * 0.5, midX + r * 0.5, midY + r * 0.5, midX + r * Math.cos(0.4 * Math.PI), midY + r * Math.sin(0.4 * Math.PI));
+        ctx.stroke();
+        break;
+      }
+
+      case 'sun': {
+        const r = Math.max(w, h) / 3.5;
+        ctx.arc(midX, midY, r, 0, Math.PI * 2);
+        ctx.stroke();
+        for (let i = 0; i < 8; i++) {
+          const angle = (i * Math.PI) / 4;
+          const xStart = midX + (r + 4) * Math.cos(angle);
+          const yStart = midY + (r + 4) * Math.sin(angle);
+          const xEnd = midX + (r * 1.55) * Math.cos(angle);
+          const yEnd = midY + (r * 1.55) * Math.sin(angle);
+          ctx.beginPath();
+          ctx.moveTo(xStart, yStart);
+          ctx.lineTo(xEnd, yEnd);
+          ctx.stroke();
+        }
+        break;
+      }
+
+      case 'cross': {
+        ctx.moveTo(midX, minY);
+        ctx.lineTo(midX, maxY);
+        ctx.moveTo(minX, midY);
+        ctx.lineTo(maxX, midY);
+        ctx.stroke();
+        break;
+      }
+
+      case 'check':
+        ctx.moveTo(minX + w * 0.1, minY + h * 0.55);
+        ctx.lineTo(minX + w * 0.4, maxY - h * 0.1);
+        ctx.lineTo(maxX - w * 0.1, minY + h * 0.15);
+        ctx.stroke();
+        break;
+
+      case 'shield': {
+        ctx.moveTo(minX, minY);
+        ctx.lineTo(maxX, minY);
+        ctx.bezierCurveTo(maxX, minY + h * 0.6, midX, maxY, midX, maxY);
+        ctx.bezierCurveTo(midX, maxY, minX, minY + h * 0.6, minX, minY);
+        ctx.closePath();
+        ctx.stroke();
+        break;
+      }
+
+      case 'speech_bubble': {
+        const bw = w;
+        const bh = h * 0.75;
+        const r = Math.min(14, bw / 4, bh / 4);
+        if (ctx.roundRect) ctx.roundRect(minX, minY, bw, bh, r);
+        else ctx.strokeRect(minX, minY, bw, bh);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(minX + bw * 0.2, minY + bh);
+        ctx.lineTo(minX + bw * 0.1, maxY);
+        ctx.lineTo(minX + bw * 0.4, minY + bh);
+        ctx.stroke();
+        break;
+      }
+
+      case 'thought_bubble': {
+        const bw = w * 0.9;
+        const bh = h * 0.75;
+        ctx.ellipse(minX + bw / 2, minY + bh / 2, bw / 2, bh / 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(minX + bw * 0.2, minY + bh + h * 0.08, 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(minX + bw * 0.1, minY + bh + h * 0.18, 2.5, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+
+      case 'cloud': {
+        ctx.arc(minX + w * 0.3, minY + h * 0.6, w * 0.2, Math.PI * 0.5, Math.PI * 1.5);
+        ctx.arc(minX + w * 0.5, minY + h * 0.35, w * 0.25, Math.PI * 1.0, Math.PI * 2.0);
+        ctx.arc(minX + w * 0.75, minY + h * 0.55, w * 0.2, Math.PI * 1.5, Math.PI * 0.5);
+        ctx.closePath();
+        ctx.stroke();
+        break;
+      }
+
+      case 'cylinder': {
+        const rx = w / 2;
+        const ry = Math.min(h * 0.16, 26);
+        const topY = minY + ry;
+        const bottomY = maxY - ry;
+        ctx.ellipse(midX, topY, rx, ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(midX, bottomY, rx, ry, 0, 0, Math.PI);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(midX - rx, topY);
+        ctx.lineTo(midX - rx, bottomY);
+        ctx.moveTo(midX + rx, topY);
+        ctx.lineTo(midX + rx, bottomY);
+        ctx.stroke();
+        break;
+      }
+
+      case 'cube': {
+        const d = Math.min(w, h) * 0.28;
+        ctx.strokeRect(minX, minY + d, w - d, h - d);
+        ctx.strokeRect(minX + d, minY, w - d, h - d);
+        ctx.beginPath();
+        ctx.moveTo(minX, minY + d);
+        ctx.lineTo(minX + d, minY);
+        ctx.moveTo(maxX - d, minY + d);
+        ctx.lineTo(maxX, minY);
+        ctx.moveTo(minX, maxY);
+        ctx.lineTo(minX + d, maxY - d);
+        ctx.moveTo(maxX - d, maxY);
+        ctx.lineTo(maxX, maxY - d);
+        ctx.stroke();
+        break;
+      }
+
+      default:
+        ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+        break;
     }
+
     ctx.restore();
   };
 
@@ -997,17 +1459,24 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card modal-responsive" style={{ maxWidth: '780px', width: '96vw', maxHeight: '95dvh', display: 'flex', flexDirection: 'column', margin: 'auto' }}>
+      <div className="modal-card modal-responsive" style={{ maxWidth: '800px', width: '96vw', maxHeight: '95dvh', display: 'flex', flexDirection: 'column', margin: 'auto' }}>
         {/* Modal Header */}
         <div className="modal-header" style={{ padding: '0.75rem 1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Presentation size={20} color="var(--accent)" />
             <div>
-              <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-main)' }}>
-                Live Drawboard — {chatTitle || 'Board'}
+              <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {initialImage ? (
+                  <>
+                    <Edit3 size={15} color="#38bdf8" />
+                    <span>Editing Drawing — {chatTitle || 'Board'}</span>
+                  </>
+                ) : (
+                  <span>Live Drawboard — {chatTitle || 'Board'}</span>
+                )}
               </h3>
               <span style={{ fontSize: '0.7rem', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <Sparkles size={11} /> Smooth Drawing, Custom Boards, Shapes & Stickers
+                <Sparkles size={11} /> Smooth Drawing • Unlimited Shapes ({ALL_SHAPES.length}+) • Edit & Send
               </span>
             </div>
           </div>
@@ -1148,10 +1617,10 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                   setShowStickersMenu(false);
                   setShowBoardColorMenu(false);
                 }}
-                title="Shapes Tool"
+                title="Unlimited Shapes Library"
                 style={{ borderRadius: '8px', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 auto', justifyContent: 'center' }}
               >
-                <Square size={15} /> <span>Shapes</span>
+                <Square size={15} /> <span>Shapes ({ALL_SHAPES.length}+)</span>
               </button>
 
               <button
@@ -1390,7 +1859,7 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
                       flexShrink: 0
                     }}
                   >
-                    <Send size={13} /> Send to Chat
+                    <Send size={13} /> {initialImage ? 'Update in Chat' : 'Send to Chat'}
                   </button>
                 )}
               </div>
@@ -1471,33 +1940,138 @@ export default function WhiteboardModal({ onClose, chatTitle, chatId, onSendDraw
             </div>
           )}
 
-          {/* Shapes Selection Sub-Bar */}
+          {/* Unlimited Shapes Selection Sub-Bar */}
           {showShapesMenu && (
-            <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-sidebar)', padding: '6px 10px', borderRadius: '10px', border: '1px solid var(--border)', alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Choose Shape:</span>
-              {SHAPES.map(s => {
-                const IconComp = s.icon;
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => { setSelectedShape(s.id); setTool('shape'); }}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              background: 'var(--bg-sidebar)',
+              padding: '10px 12px',
+              borderRadius: '12px',
+              border: '1px solid var(--border)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+              animation: 'pulseModalPop 0.18s ease'
+            }}>
+              {/* Header and Search */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Square size={16} color="var(--accent)" />
+                  <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                    Unlimited Shapes ({ALL_SHAPES.length}+)
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    (Pick a shape and drag on board!)
+                  </span>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: 'rgba(0, 0, 0, 0.25)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '8px',
+                  padding: '3px 8px',
+                  flex: '1 1 140px',
+                  maxWidth: '220px'
+                }}>
+                  <Search size={13} color="var(--text-muted)" style={{ marginRight: '6px' }} />
+                  <input
+                    type="text"
+                    placeholder="Search shapes..."
+                    value={shapeSearch}
+                    onChange={e => setShapeSearch(e.target.value)}
                     style={{
-                      background: selectedShape === s.id && tool === 'shape' ? 'var(--accent)' : 'var(--bg-card)',
-                      color: selectedShape === s.id && tool === 'shape' ? '#fff' : 'var(--text-main)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      padding: '4px 10px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-main)',
                       fontSize: '0.78rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      cursor: 'pointer'
+                      outline: 'none',
+                      width: '100%'
+                    }}
+                  />
+                  {shapeSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setShapeSearch('')}
+                      style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Category Pills */}
+              <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '2px' }}>
+                {SHAPE_CATEGORIES.map(cat => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setShapeCategory(cat.id);
+                      setShapeSearch('');
+                    }}
+                    style={{
+                      padding: '3px 9px',
+                      borderRadius: '12px',
+                      background: shapeCategory === cat.id && !shapeSearch ? 'var(--accent)' : 'rgba(255,255,255,0.06)',
+                      color: shapeCategory === cat.id && !shapeSearch ? '#fff' : 'var(--text-muted)',
+                      border: 'none',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
                     }}
                   >
-                    <IconComp size={14} /> {s.name}
+                    {cat.label}
                   </button>
-                );
-              })}
+                ))}
+              </div>
+
+              {/* Shapes Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(115px, 1fr))',
+                gap: '6px',
+                maxHeight: '135px',
+                overflowY: 'auto',
+                padding: '4px',
+                background: 'rgba(0, 0, 0, 0.15)',
+                borderRadius: '8px'
+              }}>
+                {displayedShapes.map(s => {
+                  const IconComp = s.icon;
+                  const isSelected = selectedShape === s.id && tool === 'shape';
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedShape(s.id);
+                        setTool('shape');
+                      }}
+                      style={{
+                        background: isSelected ? 'var(--accent)' : 'rgba(255, 255, 255, 0.05)',
+                        color: isSelected ? '#fff' : 'var(--text-main)',
+                        border: isSelected ? '1.5px solid #fff' : '1px solid rgba(255, 255, 255, 0.08)',
+                        borderRadius: '8px',
+                        padding: '6px 8px',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        cursor: 'pointer',
+                        transition: 'all 0.12s ease'
+                      }}
+                    >
+                      <IconComp size={15} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
