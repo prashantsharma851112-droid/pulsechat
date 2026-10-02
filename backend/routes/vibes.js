@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const authMiddleware = require('../middleware/authMiddleware');
 const Vibe = require('../models/Vibe');
 const User = require('../models/User');
+const SparksTransaction = require('../models/SparksTransaction');
 
 // Create a new 24-hour Vibe Story
 router.post('/create', authMiddleware, async (req, res) => {
@@ -328,13 +329,25 @@ router.post('/react/:vibeId', authMiddleware, async (req, res) => {
     }
 
     if (tipSparks && Number(tipSparks) > 0) {
-      const sparkAmount = Number(tipSparks);
-      if ((sender.pulseSparks || 0) < sparkAmount) {
-        return res.status(400).json({ error: 'Not enough Sparks balance' });
+      const sparkAmount = Math.max(1, Math.floor(Number(tipSparks)));
+
+      // Self-tipping check
+      if (vibe.userId === resolvedSenderId || (sender._id && vibe.userId === sender._id.toString())) {
+        return res.status(400).json({ error: 'You cannot send Sparks to your own story' });
+      }
+
+      const senderCurrentSparks = typeof sender.pulseSparks === 'number' ? sender.pulseSparks : 50;
+      if (senderCurrentSparks < sparkAmount) {
+        return res.status(400).json({
+          error: `Insufficient Sparks balance. You have ${senderCurrentSparks} Sparks, need ${sparkAmount}.`,
+          required: sparkAmount,
+          balance: senderCurrentSparks
+        });
       }
 
       // 1. Deduct from Sender
-      sender.pulseSparks = Math.max(0, (sender.pulseSparks || 0) - sparkAmount);
+      const senderNewBalance = Math.max(0, senderCurrentSparks - sparkAmount);
+      sender.pulseSparks = senderNewBalance;
       await sender.save();
 
       vibe.sparksEarned = (vibe.sparksEarned || 0) + sparkAmount;
@@ -351,16 +364,75 @@ router.post('/react/:vibeId', authMiddleware, async (req, res) => {
         },
         { $inc: { pulseSparks: sparkAmount } },
         { new: true }
-      ).select('id _id username pulseSparks').lean();
+      ).select('id _id username displayName avatar pulseSparks').lean();
 
-      // 3. Broadcast real-time profile update to Author's socket room
+      const canonicalAuthorId = updatedAuthor
+        ? (updatedAuthor.id || updatedAuthor._id?.toString())
+        : vibe.userId;
+
+      // 3. Record Sparks Ledger History for Both Parties
+      try {
+        // Sender Debit Transaction
+        await SparksTransaction.create({
+          userId: resolvedSenderId,
+          type: 'debit',
+          amount: sparkAmount,
+          reason: 'story_tip_sent',
+          title: `Tipped @${vibe.username || 'user'}'s Story`,
+          description: `Sent ⚡ ${sparkAmount} Sparks on story`,
+          relatedUserId: canonicalAuthorId,
+          relatedUserName: updatedAuthor?.displayName || updatedAuthor?.username || vibe.username || 'User',
+          balanceAfter: senderNewBalance,
+          metadata: { vibeId: vibe.id, mediaUrl: vibe.mediaUrl }
+        });
+
+        // Author Credit Transaction
+        if (updatedAuthor) {
+          await SparksTransaction.create({
+            userId: canonicalAuthorId,
+            type: 'credit',
+            amount: sparkAmount,
+            reason: 'story_tip_received',
+            title: `Received Story Tip from @${sender.username || 'user'}`,
+            description: `Received ⚡ ${sparkAmount} Sparks on your story`,
+            relatedUserId: resolvedSenderId,
+            relatedUserName: sender.displayName || sender.username || 'User',
+            balanceAfter: updatedAuthor.pulseSparks,
+            metadata: { vibeId: vibe.id, mediaUrl: vibe.mediaUrl }
+          });
+        }
+      } catch (txErr) {
+        console.warn('Failed to record SparksTransaction for story tip:', txErr);
+      }
+
+      // 4. Broadcast real-time profile and sparks updates to Both Users
       const io = req.app.get('io');
-      if (io && updatedAuthor) {
-        const canonicalAuthorId = updatedAuthor.id || updatedAuthor._id?.toString();
-        io.to(`user_${canonicalAuthorId}`).emit('user_profile_updated', {
-          userId: canonicalAuthorId,
-          userMongoId: updatedAuthor._id ? updatedAuthor._id.toString() : null,
-          pulseSparks: updatedAuthor.pulseSparks
+      if (io) {
+        // Update Author
+        if (updatedAuthor) {
+          io.to(`user_${canonicalAuthorId}`).emit('sparks_updated', {
+            pulseSparks: updatedAuthor.pulseSparks,
+            addedAmount: sparkAmount,
+            type: 'credit',
+            title: `⚡ Received ${sparkAmount} Sparks from @${sender.username || 'user'}!`
+          });
+          io.to(`user_${canonicalAuthorId}`).emit('user_profile_updated', {
+            userId: canonicalAuthorId,
+            userMongoId: updatedAuthor._id ? updatedAuthor._id.toString() : null,
+            pulseSparks: updatedAuthor.pulseSparks
+          });
+        }
+
+        // Update Sender
+        io.to(`user_${resolvedSenderId}`).emit('sparks_updated', {
+          pulseSparks: senderNewBalance,
+          deductedAmount: sparkAmount,
+          type: 'debit',
+          title: `⚡ Sent ${sparkAmount} Sparks to @${vibe.username || 'user'}`
+        });
+        io.to(`user_${resolvedSenderId}`).emit('user_profile_updated', {
+          userId: resolvedSenderId,
+          pulseSparks: senderNewBalance
         });
       }
     }

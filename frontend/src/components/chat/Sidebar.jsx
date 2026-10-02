@@ -14,6 +14,7 @@ import PulseVibesBar from '../vibes/PulseVibesBar';
 import CreateVibeModal from '../vibes/CreateVibeModal';
 import VibeViewerModal from '../vibes/VibeViewerModal';
 import PulseZoneModal from '../zone/PulseZoneModal';
+import SparksWalletModal from './SparksWalletModal';
 import { Gamepad2 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
@@ -103,8 +104,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [showCreateVibe, setShowCreateVibe] = useState(false);
   const [selectedVibeGroup, setSelectedVibeGroup] = useState(null);
   const [showPulseZone, setShowPulseZone] = useState(false);
+  const [showSparksWallet, setShowSparksWallet] = useState(false);
   const [showTopMenu, setShowTopMenu] = useState(false);
   const [showSwitchAccountMenu, setShowSwitchAccountMenu] = useState(false);
+
+  useEffect(() => {
+    const handleOpenWallet = () => setShowSparksWallet(true);
+    window.addEventListener('pulsechat_open_sparks_wallet', handleOpenWallet);
+    return () => window.removeEventListener('pulsechat_open_sparks_wallet', handleOpenWallet);
+  }, []);
 
   // Hardware/Swipe Back button closes popup menus or clears search bar safely
   useBackHandler(() => setShowTopMenu(false), showTopMenu);
@@ -1725,8 +1733,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               {/* Sparks Wallet Balance Card */}
               <div
                 onClick={() => {
-                  setProModalTab('coins');
-                  setShowProModal(true);
+                  setShowSparksWallet(true);
                   setShowTopMenu(false);
                 }}
                 style={{
@@ -1766,13 +1773,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 <span style={{
                   fontSize: '0.72rem',
                   fontWeight: 700,
-                  color: 'var(--accent)',
-                  background: 'var(--bg-card)',
+                  color: '#f59e0b',
+                  background: 'rgba(245, 158, 11, 0.15)',
                   padding: '4px 8px',
                   borderRadius: '8px',
-                  border: '1px solid var(--border)'
+                  border: '1px solid rgba(245, 158, 11, 0.3)'
                 }}>
-                  + Top Up
+                  Wallet ⚡
                 </span>
               </div>
 
@@ -2572,6 +2579,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             setProModalTab('pro');
             setShowProModal(true);
           }}
+        />
+      )}
+
+      {showSparksWallet && (
+        <SparksWalletModal
+          onClose={() => setShowSparksWallet(false)}
         />
       )}
     </div>

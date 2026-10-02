@@ -182,7 +182,7 @@ function StealthDustCard({ message, chatId, isMine, socket }) {
 }
 
 
-function StoryReplyCard({ message, isMine, onOpenStory }) {
+function StoryReplyCard({ message, isMine, onOpenStory, onOpenSparksWallet }) {
   const sr = message.storyReply;
   const isReaction = Boolean(sr?.reactionEmoji || (!sr && message.content && message.content.startsWith('Reacted ') && message.content.includes('story')));
   const isSparks = Boolean(sr?.tipSparks || (!sr && message.content && message.content.startsWith('Tipped ') && message.content.includes('story')));
@@ -412,19 +412,54 @@ function StoryReplyCard({ message, isMine, onOpenStory }) {
           </div>
         </div>
       ) : isSparks ? (
-        /* Sparks Tip on Story */
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '6px 12px',
-          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.12))',
-          border: '1px solid rgba(245, 158, 11, 0.4)',
-          borderRadius: '12px'
-        }}>
-          <span style={{ fontSize: '1.2rem' }}>⚡</span>
-          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f59e0b' }}>
-            {isMyStory ? `Tipped ⚡ ${tipSparks || 10} Sparks on your story!` : `Tipped ⚡ ${tipSparks || 10} Sparks on story!`}
+        /* Sparks Tip on Story - Interactive tap to open Sparks Wallet & History */
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onOpenSparksWallet) {
+              onOpenSparksWallet();
+            } else if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('pulsechat_open_sparks_wallet'));
+            }
+          }}
+          title="Click to view your Sparks Wallet & Balance"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            padding: '8px 12px',
+            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(217, 119, 6, 0.14))',
+            border: '1.5px solid rgba(245, 158, 11, 0.45)',
+            borderRadius: '14px',
+            cursor: 'pointer',
+            transition: 'transform 0.15s ease, background 0.15s ease',
+            boxShadow: '0 4px 14px rgba(245, 158, 11, 0.15)'
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.3rem', filter: 'drop-shadow(0 2px 6px rgba(245, 158, 11, 0.6))' }}>⚡</span>
+            <div>
+              <div style={{ fontSize: '0.86rem', fontWeight: 800, color: '#f59e0b' }}>
+                {isMyStory ? `Tipped ⚡ ${tipSparks || 10} Sparks on your story!` : `Tipped ⚡ ${tipSparks || 10} Sparks on story!`}
+              </div>
+              <div style={{ fontSize: '0.68rem', color: 'rgba(255, 255, 255, 0.75)', fontWeight: 600 }}>
+                Tap to view Sparks Wallet & History
+              </div>
+            </div>
+          </div>
+          <span style={{
+            fontSize: '0.72rem',
+            padding: '3px 8px',
+            borderRadius: '10px',
+            background: 'rgba(245, 158, 11, 0.3)',
+            color: '#fff',
+            fontWeight: 700,
+            whiteSpace: 'nowrap'
+          }}>
+            Wallet →
           </span>
         </div>
       ) : (
@@ -467,7 +502,8 @@ export default function MessageItem({
   onOpenUnlimitedEmoji,
   onOpenCustomizeReactions,
   onDismissAction,
-  onOpenStory
+  onOpenStory,
+  onOpenSparksWallet
 }) {
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
@@ -1029,7 +1065,12 @@ export default function MessageItem({
             (message.content.startsWith('Tipped ') && message.content.includes('story'))
           )
         )) ? (
-          <StoryReplyCard message={message} isMine={isMine} onOpenStory={onOpenStory} />
+          <StoryReplyCard
+            message={message}
+            isMine={isMine}
+            onOpenStory={onOpenStory}
+            onOpenSparksWallet={onOpenSparksWallet}
+          />
         ) : (message.type === 'text' && (
           <p style={{ fontSize: '0.98rem', wordBreak: 'break-word', margin: 0, lineHeight: 1.45 }}>
             {message.content}

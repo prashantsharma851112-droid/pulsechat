@@ -23,6 +23,7 @@ import ForwardModal from './ForwardModal';
 import MessageInfoModal from './MessageInfoModal';
 import SetDefaultReactionsModal from './SetDefaultReactionsModal';
 import VibeViewerModal from '../vibes/VibeViewerModal';
+import SparksWalletModal from './SparksWalletModal';
 import { recordRecentReaction } from '../../utils/quickReactions';
 import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
@@ -128,6 +129,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     window.addEventListener('pulsechat_open_story', onOpenStoryEvent);
     return () => window.removeEventListener('pulsechat_open_story', onOpenStoryEvent);
   }, [handleOpenStory]);
+
+  // Sparks Wallet Modal state
+  const [showSparksWallet, setShowSparksWallet] = useState(false);
+
+  useEffect(() => {
+    const handleOpenWallet = () => setShowSparksWallet(true);
+    window.addEventListener('pulsechat_open_sparks_wallet', handleOpenWallet);
+    return () => window.removeEventListener('pulsechat_open_sparks_wallet', handleOpenWallet);
+  }, []);
 
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showSolidThemeModal, setShowSolidThemeModal] = useState(false);
@@ -3413,6 +3423,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   replyInputRef.current?.focus();
                 }}
                 onOpenStory={handleOpenStory}
+                onOpenSparksWallet={() => setShowSparksWallet(true)}
               />
             </React.Fragment>
           );
@@ -4586,6 +4597,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             setSelectedStoryVibeId(null);
           }}
         />
+      )}
+
+      {/* Sparks Wallet Modal */}
+      {showSparksWallet && (
+        <SparksWalletModal onClose={() => setShowSparksWallet(false)} />
       )}
     </div>
   );

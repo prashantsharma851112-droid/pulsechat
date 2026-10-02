@@ -21,6 +21,7 @@ const paymentRoutes = require('./routes/payments');
 const adminRoutes = require('./routes/admin');
 const vibeRoutes = require('./routes/vibes');
 const zoneRoutes = require('./routes/zone');
+const sparksRoutes = require('./routes/sparks');
 const legalRoutes = require('./routes/legal');
 const { uploadToCloudinary } = require('./utils/cloudinary');
 const { checkAndUpdateFileQuota } = require('./utils/fileQuota');
@@ -60,6 +61,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/vibes', vibeRoutes);
 app.use('/api/zone', zoneRoutes);
+app.use('/api/sparks', sparksRoutes);
 app.use('/', legalRoutes); // Public Google Play URLs: /privacy, /terms
 app.use('/api', legalRoutes);
 

@@ -6,6 +6,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 const User = require('../models/User');
 const Message = require('../models/Message');
 const PaymentTransaction = require('../models/PaymentTransaction');
+const SparksTransaction = require('../models/SparksTransaction');
 const db = require('../database/db');
 const webpush = require('../utils/webpush');
 
@@ -206,7 +207,21 @@ router.post('/verify', authMiddleware, async (req, res) => {
       userDoc.proExpiresAt = new Date(Date.now() + durationMs);
       userDoc.customBadge = '⚡ VIP';
     } else if (plan.type === 'sparks') {
-      userDoc.pulseSparks = (userDoc.pulseSparks || 0) + (plan.sparks || 0);
+      const addedSparks = plan.sparks || 0;
+      userDoc.pulseSparks = (userDoc.pulseSparks || 0) + addedSparks;
+      try {
+        await SparksTransaction.create({
+          userId: userDoc.id || userDoc._id.toString(),
+          type: 'credit',
+          amount: addedSparks,
+          reason: 'sparks_purchase',
+          title: `Purchased ${addedSparks} Sparks ⚡`,
+          description: `Added via ${plan.name || 'Sparks Pack'}`,
+          balanceAfter: userDoc.pulseSparks
+        });
+      } catch (txErr) {
+        console.warn('Failed to record SparksTransaction:', txErr);
+      }
     }
 
     await userDoc.save();
@@ -298,7 +313,21 @@ router.post('/submit-upi', authMiddleware, async (req, res) => {
       userDoc.proExpiresAt = new Date(Date.now() + durationMs);
       userDoc.customBadge = '👑 VIP';
     } else if (plan.type === 'sparks') {
-      userDoc.pulseSparks = (userDoc.pulseSparks || 0) + (plan.sparks || 0);
+      const addedSparks = plan.sparks || 0;
+      userDoc.pulseSparks = (userDoc.pulseSparks || 0) + addedSparks;
+      try {
+        await SparksTransaction.create({
+          userId: userDoc.id || userDoc._id.toString(),
+          type: 'credit',
+          amount: addedSparks,
+          reason: 'sparks_purchase',
+          title: `Purchased ${addedSparks} Sparks ⚡`,
+          description: `Added via UPI (${cleanUtr})`,
+          balanceAfter: userDoc.pulseSparks
+        });
+      } catch (txErr) {
+        console.warn('Failed to record SparksTransaction:', txErr);
+      }
     }
 
     await userDoc.save();
@@ -547,9 +576,42 @@ router.post('/send-gift', authMiddleware, async (req, res) => {
     sender.pulseSparks = currentSparks - gift.sparks;
     await sender.save();
 
+    try {
+      await SparksTransaction.create({
+        userId: sender.id || sender._id.toString(),
+        type: 'debit',
+        amount: gift.sparks,
+        reason: 'gift_sent',
+        title: `Sent ${gift.name} ${gift.icon}`,
+        description: `Virtual gift sent in chat`,
+        relatedUserId: receiverId || '',
+        balanceAfter: sender.pulseSparks
+      });
+    } catch (txErr) {}
+
     // If 1-on-1 chat, credit sparks to receiver
     if (receiverId && !isGroup) {
-      await User.updateOne({ id: receiverId }, { $inc: { pulseSparks: gift.sparks } });
+      const updatedReceiver = await User.findOneAndUpdate(
+        { id: receiverId },
+        { $inc: { pulseSparks: gift.sparks } },
+        { new: true }
+      ).select('id pulseSparks').lean();
+
+      if (updatedReceiver) {
+        try {
+          await SparksTransaction.create({
+            userId: receiverId,
+            type: 'credit',
+            amount: gift.sparks,
+            reason: 'gift_received',
+            title: `Received ${gift.name} ${gift.icon}`,
+            description: `Virtual gift received from @${sender.username || 'user'}`,
+            relatedUserId: sender.id,
+            relatedUserName: sender.displayName || sender.username,
+            balanceAfter: updatedReceiver.pulseSparks
+          });
+        } catch (txErr) {}
+      }
     }
 
     const senderName = sender.displayName || sender.username || 'PulseChat User';

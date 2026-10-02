@@ -8,6 +8,8 @@ import { updateRecentChatSnippet, getCachedAllUsers } from '../../utils/offlineS
 import { useBackHandler } from '../../utils/backNavigation';
 
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
+import SparksWalletModal from '../chat/SparksWalletModal';
+import PulseProModal from '../chat/PulseProModal';
 
 export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initialVibeId }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
@@ -54,9 +56,19 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
   const [isPaused, setIsPaused] = useState(false);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
 
-  // Hardware/Swipe Back button closes viewers sheet if open, otherwise closes story viewer safely
-  useBackHandler(() => setShowViewersSheet(false), showViewersSheet);
-  useBackHandler(onClose, !showViewersSheet);
+  // Sparks Tipping & Wallet Modal States
+  const [showSparksTipModal, setShowSparksTipModal] = useState(false);
+  const [tipSparksAmount, setTipSparksAmount] = useState(25);
+  const [customSparksInput, setCustomSparksInput] = useState('');
+  const [showSparksWallet, setShowSparksWallet] = useState(false);
+  const [showGetSparksModal, setShowGetSparksModal] = useState(false);
+
+  // Hardware/Swipe Back button closes submodals first, otherwise closes story viewer safely
+  useBackHandler(() => setShowGetSparksModal(false), showGetSparksModal);
+  useBackHandler(() => setShowSparksWallet(false), showSparksWallet && !showGetSparksModal);
+  useBackHandler(() => setShowSparksTipModal(false), showSparksTipModal && !showSparksWallet && !showGetSparksModal);
+  useBackHandler(() => setShowViewersSheet(false), showViewersSheet && !showSparksTipModal && !showSparksWallet && !showGetSparksModal);
+  useBackHandler(onClose, !showViewersSheet && !showSparksTipModal && !showSparksWallet && !showGetSparksModal);
 
   // Per-story live views dictionary keyed by vibe ID
   const [viewsByVibeId, setViewsByVibeId] = useState(() => {
@@ -296,7 +308,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
 
   // Story Auto-Advance Progress Bar Timer (respects currentVibe.storyDuration: 15s, 30s, 60s)
   useEffect(() => {
-    if (isPaused || showViewersSheet) {
+    if (isPaused || showViewersSheet || showSparksTipModal || showSparksWallet || showGetSparksModal) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
@@ -1081,8 +1093,16 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
 
                 {/* Tip Sparks Button */}
                 <button
-                  onClick={() => handleReact('⚡', 10)}
-                  title="Tip 10 Sparks"
+                  type="button"
+                  onClick={() => {
+                    if (isMine) {
+                      setSparksMsg('You cannot tip your own story');
+                      setTimeout(() => setSparksMsg(''), 2500);
+                      return;
+                    }
+                    setShowSparksTipModal(true);
+                  }}
+                  title="Send Sparks to Author"
                   style={{
                     background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
                     color: '#fff',
@@ -1098,7 +1118,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                     boxShadow: '0 3px 10px rgba(245, 158, 11, 0.4)'
                   }}
                 >
-                  <Zap size={14} fill="#fff" /> Tip 10 Sparks
+                  <Zap size={14} fill="#fff" /> Tip Sparks
                 </button>
               </div>
             </div>
@@ -1219,6 +1239,266 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
             )}
             </div>
           </div>
+        )}
+
+        {/* Send Sparks Bottom Sheet / Dialog */}
+        {showSparksTipModal && !isMine && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0, 0, 0, 0.72)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              zIndex: 50,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'flex-end',
+              animation: 'fadeIn 0.15s ease'
+            }}
+            onClick={() => setShowSparksTipModal(false)}
+          >
+            <div
+              style={{
+                background: 'linear-gradient(180deg, #1e1b4b 0%, #111827 100%)',
+                borderTopLeftRadius: '24px',
+                borderTopRightRadius: '24px',
+                border: '1.5px solid rgba(245, 158, 11, 0.35)',
+                borderBottom: 'none',
+                padding: '20px',
+                boxShadow: '0 -10px 40px rgba(0,0,0,0.6), 0 0 30px rgba(245, 158, 11, 0.15)',
+                animation: 'slideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1)'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Drag Handle & Header */}
+              <div style={{ width: '40px', height: '4px', background: 'rgba(255,255,255,0.25)', borderRadius: '2px', margin: '0 auto 14px auto' }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '10px',
+                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 10px rgba(245, 158, 11, 0.4)'
+                  }}>
+                    <Zap size={18} color="#fff" fill="#fff" />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.02rem', fontWeight: 800, color: '#fff' }}>
+                      Tip Sparks
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)' }}>
+                      To {vibeGroup?.displayName || vibeGroup?.username || 'User'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* User Current Balance & Wallet Link */}
+                <button
+                  type="button"
+                  onClick={() => setShowSparksWallet(true)}
+                  style={{
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    border: '1px solid rgba(245, 158, 11, 0.35)',
+                    padding: '5px 10px',
+                    borderRadius: '16px',
+                    color: '#f59e0b',
+                    fontSize: '0.75rem',
+                    fontWeight: 800,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    cursor: 'pointer'
+                  }}
+                  title="View your Sparks Wallet"
+                >
+                  <Zap size={13} fill="#f59e0b" />
+                  <span>{user?.pulseSparks || 50} ⚡</span>
+                </button>
+              </div>
+
+              {/* Quick Amount Options */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '14px' }}>
+                {[10, 25, 50, 100, 250, 500].map(amt => {
+                  const isSelected = !customSparksInput && tipSparksAmount === amt;
+                  return (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => {
+                        setTipSparksAmount(amt);
+                        setCustomSparksInput('');
+                      }}
+                      style={{
+                        padding: '10px 8px',
+                        borderRadius: '14px',
+                        background: isSelected
+                          ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(217, 119, 6, 0.2))'
+                          : 'rgba(255, 255, 255, 0.06)',
+                        border: isSelected ? '1.5px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.1)',
+                        color: isSelected ? '#f59e0b' : '#fff',
+                        fontWeight: 800,
+                        fontSize: '0.92rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <Zap size={14} fill={isSelected ? '#f59e0b' : 'transparent'} />
+                      <span>{amt}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Custom Input */}
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: 'rgba(0, 0, 0, 0.35)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  borderRadius: '14px',
+                  padding: '4px 12px'
+                }}>
+                  <span style={{ color: '#f59e0b', fontWeight: 800, fontSize: '0.9rem', marginRight: '6px' }}>⚡</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10000"
+                    placeholder="Enter custom Sparks amount..."
+                    value={customSparksInput}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomSparksInput(val);
+                      if (val && !isNaN(val)) {
+                        setTipSparksAmount(Math.max(1, parseInt(val, 10)));
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#fff',
+                      fontSize: '0.88rem',
+                      fontWeight: 600,
+                      outline: 'none',
+                      padding: '8px 0'
+                    }}
+                  />
+                  {customSparksInput && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomSparksInput('')}
+                      style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: 0 }}
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Validation / Action Button */}
+              {(() => {
+                const currentBalance = typeof user?.pulseSparks === 'number' ? user.pulseSparks : 50;
+                const activeAmount = customSparksInput ? Math.max(1, parseInt(customSparksInput, 10) || 1) : tipSparksAmount;
+                const hasEnough = currentBalance >= activeAmount;
+
+                if (!hasEnough) {
+                  const needed = activeAmount - currentBalance;
+                  return (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{
+                        flex: 1,
+                        padding: '12px',
+                        borderRadius: '14px',
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        color: '#ef4444',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        Need {needed} more Sparks
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSparksTipModal(false);
+                          setShowGetSparksModal(true);
+                        }}
+                        style={{
+                          padding: '12px 18px',
+                          borderRadius: '14px',
+                          background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                          border: 'none',
+                          color: '#fff',
+                          fontWeight: 800,
+                          fontSize: '0.86rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <Zap size={16} fill="#fff" />
+                        <span>Get Sparks</span>
+                      </button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSparksTipModal(false);
+                      handleReact('', activeAmount, '');
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '13px',
+                      borderRadius: '14px',
+                      background: 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)',
+                      border: 'none',
+                      color: '#fff',
+                      fontWeight: 900,
+                      fontSize: '0.95rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 18px rgba(245, 158, 11, 0.45)'
+                    }}
+                  >
+                    <Zap size={18} fill="#fff" />
+                    <span>Send ⚡ {activeAmount} Sparks</span>
+                  </button>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* Sparks Wallet Full History Modal */}
+        {showSparksWallet && (
+          <SparksWalletModal onClose={() => setShowSparksWallet(false)} />
+        )}
+
+        {/* Get / Top-Up Sparks Modal */}
+        {showGetSparksModal && (
+          <PulseProModal initialTab="sparks" onClose={() => setShowGetSparksModal(false)} />
         )}
       </div>
     </div>
