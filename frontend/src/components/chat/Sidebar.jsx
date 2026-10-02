@@ -1,12 +1,13 @@
 import React, { useState, useContext, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2 } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
 import SettingsModal from '../profile/SettingsModal';
 import AdminDashboardModal from '../admin/AdminDashboardModal';
 import FriendsTab from './FriendsTab';
 import PulseProModal from './PulseProModal';
+import AppFeatureTourModal from '../common/AppFeatureTourModal';
 import PulseVipBadge from '../common/PulseVipBadge';
 import PulseVibesBar from '../vibes/PulseVibesBar';
 import CreateVibeModal from '../vibes/CreateVibeModal';
@@ -97,6 +98,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [showProModal, setShowProModal] = useState(false);
   const [proModalTab, setProModalTab] = useState('pro');
+  const [showFeatureTourModal, setShowFeatureTourModal] = useState(false);
   const [showCreateVibe, setShowCreateVibe] = useState(false);
   const [selectedVibeGroup, setSelectedVibeGroup] = useState(null);
   const [showPulseZone, setShowPulseZone] = useState(false);
@@ -1716,6 +1718,34 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 )}
               </button>
 
+              {/* App Feature Tour */}
+              <button
+                onClick={() => {
+                  setShowTopMenu(false);
+                  setShowFeatureTourModal(true);
+                }}
+                className="dropdown-menu-item"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text-main)',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  width: '100%',
+                  transition: 'background 0.15s ease'
+                }}
+              >
+                <Compass size={17} color="#38bdf8" />
+                <span>App Feature Tour</span>
+              </button>
+
               {/* Create New Group */}
               <button
                 onClick={() => {
@@ -2421,6 +2451,17 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       {showPulseZone && (
         <PulseZoneModal
           onClose={() => setShowPulseZone(false)}
+        />
+      )}
+
+      {showFeatureTourModal && (
+        <AppFeatureTourModal
+          onClose={() => setShowFeatureTourModal(false)}
+          onOpenPro={() => {
+            setShowFeatureTourModal(false);
+            setProModalTab('pro');
+            setShowProModal(true);
+          }}
         />
       )}
     </div>
