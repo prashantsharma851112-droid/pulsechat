@@ -551,8 +551,15 @@ io.on('connection', (socket) => {
         }
       }
 
+      // Auto-resolve receiverId for 1-on-1 chats if not explicitly provided
+      let resolvedReceiverId = receiverId || '';
+      if (!resolvedReceiverId && !isGroup && chatId && chatId.includes('_')) {
+        const parts = chatId.split('_');
+        resolvedReceiverId = parts.find(p => p !== senderId) || '';
+      }
+
       // Check if recipient is currently online
-      const isReceiverOnline = Boolean(receiverId && !isGroup && onlineUsers.has(receiverId));
+      const isReceiverOnline = Boolean(resolvedReceiverId && !isGroup && onlineUsers.has(resolvedReceiverId));
       const initialStatus = isReceiverOnline ? 'delivered' : 'sent';
 
       const newMsg = {
@@ -566,8 +573,9 @@ io.on('connection', (socket) => {
         senderIsPro: resolvedSenderIsPro,
         senderProTier: resolvedSenderProTier,
         senderCustomBadge: resolvedSenderCustomBadge,
-        receiverId: receiverId || '',
+        receiverId: resolvedReceiverId,
         isGroup: !!isGroup,
+        isForwarded: Boolean(messageData.isForwarded),
         content: content || '',
         type: type || 'text',
         textStyle: textStyle || (type === '3d_text' ? 'cyber-neon' : null),
@@ -596,8 +604,9 @@ io.on('connection', (socket) => {
       io.to(chatId).emit('new_message', newMsg);
 
       // Notify recipient private room for badge/sound if they are outside the active chat room
-      if (receiverId && !isGroup) {
-        io.to(`user_${receiverId}`).emit('message_notification', newMsg);
+      if (resolvedReceiverId && !isGroup) {
+        io.to(`user_${resolvedReceiverId}`).emit('new_message', newMsg);
+        io.to(`user_${resolvedReceiverId}`).emit('message_notification', newMsg);
       }
 
       // 3. Concurrently save to MongoDB (zero blocking on emission)
@@ -609,13 +618,15 @@ io.on('connection', (socket) => {
       setImmediate(async () => {
         try {
           await savePromise;
-          if (receiverId && !isGroup) {
-            const bodyText = newMsg.type === 'text'
-              ? (newMsg.content || 'New message')
-              : (newMsg.type === '3d_text'
-                  ? `✨ 3D Text: "${newMsg.content}"`
-                  : `Sent a ${newMsg.type}`);
-            dispatchWebPush(receiverId, `💬 ${resolvedSenderName}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, false, resolvedSenderAvatar);
+          if (resolvedReceiverId && !isGroup) {
+            const bodyText = newMsg.isForwarded
+              ? `➡️ Forwarded: ${newMsg.content || newMsg.type}`
+              : (newMsg.type === 'text'
+                  ? (newMsg.content || 'New message')
+                  : (newMsg.type === '3d_text'
+                      ? `✨ 3D Text: "${newMsg.content}"`
+                      : `Sent a ${newMsg.type}`));
+            dispatchWebPush(resolvedReceiverId, `💬 ${resolvedSenderName}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, false, resolvedSenderAvatar);
           } else if (isGroup) {
             const Group = require('./models/Group');
             const group = await Group.findOne({ id: chatId }).lean();

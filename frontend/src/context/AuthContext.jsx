@@ -361,6 +361,32 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const deleteAccount = async ({ reason, reasonDetail, confirmation }) => {
+    if (!token) return { success: false, error: 'Not authenticated' };
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/users/delete-account`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ reason, reasonDetail, confirmation })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Failed to delete account' };
+      }
+      if (user?.id) {
+        removeSavedAccount(user.id);
+      }
+      logout();
+      return { success: true, message: data.message };
+    } catch (e) {
+      console.error('Failed to delete account:', e);
+      return { success: false, error: e.message };
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -368,6 +394,7 @@ export function AuthProvider({ children }) {
       loading,
       login,
       logout,
+      deleteAccount,
       savedAccounts,
       switchAccount,
       addAccount,

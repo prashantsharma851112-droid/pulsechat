@@ -784,6 +784,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         }
       }
 
+      if (msg.isForwarded && contentSnippet) {
+        contentSnippet = `➡️ Forwarded: ${contentSnippet}`;
+      }
+
       setRecentChats(prevChats => {
         const existingIdx = prevChats.findIndex(c =>
           c.id === targetId ||

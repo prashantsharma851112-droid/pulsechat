@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
 import { BACKEND_URL } from '../../utils/config';
-import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal } from 'lucide-react';
+import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 import EditPollModal from './EditPollModal';
@@ -677,6 +677,23 @@ export default function MessageItem({
             </span>
           </div>
         )}
+        {/* Forwarded Message Header (WhatsApp Style) */}
+        {message.isForwarded && (
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '5px',
+            fontSize: '0.72rem',
+            fontStyle: 'italic',
+            color: isMine ? 'rgba(255, 255, 255, 0.72)' : 'var(--text-muted)',
+            marginBottom: '4px',
+            userSelect: 'none'
+          }}>
+            <Forward size={13} style={{ flexShrink: 0 }} />
+            <span>Forwarded</span>
+          </div>
+        )}
+
         {/* Quoted Reply Preview (WhatsApp Style) */}
         {message.replyTo && (
           <div style={{

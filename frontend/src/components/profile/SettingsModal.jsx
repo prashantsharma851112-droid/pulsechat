@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { ThemeContext } from '../../context/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, Sparkles, Bell, BellOff, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2, Crown, Lock, Shield, FileText, HelpCircle, RefreshCw } from 'lucide-react';
+import { X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, Sparkles, Bell, BellOff, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2, Crown, Lock, Shield, FileText, HelpCircle, RefreshCw, AlertTriangle, Loader2 } from 'lucide-react';
 import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
 import { BACKEND_URL } from '../../utils/config';
 import PulseProModal from '../chat/PulseProModal';
@@ -32,7 +32,7 @@ export default function SettingsModal({
   openAdminModal
 }) {
   const { theme, changeTheme } = useContext(ThemeContext);
-  const { user, logout, toggleHideReadReceipts, toggleHideOnlineStatus, toggleAutoCleanup, runInstantCleanup, unblockUser, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
+  const { user, logout, deleteAccount, toggleHideReadReceipts, toggleHideOnlineStatus, toggleAutoCleanup, runInstantCleanup, unblockUser, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
   const [showBlockedModal, setShowBlockedModal] = useState(false);
   const [blockedList, setBlockedList] = useState([]);
   const [loadingBlocked, setLoadingBlocked] = useState(false);
@@ -43,6 +43,46 @@ export default function SettingsModal({
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
     return localStorage.getItem('pulsechat_notifications_enabled') !== 'false';
   });
+
+  // Account Permanent Deletion States (GDPR & Google Play Policy Section 5)
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleteDetail, setDeleteDetail] = useState('');
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  const handleDeleteAccountSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!deleteReason) {
+      setDeleteError('Please choose a reason for deleting your account.');
+      return;
+    }
+    if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') {
+      setDeleteError('Please type "DELETE" in capital letters to confirm.');
+      return;
+    }
+    setIsDeletingAccount(true);
+    setDeleteError('');
+    try {
+      const res = await deleteAccount({
+        reason: deleteReason,
+        reasonDetail: deleteDetail.trim(),
+        confirmation: deleteConfirmText.trim()
+      });
+      if (res && res.success) {
+        setShowDeleteModal(false);
+        onClose();
+        alert('Your account and all associated data have been permanently deleted.');
+      } else {
+        setDeleteError(res?.error || 'Failed to delete account. Please try again.');
+      }
+    } catch (err) {
+      setDeleteError(err.message || 'An error occurred while deleting your account.');
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
 
   const handleRunInstantCleanup = async () => {
     if (cleaningStorage) return;
@@ -957,10 +997,39 @@ export default function SettingsModal({
             </div>
           </div>
 
-          {/* Account Logout */}
-          <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: '4px' }}>
+          {/* Account Actions: Logout & Permanent Deletion (Privacy Policy Section 5) */}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <button
+              type="button"
               onClick={() => { onClose(); logout(); }}
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '10px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                color: 'var(--text-main)',
+                fontWeight: 600,
+                fontSize: '0.88rem',
+                border: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                cursor: 'pointer'
+              }}
+            >
+              <LogOut size={16} /> Logout Account
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteReason('');
+                setDeleteDetail('');
+                setDeleteConfirmText('');
+                setDeleteError('');
+                setShowDeleteModal(true);
+              }}
               style={{
                 width: '100%',
                 padding: '10px',
@@ -969,14 +1038,16 @@ export default function SettingsModal({
                 color: '#ef4444',
                 fontWeight: 600,
                 fontSize: '0.88rem',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px'
+                gap: '8px',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
               }}
             >
-              <LogOut size={16} /> Logout Account
+              <Trash2 size={16} /> Permanently Delete Account
             </button>
           </div>
         </div>
@@ -1064,6 +1135,231 @@ export default function SettingsModal({
           </div>
         )}
       </div>
+
+      {/* Permanent Account Deletion Modal (Privacy Policy & Play Store Compliant) */}
+      {showDeleteModal && (
+        <div
+          className="modal-overlay"
+          style={{ zIndex: 99999 }}
+          onClick={() => !isDeletingAccount && setShowDeleteModal(false)}
+        >
+          <div
+            className="modal-card modal-responsive"
+            style={{
+              maxWidth: '460px',
+              width: '92vw',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '24px',
+              borderRadius: '20px',
+              background: 'var(--bg-card)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              boxShadow: '0 24px 60px rgba(0,0,0,0.8)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '50%',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#ef4444'
+                }}>
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.08rem', fontWeight: 700, color: '#ef4444' }}>
+                    Permanently Delete Account
+                  </h3>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    Privacy Policy Section 5: User Rights
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isDeletingAccount}
+                onClick={() => setShowDeleteModal(false)}
+                className="icon-btn-ghost"
+                style={{ width: '32px', height: '32px', borderRadius: '50%' }}
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            {/* Warning Text */}
+            <div style={{
+              padding: '12px',
+              borderRadius: '12px',
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              fontSize: '0.8rem',
+              color: 'var(--text-main)',
+              lineHeight: 1.5
+            }}>
+              ⚠️ <strong>Warning:</strong> Closing your account is immediate and permanent. All your chats, messages, friendships, and account records will be permanently wiped. This action cannot be reversed.
+            </div>
+
+            {/* Reason Selection Form */}
+            <form onSubmit={handleDeleteAccountSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '6px' }}>
+                  Please tell us why you are deleting your account: <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {[
+                    'I am switching to another messaging app',
+                    'Privacy or security concerns',
+                    'Facing technical issues or bugs in the app',
+                    'Too many notifications / Taking a break',
+                    'Creating a new / fresh account',
+                    'Other personal reasons'
+                  ].map((r) => (
+                    <label
+                      key={r}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '10px',
+                        background: deleteReason === r ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                        border: deleteReason === r ? '1px solid rgba(239, 68, 68, 0.5)' : '1px solid var(--border)',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        color: deleteReason === r ? '#fff' : 'var(--text-muted)'
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="deleteReason"
+                        value={r}
+                        checked={deleteReason === r}
+                        onChange={() => { setDeleteReason(r); setDeleteError(''); }}
+                        style={{ accentColor: '#ef4444' }}
+                      />
+                      <span>{r}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Optional detail */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '5px' }}>
+                  Additional Feedback (Optional):
+                </label>
+                <textarea
+                  value={deleteDetail}
+                  onChange={(e) => setDeleteDetail(e.target.value)}
+                  placeholder="Tell us what we could improve (optional)..."
+                  rows={2}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.8rem',
+                    resize: 'none',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              {/* Confirmation Input */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '5px' }}>
+                  To confirm, type <strong style={{ color: '#ef4444' }}>DELETE</strong> in the box below:
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => { setDeleteConfirmText(e.target.value); setDeleteError(''); }}
+                  placeholder="DELETE"
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '10px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid var(--border)',
+                    color: '#ef4444',
+                    fontWeight: 700,
+                    fontSize: '0.88rem',
+                    letterSpacing: '0.05em',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              {/* Error Notification */}
+              {deleteError && (
+                <div style={{ color: '#ef4444', fontSize: '0.78rem', fontWeight: 600 }}>
+                  ⚠️ {deleteError}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                <button
+                  type="button"
+                  disabled={isDeletingAccount}
+                  onClick={() => setShowDeleteModal(false)}
+                  className="btn-secondary"
+                  style={{ flex: 1, padding: '10px', borderRadius: '10px', fontSize: '0.85rem' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isDeletingAccount || !deleteReason || deleteConfirmText.trim().toUpperCase() !== 'DELETE'}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    borderRadius: '10px',
+                    background: '#ef4444',
+                    color: '#ffffff',
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    cursor: (isDeletingAccount || !deleteReason || deleteConfirmText.trim().toUpperCase() !== 'DELETE') ? 'not-allowed' : 'pointer',
+                    opacity: (isDeletingAccount || !deleteReason || deleteConfirmText.trim().toUpperCase() !== 'DELETE') ? 0.5 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    boxShadow: '0 4px 14px rgba(239, 68, 68, 0.35)'
+                  }}
+                >
+                  {isDeletingAccount ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={16} />
+                      <span>Delete My Account</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {showProModal && (
         <PulseProModal

@@ -2089,33 +2089,52 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     for (const target of selectedTargets) {
       const targetIsGroup = !!target.isGroup;
       const targetChatId = targetIsGroup ? target.id : [user.id, target.id].sort().join('_');
+      const receiverId = targetIsGroup ? '' : target.id;
 
       const fwdPayload = {
+        ...getSenderPayload(),
         chatId: targetChatId,
         senderId: user.id,
-        senderName: user.displayName || user.username,
-        senderAvatar: user.avatar,
+        receiverId,
+        isGroup: targetIsGroup,
+        isForwarded: true,
         content: msg.content || '',
         type: msg.type || 'text',
+        textStyle: msg.textStyle || null,
         mediaUrl: msg.mediaUrl || null,
+        audioUrl: msg.audioUrl || null,
         fileName: msg.fileName || null,
         fileSize: msg.fileSize || null,
-        isGroup: targetIsGroup,
         timestamp: new Date().toISOString()
       };
 
       if (socket) {
         socket.emit('send_message', fwdPayload);
       }
-      appendCachedMessage(targetChatId, {
+
+      const tempFwdMsg = {
         ...fwdPayload,
-        id: 'fwd_' + Date.now() + Math.random().toString(36).substr(2, 5)
+        id: 'fwd_' + Date.now() + Math.random().toString(36).substr(2, 5),
+        status: 'sent'
+      };
+
+      appendCachedMessage(targetChatId, tempFwdMsg);
+
+      if (targetChatId === chatId) {
+        setMessages(prev => [...prev, tempFwdMsg]);
+      }
+
+      updateRecentChatSnippet(targetChatId, {
+        lastMessage: fwdPayload.content || (fwdPayload.mediaUrl ? '🖼️ Photo' : '➡️ Forwarded message'),
+        timestamp: fwdPayload.timestamp
       });
     }
+
+    try { playSound('sent'); } catch {}
     setActionToast(`Forwarded to ${selectedTargets.length} chat${selectedTargets.length > 1 ? 's' : ''} ➡️`);
     setTimeout(() => setActionToast(''), 2500);
     handleDismissActionMessage();
-  }, [user, socket, handleDismissActionMessage]);
+  }, [user, socket, chatId, handleDismissActionMessage]);
 
   const handleDeleteActionMessage = useCallback((msg) => {
     if (!msg) return;

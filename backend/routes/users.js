@@ -361,4 +361,60 @@ router.delete('/push-subscription', authMiddleware, async (req, res) => {
   }
 });
 
+// Permanent Account Deletion (GDPR, Google Play Store Policy & Privacy Policy compliant)
+router.post('/delete-account', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { reason, reasonDetail, confirmation } = req.body;
+
+    if (!reason) {
+      return res.status(400).json({ error: 'Please select a reason for account deletion.' });
+    }
+
+    if (!confirmation || confirmation.trim().toUpperCase() !== 'DELETE') {
+      return res.status(400).json({ error: 'Please type "DELETE" to confirm account deletion.' });
+    }
+
+    const Message = require('../models/Message');
+    const FriendRequest = require('../models/FriendRequest');
+    const Group = require('../models/Group');
+    const Vibe = require('../models/Vibe');
+
+    // 1. Permanently delete all messages sent by this user
+    await Message.deleteMany({ senderId: userId });
+
+    // 2. Permanently delete friend requests
+    await FriendRequest.deleteMany({
+      $or: [{ senderId: userId }, { receiverId: userId }]
+    });
+
+    // 3. Remove user from all groups
+    await Group.updateMany(
+      { members: userId },
+      { $pull: { members: userId, admins: userId } }
+    );
+
+    // 4. Remove user's vibes / stories
+    await Vibe.deleteMany({ userId });
+
+    // 5. Invalidate caches
+    try {
+      const redis = require('../utils/redis');
+      if (redis && redis.invalidateRecent) {
+        await redis.invalidateRecent(userId).catch(() => {});
+      }
+    } catch (e) {}
+
+    // 6. Delete user account record
+    await User.deleteOne({ id: userId });
+
+    console.log(`[Account Deletion] User ${userId} permanently closed account. Reason: "${reason}" (${reasonDetail || 'N/A'})`);
+
+    res.json({ success: true, message: 'Your account and all associated data have been permanently deleted.' });
+  } catch (err) {
+    console.error('Account deletion error:', err);
+    res.status(500).json({ error: 'Failed to delete account. Please try again.' });
+  }
+});
+
 module.exports = router;
