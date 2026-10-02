@@ -1017,6 +1017,14 @@ io.on('connection', (socket) => {
     socket.to(chatId).emit('wb_restore', { boardDataUrl });
   });
 
+  socket.on('wb_text', ({ chatId, textItem }) => {
+    socket.to(chatId).emit('wb_text', textItem);
+  });
+
+  socket.on('wb_text_update', ({ chatId, textItems }) => {
+    socket.to(chatId).emit('wb_text_update', textItems);
+  });
+
   // Real-Time Live Arrow Battle Game Socket Handlers
   socket.on('arrow_game_start', (data) => {
     if (data && data.chatId) {
