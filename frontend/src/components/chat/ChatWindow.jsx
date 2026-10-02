@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2 } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -19,6 +19,8 @@ import Animated3DTextModal from './Animated3DTextModal';
 import LiveArrowGameModal from './LiveArrowGameModal';
 import PulseVipBadge from '../common/PulseVipBadge';
 import MusicPickerModal from '../vibes/MusicPickerModal';
+import ForwardModal from './ForwardModal';
+import MessageInfoModal from './MessageInfoModal';
 import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
@@ -729,7 +731,56 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [clearedBackup, setClearedBackup] = useState([]);
   const [clearedUndoSecs, setClearedUndoSecs] = useState(0);
   const [multiDeleteBackupIds, setMultiDeleteBackupIds] = useState([]);
-  const [multiDeleteUndoSecs, setMultiDeleteUndoSecs] = useState(0);
+  // WhatsApp-Style Message Selection, Context Bar & Reactions states
+  const [selectedActionMessage, setSelectedActionMessage] = useState(null);
+  const [starredMsgIds, setStarredMsgIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`pulsechat_starred_${chatId}`) || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
+  const [pinnedMessage, setPinnedMessage] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`pulsechat_pinned_${chatId}`) || 'null');
+    } catch (e) {
+      return null;
+    }
+  });
+  const [showForwardModal, setShowForwardModal] = useState(false);
+  const [showMessageInfoModal, setShowMessageInfoModal] = useState(false);
+  const [showUnlimitedEmojiPicker, setShowUnlimitedEmojiPicker] = useState(false);
+  const [actionMessageForEmoji, setActionMessageForEmoji] = useState(null);
+  const [showActionMoreMenu, setShowActionMoreMenu] = useState(false);
+  const [actionToast, setActionToast] = useState('');
+
+  // Sync starred & pinned when chatId changes
+  useEffect(() => {
+    try {
+      setStarredMsgIds(JSON.parse(localStorage.getItem(`pulsechat_starred_${chatId}`) || '[]'));
+    } catch (e) {
+      setStarredMsgIds([]);
+    }
+    try {
+      setPinnedMessage(JSON.parse(localStorage.getItem(`pulsechat_pinned_${chatId}`) || 'null'));
+    } catch (e) {
+      setPinnedMessage(null);
+    }
+    setSelectedActionMessage(null);
+    setShowActionMoreMenu(false);
+    setShowUnlimitedEmojiPicker(false);
+  }, [chatId]);
+
+  // Listener to dismiss selected message action via backdrop, back button or Esc
+  useEffect(() => {
+    const handleDismissAction = () => {
+      setSelectedActionMessage(null);
+      setShowActionMoreMenu(false);
+      setShowUnlimitedEmojiPicker(false);
+    };
+    window.addEventListener('pulsechat_dismiss_message_action', handleDismissAction);
+    return () => window.removeEventListener('pulsechat_dismiss_message_action', handleDismissAction);
+  }, []);
 
   // Cooldown timer state (10s delayed send option)
   const [cooldownSecs, setCooldownSecs] = useState(0);
@@ -1953,6 +2004,130 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setMessages(prev => prev.filter(m => m.id !== msgId));
   };
 
+  const handleSelectForAction = useCallback((msg) => {
+    setSelectedActionMessage(msg);
+    setShowActionMoreMenu(false);
+    try {
+      window.history.pushState({ messageActionOpen: true }, '');
+    } catch (e) {}
+  }, []);
+
+  const handleDismissActionMessage = useCallback(() => {
+    setSelectedActionMessage(null);
+    setShowActionMoreMenu(false);
+  }, []);
+
+  const handleToggleStarMessage = useCallback((msg) => {
+    if (!msg?.id) return;
+    setStarredMsgIds(prev => {
+      const isStarred = prev.includes(msg.id);
+      const next = isStarred ? prev.filter(id => id !== msg.id) : [...prev, msg.id];
+      try {
+        localStorage.setItem(`pulsechat_starred_${chatId}`, JSON.stringify(next));
+      } catch (e) {}
+      setActionToast(isStarred ? 'Message unstarred' : 'Message starred ⭐');
+      setTimeout(() => setActionToast(''), 2200);
+      return next;
+    });
+    handleDismissActionMessage();
+  }, [chatId, handleDismissActionMessage]);
+
+  const handleCopyMessage = useCallback((msg) => {
+    if (!msg) return;
+    const textToCopy = msg.content || msg.fileName || (msg.mediaUrl ? 'Media: ' + msg.mediaUrl : '');
+    if (textToCopy && navigator.clipboard) {
+      navigator.clipboard.writeText(textToCopy);
+      setActionToast('Message copied to clipboard 📋');
+      setTimeout(() => setActionToast(''), 2200);
+    }
+    handleDismissActionMessage();
+  }, [handleDismissActionMessage]);
+
+  const handlePinMessage = useCallback((msg) => {
+    if (!msg) return;
+    setPinnedMessage(msg);
+    try {
+      localStorage.setItem(`pulsechat_pinned_${chatId}`, JSON.stringify(msg));
+    } catch (e) {}
+    setActionToast('Message pinned to chat 📌');
+    setTimeout(() => setActionToast(''), 2200);
+    handleDismissActionMessage();
+  }, [chatId, handleDismissActionMessage]);
+
+  const handleUnpinMessage = useCallback(() => {
+    setPinnedMessage(null);
+    try {
+      localStorage.removeItem(`pulsechat_pinned_${chatId}`);
+    } catch (e) {}
+    setActionToast('Message unpinned');
+    setTimeout(() => setActionToast(''), 2000);
+  }, [chatId]);
+
+  const handleJumpToMessage = useCallback((msgId) => {
+    if (!msgId) return;
+    const el = document.getElementById(`msg-${msgId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.transition = 'all 0.3s ease';
+      el.style.filter = 'drop-shadow(0 0 16px var(--accent))';
+      setTimeout(() => {
+        el.style.filter = 'none';
+      }, 1000);
+    }
+  }, []);
+
+  const handleForwardMessage = useCallback(async (selectedTargets, msg) => {
+    if (!selectedTargets || !msg) return;
+    for (const target of selectedTargets) {
+      const targetIsGroup = !!target.isGroup;
+      const targetChatId = targetIsGroup ? target.id : [user.id, target.id].sort().join('_');
+
+      const fwdPayload = {
+        chatId: targetChatId,
+        senderId: user.id,
+        senderName: user.displayName || user.username,
+        senderAvatar: user.avatar,
+        content: msg.content || '',
+        type: msg.type || 'text',
+        mediaUrl: msg.mediaUrl || null,
+        fileName: msg.fileName || null,
+        fileSize: msg.fileSize || null,
+        isGroup: targetIsGroup,
+        timestamp: new Date().toISOString()
+      };
+
+      if (socket) {
+        socket.emit('send_message', fwdPayload);
+      }
+      appendCachedMessage(targetChatId, {
+        ...fwdPayload,
+        id: 'fwd_' + Date.now() + Math.random().toString(36).substr(2, 5)
+      });
+    }
+    setActionToast(`Forwarded to ${selectedTargets.length} chat${selectedTargets.length > 1 ? 's' : ''} ➡️`);
+    setTimeout(() => setActionToast(''), 2500);
+    handleDismissActionMessage();
+  }, [user, socket, handleDismissActionMessage]);
+
+  const handleDeleteActionMessage = useCallback((msg) => {
+    if (!msg) return;
+    const isMine = msg.senderId === user.id;
+    if (isMine) {
+      const choice = window.confirm("Delete this message for everyone?\n\nClick OK for 'Delete for Everyone', or Cancel for 'Delete for Me'");
+      if (choice) {
+        if (socket) socket.emit('delete_message', { messageId: msg.id, chatId });
+        handleTriggerUndoToast(msg.id);
+      } else {
+        handleDeleteLocalMessage(msg.id);
+        handleTriggerUndoToast(msg.id);
+      }
+    } else {
+      handleDeleteLocalMessage(msg.id);
+      handleTriggerUndoToast(msg.id);
+    }
+    handleDismissActionMessage();
+  }, [user.id, socket, chatId, handleTriggerUndoToast, handleDeleteLocalMessage, handleDismissActionMessage]);
+
   const handleTextChange = (e) => {
     const val = e.target.value;
     setText(val);
@@ -2256,7 +2431,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       )}
 
       {/* Header Bar */}
-      <div style={{
+      {!selectedActionMessage ? (
+        <div style={{
         padding: '0.75rem 1rem',
         borderBottom: '1px solid var(--border)',
         background: (chatWallpaper && chatWallpaper !== 'none') ? 'rgba(11, 15, 25, 0.78)' : 'var(--bg-sidebar)',
@@ -2723,6 +2899,232 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           <div style={{ flex: 1, height: '2px', borderRadius: '2px', background: moodInfo.color, opacity: 0.4 }} />
         </div>
       </div>
+      ) : (
+        <div style={{
+          padding: '0.75rem 1rem',
+          borderBottom: '1px solid var(--accent)',
+          background: 'rgba(15, 23, 42, 0.98)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          position: 'relative',
+          zIndex: 50
+        }}>
+          {/* Left: Close Button + "1" */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <button
+              type="button"
+              onClick={handleDismissActionMessage}
+              className="icon-btn-ghost"
+              style={{ width: '38px', height: '38px', borderRadius: '50%', color: '#fff' }}
+              title="Unselect message"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <span style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '0.02em' }}>
+              1
+            </span>
+          </div>
+
+          {/* Right: Action Buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {/* Reply */}
+            <button
+              type="button"
+              onClick={() => {
+                const senderInfo = groupMembersMap[selectedActionMessage.senderId];
+                setReplyTo({
+                  ...selectedActionMessage,
+                  senderName: selectedActionMessage.senderId === user.id
+                    ? 'You'
+                    : (senderInfo?.displayName || senderInfo?.username || activeChat.displayName)
+                });
+                handleDismissActionMessage();
+                replyInputRef.current?.focus();
+              }}
+              className="icon-btn-ghost"
+              title="Reply"
+              style={{ width: '38px', height: '38px', borderRadius: '50%', color: 'var(--text-main)' }}
+            >
+              <CornerUpLeft size={19} />
+            </button>
+
+            {/* Star / Bookmark */}
+            <button
+              type="button"
+              onClick={() => handleToggleStarMessage(selectedActionMessage)}
+              className="icon-btn-ghost"
+              title={starredMsgIds.includes(selectedActionMessage.id) ? "Unstar message" : "Star message"}
+              style={{ width: '38px', height: '38px', borderRadius: '50%', color: starredMsgIds.includes(selectedActionMessage.id) ? '#f59e0b' : 'var(--text-main)' }}
+            >
+              <Star size={19} fill={starredMsgIds.includes(selectedActionMessage.id) ? "#f59e0b" : "none"} />
+            </button>
+
+            {/* Copy */}
+            <button
+              type="button"
+              onClick={() => handleCopyMessage(selectedActionMessage)}
+              className="icon-btn-ghost"
+              title="Copy message"
+              style={{ width: '38px', height: '38px', borderRadius: '50%', color: 'var(--text-main)' }}
+            >
+              <Copy size={19} />
+            </button>
+
+            {/* Forward */}
+            <button
+              type="button"
+              onClick={() => setShowForwardModal(true)}
+              className="icon-btn-ghost"
+              title="Forward message"
+              style={{ width: '38px', height: '38px', borderRadius: '50%', color: 'var(--text-main)' }}
+            >
+              <Forward size={19} />
+            </button>
+
+            {/* Delete */}
+            <button
+              type="button"
+              onClick={() => handleDeleteActionMessage(selectedActionMessage)}
+              className="icon-btn-ghost"
+              title="Delete message"
+              style={{ width: '38px', height: '38px', borderRadius: '50%', color: '#ef4444' }}
+            >
+              <Trash2 size={19} />
+            </button>
+
+            {/* 3-Dots More Options Menu */}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => setShowActionMoreMenu(prev => !prev)}
+                className="icon-btn-ghost"
+                title="More options"
+                style={{ width: '38px', height: '38px', borderRadius: '50%', color: 'var(--text-main)' }}
+              >
+                <MoreVertical size={19} />
+              </button>
+
+              {showActionMoreMenu && (
+                <div className="chat-header-dropdown-menu" style={{ right: 0, minWidth: '190px', zIndex: 100 }}>
+                  <button
+                    onClick={() => {
+                      setShowActionMoreMenu(false);
+                      if (pinnedMessage?.id === selectedActionMessage.id) {
+                        handleUnpinMessage();
+                      } else {
+                        handlePinMessage(selectedActionMessage);
+                      }
+                    }}
+                  >
+                    <Pin size={16} color="var(--accent)" />
+                    <span>{pinnedMessage?.id === selectedActionMessage.id ? 'Unpin message' : 'Pin message'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowActionMoreMenu(false);
+                      setShowMessageInfoModal(true);
+                    }}
+                  >
+                    <Info size={16} color="var(--accent)" />
+                    <span>Message info</span>
+                  </button>
+
+                  {selectedActionMessage.senderId !== user.id && !isGroup && (
+                    <button
+                      onClick={async () => {
+                        setShowActionMoreMenu(false);
+                        if (window.confirm(`Report message and block ${activeChat.displayName}?`)) {
+                          await blockUser(activeChat.id);
+                          setBlockStatus(prev => ({ ...prev, isBlockedByMe: true }));
+                          setActionToast('User reported and blocked 🚨');
+                          setTimeout(() => setActionToast(''), 2500);
+                          handleDismissActionMessage();
+                        }
+                      }}
+                      style={{ color: '#ef4444' }}
+                    >
+                      <Ban size={16} color="#ef4444" />
+                      <span>Report & Block</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pinned Message Banner */}
+      {pinnedMessage && (
+        <div
+          className="pinned-message-banner"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '7px 14px',
+            background: 'rgba(15, 23, 42, 0.94)',
+            borderBottom: '1px solid rgba(245, 158, 11, 0.35)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            fontSize: '0.82rem',
+            color: 'var(--text-main)',
+            zIndex: 15,
+            position: 'relative',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
+          }}
+        >
+          <div
+            onClick={() => handleJumpToMessage(pinnedMessage.id)}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', flex: 1, minWidth: 0 }}
+            title="Click to jump to pinned message"
+          >
+            <Pin size={15} color="#f59e0b" style={{ flexShrink: 0, transform: 'rotate(45deg)' }} />
+            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ color: '#f59e0b', fontWeight: 700, marginRight: '6px' }}>Pinned:</span>
+              <span style={{ color: 'var(--text-muted)' }}>
+                {pinnedMessage.type === 'image' ? '📷 Photo' :
+                 pinnedMessage.type === 'audio' ? '🎵 Voice Note' :
+                 pinnedMessage.type === 'gift' ? '🎁 Sticker' :
+                 pinnedMessage.type === 'poll' ? '📊 Poll' :
+                 (pinnedMessage.content || 'Message')}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleUnpinMessage}
+            className="icon-btn-ghost"
+            style={{ width: '26px', height: '26px', borderRadius: '50%', padding: 0 }}
+            title="Unpin message"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Tap-outside Backdrop to dismiss Message Action */}
+      {selectedActionMessage && (
+        <div
+          className="message-action-backdrop"
+          onClick={handleDismissActionMessage}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.4)',
+            backdropFilter: 'blur(2px)',
+            WebkitBackdropFilter: 'blur(2px)',
+            zIndex: 42,
+            touchAction: 'none'
+          }}
+        />
+      )}
 
       {/* WhatsApp-Style Offline Indicator */}
       {!isNetConnected && (
@@ -2894,6 +3296,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 isSelected={selectedMsgIds.includes(msg.id)}
                 onToggleSelect={handleToggleSelectMsg}
                 onJoinGroupCall={(isVideo) => onStartGroupCall && onStartGroupCall(activeChat, isVideo)}
+                isSelectedForAction={selectedActionMessage?.id === msg.id}
+                onSelectForAction={handleSelectForAction}
+                isStarred={starredMsgIds.includes(msg.id)}
+                onOpenUnlimitedEmoji={(targetMsg) => {
+                  setActionMessageForEmoji(targetMsg);
+                  setShowUnlimitedEmojiPicker(true);
+                }}
+                onDismissAction={handleDismissActionMessage}
                 onReply={(msg) => {
                   // Sender ka naam determine karo
                   const senderInfo = groupMembersMap[msg.senderId];
@@ -3802,6 +4212,115 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             setShowChatMusicPicker(false);
           }}
         />
+      )}
+
+      {/* Forward Modal */}
+      {showForwardModal && selectedActionMessage && (
+        <ForwardModal
+          message={selectedActionMessage}
+          currentUserId={user?.id}
+          onClose={() => setShowForwardModal(false)}
+          onForward={handleForwardMessage}
+        />
+      )}
+
+      {/* Message Info Modal */}
+      {showMessageInfoModal && selectedActionMessage && (
+        <MessageInfoModal
+          message={selectedActionMessage}
+          isMine={selectedActionMessage.senderId === user?.id}
+          onClose={() => setShowMessageInfoModal(false)}
+        />
+      )}
+
+      {/* Unlimited Emoji Picker Modal */}
+      {showUnlimitedEmojiPicker && actionMessageForEmoji && (
+        <div
+          className="modal-overlay"
+          style={{ zIndex: 9999 }}
+          onClick={() => { setShowUnlimitedEmojiPicker(false); setActionMessageForEmoji(null); }}
+        >
+          <div
+            className="modal-card"
+            style={{
+              maxWidth: '380px',
+              width: '92vw',
+              padding: '12px',
+              borderRadius: '20px',
+              background: 'var(--bg-card)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.6)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px 10px 8px', borderBottom: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                React with Emoji
+              </span>
+              <button
+                type="button"
+                onClick={() => { setShowUnlimitedEmojiPicker(false); setActionMessageForEmoji(null); }}
+                className="icon-btn-ghost"
+                style={{ width: '30px', height: '30px', borderRadius: '50%' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div style={{ height: '360px', marginTop: '6px' }}>
+              <EmojiPicker
+                onSelectEmoji={(em) => {
+                  if (socket && user?.id && actionMessageForEmoji) {
+                    socket.emit('add_reaction', {
+                      messageId: actionMessageForEmoji.id,
+                      chatId,
+                      emoji: em,
+                      userId: user.id
+                    });
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
+                        detail: { emoji: em || '❤️', mode: 'reaction', duration: 3 }
+                      }));
+                    }
+                  }
+                  setShowUnlimitedEmojiPicker(false);
+                  setActionMessageForEmoji(null);
+                  handleDismissActionMessage();
+                }}
+                onClose={() => {
+                  setShowUnlimitedEmojiPicker(false);
+                  setActionMessageForEmoji(null);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Toast Notification */}
+      {actionToast && (
+        <div style={{
+          position: 'fixed',
+          bottom: '85px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(15, 23, 42, 0.96)',
+          color: '#fff',
+          border: '1px solid rgba(255,255,255,0.18)',
+          borderRadius: '30px',
+          padding: '8px 20px',
+          fontSize: '0.84rem',
+          fontWeight: 600,
+          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          pointerEvents: 'none',
+          backdropFilter: 'blur(12px)',
+          animation: 'fadeInUp 0.2s ease'
+        }}>
+          <span>{actionToast}</span>
+        </div>
       )}
     </div>
   );

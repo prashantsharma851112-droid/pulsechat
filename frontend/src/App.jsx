@@ -286,12 +286,23 @@ export default function App() {
 
   useEffect(() => {
     const handlePopState = () => {
+      if (document.querySelector('.message-action-backdrop') || document.querySelector('.message-action-overlay')) {
+        window.dispatchEvent(new CustomEvent('pulsechat_dismiss_message_action'));
+        window.history.pushState({ chatOpen: true }, '');
+        return;
+      }
       handleCloseChat();
     };
 
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && activeChatRef.current) {
-        handleCloseChat();
+      if (e.key === 'Escape') {
+        if (document.querySelector('.message-action-backdrop') || document.querySelector('.message-action-overlay')) {
+          window.dispatchEvent(new CustomEvent('pulsechat_dismiss_message_action'));
+          return;
+        }
+        if (activeChatRef.current) {
+          handleCloseChat();
+        }
       }
     };
 

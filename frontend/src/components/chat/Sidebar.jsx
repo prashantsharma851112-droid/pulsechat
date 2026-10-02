@@ -2241,6 +2241,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                       className={u.isPro ? 'pro-neon-avatar' : ''}
                       style={{ position: 'relative', flexShrink: 0 }}
                     >
+                      {u.hasKingCrown ? (
+                        <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+                      ) : u.hasSilverCrown ? (
+                        <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+                      ) : u.hasStreakCrown ? (
+                        <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+                      ) : null}
                       <img
                         src={u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`}
                         alt="Avatar"
@@ -2248,7 +2255,20 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                         onError={(e) => {
                           e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
                         }}
-                        style={{ width: '48px', height: '48px', borderRadius: '50%', cursor: 'pointer', objectFit: 'cover' }}
+                        style={{
+                          width: '48px',
+                          height: '48px',
+                          borderRadius: '50%',
+                          cursor: 'pointer',
+                          objectFit: 'cover',
+                          border: u.hasKingCrown
+                            ? '2.5px solid #fbbf24'
+                            : u.hasSilverCrown
+                            ? '2.5px solid #cbd5e1'
+                            : u.hasStreakCrown
+                            ? '2.5px solid #f97316'
+                            : 'none'
+                        }}
                         title="Click to view full screen DP"
                       />
                       {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}

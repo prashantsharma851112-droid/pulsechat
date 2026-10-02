@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
 import { BACKEND_URL } from '../../utils/config';
-import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X } from 'lucide-react';
+import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 import EditPollModal from './EditPollModal';
@@ -193,7 +193,12 @@ export default function MessageItem({
   onToggleSelect,
   onJoinGroupCall,
   onReply,
-  senderIsPro
+  senderIsPro,
+  isSelectedForAction,
+  onSelectForAction,
+  isStarred,
+  onOpenUnlimitedEmoji,
+  onDismissAction
 }) {
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
@@ -218,6 +223,8 @@ export default function MessageItem({
   const lastTapRef = useRef(0);
   const isMouseDownRef = useRef(false);
   const mouseStartXRef = useRef(0);
+  const longPressTimerRef = useRef(null);
+  const isLongPressRef = useRef(false);
 
   useEffect(() => {
     if (!socket) return;
@@ -338,6 +345,7 @@ export default function MessageItem({
       }));
     }
     setShowContextMenu(false);
+    if (onDismissAction) onDismissAction();
   };
 
   const handleDoubleTap = () => {
@@ -346,13 +354,25 @@ export default function MessageItem({
     setTimeout(() => setShowHeartBurst(false), 750);
   };
 
-  // Touch Swipe-to-Reply & Double-Tap Detection
+  // Touch Long-Press Selection & Swipe-to-Reply Detection
   const handleTouchStart = (e) => {
     if (isMultiSelectMode) return;
     const touch = e.touches[0];
     touchStartXRef.current = touch.clientX;
     touchStartYRef.current = touch.clientY;
     isSwipingRef.current = false;
+    isLongPressRef.current = false;
+
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressRef.current = true;
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(40);
+      }
+      if (onSelectForAction) {
+        onSelectForAction(message);
+      }
+    }, 420);
   };
 
   const handleTouchMove = (e) => {
@@ -360,6 +380,16 @@ export default function MessageItem({
     const touch = e.touches[0];
     const deltaX = touch.clientX - touchStartXRef.current;
     const deltaY = Math.abs(touch.clientY - touchStartYRef.current);
+
+    // Cancel long press if finger moved
+    if (Math.abs(deltaX) > 8 || deltaY > 8) {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }
+
+    if (isLongPressRef.current) return;
 
     // Swipe right to reply (WhatsApp style)
     if (deltaX > 8 && deltaX > deltaY) {
@@ -371,6 +401,14 @@ export default function MessageItem({
   };
 
   const handleTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    if (isLongPressRef.current) {
+      isLongPressRef.current = false;
+      return;
+    }
     if (isMultiSelectMode) return;
     if (isSwipingRef.current) {
       if (dragX >= 35 && onReply) {
@@ -511,6 +549,7 @@ export default function MessageItem({
 
   return (
     <div
+      id={`msg-${message.id || message._id || message.clientTempId}`}
       onClick={isMultiSelectMode ? () => onToggleSelect && onToggleSelect(message.id) : undefined}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -525,7 +564,8 @@ export default function MessageItem({
         minWidth: '160px',
         position: 'relative',
         cursor: isMultiSelectMode ? 'pointer' : 'default',
-        touchAction: 'pan-y'
+        touchAction: 'pan-y',
+        zIndex: isSelectedForAction ? 55 : (isMultiSelectMode ? 10 : 1)
       }}
     >
       {/* Swipe to Reply Indicator */}
@@ -578,18 +618,24 @@ export default function MessageItem({
         onContextMenu={(e) => {
           if (!isMultiSelectMode) {
             e.preventDefault();
-            setShowContextMenu(!showContextMenu);
+            if (onSelectForAction) {
+              onSelectForAction(message);
+            }
           }
         }}
         style={{
           background: (message.type === 'gift' || message.type === '3d_text')
-            ? (isSelected ? 'rgba(99, 102, 241, 0.25)' : 'transparent')
-            : (isSelected ? 'rgba(99, 102, 241, 0.25)' : (isMine ? 'var(--bubble-sent)' : 'var(--bubble-received)')),
+            ? ((isSelected || isSelectedForAction) ? 'rgba(99, 102, 241, 0.25)' : 'transparent')
+            : ((isSelected || isSelectedForAction) ? 'rgba(99, 102, 241, 0.28)' : (isMine ? 'var(--bubble-sent)' : 'var(--bubble-received)')),
           color: isMine ? '#ffffff' : 'var(--text-main)',
           padding: (message.type === 'gift' || message.type === '3d_text') ? '2px 4px' : '0.75rem 1rem',
           borderRadius: isMine ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
-          boxShadow: (message.type === 'gift' || message.type === '3d_text') ? 'none' : '0 2px 6px rgba(0,0,0,0.08)',
-          border: isSelected ? '1.5px solid var(--accent)' : ((message.type === 'gift' || message.type === '3d_text') ? 'none' : '1px solid transparent'),
+          boxShadow: isSelectedForAction
+            ? '0 0 22px rgba(99, 102, 241, 0.55), 0 4px 14px rgba(0,0,0,0.3)'
+            : ((message.type === 'gift' || message.type === '3d_text') ? 'none' : '0 2px 6px rgba(0,0,0,0.08)'),
+          border: isSelectedForAction
+            ? '1.5px solid var(--accent)'
+            : (isSelected ? '1.5px solid var(--accent)' : ((message.type === 'gift' || message.type === '3d_text') ? 'none' : '1px solid transparent')),
           transform: `translateX(${dragX}px)`,
           transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1), background 0.15s ease',
           userSelect: isDragging ? 'none' : 'auto',
@@ -1262,6 +1308,9 @@ export default function MessageItem({
         {/* Timestamp & Ticks (hidden for gift stickers and 3D text as they display it natively) */}
         {message.type !== 'gift' && message.type !== '3d_text' && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem', marginTop: '0.35rem', fontSize: '0.68rem', opacity: 0.75 }}>
+            {isStarred && (
+              <Star size={11} fill="#f59e0b" color="#f59e0b" style={{ marginRight: '1px', flexShrink: 0 }} title="Starred message" />
+            )}
             <span>{timeStr}</span>
             {isMine && (
               <span style={{ display: 'inline-flex', alignItems: 'center' }}>
@@ -1280,55 +1329,77 @@ export default function MessageItem({
         )}
       </div>
 
-      {/* Action Context Menu (Reactions, Thread Reply & Delete/Unsend) */}
-      {showContextMenu && (
-        <div style={{ position: 'absolute', top: '-44px', [isMine ? 'right' : 'left']: 0, background: 'var(--bg-sidebar)', border: '1px solid var(--border)', borderRadius: '14px', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '10px', zIndex: 30, boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
-          <span onClick={() => handleReact('👍')} style={{ cursor: 'pointer' }}>👍</span>
-          <span onClick={() => handleReact('❤️')} style={{ cursor: 'pointer' }}>❤️</span>
-          <span onClick={() => handleReact('🔥')} style={{ cursor: 'pointer' }}>🔥</span>
-
-          <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
-
-          {/* Reply Button */}
-          <button
-            onClick={() => {
-              if (onReply) onReply(message);
-              setShowContextMenu(false);
-            }}
-            className="icon-btn-ghost"
-            title="Reply to message"
-            style={{ padding: '2px', color: 'var(--accent)' }}
-          >
-            <CornerUpLeft size={16} />
-          </button>
-
-          <button onClick={() => { setShowThread(true); setShowContextMenu(false); }} className="icon-btn-ghost" title="Reply in sub-thread" style={{ padding: '2px' }}>
-            <GitBranch size={16} />
-          </button>
-
-          {/* Save / Download to Device in Context Menu */}
-          {!message.isViewOnce && message.mediaUrl && (
+      {/* WhatsApp-Style Floating Quick Reaction Bar above message */}
+      {isSelectedForAction && (
+        <div
+          className="floating-reaction-bar"
+          style={{
+            position: 'absolute',
+            top: '-50px',
+            [isMine ? 'right' : 'left']: '4px',
+            background: 'rgba(15, 23, 42, 0.96)',
+            border: '1px solid rgba(255, 255, 255, 0.16)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            borderRadius: '30px',
+            padding: '4px 10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            zIndex: 65,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+            userSelect: 'none'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥'].map((em) => (
             <button
-              onClick={(e) => {
-                handleDownloadMedia(e, message.mediaUrl, message.fileName);
-                setShowContextMenu(false);
+              key={em}
+              type="button"
+              onClick={() => handleReact(em)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                fontSize: '1.35rem',
+                cursor: 'pointer',
+                padding: '2px 4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'transform 0.15s ease',
+                lineHeight: 1
               }}
-              className="icon-btn-ghost"
-              title="Save to Device"
-              style={{ color: '#10b981', padding: '2px' }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.35)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
             >
-              <Download size={16} />
+              {em}
             </button>
-          )}
+          ))}
 
-          {isMine && (
-            <button onClick={handleUnsendForEveryone} className="icon-btn-ghost" title="Unsend for Everyone" style={{ color: '#ef4444', padding: '2px' }}>
-              <Trash2 size={16} />
-            </button>
-          )}
+          <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.18)', margin: '0 2px' }} />
 
-          <button onClick={handleDeleteForMe} className="icon-btn-ghost" title="Delete for Me" style={{ color: 'var(--text-muted)', padding: '2px' }}>
-            Delete
+          {/* Plus button for Unlimited Emojis */}
+          <button
+            type="button"
+            onClick={() => onOpenUnlimitedEmoji && onOpenUnlimitedEmoji(message)}
+            title="More reactions (Unlimited emojis)"
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '50%',
+              background: 'rgba(255, 255, 255, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent)'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
+          >
+            <Plus size={15} />
           </button>
         </div>
       )}
