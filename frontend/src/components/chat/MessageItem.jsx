@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
 import { BACKEND_URL } from '../../utils/config';
-import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus } from 'lucide-react';
+import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 import EditPollModal from './EditPollModal';
@@ -10,6 +10,7 @@ import { getPollTheme, getPollAura } from './pollThemes';
 import PulseVipBadge from '../common/PulseVipBadge';
 import Sticker3D from '../common/Sticker3D';
 import Animated3DText from '../common/Animated3DText';
+import { getSavedQuickReactions, recordRecentReaction } from '../../utils/quickReactions';
 
 function StealthDustCard({ message, chatId, isMine, socket }) {
   const [isRevealing, setIsRevealing] = useState(false);
@@ -198,6 +199,7 @@ export default function MessageItem({
   onSelectForAction,
   isStarred,
   onOpenUnlimitedEmoji,
+  onOpenCustomizeReactions,
   onDismissAction
 }) {
   const { socket } = useContext(SocketContext);
@@ -211,6 +213,19 @@ export default function MessageItem({
   const [viewedByState, setViewedByState] = useState(message.viewedBy || []);
   const [downloadState, setDownloadState] = useState(''); // '' | 'Saving...' | 'Saved!'
   const [showImagePreview, setShowImagePreview] = useState(false);
+
+  // Quick Reaction emojis sequence state
+  const [quickReactions, setQuickReactions] = useState(() => getSavedQuickReactions());
+
+  useEffect(() => {
+    const handleQuickReactionsUpdate = (e) => {
+      if (e.detail?.reactions) {
+        setQuickReactions(e.detail.reactions);
+      }
+    };
+    window.addEventListener('pulsechat_quick_reactions_updated', handleQuickReactionsUpdate);
+    return () => window.removeEventListener('pulsechat_quick_reactions_updated', handleQuickReactionsUpdate);
+  }, []);
 
   // Swipe-to-reply & Double-tap states
   const [dragX, setDragX] = useState(0);
@@ -333,6 +348,7 @@ export default function MessageItem({
   };
 
   const handleReact = (emoji) => {
+    recordRecentReaction(emoji);
     const existingList = message.reactions?.[emoji] || [];
     const isAlreadyReacted = Array.isArray(existingList) && existingList.includes(currentUser?.id);
 
@@ -1362,7 +1378,7 @@ export default function MessageItem({
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥'].map((em) => (
+          {quickReactions.slice(0, 7).map((em) => (
             <button
               key={em}
               type="button"
@@ -1418,6 +1434,34 @@ export default function MessageItem({
             onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)'}
           >
             <Plus size={16} />
+          </button>
+
+          {/* Customize / Set Default Emojis Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onOpenCustomizeReactions) onOpenCustomizeReactions();
+            }}
+            title="Customize default reaction emojis"
+            style={{
+              width: '30px',
+              height: '30px',
+              borderRadius: '50%',
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              color: 'var(--text-muted)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              pointerEvents: 'auto'
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#f59e0b'; e.currentTarget.style.background = 'rgba(245, 158, 11, 0.15)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'; }}
+          >
+            <SlidersHorizontal size={14} />
           </button>
         </div>
       )}

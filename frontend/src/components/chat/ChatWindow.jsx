@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -21,6 +21,8 @@ import PulseVipBadge from '../common/PulseVipBadge';
 import MusicPickerModal from '../vibes/MusicPickerModal';
 import ForwardModal from './ForwardModal';
 import MessageInfoModal from './MessageInfoModal';
+import SetDefaultReactionsModal from './SetDefaultReactionsModal';
+import { recordRecentReaction } from '../../utils/quickReactions';
 import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
@@ -755,6 +757,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [showActionMoreMenu, setShowActionMoreMenu] = useState(false);
   const [actionToast, setActionToast] = useState('');
   const [deleteModalMessage, setDeleteModalMessage] = useState(null);
+  const [showCustomizeReactionsModal, setShowCustomizeReactionsModal] = useState(false);
 
   // Sync starred & pinned when chatId changes
   useEffect(() => {
@@ -3306,6 +3309,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   setActionMessageForEmoji(targetMsg);
                   setShowUnlimitedEmojiPicker(true);
                 }}
+                onOpenCustomizeReactions={() => setShowCustomizeReactionsModal(true)}
                 onDismissAction={handleDismissActionMessage}
                 onReply={(msg) => {
                   // Sender ka naam determine karo
@@ -4260,18 +4264,41 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               <span style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)' }}>
                 React with Emoji
               </span>
-              <button
-                type="button"
-                onClick={() => { setShowUnlimitedEmojiPicker(false); setActionMessageForEmoji(null); }}
-                className="icon-btn-ghost"
-                style={{ width: '30px', height: '30px', borderRadius: '50%' }}
-              >
-                <X size={16} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCustomizeReactionsModal(true)}
+                  className="icon-btn-ghost"
+                  style={{
+                    padding: '4px 10px',
+                    height: '28px',
+                    borderRadius: '14px',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    background: 'rgba(255,255,255,0.06)'
+                  }}
+                  title="Customize default reaction emojis"
+                >
+                  <SlidersHorizontal size={13} />
+                  <span>Set Defaults</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowUnlimitedEmojiPicker(false); setActionMessageForEmoji(null); }}
+                  className="icon-btn-ghost"
+                  style={{ width: '30px', height: '30px', borderRadius: '50%' }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
             <div style={{ height: '360px', marginTop: '6px' }}>
               <EmojiPicker
                 onSelectEmoji={(em) => {
+                  recordRecentReaction(em);
                   if (socket && user?.id && actionMessageForEmoji) {
                     socket.emit('add_reaction', {
                       messageId: actionMessageForEmoji.id,
@@ -4373,36 +4400,34 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
-              {deleteModalMessage.senderId === user.id && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (socket) socket.emit('delete_message', { messageId: deleteModalMessage.id, chatId });
-                    handleTriggerUndoToast(deleteModalMessage.id);
-                    setDeleteModalMessage(null);
-                    handleDismissActionMessage();
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '11px 16px',
-                    borderRadius: '12px',
-                    background: '#ef4444',
-                    color: '#fff',
-                    border: 'none',
-                    fontWeight: 600,
-                    fontSize: '0.88rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    boxShadow: '0 4px 14px rgba(239, 68, 68, 0.35)'
-                  }}
-                >
-                  <Trash2 size={16} />
-                  <span>Delete for Everyone</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  if (socket) socket.emit('delete_message', { messageId: deleteModalMessage.id, chatId });
+                  handleTriggerUndoToast(deleteModalMessage.id);
+                  setDeleteModalMessage(null);
+                  handleDismissActionMessage();
+                }}
+                style={{
+                  width: '100%',
+                  padding: '11px 16px',
+                  borderRadius: '12px',
+                  background: '#ef4444',
+                  color: '#fff',
+                  border: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 14px rgba(239, 68, 68, 0.35)'
+                }}
+              >
+                <Trash2 size={16} />
+                <span>Delete for Everyone</span>
+              </button>
 
               <button
                 type="button"
@@ -4452,6 +4477,17 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </div>
           </div>
         </div>
+      )}
+
+      {/* Set Default Reaction Emojis Modal */}
+      {showCustomizeReactionsModal && (
+        <SetDefaultReactionsModal
+          onClose={() => setShowCustomizeReactionsModal(false)}
+          onSaved={() => {
+            setActionToast('Default reaction emojis saved! ✨');
+            setTimeout(() => setActionToast(''), 2200);
+          }}
+        />
       )}
     </div>
   );
