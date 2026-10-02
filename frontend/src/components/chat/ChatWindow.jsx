@@ -4303,6 +4303,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </div>
             <div style={{ height: '360px', marginTop: '6px' }}>
               <EmojiPicker
+                inline={true}
                 onSelectEmoji={(em) => {
                   recordRecentReaction(em);
                   if (socket && user?.id && actionMessageForEmoji) {

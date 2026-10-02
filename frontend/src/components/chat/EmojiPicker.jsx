@@ -75,7 +75,7 @@ export const EMOJI_CATEGORIES = [
 
 export const ALL_EMOJIS = EMOJI_CATEGORIES.flatMap(cat => cat.emojis);
 
-export default function EmojiPicker({ onSelectEmoji, onClose }) {
+export default function EmojiPicker({ onSelectEmoji, onClose, inline = false, style = {} }) {
   const [activeCategory, setActiveCategory] = useState('smileys');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -89,27 +89,48 @@ export default function EmojiPicker({ onSelectEmoji, onClose }) {
     return ALL_EMOJIS;
   }, [activeCategory, searchQuery]);
 
+  const defaultFloatingStyle = {
+    position: 'absolute',
+    bottom: '68px',
+    left: '12px',
+    width: '320px',
+    maxWidth: 'calc(100vw - 24px)',
+    height: '360px',
+    background: 'rgba(18, 18, 26, 0.96)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    border: '1px solid rgba(245, 158, 11, 0.35)',
+    borderRadius: '20px',
+    padding: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    zIndex: 1000,
+    boxShadow: '0 16px 40px rgba(0,0,0,0.7)',
+    animation: 'pulseFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+  };
+
+  const inlineContainerStyle = {
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+    minHeight: '260px',
+    background: 'transparent',
+    border: 'none',
+    borderRadius: '0',
+    padding: '0',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    boxShadow: 'none',
+    zIndex: 'auto'
+  };
+
   return (
     <div
       style={{
-        position: 'absolute',
-        bottom: '68px',
-        left: '12px',
-        width: '320px',
-        maxWidth: 'calc(100vw - 24px)',
-        height: '360px',
-        background: 'rgba(18, 18, 26, 0.96)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        border: '1px solid rgba(245, 158, 11, 0.35)',
-        borderRadius: '20px',
-        padding: '12px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-        zIndex: 1000,
-        boxShadow: '0 16px 40px rgba(0,0,0,0.7)',
-        animation: 'pulseFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+        ...(inline ? inlineContainerStyle : defaultFloatingStyle),
+        ...style
       }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -149,23 +170,25 @@ export default function EmojiPicker({ onSelectEmoji, onClose }) {
             </button>
           )}
         </div>
-        <button
-          onClick={onClose}
-          style={{
-            background: 'rgba(255,255,255,0.08)',
-            border: 'none',
-            color: '#fff',
-            borderRadius: '50%',
-            width: '28px',
-            height: '28px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer'
-          }}
-        >
-          <X size={15} />
-        </button>
+        {!inline && onClose && (
+          <button
+            onClick={onClose}
+            style={{
+              background: 'rgba(255,255,255,0.08)',
+              border: 'none',
+              color: '#fff',
+              borderRadius: '50%',
+              width: '28px',
+              height: '28px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+          >
+            <X size={15} />
+          </button>
+        )}
       </div>
 
       {/* Category Tabs */}
@@ -223,7 +246,7 @@ export default function EmojiPicker({ onSelectEmoji, onClose }) {
             type="button"
             onClick={() => {
               onSelectEmoji(emoji);
-              if (onClose) onClose();
+              if (!inline && onClose) onClose();
             }}
             style={{
               fontSize: '1.45rem',

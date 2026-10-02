@@ -107,9 +107,10 @@ export default function SetDefaultReactionsModal({ onClose, onSaved }) {
         </div>
 
         {/* Emoji Grid Container */}
-        <div style={{ flex: 1, overflowY: 'auto', minHeight: '260px', maxHeight: '340px', padding: '10px 14px' }}>
+        <div style={{ flex: 1, minHeight: '300px', maxHeight: '360px', padding: '12px 16px', display: 'flex', flexDirection: 'column' }}>
           <EmojiPicker
             onSelectEmoji={handleSelectEmoji}
+            inline={true}
           />
         </div>
 
