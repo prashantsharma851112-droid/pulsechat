@@ -9,7 +9,7 @@ import { useBackHandler } from '../../utils/backNavigation';
 
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 
-export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
+export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initialVibeId }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
   
@@ -30,7 +30,23 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
     return clean;
   }, [vibeGroup?.vibes]);
 
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    if (initialVibeId && vibes.length > 0) {
+      const idx = vibes.findIndex(v => String(v.id) === String(initialVibeId) || String(v._id) === String(initialVibeId));
+      if (idx !== -1) return idx;
+    }
+    return 0;
+  });
+
+  useEffect(() => {
+    if (initialVibeId && vibes.length > 0) {
+      const idx = vibes.findIndex(v => String(v.id) === String(initialVibeId) || String(v._id) === String(initialVibeId));
+      if (idx !== -1) {
+        setCurrentIndex(idx);
+        setProgress(0);
+      }
+    }
+  }, [initialVibeId, vibes]);
   const [progress, setProgress] = useState(0);
   const [sparksMsg, setSparksMsg] = useState('');
   const [replyText, setReplyText] = useState('');
@@ -351,6 +367,24 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
       msgText = `Reacted ${emoji} to story`;
     }
 
+    const storyReplyData = {
+      storyId: currentVibe.id,
+      mediaUrl: currentVibe.mediaUrl || null,
+      mediaType: currentVibe.mediaUrl ? (currentVibe.mediaUrl.match(/\.(mp4|webm|mov)$/i) ? 'video' : 'image') : 'text',
+      caption: currentVibe.caption || '',
+      bgGradient: currentVibe.bgGradient || null,
+      audioUrl: currentVibe.audioUrl || null,
+      songTitle: currentVibe.songTitle || '',
+      artistName: currentVibe.artistName || '',
+      authorId: storyAuthorId,
+      authorName: authorName,
+      authorAvatar: vibeGroup?.avatar || currentVibe.avatar || '',
+      reactionEmoji: emoji || null,
+      replyText: textMsg ? textMsg.trim() : null,
+      tipSparks: tipSparks > 0 ? tipSparks : 0,
+      createdAt: currentVibe.createdAt || new Date().toISOString()
+    };
+
     // 1. INSTANT LOCAL RECENT CHATS UPDATE (0ms latency, zero chat disappearance!)
     if (user?.id && storyAuthorId && msgText) {
       const chatId = [user.id, storyAuthorId].sort().join('_');
@@ -361,7 +395,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
         receiverId: storyAuthorId,
         isGroup: false,
         content: msgText,
-        type: 'text',
+        type: 'story_reply',
+        storyReply: storyReplyData,
         status: 'sent',
         timestamp: new Date().toISOString()
       };

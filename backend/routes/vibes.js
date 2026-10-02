@@ -398,6 +398,24 @@ router.post('/react/:vibeId', authMiddleware, async (req, res) => {
       }
 
       if (msgText) {
+        const storyReplyData = {
+          storyId: vibe.id,
+          mediaUrl: vibe.mediaUrl || null,
+          mediaType: vibe.mediaUrl ? (vibe.mediaUrl.match(/\.(mp4|webm|mov)$/i) ? 'video' : 'image') : 'text',
+          caption: vibe.caption || '',
+          bgGradient: vibe.bgGradient || null,
+          audioUrl: vibe.audioUrl || null,
+          songTitle: vibe.songTitle || '',
+          artistName: vibe.artistName || '',
+          authorId: storyAuthorId,
+          authorName: authorUser?.displayName || authorUser?.username || vibe.displayName || 'Pulse User',
+          authorAvatar: authorUser?.avatar || vibe.avatar || '',
+          reactionEmoji: emoji || null,
+          replyText: replyText ? replyText.trim() : null,
+          tipSparks: tipSparks > 0 ? Number(tipSparks) : 0,
+          createdAt: vibe.createdAt ? new Date(vibe.createdAt).toISOString() : new Date().toISOString()
+        };
+
         createdMsg = {
           id: 'msg_vibe_' + Date.now(),
           chatId,
@@ -405,16 +423,26 @@ router.post('/react/:vibeId', authMiddleware, async (req, res) => {
           receiverId: storyAuthorId,
           isGroup: false,
           content: msgText,
-          type: 'text',
+          type: 'story_reply',
+          storyReply: storyReplyData,
           status: 'sent',
           timestamp: new Date().toISOString()
         };
 
         await db.saveMessage(createdMsg);
 
+        try {
+          const redis = require('../utils/redis');
+          if (redis) {
+            redis.invalidateRecent(resolvedSenderId).catch(() => {});
+            redis.invalidateRecent(storyAuthorId).catch(() => {});
+          }
+        } catch (e) {}
+
         const io = req.app.get('io');
         if (io) {
           io.to(chatId).emit('new_message', createdMsg);
+          io.to(`user_${storyAuthorId}`).emit('new_message', createdMsg);
           io.to(`user_${storyAuthorId}`).emit('message_notification', {
             ...createdMsg,
             senderName: sender.displayName || sender.username || 'Pulse User',

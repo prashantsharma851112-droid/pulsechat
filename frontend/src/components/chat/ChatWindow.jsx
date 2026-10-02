@@ -22,6 +22,7 @@ import MusicPickerModal from '../vibes/MusicPickerModal';
 import ForwardModal from './ForwardModal';
 import MessageInfoModal from './MessageInfoModal';
 import SetDefaultReactionsModal from './SetDefaultReactionsModal';
+import VibeViewerModal from '../vibes/VibeViewerModal';
 import { recordRecentReaction } from '../../utils/quickReactions';
 import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
@@ -63,6 +64,70 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     senderProTier: user?.proTier || 'none',
     senderCustomBadge: user?.customBadge || ''
   });
+
+  // Instagram-style Story preview modal state
+  const [selectedStoryVibeGroup, setSelectedStoryVibeGroup] = useState(null);
+  const [selectedStoryVibeId, setSelectedStoryVibeId] = useState(null);
+
+  const handleOpenStory = useCallback(async (storyPayload) => {
+    if (!storyPayload) return;
+    const authorId = storyPayload.authorId || (activeChat.isGroup ? null : activeChat.id);
+    const targetVibeId = storyPayload.storyId || storyPayload.id;
+    setSelectedStoryVibeId(targetVibeId);
+
+    if (authorId && token) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/vibes/user/${authorId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.vibes) && data.vibes.length > 0) {
+            setSelectedStoryVibeGroup(data);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch active vibes for story preview, using fallback:', err);
+      }
+    }
+
+    // Fallback: build snapshot vibeGroup from storyPayload so user can ALWAYS view story card even if expired
+    const fallbackVibe = {
+      id: targetVibeId || 'story_snapshot_' + Date.now(),
+      _id: targetVibeId || 'story_snapshot_' + Date.now(),
+      userId: authorId || user?.id,
+      caption: storyPayload.caption || '',
+      mediaUrl: storyPayload.mediaUrl || null,
+      mediaType: storyPayload.mediaType || (storyPayload.mediaUrl?.match(/\.(mp4|webm|mov)$/i) ? 'video' : 'image'),
+      bgGradient: storyPayload.bgGradient || 'linear-gradient(135deg, #1e1b4b 0%, #311042 100%)',
+      audioUrl: storyPayload.audioUrl || null,
+      songTitle: storyPayload.songTitle || null,
+      artistName: storyPayload.artistName || null,
+      createdAt: storyPayload.createdAt || new Date().toISOString(),
+      views: []
+    };
+
+    const fallbackGroup = {
+      userId: authorId || user?.id,
+      displayName: storyPayload.authorName || activeChat?.displayName || 'User',
+      username: storyPayload.authorUsername || activeChat?.username || '',
+      avatar: storyPayload.authorAvatar || activeChat?.avatar || '',
+      vibes: [fallbackVibe]
+    };
+
+    setSelectedStoryVibeGroup(fallbackGroup);
+  }, [token, activeChat, user]);
+
+  useEffect(() => {
+    const onOpenStoryEvent = (e) => {
+      if (e.detail) {
+        handleOpenStory(e.detail);
+      }
+    };
+    window.addEventListener('pulsechat_open_story', onOpenStoryEvent);
+    return () => window.removeEventListener('pulsechat_open_story', onOpenStoryEvent);
+  }, [handleOpenStory]);
 
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showSolidThemeModal, setShowSolidThemeModal] = useState(false);
@@ -3347,6 +3412,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   });
                   replyInputRef.current?.focus();
                 }}
+                onOpenStory={handleOpenStory}
               />
             </React.Fragment>
           );
@@ -4506,6 +4572,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           onSaved={() => {
             setActionToast('Default reaction emojis saved! ✨');
             setTimeout(() => setActionToast(''), 2200);
+          }}
+        />
+      )}
+
+      {/* Story / Vibe Viewer Modal */}
+      {selectedStoryVibeGroup && (
+        <VibeViewerModal
+          vibeGroup={selectedStoryVibeGroup}
+          initialVibeId={selectedStoryVibeId}
+          onClose={() => {
+            setSelectedStoryVibeGroup(null);
+            setSelectedStoryVibeId(null);
           }}
         />
       )}

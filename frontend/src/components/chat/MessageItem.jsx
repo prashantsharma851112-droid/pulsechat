@@ -182,6 +182,272 @@ function StealthDustCard({ message, chatId, isMine, socket }) {
 }
 
 
+function StoryReplyCard({ message, isMine, onOpenStory }) {
+  const sr = message.storyReply;
+  const isReaction = Boolean(sr?.reactionEmoji || (!sr && message.content && message.content.startsWith('Reacted ') && message.content.includes('story')));
+  const isSparks = Boolean(sr?.tipSparks || (!sr && message.content && message.content.startsWith('Tipped ') && message.content.includes('story')));
+
+  let reactionEmoji = sr?.reactionEmoji;
+  if (!reactionEmoji && message.content) {
+    const m = message.content.match(/Reacted\s+([^\s]+)\s+to/);
+    if (m) reactionEmoji = m[1];
+  }
+
+  let replyText = sr?.replyText;
+  if (!replyText && !isReaction && !isSparks && message.content) {
+    replyText = message.content.replace(/^(Replied to your story:|You replied:)\s*"?/, '').replace(/"?$/, '').trim();
+  }
+
+  let tipSparks = sr?.tipSparks;
+  if (!tipSparks && isSparks && message.content) {
+    const m = message.content.match(/Tipped\s*(?:⚡)?\s*(\d+)/);
+    if (m) tipSparks = m[1];
+  }
+
+  const storyAuthorId = sr?.authorId || (isMine ? message.receiverId : message.senderId);
+  const storyAuthorName = sr?.authorName || (isMine ? 'User' : (message.senderName || 'User'));
+  const isMyStory = !isMine; // If message was received by me, it's a reaction to my story
+
+  const handleCardClick = (e) => {
+    e.stopPropagation();
+    const storyPayload = sr || {
+      storyId: 'story_' + (message.id || Date.now()),
+      mediaUrl: null,
+      caption: '',
+      authorId: storyAuthorId,
+      authorName: storyAuthorName
+    };
+    if (onOpenStory) {
+      onOpenStory(storyPayload);
+    } else if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechat_open_story', { detail: storyPayload }));
+    }
+  };
+
+  const hasMedia = Boolean(sr?.mediaUrl);
+  const isVideo = sr?.mediaType === 'video' || (sr?.mediaUrl && sr.mediaUrl.match(/\.(mp4|webm|mov)$/i));
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '220px', maxWidth: '280px' }}>
+      {/* 1. Instagram-Style Story Thumbnail Preview Box */}
+      <div
+        onClick={handleCardClick}
+        style={{
+          position: 'relative',
+          borderRadius: '16px',
+          overflow: 'hidden',
+          cursor: 'pointer',
+          border: '1.5px solid rgba(255, 255, 255, 0.18)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+          background: sr?.bgGradient || 'linear-gradient(135deg, #1e1b4b 0%, #311042 100%)',
+          height: hasMedia || sr?.caption ? '150px' : '110px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          transition: 'transform 0.18s ease, box-shadow 0.18s ease',
+          userSelect: 'none'
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+        title="Tap to view story"
+      >
+        {/* Media (Image or Video) with Dark Gradient Blend */}
+        {hasMedia && (
+          <>
+            {isVideo ? (
+              <video
+                src={sr.mediaUrl}
+                muted
+                playsInline
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover'
+                }}
+              />
+            ) : (
+              <img
+                src={sr.mediaUrl}
+                alt="Story preview"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover'
+                }}
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            )}
+            {/* Blend Gradient Overlay */}
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.65) 100%)',
+              pointerEvents: 'none'
+            }} />
+          </>
+        )}
+
+        {/* Top Header Tag: Story Pill */}
+        <div style={{
+          position: 'relative',
+          zIndex: 2,
+          padding: '8px 10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <span style={{
+            fontSize: '0.7rem',
+            fontWeight: 800,
+            background: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255, 255, 255, 0.25)',
+            color: '#fff',
+            padding: '3px 8px',
+            borderRadius: '20px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '5px',
+            letterSpacing: '0.4px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.4)'
+          }}>
+            <span style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              background: 'linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)',
+              display: 'inline-block'
+            }} />
+            {isMyStory ? 'Your Story' : 'Story'}
+          </span>
+
+          <span style={{
+            fontSize: '0.65rem',
+            color: 'rgba(255,255,255,0.9)',
+            background: 'rgba(0,0,0,0.5)',
+            padding: '2px 7px',
+            borderRadius: '10px',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px'
+          }}>
+            <Eye size={11} /> View
+          </span>
+        </div>
+
+        {/* Text Story Caption or Media Caption */}
+        <div style={{
+          position: 'relative',
+          zIndex: 2,
+          padding: '10px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-end',
+          flex: 1
+        }}>
+          {sr?.caption ? (
+            <p style={{
+              margin: 0,
+              fontSize: '0.84rem',
+              fontWeight: 600,
+              color: '#ffffff',
+              textShadow: '0 2px 6px rgba(0,0,0,0.9)',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              lineHeight: 1.3
+            }}>
+              {sr.caption}
+            </p>
+          ) : !hasMedia && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              textAlign: 'center',
+              color: 'rgba(255,255,255,0.9)',
+              fontSize: '0.85rem',
+              fontWeight: 700
+            }}>
+              ✨ Story
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 2. Reaction or Reply Bubble Content */}
+      {isReaction ? (
+        /* Instagram Style Story Reaction */
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          padding: '4px 6px',
+          background: 'rgba(0,0,0,0.18)',
+          borderRadius: '12px'
+        }}>
+          <span style={{
+            fontSize: '2rem',
+            lineHeight: 1,
+            filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))',
+            animation: 'pulseModalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}>
+            {reactionEmoji || '❤️'}
+          </span>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>
+              {isMyStory ? 'Reacted to your story' : 'You reacted to story'}
+            </span>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+              Quick reaction
+            </span>
+          </div>
+        </div>
+      ) : isSparks ? (
+        /* Sparks Tip on Story */
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '6px 12px',
+          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.12))',
+          border: '1px solid rgba(245, 158, 11, 0.4)',
+          borderRadius: '12px'
+        }}>
+          <span style={{ fontSize: '1.2rem' }}>⚡</span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f59e0b' }}>
+            {isMyStory ? `Tipped ⚡ ${tipSparks || 10} Sparks on your story!` : `Tipped ⚡ ${tipSparks || 10} Sparks on story!`}
+          </span>
+        </div>
+      ) : (
+        /* Instagram Style Story Reply Message Text */
+        <div style={{
+          padding: '2px 4px'
+        }}>
+          <p style={{
+            fontSize: '0.98rem',
+            wordBreak: 'break-word',
+            margin: 0,
+            lineHeight: 1.45,
+            fontWeight: 500,
+            color: 'var(--text-main)'
+          }}>
+            {replyText || message.content}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MessageItem({
   message,
   isMine,
@@ -200,7 +466,8 @@ export default function MessageItem({
   isStarred,
   onOpenUnlimitedEmoji,
   onOpenCustomizeReactions,
-  onDismissAction
+  onDismissAction,
+  onOpenStory
 }) {
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
@@ -753,26 +1020,21 @@ export default function MessageItem({
           </div>
         )}
 
-        {/* Text Message */}
-        {message.type === 'text' && (
+        {/* Instagram-Style Story Reply / Reaction Message */}
+        {(message.type === 'story_reply' || Boolean(message.storyReply) || (
+          message.type === 'text' && message.content && (
+            message.content.startsWith('Replied to your story:') ||
+            message.content.startsWith('You replied: ') ||
+            (message.content.startsWith('Reacted ') && message.content.includes('story')) ||
+            (message.content.startsWith('Tipped ') && message.content.includes('story'))
+          )
+        )) ? (
+          <StoryReplyCard message={message} isMine={isMine} onOpenStory={onOpenStory} />
+        ) : (message.type === 'text' && (
           <p style={{ fontSize: '0.98rem', wordBreak: 'break-word', margin: 0, lineHeight: 1.45 }}>
-            {(() => {
-              if (!message.content) return '';
-              if (isMine) {
-                if (message.content.startsWith('Replied to your story:')) {
-                  return message.content.replace(/^Replied to your story:\s*/, 'You replied: ');
-                }
-                if (message.content.startsWith('Reacted ') && message.content.includes(' to your story')) {
-                  return message.content.replace(/\s*to your story$/, ' to story');
-                }
-                if (message.content.startsWith('Tipped ') && message.content.includes(' on your story!')) {
-                  return message.content.replace(/\s*on your story!$/, ' on story!');
-                }
-              }
-              return message.content;
-            })()}
+            {message.content}
           </p>
-        )}
+        ))}
 
         {/* View Once Media Message */}
         {(message.type === 'image' || message.type === 'video') && message.isViewOnce && (

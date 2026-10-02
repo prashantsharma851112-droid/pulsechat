@@ -34,6 +34,8 @@ const messageSchema = new mongoose.Schema({
   replyTo: { type: Object, default: null }, // { id, content, type, senderId, senderName }
   // WhatsApp-style forwarded indicator
   isForwarded: { type: Boolean, default: false },
+  // Instagram-style Story reply / reaction data
+  storyReply: { type: Object, default: null },
   // Auto-decay / disappearing message expiry (MongoDB TTL index - 30-day lifetime free storage rule)
   expiresAt: { type: Date, default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), index: { expires: 0 } }
 });

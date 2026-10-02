@@ -763,7 +763,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       const targetId = isMyMsg ? msg.receiverId : (msg.isGroup ? msg.chatId : msg.senderId);
       if (!targetId && !msg.chatId) return;
 
-      let contentSnippet = msg.type === 'text'
+      let contentSnippet = (msg.type === 'story_reply' || msg.storyReply)
+        ? (() => {
+            const sr = msg.storyReply;
+            if (sr?.reactionEmoji) return isMyMsg ? `You reacted ${sr.reactionEmoji} to story` : `Reacted ${sr.reactionEmoji} to your story`;
+            if (sr?.tipSparks) return isMyMsg ? `You tipped ⚡ ${sr.tipSparks} Sparks on story` : `Tipped ⚡ ${sr.tipSparks} Sparks on your story!`;
+            if (sr?.replyText) return isMyMsg ? `You replied: "${sr.replyText}"` : `Replied to your story: "${sr.replyText}"`;
+            return isMyMsg ? 'You replied to story' : 'Replied to your story';
+          })()
+        : (msg.type === 'text'
         ? (msg.content || '')
         : (msg.type === '3d_text' ? `✨ 3D: ${msg.content}`
         : msg.type === 'stealth_dust' ? '⚡ Stealth Dust Text'
@@ -773,7 +781,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         : msg.type === 'gift' ? '🎁 Gift'
         : msg.type === 'poll' ? '📊 Poll'
         : msg.type === 'call' ? '📞 Call'
-        : 'File attachment');
+        : 'File attachment'));
 
       if (msg.type === 'text' && contentSnippet) {
         if (contentSnippet.startsWith('Replied to your story:')) {
