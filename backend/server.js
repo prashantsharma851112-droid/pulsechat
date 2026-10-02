@@ -593,6 +593,45 @@ io.on('connection', (socket) => {
         resolvedReceiverId = parts.find(p => p !== senderId) || '';
       }
 
+      // Enforce friendship for 1-on-1 messages: non-synced users cannot send messages
+      if (!isGroup && resolvedReceiverId && senderId !== resolvedReceiverId) {
+        try {
+          const sUser = await User.findOne({
+            $or: [
+              { id: senderId },
+              ...(mongoose.Types.ObjectId.isValid(senderId) ? [{ _id: senderId }] : []),
+              { username: senderId }
+            ]
+          });
+          const rUser = await User.findOne({
+            $or: [
+              { id: resolvedReceiverId },
+              ...(mongoose.Types.ObjectId.isValid(resolvedReceiverId) ? [{ _id: resolvedReceiverId }] : []),
+              { username: resolvedReceiverId }
+            ]
+          });
+
+          if (sUser && rUser) {
+            const rIdentifiers = [rUser.id, rUser._id?.toString(), rUser.username, resolvedReceiverId].filter(Boolean);
+            const sIdentifiers = [sUser.id, sUser._id?.toString(), sUser.username, senderId].filter(Boolean);
+            const isFriend = sUser.friends?.some(f => rIdentifiers.includes(f)) || rUser.friends?.some(f => sIdentifiers.includes(f));
+            if (!isFriend) {
+              socket.emit('message_blocked', {
+                chatId,
+                receiverId: resolvedReceiverId,
+                reason: 'Aap sirf apne synced friends ko message bhej sakte hain. Pehle Sync Request accept karwayein.'
+              });
+              if (typeof ackCallback === 'function') {
+                ackCallback({ error: 'not_friends', message: 'You can only message synced friends.' });
+              }
+              return;
+            }
+          }
+        } catch (e) {
+          console.error('Error verifying friendship for send_message:', e);
+        }
+      }
+
       // Check if recipient is currently online
       const isReceiverOnline = Boolean(resolvedReceiverId && !isGroup && onlineUsers.has(resolvedReceiverId));
       const initialStatus = isReceiverOnline ? 'delivered' : 'sent';

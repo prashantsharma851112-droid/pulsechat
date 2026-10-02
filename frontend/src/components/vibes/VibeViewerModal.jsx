@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc } from 'lucide-react';
+import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc, Lock } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import { updateRecentChatSnippet, getCachedAllUsers } from '../../utils/offlineStorage';
@@ -108,8 +108,133 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     return () => clearInterval(interval);
   }, [showingSponsoredAd]);
 
+  const storyAuthorId = currentVibe?.userId || vibeGroup?.userId;
   const currentUserId = user?.id || user?._id || 'local_user';
-  const isMine = currentVibe?.userId === currentUserId || vibeGroup?.userId === currentUserId;
+  const isMine = Boolean(
+    storyAuthorId && (
+      storyAuthorId === currentUserId ||
+      (user?.id && (storyAuthorId === user.id || currentVibe?.userId === user.id || vibeGroup?.userId === user.id)) ||
+      (user?._id && (storyAuthorId === user._id || currentVibe?.userId === user._id || vibeGroup?.userId === user._id)) ||
+      (user?.username && (storyAuthorId === user.username || currentVibe?.username === user.username || vibeGroup?.username === user.username))
+    )
+  );
+
+  const [authorFriendStatus, setAuthorFriendStatus] = useState(() => isMine ? 'friends' : 'checking');
+  const [authorRequestId, setAuthorRequestId] = useState(null);
+  const [authorActionLoading, setAuthorActionLoading] = useState(false);
+
+  // Fetch friendship status for the story author
+  useEffect(() => {
+    if (isMine) {
+      setAuthorFriendStatus('friends');
+      return;
+    }
+    if (!storyAuthorId || !token) {
+      setAuthorFriendStatus('none');
+      return;
+    }
+
+    let isMounted = true;
+    setAuthorFriendStatus('checking');
+
+    fetch(`${BACKEND_URL}/api/friends/status/${storyAuthorId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (isMounted && data) {
+          setAuthorFriendStatus(data.status || 'none');
+          setAuthorRequestId(data.requestId || null);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setAuthorFriendStatus('none');
+      });
+
+    return () => { isMounted = false; };
+  }, [storyAuthorId, isMine, token]);
+
+  // Real-time synchronization of friendship status (lock/unlock immediately)
+  useEffect(() => {
+    const handleFriendRemoved = (e) => {
+      const targetId = e?.detail?.targetId || e?.userId || e?.targetId;
+      if (targetId && (targetId === storyAuthorId || targetId === vibeGroup?.username || (currentVibe && targetId === currentVibe.userId))) {
+        setAuthorFriendStatus('none');
+      }
+    };
+    const handleReqAccepted = (data) => {
+      const otherId = data?.friend?.id || data?.senderId;
+      if (otherId && (otherId === storyAuthorId || otherId === vibeGroup?.username || (currentVibe && otherId === currentVibe.userId))) {
+        setAuthorFriendStatus('friends');
+      }
+    };
+    const handleReqCancelled = (data) => {
+      if (data?.requestId === authorRequestId || data?.targetId === storyAuthorId) {
+        setAuthorFriendStatus('none');
+        setAuthorRequestId(null);
+      }
+    };
+
+    if (socket) {
+      socket.on('friend_removed', handleFriendRemoved);
+      socket.on('friend_request_accepted', handleReqAccepted);
+      socket.on('friend_request_cancelled', handleReqCancelled);
+      socket.on('friend_request_rejected', handleReqCancelled);
+    }
+    window.addEventListener('pulsechat_friend_removed', handleFriendRemoved);
+
+    return () => {
+      if (socket) {
+        socket.off('friend_removed', handleFriendRemoved);
+        socket.off('friend_request_accepted', handleReqAccepted);
+        socket.off('friend_request_cancelled', handleReqCancelled);
+        socket.off('friend_request_rejected', handleReqCancelled);
+      }
+      window.removeEventListener('pulsechat_friend_removed', handleFriendRemoved);
+    };
+  }, [socket, storyAuthorId, vibeGroup?.username, currentVibe?.userId, authorRequestId]);
+
+  const handleSendSyncRequest = async () => {
+    if (!token || !storyAuthorId || authorActionLoading) return;
+    try {
+      setAuthorActionLoading(true);
+      setAuthorFriendStatus('pending_sent');
+      const res = await fetch(`${BACKEND_URL}/api/friends/request/${storyAuthorId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data?.status === 'accepted') {
+        setAuthorFriendStatus('friends');
+      } else if (data?.request?.id) {
+        setAuthorRequestId(data.request.id);
+      }
+    } catch (err) {
+      console.error('Failed to send sync request from vibe viewer:', err);
+    } finally {
+      setAuthorActionLoading(false);
+    }
+  };
+
+  const handleAcceptSyncRequest = async () => {
+    if (!token || !authorRequestId || authorActionLoading) return;
+    try {
+      setAuthorActionLoading(true);
+      setAuthorFriendStatus('friends');
+      const res = await fetch(`${BACKEND_URL}/api/friends/accept/${authorRequestId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        setAuthorFriendStatus('pending_received');
+      }
+    } catch (err) {
+      console.error('Failed to accept sync request from vibe viewer:', err);
+      setAuthorFriendStatus('pending_received');
+    } finally {
+      setAuthorActionLoading(false);
+    }
+  };
 
   const isKing = vibeGroup?.hasKingCrown || (isMine && user?.hasKingCrown);
   const isSilver = vibeGroup?.hasSilverCrown || (isMine && user?.hasSilverCrown);
@@ -365,6 +490,11 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
 
   const handleReact = async (emoji, tipSparks = 0, textMsg = '') => {
     if (!currentVibe) return;
+    if (!isMine && authorFriendStatus !== 'friends') {
+      setSparksMsg('🔒 Sync first to reply, react or tip sparks');
+      setTimeout(() => setSparksMsg(''), 3000);
+      return;
+    }
     playSound('pop');
 
     const storyAuthorId = currentVibe.userId || vibeGroup?.userId;
@@ -1014,6 +1144,103 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                 <span style={{ color: '#f59e0b', fontSize: '0.8rem', fontWeight: 800 }}>
                   ⚡ {currentVibe.sparksEarned} Sparks Tipped!
                 </span>
+              )}
+            </div>
+          ) : !isMine && authorFriendStatus !== 'friends' ? (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '10px',
+              background: 'rgba(15, 23, 42, 0.82)',
+              backdropFilter: 'blur(16px)',
+              border: '1px solid rgba(255, 255, 255, 0.16)',
+              borderRadius: '20px',
+              padding: '10px 14px',
+              width: '100%',
+              color: '#fff',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.5)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                <div style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  background: 'rgba(239, 68, 68, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  border: '1px solid rgba(239, 68, 68, 0.4)'
+                }}>
+                  <Lock size={16} color="#f87171" />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    Only Synced Friends Can Reply
+                  </span>
+                  <span style={{ fontSize: '0.67rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    Sync with {vibeGroup?.displayName || vibeGroup?.username || 'user'} to reply, react or tip sparks
+                  </span>
+                </div>
+              </div>
+
+              {authorFriendStatus === 'pending_sent' ? (
+                <span style={{
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  color: '#f59e0b',
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  padding: '6px 12px',
+                  borderRadius: '14px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0
+                }}>
+                  Pending ⏳
+                </span>
+              ) : authorFriendStatus === 'pending_received' ? (
+                <button
+                  type="button"
+                  onClick={handleAcceptSyncRequest}
+                  disabled={authorActionLoading}
+                  style={{
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '14px',
+                    padding: '7px 14px',
+                    fontSize: '0.78rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.4)'
+                  }}
+                >
+                  Accept Sync ⚡
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSendSyncRequest}
+                  disabled={authorActionLoading || authorFriendStatus === 'checking'}
+                  style={{
+                    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '14px',
+                    padding: '7px 14px',
+                    fontSize: '0.78rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)'
+                  }}
+                >
+                  ⚡ Sync
+                </button>
               )}
             </div>
           ) : (

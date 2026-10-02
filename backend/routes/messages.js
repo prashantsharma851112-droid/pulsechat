@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../database/db');
 const authMiddleware = require('../middleware/authMiddleware');
 const { uploadToCloudinary } = require('../utils/cloudinary');
+const mongoose = require('mongoose');
 
 const User = require('../models/User');
 
@@ -236,6 +237,32 @@ router.post('/send', authMiddleware, async (req, res) => {
       const blockStatus = await db.isUserBlocked(senderId, receiverId);
       if (blockStatus.isBlocked) {
         return res.status(403).json({ error: 'Blocked contact' });
+      }
+
+      // Check friendship for 1-to-1: both users must be synced
+      if (senderId !== receiverId) {
+        const sUser = await User.findOne({
+          $or: [
+            { id: senderId },
+            ...(mongoose.Types.ObjectId.isValid(senderId) ? [{ _id: senderId }] : []),
+            { username: senderId }
+          ]
+        });
+        const rUser = await User.findOne({
+          $or: [
+            { id: receiverId },
+            ...(mongoose.Types.ObjectId.isValid(receiverId) ? [{ _id: receiverId }] : []),
+            { username: receiverId }
+          ]
+        });
+        if (sUser && rUser) {
+          const rIds = [rUser.id, rUser._id?.toString(), rUser.username, receiverId].filter(Boolean);
+          const sIds = [sUser.id, sUser._id?.toString(), sUser.username, senderId].filter(Boolean);
+          const isFriend = sUser.friends?.some(f => rIds.includes(f)) || rUser.friends?.some(f => sIds.includes(f));
+          if (!isFriend) {
+            return res.status(403).json({ error: 'You can only message synced friends.' });
+          }
+        }
       }
     }
 

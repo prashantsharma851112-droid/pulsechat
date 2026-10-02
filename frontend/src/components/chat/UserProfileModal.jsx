@@ -4,7 +4,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
 import PulseVipBadge from '../common/PulseVipBadge';
-import { getCachedAllUsers } from '../../utils/offlineStorage';
+import { getCachedAllUsers, getCachedFriends, setCachedFriends } from '../../utils/offlineStorage';
 
 export default function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp }) {
   const { user, token, blockUser, unblockUser } = useContext(AuthContext);
@@ -245,6 +245,12 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
       });
       if (res.ok) {
         setFriendStatus({ status: 'none', requestId: null });
+        if (user?.id) {
+          const curFriends = getCachedFriends(user.id);
+          const next = curFriends.filter(f => f.id !== targetUser.id && f._id !== targetUser.id);
+          setCachedFriends(user.id, next);
+        }
+        window.dispatchEvent(new CustomEvent('pulsechat_friend_removed', { detail: { targetId: targetUser.id } }));
       }
     } catch (e) {
       console.error(e);

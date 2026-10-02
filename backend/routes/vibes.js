@@ -320,6 +320,30 @@ router.post('/react/:vibeId', authMiddleware, async (req, res) => {
 
     const resolvedSenderId = sender.id || (sender._id ? sender._id.toString() : targetUserId);
 
+    // Enforce friendship: Only synced friends can react, reply, or tip sparks on stories
+    const isOwnStory = vibe.userId === resolvedSenderId ||
+      (sender._id && vibe.userId === sender._id.toString()) ||
+      (sender.username && vibe.userId === sender.username);
+
+    if (!isOwnStory) {
+      const authorUser = await User.findOne({
+        $or: [
+          { id: vibe.userId },
+          ...(mongoose.Types.ObjectId.isValid(vibe.userId) ? [{ _id: vibe.userId }] : []),
+          { username: vibe.userId }
+        ]
+      });
+
+      if (authorUser) {
+        const authorIds = [authorUser.id, authorUser._id?.toString(), authorUser.username, vibe.userId].filter(Boolean);
+        const senderIds = [resolvedSenderId, sender.id, sender._id?.toString(), sender.username].filter(Boolean);
+        const isFriend = sender.friends?.some(f => authorIds.includes(f)) || authorUser.friends?.some(f => senderIds.includes(f));
+        if (!isFriend) {
+          return res.status(403).json({ error: 'You can only react, reply or send sparks to stories from synced friends.' });
+        }
+      }
+    }
+
     if (emoji) {
       vibe.reactions.push({
         userId: resolvedSenderId,

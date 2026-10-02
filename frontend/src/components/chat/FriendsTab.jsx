@@ -258,7 +258,11 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
     const handleFriendRemoved = (data) => {
       const removedId = data?.targetId || data?.userId;
       if (removedId) {
-        setFriends(prev => prev.filter(f => f.id !== removedId));
+        setFriends(prev => {
+          const next = prev.filter(f => f.id !== removedId && f._id !== removedId);
+          if (user?.id) setCachedFriends(user.id, next);
+          return next;
+        });
       }
       fetchFriends();
     };
@@ -467,7 +471,12 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
   // Unfriend / Unsync (0ms instant optimistic update)
   const handleUnfriend = async (friendId, friendName) => {
     if (!window.confirm(`Are you sure you want to unsync pulse with ${friendName}?`)) return;
-    setFriends(prev => prev.filter(f => f.id !== friendId));
+    setFriends(prev => {
+      const next = prev.filter(f => f.id !== friendId && f._id !== friendId);
+      if (user?.id) setCachedFriends(user.id, next);
+      return next;
+    });
+    window.dispatchEvent(new CustomEvent('pulsechat_friend_removed', { detail: { targetId: friendId } }));
 
     setActionLoading(prev => ({ ...prev, [friendId]: true }));
     try {

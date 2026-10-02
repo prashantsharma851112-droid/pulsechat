@@ -40,6 +40,8 @@ import {
   mergeIntoAllUsersCache,
   getCachedAllUsers,
   isCachedFriend,
+  getCachedFriends,
+  setCachedFriends,
   isDeviceOnline,
   subscribeToNetworkChanges,
   updateGroupInStorage,
@@ -634,12 +636,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
   }, [socket, activeChat, isGroup]);
 
-  const isDirectFriend = isGroup ||
-    (activeChat?.lastMessage !== undefined && activeChat?.lastMessage !== null) ||
-    activeChat?.hasHistory ||
-    activeChat?.isFriend ||
-    (getCachedMessages(chatId).length > 0) ||
-    isCachedFriend(user?.id, activeChat?.id);
+  const isDirectFriend = isGroup || isCachedFriend(user?.id, activeChat?.id);
 
   const [friendshipStatus, setFriendshipStatus] = useState(() => isDirectFriend ? 'friends' : 'checking');
   const [friendRequestId, setFriendRequestId] = useState(null);
@@ -1286,20 +1283,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   }, [lastNotification, chatId, user.id, socket]);
 
-  // Fetch Friendship status for 1-to-1 chats
+  // Fetch Friendship status for 1-to-1 chats (strictly require friendship)
   useEffect(() => {
     if (isGroup) {
-      setFriendshipStatus('friends');
-      return;
-    }
-    // Existing conversation history allows instant chatting (0ms)
-    const hasHistory = (activeChat?.lastMessage !== undefined && activeChat?.lastMessage !== null) ||
-      activeChat?.hasHistory ||
-      activeChat?.isFriend ||
-      messages.length > 0 ||
-      isCachedFriend(user?.id, activeChat?.id);
-
-    if (hasHistory) {
       setFriendshipStatus('friends');
       return;
     }
@@ -1320,7 +1306,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         .catch(() => {});
     }
     return () => { isMounted = false; };
-  }, [activeChat?.id, activeChat?.lastMessage, activeChat?.hasHistory, activeChat?.isFriend, isGroup, token, messages.length, user?.id]);
+  }, [activeChat?.id, isGroup, token]);
 
   // Real-time friendship socket events
   useEffect(() => {
@@ -1354,8 +1340,24 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     const handleFriendRemoved = (data) => {
-      if (data?.userId === activeChat?.id || data?.targetId === activeChat?.id) {
+      const otherId = data?.userId === user?.id ? data?.targetId : (data?.userId || data?.targetId);
+      if (otherId === activeChat?.id || otherId === activeChat?.username) {
         setFriendshipStatus('none');
+        if (user?.id) {
+          const cur = getCachedFriends(user.id);
+          setCachedFriends(user.id, cur.filter(f => f.id !== otherId && f._id !== otherId));
+        }
+      }
+    };
+
+    const handleLocalFriendRemoved = (e) => {
+      const targetId = e.detail?.targetId;
+      if (targetId && (targetId === activeChat?.id || targetId === activeChat?.username)) {
+        setFriendshipStatus('none');
+        if (user?.id) {
+          const cur = getCachedFriends(user.id);
+          setCachedFriends(user.id, cur.filter(f => f.id !== targetId && f._id !== targetId));
+        }
       }
     };
 
@@ -1364,6 +1366,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     socket.on('friend_request_cancelled', handleReqCancelled);
     socket.on('friend_request_rejected', handleReqRejected);
     socket.on('friend_removed', handleFriendRemoved);
+    window.addEventListener('pulsechat_friend_removed', handleLocalFriendRemoved);
 
     return () => {
       socket.off('friend_request_accepted', handleReqAccepted);
@@ -1371,6 +1374,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.off('friend_request_cancelled', handleReqCancelled);
       socket.off('friend_request_rejected', handleReqRejected);
       socket.off('friend_removed', handleFriendRemoved);
+      window.removeEventListener('pulsechat_friend_removed', handleLocalFriendRemoved);
     };
   }, [socket, activeChat?.id, isGroup, friendRequestId]);
 
