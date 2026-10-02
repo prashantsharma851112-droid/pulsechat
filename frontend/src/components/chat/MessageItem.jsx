@@ -550,7 +550,13 @@ export default function MessageItem({
   return (
     <div
       id={`msg-${message.id || message._id || message.clientTempId}`}
-      onClick={isMultiSelectMode ? () => onToggleSelect && onToggleSelect(message.id) : undefined}
+      onClick={(e) => {
+        if (isMultiSelectMode) {
+          if (onToggleSelect) onToggleSelect(message.id);
+        } else if (!isSelectedForAction && onDismissAction) {
+          onDismissAction();
+        }
+      }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -565,7 +571,7 @@ export default function MessageItem({
         position: 'relative',
         cursor: isMultiSelectMode ? 'pointer' : 'default',
         touchAction: 'pan-y',
-        zIndex: isSelectedForAction ? 55 : (isMultiSelectMode ? 10 : 1)
+        zIndex: isSelectedForAction ? 999 : (isMultiSelectMode ? 10 : 1)
       }}
     >
       {/* Swipe to Reply Indicator */}
@@ -614,6 +620,11 @@ export default function MessageItem({
       )}
 
       <div
+        onClick={(e) => {
+          if (isSelectedForAction) {
+            e.stopPropagation();
+          }
+        }}
         onDoubleClick={!isMultiSelectMode ? handleDoubleTap : undefined}
         onContextMenu={(e) => {
           if (!isMultiSelectMode) {
@@ -1337,18 +1348,17 @@ export default function MessageItem({
             position: 'absolute',
             top: '-50px',
             [isMine ? 'right' : 'left']: '4px',
-            background: 'rgba(15, 23, 42, 0.96)',
-            border: '1px solid rgba(255, 255, 255, 0.16)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
+            background: '#0f172a',
+            border: '1.5px solid rgba(255, 255, 255, 0.22)',
             borderRadius: '30px',
-            padding: '4px 10px',
+            padding: '5px 12px',
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
-            zIndex: 65,
-            boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-            userSelect: 'none'
+            gap: '8px',
+            zIndex: 9999,
+            boxShadow: '0 12px 36px rgba(0,0,0,0.7)',
+            userSelect: 'none',
+            pointerEvents: 'auto'
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -1356,18 +1366,22 @@ export default function MessageItem({
             <button
               key={em}
               type="button"
-              onClick={() => handleReact(em)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleReact(em);
+              }}
               style={{
                 background: 'transparent',
                 border: 'none',
-                fontSize: '1.35rem',
+                fontSize: '1.45rem',
                 cursor: 'pointer',
                 padding: '2px 4px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 transition: 'transform 0.15s ease',
-                lineHeight: 1
+                lineHeight: 1,
+                pointerEvents: 'auto'
               }}
               onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.35)'}
               onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
@@ -1376,30 +1390,34 @@ export default function MessageItem({
             </button>
           ))}
 
-          <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.18)', margin: '0 2px' }} />
+          <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.22)', margin: '0 2px' }} />
 
           {/* Plus button for Unlimited Emojis */}
           <button
             type="button"
-            onClick={() => onOpenUnlimitedEmoji && onOpenUnlimitedEmoji(message)}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onOpenUnlimitedEmoji) onOpenUnlimitedEmoji(message);
+            }}
             title="More reactions (Unlimited emojis)"
             style={{
-              width: '28px',
-              height: '28px',
+              width: '30px',
+              height: '30px',
               borderRadius: '50%',
-              background: 'rgba(255, 255, 255, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
+              background: 'rgba(255, 255, 255, 0.12)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
               color: '#fff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              transition: 'all 0.15s ease'
+              transition: 'all 0.15s ease',
+              pointerEvents: 'auto'
             }}
             onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent)'}
-            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)'}
           >
-            <Plus size={15} />
+            <Plus size={16} />
           </button>
         </div>
       )}

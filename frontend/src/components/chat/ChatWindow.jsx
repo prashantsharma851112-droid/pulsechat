@@ -754,6 +754,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [actionMessageForEmoji, setActionMessageForEmoji] = useState(null);
   const [showActionMoreMenu, setShowActionMoreMenu] = useState(false);
   const [actionToast, setActionToast] = useState('');
+  const [deleteModalMessage, setDeleteModalMessage] = useState(null);
 
   // Sync starred & pinned when chatId changes
   useEffect(() => {
@@ -770,6 +771,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setSelectedActionMessage(null);
     setShowActionMoreMenu(false);
     setShowUnlimitedEmojiPicker(false);
+    setDeleteModalMessage(null);
   }, [chatId]);
 
   // Listener to dismiss selected message action via backdrop, back button or Esc
@@ -778,6 +780,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       setSelectedActionMessage(null);
       setShowActionMoreMenu(false);
       setShowUnlimitedEmojiPicker(false);
+      setDeleteModalMessage(null);
     };
     window.addEventListener('pulsechat_dismiss_message_action', handleDismissAction);
     return () => window.removeEventListener('pulsechat_dismiss_message_action', handleDismissAction);
@@ -2016,6 +2019,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const handleDismissActionMessage = useCallback(() => {
     setSelectedActionMessage(null);
     setShowActionMoreMenu(false);
+    setDeleteModalMessage(null);
   }, []);
 
   const handleToggleStarMessage = useCallback((msg) => {
@@ -2112,22 +2116,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleDeleteActionMessage = useCallback((msg) => {
     if (!msg) return;
-    const isMine = msg.senderId === user.id;
-    if (isMine) {
-      const choice = window.confirm("Delete this message for everyone?\n\nClick OK for 'Delete for Everyone', or Cancel for 'Delete for Me'");
-      if (choice) {
-        if (socket) socket.emit('delete_message', { messageId: msg.id, chatId });
-        handleTriggerUndoToast(msg.id);
-      } else {
-        handleDeleteLocalMessage(msg.id);
-        handleTriggerUndoToast(msg.id);
-      }
-    } else {
-      handleDeleteLocalMessage(msg.id);
-      handleTriggerUndoToast(msg.id);
-    }
-    handleDismissActionMessage();
-  }, [user.id, socket, chatId, handleTriggerUndoToast, handleDeleteLocalMessage, handleDismissActionMessage]);
+    setDeleteModalMessage(msg);
+  }, []);
 
   const handleTextChange = (e) => {
     const val = e.target.value;
@@ -3118,10 +3108,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(0, 0, 0, 0.4)',
-            backdropFilter: 'blur(2px)',
-            WebkitBackdropFilter: 'blur(2px)',
-            zIndex: 42,
+            background: 'rgba(0, 0, 0, 0.45)',
+            zIndex: 40,
             touchAction: 'none'
           }}
         />
@@ -3173,7 +3161,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         )}
 
       {/* Message Stream with Live Wallpaper Overlay & WhatsApp-Style Date Dividers */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', zIndex: 1 }}>
+      <div
+        onClick={() => {
+          if (selectedActionMessage) handleDismissActionMessage();
+        }}
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '1rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.75rem',
+          position: 'relative',
+          zIndex: selectedActionMessage ? 45 : 1
+        }}
+      >
         {/* Load Earlier Messages Button (Pagination) */}
         {hasMoreOlderMessages && (
           <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 8px 0' }}>
@@ -4321,6 +4323,134 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           animation: 'fadeInUp 0.2s ease'
         }}>
           <span>{actionToast}</span>
+        </div>
+      )}
+
+      {/* Delete Message Confirmation Modal with Cancel Option */}
+      {deleteModalMessage && (
+        <div
+          className="modal-overlay"
+          style={{ zIndex: 99999 }}
+          onClick={() => setDeleteModalMessage(null)}
+        >
+          <div
+            className="modal-card"
+            style={{
+              maxWidth: '360px',
+              width: '90vw',
+              padding: '20px',
+              borderRadius: '20px',
+              background: 'var(--bg-card)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              boxShadow: '0 24px 60px rgba(0,0,0,0.7)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '50%',
+                background: 'rgba(239, 68, 68, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <Trash2 size={20} color="#ef4444" />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                  Delete Message?
+                </h3>
+                <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Choose an option to delete this message.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+              {deleteModalMessage.senderId === user.id && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (socket) socket.emit('delete_message', { messageId: deleteModalMessage.id, chatId });
+                    handleTriggerUndoToast(deleteModalMessage.id);
+                    setDeleteModalMessage(null);
+                    handleDismissActionMessage();
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '11px 16px',
+                    borderRadius: '12px',
+                    background: '#ef4444',
+                    color: '#fff',
+                    border: 'none',
+                    fontWeight: 600,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 14px rgba(239, 68, 68, 0.35)'
+                  }}
+                >
+                  <Trash2 size={16} />
+                  <span>Delete for Everyone</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleDeleteLocalMessage(deleteModalMessage.id);
+                  handleTriggerUndoToast(deleteModalMessage.id);
+                  setDeleteModalMessage(null);
+                  handleDismissActionMessage();
+                }}
+                style={{
+                  width: '100%',
+                  padding: '11px 16px',
+                  borderRadius: '12px',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  color: 'var(--text-main)',
+                  border: '1px solid var(--border)',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                <span>Delete for Me</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDeleteModalMessage(null)}
+                style={{
+                  width: '100%',
+                  padding: '10px 16px',
+                  borderRadius: '12px',
+                  background: 'transparent',
+                  color: 'var(--text-muted)',
+                  border: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.86rem',
+                  cursor: 'pointer',
+                  marginTop: '2px'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
