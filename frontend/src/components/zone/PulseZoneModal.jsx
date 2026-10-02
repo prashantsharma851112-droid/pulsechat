@@ -5,8 +5,10 @@ import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Sparkles, Award } f
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 import ArrowPuzzleGame from './ArrowPuzzleGame';
+import { useBackHandler } from '../../utils/backNavigation';
 
 export default function PulseZoneModal({ onClose }) {
+  useBackHandler(onClose, true);
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
   const [activeTab, setActiveTab] = useState('games'); // 'games' | 'leaderboard'

@@ -5,6 +5,7 @@ import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc } from 
 import { BACKEND_URL } from '../../utils/config';
 import { playSound, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import { updateRecentChatSnippet, getCachedAllUsers } from '../../utils/offlineStorage';
+import { useBackHandler } from '../../utils/backNavigation';
 
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 
@@ -36,6 +37,10 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh }) {
   const [showViewersSheet, setShowViewersSheet] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
+
+  // Hardware/Swipe Back button closes viewers sheet if open, otherwise closes story viewer safely
+  useBackHandler(() => setShowViewersSheet(false), showViewersSheet);
+  useBackHandler(onClose, !showViewersSheet);
 
   // Per-story live views dictionary keyed by vibe ID
   const [viewsByVibeId, setViewsByVibeId] = useState(() => {

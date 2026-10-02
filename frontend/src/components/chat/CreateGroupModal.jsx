@@ -5,6 +5,7 @@ import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
 import { getCachedAllUsers, mergeIntoAllUsersCache, getCachedRecentChats } from '../../utils/offlineStorage';
 import { compressImage, parseSafeJson } from '../../utils/imageCompressor';
+import { useBackHandler } from '../../utils/backNavigation';
 
 const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/identicon/svg?seed=group1',
@@ -16,6 +17,7 @@ const PRESET_AVATARS = [
 ];
 
 export default function CreateGroupModal({ onClose, onGroupCreated, preloadedUsers = [] }) {
+  useBackHandler(onClose, true);
   const { token, user: currentUser } = useContext(AuthContext);
   const { socket } = useContext(SocketContext) || {};
   const [groupName, setGroupName] = useState('');

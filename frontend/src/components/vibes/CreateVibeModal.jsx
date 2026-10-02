@@ -10,6 +10,7 @@ import { registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audi
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 import MusicPickerModal from './MusicPickerModal';
 import { EMOJI_CATEGORIES, ALL_EMOJIS } from '../chat/EmojiPicker';
+import { useBackHandler } from '../../utils/backNavigation';
 
 const GRADIENTS = [
   { id: 'g1', name: 'Pulse Purple', value: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)' },
@@ -120,6 +121,11 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [showMusicPicker, setShowMusicPicker] = useState(false);
   const [musicScale, setMusicScale] = useState(1.0); // 0.6 to 2.4
   const [musicStyle, setMusicStyle] = useState('pill'); // 'pill' | 'card' | 'glass' | 'minimal'
+
+  // Hardware/Swipe Back button closes music picker or active panel first, then closes modal safely
+  useBackHandler(() => setShowMusicPicker(false), showMusicPicker);
+  useBackHandler(() => setActivePanel(null), !showMusicPicker && Boolean(activePanel));
+  useBackHandler(onClose, !showMusicPicker && !activePanel);
 
   // Image FX State & Gestures
   const [imageFit, setImageFit] = useState('cover'); // 'cover' | 'contain' | 'padded'

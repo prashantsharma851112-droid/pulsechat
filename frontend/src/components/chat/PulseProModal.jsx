@@ -4,6 +4,7 @@ import { X, Sparkles, Check, Crown, Zap, ShieldCheck, Flame, Coffee, Heart, Rock
 import PulseVipBadge from '../common/PulseVipBadge';
 import UpiCheckoutModal from './UpiCheckoutModal';
 import { BACKEND_URL } from '../../utils/config';
+import { useBackHandler } from '../../utils/backNavigation';
 
 export default function PulseProModal({ onClose, initialTab = 'pro' }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
@@ -14,6 +15,9 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [razorpayConfig, setRazorpayConfig] = useState({ keyId: '', isLive: false });
   const [upiCheckoutPlan, setUpiCheckoutPlan] = useState(null);
+
+  useBackHandler(() => setUpiCheckoutPlan(null), Boolean(upiCheckoutPlan));
+  useBackHandler(onClose, !upiCheckoutPlan);
 
   useEffect(() => {
     if (initialTab) {

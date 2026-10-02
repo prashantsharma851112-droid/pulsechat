@@ -22,6 +22,7 @@ import LegalView from './components/common/LegalView';
 import LegalModal from './components/common/LegalModal';
 import { BACKEND_URL } from './utils/config';
 import { updateUserProfileInStorage, clearUnreadCount, getCachedAllUsers } from './utils/offlineStorage';
+import { initBackListeners, useBackHandler } from './utils/backNavigation';
 import { Zap, AlertTriangle } from 'lucide-react';
 
 class ErrorBoundary extends React.Component {
@@ -314,6 +315,27 @@ export default function App() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [handleCloseChat]);
+
+  // Global Capacitor and Browser back event listener for closing active chat
+  useEffect(() => {
+    initBackListeners();
+    const handleClose = () => {
+      if (activeChatRef.current) {
+        handleCloseChat();
+      }
+    };
+    window.addEventListener('pulsechat_close_active_chat', handleClose);
+    return () => window.removeEventListener('pulsechat_close_active_chat', handleClose);
+  }, [handleCloseChat]);
+
+  // Modals & Active View Back Button Hooks
+  useBackHandler(() => setShowProfile(false), showProfile);
+  useBackHandler(() => setShowSettings(false), showSettings);
+  useBackHandler(() => setShowAdminModal(false), showAdminModal);
+  useBackHandler(() => setFullDpData(null), Boolean(fullDpData));
+  useBackHandler(() => setLegalModalTab(null), Boolean(legalModalTab));
+  useBackHandler(() => setShowOnboardingModal(false), showOnboardingModal);
+  useBackHandler(handleCloseChat, Boolean(activeChat));
 
   const handleSelectActiveChat = (chat) => {
     if (chat?.id && user?.id) {

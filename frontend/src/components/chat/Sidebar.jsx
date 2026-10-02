@@ -8,6 +8,7 @@ import AdminDashboardModal from '../admin/AdminDashboardModal';
 import FriendsTab from './FriendsTab';
 import PulseProModal from './PulseProModal';
 import AppFeatureTourModal from '../common/AppFeatureTourModal';
+import { useBackHandler } from '../../utils/backNavigation';
 import PulseVipBadge from '../common/PulseVipBadge';
 import PulseVibesBar from '../vibes/PulseVibesBar';
 import CreateVibeModal from '../vibes/CreateVibeModal';
@@ -104,6 +105,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [showPulseZone, setShowPulseZone] = useState(false);
   const [showTopMenu, setShowTopMenu] = useState(false);
   const [showSwitchAccountMenu, setShowSwitchAccountMenu] = useState(false);
+
+  // Hardware/Swipe Back button closes popup menus or clears search bar safely
+  useBackHandler(() => setShowTopMenu(false), showTopMenu);
+  useBackHandler(() => setShowSwitchAccountMenu(false), showSwitchAccountMenu);
+  useBackHandler(() => setSearchQuery(''), Boolean(searchQuery));
   const topMenuRef = useRef(null);
   const switchAccountMenuRef = useRef(null);
   const activeChatRef = React.useRef(activeChat);

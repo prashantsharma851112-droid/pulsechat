@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Music, Gamepad2, Sparkles, Lock, Paintbrush, Forward, Smile, Phone, Video, Crown, ArrowRight, MapPin, CheckCircle2, SlidersHorizontal, Flame, Radio, Zap } from 'lucide-react';
 import PulseVipBadge from './PulseVipBadge';
+import { useBackHandler } from '../../utils/backNavigation';
 
 const TOUR_FEATURES = [
   {
@@ -116,6 +117,7 @@ const TOUR_FEATURES = [
 ];
 
 export default function AppFeatureTourModal({ onClose, onOpenPro }) {
+  useBackHandler(onClose, true);
   const [filter, setFilter] = useState('all'); // 'all' | 'chat' | 'vip'
 
   const filtered = TOUR_FEATURES.filter(f => {

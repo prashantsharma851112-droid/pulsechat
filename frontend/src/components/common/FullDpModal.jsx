@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { X, User as UserIcon } from 'lucide-react';
+import { useBackHandler } from '../../utils/backNavigation';
 
 export default function FullDpModal({ imageUrl, name, username, onClose }) {
+  useBackHandler(onClose, true);
   const defaultFallback = `https://api.dicebear.com/7.x/avataaars/svg?seed=${username || 'pulse'}`;
   const [imgSrc, setImgSrc] = useState(imageUrl || defaultFallback);
   const [imgLoading, setImgLoading] = useState(true);

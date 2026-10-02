@@ -1,7 +1,9 @@
 import React from 'react';
 import LegalView from './LegalView';
+import { useBackHandler } from '../../utils/backNavigation';
 
 export default function LegalModal({ initialTab = 'privacy', onClose }) {
+  useBackHandler(onClose, true);
   return (
     <div style={{
       position: 'fixed',

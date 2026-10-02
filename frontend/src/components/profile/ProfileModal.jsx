@@ -3,6 +3,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { X, Upload, Camera, Lock, User as UserIcon, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { compressImage, parseSafeJson } from '../../utils/imageCompressor';
+import { useBackHandler } from '../../utils/backNavigation';
 
 const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/bottts/svg?seed=alex',
@@ -20,6 +21,7 @@ const PRESET_AVATARS = [
 ];
 
 export default function ProfileModal({ onClose, onOpenFullDp }) {
+  useBackHandler(onClose, true);
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'password'
 
