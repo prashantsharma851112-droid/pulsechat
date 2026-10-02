@@ -268,6 +268,8 @@ function PrivacyContent() {
         <li>To authenticate your identity and prevent fraudulent activities or unauthorized account access.</li>
         <li>To deliver VIP perks, custom badges, theme preferences, and in-game Pulse Sparks balances.</li>
         <li>To communicate critical service updates, OTP security codes, and customer support responses.</li>
+        <li><strong>Support & Grievance Redressal:</strong> To review user-submitted support inquiries and transmit official resolutions to your registered email address.</li>
+        <li><strong>Platform Safety & Moderation:</strong> To enforce acceptable use standards, investigate reported abuse, and prevent spam or unauthorized automated activity.</li>
       </ul>
 
       <SectionTitle>3. Third-Party Integrations & Advertising</SectionTitle>
@@ -280,9 +282,12 @@ function PrivacyContent() {
         <li><strong>Payment Processors:</strong> Process payments under strict PCI-DSS and RBI compliance standards.</li>
       </ul>
 
-      <SectionTitle>4. Data Security & Storage</SectionTitle>
+      <SectionTitle>4. Data Security & Administrative Access</SectionTitle>
       <p>
         We employ industry-standard administrative, technical, and physical security measures including SSL/TLS 256-bit encryption in transit, strict database access controls, and rate-limiting to prevent brute-force attacks.
+      </p>
+      <p style={{ marginTop: '8px' }}>
+        <strong>Administrative Oversight & Helpdesk:</strong> Access to backend administrative and moderation controls is strictly protected by multi-tier encryption and authorized credentials. Administrative tools are utilized solely for server uptime monitoring, fulfilling user-requested support queries, and preventing fraudulent or abusive behavior in full compliance with the Digital Personal Data Protection (DPDP) Act and Google Play Developer Policies. Private 1-to-1 conversations remain confidential and are transmitted securely.
       </p>
 
       <SectionTitle>5. User Rights & Account Deletion</SectionTitle>
