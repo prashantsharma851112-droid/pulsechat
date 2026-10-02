@@ -2583,18 +2583,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               <Music size={19} color="#f59e0b" />
               <span style={{
                 position: 'absolute',
-                top: '-3px',
-                right: '-3px',
-                background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
-                color: '#fff',
-                fontSize: '0.52rem',
-                fontWeight: 900,
-                padding: '1px 4px',
-                borderRadius: '5px',
-                lineHeight: 1,
-                boxShadow: '0 0 6px rgba(245, 158, 11, 0.6)'
-              }}>
-                VIP
+                top: '-5px',
+                right: '-4px',
+                background: '#0f172a',
+                border: '1.2px solid #f59e0b',
+                color: '#f59e0b',
+                borderRadius: '50%',
+                width: '18px',
+                height: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 8px rgba(245, 158, 11, 0.75)',
+                filter: 'drop-shadow(0 0 3px #f59e0b)'
+              }}
+              title="VIP Feature"
+              >
+                <Crown size={11} color="#f59e0b" strokeWidth={2.4} fill="rgba(245, 158, 11, 0.25)" />
               </span>
             </button>
 
@@ -2736,14 +2741,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     <Music size={16} />
                     <span>{chatMusicSong ? '🎵 Change Song' : '🎵 Search & Play Music'}</span>
                     <span style={{
-                      fontSize: '0.58rem',
-                      background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
-                      color: '#fff',
-                      padding: '1px 5px',
-                      borderRadius: '5px',
-                      fontWeight: 900
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'rgba(245, 158, 11, 0.2)',
+                      border: '1px solid rgba(245, 158, 11, 0.55)',
+                      padding: '2px 5px',
+                      borderRadius: '5px'
                     }}>
-                      VIP
+                      <Crown size={12} color="#fbbf24" strokeWidth={2.4} fill="rgba(245, 158, 11, 0.3)" />
                     </span>
                   </button>
 

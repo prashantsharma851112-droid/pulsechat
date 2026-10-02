@@ -306,10 +306,27 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
           background: 'linear-gradient(135deg, var(--accent) 0%, #3b82f6 100%)',
           position: 'relative',
           display: 'flex',
-          justifyContent: 'flex-end',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
           padding: '12px',
           flexShrink: 0
         }}>
+          {/* Top Left: VIP Badge (opposite side of close cross button) */}
+          {userToDisplay?.isPro ? (
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              background: 'rgba(15, 23, 42, 0.75)',
+              border: '1px solid rgba(251, 191, 36, 0.45)',
+              borderRadius: '20px',
+              padding: '4px 10px',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
+              backdropFilter: 'blur(8px)'
+            }}>
+              <PulseVipBadge size={18} showLabel={true} />
+            </div>
+          ) : <div />}
+
           <button
             className="icon-btn-ghost"
             onClick={onClose}
@@ -406,17 +423,11 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
             )}
           </div>
 
-          {/* Display Name & Verified Badge */}
+          {/* Display Name */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
             <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)' }}>
               {userToDisplay.displayName}
             </h3>
-            {userToDisplay.isEmailVerified && (
-              <CheckCircle2 size={18} color="#10b981" title="Verified Account" />
-            )}
-            {userToDisplay?.isPro && (
-              <PulseVipBadge size={20} showLabel={true} />
-            )}
           </div>
           <p style={{ margin: '2px 0 0.75rem 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             @{userToDisplay.username}
