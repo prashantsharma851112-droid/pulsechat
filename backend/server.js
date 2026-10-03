@@ -27,8 +27,19 @@ const { uploadToCloudinary } = require('./utils/cloudinary');
 const { checkAndUpdateFileQuota } = require('./utils/fileQuota');
 const redis = require('./utils/redis');
 
+const compression = require('compression');
 const app = express();
 const server = http.createServer(app);
+
+// Gzip/Brotli HTTP response compression (Instagram / high-scale efficiency: cuts JSON egress by 75-85%)
+app.use(compression({
+  level: 6,
+  threshold: 1024,
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  }
+}));
 
 app.use(cors({
   origin: '*',
@@ -111,14 +122,18 @@ app.get('/', (req, res) => {
   });
 });
 
-// Socket.io Real-Time Engine
+// Socket.io Real-Time Engine (WhatsApp / Instagram lightweight efficiency)
 const io = new Server(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"]
   },
-  pingInterval: 5000,
-  pingTimeout: 5000
+  perMessageDeflate: {
+    threshold: 1024 // Compresses WebSocket frames > 1KB to save bandwidth
+  },
+  pingInterval: 25000, // Reduced chatty pings from 5s to 25s (80% bandwidth cut on idle sockets)
+  pingTimeout: 60000,
+  maxHttpBufferSize: 1e7
 });
 
 app.set('io', io);

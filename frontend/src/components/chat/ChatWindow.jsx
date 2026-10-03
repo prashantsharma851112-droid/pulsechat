@@ -25,6 +25,7 @@ import SetDefaultReactionsModal from './SetDefaultReactionsModal';
 import VibeViewerModal from '../vibes/VibeViewerModal';
 import SparksWalletModal from './SparksWalletModal';
 import { recordRecentReaction } from '../../utils/quickReactions';
+import { uploadMediaDirect } from '../../utils/mediaUpload';
 import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
@@ -1984,18 +1985,27 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setCooldownMsg(null);
   };
 
-  const handleSendVoice = (audioUrl) => {
+  const handleSendVoice = async (audioUrl) => {
+    setShowRecorder(false);
+    let finalAudioUrl = audioUrl;
+    if (audioUrl && audioUrl.startsWith('data:')) {
+      try {
+        finalAudioUrl = await uploadMediaDirect(audioUrl, 'pulsechat_voice', token);
+      } catch (e) {
+        console.warn('Voice upload direct error:', e);
+      }
+    }
+
     socket.emit('send_message', {
       ...getSenderPayload(),
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
       isGroup,
-      audioUrl,
+      audioUrl: finalAudioUrl,
       type: 'voice'
     });
     playSound('sent');
-    setShowRecorder(false);
   };
 
   const handleCreatePoll = (pollData) => {
@@ -2046,21 +2056,30 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setShowWhiteboard(true);
   };
 
-  const handleSendDrawing = (mediaUrl) => {
+  const handleSendDrawing = async (mediaUrl) => {
+    setShowWhiteboard(false);
+    let finalMediaUrl = mediaUrl;
+    if (mediaUrl && mediaUrl.startsWith('data:')) {
+      try {
+        finalMediaUrl = await uploadMediaDirect(mediaUrl, 'pulsechat_drawings', token);
+      } catch (e) {
+        console.warn('Drawing direct upload error:', e);
+      }
+    }
+
     socket.emit('send_message', {
       ...getSenderPayload(),
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
       isGroup,
-      mediaUrl,
+      mediaUrl: finalMediaUrl,
       type: 'image',
       content: '🎨 Whiteboard Drawing',
       fileName: `pulsechat_drawing_${Date.now()}.png`,
       isDrawing: true
     });
     playSound('sent');
-    setShowWhiteboard(false);
     setWhiteboardInitialImage(null);
     setWhiteboardInitialData(null);
   };
@@ -2107,7 +2126,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     e.target.value = '';
   };
 
-  const handleSendMedia = ({ mediaUrl, type, isViewOnce, fileName, fileSize }) => {
+  const handleSendMedia = async ({ mediaUrl, type, isViewOnce, fileName, fileSize }) => {
     const msgType = type === 'document'
       ? 'document'
       : (type?.startsWith('video/') ? 'video' : 'image');
@@ -2119,13 +2138,26 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       localStorage.setItem(storageKey, String(todayUsed + pendingMedia.rawSizeBytes));
     }
 
+    setPendingMedia(null);
+    setReplyTo(null);
+
+    // Direct upload to Cloudinary Edge CDN (bypasses Render Node.js bandwidth!)
+    let finalMediaUrl = mediaUrl;
+    if (mediaUrl && mediaUrl.startsWith('data:')) {
+      try {
+        finalMediaUrl = await uploadMediaDirect(mediaUrl, 'pulsechat_media', token);
+      } catch (e) {
+        console.warn('Direct media upload error:', e);
+      }
+    }
+
     socket.emit('send_message', {
       ...getSenderPayload(),
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
       isGroup,
-      mediaUrl,
+      mediaUrl: finalMediaUrl,
       type: msgType,
       isViewOnce: msgType === 'document' ? false : isViewOnce,
       fileName: fileName || null,
@@ -2133,8 +2165,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       replyTo
     });
     playSound('sent');
-    setPendingMedia(null);
-    setReplyTo(null);
   };
 
   const handleDeleteLocalMessage = (msgId) => {
