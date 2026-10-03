@@ -1938,6 +1938,63 @@ input, textarea {
   100% { transform: translate(-3px, -6px) scale(0.85); opacity: 0.5; }
 }
 
+/* --- 3D GIFT BOX UNBOXING ANIMATIONS --- */
+@keyframes giftWiggle {
+  0% { transform: scale(1.05) rotate(0deg); }
+  15% { transform: scale(1.08) rotate(-7deg); }
+  30% { transform: scale(1.1) rotate(6deg); }
+  45% { transform: scale(1.12) rotate(-8deg); }
+  60% { transform: scale(1.14) rotate(7deg); }
+  75% { transform: scale(1.16) rotate(-5deg); }
+  90% { transform: scale(1.2) rotate(4deg); }
+  100% { transform: scale(1.25) rotate(0deg); }
+}
+
+.gift-box-shaking {
+  animation: giftWiggle 0.75s cubic-bezier(0.36, 0.07, 0.19, 0.97) both !important;
+}
+
+@keyframes sunburstSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.gift-sunburst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 480px;
+  height: 480px;
+  margin-top: -240px;
+  margin-left: -240px;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.25) 0%, rgba(99, 102, 241, 0.15) 40%, transparent 70%);
+  animation: sunburstSpin 20s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes giftEmergence {
+  0% {
+    transform: translateY(60px) scale(0.3) rotate(-15deg);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(-15px) scale(1.15) rotate(4deg);
+    opacity: 1;
+  }
+  80% {
+    transform: translateY(5px) scale(0.98) rotate(-2deg);
+  }
+  100% {
+    transform: translateY(0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.gift-emerged {
+  animation: giftEmergence 0.85s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
 /* ==========================================================================
    HYPER-REALISTIC 3D ANIMATED TYPOGRAPHY STICKERS (VIP PRO FEATURE)
    ========================================================================== */

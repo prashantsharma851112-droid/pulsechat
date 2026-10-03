@@ -10,6 +10,7 @@ import { getPollTheme, getPollAura } from './pollThemes';
 import PulseVipBadge from '../common/PulseVipBadge';
 import Sticker3D from '../common/Sticker3D';
 import Animated3DText from '../common/Animated3DText';
+import GiftUnboxModal from './GiftUnboxModal';
 import { getSavedQuickReactions, recordRecentReaction } from '../../utils/quickReactions';
 
 function StealthDustCard({ message, chatId, isMine, socket }) {
@@ -517,6 +518,16 @@ export default function MessageItem({
   const [viewedByState, setViewedByState] = useState(message.viewedBy || []);
   const [downloadState, setDownloadState] = useState(''); // '' | 'Saving...' | 'Saved!'
   const [showImagePreview, setShowImagePreview] = useState(false);
+  const [showGiftUnboxModal, setShowGiftUnboxModal] = useState(false);
+  const giftStorageKey = (message.type === 'gift' && message.id) ? `pulse_gift_unboxed_${message.id}` : null;
+  const [isGiftUnboxed, setIsGiftUnboxed] = useState(() => {
+    if (!giftStorageKey) return false;
+    try {
+      return localStorage.getItem(giftStorageKey) === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   // Quick Reaction emojis sequence state
   const [quickReactions, setQuickReactions] = useState(() => getSavedQuickReactions());
@@ -1388,15 +1399,77 @@ export default function MessageItem({
           </div>
         )}
 
-        {/* Virtual Gift 3D Animated Sticker (Realistic 3D motion graphic + spark count pill) */}
+        {/* Virtual Gift 3D Animated Gift Box (Gift Dabba) & Step-by-Step Pop-up Unboxing */}
         {message.type === 'gift' && (
-          <Sticker3D
-            giftId={message.giftData?.giftId || 'rocket'}
-            sparkAmount={message.giftData?.sparkAmount || 10}
-            isMine={isMine}
-            timeStr={timeStr}
-            status={message.status}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start' }}>
+            <Sticker3D
+              giftId={isGiftUnboxed ? (message.giftData?.giftId || 'giftbox') : 'giftbox'}
+              sparkAmount={message.giftData?.sparkAmount || 10}
+              isMine={isMine}
+              timeStr={timeStr}
+              status={message.status}
+              onClick={() => setShowGiftUnboxModal(true)}
+            />
+
+            {/* Interactive Unbox / View Badge */}
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowGiftUnboxModal(true);
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                marginTop: '4px',
+                padding: '4px 10px',
+                borderRadius: '14px',
+                background: isGiftUnboxed
+                  ? 'rgba(245, 158, 11, 0.15)'
+                  : 'linear-gradient(90deg, rgba(236, 72, 153, 0.25), rgba(168, 85, 247, 0.25))',
+                border: isGiftUnboxed
+                  ? '1px solid rgba(245, 158, 11, 0.4)'
+                  : '1px solid rgba(236, 72, 153, 0.55)',
+                color: isGiftUnboxed ? '#fbbf24' : '#f472b6',
+                fontSize: '0.74rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                boxShadow: isGiftUnboxed ? 'none' : '0 2px 8px rgba(236, 72, 153, 0.3)',
+                userSelect: 'none'
+              }}
+            >
+              <Sparkles size={12} fill="currentColor" />
+              <span>
+                {isGiftUnboxed
+                  ? `✨ Unboxed: ${message.giftData?.giftName || 'Gift'} • View`
+                  : '🎁 Tap to Unbox Gift!'}
+              </span>
+            </div>
+
+            {showGiftUnboxModal && (
+              <GiftUnboxModal
+                giftData={message.giftData}
+                senderName={message.senderName || senderName || 'Friend'}
+                senderAvatar={message.senderAvatar || null}
+                isMine={isMine}
+                messageId={message.id}
+                onClose={() => {
+                  setShowGiftUnboxModal(false);
+                  if (giftStorageKey && localStorage.getItem(giftStorageKey) === 'true') {
+                    setIsGiftUnboxed(true);
+                  }
+                }}
+                onOpenWallet={() => {
+                  setShowGiftUnboxModal(false);
+                  if (onOpenSparksWallet) {
+                    onOpenSparksWallet();
+                  } else if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('pulsechat_open_sparks_wallet'));
+                  }
+                }}
+              />
+            )}
+          </div>
         )}
 
         {/* 3D Animated Typography Message (VIP Pro Feature) */}

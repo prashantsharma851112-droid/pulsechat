@@ -954,6 +954,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
   }, [chatId, auraVolume]);
 
+  useEffect(() => {
+    const handleOpenWallet = () => setShowSparksWallet(true);
+    window.addEventListener('pulsechat_open_sparks_wallet', handleOpenWallet);
+    return () => window.removeEventListener('pulsechat_open_sparks_wallet', handleOpenWallet);
+  }, []);
+
   const handleSelectAura = (auraId) => {
     if (auraId !== 'off' && auraId !== 'waves' && !user?.isPro) {
       setShowAuraMenu(false);
@@ -4416,8 +4422,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           onClose={() => setShowGiftPicker(false)}
           onOpenSparksStore={() => {
             setShowGiftPicker(false);
-            setProModalTab('sparks');
-            setShowProModal(true);
+            setShowSparksWallet(true);
           }}
         />
       )}

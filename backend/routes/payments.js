@@ -24,12 +24,22 @@ const PLANS = {
 };
 
 const GIFTS = {
-  coffee: { id: 'coffee', name: 'Coffee Vibe', sparks: 10, icon: '☕', animation: 'steam' },
-  heart: { id: 'heart', name: 'Love Pulse', sparks: 20, icon: '💖', animation: 'heartbeat' },
-  fire: { id: 'fire', name: 'Fire Energy', sparks: 25, icon: '🔥', animation: 'flame' },
-  rocket: { id: 'rocket', name: 'Super Rocket', sparks: 35, icon: '🚀', animation: 'launch' },
-  diamond: { id: 'diamond', name: 'Pulse Diamond', sparks: 50, icon: '💎', animation: 'sparkle' },
-  crown: { id: 'crown', name: 'Royal Crown', sparks: 100, icon: '👑', animation: 'golden' }
+  coffee: { id: 'coffee', name: 'Coffee Chat', sparks: 10, icon: '☕', animation: 'steam', desc: 'Cozy conversation & good vibes' },
+  heart: { id: 'heart', name: 'Love Pulse', sparks: 20, icon: '💖', animation: 'heartbeat', desc: 'Heartfelt fluttering warmth' },
+  chocolates: { id: 'chocolates', name: 'Belgian Chocolate Box', sparks: 25, icon: '🍫', animation: 'sweet', desc: 'Luxury artisanal chocolates in velvet box' },
+  rose: { id: 'rose', name: 'Midnight Red Rose', sparks: 30, icon: '🌹', animation: 'bloom', desc: 'Blooming enchanted crimson rose' },
+  pizza: { id: 'pizza', name: 'Pizza Party Slice', sparks: 35, icon: '🍕', animation: 'sizzle', desc: 'Cheesy oven-hot sizzling slice' },
+  gelato: { id: 'gelato', name: 'Golden Gelato Sundae', sparks: 40, icon: '🍦', animation: 'sparkle', desc: 'Triple-scoop ice cream with waffle cone' },
+  teddy: { id: 'teddy', name: 'Teddy Hug', sparks: 50, icon: '🧸', animation: 'cuddle', desc: 'Fluffy cuddly teddy holding a glowing heart' },
+  ring: { id: 'ring', name: 'Diamond Ring Box', sparks: 75, icon: '💍', animation: 'sparkle', desc: 'Sparkling solitaire diamond in royal case' },
+  crown: { id: 'crown', name: 'Royal Imperial Crown', sparks: 100, icon: '👑', animation: 'golden', desc: 'Grand 24K gold coronation crown' },
+  supercar: { id: 'supercar', name: 'Supercar Beam', sparks: 150, icon: '🏎️', animation: 'vroom', desc: 'Roaring exotic neon sports car' },
+  castle: { id: 'castle', name: 'Fairytale Castle', sparks: 250, icon: '🏰', animation: 'magic', desc: 'Enchanted palace with glowing towers & fireworks' },
+  ufo: { id: 'ufo', name: 'Cyber Pulse UFO', sparks: 500, icon: '🛸', animation: 'beam', desc: 'Ultra-rare galactic UFO with tractor beam' },
+  // Backward compatibility
+  fire: { id: 'fire', name: 'Fire Energy', sparks: 25, icon: '🔥', animation: 'flame', desc: 'Lit hype & vibes' },
+  rocket: { id: 'rocket', name: 'Super Rocket', sparks: 35, icon: '🚀', animation: 'launch', desc: 'Blast off support' },
+  diamond: { id: 'diamond', name: 'Pulse Diamond', sparks: 50, icon: '💎', animation: 'sparkle', desc: 'Ultra rare appreciation' }
 };
 
 // Helper to create Razorpay Order via native HTTPS (no external dependency needed)

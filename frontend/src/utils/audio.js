@@ -24,6 +24,42 @@ export function playSound(type = 'received') {
       gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.12);
       osc.start();
       osc.stop(ctx.currentTime + 0.12);
+    } else if (type === 'pop') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(900, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.08);
+    } else if (type === 'sparkle') {
+      // 3 ascending magical notes
+      [784, 1046.5, 1318.5].forEach((freq, idx) => {
+        const noteOsc = ctx.createOscillator();
+        const noteGain = ctx.createGain();
+        noteOsc.type = 'sine';
+        noteOsc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.06);
+        noteGain.gain.setValueAtTime(0.12, ctx.currentTime + idx * 0.06);
+        noteGain.gain.linearRampToValueAtTime(0.005, ctx.currentTime + idx * 0.06 + 0.12);
+        noteOsc.connect(noteGain);
+        noteGain.connect(ctx.destination);
+        noteOsc.start(ctx.currentTime + idx * 0.06);
+        noteOsc.stop(ctx.currentTime + idx * 0.06 + 0.12);
+      });
+    } else if (type === 'success' || type === 'tada') {
+      // Celebratory chord (C - E - G - C)
+      [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+        const noteOsc = ctx.createOscillator();
+        const noteGain = ctx.createGain();
+        noteOsc.type = 'triangle';
+        noteOsc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.07);
+        noteGain.gain.setValueAtTime(0.15, ctx.currentTime + idx * 0.07);
+        noteGain.gain.linearRampToValueAtTime(0.005, ctx.currentTime + idx * 0.07 + 0.25);
+        noteOsc.connect(noteGain);
+        noteGain.connect(ctx.destination);
+        noteOsc.start(ctx.currentTime + idx * 0.07);
+        noteOsc.stop(ctx.currentTime + idx * 0.07 + 0.25);
+      });
     }
   } catch (e) {
     // Ignore audio autoplay restrictions

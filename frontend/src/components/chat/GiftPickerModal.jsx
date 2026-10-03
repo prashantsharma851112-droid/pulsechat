@@ -6,12 +6,18 @@ import Sticker3D from '../common/Sticker3D';
 
 
 const GIFTS = [
-  { id: 'coffee', name: 'Coffee Chat', sparks: 10, icon: '☕', desc: 'A casual caffeine pulse' },
-  { id: 'heart', name: 'Love Pulse', sparks: 20, icon: '💖', desc: 'Heartfelt appreciation' },
-  { id: 'fire', name: 'Fire Energy', sparks: 25, icon: '🔥', desc: 'Lit hype & vibes' },
-  { id: 'rocket', name: 'Super Rocket', sparks: 35, icon: '🚀', desc: 'Blast off support' },
-  { id: 'diamond', name: 'Pulse Diamond', sparks: 50, icon: '💎', desc: 'Ultra rare appreciation' },
-  { id: 'crown', name: 'Royal Crown', sparks: 100, icon: '👑', desc: 'King / Queen respect' }
+  { id: 'coffee', name: 'Coffee Chat', sparks: 10, icon: '☕', desc: 'A casual caffeine pulse & good vibes' },
+  { id: 'heart', name: 'Love Pulse', sparks: 20, icon: '💖', desc: 'Heartfelt fluttering warmth & care' },
+  { id: 'chocolates', name: 'Belgian Chocolate Box', sparks: 25, icon: '🍫', desc: 'Artisanal chocolates in velvet gift box' },
+  { id: 'rose', name: 'Midnight Red Rose', sparks: 30, icon: '🌹', desc: 'Enchanted blooming crimson rose' },
+  { id: 'pizza', name: 'Pizza Party Slice', sparks: 35, icon: '🍕', desc: 'Cheesy oven-hot sizzling slice' },
+  { id: 'gelato', name: 'Golden Gelato Sundae', sparks: 40, icon: '🍦', desc: 'Triple-scoop sundae with waffle cone' },
+  { id: 'teddy', name: 'Teddy Hug', sparks: 50, icon: '🧸', desc: 'Fluffy cuddly teddy holding a glowing heart' },
+  { id: 'ring', name: 'Diamond Ring Box', sparks: 75, icon: '💍', desc: 'Sparkling solitaire diamond in royal case' },
+  { id: 'crown', name: 'Royal Imperial Crown', sparks: 100, icon: '👑', desc: 'Grand 24K gold coronation crown' },
+  { id: 'supercar', name: 'Supercar Beam', sparks: 150, icon: '🏎️', desc: 'Roaring exotic neon sports car' },
+  { id: 'castle', name: 'Fairytale Castle', sparks: 250, icon: '🏰', desc: 'Majestic enchanted palace & fireworks' },
+  { id: 'ufo', name: 'Cyber Pulse UFO', sparks: 500, icon: '🛸', desc: 'Ultra-rare galactic UFO with tractor beam' }
 ];
 
 export default function GiftPickerModal({
