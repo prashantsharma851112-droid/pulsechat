@@ -130,10 +130,14 @@ router.post('/claim-daily', authMiddleware, async (req, res) => {
     }
 
     const canonicalId = userDoc.id || userDoc._id.toString();
+    const idFilters = [{ userId: canonicalId }];
+    if (userDoc._id && userDoc._id.toString() !== canonicalId) {
+      idFilters.push({ userId: userDoc._id.toString() });
+    }
 
     // Check last daily claim
     const lastClaimTx = await SparksTransaction.findOne({
-      userId: canonicalId,
+      $or: idFilters,
       reason: 'daily_claim'
     }).sort({ createdAt: -1 }).lean();
 
@@ -218,8 +222,13 @@ router.post('/claim-ad-reward', authMiddleware, async (req, res) => {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
+    const idFilters = [{ userId: canonicalId }];
+    if (userDoc._id && userDoc._id.toString() !== canonicalId) {
+      idFilters.push({ userId: userDoc._id.toString() });
+    }
+
     const todayAdsCount = await SparksTransaction.countDocuments({
-      userId: canonicalId,
+      $or: idFilters,
       reason: 'ad_reward',
       createdAt: { $gte: startOfToday }
     });

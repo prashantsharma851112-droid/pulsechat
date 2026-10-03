@@ -201,6 +201,7 @@ export default function SparksWalletModal({ onClose }) {
           updateUserProfileRef.current({ ...currentUser, pulseSparks: data.balance });
         }
         setAdModalOpen(false);
+        fetchWallet(false);
         setTimeout(() => setClaimToast(''), 3500);
       } else {
         setClaimToast(data.error || 'Failed to claim ad reward');

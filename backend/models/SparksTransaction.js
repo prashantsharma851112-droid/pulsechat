@@ -13,10 +13,14 @@ const sparksTransactionSchema = new mongoose.Schema({
       'gift_received',
       'sparks_purchase',
       'daily_claim',
+      'ad_reward',
       'signup_bonus',
       'zone_reward',
       'ai_chat',
-      'admin_adjustment'
+      'admin_adjustment',
+      'vibe_tip_sent',
+      'vibe_tip_received',
+      'vibe_tip'
     ],
     default: 'story_tip_sent'
   },
