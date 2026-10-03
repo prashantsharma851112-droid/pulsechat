@@ -269,15 +269,15 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
         >
           <div style={{
             position: 'relative',
-            width: '54px',
-            height: '54px',
+            width: '56px',
+            height: '56px',
             borderRadius: '50%',
             padding: '2.5px',
             background: (myVibesGroup && Array.isArray(myVibesGroup.vibes) && myVibesGroup.vibes.length > 0)
-              ? 'linear-gradient(135deg, #f59e0b, #ec4899, #6366f1)'
-              : 'rgba(255,255,255,0.15)',
+              ? 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)'
+              : 'rgba(255,255,255,0.18)',
             boxShadow: (myVibesGroup && Array.isArray(myVibesGroup.vibes) && myVibesGroup.vibes.length > 0)
-              ? '0 0 12px rgba(245, 158, 11, 0.45)'
+              ? '0 0 14px rgba(220, 39, 67, 0.45)'
               : 'none'
           }}>
             {myHasKing ? (
@@ -287,17 +287,19 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
             ) : myHasStreak ? (
               <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
             ) : null}
-            <img
-              src={user?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.username || 'user'}`}
-              alt="My Vibe"
-              style={{
-                width: '100%',
-                height: '100%',
-                borderRadius: '50%',
-                objectFit: 'cover',
-                background: '#111'
-              }}
-            />
+            <div style={{ width: '100%', height: '100%', borderRadius: '50%', padding: '2px', background: 'var(--bg-card, #0f172a)' }}>
+              <img
+                src={user?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.username || 'user'}`}
+                alt="My Vibe"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  background: '#111'
+                }}
+              />
+            </div>
             {/* Plus Icon Overlay */}
             <div style={{
               position: 'absolute',
@@ -306,12 +308,13 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
               width: '18px',
               height: '18px',
               borderRadius: '50%',
-              background: '#6366f1',
+              background: '#38bdf8',
               color: '#fff',
-              border: '2px solid var(--bg-card)',
+              border: '2px solid var(--bg-card, #0f172a)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.5)'
             }}>
               <Plus size={11} strokeWidth={3} />
             </div>
@@ -343,16 +346,16 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
             >
               <div style={{
                 position: 'relative',
-                width: '54px',
-                height: '54px',
+                width: '56px',
+                height: '56px',
                 borderRadius: '50%',
                 padding: '2.5px',
                 background: viewed
-                  ? 'linear-gradient(135deg, #64748b, #94a3b8)'
-                  : 'linear-gradient(135deg, #f59e0b, #ec4899, #6366f1)',
+                  ? 'rgba(255, 255, 255, 0.22)'
+                  : 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)',
                 boxShadow: viewed
                   ? 'none'
-                  : '0 0 12px rgba(236, 72, 153, 0.45)',
+                  : '0 0 14px rgba(220, 39, 67, 0.45)',
                 animation: viewed ? 'none' : 'pulseGlow 2.5s infinite alternate'
               }}>
                 {crowns.king ? (
@@ -362,17 +365,19 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
                 ) : crowns.streak ? (
                   <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
                 ) : null}
-                <img
-                  src={group.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${group.username || 'vibe'}`}
-                  alt={group.displayName}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    borderRadius: '50%',
-                    objectFit: 'cover',
-                    background: '#111'
-                  }}
-                />
+                <div style={{ width: '100%', height: '100%', borderRadius: '50%', padding: '2px', background: 'var(--bg-card, #0f172a)' }}>
+                  <img
+                    src={group.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${group.username || 'vibe'}`}
+                    alt={group.displayName}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                      background: '#111'
+                    }}
+                  />
+                </div>
               </div>
               <span style={{ fontSize: '0.68rem', fontWeight: 600, color: viewed ? 'var(--text-muted)' : 'var(--text-main)', maxWidth: '58px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {group.displayName ? group.displayName.split(' ')[0] : 'User'}

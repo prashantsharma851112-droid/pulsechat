@@ -7,6 +7,7 @@ const VibeSchema = new mongoose.Schema({
   displayName: { type: String, default: '' },
   avatar: { type: String, default: '' },
   mediaUrl: { type: String, default: null },
+  mediaType: { type: String, default: 'image' }, // 'image' | 'video'
   caption: { type: String, default: '' },
   soundtrack: { type: String, default: 'lofi' },
   songTitle: { type: String, default: '' },

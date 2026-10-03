@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
+import { uploadMediaDirect } from '../../utils/mediaUpload';
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 import MusicPickerModal from './MusicPickerModal';
 import { EMOJI_CATEGORIES, ALL_EMOJIS } from '../chat/EmojiPicker';
@@ -106,10 +107,14 @@ export default function CreateVibeModal({ onClose, onCreated }) {
 
   // Story Content
   const [mediaUrl, setMediaUrl] = useState('');
+  const [mediaType, setMediaType] = useState('image'); // 'image' | 'video'
+  const [selectedMediaFile, setSelectedMediaFile] = useState(null);
   const [caption, setCaption] = useState('');
   const [selectedGradient, setSelectedGradient] = useState(GRADIENTS[0].value);
   const [animatedBg, setAnimatedBg] = useState('none');
   const [textStyle3D, setTextStyle3D] = useState('none');
+  const [textBgStyle, setTextBgStyle] = useState('none'); // 'none' | 'box' | 'neon' | 'gradient'
+  const [textColor, setTextColor] = useState('#ffffff');
   const [textSize, setTextSize] = useState(1.4);
   const [textAlign, setTextAlign] = useState('center');
 
@@ -258,52 +263,39 @@ export default function CreateVibeModal({ onClose, onCreated }) {
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    setMediaType('image');
+    setSelectedMediaFile(null);
     setMediaUrl(dataUrl);
     stopCameraStream();
     setViewMode('canvas');
     setActivePanel('image_adjust');
   };
 
-  // File Upload from Gallery
+  // File Upload from Gallery (Supports high-res Photos & Videos!)
   const handleFileChange = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
 
-    if (file.size > 25 * 1024 * 1024) {
-      setError('File size exceeds 25MB limit.');
+    if (file.size > 50 * 1024 * 1024) {
+      setError('File size exceeds 50MB limit.');
       return;
     }
 
     stopCameraStream();
     setError('');
 
-    let uploadedUrl = null;
-    if (token) {
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch(`${BACKEND_URL}/api/upload`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.url) uploadedUrl = data.url;
-        }
-      } catch (err) {}
-    }
+    const isVid = file.type.startsWith('video/') || Boolean(file.name?.match(/\.(mp4|webm|mov|ogg)($|\?)/i));
+    setMediaType(isVid ? 'video' : 'image');
+    setSelectedMediaFile(file);
 
-    if (!uploadedUrl) {
-      try {
-        uploadedUrl = await compressImageToBase64(file);
-      } catch (err) {}
-    }
-
-    if (uploadedUrl) {
-      setMediaUrl(uploadedUrl);
+    // Instant local preview via Blob URL (0ms latency, zero server bandwidth used!)
+    try {
+      const objectUrl = URL.createObjectURL(file);
+      setMediaUrl(objectUrl);
       setViewMode('canvas');
       setActivePanel('image_adjust');
+    } catch (err) {
+      setError('Could not load media preview.');
     }
   };
 
@@ -566,6 +558,26 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     setSubmitting(true);
     setError('');
 
+    let finalMediaUrl = mediaUrl;
+    // Direct Cloudinary Edge CDN upload (Instagram pattern: 0 bytes pass through Render Node.js backend!)
+    if (selectedMediaFile) {
+      try {
+        const cdnUrl = await uploadMediaDirect(selectedMediaFile, 'pulsechat_vibes', token);
+        if (cdnUrl) finalMediaUrl = cdnUrl;
+      } catch (err) {
+        console.warn('Direct media upload fallback:', err);
+      }
+    } else if (mediaUrl && (mediaUrl.startsWith('data:image') || mediaUrl.startsWith('blob:'))) {
+      try {
+        const cdnUrl = await uploadMediaDirect(mediaUrl, 'pulsechat_vibes', token);
+        if (cdnUrl) finalMediaUrl = cdnUrl;
+      } catch (err) {
+        console.warn('Direct image upload fallback:', err);
+      }
+    }
+
+    const calculatedMediaType = mediaType || (finalMediaUrl?.match(/\.(mp4|webm|mov|ogg)($|\?)/i) ? 'video' : 'image');
+
     const vibeId = 'vibe_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     let createdVibe = {
       id: vibeId,
@@ -574,7 +586,10 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       displayName: user?.displayName || user?.username || 'You',
       avatar: user?.avatar,
       caption: caption.trim(),
-      mediaUrl: mediaUrl || null,
+      mediaUrl: finalMediaUrl || null,
+      mediaType: calculatedMediaType,
+      textBgStyle,
+      textColor,
       soundtrack: selectedSong ? 'music_track' : 'lofi',
       songTitle: selectedSong ? selectedSong.songTitle : '',
       artistName: selectedSong ? selectedSong.artistName : '',
@@ -616,7 +631,10 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           body: JSON.stringify({
             id: vibeId,
             caption: caption.trim(),
-            mediaUrl: mediaUrl || null,
+            mediaUrl: finalMediaUrl || null,
+            mediaType: calculatedMediaType,
+            textBgStyle,
+            textColor,
             soundtrack: selectedSong ? 'music_track' : 'lofi',
             songTitle: selectedSong ? selectedSong.songTitle : '',
             artistName: selectedSong ? selectedSong.artistName : '',
@@ -694,7 +712,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,video/*"
         onChange={handleFileChange}
         style={{ display: 'none' }}
       />
@@ -1212,23 +1230,44 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                     touchAction: 'none'
                   }}
                 >
-                  <img
-                    src={mediaUrl}
-                    alt="Media"
-                    draggable={false}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: imageFit === 'padded' ? 'contain' : imageFit,
-                      transform: `scale(${imageZoom})`,
-                      filter: imageFilter !== 'none' ? imageFilter : 'none',
-                      opacity: imageOpacity,
-                      borderRadius: imageFit === 'padded' ? '18px' : '0px',
-                      pointerEvents: 'none',
-                      userSelect: 'none',
-                      WebkitUserDrag: 'none'
-                    }}
-                  />
+                  {(mediaType === 'video' || selectedMediaFile?.type?.startsWith('video/') || Boolean(mediaUrl?.match(/\.(mp4|webm|mov|ogg)($|\?)/i))) ? (
+                    <video
+                      src={mediaUrl}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: imageFit === 'padded' ? 'contain' : imageFit,
+                        transform: `scale(${imageZoom})`,
+                        filter: imageFilter !== 'none' ? imageFilter : 'none',
+                        opacity: imageOpacity,
+                        borderRadius: imageFit === 'padded' ? '18px' : '0px',
+                        pointerEvents: 'none',
+                        userSelect: 'none'
+                      }}
+                    />
+                  ) : (
+                    <img
+                      src={mediaUrl}
+                      alt="Media"
+                      draggable={false}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: imageFit === 'padded' ? 'contain' : imageFit,
+                        transform: `scale(${imageZoom})`,
+                        filter: imageFilter !== 'none' ? imageFilter : 'none',
+                        opacity: imageOpacity,
+                        borderRadius: imageFit === 'padded' ? '18px' : '0px',
+                        pointerEvents: 'none',
+                        userSelect: 'none',
+                        WebkitUserDrag: 'none'
+                      }}
+                    />
+                  )}
                 </div>
               )}
 
@@ -1302,11 +1341,28 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                       style={{
                         fontSize: `${textSize}rem`,
                         fontWeight: 800,
-                        color: '#ffffff',
+                        color: textColor || '#ffffff',
                         lineHeight: 1.35,
                         wordBreak: 'break-word',
                         textAlign: textAlign,
-                        textShadow: '0 3px 14px rgba(0,0,0,0.85)',
+                        background: textBgStyle === 'box'
+                          ? 'rgba(0, 0, 0, 0.72)'
+                          : textBgStyle === 'neon'
+                          ? 'rgba(99, 102, 241, 0.88)'
+                          : textBgStyle === 'gradient'
+                          ? 'linear-gradient(45deg, #f09433, #dc2743, #bc1888)'
+                          : 'transparent',
+                        padding: textBgStyle !== 'none' ? '6px 14px' : '0px',
+                        borderRadius: textBgStyle !== 'none' ? '12px' : '0px',
+                        backdropFilter: textBgStyle === 'box' ? 'blur(8px)' : 'none',
+                        boxShadow: textBgStyle === 'neon'
+                          ? '0 0 20px rgba(99, 102, 241, 0.7)'
+                          : textBgStyle === 'gradient'
+                          ? '0 4px 18px rgba(220, 39, 67, 0.5)'
+                          : textBgStyle === 'box'
+                          ? '0 4px 16px rgba(0,0,0,0.6)'
+                          : 'none',
+                        textShadow: textBgStyle === 'none' ? '0 3px 14px rgba(0,0,0,0.95)' : 'none',
                         opacity: caption ? 1 : 0.6
                       }}
                     >
@@ -1576,7 +1632,26 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                       borderRadius: '16px',
                       padding: '4px'
                     }}>
-                      {st.emoji}
+                    {st.isTipBadge ? (
+                      <div style={{
+                        background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
+                        color: '#fff',
+                        padding: '8px 16px',
+                        borderRadius: '24px',
+                        boxShadow: '0 4px 18px rgba(245, 158, 11, 0.6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontWeight: 900,
+                        fontSize: '0.9rem',
+                        whiteSpace: 'nowrap',
+                        border: '1.5px solid rgba(255,255,255,0.5)'
+                      }}>
+                        ⚡ Tip Sparks
+                      </div>
+                    ) : (
+                      st.emoji
+                    )}
 
                       {/* Corner Handle & Remove Button when Selected */}
                       {isSelected && (
@@ -1799,6 +1874,65 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   ))}
                 </div>
               </div>
+
+              {/* Instagram Text Highlight Box & Color Swatches */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                {/* Background Box Mode Toggle (Instagram 'A' button style) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const modes = ['none', 'box', 'neon', 'gradient'];
+                    const next = modes[(modes.indexOf(textBgStyle) + 1) % modes.length];
+                    setTextBgStyle(next);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: textBgStyle === 'none' ? 'rgba(255,255,255,0.08)' :
+                                textBgStyle === 'box' ? 'rgba(0,0,0,0.85)' :
+                                textBgStyle === 'neon' ? 'rgba(99,102,241,0.8)' :
+                                'linear-gradient(45deg, #f09433, #dc2743, #bc1888)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '14px',
+                    padding: '6px 12px',
+                    color: '#fff',
+                    fontSize: '0.74rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    boxShadow: textBgStyle === 'neon' ? '0 0 12px rgba(99,102,241,0.6)' : 'none',
+                    flexShrink: 0
+                  }}
+                  title="Toggle Instagram Text Highlight Box"
+                >
+                  <span style={{ fontSize: '0.85rem', fontWeight: 900, background: '#fff', color: '#000', borderRadius: '4px', padding: '0 4px', lineHeight: 1.2 }}>A</span>
+                  <span>{textBgStyle === 'none' ? 'No Box' : textBgStyle === 'box' ? 'Dark Box' : textBgStyle === 'neon' ? 'Neon Glow' : 'Sunset Gradient'}</span>
+                </button>
+
+                {/* Quick Color Swatches Palette */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflowX: 'auto', scrollbarWidth: 'none', padding: '2px 0' }}>
+                  {['#ffffff', '#000000', '#ef4444', '#f59e0b', '#10b981', '#06b6d4', '#6366f1', '#ec4899', '#f43f5e', '#a855f7'].map(col => (
+                    <button
+                      key={col}
+                      type="button"
+                      onClick={() => setTextColor(col)}
+                      style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        background: col,
+                        border: textColor === col ? '2.5px solid #fff' : '1px solid rgba(255,255,255,0.3)',
+                        transform: textColor === col ? 'scale(1.2)' : 'scale(1)',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                        transition: 'all 0.15s ease',
+                        boxShadow: textColor === col ? '0 0 8px rgba(255,255,255,0.6)' : 'none'
+                      }}
+                      title={col}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
@@ -1967,6 +2101,44 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                   style={{ background: 'rgba(234, 179, 8, 0.25)', border: '1px solid rgba(234, 179, 8, 0.4)', color: '#fff', borderRadius: '12px', padding: '3px 10px', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer' }}
                 >
                   Done ✓
+                </button>
+              </div>
+
+              {/* Instagram-Style Featured Interactive Stickers */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '2px', scrollbarWidth: 'none' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newSticker = {
+                      id: 'tip_sparks_' + Date.now(),
+                      emoji: '⚡ Tip Sparks',
+                      isTipBadge: true,
+                      x: 50,
+                      y: 50,
+                      scale: 1.0
+                    };
+                    setStickersList(prev => [...prev, newSticker]);
+                    setSelectedElement(newSticker.id);
+                    setActivePanel(null);
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
+                    border: '1.5px solid rgba(255,255,255,0.4)',
+                    borderRadius: '16px',
+                    padding: '7px 14px',
+                    color: '#fff',
+                    fontSize: '0.76rem',
+                    fontWeight: 900,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 15px rgba(245, 158, 11, 0.5)',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0
+                  }}
+                >
+                  <Sparkles size={14} /> ⚡ Add "Tip Sparks" Sticker
                 </button>
               </div>
 

@@ -11,7 +11,7 @@ router.post('/create', authMiddleware, async (req, res) => {
   try {
     const {
       id,
-      mediaUrl, caption, soundtrack, songTitle, artistName, albumArt, audioUrl, youtubeId, songStartTime,
+      mediaUrl, mediaType, caption, soundtrack, songTitle, artistName, albumArt, audioUrl, youtubeId, songStartTime,
       storyDuration, bgGradient, textStyle3D, animatedBg, textPos, musicPos, imagePos, imageFit, imageZoom,
       imageFilter, imageOpacity, textSize, textAlign, selectedStickers,
       musicScale, musicStyle, stickersData
@@ -59,6 +59,7 @@ router.post('/create', authMiddleware, async (req, res) => {
       displayName: user.displayName || user.name || user.username || 'Pulse User',
       avatar: user.avatar || '',
       mediaUrl: mediaUrl || null,
+      mediaType: mediaType || (mediaUrl && (mediaUrl.match(/\.(mp4|webm|mov|m4v)(\?.*)?$/i) || mediaUrl.includes('/video/')) ? 'video' : 'image'),
       caption: caption || '',
       soundtrack: soundtrack || (audioUrl || youtubeId ? 'music_track' : 'lofi'),
       songTitle: songTitle || '',

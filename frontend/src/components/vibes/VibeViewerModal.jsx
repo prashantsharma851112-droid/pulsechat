@@ -54,6 +54,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
   const [replyText, setReplyText] = useState('');
   const [showViewersSheet, setShowViewersSheet] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isHolding, setIsHolding] = useState(false);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
 
   // Sparks Tipping & Wallet Modal States
@@ -84,6 +85,9 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
   const currentVibe = vibes[currentIndex] || vibes[0];
   const timerRef = useRef(null);
   const audioRef = useRef(null);
+  const videoPlayerRef = useRef(null);
+  const holdTimerRef = useRef(null);
+  const touchStartTimeRef = useRef(0);
 
   // Current story's specific viewers list & count
   const currentStoryViews = viewsByVibeId[currentVibe?.id] ?? (Array.isArray(currentVibe?.views) ? currentVibe.views : []);
@@ -431,9 +435,38 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     onClose();
   };
 
-  // Story Auto-Advance Progress Bar Timer (respects currentVibe.storyDuration: 15s, 30s, 60s)
+  const isCurrentStoryVideo = currentVibe?.mediaType === 'video' || Boolean(currentVibe?.mediaUrl?.match(/\.(mp4|webm|mov|ogg)($|\?)/i));
+
+  // Sync video player lifecycle
   useEffect(() => {
-    if (isPaused || showViewersSheet || showSparksTipModal || showSparksWallet || showGetSparksModal) {
+    if (videoPlayerRef.current) {
+      try {
+        videoPlayerRef.current.currentTime = 0;
+        videoPlayerRef.current.play().catch(() => {});
+      } catch (e) {}
+    }
+  }, [currentIndex, currentVibe?.id]);
+
+  useEffect(() => {
+    if (videoPlayerRef.current) {
+      videoPlayerRef.current.muted = isAudioMuted;
+    }
+  }, [isAudioMuted]);
+
+  useEffect(() => {
+    if (videoPlayerRef.current) {
+      if (isPaused || isHolding || showViewersSheet || showSparksTipModal || showSparksWallet || showGetSparksModal) {
+        try { videoPlayerRef.current.pause(); } catch (e) {}
+      } else {
+        try { videoPlayerRef.current.play().catch(() => {}); } catch (e) {}
+      }
+    }
+  }, [isPaused, isHolding, showViewersSheet, showSparksTipModal, showSparksWallet, showGetSparksModal]);
+
+  // Story Auto-Advance Progress Bar Timer (for photo/text stories; videos manage progress via onTimeUpdate)
+  useEffect(() => {
+    if (isCurrentStoryVideo) return;
+    if (isPaused || isHolding || showViewersSheet || showSparksTipModal || showSparksWallet || showGetSparksModal) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
@@ -468,7 +501,53 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [currentIndex, vibes.length, onClose, isPaused, showViewersSheet, currentVibe?.id, currentVibe?.storyDuration, user?.isPro, showingSponsoredAd]);
+  }, [currentIndex, vibes.length, onClose, isPaused, isHolding, showViewersSheet, currentVibe?.id, currentVibe?.storyDuration, user?.isPro, showingSponsoredAd, isCurrentStoryVideo]);
+
+  // Instagram-style Hold to Pause & Tap Navigation Gestures
+  const handleStagePointerDown = (e) => {
+    if (e.target.closest('button') || e.target.closest('input') || e.target.closest('.interactive-action') || e.target.closest('form')) return;
+    touchStartTimeRef.current = Date.now();
+    holdTimerRef.current = setTimeout(() => {
+      setIsHolding(true);
+      setIsPaused(true);
+      if (videoPlayerRef.current) {
+        try { videoPlayerRef.current.pause(); } catch (err) {}
+      }
+      if (audioRef.current) {
+        try { audioRef.current.pause(); } catch (err) {}
+      }
+    }, 160);
+  };
+
+  const handleStagePointerUp = (e) => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    const pressDuration = Date.now() - touchStartTimeRef.current;
+    if (isHolding) {
+      setIsHolding(false);
+      setIsPaused(false);
+      if (videoPlayerRef.current) {
+        try { videoPlayerRef.current.play().catch(() => {}); } catch (err) {}
+      }
+      if (audioRef.current && !isAudioMuted) {
+        try { audioRef.current.play().catch(() => {}); } catch (err) {}
+      }
+      return;
+    }
+
+    if (pressDuration < 200 && !e.target.closest('button') && !e.target.closest('input') && !e.target.closest('.interactive-action') && !e.target.closest('form')) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const clientX = e.clientX ?? (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : rect.width / 2);
+      const relativeX = clientX - rect.left;
+      if (relativeX < rect.width * 0.35) {
+        handlePrev();
+      } else {
+        handleNext();
+      }
+    }
+  };
 
   const handleNext = () => {
     if (currentIndex < vibes.length - 1) {
@@ -652,7 +731,10 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
           right: 12,
           display: 'flex',
           gap: '4px',
-          zIndex: 10
+          zIndex: 10,
+          opacity: isHolding ? 0 : 1,
+          pointerEvents: isHolding ? 'none' : 'auto',
+          transition: 'opacity 0.22s ease'
         }}>
           {vibes.map((v, i) => (
             <div
@@ -687,7 +769,10 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
           alignItems: 'center',
           justifyContent: 'space-between',
           zIndex: 10,
-          color: '#fff'
+          color: '#fff',
+          opacity: isHolding ? 0 : 1,
+          pointerEvents: isHolding ? 'none' : 'auto',
+          transition: 'opacity 0.22s ease'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ position: 'relative', width: '36px', height: '36px', flexShrink: 0 }}>
@@ -720,7 +805,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                 👑 VIP Ad-Free
               </span>
             )}
-            {currentVibe?.audioUrl && (
+            {Boolean(currentVibe?.audioUrl || isCurrentStoryVideo) && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -729,7 +814,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                 }}
                 className="icon-btn-ghost"
                 style={{ color: '#fff', background: 'rgba(0,0,0,0.4)', borderRadius: '50%', padding: '6px' }}
-                title={isAudioMuted ? "Unmute Story Music" : "Mute Story Music"}
+                title={isAudioMuted ? "Unmute Story Audio" : "Mute Story Audio"}
               >
                 {isAudioMuted ? <VolumeX size={16} color="#ef4444" /> : <Volume2 size={16} color="#f59e0b" />}
               </button>
@@ -847,23 +932,24 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
           <ChatLiveWallpaper wallpaperId={currentVibe.animatedBg} />
         )}
 
-        {/* Media or Text Content Body */}
+        {/* Media or Text Content Body with Instagram Hold-to-Pause and Tap navigation */}
         <div
-          onClick={(e) => {
-            const width = e.currentTarget.offsetWidth;
-            const clickX = e.nativeEvent.offsetX;
-            if (clickX < width / 3) handlePrev();
-            else handleNext();
-          }}
+          onMouseDown={handleStagePointerDown}
+          onMouseUp={handleStagePointerUp}
+          onTouchStart={handleStagePointerDown}
+          onTouchEnd={handleStagePointerUp}
+          onContextMenu={(e) => e.preventDefault()}
           style={{
             flex: 1,
             position: 'relative',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: currentVibe.imageFit === 'padded' ? '50px 30px' : '40px 20px',
+            padding: currentVibe.imageFit === 'padded' ? '50px 30px' : '0px',
             cursor: 'pointer',
-            userSelect: 'none'
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            touchAction: 'none'
           }}
         >
           {/* Full Song YouTube Background Audio Engine (Fallback ONLY when no direct audioUrl) */}
@@ -893,7 +979,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
             </div>
           )}
 
-          {/* Uploaded Image Layer with positioning & zoom */}
+          {/* Uploaded Image or Video Layer */}
           {currentVibe.mediaUrl ? (
             <div style={{
               position: 'absolute',
@@ -909,20 +995,50 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
               justifyContent: 'center',
               zIndex: 2
             }}>
-              <img
-                src={currentVibe.mediaUrl}
-                alt="Vibe Content"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: currentVibe.imageFit === 'padded' ? 'contain' : (currentVibe.imageFit || 'contain'),
-                  filter: currentVibe.imageFilter === 'warm' ? 'saturate(1.4) contrast(1.15)' :
-                          currentVibe.imageFilter === 'cyber' ? 'hue-rotate(180deg) saturate(1.5)' :
-                          currentVibe.imageFilter === 'vintage' ? 'sepia(0.4) contrast(1.1)' :
-                          currentVibe.imageFilter === 'bw' ? 'grayscale(0.85) contrast(1.2)' : 'none',
-                  opacity: currentVibe.imageOpacity || 1.0
-                }}
-              />
+              {isCurrentStoryVideo ? (
+                <video
+                  ref={videoPlayerRef}
+                  key={`video_${currentVibe.id}_${currentVibe.mediaUrl}`}
+                  src={currentVibe.mediaUrl}
+                  playsInline
+                  autoPlay
+                  muted={isAudioMuted}
+                  onTimeUpdate={(e) => {
+                    const v = e.currentTarget;
+                    if (v.duration && !isNaN(v.duration) && v.duration > 0) {
+                      setProgress((v.currentTime / v.duration) * 100);
+                    }
+                  }}
+                  onEnded={handleNext}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: currentVibe.imageFit === 'padded' ? 'contain' : (currentVibe.imageFit || 'cover'),
+                    filter: currentVibe.imageFilter === 'warm' ? 'saturate(1.4) contrast(1.15)' :
+                            currentVibe.imageFilter === 'cyber' ? 'hue-rotate(180deg) saturate(1.5)' :
+                            currentVibe.imageFilter === 'vintage' ? 'sepia(0.4) contrast(1.1)' :
+                            currentVibe.imageFilter === 'bw' ? 'grayscale(0.85) contrast(1.2)' : 'none',
+                    opacity: currentVibe.imageOpacity || 1.0,
+                    pointerEvents: 'none'
+                  }}
+                />
+              ) : (
+                <img
+                  src={currentVibe.mediaUrl}
+                  alt="Vibe Content"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: currentVibe.imageFit === 'padded' ? 'contain' : (currentVibe.imageFit || 'cover'),
+                    filter: currentVibe.imageFilter === 'warm' ? 'saturate(1.4) contrast(1.15)' :
+                            currentVibe.imageFilter === 'cyber' ? 'hue-rotate(180deg) saturate(1.5)' :
+                            currentVibe.imageFilter === 'vintage' ? 'sepia(0.4) contrast(1.1)' :
+                            currentVibe.imageFilter === 'bw' ? 'grayscale(0.85) contrast(1.2)' : 'none',
+                    opacity: currentVibe.imageOpacity || 1.0,
+                    pointerEvents: 'none'
+                  }}
+                />
+              )}
             </div>
           ) : null}
 
@@ -947,18 +1063,34 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                 </div>
               </div>
             ) : currentVibe.caption ? (
-              <h2 style={{
-                color: '#fff',
+              <div style={{
+                color: currentVibe.textColor || '#ffffff',
                 fontSize: `${(currentVibe.textSize || 1.3) * 1.15}rem`,
                 fontWeight: 800,
                 textAlign: currentVibe.textAlign || 'center',
                 lineHeight: 1.4,
-                textShadow: '0 2px 10px rgba(0,0,0,0.85)',
-                padding: '0 10px',
+                background: currentVibe.textBgStyle === 'box'
+                  ? 'rgba(0, 0, 0, 0.75)'
+                  : currentVibe.textBgStyle === 'neon'
+                  ? 'rgba(99, 102, 241, 0.88)'
+                  : currentVibe.textBgStyle === 'gradient'
+                  ? 'linear-gradient(45deg, #f09433, #dc2743, #bc1888)'
+                  : 'transparent',
+                padding: currentVibe.textBgStyle && currentVibe.textBgStyle !== 'none' ? '8px 18px' : '0px',
+                borderRadius: currentVibe.textBgStyle && currentVibe.textBgStyle !== 'none' ? '14px' : '0px',
+                backdropFilter: currentVibe.textBgStyle === 'box' ? 'blur(8px)' : 'none',
+                boxShadow: currentVibe.textBgStyle === 'neon'
+                  ? '0 0 20px rgba(99, 102, 241, 0.7)'
+                  : currentVibe.textBgStyle === 'gradient'
+                  ? '0 4px 18px rgba(220, 39, 67, 0.5)'
+                  : currentVibe.textBgStyle === 'box'
+                  ? '0 4px 16px rgba(0,0,0,0.6)'
+                  : 'none',
+                textShadow: (!currentVibe.textBgStyle || currentVibe.textBgStyle === 'none') ? '0 2px 10px rgba(0,0,0,0.85)' : 'none',
                 margin: 0
               }}>
                 {currentVibe.caption}
-              </h2>
+              </div>
             ) : null}
           </div>
 
@@ -967,20 +1099,51 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
             currentVibe.stickersData.map((s, idx) => (
               <div
                 key={s.id || idx}
+                onClick={(e) => {
+                  if (s.isTipBadge || s.emoji === '⚡ Tip Sparks') {
+                    e.stopPropagation();
+                    if (!isMine && authorFriendStatus !== 'friends') {
+                      setSparksMsg('🔒 Sync first to tip sparks');
+                      setTimeout(() => setSparksMsg(''), 3000);
+                      return;
+                    }
+                    setShowSparksTipModal(true);
+                  }
+                }}
+                className={s.isTipBadge || s.emoji === '⚡ Tip Sparks' ? 'interactive-action' : ''}
                 style={{
                   position: 'absolute',
                   left: `${s.x ?? 50}%`,
                   top: `${s.y ?? 50}%`,
                   transform: `translate(-50%, -50%) scale(${s.scale || 1.0})`,
-                  zIndex: 7,
-                  fontSize: '2.2rem',
+                  zIndex: 8,
                   userSelect: 'none',
-                  pointerEvents: 'none',
+                  cursor: (s.isTipBadge || s.emoji === '⚡ Tip Sparks') ? 'pointer' : 'default',
                   filter: 'drop-shadow(0 4px 14px rgba(0,0,0,0.6))',
                   animation: 'pulseFadeIn 0.25s ease'
                 }}
               >
-                {s.emoji}
+                {s.isTipBadge || s.emoji === '⚡ Tip Sparks' ? (
+                  <div style={{
+                    background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
+                    color: '#fff',
+                    padding: '8px 18px',
+                    borderRadius: '24px',
+                    boxShadow: '0 4px 20px rgba(245, 158, 11, 0.6)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontWeight: 900,
+                    fontSize: '0.9rem',
+                    border: '1.5px solid rgba(255,255,255,0.4)',
+                    animation: 'pulseGlow 2s infinite alternate'
+                  }}>
+                    <Zap size={16} fill="#fbbf24" color="#fbbf24" />
+                    <span>Tip Sparks</span>
+                  </div>
+                ) : (
+                  <span style={{ fontSize: '2.4rem' }}>{s.emoji}</span>
+                )}
               </div>
             ))
           ) : (
@@ -1111,7 +1274,10 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
           flexDirection: 'column',
           gap: '10px',
           flexShrink: 0,
-          zIndex: 10
+          zIndex: 10,
+          opacity: isHolding ? 0 : 1,
+          pointerEvents: isHolding ? 'none' : 'auto',
+          transition: 'opacity 0.22s ease'
         }}>
           {isMine ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
