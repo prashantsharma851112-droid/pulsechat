@@ -12,12 +12,18 @@ const GIFTS = [
   { id: 'rose', name: 'Midnight Red Rose', sparks: 30, icon: '🌹', desc: 'Enchanted blooming crimson rose' },
   { id: 'pizza', name: 'Pizza Party Slice', sparks: 35, icon: '🍕', desc: 'Cheesy oven-hot sizzling slice' },
   { id: 'gelato', name: 'Golden Gelato Sundae', sparks: 40, icon: '🍦', desc: 'Triple-scoop sundae with waffle cone' },
+  { id: 'perfume', name: 'French Velvet Perfume', sparks: 45, icon: '🍾', desc: 'Crystal flacon with golden fragrance mist' },
   { id: 'teddy', name: 'Teddy Hug', sparks: 50, icon: '🧸', desc: 'Fluffy cuddly teddy holding a glowing heart' },
+  { id: 'guitar', name: 'Electric Neon Guitar', sparks: 60, icon: '🎸', desc: 'Rockstar guitar with glowing neon chords' },
   { id: 'ring', name: 'Diamond Ring Box', sparks: 75, icon: '💍', desc: 'Sparkling solitaire diamond in royal case' },
+  { id: 'rolex', name: 'Rolex Cosmograph', sparks: 80, icon: '⌚', desc: 'Luxury diamond bezel gold timepiece' },
   { id: 'crown', name: 'Royal Imperial Crown', sparks: 100, icon: '👑', desc: 'Grand 24K gold coronation crown' },
   { id: 'supercar', name: 'Supercar Beam', sparks: 150, icon: '🏎️', desc: 'Roaring exotic neon sports car' },
   { id: 'castle', name: 'Fairytale Castle', sparks: 250, icon: '🏰', desc: 'Majestic enchanted palace & fireworks' },
-  { id: 'ufo', name: 'Cyber Pulse UFO', sparks: 500, icon: '🛸', desc: 'Ultra-rare galactic UFO with tractor beam' }
+  { id: 'jet', name: 'Supersonic Private Jet', sparks: 300, icon: '✈️', desc: 'VIP executive jet soaring over clouds' },
+  { id: 'yacht', name: 'Billionaire Mega Yacht', sparks: 350, icon: '🛥️', desc: 'Luxury multi-deck yacht on turquoise waves' },
+  { id: 'ufo', name: 'Cyber Pulse UFO', sparks: 500, icon: '🛸', desc: 'Ultra-rare galactic UFO with tractor beam' },
+  { id: 'galaxy', name: 'Cosmic Infinity Gem', sparks: 600, icon: '💎', desc: 'Ultra-rare celestial galaxy stone of infinite energy' }
 ];
 
 export default function GiftPickerModal({

@@ -2380,6 +2380,77 @@ input, textarea {
   }
 }
 
+/* ==========================================================================
+   PURE 3D CINEMATIC GIFT BOX UNBOXING ANIMATIONS
+   ========================================================================== */
+@keyframes giftBoxFloat {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-16px) rotate(1.5deg); }
+}
+
+@keyframes giftBoxShake {
+  0%, 100% { transform: translateY(0) rotate(0deg) scale(1.05); }
+  20% { transform: translateY(-6px) rotate(-8deg) scale(1.08); }
+  40% { transform: translateY(-10px) rotate(8deg) scale(1.12); }
+  60% { transform: translateY(-6px) rotate(-6deg) scale(1.08); }
+  80% { transform: translateY(-2px) rotate(5deg) scale(1.06); }
+}
+
+@keyframes giftBoxLidFly {
+  0% { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
+  35% { transform: translateY(-80px) rotate(-22deg) scale(1.15); opacity: 0.95; }
+  100% { transform: translateY(-240px) rotate(-55deg) scale(0.6); opacity: 0; pointer-events: none; }
+}
+
+@keyframes giftBoxBaseFall {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  25% { transform: translateY(18px) scale(1.03); opacity: 0.95; }
+  100% { transform: translateY(280px) scale(0.4) rotate(8deg); opacity: 0; pointer-events: none; }
+}
+
+@keyframes giftItemPopOut {
+  0% {
+    transform: translateY(80px) scale(0.15) rotate(-20deg);
+    opacity: 0;
+  }
+  50% {
+    transform: translateY(-25px) scale(1.35) rotate(5deg);
+    opacity: 1;
+  }
+  75% {
+    transform: translateY(6px) scale(1.2);
+  }
+  100% {
+    transform: translateY(0) scale(1.25) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes giftPulseGlowAura {
+  0%, 100% { filter: drop-shadow(0 0 30px rgba(245, 158, 11, 0.45)) drop-shadow(0 0 60px rgba(168, 85, 247, 0.3)); }
+  50% { filter: drop-shadow(0 0 50px rgba(245, 158, 11, 0.8)) drop-shadow(0 0 95px rgba(236, 72, 153, 0.55)); }
+}
+
+.gift-box-floating {
+  animation: giftBoxFloat 3.2s ease-in-out infinite;
+}
+
+.gift-box-shaking {
+  animation: giftBoxShake 0.35s ease-in-out infinite !important;
+}
+
+.gift-box-lid-opening {
+  animation: giftBoxLidFly 0.85s cubic-bezier(0.25, 1, 0.5, 1) forwards !important;
+}
+
+.gift-box-base-falling {
+  animation: giftBoxBaseFall 0.85s cubic-bezier(0.5, 0, 0.75, 0) forwards !important;
+}
+
+.gift-item-emerging {
+  animation: giftItemPopOut 0.85s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, giftPulseGlowAura 3s ease-in-out infinite 0.85s;
+}
+
 
 
 

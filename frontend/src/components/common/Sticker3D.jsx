@@ -416,67 +416,6 @@ export default function Sticker3D({
           </svg>
         );
 
-      case 'giftbox':
-        return (
-          <svg viewBox="0 0 160 160" width="115" height="115" className="sticker-3d-graphic">
-            <defs>
-              <linearGradient id={`boxTop_${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#a855f7" />
-                <stop offset="100%" stopColor="#7e22ce" />
-              </linearGradient>
-              <linearGradient id={`boxLeft_${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#7e22ce" />
-                <stop offset="100%" stopColor="#581c87" />
-              </linearGradient>
-              <linearGradient id={`boxRight_${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#6b21a8" />
-                <stop offset="100%" stopColor="#3b0764" />
-              </linearGradient>
-              <linearGradient id={`goldRibbon_${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#fef08a" />
-                <stop offset="45%" stopColor="#facc15" />
-                <stop offset="80%" stopColor="#eab308" />
-                <stop offset="100%" stopColor="#a16207" />
-              </linearGradient>
-              <filter id={`boxGlow_${uid}`} x="-25%" y="-25%" width="150%" height="150%">
-                <feDropShadow dx="0" dy="10" stdDeviation="12" floodColor="#a855f7" floodOpacity="0.5" />
-              </filter>
-            </defs>
-
-            <g filter={`url(#boxGlow_${uid})`}>
-              {/* Box 3D Faces */}
-              <polygon points="26,72 80,98 80,140 26,114" fill={`url(#boxLeft_${uid})`} />
-              <polygon points="80,98 134,72 134,114 80,140" fill={`url(#boxRight_${uid})`} />
-              <polygon points="80,44 134,72 80,98 26,72" fill={`url(#boxTop_${uid})`} />
-
-              {/* Vertical Gold Ribbon */}
-              <polygon points="50,84 56,87 56,128 50,125" fill={`url(#goldRibbon_${uid})`} />
-              <polygon points="104,87 110,84 110,125 104,128" fill={`url(#goldRibbon_${uid})`} />
-              {/* Horizontal Ribbons across Top */}
-              <polygon points="50,58 56,61 110,87 104,84" fill={`url(#goldRibbon_${uid})`} opacity="0.95" />
-              <polygon points="104,58 110,61 56,87 50,84" fill={`url(#goldRibbon_${uid})`} opacity="0.95" />
-
-              {/* 3D Bow Knot & Loops */}
-              <ellipse cx="68" cy="40" rx="15" ry="9" transform="rotate(-25 68 40)" fill={`url(#goldRibbon_${uid})`} />
-              <ellipse cx="92" cy="40" rx="15" ry="9" transform="rotate(25 92 40)" fill={`url(#goldRibbon_${uid})`} />
-              <ellipse cx="69" cy="40" rx="6" ry="3.5" transform="rotate(-25 69 40)" fill="#581c87" opacity="0.7" />
-              <ellipse cx="91" cy="40" rx="6" ry="3.5" transform="rotate(25 91 40)" fill="#581c87" opacity="0.7" />
-              {/* Center Knot */}
-              <circle cx="80" cy="44" r="7" fill="#fef08a" stroke="#ca8a04" strokeWidth="1.5" />
-              {/* Ribbon Tails */}
-              <path d="M78 48 Q68 64 60 70 Q66 64 74 51 Z" fill={`url(#goldRibbon_${uid})`} />
-              <path d="M82 48 Q92 64 100 70 Q94 64 86 51 Z" fill={`url(#goldRibbon_${uid})`} />
-            </g>
-
-            {/* Sparkle Glints */}
-            <g className="sticker-particle-p1">
-              <polygon points="32,46 34,40 36,46 42,48 36,50 34,56 32,50 26,48" fill="#fde047" />
-            </g>
-            <g className="sticker-particle-p2">
-              <polygon points="126,52 128,46 130,52 136,54 130,56 128,62 126,56 120,54" fill="#fef08a" />
-            </g>
-          </svg>
-        );
 
       case 'chocolates':
         return (
@@ -1025,6 +964,318 @@ export default function Sticker3D({
               <circle cx="80" cy="78" r="4" fill="#a855f7" />
               <circle cx="104" cy="77" r="3.5" fill="#22d3ee" />
               <circle cx="124" cy="73" r="3.5" fill="#fde047" />
+            </g>
+          </svg>
+        );
+
+      case 'box':
+      case 'giftbox':
+        return (
+          <svg viewBox="0 0 160 160" width="130" height="130" className="sticker-3d-graphic">
+            <defs>
+              <linearGradient id={`boxTop_${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#f43f5e" />
+                <stop offset="100%" stopColor="#be123c" />
+              </linearGradient>
+              <linearGradient id={`boxLeft_${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#be123c" />
+                <stop offset="100%" stopColor="#881337" />
+              </linearGradient>
+              <linearGradient id={`boxRight_${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#9f1239" />
+                <stop offset="100%" stopColor="#4c0519" />
+              </linearGradient>
+              <linearGradient id={`ribbonGold_${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#fef08a" />
+                <stop offset="50%" stopColor="#f59e0b" />
+                <stop offset="100%" stopColor="#b45309" />
+              </linearGradient>
+              <filter id={`boxShadow_${uid}`} x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="12" stdDeviation="12" floodColor="#f43f5e" floodOpacity="0.5" />
+              </filter>
+            </defs>
+
+            {/* 3D Isometric Drop Shadow */}
+            <ellipse cx="80" cy="144" rx="46" ry="12" fill="#000000" opacity="0.45" />
+
+            {/* 3D Gift Box Main Body */}
+            <g filter={`url(#boxShadow_${uid})`}>
+              {/* Left Side Face */}
+              <polygon points="34,76 80,102 80,138 34,112" fill={`url(#boxLeft_${uid})`} />
+              {/* Right Side Face */}
+              <polygon points="80,102 126,76 126,112 80,138" fill={`url(#boxRight_${uid})`} />
+              {/* Left Face Ribbon */}
+              <polygon points="53,87 61,91 61,127 53,123" fill={`url(#ribbonGold_${uid})`} />
+              {/* Right Face Ribbon */}
+              <polygon points="99,91 107,87 107,123 99,127" fill={`url(#ribbonGold_${uid})`} />
+
+              {/* 3D Lid (Slightly larger overhang) */}
+              <polygon points="30,68 80,96 80,103 30,75" fill="#be123c" />
+              <polygon points="80,96 130,68 130,75 80,103" fill="#881337" />
+              <polygon points="80,40 130,68 80,96 30,68" fill={`url(#boxTop_${uid})`} />
+
+              {/* Top Face Gold Ribbons */}
+              <polygon points="52,54 58,51 108,79 102,82" fill={`url(#ribbonGold_${uid})`} />
+              <polygon points="102,54 108,51 58,79 52,82" fill={`url(#ribbonGold_${uid})`} />
+
+              {/* Specular Highlight on Lid Rim */}
+              <polyline points="30,68 80,96 130,68" fill="none" stroke="#fda4af" strokeWidth="1.5" opacity="0.8" />
+
+              {/* 3D Golden Bow on Top */}
+              <g className="sticker-flame-core">
+                <path d="M80 66 C65 42 42 46 60 64 C68 70 76 68 80 66 Z" fill={`url(#ribbonGold_${uid})`} />
+                <path d="M80 66 C95 42 118 46 100 64 C92 70 84 68 80 66 Z" fill={`url(#ribbonGold_${uid})`} />
+                <ellipse cx="80" cy="66" rx="7" ry="5.5" fill="#fef08a" stroke="#d97706" strokeWidth="1" />
+                <path d="M78 68 C74 76 64 82 58 84 C62 81 72 74 76 68 Z" fill={`url(#ribbonGold_${uid})`} />
+                <path d="M82 68 C86 76 96 82 102 84 C98 81 88 74 84 68 Z" fill={`url(#ribbonGold_${uid})`} />
+              </g>
+            </g>
+
+            {/* Floating Magical Golden Sparks */}
+            <g className="sticker-particle-p1">
+              <polygon points="26,44 28,38 30,44 36,46 30,48 28,54 26,48 20,46" fill="#fef08a" />
+            </g>
+            <g className="sticker-particle-p2">
+              <polygon points="134,36 136,30 138,36 144,38 138,40 136,46 134,40 128,38" fill="#f59e0b" />
+            </g>
+          </svg>
+        );
+
+      case 'rolex':
+        return (
+          <svg viewBox="0 0 160 160" width="115" height="115" className="sticker-3d-graphic">
+            <defs>
+              <linearGradient id={`goldLug_${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#fef08a" />
+                <stop offset="50%" stopColor="#eab308" />
+                <stop offset="100%" stopColor="#a16207" />
+              </linearGradient>
+              <radialGradient id={`dial_${uid}`} cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#064e3b" />
+                <stop offset="70%" stopColor="#022c22" />
+                <stop offset="100%" stopColor="#000000" />
+              </radialGradient>
+              <filter id={`rolexGlow_${uid}`} x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="8" stdDeviation="12" floodColor="#eab308" floodOpacity="0.5" />
+              </filter>
+            </defs>
+            <ellipse cx="80" cy="142" rx="42" ry="8" fill="#000" opacity="0.35" />
+            <g filter={`url(#rolexGlow_${uid})`}>
+              <rect x="66" y="16" width="28" height="34" rx="4" fill={`url(#goldLug_${uid})`} />
+              <rect x="66" y="110" width="28" height="34" rx="4" fill={`url(#goldLug_${uid})`} />
+              <line x1="75" y1="16" x2="75" y2="50" stroke="#ca8a04" strokeWidth="1.5" />
+              <line x1="85" y1="16" x2="85" y2="50" stroke="#ca8a04" strokeWidth="1.5" />
+              <line x1="75" y1="110" x2="75" y2="144" stroke="#ca8a04" strokeWidth="1.5" />
+              <line x1="85" y1="110" x2="85" y2="144" stroke="#ca8a04" strokeWidth="1.5" />
+
+              <circle cx="80" cy="80" r="42" fill={`url(#goldLug_${uid})`} />
+              <circle cx="80" cy="80" r="37" fill="#ca8a04" stroke="#fef08a" strokeWidth="2" strokeDasharray="3 2" />
+              <circle cx="80" cy="80" r="33" fill={`url(#dial_${uid})`} />
+
+              {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((deg, i) => (
+                <line
+                  key={i}
+                  x1="80" y1="52" x2="80" y2="57"
+                  stroke="#ffffff"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  transform={`rotate(${deg} 80 80)`}
+                />
+              ))}
+
+              <polygon points="78,54 82,54 83,50 80,48 77,50" fill="#fef08a" />
+              <line x1="80" y1="80" x2="98" y2="68" stroke="#fef08a" strokeWidth="3" strokeLinecap="round" />
+              <line x1="80" y1="80" x2="72" y2="60" stroke="#fef08a" strokeWidth="2" strokeLinecap="round" />
+              <line x1="80" y1="80" x2="86" y2="102" stroke="#ef4444" strokeWidth="1" />
+              <circle cx="80" cy="80" r="3" fill="#fef08a" />
+              <rect x="99" y="74" width="10" height="12" rx="2" fill="#ffffff" opacity="0.3" stroke="#fef08a" strokeWidth="1" />
+            </g>
+            <g className="sticker-particle-p1">
+              <polygon points="128,40 130,34 132,40 138,42 132,44 130,50 128,44 122,42" fill="#fef08a" />
+            </g>
+          </svg>
+        );
+
+      case 'perfume':
+        return (
+          <svg viewBox="0 0 160 160" width="115" height="115" className="sticker-3d-graphic">
+            <defs>
+              <linearGradient id={`perfumeGlass_${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#fdf2f8" stopOpacity="0.9" />
+                <stop offset="40%" stopColor="#f472b6" stopOpacity="0.6" />
+                <stop offset="100%" stopColor="#be185d" stopOpacity="0.85" />
+              </linearGradient>
+              <linearGradient id={`goldCap_${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#fef08a" />
+                <stop offset="50%" stopColor="#f59e0b" />
+                <stop offset="100%" stopColor="#b45309" />
+              </linearGradient>
+              <filter id={`perfumeGlow_${uid}`} x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="10" stdDeviation="12" floodColor="#ec4899" floodOpacity="0.45" />
+              </filter>
+            </defs>
+            <ellipse cx="80" cy="142" rx="44" ry="10" fill="#000" opacity="0.3" />
+            <g filter={`url(#perfumeGlow_${uid})`}>
+              <rect x="68" y="24" width="24" height="20" rx="3" fill="#18181b" stroke="#f59e0b" strokeWidth="1.5" />
+              <rect x="74" y="44" width="12" height="10" fill={`url(#goldCap_${uid})`} />
+              <rect x="44" y="54" width="72" height="82" rx="14" fill={`url(#perfumeGlass_${uid})`} stroke="#ffffff" strokeWidth="1.5" />
+              <path d="M50 62 L60 62 L54 128 L48 128 Z" fill="#ffffff" opacity="0.6" />
+              <rect x="58" y="78" width="44" height="34" rx="4" fill="rgba(255,255,255,0.2)" stroke="#fef08a" strokeWidth="1" />
+              <text x="80" y="96" fill="#ffffff" fontSize="9" fontWeight="900" textAnchor="middle" letterSpacing="1.5">PULSE</text>
+              <text x="80" y="106" fill="#fef08a" fontSize="6.5" fontWeight="700" textAnchor="middle">PARFUM</text>
+            </g>
+            <circle cx="80" cy="18" r="3" fill="#f472b6" opacity="0.8" className="sticker-particle-p1" />
+            <circle cx="92" cy="12" r="2.5" fill="#fde047" opacity="0.9" className="sticker-particle-p2" />
+            <circle cx="68" cy="14" r="2" fill="#f472b6" opacity="0.7" className="sticker-particle-p1" />
+          </svg>
+        );
+
+      case 'guitar':
+        return (
+          <svg viewBox="0 0 160 160" width="115" height="115" className="sticker-3d-graphic">
+            <defs>
+              <linearGradient id={`guitarBody_${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#f59e0b" />
+                <stop offset="40%" stopColor="#ef4444" />
+                <stop offset="100%" stopColor="#7f1d1d" />
+              </linearGradient>
+              <filter id={`guitarGlow_${uid}`} x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="6" stdDeviation="12" floodColor="#ef4444" floodOpacity="0.55" />
+              </filter>
+            </defs>
+            <ellipse cx="80" cy="142" rx="40" ry="8" fill="#000" opacity="0.3" />
+            <g filter={`url(#guitarGlow_${uid})`}>
+              <rect x="74" y="16" width="12" height="65" fill="#78350f" stroke="#451a03" strokeWidth="1" />
+              <polygon points="72,16 88,16 86,2 74,4" fill="#18181b" />
+              <circle cx="70" cy="6" r="2.5" fill="#fef08a" />
+              <circle cx="70" cy="11" r="2.5" fill="#fef08a" />
+              <circle cx="90" cy="6" r="2.5" fill="#fef08a" />
+              <circle cx="90" cy="11" r="2.5" fill="#fef08a" />
+
+              <path
+                d="M62 70 C48 74 38 88 42 106 C46 126 64 142 80 142 C96 142 114 126 118 106 C122 88 112 74 98 70 C106 62 108 52 104 46 C100 40 94 48 90 58 L70 58 C66 48 60 40 56 46 C52 52 54 62 62 70 Z"
+                fill={`url(#guitarBody_${uid})`}
+              />
+
+              <path d="M72 74 C64 78 58 88 62 102 C66 114 78 120 86 116 C88 104 86 86 82 74 Z" fill="#ffffff" opacity="0.9" />
+              <rect x="76" y="86" width="8" height="4" rx="1" fill="#18181b" />
+              <rect x="76" y="96" width="8" height="4" rx="1" fill="#18181b" />
+              <rect x="75" y="112" width="10" height="6" fill="#94a3b8" />
+
+              <line x1="77" y1="16" x2="77" y2="114" stroke="#ffffff" strokeWidth="1" opacity="0.9" />
+              <line x1="80" y1="16" x2="80" y2="114" stroke="#ffffff" strokeWidth="1" opacity="0.9" />
+              <line x1="83" y1="16" x2="83" y2="114" stroke="#ffffff" strokeWidth="1" opacity="0.9" />
+            </g>
+            <g className="sticker-particle-p1">
+              <text x="34" y="60" fill="#fef08a" fontSize="16" fontWeight="bold">♪</text>
+            </g>
+            <g className="sticker-particle-p2">
+              <text x="120" y="70" fill="#ef4444" fontSize="18" fontWeight="bold">♫</text>
+            </g>
+          </svg>
+        );
+
+      case 'jet':
+        return (
+          <svg viewBox="0 0 160 160" width="120" height="120" className="sticker-3d-graphic">
+            <defs>
+              <linearGradient id={`jetHull_${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#ffffff" />
+                <stop offset="60%" stopColor="#cbd5e1" />
+                <stop offset="100%" stopColor="#64748b" />
+              </linearGradient>
+              <linearGradient id={`jetWindow_${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#38bdf8" />
+                <stop offset="100%" stopColor="#0369a1" />
+              </linearGradient>
+              <filter id={`jetGlow_${uid}`} x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="8" stdDeviation="12" floodColor="#38bdf8" floodOpacity="0.45" />
+              </filter>
+            </defs>
+            <ellipse cx="80" cy="140" rx="46" ry="8" fill="#000" opacity="0.25" />
+            <line x1="56" y1="102" x2="38" y2="136" stroke="#e0f2fe" strokeWidth="3" strokeLinecap="round" opacity="0.7" />
+            <line x1="104" y1="102" x2="122" y2="136" stroke="#e0f2fe" strokeWidth="3" strokeLinecap="round" opacity="0.7" />
+            <g filter={`url(#jetGlow_${uid})`}>
+              <polygon points="80,74 20,96 28,102 78,86" fill={`url(#jetHull_${uid})`} />
+              <polygon points="80,74 140,96 132,102 82,86" fill={`url(#jetHull_${uid})`} />
+              <circle cx="20" cy="96" r="2.5" fill="#ef4444" />
+              <circle cx="140" cy="96" r="2.5" fill="#10b981" />
+
+              <polygon points="80,108 52,122 56,126 80,118" fill="#94a3b8" />
+              <polygon points="80,108 108,122 104,126 80,118" fill="#94a3b8" />
+              <polygon points="78,98 82,98 83,78 77,78" fill="#cbd5e1" />
+
+              <ellipse cx="80" cy="74" rx="12" ry="48" fill={`url(#jetHull_${uid})`} />
+              <ellipse cx="80" cy="38" rx="7" ry="9" fill={`url(#jetWindow_${uid})`} />
+              <circle cx="75" cy="56" r="2" fill={`url(#jetWindow_${uid})`} />
+              <circle cx="75" cy="64" r="2" fill={`url(#jetWindow_${uid})`} />
+              <circle cx="75" cy="72" r="2" fill={`url(#jetWindow_${uid})`} />
+              <circle cx="75" cy="80" r="2" fill={`url(#jetWindow_${uid})`} />
+              <circle cx="85" cy="56" r="2" fill={`url(#jetWindow_${uid})`} />
+              <circle cx="85" cy="64" r="2" fill={`url(#jetWindow_${uid})`} />
+              <circle cx="85" cy="72" r="2" fill={`url(#jetWindow_${uid})`} />
+              <circle cx="85" cy="80" r="2" fill={`url(#jetWindow_${uid})`} />
+            </g>
+          </svg>
+        );
+
+      case 'yacht':
+        return (
+          <svg viewBox="0 0 160 160" width="120" height="120" className="sticker-3d-graphic">
+            <defs>
+              <linearGradient id={`yachtHull_${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#ffffff" />
+                <stop offset="70%" stopColor="#e2e8f0" />
+                <stop offset="100%" stopColor="#0f172a" />
+              </linearGradient>
+              <filter id={`yachtGlow_${uid}`} x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="8" stdDeviation="12" floodColor="#06b6d4" floodOpacity="0.4" />
+              </filter>
+            </defs>
+            <ellipse cx="80" cy="132" rx="60" ry="12" fill="#0284c7" opacity="0.75" />
+            <ellipse cx="80" cy="135" rx="48" ry="7" fill="#38bdf8" opacity="0.6" />
+            <g filter={`url(#yachtGlow_${uid})`}>
+              <path d="M24 116 L44 130 L116 130 L136 116 L124 102 L36 102 Z" fill={`url(#yachtHull_${uid})`} />
+              <rect x="42" y="86" width="76" height="18" rx="4" fill="#ffffff" />
+              <rect x="48" y="90" width="64" height="8" rx="2" fill="#0f172a" />
+              <rect x="54" y="70" width="52" height="16" rx="4" fill="#f8fafc" />
+              <rect x="58" y="74" width="44" height="7" rx="2" fill="#0284c7" />
+              <line x1="80" y1="70" x2="80" y2="56" stroke="#94a3b8" strokeWidth="2.5" />
+              <ellipse cx="80" cy="56" rx="10" ry="3" fill="#38bdf8" />
+            </g>
+          </svg>
+        );
+
+      case 'galaxy':
+        return (
+          <svg viewBox="0 0 160 160" width="120" height="120" className="sticker-3d-graphic">
+            <defs>
+              <radialGradient id={`cosmicCore_${uid}`} cx="40%" cy="40%" r="60%">
+                <stop offset="0%" stopColor="#ffffff" />
+                <stop offset="25%" stopColor="#38bdf8" />
+                <stop offset="55%" stopColor="#a855f7" />
+                <stop offset="85%" stopColor="#4c1d95" />
+                <stop offset="100%" stopColor="#09090b" />
+              </radialGradient>
+              <linearGradient id={`ringGrad_${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#f472b6" />
+                <stop offset="50%" stopColor="#60a5fa" />
+                <stop offset="100%" stopColor="#34d399" />
+              </linearGradient>
+              <filter id={`cosmicGlow_${uid}`} x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow dx="0" dy="0" stdDeviation="16" floodColor="#a855f7" floodOpacity="0.8" />
+              </filter>
+            </defs>
+            <g filter={`url(#cosmicGlow_${uid})`}>
+              <ellipse cx="80" cy="80" rx="58" ry="18" fill="none" stroke={`url(#ringGrad_${uid})`} strokeWidth="4" strokeDasharray="90 100" transform="rotate(-25 80 80)" />
+              <circle cx="80" cy="80" r="38" fill={`url(#cosmicCore_${uid})`} />
+              <circle cx="72" cy="74" r="3" fill="#ffffff" opacity="0.9" />
+              <circle cx="88" cy="84" r="2.5" fill="#fde047" opacity="0.8" />
+              <circle cx="76" cy="90" r="2" fill="#67e8f9" opacity="0.9" />
+              <ellipse cx="80" cy="80" rx="58" ry="18" fill="none" stroke={`url(#ringGrad_${uid})`} strokeWidth="4" strokeDasharray="100 90" strokeDashoffset="90" transform="rotate(-25 80 80)" />
+            </g>
+            <g className="sticker-particle-p1">
+              <polygon points="128,34 130,28 132,34 138,36 132,38 130,44 128,38 122,36" fill="#fde047" />
             </g>
           </svg>
         );
