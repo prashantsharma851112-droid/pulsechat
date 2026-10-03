@@ -76,6 +76,13 @@ router.get('/wallet', authMiddleware, async (req, res) => {
       }
     }
 
+    // Calculate rewarded ads watched today (max 3 per day)
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const adsWatchedToday = transactions.filter(tx => 
+      tx.reason === 'ad_reward' && new Date(tx.createdAt).getTime() >= startOfToday.getTime()
+    ).length;
+
     res.json({
       success: true,
       balance: currentBalance,
@@ -90,7 +97,11 @@ router.get('/wallet', authMiddleware, async (req, res) => {
       transactions,
       canClaimDaily,
       dailyRewardAmount: 15,
-      nextClaimInMs
+      nextClaimInMs,
+      adsWatchedToday: Math.min(3, adsWatchedToday),
+      maxDailyAds: 3,
+      adRewardAmount: 15,
+      canWatchAd: adsWatchedToday < 3
     });
   } catch (err) {
     console.error('Error fetching sparks wallet:', err);
@@ -180,6 +191,90 @@ router.post('/claim-daily', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Error claiming daily sparks:', err);
     res.status(500).json({ error: 'Failed to claim daily sparks' });
+  }
+});
+
+// 3. Claim Rewarded Video Ad Sparks (+15 Sparks per ad, max 3 ads per day)
+router.post('/claim-ad-reward', authMiddleware, async (req, res) => {
+  try {
+    const userId = resolveCanonicalUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized user' });
+    }
+
+    const isObjId = mongoose.Types.ObjectId.isValid(userId);
+    const userDoc = await User.findOne({
+      $or: [
+        { id: userId },
+        ...(isObjId ? [{ _id: userId }] : [])
+      ]
+    });
+
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const canonicalId = userDoc.id || userDoc._id.toString();
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const todayAdsCount = await SparksTransaction.countDocuments({
+      userId: canonicalId,
+      reason: 'ad_reward',
+      createdAt: { $gte: startOfToday }
+    });
+
+    if (todayAdsCount >= 3) {
+      return res.status(400).json({
+        error: 'Daily ad limit reached (3/3). Come back tomorrow to earn more free Sparks!',
+        adsWatchedToday: 3,
+        maxDailyAds: 3
+      });
+    }
+
+    const rewardAmount = 15;
+    const oldBalance = typeof userDoc.pulseSparks === 'number' ? userDoc.pulseSparks : 50;
+    const newBalance = oldBalance + rewardAmount;
+    userDoc.pulseSparks = newBalance;
+    await userDoc.save();
+
+    // Record credit transaction
+    const tx = await SparksTransaction.create({
+      userId: canonicalId,
+      type: 'credit',
+      amount: rewardAmount,
+      reason: 'ad_reward',
+      title: 'Rewarded Ad Bonus 🎬⚡',
+      description: `Watched rewarded video ad (${todayAdsCount + 1}/3)`,
+      balanceAfter: newBalance
+    });
+
+    // Real-time socket broadcast
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user_${canonicalId}`).emit('sparks_updated', {
+        pulseSparks: newBalance,
+        addedAmount: rewardAmount,
+        type: 'credit',
+        title: `🎬 +15 Sparks Earned from Ad! (${todayAdsCount + 1}/3)`
+      });
+      io.to(`user_${canonicalId}`).emit('user_profile_updated', {
+        userId: canonicalId,
+        pulseSparks: newBalance
+      });
+    }
+
+    res.json({
+      success: true,
+      balance: newBalance,
+      addedAmount: rewardAmount,
+      adsWatchedToday: todayAdsCount + 1,
+      maxDailyAds: 3,
+      transaction: tx
+    });
+  } catch (err) {
+    console.error('Error claiming ad reward sparks:', err);
+    res.status(500).json({ error: 'Failed to claim ad reward sparks' });
   }
 });
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, Zap, ArrowDownLeft, ArrowUpRight, Sparkles, Clock, RefreshCw, Gift, Flame, CheckCircle2, ShoppingBag } from 'lucide-react';
+import { X, Zap, ArrowDownLeft, ArrowUpRight, Sparkles, Clock, RefreshCw, Gift, Flame, CheckCircle2, ShoppingBag, Play, Film } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 import { useBackHandler } from '../../utils/backNavigation';
@@ -30,16 +30,43 @@ export default function SparksWalletModal({ onClose }) {
     transactions: [],
     canClaimDaily: false,
     dailyRewardAmount: 15,
-    nextClaimInMs: 0
+    nextClaimInMs: 0,
+    adsWatchedToday: 0,
+    maxDailyAds: 3,
+    canWatchAd: true
   });
   const [filterTab, setFilterTab] = useState('all'); // 'all' | 'credit' | 'debit'
   const [claimingDaily, setClaimingDaily] = useState(false);
   const [claimToast, setClaimToast] = useState('');
   const [showBuySparksModal, setShowBuySparksModal] = useState(false);
 
+  // Rewarded Video Ad State (Watch Ad to earn 15 Sparks, max 3/day)
+  const [adModalOpen, setAdModalOpen] = useState(false);
+  const [adSecondsLeft, setAdSecondsLeft] = useState(5);
+  const [adRewardReady, setAdRewardReady] = useState(false);
+  const [claimingAdReward, setClaimingAdReward] = useState(false);
+
   // Hardware Back button closes modal safely
-  useBackHandler(() => setShowBuySparksModal(false), showBuySparksModal);
-  useBackHandler(onClose, !showBuySparksModal);
+  useBackHandler(() => setAdModalOpen(false), adModalOpen);
+  useBackHandler(() => setShowBuySparksModal(false), showBuySparksModal && !adModalOpen);
+  useBackHandler(onClose, !showBuySparksModal && !adModalOpen);
+
+  useEffect(() => {
+    if (!adModalOpen) return;
+    setAdSecondsLeft(5);
+    setAdRewardReady(false);
+    const timer = setInterval(() => {
+      setAdSecondsLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setAdRewardReady(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [adModalOpen]);
 
   const fetchWallet = useCallback(async (isManual = false) => {
     if (!token) return;
@@ -60,7 +87,10 @@ export default function SparksWalletModal({ onClose }) {
             transactions: data.transactions || [],
             canClaimDaily: Boolean(data.canClaimDaily),
             dailyRewardAmount: data.dailyRewardAmount || 15,
-            nextClaimInMs: data.nextClaimInMs || 0
+            nextClaimInMs: data.nextClaimInMs || 0,
+            adsWatchedToday: typeof data.adsWatchedToday === 'number' ? data.adsWatchedToday : 0,
+            maxDailyAds: data.maxDailyAds || 3,
+            canWatchAd: data.adsWatchedToday < (data.maxDailyAds || 3)
           });
           const currentUser = userRef.current;
           if (updateUserProfileRef.current && typeof data.balance === 'number' && currentUser && currentUser.pulseSparks !== data.balance) {
@@ -140,6 +170,49 @@ export default function SparksWalletModal({ onClose }) {
       setTimeout(() => setClaimToast(''), 3000);
     } finally {
       setClaimingDaily(false);
+    }
+  };
+
+  const handleClaimAdReward = async () => {
+    if (!adRewardReady || claimingAdReward || !token) return;
+    try {
+      setClaimingAdReward(true);
+      const res = await fetch(`${BACKEND_URL}/api/sparks/claim-ad-reward`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        playSound('sparkle');
+        setClaimToast(`🎉 +${data.addedAmount || 15} Sparks Earned from Video Ad!`);
+        setWalletData(prev => ({
+          ...prev,
+          balance: data.balance,
+          totalEarned: prev.totalEarned + (data.addedAmount || 15),
+          adsWatchedToday: data.adsWatchedToday,
+          canWatchAd: data.adsWatchedToday < (data.maxDailyAds || 3),
+          transactions: data.transaction ? [data.transaction, ...prev.transactions] : prev.transactions
+        }));
+        const currentUser = userRef.current;
+        if (updateUserProfileRef.current && currentUser) {
+          updateUserProfileRef.current({ ...currentUser, pulseSparks: data.balance });
+        }
+        setAdModalOpen(false);
+        setTimeout(() => setClaimToast(''), 3500);
+      } else {
+        setClaimToast(data.error || 'Failed to claim ad reward');
+        setAdModalOpen(false);
+        setTimeout(() => setClaimToast(''), 3000);
+      }
+    } catch (e) {
+      setClaimToast('Error claiming ad reward');
+      setAdModalOpen(false);
+      setTimeout(() => setClaimToast(''), 3000);
+    } finally {
+      setClaimingAdReward(false);
     }
   };
 
@@ -447,6 +520,47 @@ export default function SparksWalletModal({ onClose }) {
                 )}
               </button>
             </div>
+
+            {/* Watch Ad (+15 Sparks) Button - Max 3 per day */}
+            <button
+              type="button"
+              onClick={() => {
+                if (walletData.adsWatchedToday >= 3) {
+                  setClaimToast('Daily ad limit reached (3/3). Come back tomorrow!');
+                  setTimeout(() => setClaimToast(''), 3000);
+                  return;
+                }
+                setAdModalOpen(true);
+              }}
+              disabled={walletData.adsWatchedToday >= 3}
+              style={{
+                width: '100%',
+                marginTop: '10px',
+                padding: '11px 14px',
+                borderRadius: '12px',
+                background: walletData.adsWatchedToday < 3
+                  ? 'linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%)'
+                  : 'rgba(255, 255, 255, 0.08)',
+                border: walletData.adsWatchedToday < 3 ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
+                color: walletData.adsWatchedToday < 3 ? '#fff' : 'var(--text-muted)',
+                fontWeight: 800,
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                cursor: walletData.adsWatchedToday < 3 ? 'pointer' : 'default',
+                boxShadow: walletData.adsWatchedToday < 3 ? '0 4px 14px rgba(99, 102, 241, 0.35)' : 'none',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Film size={16} />
+              <span>
+                {walletData.adsWatchedToday >= 3
+                  ? 'Daily Ad Limit Reached (3/3) ✓'
+                  : `Watch Ad (+15 ⚡ Sparks) • ${walletData.adsWatchedToday || 0}/3 Today`}
+              </span>
+            </button>
           </div>
 
           {/* History Header & Filter Pills */}
@@ -615,6 +729,114 @@ export default function SparksWalletModal({ onClose }) {
             fetchWallet();
           }}
         />
+      )}
+
+      {/* REWARDED VIDEO AD OVERLAY */}
+      {adModalOpen && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(10, 10, 18, 0.96)',
+          backdropFilter: 'blur(16px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+          zIndex: 1300
+        }}>
+          <div style={{
+            background: 'linear-gradient(145deg, #1e1b4b, #0f172a)',
+            border: '1.5px solid rgba(16, 185, 129, 0.5)',
+            borderRadius: '24px',
+            padding: '24px 20px',
+            maxWidth: '350px',
+            width: '100%',
+            textAlign: 'center',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.85)',
+            position: 'relative'
+          }}>
+            {/* Ad Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <span style={{ fontSize: '0.68rem', background: 'rgba(255,255,255,0.1)', color: '#94a3b8', padding: '3px 8px', borderRadius: '8px', fontWeight: 800 }}>
+                Pulse Rewards • Google AdMob
+              </span>
+              <span style={{ fontSize: '0.74rem', color: adRewardReady ? '#10b981' : '#f59e0b', fontWeight: 800 }}>
+                {adRewardReady ? '✓ Reward Ready' : `Reward in ${adSecondsLeft}s`}
+              </span>
+            </div>
+
+            {/* Ad Media Showcase Card */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(236, 72, 153, 0.25))',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: '16px',
+              padding: '22px 16px',
+              marginBottom: '18px'
+            }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>⚡</div>
+              <h3 style={{ margin: '0 0 6px 0', fontSize: '1.2rem', color: '#fff', fontWeight: 900 }}>
+                Pulse Sparks & VIP
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+                Earn 15 free Sparks to send 3D Texts, Emoji Bursts, Dust Notes & create interactive polls!
+              </p>
+            </div>
+
+            {/* Progress Bar */}
+            <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '10px', overflow: 'hidden', marginBottom: '18px' }}>
+              <div style={{
+                height: '100%',
+                width: `${((5 - adSecondsLeft) / 5) * 100}%`,
+                background: 'linear-gradient(90deg, #10b981, #06b6d4)',
+                transition: 'width 0.9s linear'
+              }} />
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setAdModalOpen(false)}
+                disabled={claimingAdReward}
+                style={{
+                  flex: 1,
+                  padding: '10px 14px',
+                  borderRadius: '12px',
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: 'var(--text-muted)',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={handleClaimAdReward}
+                disabled={!adRewardReady || claimingAdReward}
+                style={{
+                  flex: 2,
+                  padding: '10px 14px',
+                  borderRadius: '12px',
+                  background: adRewardReady
+                    ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                    : 'rgba(255,255,255,0.12)',
+                  border: 'none',
+                  color: '#fff',
+                  fontWeight: 800,
+                  fontSize: '0.88rem',
+                  cursor: adRewardReady ? 'pointer' : 'not-allowed',
+                  opacity: adRewardReady ? 1 : 0.6,
+                  boxShadow: adRewardReady ? '0 4px 16px rgba(16, 185, 129, 0.45)' : 'none'
+                }}
+              >
+                {claimingAdReward ? 'Claiming...' : adRewardReady ? 'Claim +15 Sparks ⚡' : `Wait ${adSecondsLeft}s`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

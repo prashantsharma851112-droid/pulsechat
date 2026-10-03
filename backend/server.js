@@ -538,7 +538,13 @@ io.on('connection', (socket) => {
 
       // 3D Animated Text / Emoji Validation & Sparks Cost Engine:
       if (type === '3d_text') {
-        const senderUser = await User.findOne({ id: senderId });
+        const senderUser = await User.findOne({
+          $or: [
+            { id: senderId },
+            ...(mongoose.Types.ObjectId.isValid(senderId) ? [{ _id: senderId }] : []),
+            { username: senderId }
+          ]
+        });
         if (senderUser) {
           const isPro = Boolean(senderUser.isPro && senderUser.proExpiresAt && new Date(senderUser.proExpiresAt) > new Date());
           const hasUsedTrial = Boolean(senderUser.hasUsed3DTrial);
@@ -551,24 +557,15 @@ io.on('connection', (socket) => {
               hasUsed3DTrial: true
             });
             socket.emit('3d_trial_used', { hasUsed3DTrial: true });
-          } else {
-            if (!isPro) {
-              socket.emit('message_blocked', {
-                chatId,
-                receiverId,
-                reason: 'Aapka 3D Free Trial khatam ho chuka hai. 3D text stickers bhejne ke liye Pulse VIP subscription activate karein.'
-              });
-              if (typeof ackCallback === 'function') ackCallback({ error: 'subscription_required' });
-              return;
-            }
-
+          } else if (!isPro) {
+            // Free users without subscription spend 10 Sparks
             const SPARKS_COST = 10;
             const currentSparks = senderUser.pulseSparks || 0;
             if (currentSparks < SPARKS_COST) {
               socket.emit('message_blocked', {
                 chatId,
                 receiverId,
-                reason: `Sparks kam hain! 3D text bhejne ke liye 10 Sparks lagte hain, aapke paas sirf ${currentSparks} Sparks hain. VIP Store se free claim karein.`
+                reason: `Sparks kam hain! 3D text bhejne ke liye 10 Sparks lagte hain, aapke paas sirf ${currentSparks} Sparks hain. Sparks Wallet se Ad dekh kar ya Free Daily claim karein.`
               });
               if (typeof ackCallback === 'function') ackCallback({ error: 'insufficient_sparks' });
               return;
@@ -577,6 +574,75 @@ io.on('connection', (socket) => {
             senderUser.pulseSparks = currentSparks - SPARKS_COST;
             await senderUser.save();
 
+            socket.emit('sparks_updated', { pulseSparks: senderUser.pulseSparks });
+            socket.emit('user_profile_updated', {
+              userId: senderId,
+              pulseSparks: senderUser.pulseSparks
+            });
+          }
+          // Pro users get it 100% free with 0 Sparks
+        }
+      }
+
+      // Stealth Dust Note Validation & Sparks Cost Engine:
+      if (type === 'stealth_dust') {
+        const senderUser = await User.findOne({
+          $or: [
+            { id: senderId },
+            ...(mongoose.Types.ObjectId.isValid(senderId) ? [{ _id: senderId }] : []),
+            { username: senderId }
+          ]
+        });
+        if (senderUser) {
+          const isPro = Boolean(senderUser.isPro && senderUser.proExpiresAt && new Date(senderUser.proExpiresAt) > new Date());
+          if (!isPro) {
+            const SPARKS_COST = 5;
+            const currentSparks = senderUser.pulseSparks || 0;
+            if (currentSparks < SPARKS_COST) {
+              socket.emit('message_blocked', {
+                chatId,
+                receiverId,
+                reason: `Sparks kam hain! Dust text secret note ke liye 5 Sparks lagte hain. Sparks Wallet se Ad dekh kar free Sparks lein.`
+              });
+              if (typeof ackCallback === 'function') ackCallback({ error: 'insufficient_sparks' });
+              return;
+            }
+            senderUser.pulseSparks = currentSparks - SPARKS_COST;
+            await senderUser.save();
+            socket.emit('sparks_updated', { pulseSparks: senderUser.pulseSparks });
+            socket.emit('user_profile_updated', {
+              userId: senderId,
+              pulseSparks: senderUser.pulseSparks
+            });
+          }
+        }
+      }
+
+      // Interactive Poll Validation & Sparks Cost Engine:
+      if (type === 'poll') {
+        const senderUser = await User.findOne({
+          $or: [
+            { id: senderId },
+            ...(mongoose.Types.ObjectId.isValid(senderId) ? [{ _id: senderId }] : []),
+            { username: senderId }
+          ]
+        });
+        if (senderUser) {
+          const isPro = Boolean(senderUser.isPro && senderUser.proExpiresAt && new Date(senderUser.proExpiresAt) > new Date());
+          if (!isPro) {
+            const SPARKS_COST = 5;
+            const currentSparks = senderUser.pulseSparks || 0;
+            if (currentSparks < SPARKS_COST) {
+              socket.emit('message_blocked', {
+                chatId,
+                receiverId,
+                reason: `Sparks kam hain! Poll create karne ke liye 5 Sparks lagte hain. Sparks Wallet se Ad dekh kar free Sparks lein.`
+              });
+              if (typeof ackCallback === 'function') ackCallback({ error: 'insufficient_sparks' });
+              return;
+            }
+            senderUser.pulseSparks = currentSparks - SPARKS_COST;
+            await senderUser.save();
             socket.emit('sparks_updated', { pulseSparks: senderUser.pulseSparks });
             socket.emit('user_profile_updated', {
               userId: senderId,
@@ -951,7 +1017,40 @@ io.on('connection', (socket) => {
   });
 
   // 3D Live Emoji Particle Burst Handler
-  socket.on('trigger_emoji_burst', ({ chatId, emoji, userId }) => {
+  socket.on('trigger_emoji_burst', async ({ chatId, emoji, userId }) => {
+    if (!userId || !emoji) return;
+
+    try {
+      const u = await User.findOne({
+        $or: [
+          { id: userId },
+          ...(mongoose.Types.ObjectId.isValid(userId) ? [{ _id: userId }] : []),
+          { username: userId }
+        ]
+      });
+
+      if (u) {
+        const isPro = Boolean(u.isPro && u.proExpiresAt && new Date(u.proExpiresAt) > new Date());
+        if (!isPro) {
+          const SPARKS_COST = 5;
+          const currentSparks = u.pulseSparks || 0;
+          if (currentSparks < SPARKS_COST) {
+            socket.emit('message_blocked', {
+              chatId,
+              reason: `Sparks kam hain! Emoji particle burst ke liye 5 Sparks lagte hain. Sparks Wallet se Ad dekh kar free Sparks lein.`
+            });
+            return;
+          }
+          u.pulseSparks = currentSparks - SPARKS_COST;
+          await u.save();
+          socket.emit('sparks_updated', { pulseSparks: u.pulseSparks });
+          socket.emit('user_profile_updated', { userId, pulseSparks: u.pulseSparks });
+        }
+      }
+    } catch (e) {
+      console.error('Error handling sparks for emoji burst:', e);
+    }
+
     io.to(chatId).emit('emoji_burst_received', { chatId, emoji, userId });
     if (chatId && chatId.includes('_')) {
       const parts = chatId.split('_');

@@ -61,6 +61,11 @@ export default function CreatePollModal({ onClose, onCreatePoll, user, onOpenPro
       setError('Please enter a poll question.');
       return;
     }
+    if (!isProUser && (user?.pulseSparks ?? 0) < 5) {
+      setError(`⚡ Sparks kam hain! Poll create karne ke liye 5 Sparks lagte hain. (Aapke paas ${user?.pulseSparks ?? 0} Sparks hain).`);
+      if (onOpenProModal) onOpenProModal('sparks');
+      return;
+    }
     const validOptions = options.map(o => o.trim()).filter(Boolean);
     if (validOptions.length < 2) {
       setError('Please provide at least 2 non-empty options.');
@@ -415,7 +420,7 @@ export default function CreatePollModal({ onClose, onCreatePoll, user, onOpenPro
                 transition: 'opacity 0.15s'
               }}
             >
-              Create & Send
+              {isProUser ? 'Create & Send (Free for VIP 👑)' : 'Create & Send (⚡ 5 Sparks)'}
             </button>
           </div>
         </form>

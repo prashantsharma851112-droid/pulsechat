@@ -770,6 +770,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [showArrowGameModal, setShowArrowGameModal] = useState(false);
   const [showActionGrid, setShowActionGrid] = useState(false);
   const [showEmojiBurstPicker, setShowEmojiBurstPicker] = useState(false);
+  const [customBurstEmoji, setCustomBurstEmoji] = useState('');
   const actionGridRef = useRef(null);
   const actionGridBtnRef = useRef(null);
   const [proModalTab, setProModalTab] = useState('pro');
@@ -970,12 +971,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleSendStealthDust = () => {
     setShowActionGrid(false);
-    if (!user?.isPro) {
-      setShowProModal(true);
+    const isPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
+    const sparksBalance = user?.pulseSparks ?? 0;
+
+    if (!isPro && sparksBalance < 5) {
+      alert(`⚡ Sparks kam hain!\nDust text secret note bhejne ke liye 5 Sparks lagte hain.\nAapke paas sirf ${sparksBalance} Sparks hain.\n\nSparks Wallet se free video ad dekh kar ya Daily bonus se free Sparks lein.`);
       return;
     }
-    const dustText = prompt("⚡ Enter your Dust Text Secret Note:\n(It will render blurred until recipient holds down, then shatters into digital dust)");
+
+    const dustText = prompt(`⚡ Enter your Dust Text Secret Note:\n(It will render blurred until recipient holds down, then shatters into digital dust)\n\n${isPro ? "👑 VIP Member: FREE (0 Sparks)" : "⚡ Cost: 5 Sparks (Balance: " + sparksBalance + ")"}`);
     if (!dustText || !dustText.trim()) return;
+
+    if (!isPro && updateUserProfile) {
+      updateUserProfile({ ...user, pulseSparks: Math.max(0, sparksBalance - 5) });
+    }
 
     const tempMsgId = 'msg_stealth_' + Date.now();
     const msgData = {
@@ -1000,17 +1009,28 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   const handleTriggerEmojiBurst = (emoji = '🔥') => {
+    if (!emoji || !emoji.trim()) return;
+    const cleanEmoji = emoji.trim();
     setShowActionGrid(false);
     setShowEmojiBurstPicker(false);
-    if (!user?.isPro) {
-      setShowProModal(true);
+
+    const isPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
+    const sparksBalance = user?.pulseSparks ?? 0;
+
+    if (!isPro && sparksBalance < 5) {
+      alert(`⚡ Sparks kam hain!\nEmoji particle burst ke liye 5 Sparks lagte hain.\nAapke paas sirf ${sparksBalance} Sparks hain.\n\nSparks Wallet se free video ad dekh kar free Sparks lein.`);
       return;
     }
+
+    if (!isPro && updateUserProfile) {
+      updateUserProfile({ ...user, pulseSparks: Math.max(0, sparksBalance - 5) });
+    }
+
     if (socket) {
-      socket.emit('trigger_emoji_burst', { chatId, emoji, userId: user?.id });
+      socket.emit('trigger_emoji_burst', { chatId, emoji: cleanEmoji, userId: user?.id });
     }
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji, mode: 'burst', duration: 5 } }));
+      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji: cleanEmoji, mode: 'burst', duration: 5 } }));
     }
   };
 
@@ -1973,6 +1993,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   const handleCreatePoll = (pollData) => {
+    const isPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
+    const sparksBalance = user?.pulseSparks ?? 0;
+
+    if (!isPro && sparksBalance < 5) {
+      alert(`⚡ Sparks kam hain!\nPoll create karne ke liye 5 Sparks lagte hain.\nAapke paas sirf ${sparksBalance} Sparks hain.\n\nSparks Wallet se video ad dekh kar ya daily bonus se free Sparks claim karein.`);
+      return;
+    }
+
+    if (!isPro && updateUserProfile) {
+      updateUserProfile({ ...user, pulseSparks: Math.max(0, sparksBalance - 5) });
+    }
+
     socket.emit('send_message', {
       ...getSenderPayload(),
       chatId,
@@ -4038,15 +4070,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 padding: '14px',
                 boxShadow: '0 16px 40px rgba(0,0,0,0.5), 0 0 25px rgba(239, 68, 68, 0.3)',
                 zIndex: 1150,
-                width: 'min(320px, 92vw)',
+                width: 'min(330px, 92vw)',
+                maxHeight: '380px',
+                display: 'flex',
+                flexDirection: 'column',
                 animation: 'pulseModalPop 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <span style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   💥 3D Floating Emoji Burst
                 </span>
                 <button
+                  type="button"
                   onClick={() => setShowEmojiBurstPicker(false)}
                   style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
                 >
@@ -4054,15 +4090,98 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                {['🔥', '❤️', '⚡', '🎉', '🚀', '💎', '💩', '🥳', '😂', '🌟', '👑', '🦄'].map((emoji) => (
+              {/* Sparks Cost / VIP Perks Info */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '0.72rem',
+                color: 'var(--text-muted)',
+                marginBottom: '10px',
+                padding: '5px 10px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '10px',
+                border: '1px solid rgba(255, 255, 255, 0.08)'
+              }}>
+                <span style={{ color: user?.isPro ? '#10b981' : '#f59e0b', fontWeight: 700 }}>
+                  {user?.isPro ? '👑 VIP: FREE (0 Sparks)' : '⚡ Cost: 5 Sparks / burst'}
+                </span>
+                <span>Balance: <strong>{user?.pulseSparks ?? 0} ⚡</strong></span>
+              </div>
+
+              {/* Custom Any Emoji Input */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (customBurstEmoji.trim()) {
+                    handleTriggerEmojiBurst(customBurstEmoji.trim());
+                    setCustomBurstEmoji('');
+                  }
+                }}
+                style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}
+              >
+                <input
+                  type="text"
+                  value={customBurstEmoji}
+                  onChange={(e) => setCustomBurstEmoji(e.target.value)}
+                  placeholder="Type or paste ANY emoji..."
+                  maxLength={10}
+                  style={{
+                    flex: 1,
+                    background: 'var(--hover-bg)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '12px',
+                    padding: '8px 12px',
+                    fontSize: '0.86rem',
+                    color: 'var(--text-main)',
+                    outline: 'none'
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={!customBurstEmoji.trim()}
+                  style={{
+                    background: 'linear-gradient(135deg, #f43f5e, #fb7185)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '8px 14px',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    cursor: customBurstEmoji.trim() ? 'pointer' : 'default',
+                    opacity: customBurstEmoji.trim() ? 1 : 0.6,
+                    boxShadow: '0 2px 8px rgba(244, 63, 94, 0.4)'
+                  }}
+                >
+                  Burst 💥
+                </button>
+              </form>
+
+              {/* Popular Emojis Grid (Scrollable) */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: '8px',
+                overflowY: 'auto',
+                maxHeight: '190px',
+                paddingRight: '2px'
+              }}>
+                {[
+                  '🔥', '❤️', '⚡', '🎉',
+                  '🚀', '💎', '💩', '🥳',
+                  '😂', '🌟', '👑', '🦄',
+                  '💀', '👻', '💯', '🌸',
+                  '🍕', '🎯', '🏆', '🎸',
+                  '👾', '🍔', '🌹', '💋',
+                  '😈', '🥶', '🤯', '✨'
+                ].map((emoji) => (
                   <button
                     key={emoji}
                     type="button"
                     onClick={() => handleTriggerEmojiBurst(emoji)}
                     style={{
-                      fontSize: '1.7rem',
-                      padding: '10px 4px',
+                      fontSize: '1.6rem',
+                      padding: '8px 2px',
                       background: 'var(--hover-bg)',
                       border: '1px solid var(--border)',
                       borderRadius: '12px',
@@ -4072,7 +4191,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                       justifyContent: 'center',
                       transition: 'transform 0.12s ease'
                     }}
-                    onMouseDown={(e) => e.currentTarget.style.transform = 'scale(1.25)'}
+                    onMouseDown={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
                     onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
                   >
                     {emoji}

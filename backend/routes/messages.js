@@ -267,7 +267,13 @@ router.post('/send', authMiddleware, async (req, res) => {
     }
 
     if (type === '3d_text') {
-      const senderUser = await User.findOne({ id: senderId });
+      const senderUser = await User.findOne({
+        $or: [
+          { id: senderId },
+          ...(mongoose.Types.ObjectId.isValid(senderId) ? [{ _id: senderId }] : []),
+          { username: senderId }
+        ]
+      });
       if (senderUser) {
         const isPro = Boolean(senderUser.isPro && senderUser.proExpiresAt && new Date(senderUser.proExpiresAt) > new Date());
         const hasUsedTrial = Boolean(senderUser.hasUsed3DTrial);
@@ -275,23 +281,66 @@ router.post('/send', authMiddleware, async (req, res) => {
         if (!hasUsedTrial) {
           senderUser.hasUsed3DTrial = true;
           await senderUser.save();
-        } else {
-          if (!isPro) {
-            return res.status(403).json({
-              error: 'subscription_required',
-              message: 'Aapka 3D Free Trial khatam ho chuka hai. 3D text stickers bhejne ke liye Pulse VIP subscription activate karein.'
-            });
-          }
-
+        } else if (!isPro) {
           const SPARKS_COST = 10;
           const currentSparks = senderUser.pulseSparks || 0;
           if (currentSparks < SPARKS_COST) {
             return res.status(400).json({
               error: 'insufficient_sparks',
-              message: `Sparks kam hain! 3D text bhejne ke liye 10 Sparks lagte hain, aapke paas sirf ${currentSparks} Sparks hain. VIP Store se free claim karein.`
+              message: `Sparks kam hain! 3D text bhejne ke liye 10 Sparks lagte hain, aapke paas sirf ${currentSparks} Sparks hain. Sparks Wallet se Ad dekh kar ya Free Daily bonus se free claim karein.`
             });
           }
 
+          senderUser.pulseSparks = currentSparks - SPARKS_COST;
+          await senderUser.save();
+        }
+      }
+    }
+
+    if (type === 'stealth_dust') {
+      const senderUser = await User.findOne({
+        $or: [
+          { id: senderId },
+          ...(mongoose.Types.ObjectId.isValid(senderId) ? [{ _id: senderId }] : []),
+          { username: senderId }
+        ]
+      });
+      if (senderUser) {
+        const isPro = Boolean(senderUser.isPro && senderUser.proExpiresAt && new Date(senderUser.proExpiresAt) > new Date());
+        if (!isPro) {
+          const SPARKS_COST = 5;
+          const currentSparks = senderUser.pulseSparks || 0;
+          if (currentSparks < SPARKS_COST) {
+            return res.status(400).json({
+              error: 'insufficient_sparks',
+              message: `Sparks kam hain! Dust text secret note ke liye 5 Sparks lagte hain.`
+            });
+          }
+          senderUser.pulseSparks = currentSparks - SPARKS_COST;
+          await senderUser.save();
+        }
+      }
+    }
+
+    if (type === 'poll') {
+      const senderUser = await User.findOne({
+        $or: [
+          { id: senderId },
+          ...(mongoose.Types.ObjectId.isValid(senderId) ? [{ _id: senderId }] : []),
+          { username: senderId }
+        ]
+      });
+      if (senderUser) {
+        const isPro = Boolean(senderUser.isPro && senderUser.proExpiresAt && new Date(senderUser.proExpiresAt) > new Date());
+        if (!isPro) {
+          const SPARKS_COST = 5;
+          const currentSparks = senderUser.pulseSparks || 0;
+          if (currentSparks < SPARKS_COST) {
+            return res.status(400).json({
+              error: 'insufficient_sparks',
+              message: `Sparks kam hain! Poll create karne ke liye 5 Sparks lagte hain.`
+            });
+          }
           senderUser.pulseSparks = currentSparks - SPARKS_COST;
           await senderUser.save();
         }

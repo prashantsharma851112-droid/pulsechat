@@ -48,10 +48,13 @@ export default function Animated3DTextModal({ initialText = '', onSend3D, onClos
       onClose();
       return;
     }
-    if (!isUserPro) {
-      openPro('pro');
+    // Pro users send for 100% FREE with 0 Sparks
+    if (isUserPro) {
+      onSend3D(cleanText, selectedStyle);
+      onClose();
       return;
     }
+    // Free users can send using 10 Sparks
     if (currentSparks < 10) {
       openPro('sparks');
       return;
@@ -382,11 +385,11 @@ export default function Animated3DTextModal({ initialText = '', onSend3D, onClos
                 justifyContent: 'center',
                 background: isTrial
                   ? 'linear-gradient(135deg, #10b981, #6366f1)'
-                  : !isUserPro
-                  ? 'linear-gradient(135deg, #f59e0b, #ec4899)'
+                  : isUserPro
+                  ? 'linear-gradient(135deg, #10b981, #059669)'
                   : currentSparks < 10
                   ? 'linear-gradient(135deg, #ef4444, #f59e0b)'
-                  : 'linear-gradient(135deg, #f59e0b, #10b981)',
+                  : 'linear-gradient(135deg, #f59e0b, #ec4899)',
                 border: 'none',
                 boxShadow: '0 4px 14px rgba(0, 0, 0, 0.35)',
                 color: '#fff',
@@ -398,9 +401,9 @@ export default function Animated3DTextModal({ initialText = '', onSend3D, onClos
                 <>
                   <Sparkles size={16} /> Send Free Trial (0 Sparks)
                 </>
-              ) : !isUserPro ? (
+              ) : isUserPro ? (
                 <>
-                  <Crown size={16} /> Unlock VIP Subscription
+                  <Send size={16} /> Send 3D Text (Free for VIP 👑)
                 </>
               ) : currentSparks < 10 ? (
                 <>
@@ -408,7 +411,7 @@ export default function Animated3DTextModal({ initialText = '', onSend3D, onClos
                 </>
               ) : (
                 <>
-                  <Send size={16} /> Send 3D Text (10 Sparks)
+                  <Send size={16} /> Send 3D Text (10 ⚡ Sparks)
                 </>
               )}
             </button>

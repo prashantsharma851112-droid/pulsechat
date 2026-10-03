@@ -580,8 +580,8 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                 }}>
                   <div style={{ color: '#06b6d4', flexShrink: 0 }}><Type size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>3D & Dust Text Effects</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Send glowing 3D embossed messages & dust-dissolving text.</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Zero Sparks Needed (0 ⚡)</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Unlimited 3D Text, Dust Notes, Emoji Bursts & Polls with 0 Sparks deducted.</div>
                   </div>
                 </div>
 
@@ -885,11 +885,15 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
-                    <span>✨ 3D Text & Dust Text Effects</span>
+                    <span>⚡ Zero Sparks Needed: 3D Text & Dust Notes</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
-                    <span>💥 3D Emoji Particle Bursts</span>
+                    <span>💥 3D Emoji Particle Bursts (No Sparks)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
+                    <span>📊 Interactive Animated Polls (No Sparks)</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
