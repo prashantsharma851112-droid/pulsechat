@@ -37,7 +37,16 @@ router.get('/', authMiddleware, async (req, res) => {
 // anyone who has messaged you OR whom you've messaged, even without a search
 router.get('/recent', authMiddleware, async (req, res) => {
   try {
+    const redis = require('../utils/redis');
+    const cached = await redis.getCachedRecent(req.user.id);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const conversations = await db.getRecentConversations(req.user.id);
+    if (Array.isArray(conversations)) {
+      redis.setCachedRecent(req.user.id, conversations, 60).catch(() => {});
+    }
     res.json(conversations);
   } catch (err) {
     console.error('Error in /recent route:', err);
@@ -257,10 +266,16 @@ router.get('/:id/block-status', authMiddleware, async (req, res) => {
   }
 });
 
-// Get Specific User Profile by ID or username
+// Get Specific User Profile by ID or username (Microsecond RAM speed with Redis Cache)
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const targetId = req.params.id;
+    const redis = require('../utils/redis');
+    const cached = await redis.getCachedUser(targetId);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const mongoose = require('mongoose');
     const isObjectId = mongoose.Types.ObjectId.isValid(targetId);
     const targetUser = await User.findOne({
@@ -274,6 +289,13 @@ router.get('/:id', authMiddleware, async (req, res) => {
     if (!targetUser) {
       return res.status(404).json({ error: 'User not found' });
     }
+
+    // Cache profile in Redis for 15 minutes (900 seconds)
+    redis.setCachedUser(targetId, targetUser, 900).catch(() => {});
+    if (targetUser.id && targetUser.id !== targetId) {
+      redis.setCachedUser(targetUser.id, targetUser, 900).catch(() => {});
+    }
+
     res.json(targetUser);
   } catch (err) {
     console.error('Fetch user by ID error:', err);
