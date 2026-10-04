@@ -22,10 +22,9 @@ export default function GiftUnboxModal({
 
   // Check if previously unboxed
   const storageKey = messageId ? `pulse_gift_unboxed_${messageId}` : null;
-  const isAlreadyUnboxed = storageKey ? localStorage.getItem(storageKey) === 'true' : false;
 
-  // States: 'box' | 'opening' | 'revealed'
-  const [step, setStep] = useState(isAlreadyUnboxed ? 'revealed' : 'box');
+  // States: 'box' | 'opening' | 'revealed' (Always start with box so user sees 3D unboxing animation!)
+  const [step, setStep] = useState('box');
   const [isShaking, setIsShaking] = useState(false);
   const [isPopping, setIsPopping] = useState(false);
   const [confetti, setConfetti] = useState([]);

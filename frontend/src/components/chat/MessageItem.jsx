@@ -1403,7 +1403,7 @@ export default function MessageItem({
         {message.type === 'gift' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start' }}>
             <Sticker3D
-              giftId={isGiftUnboxed ? (message.giftData?.giftId || 'giftbox') : (message.giftData?.giftId || 'giftbox')}
+              giftId={isGiftUnboxed ? (message.giftData?.giftId || 'coffee') : 'giftbox'}
               sparkAmount={message.giftData?.sparkAmount || 10}
               isMine={isMine}
               timeStr={timeStr}

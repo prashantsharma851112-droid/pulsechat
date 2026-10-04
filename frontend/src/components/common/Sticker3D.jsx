@@ -1324,6 +1324,26 @@ export default function Sticker3D({
             <span>{sparkAmount} Sparks</span>
           </span>
 
+          {giftId === 'giftbox' && (
+            <span
+              style={{
+                fontSize: '0.68rem',
+                fontWeight: 800,
+                color: '#f43f5e',
+                background: 'rgba(244, 63, 94, 0.16)',
+                border: '1px solid rgba(244, 63, 94, 0.35)',
+                borderRadius: '12px',
+                padding: '2px 8px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+                cursor: 'pointer'
+              }}
+            >
+              🎁 Tap to open
+            </span>
+          )}
+
           {/* Minimal Timestamp & Delivery Ticks */}
           <span
             style={{
