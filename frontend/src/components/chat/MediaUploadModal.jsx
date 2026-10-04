@@ -3,6 +3,7 @@ import { X, Send, Eye, EyeOff } from 'lucide-react';
 
 export default function MediaUploadModal({ mediaFile, onSend, onClose }) {
   const [isViewOnce, setIsViewOnce] = useState(false);
+  const [isFogSnap, setIsFogSnap] = useState(false);
   const isVideo = mediaFile?.type?.startsWith('video/');
 
   if (!mediaFile) return null;

@@ -2333,7 +2333,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     e.target.value = '';
   };
 
-  const handleSendMedia = async ({ mediaUrl, type, isViewOnce, fileName, fileSize }) => {
+  const handleSendMedia = async ({ mediaUrl, type, isViewOnce, isFogSnap, fogSnapDuration, fileName, fileSize }) => {
     const msgType = type === 'document'
       ? 'document'
       : (type?.startsWith('video/') ? 'video' : 'image');
@@ -2366,7 +2366,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       isGroup,
       mediaUrl: finalMediaUrl,
       type: msgType,
-      isViewOnce: msgType === 'document' ? false : isViewOnce,
+      isViewOnce: msgType === 'document' ? false : Boolean(isViewOnce || isFogSnap),
+      isFogSnap: Boolean(isFogSnap),
+      fogSnapDuration: fogSnapDuration || 7,
+      fogSnapStatus: isFogSnap ? 'unrevealed' : undefined,
       fileName: fileName || null,
       fileSize: fileSize || null,
       replyTo
