@@ -124,7 +124,7 @@ export default function ChatLiveWallpaper({ wallpaperId, customImage }) {
   }, [wallpaperId]);
 
   if (wallpaperId === 'custom_image') {
-    const bgSrc = customImage || (typeof window !== 'undefined' ? localStorage.getItem(`pulsechat_custom_wallpaper_${wallpaperId}`) : null);
+    const bgSrc = customImage;
     if (bgSrc) {
       return (
         <div

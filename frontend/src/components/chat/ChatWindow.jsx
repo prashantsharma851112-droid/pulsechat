@@ -54,7 +54,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const { socket, onlineUsers, typingMap, lastNotification } = useContext(SocketContext);
 
   const isGroup = !!activeChat.isGroup;
-  const chatId = isGroup ? activeChat.id : [user.id, activeChat.id].sort().join('_');
+  const currentUserId = user?.id || user?._id || '';
+  const activeChatId = activeChat?.id || activeChat?._id || '';
+  const chatId = isGroup ? activeChatId : [currentUserId, activeChatId].filter(Boolean).sort().join('_');
   const isOnline = !isGroup && onlineUsers.includes(activeChat.id);
   const typingUser = typingMap[chatId];
   const isTyping = Boolean(typingUser && typingUser !== user?.username && typingUser !== user?.id && typingUser !== user?.displayName);
@@ -649,6 +651,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     return localStorage.getItem(`pulsechat_custom_wallpaper_${chatId}`) || null;
   });
 
+  const isMatchingChatId = (c1, c2) => {
+    if (!c1 || !c2) return false;
+    if (c1 === c2) return true;
+    if (c1.includes('_') && c2.includes('_')) {
+      return c1.split('_').sort().join('_') === c2.split('_').sort().join('_');
+    }
+    return false;
+  };
+
   useEffect(() => {
     const savedTheme = localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'midnight_amoled';
     setChatTheme(savedTheme);
@@ -658,7 +669,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setCustomWallpaper(savedCustom || null);
 
     const handleWallpaperUpdated = (e) => {
-      if (e.detail?.chatId === chatId) {
+      const incomingChatId = e.detail?.chatId;
+      const originalChatId = e.detail?.originalChatId;
+      if (isMatchingChatId(incomingChatId, chatId) || isMatchingChatId(originalChatId, chatId)) {
         const newWall = e.detail.wallpaperId || 'none';
         const incomingCustomUrl = e.detail.customWallpaperUrl || e.detail.customImage;
         const fallbackCustomUrl = localStorage.getItem(`pulsechat_custom_wallpaper_${chatId}`);
@@ -674,13 +687,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           localStorage.removeItem(`pulsechat_chat_wallpaper_${chatId}`);
           localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
         } else {
+          setChatWallpaper(newWall);
+          setCustomWallpaper(null);
           localStorage.setItem(`pulsechat_chat_wallpaper_${chatId}`, newWall);
+          localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
         }
       }
     };
 
     const handleThemeUpdated = (e) => {
-      if (e.detail?.chatId === chatId) {
+      const incomingChatId = e.detail?.chatId;
+      const originalChatId = e.detail?.originalChatId;
+      if (isMatchingChatId(incomingChatId, chatId) || isMatchingChatId(originalChatId, chatId)) {
         const newTheme = e.detail.themeId || 'default';
         setChatTheme(newTheme);
         if (newTheme === 'default' || newTheme === 'midnight_amoled') {
@@ -710,7 +728,17 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       localStorage.setItem('pulsechat_chat_default_theme', newTheme);
     }
     if (socket) {
-      socket.emit('set_chat_theme', { chatId, themeId: newTheme, userId: user?.id });
+      socket.emit('set_chat_theme', { chatId, themeId: newTheme, userId: user?.id, setBy: user?.id });
+    }
+    if (token) {
+      fetch(`${BACKEND_URL}/api/messages/settings/${chatId}/theme`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ themeId: newTheme })
+      }).catch(() => {});
     }
   };
 
@@ -718,12 +746,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setChatWallpaper(newWall);
     if (newWall === 'none') {
       localStorage.removeItem(`pulsechat_chat_wallpaper_${chatId}`);
+      localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
     } else {
       localStorage.setItem(`pulsechat_chat_wallpaper_${chatId}`, newWall);
     }
-    if (customUrl) {
+    if (newWall === 'custom_image' && customUrl) {
       localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, customUrl);
+    } else if (newWall !== 'custom_image') {
+      localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
     }
+
     if (socket) {
       socket.emit('set_chat_wallpaper', {
         chatId,
@@ -734,17 +766,67 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         setBy: user?.id
       });
     }
+
+    if (token) {
+      fetch(`${BACKEND_URL}/api/messages/settings/${chatId}/wallpaper`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          wallpaperId: newWall,
+          customWallpaperUrl: customUrl
+        })
+      }).catch(() => {});
+    }
   };
 
-  const handleSetCustomWallpaper = (dataUrl) => {
-    setCustomWallpaper(dataUrl);
-    if (dataUrl) {
-      localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, dataUrl);
-      handleSelectChatWallpaper('custom_image', dataUrl);
-    } else {
+  const handleSetCustomWallpaper = async (dataUrl) => {
+    if (!dataUrl) {
+      setCustomWallpaper(null);
       localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
       handleSelectChatWallpaper('none', null);
+      return;
     }
+
+    // 1. Instant local preview on client
+    setCustomWallpaper(dataUrl);
+    setChatWallpaper('custom_image');
+    localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, dataUrl);
+    localStorage.setItem(`pulsechat_chat_wallpaper_${chatId}`, 'custom_image');
+
+    // 2. Upload to server/Cloudinary so both sides receive a high quality permanent URL
+    let finalUrl = dataUrl;
+    if (token && dataUrl.startsWith('data:')) {
+      try {
+        const uploadRes = await fetch(`${BACKEND_URL}/api/upload`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            file: dataUrl,
+            folder: 'pulsechat_wallpapers',
+            resourceType: 'image'
+          })
+        });
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          if (uploadData?.url) {
+            finalUrl = uploadData.url;
+            setCustomWallpaper(finalUrl);
+            localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, finalUrl);
+          }
+        }
+      } catch (err) {
+        console.warn('Direct wallpaper upload failed, using optimized base64 payload:', err);
+      }
+    }
+
+    // 3. Save to MongoDB & broadcast via Socket.IO
+    handleSelectChatWallpaper('custom_image', finalUrl);
   };
 
   const [messages, setMessages] = useState(() => {
@@ -1178,13 +1260,31 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           // Offline: messages already loaded from cache!
         });
 
-      // Fetch disappearing messages setting
+      // Fetch disappearing messages and chat wallpaper & theme settings
       fetch(`${BACKEND_URL}/api/messages/settings/${chatId}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => res.json())
         .then(data => {
-          if (data?.disappearingEnabled !== undefined) setChatSetting(data);
+          if (data) {
+            if (data.disappearingEnabled !== undefined) setChatSetting(data);
+            if (data.wallpaperId !== undefined) {
+              setChatWallpaper(data.wallpaperId);
+              localStorage.setItem(`pulsechat_chat_wallpaper_${chatId}`, data.wallpaperId);
+            }
+            if (data.customWallpaperUrl !== undefined) {
+              setCustomWallpaper(data.customWallpaperUrl);
+              if (data.customWallpaperUrl) {
+                localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, data.customWallpaperUrl);
+              } else {
+                localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
+              }
+            }
+            if (data.chatTheme) {
+              setChatTheme(data.chatTheme);
+              localStorage.setItem(`pulsechat_chat_theme_${chatId}`, data.chatTheme);
+            }
+          }
         })
         .catch(() => {});
 

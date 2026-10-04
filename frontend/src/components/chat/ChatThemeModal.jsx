@@ -194,11 +194,6 @@ export default function ChatThemeModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!isUserPro) {
-      setShowProModal(true);
-      return;
-    }
-
     const reader = new FileReader();
     reader.onload = (event) => {
       const rawDataUrl = event.target.result;
@@ -497,7 +492,6 @@ export default function ChatThemeModal({
                     <div style={{ textAlign: 'center' }}>
                       <h4 style={{ margin: '0 0 4px 0', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                         <span>Upload Gallery Wallpaper</span>
-                        {!isUserPro && <Crown size={14} color="#f59e0b" />}
                       </h4>
                       <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)', maxWidth: '320px' }}>
                         Set any personal photo, couple memory or custom HD wallpaper as your chat background.
@@ -506,13 +500,7 @@ export default function ChatThemeModal({
                     <button
                       type="button"
                       className="btn-primary"
-                      onClick={() => {
-                        if (!isUserPro) {
-                          setShowProModal(true);
-                          return;
-                        }
-                        fileInputRef.current?.click();
-                      }}
+                      onClick={() => fileInputRef.current?.click()}
                       style={{ padding: '10px 24px', borderRadius: '20px', fontSize: '0.88rem', fontWeight: 700 }}
                     >
                       📁 Select Photo from Device

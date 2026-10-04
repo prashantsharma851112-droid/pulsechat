@@ -73,6 +73,68 @@ router.put('/settings/:chatId/disappearing', authMiddleware, async (req, res) =>
   }
 });
 
+// Set Chat Wallpaper (Live Themes or Custom Gallery Wallpapers) - MUST BE BEFORE /:chatId
+router.put('/settings/:chatId/wallpaper', authMiddleware, async (req, res) => {
+  try {
+    const { wallpaperId, customWallpaperUrl } = req.body;
+    const setting = await db.setChatWallpaper(req.params.chatId, wallpaperId, customWallpaperUrl, req.user?.id);
+
+    const payload = {
+      chatId: setting.chatId,
+      originalChatId: req.params.chatId,
+      wallpaperId: setting.wallpaperId,
+      customWallpaperUrl: setting.customWallpaperUrl,
+      customImage: setting.customWallpaperUrl,
+      setBy: req.user?.id
+    };
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(req.params.chatId).emit('chat_wallpaper_updated', payload);
+      if (req.params.chatId.includes('_')) {
+        const parts = req.params.chatId.split('_');
+        io.to(`${parts[1]}_${parts[0]}`).emit('chat_wallpaper_updated', payload);
+        parts.forEach(uId => io.to(`user_${uId}`).emit('chat_wallpaper_updated', payload));
+      }
+    }
+
+    res.json({ success: true, setting, payload });
+  } catch (err) {
+    console.error('Failed to update chat wallpaper:', err);
+    res.status(500).json({ error: 'Failed to update chat wallpaper' });
+  }
+});
+
+// Set Chat Theme (Color theme) - MUST BE BEFORE /:chatId
+router.put('/settings/:chatId/theme', authMiddleware, async (req, res) => {
+  try {
+    const { themeId } = req.body;
+    const setting = await db.setChatTheme(req.params.chatId, themeId, req.user?.id);
+
+    const payload = {
+      chatId: setting.chatId,
+      originalChatId: req.params.chatId,
+      themeId: setting.chatTheme,
+      setBy: req.user?.id
+    };
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(req.params.chatId).emit('chat_theme_updated', payload);
+      if (req.params.chatId.includes('_')) {
+        const parts = req.params.chatId.split('_');
+        io.to(`${parts[1]}_${parts[0]}`).emit('chat_theme_updated', payload);
+        parts.forEach(uId => io.to(`user_${uId}`).emit('chat_theme_updated', payload));
+      }
+    }
+
+    res.json({ success: true, setting, payload });
+  } catch (err) {
+    console.error('Failed to update chat theme:', err);
+    res.status(500).json({ error: 'Failed to update chat theme' });
+  }
+});
+
 // Get Chat Message History - ultra fast response with Redis RAM cache, non-blocking background read receipts
 router.get('/:chatId', authMiddleware, async (req, res) => {
   try {

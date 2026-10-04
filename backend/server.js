@@ -941,11 +941,17 @@ io.on('connection', (socket) => {
   });
 
   // Chat Live & Custom Wallpaper Real-Time Synchronization
-  socket.on('set_chat_wallpaper', (data) => {
+  socket.on('set_chat_wallpaper', async (data) => {
     if (!data) return;
     const { chatId, wallpaperId, customWallpaperUrl, customImage, userId, setBy } = data;
     const finalCustomUrl = customWallpaperUrl || customImage || null;
     const finalUserId = userId || setBy || null;
+
+    try {
+      await db.setChatWallpaper(chatId, wallpaperId, finalCustomUrl, finalUserId);
+    } catch (e) {
+      console.error('Error saving chat wallpaper to database:', e);
+    }
 
     const payload = {
       chatId,
@@ -959,16 +965,32 @@ io.on('connection', (socket) => {
     io.to(chatId).emit('chat_wallpaper_updated', payload);
     if (chatId && chatId.includes('_')) {
       const parts = chatId.split('_');
-      parts.forEach(uId => io.to(`user_${uId}`).emit('chat_wallpaper_updated', payload));
+      io.to(`${parts[1]}_${parts[0]}`).emit('chat_wallpaper_updated', payload);
+      parts.forEach(uId => {
+        io.to(`user_${uId}`).emit('chat_wallpaper_updated', payload);
+        io.to(uId).emit('chat_wallpaper_updated', payload);
+      });
     }
   });
 
   // Chat Solid Color Theme Real-Time Synchronization
-  socket.on('set_chat_theme', ({ chatId, themeId, setBy }) => {
-    io.to(chatId).emit('chat_theme_updated', { chatId, themeId, setBy });
+  socket.on('set_chat_theme', async ({ chatId, themeId, setBy, userId }) => {
+    const finalUserId = userId || setBy || null;
+    try {
+      await db.setChatTheme(chatId, themeId, finalUserId);
+    } catch (e) {
+      console.error('Error saving chat theme to database:', e);
+    }
+
+    const payload = { chatId, themeId, setBy: finalUserId };
+    io.to(chatId).emit('chat_theme_updated', payload);
     if (chatId && chatId.includes('_')) {
       const parts = chatId.split('_');
-      parts.forEach(uId => io.to(`user_${uId}`).emit('chat_theme_updated', { chatId, themeId, setBy }));
+      io.to(`${parts[1]}_${parts[0]}`).emit('chat_theme_updated', payload);
+      parts.forEach(uId => {
+        io.to(`user_${uId}`).emit('chat_theme_updated', payload);
+        io.to(uId).emit('chat_theme_updated', payload);
+      });
     }
   });
 
