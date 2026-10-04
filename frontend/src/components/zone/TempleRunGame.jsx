@@ -1,16 +1,12 @@
 import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import * as THREE from 'three';
 import { AuthContext } from '../../context/AuthContext';
-import { 
-  Trophy, RotateCcw, Volume2, VolumeX, Shield, 
-  Flame, Play, ChevronLeft, ChevronRight, ArrowLeft, ArrowUp, ArrowDown, 
-  Maximize2, Minimize2, Pause, FastForward
-} from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 
 // =========================================================================
-// NATIVE WEB AUDIO ENGINE: TRIBAL DRUMS & TEMPLE RUN SFX
-// Zero external audio files required, 100% native synthesized Web Audio
+// NATIVE WEB AUDIO ENGINE: TEMPLE RUN JUNGLE & TRIBAL DRUMS SYNTHESIZER
+// High-fidelity synthesized drums, shakers, coin bells, jump & slide swooshes
+// Zero external mp3/wav files required
 // =========================================================================
 const createTempleAudio = () => {
   let ctx = null;
@@ -191,27 +187,6 @@ const createTempleAudio = () => {
     } catch (e) {}
   };
 
-  const playPowerUp = () => {
-    init();
-    if (isMuted || !ctx) return;
-    try {
-      const notes = [440, 554, 659, 880];
-      notes.forEach((freq, idx) => {
-        const now = ctx.currentTime + idx * 0.06;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now);
-        gain.gain.setValueAtTime(0.08, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.25);
-      });
-    } catch (e) {}
-  };
-
   const playGameOver = () => {
     init();
     stopTribalMusic();
@@ -241,7 +216,6 @@ const createTempleAudio = () => {
     playSlideSwoosh,
     playDemonRoar,
     playStumble,
-    playPowerUp,
     playGameOver,
     setMuted: (val) => {
       isMuted = val;
@@ -250,11 +224,107 @@ const createTempleAudio = () => {
   };
 };
 
+// =========================================================================
+// PROCEDURAL CANVAS TEXTURE GENERATOR: AUTHENTIC TEMPLE RUN STONE & SPIRALS
+// Creates golden-yellow stone flagstones with ancient carved stone spirals & moss
+// =========================================================================
+const createStonePathwayTexture = () => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+
+  // 1. Warm Golden Sandstone Flagstones Base
+  const baseGrad = ctx.createLinearGradient(0, 0, 512, 512);
+  baseGrad.addColorStop(0, '#eab308');
+  baseGrad.addColorStop(0.5, '#ca8a04');
+  baseGrad.addColorStop(1, '#a16207');
+  ctx.fillStyle = baseGrad;
+  ctx.fillRect(0, 0, 512, 512);
+
+  // 2. Stone Tile Texture Noise & Mortar Lines
+  ctx.fillStyle = 'rgba(113, 63, 18, 0.4)';
+  for (let y = 0; y < 512; y += 64) {
+    ctx.fillRect(0, y, 512, 4);
+    for (let x = (y % 128 === 0 ? 0 : 32); x < 512; x += 64) {
+      ctx.fillRect(x, y, 4, 64);
+    }
+  }
+
+  // 3. Ancient Carved Stone Spirals (Exact match to Temple Run 2 Screenshots)
+  const drawSpiral = (cx, cy, maxR) => {
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    for (let a = 0; a < Math.PI * 6; a += 0.1) {
+      const r = (a / (Math.PI * 6)) * maxR;
+      const x = cx + Math.cos(a) * r;
+      const y = cy + Math.sin(a) * r;
+      if (a === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Inner highlight ring
+    ctx.strokeStyle = 'rgba(254, 240, 138, 0.4)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+  };
+
+  // Draw concentric spiral stone runes along center and side paths
+  drawSpiral(256, 128, 55);
+  drawSpiral(256, 384, 55);
+  drawSpiral(100, 256, 40);
+  drawSpiral(412, 256, 40);
+
+  // 4. Wild Moss & Vegetation on Outer Edges
+  ctx.fillStyle = '#166534';
+  for (let i = 0; i < 512; i += 8) {
+    const mossW1 = Math.random() * 32 + 10;
+    const mossW2 = Math.random() * 32 + 10;
+    ctx.fillRect(0, i, mossW1, 8);
+    ctx.fillRect(512 - mossW2, i, mossW2, 8);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(1, 3);
+  return texture;
+};
+
+// Procedural Sunset Sky Canvas Texture (Golden-Orange clouds to blue)
+const createSkyTexture = () => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+
+  const grad = ctx.createLinearGradient(0, 0, 0, 512);
+  grad.addColorStop(0, '#f97316');   // Vibrant Orange Sunset
+  grad.addColorStop(0.35, '#fb923c');
+  grad.addColorStop(0.65, '#fed7aa'); // Golden Horizon
+  grad.addColorStop(0.85, '#ffffff'); // Cloud Deck
+  grad.addColorStop(1, '#e2e8f0');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 512, 512);
+
+  // Wispy cloud layers
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+  for (let i = 0; i < 6; i++) {
+    ctx.beginPath();
+    ctx.ellipse(Math.random() * 512, 300 + i * 25, 180 + Math.random() * 80, 20 + Math.random() * 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  return new THREE.CanvasTexture(canvas);
+};
+
 export default function TempleRunGame({ onScoreUpdate, onBack }) {
   const containerRef = useRef(null);
   const audioRef = useRef(null);
 
-  // React HUD States
+  // HUD & Game States
   const [gameState, setGameState] = useState('menu'); // 'menu' | 'playing' | 'paused' | 'gameover'
   const [distance, setDistance] = useState(0);
   const [coins, setCoins] = useState(0);
@@ -267,24 +337,21 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     }
   });
   const [isMuted, setIsMuted] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [activePowerUp, setActivePowerUp] = useState(null);
-  const [powerUpTimeLeft, setPowerUpTimeLeft] = useState(0);
-  const [monkeyDistance, setMonkeyDistance] = useState(100);
+  const [powerMeter, setPowerMeter] = useState(0); // 0 to 100%
 
-  // Swipe gesture tracking
+  // Touch Swipe tracking (NO BUTTONS ON SCREEN, 100% FINGER GESTURES)
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
+  const isDraggingRef = useRef(false);
 
-  // Core mutable game loop references
+  // Core gameplay state references (mutable for high-performance 60fps)
   const gameRef = useRef({
     scene: null,
     camera: null,
     renderer: null,
     playerGroup: null,
     monkeyGroup: null,
-    shieldMesh: null,
 
-    // Limb references for character running animations
+    // Rigged Character Limbs
     playerParts: {
       leftLeg: null,
       rightLeg: null,
@@ -294,30 +361,27 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       head: null
     },
 
-    // Demon Monkey parts
+    // Demon Ape Parts
     monkeyParts: {
       leftArm: null,
       rightArm: null,
-      body: null,
-      eyes: null
+      body: null
     },
 
-    // Track chunks & dynamic meshes
+    // 3D Procedural Chunks & Elements
     trackChunks: [],
     obstacles: [],
     coinsList: [],
-    particleSystems: [],
+    cloudsList: [],
 
-    // Torch point lights
-    torchLights: [],
-
-    // Game variables
-    speed: 38, // Units per second
+    // Game Variables
+    speed: 40,
     distance: 0,
     coins: 0,
     score: 0,
+    powerMeter: 0,
 
-    playerLane: 1, // 0: Left (-1.8), 1: Center (0), 2: Right (1.8)
+    playerLane: 1, // 0 = Left (-1.8), 1 = Center (0), 2 = Right (1.8)
     targetX: 0,
     currentX: 0,
 
@@ -329,20 +393,14 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     slideTimer: 0,
 
     stumbleTimer: 0,
-    monkeyDist: 100, // 100 = far, 30 = right behind, 0 = caught
-    monkeyRoarTimer: 0,
-
-    powerUp: {
-      type: null,
-      timeLeft: 0
-    },
+    monkeyDist: 90, // 90 = standard behind, 28 = right at runner's heels
 
     runAnimTime: 0,
     lastTime: 0,
     running: false
   });
 
-  // Initialize Web Audio Engine
+  // Initialize Web Audio
   useEffect(() => {
     audioRef.current = createTempleAudio();
     return () => {
@@ -359,13 +417,13 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
   };
 
   // =========================================================================
-  // LANE CONTROLS & PLAYER ACTIONS
+  // FINGER SWIPE CONTROLS & ACTIONS (ZERO BUTTONS ON SCREEN)
   // =========================================================================
   const moveLeft = useCallback(() => {
     const g = gameRef.current;
     if (g.playerLane > 0) {
       g.playerLane -= 1;
-      g.targetX = (g.playerLane - 1) * 1.8;
+      g.targetX = (g.playerLane - 1) * 1.85;
       if (audioRef.current) audioRef.current.playSlideSwoosh();
     }
   }, []);
@@ -374,7 +432,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     const g = gameRef.current;
     if (g.playerLane < 2) {
       g.playerLane += 1;
-      g.targetX = (g.playerLane - 1) * 1.8;
+      g.targetX = (g.playerLane - 1) * 1.85;
       if (audioRef.current) audioRef.current.playSlideSwoosh();
     }
   }, []);
@@ -383,7 +441,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     const g = gameRef.current;
     if (!g.isJumping && !g.isSliding) {
       g.isJumping = true;
-      g.jumpVelocity = 15.5;
+      g.jumpVelocity = 15.8;
       if (audioRef.current) audioRef.current.playJumpWhoosh();
     }
   }, []);
@@ -397,12 +455,12 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         g.isJumping = false;
       }
       g.isSliding = true;
-      g.slideTimer = 0.8;
+      g.slideTimer = 0.85;
       if (audioRef.current) audioRef.current.playSlideSwoosh();
     }
   }, []);
 
-  // Keyboard navigation
+  // Keyboard navigation fallback
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (gameState !== 'playing') {
@@ -430,53 +488,59 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [gameState, moveLeft, moveRight, jump, slide]);
 
-  // Touch Swipe Handlers
+  // Touch Swipe Handlers (Full screen natural touch interaction)
   const handleTouchStart = (e) => {
     if (!e.touches || e.touches.length === 0) return;
     const t = e.touches[0];
     touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
+    isDraggingRef.current = true;
   };
 
-  const handleTouchEnd = (e) => {
-    if (!e.changedTouches || e.changedTouches.length === 0) return;
-    const t = e.changedTouches[0];
+  const handleTouchMove = (e) => {
+    if (!isDraggingRef.current || !e.touches || e.touches.length === 0) return;
+    const t = e.touches[0];
     const dx = t.clientX - touchStartRef.current.x;
     const dy = t.clientY - touchStartRef.current.y;
-    const absX = Math.abs(dx);
-    const absY = Math.abs(dy);
-    const dt = Date.now() - touchStartRef.current.time;
 
-    if (dt > 600) return;
-
-    if (Math.max(absX, absY) > 25) {
-      if (absX > absY) {
+    // Detect immediate swipe gesture
+    if (Math.abs(dx) > 30 || Math.abs(dy) > 30) {
+      if (Math.abs(dx) > Math.abs(dy)) {
         if (dx > 0) moveRight();
         else moveLeft();
       } else {
         if (dy > 0) slide();
         else jump();
       }
+      // Reset start to avoid repeated triggers
+      touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
+      isDraggingRef.current = false;
     }
   };
 
+  const handleTouchEnd = () => {
+    isDraggingRef.current = false;
+  };
+
   // =========================================================================
-  // THREE.JS SCENE SETUP & PROCEDURAL 3D ASSETS
+  // THREE.JS SCENE SETUP & PROCEDURAL ASSETS
   // =========================================================================
   useEffect(() => {
     if (!containerRef.current) return;
     const container = containerRef.current;
     const width = container.clientWidth || 800;
-    const height = container.clientHeight || 500;
+    const height = container.clientHeight || 600;
 
-    // 1. Scene & Ancient Jungle Fog
+    // 1. Scene & Sunset Sky Background
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a1c14); // Deep ancient rainforest mist
-    scene.fog = new THREE.FogExp2(0x0a1c14, 0.012);
+    const skyTex = createSkyTexture();
+    scene.background = skyTex;
+    // Volumetric warm mountain fog
+    scene.fog = new THREE.FogExp2(0xfed7aa, 0.009);
 
     // 2. Perspective Camera (Over-the-shoulder third-person camera)
-    const camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 300);
-    camera.position.set(0, 3.8, 6.5);
-    camera.lookAt(0, 1.8, -12);
+    const camera = new THREE.PerspectiveCamera(62, width / height, 0.1, 400);
+    camera.position.set(0, 4.2, 7.8);
+    camera.lookAt(0, 2.0, -14);
 
     // 3. WebGL Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -484,191 +548,233 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    // 4. Lighting Setup (Sunlight + Ambient Jungle Light)
-    const ambientLight = new THREE.AmbientLight(0xfff5e6, 0.7);
+    // 4. Dramatic Golden Sunset Lighting
+    const ambientLight = new THREE.AmbientLight(0xffedd5, 0.85);
     scene.add(ambientLight);
 
-    const sunLight = new THREE.DirectionalLight(0xfbbf24, 1.2);
-    sunLight.position.set(20, 40, 20);
+    const sunLight = new THREE.DirectionalLight(0xf59e0b, 1.4);
+    sunLight.position.set(25, 45, 20);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 1024;
     sunLight.shadow.mapSize.height = 1024;
     scene.add(sunLight);
 
-    // 5. Materials (Ancient Mossy Stones, Gold, Foliage)
-    const stoneFloorMat = new THREE.MeshStandardMaterial({
-      color: 0x4a4031,
-      roughness: 0.85,
-      metalness: 0.1
+    // 5. Materials
+    const pathwayTex = createStonePathwayTexture();
+    const stonePathwayMat = new THREE.MeshStandardMaterial({
+      map: pathwayTex,
+      roughness: 0.75,
+      metalness: 0.15
     });
 
-    const stoneWallMat = new THREE.MeshStandardMaterial({
-      color: 0x2b251b,
+    const carvedWallMat = new THREE.MeshStandardMaterial({
+      color: 0x57534e, // Ancient grey stone
       roughness: 0.9,
       metalness: 0.05
     });
 
-    const mossTrimMat = new THREE.MeshStandardMaterial({
-      color: 0x1e3a1f,
-      roughness: 0.95
+    const emeraldGemMat = new THREE.MeshStandardMaterial({
+      color: 0x10b981, // Glowing green emerald
+      emissive: 0x059669,
+      emissiveIntensity: 0.6,
+      roughness: 0.1,
+      metalness: 0.9
     });
 
     const goldCoinMat = new THREE.MeshStandardMaterial({
       color: 0xfbbf24,
       metalness: 0.95,
-      roughness: 0.2
+      roughness: 0.15
     });
 
-    const logBarkMat = new THREE.MeshStandardMaterial({
-      color: 0x45230e,
-      roughness: 0.8
-    });
-
-    const spikeMat = new THREE.MeshStandardMaterial({
-      color: 0x9ca3af,
-      metalness: 0.7,
-      roughness: 0.3
-    });
-
-    // 6. BUILD PROCEDURAL 3D RUNNER (Guy Dangerous Explorer)
+    // 6. BUILD PROCEDURAL 3D RUNNER (Guy Dangerous - Real Temple Run Outfit)
+    // Red Hair, White Safari Shirt, Olive Trousers, Brown Boots (Exact match to Image 2)
     const playerGroup = new THREE.Group();
 
-    // Torso (Explorer Jacket)
-    const torsoGeo = new THREE.BoxGeometry(0.8, 1.0, 0.45);
-    const jacketMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.7 });
-    const torsoMesh = new THREE.Mesh(torsoGeo, jacketMat);
-    torsoMesh.position.y = 1.3;
+    // Torso (White Safari Explorer Shirt)
+    const torsoGeo = new THREE.BoxGeometry(0.85, 1.05, 0.45);
+    const shirtMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.75 });
+    const torsoMesh = new THREE.Mesh(torsoGeo, shirtMat);
+    torsoMesh.position.y = 1.35;
     torsoMesh.castShadow = true;
     playerGroup.add(torsoMesh);
 
-    // Head
+    // Head (Skin Tone)
     const headGeo = new THREE.SphereGeometry(0.28, 16, 16);
     const skinMat = new THREE.MeshStandardMaterial({ color: 0xfed7aa });
     const headMesh = new THREE.Mesh(headGeo, skinMat);
-    headMesh.position.set(0, 1.95, 0);
+    headMesh.position.set(0, 2.05, 0);
     playerGroup.add(headMesh);
 
-    // Fedora Explorer Hat
-    const hatBrimGeo = new THREE.CylinderGeometry(0.48, 0.48, 0.05, 16);
-    const hatMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.8 });
-    const hatBrim = new THREE.Mesh(hatBrimGeo, hatMat);
-    hatBrim.position.set(0, 2.15, 0);
-    playerGroup.add(hatBrim);
+    // Red/Auburn Hair
+    const hairGeo = new THREE.SphereGeometry(0.3, 16, 16);
+    const hairMat = new THREE.MeshStandardMaterial({ color: 0xc2410c, roughness: 0.8 });
+    const hairMesh = new THREE.Mesh(hairGeo, hairMat);
+    hairMesh.position.set(0, 2.15, -0.05);
+    playerGroup.add(hairMesh);
 
-    const hatTopGeo = new THREE.CylinderGeometry(0.3, 0.32, 0.25, 16);
-    const hatTop = new THREE.Mesh(hatTopGeo, hatMat);
-    hatTop.position.set(0, 2.28, 0);
-    playerGroup.add(hatTop);
-
-    // Legs (Thighs + Shins)
-    const legGeo = new THREE.BoxGeometry(0.24, 0.7, 0.24);
-    const pantsMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.6 }); // Denim explorer pants
+    // Legs (Olive Green Explorer Pants - Exact match to Image 2)
+    const legGeo = new THREE.BoxGeometry(0.26, 0.75, 0.26);
+    const pantsMat = new THREE.MeshStandardMaterial({ color: 0x3f6212, roughness: 0.7 });
 
     const leftLeg = new THREE.Mesh(legGeo, pantsMat);
-    leftLeg.position.set(-0.24, 0.45, 0);
+    leftLeg.position.set(-0.25, 0.48, 0);
     leftLeg.castShadow = true;
     playerGroup.add(leftLeg);
 
     const rightLeg = new THREE.Mesh(legGeo, pantsMat);
-    rightLeg.position.set(0.24, 0.45, 0);
+    rightLeg.position.set(0.25, 0.48, 0);
     rightLeg.castShadow = true;
     playerGroup.add(rightLeg);
 
     // Arms
-    const armGeo = new THREE.BoxGeometry(0.2, 0.65, 0.2);
-    const armMat = new THREE.MeshStandardMaterial({ color: 0xd97706 });
-
-    const leftArm = new THREE.Mesh(armGeo, armMat);
-    leftArm.position.set(-0.52, 1.3, 0);
+    const armGeo = new THREE.BoxGeometry(0.22, 0.65, 0.22);
+    const leftArm = new THREE.Mesh(armGeo, skinMat);
+    leftArm.position.set(-0.55, 1.35, 0);
     playerGroup.add(leftArm);
 
-    const rightArm = new THREE.Mesh(armGeo, armMat);
-    rightArm.position.set(0.52, 1.3, 0);
+    const rightArm = new THREE.Mesh(armGeo, skinMat);
+    rightArm.position.set(0.55, 1.35, 0);
     playerGroup.add(rightArm);
-
-    // Golden Idol Satchel on chest
-    const satchelGeo = new THREE.BoxGeometry(0.35, 0.35, 0.2);
-    const satchelMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.7 });
-    const satchel = new THREE.Mesh(satchelGeo, satchelMat);
-    satchel.position.set(0.2, 1.15, 0.25);
-    playerGroup.add(satchel);
-
-    // Shield Bubble (Hidden by default)
-    const shieldGeo = new THREE.SphereGeometry(1.6, 24, 24);
-    const shieldMat = new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
-      transparent: true,
-      opacity: 0.35,
-      metalness: 0.8,
-      roughness: 0.1
-    });
-    const shieldMesh = new THREE.Mesh(shieldGeo, shieldMat);
-    shieldMesh.position.y = 1.2;
-    shieldMesh.visible = false;
-    playerGroup.add(shieldMesh);
 
     scene.add(playerGroup);
 
-    // 7. BUILD PROCEDURAL 3D DEMON MONKEY (Evil Demon Ape)
+    // 7. BUILD PROCEDURAL 3D DEMON APE (Massive Black Gorilla - Exact match to Image 1)
     const monkeyGroup = new THREE.Group();
 
-    // Massive Gorilla Torso
-    const monTorsoGeo = new THREE.BoxGeometry(1.6, 1.8, 1.1);
-    const monFurMat = new THREE.MeshStandardMaterial({ color: 0x1c1917, roughness: 0.95 });
-    const monTorso = new THREE.Mesh(monTorsoGeo, monFurMat);
-    monTorso.position.y = 1.6;
-    monkeyGroup.add(monTorso);
+    // Massive Gorilla Back & Torso
+    const apeTorsoGeo = new THREE.BoxGeometry(2.2, 2.1, 1.5);
+    const apeFurMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.95 }); // Pitch black fur
+    const apeTorso = new THREE.Mesh(apeTorsoGeo, apeFurMat);
+    apeTorso.position.y = 1.6;
+    monkeyGroup.add(apeTorso);
 
-    // Demon Head with Horns
-    const monHeadGeo = new THREE.BoxGeometry(0.9, 0.9, 0.8);
-    const monHead = new THREE.Mesh(monHeadGeo, monFurMat);
-    monHead.position.set(0, 2.7, 0.2);
-    monkeyGroup.add(monHead);
+    // Silver Crest on Head
+    const apeHeadGeo = new THREE.BoxGeometry(1.2, 1.1, 1.1);
+    const apeHead = new THREE.Mesh(apeHeadGeo, apeFurMat);
+    apeHead.position.set(0, 2.7, 0.4);
+    monkeyGroup.add(apeHead);
 
-    // Glowing Demonic Red Eyes
-    const eyeGeo = new THREE.SphereGeometry(0.12, 12, 12);
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
-    const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-    leftEye.position.set(-0.25, 2.75, 0.65);
-    const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-    rightEye.position.set(0.25, 2.75, 0.65);
-    monkeyGroup.add(leftEye);
-    monkeyGroup.add(rightEye);
-
-    // Curved Horns
-    const hornGeo = new THREE.ConeGeometry(0.14, 0.7, 12);
-    const hornMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.5 });
-    const leftHorn = new THREE.Mesh(hornGeo, hornMat);
-    leftHorn.position.set(-0.5, 3.2, 0.1);
-    leftHorn.rotation.z = -0.5;
-    const rightHorn = new THREE.Mesh(hornGeo, hornMat);
-    rightHorn.position.set(0.5, 3.2, 0.1);
-    rightHorn.rotation.z = 0.5;
-    monkeyGroup.add(leftHorn);
-    monkeyGroup.add(rightHorn);
+    const crestGeo = new THREE.BoxGeometry(0.6, 0.35, 1.0);
+    const crestMat = new THREE.MeshStandardMaterial({ color: 0xa1a1aa, roughness: 0.6 });
+    const crest = new THREE.Mesh(crestGeo, crestMat);
+    crest.position.set(0, 3.25, 0.35);
+    monkeyGroup.add(crest);
 
     // Heavy Pounding Gorilla Arms
-    const monArmGeo = new THREE.BoxGeometry(0.45, 1.5, 0.45);
-    const monLeftArm = new THREE.Mesh(monArmGeo, monFurMat);
-    monLeftArm.position.set(-1.05, 1.2, 0.3);
-    const monRightArm = new THREE.Mesh(monArmGeo, monFurMat);
-    monRightArm.position.set(1.05, 1.2, 0.3);
-    monkeyGroup.add(monLeftArm);
-    monkeyGroup.add(monRightArm);
+    const apeArmGeo = new THREE.BoxGeometry(0.6, 1.8, 0.6);
+    const apeLeftArm = new THREE.Mesh(apeArmGeo, apeFurMat);
+    apeLeftArm.position.set(-1.4, 1.1, 0.4);
+    const apeRightArm = new THREE.Mesh(apeArmGeo, apeFurMat);
+    apeRightArm.position.set(1.4, 1.1, 0.4);
+    monkeyGroup.add(apeLeftArm);
+    monkeyGroup.add(apeRightArm);
 
-    monkeyGroup.position.set(0, 0, 4.2); // Positioned closely behind the runner
+    monkeyGroup.position.set(0, 0, 4.6); // Chasing right behind runner
     scene.add(monkeyGroup);
 
-    // Store references in gameRef
+    // 8. VOLUMETRIC CLOUDS DECK (Beneath Floating Stone Bridge)
+    const cloudsList = [];
+    const cloudMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.75,
+      roughness: 1.0
+    });
+
+    for (let c = 0; c < 25; c++) {
+      const cloudGeo = new THREE.SphereGeometry(Math.random() * 8 + 6, 8, 8);
+      const cloud = new THREE.Mesh(cloudGeo, cloudMat);
+      cloud.position.set(
+        (Math.random() - 0.5) * 60,
+        -12 - Math.random() * 8,
+        -Math.random() * 200
+      );
+      scene.add(cloud);
+      cloudsList.push(cloud);
+    }
+
+    // 9. PROCEDURAL 3D ENDLESS TRACK GENERATOR
+    const CHUNK_LENGTH = 24;
+    const CHUNK_COUNT = 14;
+    const trackChunks = [];
+
+    const createTrackChunk = (zPos) => {
+      const chunk = new THREE.Group();
+      chunk.position.z = zPos;
+
+      // Stone Bridge Runway (Width 6.6 units)
+      const floorGeo = new THREE.BoxGeometry(6.6, 1.2, CHUNK_LENGTH);
+      const floor = new THREE.Mesh(floorGeo, stonePathwayMat);
+      floor.position.y = -0.6;
+      floor.receiveShadow = true;
+      chunk.add(floor);
+
+      // Carved Stone Side Railings with Spiral Relief
+      const railGeo = new THREE.BoxGeometry(0.8, 1.6, CHUNK_LENGTH);
+      const leftRail = new THREE.Mesh(railGeo, carvedWallMat);
+      leftRail.position.set(-3.5, 0.5, 0);
+      const rightRail = new THREE.Mesh(railGeo, carvedWallMat);
+      rightRail.position.set(3.5, 0.5, 0);
+      chunk.add(leftRail);
+      chunk.add(rightRail);
+
+      // Ancient Stone Pillars with Emerald Gems at intervals (Exact match to Image 1 & 2)
+      const pillarGeo = new THREE.CylinderGeometry(0.5, 0.6, 4.2, 12);
+      const pL = new THREE.Mesh(pillarGeo, carvedWallMat);
+      pL.position.set(-3.4, 1.8, 0);
+      const pR = new THREE.Mesh(pillarGeo, carvedWallMat);
+      pR.position.set(3.4, 1.8, 0);
+      chunk.add(pL);
+      chunk.add(pR);
+
+      // Glowing Green Emerald Gems on Top of Pillars
+      const gemGeo = new THREE.OctahedronGeometry(0.38, 0);
+      const gemL = new THREE.Mesh(gemGeo, emeraldGemMat);
+      gemL.position.set(-3.4, 4.1, 0);
+      const gemR = new THREE.Mesh(gemGeo, emeraldGemMat);
+      gemR.position.set(3.4, 4.1, 0);
+      chunk.add(gemL);
+      chunk.add(gemR);
+
+      // Floating Mountain Rocks & Pine Trees in Distance
+      const rockGeo = new THREE.DodecahedronGeometry(5 + Math.random() * 4, 1);
+      const rock = new THREE.Mesh(rockGeo, carvedWallMat);
+      const rockSide = Math.random() < 0.5 ? -18 : 18;
+      rock.position.set(rockSide, -4, 0);
+      chunk.add(rock);
+
+      // Pine Tree on Cliff (Exact match to Image 1)
+      const treeTrunkGeo = new THREE.CylinderGeometry(0.2, 0.3, 2.5);
+      const treeTrunk = new THREE.Mesh(treeTrunkGeo, new THREE.MeshStandardMaterial({ color: 0x45230e }));
+      treeTrunk.position.set(rockSide * 0.7, 0, 0);
+      const treeLeavesGeo = new THREE.ConeGeometry(1.6, 4.5, 8);
+      const treeLeaves = new THREE.Mesh(treeLeavesGeo, new THREE.MeshStandardMaterial({ color: 0x166534 }));
+      treeLeaves.position.set(rockSide * 0.7, 2.8, 0);
+      chunk.add(treeTrunk);
+      chunk.add(treeLeaves);
+
+      scene.add(chunk);
+      return chunk;
+    };
+
+    for (let i = 0; i < CHUNK_COUNT; i++) {
+      trackChunks.push(createTrackChunk(-i * CHUNK_LENGTH));
+    }
+
+    // Save references to gameRef
     gameRef.current.scene = scene;
     gameRef.current.camera = camera;
     gameRef.current.renderer = renderer;
     gameRef.current.playerGroup = playerGroup;
     gameRef.current.monkeyGroup = monkeyGroup;
-    gameRef.current.shieldMesh = shieldMesh;
+    gameRef.current.trackChunks = trackChunks;
+    gameRef.current.cloudsList = cloudsList;
 
     gameRef.current.playerParts = {
       leftLeg,
@@ -680,75 +786,12 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     };
 
     gameRef.current.monkeyParts = {
-      leftArm: monLeftArm,
-      rightArm: monRightArm,
-      body: monTorso
+      leftArm: apeLeftArm,
+      rightArm: apeRightArm,
+      body: apeTorso
     };
 
-    // 8. GENERATE INITIAL 3D ENDLESS TRACK CORRIDOR
-    const CHUNK_LENGTH = 20;
-    const CHUNK_COUNT = 15;
-    const trackChunks = [];
-
-    const createTrackChunk = (zPos) => {
-      const chunk = new THREE.Group();
-      chunk.position.z = zPos;
-
-      // Stone Bridge Pathway (Width 6.4 units, 3 lanes)
-      const floorGeo = new THREE.BoxGeometry(6.4, 0.8, CHUNK_LENGTH);
-      const floor = new THREE.Mesh(floorGeo, stoneFloorMat);
-      floor.position.y = -0.4;
-      floor.receiveShadow = true;
-      chunk.add(floor);
-
-      // Left & Right Stone Walls
-      const wallGeo = new THREE.BoxGeometry(0.8, 2.2, CHUNK_LENGTH);
-      const leftWall = new THREE.Mesh(wallGeo, stoneWallMat);
-      leftWall.position.set(-3.4, 0.7, 0);
-      const rightWall = new THREE.Mesh(wallGeo, stoneWallMat);
-      rightWall.position.set(3.4, 0.7, 0);
-      chunk.add(leftWall);
-      chunk.add(rightWall);
-
-      // Mossy Wall Trim
-      const trimGeo = new THREE.BoxGeometry(0.9, 0.3, CHUNK_LENGTH);
-      const leftTrim = new THREE.Mesh(trimGeo, mossTrimMat);
-      leftTrim.position.set(-3.4, 1.85, 0);
-      const rightTrim = new THREE.Mesh(trimGeo, mossTrimMat);
-      rightTrim.position.set(3.4, 1.85, 0);
-      chunk.add(leftTrim);
-      chunk.add(rightTrim);
-
-      // Stone Pillars & Flaming Torch Light
-      const pillarGeo = new THREE.BoxGeometry(0.6, 3.2, 0.6);
-      const pL = new THREE.Mesh(pillarGeo, stoneWallMat);
-      pL.position.set(-3.2, 1.2, 0);
-      const pR = new THREE.Mesh(pillarGeo, stoneWallMat);
-      pR.position.set(3.2, 1.2, 0);
-      chunk.add(pL);
-      chunk.add(pR);
-
-      // Ancient Overhead Archway spanning the path
-      const archGeo = new THREE.BoxGeometry(7.2, 0.5, 0.8);
-      const arch = new THREE.Mesh(archGeo, stoneWallMat);
-      arch.position.set(0, 3.8, 0);
-      chunk.add(arch);
-
-      // Warm Torch Light
-      const torchLight = new THREE.PointLight(0xf59e0b, 1.8, 16);
-      torchLight.position.set(0, 2.6, 0);
-      chunk.add(torchLight);
-
-      scene.add(chunk);
-      return chunk;
-    };
-
-    for (let i = 0; i < CHUNK_COUNT; i++) {
-      trackChunks.push(createTrackChunk(-i * CHUNK_LENGTH));
-    }
-    gameRef.current.trackChunks = trackChunks;
-
-    // Handle Window Resize
+    // Resize handler
     const handleResize = () => {
       if (!containerRef.current || !renderer || !camera) return;
       const w = containerRef.current.clientWidth;
@@ -776,6 +819,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     g.speed = 42;
     g.coins = 0;
     g.score = 0;
+    g.powerMeter = 0;
     g.playerLane = 1;
     g.targetX = 0;
     g.currentX = 0;
@@ -785,24 +829,18 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     g.isSliding = false;
     g.slideTimer = 0;
     g.stumbleTimer = 0;
-    g.monkeyDist = 100;
-    g.powerUp.type = null;
-    g.powerUp.timeLeft = 0;
+    g.monkeyDist = 90;
 
-    // Clear active obstacles & coins in scene
+    // Clear active obstacles & coins
     g.obstacles.forEach(o => g.scene.remove(o.mesh));
     g.obstacles = [];
     g.coinsList.forEach(c => g.scene.remove(c.mesh));
     g.coinsList = [];
 
-    if (g.shieldMesh) g.shieldMesh.visible = false;
-
     setDistance(0);
     setCoins(0);
     setScore(0);
-    setActivePowerUp(null);
-    setPowerUpTimeLeft(0);
-    setMonkeyDistance(100);
+    setPowerMeter(0);
     setGameState('playing');
 
     if (audioRef.current) {
@@ -846,10 +884,9 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     if (!g.playerGroup) return;
 
     // 1. Distance & Progression
-    const speedMult = g.powerUp.type === 'boost' ? 1.7 : 1.0;
-    const currentSpeed = g.speed * speedMult;
+    const currentSpeed = g.speed;
     g.distance += currentSpeed * dt;
-    g.speed = Math.min(85, 42 + g.distance * 0.04); // Speed increases with distance
+    g.speed = Math.min(85, 42 + g.distance * 0.035);
 
     setDistance(Math.floor(g.distance));
     const computedScore = Math.floor(g.distance * 2 + g.coins * 15);
@@ -859,10 +896,10 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     // 2. Smooth Lateral Lane Movement
     g.currentX += (g.targetX - g.currentX) * (dt * 14);
     g.playerGroup.position.x = g.currentX;
-    // Dynamic body tilt during lane changing
-    g.playerGroup.rotation.z = (g.targetX - g.currentX) * -0.3;
+    // Dynamic runner tilt
+    g.playerGroup.rotation.z = (g.targetX - g.currentX) * -0.28;
 
-    // 3. Jump Physics (Parabolic arc)
+    // 3. Jump Physics (Parabolic Arc)
     if (g.isJumping) {
       g.jumpY += g.jumpVelocity * dt;
       g.jumpVelocity -= 36 * dt; // Gravity
@@ -877,7 +914,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     // 4. Slide Physics & Rotation
     if (g.isSliding) {
       g.slideTimer -= dt;
-      g.playerGroup.rotation.x = -1.25; // Lean backwards flat to slide
+      g.playerGroup.rotation.x = -1.25; // Lean backwards flat
       g.playerGroup.position.y = -0.35;
       if (g.slideTimer <= 0) {
         g.isSliding = false;
@@ -897,7 +934,6 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       g.playerParts.leftArm.rotation.x = -legAngle * 0.8;
       g.playerParts.rightArm.rotation.x = legAngle * 0.8;
     } else if (g.isJumping) {
-      // Tucked jump knees & raised arms
       if (g.playerParts.leftLeg) {
         g.playerParts.leftLeg.rotation.x = -0.7;
         g.playerParts.rightLeg.rotation.x = -0.7;
@@ -906,166 +942,112 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       }
     }
 
-    // 6. Demon Monkey Chase Dynamics
+    // 6. Demon Ape Pursuit Dynamics
     if (g.stumbleTimer > 0) {
       g.stumbleTimer -= dt;
       g.monkeyDist = 28; // Roaring right behind runner!
     } else {
-      g.monkeyDist += (100 - g.monkeyDist) * (dt * 0.8); // Slowly recedes
+      g.monkeyDist += (90 - g.monkeyDist) * (dt * 0.8);
     }
-    setMonkeyDistance(Math.round(g.monkeyDist));
 
     if (g.monkeyGroup) {
-      // Monkey position relative to player
-      const targetMonkeyZ = 2.2 + (g.monkeyDist * 0.055);
+      const targetMonkeyZ = 2.4 + (g.monkeyDist * 0.05);
       g.monkeyGroup.position.z += (targetMonkeyZ - g.monkeyGroup.position.z) * (dt * 5);
-      g.monkeyGroup.position.x = g.currentX * 0.8;
+      g.monkeyGroup.position.x = g.currentX * 0.85;
 
-      // Pounding gorilla arms animation
       if (g.monkeyParts.leftArm) {
-        const monCycle = Math.sin(g.runAnimTime * 1.4) * 0.9;
-        g.monkeyParts.leftArm.rotation.x = monCycle;
-        g.monkeyParts.rightArm.rotation.x = -monCycle;
-      }
-
-      // Monkey roar sound when dangerously close
-      g.monkeyRoarTimer -= dt;
-      if (g.monkeyDist < 35 && g.monkeyRoarTimer <= 0) {
-        if (audioRef.current) audioRef.current.playDemonRoar();
-        g.monkeyRoarTimer = 4.5;
+        const apeCycle = Math.sin(g.runAnimTime * 1.4) * 0.95;
+        g.monkeyParts.leftArm.rotation.x = apeCycle;
+        g.monkeyParts.rightArm.rotation.x = -apeCycle;
       }
     }
 
-    // 7. Power-up Timer
-    if (g.powerUp.type) {
-      g.powerUp.timeLeft -= dt;
-      setPowerUpTimeLeft(Math.ceil(g.powerUp.timeLeft));
-      if (g.shieldMesh) g.shieldMesh.visible = (g.powerUp.type === 'shield' || g.powerUp.type === 'boost');
-
-      if (g.powerUp.timeLeft <= 0) {
-        g.powerUp.type = null;
-        setActivePowerUp(null);
-        if (g.shieldMesh) g.shieldMesh.visible = false;
-      }
-    }
-
-    // 8. Track Recycling & Advancing (Endless 3D Runway)
-    const CHUNK_LENGTH = 20;
+    // 7. Track Recycling & Advancing (Endless 3D Sky Runway)
+    const CHUNK_LENGTH = 24;
     g.trackChunks.forEach(chunk => {
       chunk.position.z += currentSpeed * dt;
     });
 
-    // Recycle track chunk passing behind camera
-    if (g.trackChunks[0].position.z > 14) {
+    if (g.trackChunks[0].position.z > 16) {
       const first = g.trackChunks.shift();
       const lastZ = g.trackChunks[g.trackChunks.length - 1].position.z;
       first.position.z = lastZ - CHUNK_LENGTH;
       g.trackChunks.push(first);
 
-      // Spawn Obstacles & Coins on fresh chunk
       spawnChunkElements(first.position.z);
     }
+
+    // 8. Move Clouds
+    g.cloudsList.forEach(cloud => {
+      cloud.position.z += currentSpeed * dt * 0.4;
+      if (cloud.position.z > 20) {
+        cloud.position.z = -180 - Math.random() * 40;
+      }
+    });
 
     // 9. Move & Collide Obstacles
     for (let i = g.obstacles.length - 1; i >= 0; i--) {
       const obs = g.obstacles[i];
       obs.mesh.position.z += currentSpeed * dt;
 
-      // Collision window: player is at z = 0
+      // Collision window
       if (obs.mesh.position.z > -1.2 && obs.mesh.position.z < 1.2 && !obs.hit) {
         const laneMatches = obs.lane === 'all' || Math.abs(obs.laneX - g.currentX) < 1.1;
 
         if (laneMatches) {
           let dodged = false;
-
-          // JUMP Obstacles: Log, Spikes
           if (obs.type === 'log' || obs.type === 'spikes') {
-            if (g.isJumping && g.jumpY > 1.2) {
-              dodged = true;
-            }
-          }
-          // SLIDE Obstacles: Fire Ring, Archway
-          else if (obs.type === 'fire_ring') {
-            if (g.isSliding) {
-              dodged = true;
-            }
+            if (g.isJumping && g.jumpY > 1.2) dodged = true;
+          } else if (obs.type === 'fire_ring') {
+            if (g.isSliding) dodged = true;
           }
 
           if (!dodged) {
             obs.hit = true;
-
-            // Shield or Mega Boost absorbs collision!
-            if (g.powerUp.type === 'shield' || g.powerUp.type === 'boost') {
-              if (g.powerUp.type === 'shield') {
-                g.powerUp.type = null;
-                setActivePowerUp(null);
-                if (g.shieldMesh) g.shieldMesh.visible = false;
-              }
-              if (audioRef.current) audioRef.current.playStumble();
+            if (g.monkeyDist < 35) {
+              triggerGameOver();
+              return;
             } else {
-              // Stumble or Caught!
-              if (g.monkeyDist < 35) {
-                // Monkey tackles runner -> Game Over!
-                triggerGameOver();
-                return;
-              } else {
-                // First stumble: monkey rushes right behind!
-                g.stumbleTimer = 4.0;
-                g.monkeyDist = 28;
-                if (audioRef.current) {
-                  audioRef.current.playStumble();
-                  audioRef.current.playDemonRoar();
-                }
+              g.stumbleTimer = 4.0;
+              g.monkeyDist = 28;
+              if (audioRef.current) {
+                audioRef.current.playStumble();
+                audioRef.current.playDemonRoar();
               }
             }
           }
         }
       }
 
-      // Remove obstacles behind camera
-      if (obs.mesh.position.z > 14) {
+      if (obs.mesh.position.z > 16) {
         g.scene.remove(obs.mesh);
         g.obstacles.splice(i, 1);
       }
     }
 
-    // 10. Move & Collect 3D Coins & Power-ups
+    // 10. Move & Collect 3D Coins
     for (let i = g.coinsList.length - 1; i >= 0; i--) {
       const c = g.coinsList[i];
       c.mesh.position.z += currentSpeed * dt;
-      c.mesh.rotation.y += dt * 4; // 3D Coin Spin
+      c.mesh.rotation.y += dt * 4;
 
-      // Coin Magnet: pull toward player
-      if (g.powerUp.type === 'magnet' && c.type === 'coin') {
-        c.mesh.position.x += (g.currentX - c.mesh.position.x) * (dt * 10);
-        c.mesh.position.y += ((g.jumpY + 0.8) - c.mesh.position.y) * (dt * 10);
-      }
-
-      // Collect detection
       const inZ = Math.abs(c.mesh.position.z) < 1.4;
       const inX = Math.abs(c.mesh.position.x - g.currentX) < 1.0;
       const inY = Math.abs(c.mesh.position.y - (g.jumpY + 0.8)) < 1.5;
 
       if (inZ && inX && inY) {
-        if (c.type === 'coin') {
-          g.coins += c.value;
-          setCoins(g.coins);
-          if (audioRef.current) audioRef.current.playCoinDing();
-        } else if (c.type === 'powerup') {
-          g.powerUp.type = c.subType;
-          g.powerUp.timeLeft = 10;
-          setActivePowerUp(c.subType);
-          setPowerUpTimeLeft(10);
-          if (audioRef.current) audioRef.current.playPowerUp();
-        }
+        g.coins += 1;
+        setCoins(g.coins);
+        g.powerMeter = Math.min(100, g.powerMeter + 2.5);
+        setPowerMeter(g.powerMeter);
+        if (audioRef.current) audioRef.current.playCoinDing();
 
         g.scene.remove(c.mesh);
         g.coinsList.splice(i, 1);
         continue;
       }
 
-      // Remove past camera
-      if (c.mesh.position.z > 14) {
+      if (c.mesh.position.z > 16) {
         g.scene.remove(c.mesh);
         g.coinsList.splice(i, 1);
       }
@@ -1073,23 +1055,22 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
   };
 
   // =========================================================================
-  // SPAWN 3D OBSTACLES, COINS & POWER-UPS ON FRESH CHUNKS
+  // SPAWN 3D OBSTACLES & COINS
   // =========================================================================
   const spawnChunkElements = (zPos) => {
     const g = gameRef.current;
     if (!g.scene) return;
 
-    // 1. Spawn Obstacles (35% chance)
-    if (Math.random() < 0.38) {
-      const types = ['log', 'fire_ring', 'spikes'];
+    // 1. Obstacles (35% chance)
+    if (Math.random() < 0.36) {
+      const types = ['log', 'spikes', 'fire_ring'];
       const chosenType = types[Math.floor(Math.random() * types.length)];
       const lane = chosenType === 'fire_ring' ? 'all' : Math.floor(Math.random() * 3);
-      const laneX = lane === 'all' ? 0 : (lane - 1) * 1.8;
+      const laneX = lane === 'all' ? 0 : (lane - 1) * 1.85;
 
       let mesh = null;
 
       if (chosenType === 'log') {
-        // Ancient Fallen Wooden Log across the lane
         const logGeo = new THREE.CylinderGeometry(0.35, 0.35, 2.2, 16);
         const logMat = new THREE.MeshStandardMaterial({ color: 0x542c11, roughness: 0.85 });
         mesh = new THREE.Mesh(logGeo, logMat);
@@ -1097,7 +1078,6 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         mesh.position.set(laneX, 0.35, zPos);
         mesh.castShadow = true;
       } else if (chosenType === 'spikes') {
-        // Ancient Low Stone Hurdle with Sharp Spikes
         mesh = new THREE.Group();
         const baseGeo = new THREE.BoxGeometry(2.0, 0.45, 0.6);
         const baseMat = new THREE.MeshStandardMaterial({ color: 0x374151 });
@@ -1105,7 +1085,6 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         base.position.y = 0.22;
         mesh.add(base);
 
-        // 4 Steel Spikes
         const spikeGeo = new THREE.ConeGeometry(0.14, 0.6, 10);
         const spikeMat = new THREE.MeshStandardMaterial({ color: 0xe5e7eb, metalness: 0.8 });
         for (let s = -3; s <= 3; s += 2) {
@@ -1115,14 +1094,12 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         }
         mesh.position.set(laneX, 0, zPos);
       } else if (chosenType === 'fire_ring') {
-        // Low Flaming Fire Ring Arch (Slide Underneath!)
         mesh = new THREE.Group();
         const archMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.9 });
-        const archTop = new THREE.Mesh(new THREE.BoxGeometry(5.8, 0.6, 0.6), archMat);
-        archTop.position.set(0, 1.45, 0); // Low enough to hit unless sliding!
+        const archTop = new THREE.Mesh(new THREE.BoxGeometry(6.0, 0.6, 0.6), archMat);
+        archTop.position.set(0, 1.45, 0);
         mesh.add(archTop);
 
-        // Fire Torus Ring
         const fireTorus = new THREE.Mesh(
           new THREE.TorusGeometry(1.4, 0.2, 12, 24),
           new THREE.MeshBasicMaterial({ color: 0xf59e0b })
@@ -1135,45 +1112,16 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
 
       if (mesh) {
         g.scene.add(mesh);
-        g.obstacles.push({
-          mesh,
-          type: chosenType,
-          lane,
-          laneX,
-          hit: false
-        });
-        return; // Don't place coins inside obstacle
+        g.obstacles.push({ mesh, type: chosenType, lane, laneX, hit: false });
+        return;
       }
     }
 
-    // 2. Spawn Power-ups (5% chance)
-    if (Math.random() < 0.05) {
-      const powerTypes = ['magnet', 'shield', 'boost'];
-      const subType = powerTypes[Math.floor(Math.random() * powerTypes.length)];
-      const lane = Math.floor(Math.random() * 3);
-      const laneX = (lane - 1) * 1.8;
-
-      const pOrbGeo = new THREE.SphereGeometry(0.45, 16, 16);
-      const pColor = subType === 'magnet' ? 0xef4444 : subType === 'shield' ? 0x38bdf8 : 0xf59e0b;
-      const pOrbMat = new THREE.MeshBasicMaterial({ color: pColor, wireframe: true });
-      const pMesh = new THREE.Mesh(pOrbGeo, pOrbMat);
-      pMesh.position.set(laneX, 0.9, zPos);
-
-      g.scene.add(pMesh);
-      g.coinsList.push({
-        mesh: pMesh,
-        type: 'powerup',
-        subType,
-        value: 0
-      });
-      return;
-    }
-
-    // 3. Spawn 3D Golden Coin Lines (45% chance)
+    // 2. 3D Golden Coins (45% chance)
     if (Math.random() < 0.45) {
       const lane = Math.floor(Math.random() * 3);
-      const laneX = (lane - 1) * 1.8;
-      const coinGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.08, 16);
+      const laneX = (lane - 1) * 1.85;
+      const coinGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.08, 16);
       const coinMat = new THREE.MeshStandardMaterial({
         color: 0xfbbf24,
         metalness: 0.95,
@@ -1185,11 +1133,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         cMesh.rotation.x = Math.PI / 2;
         cMesh.position.set(laneX, 0.75, zPos + (c * 2.5));
         g.scene.add(cMesh);
-        g.coinsList.push({
-          mesh: cMesh,
-          type: 'coin',
-          value: 1
-        });
+        g.coinsList.push({ mesh: cMesh, value: 1 });
       }
     }
   };
@@ -1222,173 +1166,167 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
   return (
     <div
       style={{
-        position: isFullscreen ? 'fixed' : 'relative',
-        inset: isFullscreen ? 0 : 'auto',
-        zIndex: isFullscreen ? 99999 : 1,
+        position: 'relative',
         width: '100%',
-        height: isFullscreen ? '100dvh' : '520px',
-        maxWidth: isFullscreen ? '100%' : '960px',
+        height: '560px',
+        maxWidth: '960px',
         margin: '0 auto',
-        borderRadius: isFullscreen ? 0 : '22px',
+        borderRadius: '24px',
         overflow: 'hidden',
-        background: '#0a1c14',
+        background: '#040d0a',
         display: 'flex',
         flexDirection: 'column',
-        boxShadow: '0 20px 50px rgba(0,0,0,0.85), 0 0 30px rgba(245, 158, 11, 0.3)',
-        border: '1.5px solid rgba(245, 158, 11, 0.45)',
+        boxShadow: '0 25px 60px rgba(0,0,0,0.9), 0 0 30px rgba(245, 158, 11, 0.35)',
+        border: '2px solid rgba(245, 158, 11, 0.5)',
         userSelect: 'none',
         touchAction: 'none'
       }}
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Top Authentic Temple Run HUD */}
+      {/* =========================================================================
+          AUTHENTIC TEMPLE RUN HUD (EXACT REPLICA OF USER SCREENSHOTS)
+          ========================================================================= */}
+
+      {/* TOP LEFT: Carved Stone Totem Power Meter with Green Running Man */}
       <div style={{
         position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        padding: '14px 18px',
+        top: 14,
+        left: 14,
+        zIndex: 25,
         display: 'flex',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.85) 0%, transparent 100%)',
-        zIndex: 20,
-        color: '#fff'
+        gap: '6px'
       }}>
-        {/* Distance Run */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {onBack && (
-            <button
-              onClick={onBack}
-              style={{
-                background: 'rgba(0,0,0,0.5)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: '50%',
-                width: '36px',
-                height: '36px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                cursor: 'pointer'
-              }}
-            >
-              <ArrowLeft size={18} />
-            </button>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              🏃 Distance Run
-            </span>
-            <span style={{ fontSize: '1.3rem', fontWeight: 900, fontFamily: 'monospace', color: '#fff' }}>
-              {distance}m
-            </span>
-          </div>
-        </div>
-
-        {/* Demon Monkey Danger Alert */}
+        {/* Ancient Stone Totem Medallion */}
         <div style={{
+          width: '56px',
+          height: '56px',
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #44403c 0%, #292524 100%)',
+          border: '3px solid #78716c',
+          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.8), 0 4px 15px rgba(0,0,0,0.6)',
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
-          gap: '3px',
-          background: 'rgba(0,0,0,0.6)',
-          padding: '4px 14px',
-          borderRadius: '16px',
-          border: monkeyDistance < 40 ? '1.5px solid #ef4444' : '1px solid rgba(245, 158, 11, 0.4)'
+          justifyContent: 'center',
+          position: 'relative'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.74rem', color: monkeyDistance < 40 ? '#ef4444' : '#fbbf24', fontWeight: 900 }}>
-            <span>👹 Demon Monkey</span>
-            <span>{monkeyDistance < 40 ? '⚠️ DANGER!' : 'CHASING'}</span>
-          </div>
-          <div style={{ width: '85px', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{
-              width: `${100 - monkeyDistance}%`,
-              height: '100%',
-              background: monkeyDistance < 40 ? 'linear-gradient(90deg, #f59e0b, #ef4444)' : '#10b981',
-              transition: 'width 0.2s ease'
-            }} />
-          </div>
-        </div>
-
-        {/* Coins & Audio/Fullscreen */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(245, 158, 11, 0.22)', padding: '5px 12px', borderRadius: '14px', border: '1px solid rgba(245, 158, 11, 0.5)' }}>
-            <span style={{ fontSize: '1.1rem' }}>🪙</span>
-            <span style={{ fontWeight: 900, fontSize: '1.1rem', color: '#fbbf24', fontFamily: 'monospace' }}>
-              {coins}
-            </span>
+          {/* Glowing Green Running Icon */}
+          <div style={{
+            fontSize: '1.6rem',
+            filter: 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.9))'
+          }}>
+            🏃
           </div>
 
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <button
-              onClick={toggleSound}
-              style={{
-                background: 'rgba(0,0,0,0.5)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: '50%',
-                width: '36px',
-                height: '36px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                cursor: 'pointer'
-              }}
-            >
-              {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-            </button>
-
-            <button
-              onClick={() => setIsFullscreen(prev => !prev)}
-              style={{
-                background: 'rgba(0,0,0,0.5)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: '50%',
-                width: '36px',
-                height: '36px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                cursor: 'pointer'
-              }}
-            >
-              {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            </button>
-          </div>
+          {/* Circular Progress Gauge */}
+          <svg style={{ position: 'absolute', inset: -3, width: '62px', height: '62px', transform: 'rotate(-90deg)' }}>
+            <circle
+              cx="31"
+              cy="31"
+              r="26"
+              fill="transparent"
+              stroke="#10b981"
+              strokeWidth="3.5"
+              strokeDasharray="163"
+              strokeDashoffset={163 - (163 * powerMeter) / 100}
+              strokeLinecap="round"
+            />
+          </svg>
         </div>
       </div>
 
-      {/* Active Power-up Gauge */}
-      {activePowerUp && (
+      {/* TOP RIGHT: Carved Ancient Stone Tablets (Score & Coins with Emerald Gems) */}
+      <div style={{
+        position: 'absolute',
+        top: 14,
+        right: 14,
+        zIndex: 25,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        alignItems: 'flex-end'
+      }}>
+        {/* Score Stone Tablet */}
         <div style={{
-          position: 'absolute',
-          top: '68px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 20,
-          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.95), rgba(234, 88, 12, 0.95))',
-          padding: '6px 18px',
-          borderRadius: '20px',
-          color: '#fff',
-          fontWeight: 900,
-          fontSize: '0.84rem',
+          background: 'linear-gradient(180deg, #44403c 0%, #292524 100%)',
+          border: '2.5px solid #78716c',
+          borderRadius: '16px',
+          padding: '4px 14px',
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          boxShadow: '0 4px 18px rgba(245, 158, 11, 0.55)'
+          boxShadow: '0 4px 15px rgba(0,0,0,0.6)'
         }}>
-          <span>{activePowerUp === 'magnet' ? '🧲 COIN MAGNET' : activePowerUp === 'shield' ? '🛡️ TEMPLE SHIELD' : '⚡ SPRINT BOOST'}</span>
-          <span style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 8px', borderRadius: '10px' }}>
-            {powerUpTimeLeft}s
+          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
+          <span style={{
+            fontFamily: 'serif, monospace',
+            fontSize: '1.25rem',
+            fontWeight: 900,
+            color: '#fbbf24',
+            letterSpacing: '1px'
+          }}>
+            {score}
           </span>
         </div>
+
+        {/* Coins Stone Tablet with Gold Diamond Icon */}
+        <div style={{
+          background: 'linear-gradient(180deg, #44403c 0%, #292524 100%)',
+          border: '2.5px solid #78716c',
+          borderRadius: '16px',
+          padding: '3px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.6)'
+        }}>
+          <span style={{ color: '#fbbf24', fontSize: '1rem' }}>◆</span>
+          <span style={{
+            fontFamily: 'serif, monospace',
+            fontSize: '1.15rem',
+            fontWeight: 900,
+            color: '#fef08a'
+          }}>
+            {coins}
+          </span>
+        </div>
+      </div>
+
+      {/* BOTTOM RIGHT: Carved Stone Pause Button (Exact match to Image 1 & 2) */}
+      {gameState === 'playing' && (
+        <button
+          onClick={() => setGameState('paused')}
+          style={{
+            position: 'absolute',
+            bottom: 18,
+            right: 18,
+            zIndex: 25,
+            width: '54px',
+            height: '54px',
+            borderRadius: '16px',
+            background: 'linear-gradient(180deg, #44403c 0%, #292524 100%)',
+            border: '2.5px solid #78716c',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.6)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'column',
+            gap: '2px'
+          }}
+        >
+          {/* Gold Pause Bars */}
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <div style={{ width: '5px', height: '18px', background: '#fbbf24', borderRadius: '2px' }} />
+            <div style={{ width: '5px', height: '18px', background: '#fbbf24', borderRadius: '2px' }} />
+          </div>
+          <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 4px #10b981' }} />
+        </button>
       )}
 
-      {/* WebGL 3D Container */}
+      {/* 3D WebGL Canvas Container */}
       <div
         ref={containerRef}
         style={{
@@ -1398,126 +1336,12 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         }}
       />
 
-      {/* Mobile Touch D-Pad / Move Controls */}
-      {gameState === 'playing' && (
-        <div style={{
-          position: 'absolute',
-          bottom: 18,
-          left: 18,
-          right: 18,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-end',
-          pointerEvents: 'none',
-          zIndex: 30
-        }}>
-          {/* Left / Right Lane Shifts */}
-          <div style={{ display: 'flex', gap: '12px', pointerEvents: 'auto' }}>
-            <button
-              type="button"
-              onClick={moveLeft}
-              style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '20px',
-                background: 'rgba(15, 23, 42, 0.8)',
-                border: '2px solid rgba(251, 191, 36, 0.7)',
-                backdropFilter: 'blur(8px)',
-                color: '#fff',
-                fontSize: '1.5rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 18px rgba(0,0,0,0.6)',
-                cursor: 'pointer'
-              }}
-            >
-              <ChevronLeft size={32} color="#fbbf24" />
-            </button>
-            <button
-              type="button"
-              onClick={moveRight}
-              style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '20px',
-                background: 'rgba(15, 23, 42, 0.8)',
-                border: '2px solid rgba(251, 191, 36, 0.7)',
-                backdropFilter: 'blur(8px)',
-                color: '#fff',
-                fontSize: '1.5rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 18px rgba(0,0,0,0.6)',
-                cursor: 'pointer'
-              }}
-            >
-              <ChevronRight size={32} color="#fbbf24" />
-            </button>
-          </div>
-
-          {/* Jump / Slide Action Buttons */}
-          <div style={{ display: 'flex', gap: '12px', pointerEvents: 'auto' }}>
-            <button
-              type="button"
-              onClick={slide}
-              style={{
-                width: '66px',
-                height: '66px',
-                borderRadius: '20px',
-                background: 'linear-gradient(135deg, rgba(234, 88, 12, 0.9), rgba(194, 65, 12, 0.9))',
-                border: '2px solid #fff',
-                backdropFilter: 'blur(8px)',
-                color: '#fff',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 900,
-                fontSize: '0.72rem',
-                boxShadow: '0 6px 20px rgba(234, 88, 12, 0.55)',
-                cursor: 'pointer'
-              }}
-            >
-              <ArrowDown size={24} color="#fff" />
-              SLIDE
-            </button>
-
-            <button
-              type="button"
-              onClick={jump}
-              style={{
-                width: '72px',
-                height: '72px',
-                borderRadius: '22px',
-                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                border: '2.5px solid #fff',
-                backdropFilter: 'blur(8px)',
-                color: '#fff',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 900,
-                fontSize: '0.76rem',
-                boxShadow: '0 6px 24px rgba(245, 158, 11, 0.7)',
-                cursor: 'pointer'
-              }}
-            >
-              <ArrowUp size={28} color="#fff" />
-              JUMP
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Start Game Overlay */}
+      {/* Start Game Menu Overlay */}
       {gameState === 'menu' && (
         <div style={{
           position: 'absolute',
           inset: 0,
-          background: 'linear-gradient(180deg, rgba(0,0,0,0.65) 0%, rgba(10, 28, 20, 0.95) 100%)',
+          background: 'linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(26, 16, 5, 0.94) 100%)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -1528,7 +1352,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
           backdropFilter: 'blur(8px)'
         }}>
           <div style={{
-            fontSize: '3.6rem',
+            fontSize: '3.8rem',
             marginBottom: '8px',
             filter: 'drop-shadow(0 6px 15px rgba(245, 158, 11, 0.8))'
           }}>
@@ -1539,15 +1363,16 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
             fontSize: '2.4rem',
             fontWeight: 900,
             margin: '0 0 6px 0',
+            fontFamily: 'serif, sans-serif',
             background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #ea580c 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
-            letterSpacing: '1.5px'
+            letterSpacing: '2px'
           }}>
-            TEMPLE RUN 3D
+            TEMPLE RUN
           </h1>
-          <p style={{ color: '#d1d5db', fontSize: '0.92rem', margin: '0 0 20px 0', maxWidth: '380px' }}>
-            Steal the Golden Idol from the ancient temple & sprint through 3D mossy corridors to escape the Demon Monkey!
+          <p style={{ color: '#fed7aa', fontSize: '0.92rem', margin: '0 0 20px 0', maxWidth: '380px', fontWeight: 600 }}>
+            Swipe with your finger to Jump, Slide & Turn across the floating sky temple!
           </p>
 
           <div style={{
@@ -1555,18 +1380,18 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
             gap: '16px',
             marginBottom: '24px',
             background: 'rgba(0,0,0,0.5)',
-            padding: '12px 22px',
+            padding: '12px 24px',
             borderRadius: '18px',
-            border: '1px solid rgba(255,255,255,0.15)'
+            border: '1.5px solid rgba(245, 158, 11, 0.4)'
           }}>
             <div style={{ textAlign: 'center' }}>
               <span style={{ fontSize: '0.72rem', color: '#9ca3af', fontWeight: 700 }}>HIGH SCORE</span>
-              <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#fbbf24' }}>{highScore}</div>
+              <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#fbbf24' }}>{highScore}</div>
             </div>
             <div style={{ width: '1px', background: 'rgba(255,255,255,0.2)' }} />
             <div style={{ textAlign: 'center' }}>
               <span style={{ fontSize: '0.72rem', color: '#9ca3af', fontWeight: 700 }}>CONTROLS</span>
-              <div style={{ fontSize: '0.86rem', fontWeight: 800, color: '#38bdf8' }}>Swipe or ⬅️ ⬆️ ⬇️ ➡️</div>
+              <div style={{ fontSize: '0.86rem', fontWeight: 800, color: '#38bdf8' }}>Swipe Up / Down / Left / Right</div>
             </div>
           </div>
 
@@ -1584,12 +1409,61 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
-              boxShadow: '0 8px 32px rgba(234, 88, 12, 0.7)',
-              transition: 'transform 0.15s ease'
+              boxShadow: '0 8px 32px rgba(234, 88, 12, 0.7)'
             }}
           >
-            <Play size={22} fill="#fff" /> START ESCAPE
+            RUN NOW
           </button>
+        </div>
+      )}
+
+      {/* Paused Overlay */}
+      {gameState === 'paused' && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(0,0,0,0.75)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 40,
+          backdropFilter: 'blur(8px)'
+        }}>
+          <h2 style={{ color: '#fbbf24', fontSize: '2rem', fontWeight: 900, marginBottom: '20px' }}>GAME PAUSED</h2>
+          <button
+            onClick={() => setGameState('playing')}
+            style={{
+              background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+              border: '2px solid #fff',
+              color: '#fff',
+              fontSize: '1.05rem',
+              fontWeight: 900,
+              padding: '12px 36px',
+              borderRadius: '22px',
+              cursor: 'pointer',
+              marginBottom: '12px'
+            }}
+          >
+            RESUME RUN
+          </button>
+          {onBack && (
+            <button
+              onClick={onBack}
+              style={{
+                background: 'rgba(255,255,255,0.15)',
+                border: '1px solid rgba(255,255,255,0.3)',
+                color: '#fff',
+                fontSize: '0.9rem',
+                fontWeight: 800,
+                padding: '10px 24px',
+                borderRadius: '20px',
+                cursor: 'pointer'
+              }}
+            >
+              Exit to Menu
+            </button>
+          )}
         </div>
       )}
 
@@ -1608,7 +1482,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
           textAlign: 'center',
           backdropFilter: 'blur(10px)'
         }}>
-          <div style={{ fontSize: '3.2rem', marginBottom: '8px' }}>
+          <div style={{ fontSize: '3.4rem', marginBottom: '8px' }}>
             👹💥
           </div>
 
@@ -1663,7 +1537,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
                 boxShadow: '0 6px 28px rgba(234, 88, 12, 0.65)'
               }}
             >
-              <RotateCcw size={18} /> PLAY AGAIN
+              RUN AGAIN
             </button>
 
             {onBack && (
