@@ -3,7 +3,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { 
   X, Camera, SwitchCamera, Image as ImageIcon, Music, Palette, Sparkles, 
   Send, Loader2, Type, Trash2, Smile, Disc, Check, FlipHorizontal,
-  RotateCcw, Volume2, VolumeX, Clock, Play, Pause, ChevronRight
+  RotateCcw, Volume2, VolumeX, Clock, Play, Pause, ChevronRight, Layers
 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { registerGlobalMusicAudio, stopGlobalMusicAudio, playSound } from '../../utils/audio';
@@ -42,6 +42,17 @@ const IMAGE_FILTERS = [
   { id: 'vivid', label: '🌈 Vivid', css: 'saturate(1.9) contrast(1.15)' }
 ];
 
+const LIVE_WALLPAPERS = [
+  { id: 'none', label: 'Off', icon: '🚫' },
+  { id: 'starry_galaxy_live', label: 'Galaxy', icon: '🌌' },
+  { id: 'matrix_code_live', label: 'Matrix', icon: '🟢' },
+  { id: 'cyber_grid_live', label: 'Cyber', icon: '⚡' },
+  { id: 'love_hearts_live', label: 'Hearts', icon: '💖' },
+  { id: 'nature_forest_live', label: 'Nature', icon: '🍃' },
+  { id: 'ocean_waves_live', label: 'Ocean', icon: '🌊' },
+  { id: 'firefly_night_live', label: 'Fireflies', icon: '✨' }
+];
+
 export default function CreateVibeModal({ onClose, onCreated }) {
   const { user, token } = useContext(AuthContext);
 
@@ -50,7 +61,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [facingMode, setFacingMode] = useState('user'); // 'user' | 'environment'
   const [cameraActive, setCameraActive] = useState(false);
 
-  // Active floating drawer: null | 'text' | 'bg_color' | 'stickers' | 'filters'
+  // Active floating drawer: null | 'text' | 'bg_color' | 'stickers' | 'filters' | 'live_bg'
   const [activePanel, setActivePanel] = useState(null);
 
   // Text & Typography
@@ -68,6 +79,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [selectedMediaFile, setSelectedMediaFile] = useState(null);
   const [imageFilter, setImageFilter] = useState('none');
   const [imageZoom, setImageZoom] = useState(1.0);
+  const [imageOpacity, setImageOpacity] = useState(1.0);
   const [imagePos, setImagePos] = useState({ x: 50, y: 50 });
 
   // Canvas styling
@@ -337,28 +349,49 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const handlePointerMove = (e) => {
     if (!stageRef.current) return;
 
-    // 1. Multi-touch pinch-to-scale
-    if (e.touches && e.touches.length >= 2 && touchStartDistRef.current) {
+    // 1. Multi-touch pinch-to-scale (works for Emoji Stickers, Text, Music, Photo/Video)
+    if (e.touches && e.touches.length >= 2) {
       const currentDist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
-      const ratio = currentDist / touchStartDistRef.current;
 
-      if (selectedElement === 'music') {
+      // Lazily initialize touch start distance on the first multi-touch frame
+      if (!touchStartDistRef.current || touchStartDistRef.current <= 0) {
+        touchStartDistRef.current = currentDist;
+        const targetEl = selectedElement || draggingElement;
+        if (targetEl === 'music') initialPinchScaleRef.current = musicScale;
+        else if (targetEl === 'text') initialPinchScaleRef.current = textSize;
+        else if (targetEl === 'image') initialPinchScaleRef.current = imageZoom;
+        else if (typeof targetEl === 'string' && targetEl.startsWith('st_')) {
+          const st = stickersList.find(s => s.id === targetEl);
+          initialPinchScaleRef.current = st ? (st.scale || 1.3) : 1.3;
+        } else {
+          initialPinchScaleRef.current = imageZoom;
+        }
+        setDraggingElement(null);
+        return;
+      }
+
+      const ratio = currentDist / touchStartDistRef.current;
+      const target = selectedElement || draggingElement;
+
+      if (target === 'music') {
         const nextScale = Number((initialPinchScaleRef.current * ratio).toFixed(2));
-        setMusicScale(Math.min(2.4, Math.max(0.6, nextScale)));
-      } else if (selectedElement === 'text') {
+        setMusicScale(Math.min(3.0, Math.max(0.4, nextScale)));
+      } else if (target === 'text') {
         const nextScale = Number((initialPinchScaleRef.current * ratio).toFixed(2));
-        setTextSize(Math.min(2.8, Math.max(0.8, nextScale)));
-      } else if (selectedElement && typeof selectedElement === 'string' && selectedElement.startsWith('st_')) {
+        setTextSize(Math.min(3.5, Math.max(0.6, nextScale)));
+      } else if (typeof target === 'string' && target.startsWith('st_')) {
         const nextScale = Number((initialPinchScaleRef.current * ratio).toFixed(2));
-        setStickersList(prev => prev.map(s => s.id === selectedElement ? { ...s, scale: Math.min(3.0, Math.max(0.5, nextScale)) } : s));
+        setStickersList(prev => prev.map(s => s.id === target ? { ...s, scale: Math.min(4.0, Math.max(0.4, nextScale)) } : s));
       } else {
         const nextZoom = Number((initialPinchScaleRef.current * ratio).toFixed(2));
         setImageZoom(Math.min(4.0, Math.max(0.35, nextZoom)));
       }
       return;
+    } else {
+      touchStartDistRef.current = null;
     }
 
     // 2. Single-finger drag with relative smooth displacement
@@ -491,6 +524,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       imagePos: { x: imagePos.x, y: imagePos.y },
       imageFit: 'cover',
       imageZoom,
+      imageOpacity: Number(imageOpacity) || 1.0,
       imageFilter,
       textSize,
       textAlign,
@@ -539,6 +573,25 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       ref={stageRef}
       onMouseMove={handlePointerMove}
       onMouseUp={handlePointerUp}
+      onTouchStart={(e) => {
+        if (e.touches && e.touches.length >= 2) {
+          const dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          touchStartDistRef.current = dist;
+          const targetEl = selectedElement || draggingElement;
+          if (targetEl === 'music') initialPinchScaleRef.current = musicScale;
+          else if (targetEl === 'text') initialPinchScaleRef.current = textSize;
+          else if (targetEl === 'image') initialPinchScaleRef.current = imageZoom;
+          else if (typeof targetEl === 'string' && targetEl.startsWith('st_')) {
+            const st = stickersList.find(s => s.id === targetEl);
+            initialPinchScaleRef.current = st ? (st.scale || 1.3) : 1.3;
+          } else {
+            initialPinchScaleRef.current = imageZoom;
+          }
+        }
+      }}
       onTouchMove={handlePointerMove}
       onTouchEnd={handlePointerUp}
       style={{
@@ -626,7 +679,9 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               cursor: 'grab',
               touchAction: 'none',
               zIndex: 10,
-              filter: IMAGE_FILTERS.find(f => f.id === imageFilter)?.css || 'none'
+              filter: IMAGE_FILTERS.find(f => f.id === imageFilter)?.css || 'none',
+              opacity: imageOpacity,
+              transition: 'opacity 0.15s ease'
             }}
           >
             {mediaType === 'video' ? (
@@ -914,6 +969,35 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             title="Add Stickers"
           >
             <Smile size={18} />
+          </button>
+
+          {/* 🌌 (3D Live Animated Wallpaper & Opacity) */}
+          <button
+            type="button"
+            onClick={() => setActivePanel(activePanel === 'live_bg' ? null : 'live_bg')}
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: (animatedBg !== 'none' || activePanel === 'live_bg')
+                ? 'linear-gradient(135deg, #06b6d4, #3b82f6)'
+                : 'rgba(0, 0, 0, 0.45)',
+              backdropFilter: 'blur(12px)',
+              border: (animatedBg !== 'none' || activePanel === 'live_bg')
+                ? '2px solid #38bdf8'
+                : '1px solid rgba(255, 255, 255, 0.15)',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: (animatedBg !== 'none' || activePanel === 'live_bg')
+                ? '0 0 16px rgba(56, 189, 248, 0.65)'
+                : 'none'
+            }}
+            title="3D Live Animated Wallpaper & Opacity"
+          >
+            <Layers size={18} />
           </button>
         </div>
       </div>
@@ -1374,6 +1458,96 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               {f.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* 🌌 3D Live Animated Background & Opacity Drawer */}
+      {activePanel === 'live_bg' && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '80px',
+            left: '16px',
+            right: '16px',
+            zIndex: 65,
+            background: 'rgba(10, 10, 15, 0.92)',
+            backdropFilter: 'blur(24px)',
+            borderRadius: '22px',
+            padding: '16px',
+            border: '1px solid rgba(255, 255, 255, 0.18)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            boxShadow: '0 16px 36px rgba(0,0,0,0.6)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.86rem', fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Layers size={16} /> 3D Live Animated Background
+            </span>
+            <button
+              type="button"
+              onClick={() => setActivePanel(null)}
+              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Wallpapers Horizontal Selector */}
+          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '4px' }}>
+            {LIVE_WALLPAPERS.map((w) => (
+              <button
+                key={w.id}
+                type="button"
+                onClick={() => {
+                  setAnimatedBg(w.id);
+                  if (viewMode === 'camera') {
+                    stopCameraStream();
+                    setViewMode('canvas');
+                  }
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '7px 12px',
+                  borderRadius: '16px',
+                  background: animatedBg === w.id ? 'linear-gradient(135deg, #06b6d4, #3b82f6)' : 'rgba(255, 255, 255, 0.1)',
+                  border: animatedBg === w.id ? '1.5px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#fff',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                  flexShrink: 0
+                }}
+              >
+                <span>{w.icon}</span>
+                <span>{w.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Photo / Video Opacity Slider (Lets 3D live background shine through) */}
+          <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.12)', paddingTop: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1' }}>Photo / Video Transparency</span>
+              <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8' }}>{Math.round(imageOpacity * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min="0.15"
+              max="1.0"
+              step="0.05"
+              value={imageOpacity}
+              onChange={(e) => setImageOpacity(parseFloat(e.target.value))}
+              style={{ width: '100%', accentColor: '#38bdf8', cursor: 'pointer' }}
+            />
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px' }}>
+              Opacity kam karke photo/video ke peeche se 3D animated live wallpaper floating dekhein!
+            </div>
+          </div>
         </div>
       )}
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc, Lock } from 'lucide-react';
+import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc, Lock, MessageSquare, Smile } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import { updateRecentChatSnippet, getCachedAllUsers } from '../../utils/offlineStorage';
@@ -10,6 +10,7 @@ import { useBackHandler } from '../../utils/backNavigation';
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 import SparksWalletModal from '../chat/SparksWalletModal';
 import PulseProModal from '../chat/PulseProModal';
+import { EMOJI_CATEGORIES } from '../chat/EmojiPicker';
 
 export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initialVibeId }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
@@ -40,15 +41,18 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     return 0;
   });
 
+  const hasInitializedIndexRef = useRef(false);
   useEffect(() => {
-    if (initialVibeId && vibes.length > 0) {
+    if (!hasInitializedIndexRef.current && initialVibeId && vibes.length > 0) {
       const idx = vibes.findIndex(v => String(v.id) === String(initialVibeId) || String(v._id) === String(initialVibeId));
       if (idx !== -1) {
         setCurrentIndex(idx);
         setProgress(0);
       }
+      hasInitializedIndexRef.current = true;
     }
   }, [initialVibeId, vibes]);
+
   const [progress, setProgress] = useState(0);
   const [sparksMsg, setSparksMsg] = useState('');
   const [replyText, setReplyText] = useState('');
@@ -64,12 +68,19 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
   const [showSparksWallet, setShowSparksWallet] = useState(false);
   const [showGetSparksModal, setShowGetSparksModal] = useState(false);
 
+  // Sleek Bottom Bar Modal States (Reply Sheet & Unlimited Emoji Reaction Sheet)
+  const [showReplySheet, setShowReplySheet] = useState(false);
+  const [showUnlimitedEmojiModal, setShowUnlimitedEmojiModal] = useState(false);
+  const [activeEmojiCategory, setActiveEmojiCategory] = useState('smileys');
+
   // Hardware/Swipe Back button closes submodals first, otherwise closes story viewer safely
-  useBackHandler(() => setShowGetSparksModal(false), showGetSparksModal);
-  useBackHandler(() => setShowSparksWallet(false), showSparksWallet && !showGetSparksModal);
-  useBackHandler(() => setShowSparksTipModal(false), showSparksTipModal && !showSparksWallet && !showGetSparksModal);
-  useBackHandler(() => setShowViewersSheet(false), showViewersSheet && !showSparksTipModal && !showSparksWallet && !showGetSparksModal);
-  useBackHandler(onClose, !showViewersSheet && !showSparksTipModal && !showSparksWallet && !showGetSparksModal);
+  useBackHandler(() => setShowUnlimitedEmojiModal(false), showUnlimitedEmojiModal);
+  useBackHandler(() => setShowReplySheet(false), showReplySheet && !showUnlimitedEmojiModal);
+  useBackHandler(() => setShowGetSparksModal(false), showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal);
+  useBackHandler(() => setShowSparksWallet(false), showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal);
+  useBackHandler(() => setShowSparksTipModal(false), showSparksTipModal && !showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal);
+  useBackHandler(() => setShowViewersSheet(false), showViewersSheet && !showSparksTipModal && !showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal);
+  useBackHandler(onClose, !showViewersSheet && !showSparksTipModal && !showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal);
 
   // Per-story live views dictionary keyed by vibe ID
   const [viewsByVibeId, setViewsByVibeId] = useState(() => {
@@ -439,14 +450,20 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     Boolean(currentVibe?.mediaUrl && (
       currentVibe.mediaUrl.includes('/video/') ||
       currentVibe.mediaUrl.startsWith('data:video') ||
+      currentVibe.mediaUrl.startsWith('blob:') ||
       currentVibe.mediaUrl.match(/\.(mp4|webm|mov|ogg|m4v|3gp|mkv)($|\?)/i)
     ));
 
-  // Sync video player lifecycle
+  const lastPlayedVibeIdRef = useRef(null);
+
+  // Sync video player lifecycle (only resets currentTime when changing to a DIFFERENT story)
   useEffect(() => {
     if (videoPlayerRef.current) {
       try {
-        videoPlayerRef.current.currentTime = 0;
+        if (lastPlayedVibeIdRef.current !== currentVibe?.id) {
+          lastPlayedVibeIdRef.current = currentVibe?.id;
+          videoPlayerRef.current.currentTime = 0;
+        }
         videoPlayerRef.current.volume = 1.0;
         videoPlayerRef.current.muted = isAudioMuted;
         const playPromise = videoPlayerRef.current.play();
@@ -463,20 +480,22 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     }
   }, [currentIndex, currentVibe?.id, isAudioMuted]);
 
+  const isAnySubmodalOpen = showViewersSheet || showSparksTipModal || showSparksWallet || showGetSparksModal || showReplySheet || showUnlimitedEmojiModal;
+
   useEffect(() => {
     if (videoPlayerRef.current) {
-      if (isPaused || isHolding || showViewersSheet || showSparksTipModal || showSparksWallet || showGetSparksModal) {
+      if (isPaused || isHolding || isAnySubmodalOpen) {
         try { videoPlayerRef.current.pause(); } catch (e) {}
       } else {
         try { videoPlayerRef.current.play().catch(() => {}); } catch (e) {}
       }
     }
-  }, [isPaused, isHolding, showViewersSheet, showSparksTipModal, showSparksWallet, showGetSparksModal]);
+  }, [isPaused, isHolding, isAnySubmodalOpen]);
 
   // Story Auto-Advance Progress Bar Timer (for photo/text stories; videos manage progress via onTimeUpdate)
   useEffect(() => {
     if (isCurrentStoryVideo) return;
-    if (isPaused || isHolding || showViewersSheet || showSparksTipModal || showSparksWallet || showGetSparksModal) {
+    if (isPaused || isHolding || isAnySubmodalOpen) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
@@ -1020,23 +1039,46 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
               {isCurrentStoryVideo ? (
                 <video
                   ref={videoPlayerRef}
-                  key={`video_${currentVibe.id}_${currentVibe.mediaUrl}`}
+                  key={`video_${currentVibe.id}`}
                   src={currentVibe.mediaUrl}
                   playsInline
                   webkit-playsinline="true"
                   preload="auto"
                   autoPlay
+                  loop={false}
                   muted={isAudioMuted}
                   onLoadedData={(e) => {
                     const vid = e.currentTarget;
                     vid.muted = isAudioMuted;
+                    vid.volume = 1.0;
                     const p = vid.play();
                     if (p !== undefined) {
                       p.catch(() => {
                         vid.muted = true;
-                        setIsAudioMuted(true);
                         vid.play().catch(() => {});
                       });
+                    }
+                  }}
+                  onWaiting={() => {
+                    if (!isPaused && !isHolding && !isAnySubmodalOpen) {
+                      videoPlayerRef.current?.play().catch(() => {});
+                    }
+                  }}
+                  onCanPlay={() => {
+                    if (!isPaused && !isHolding && !isAnySubmodalOpen) {
+                      videoPlayerRef.current?.play().catch(() => {});
+                    }
+                  }}
+                  onStalled={() => {
+                    if (!isPaused && !isHolding && !isAnySubmodalOpen) {
+                      videoPlayerRef.current?.play().catch(() => {});
+                    }
+                  }}
+                  onPause={() => {
+                    if (!isPaused && !isHolding && !isAnySubmodalOpen) {
+                      setTimeout(() => {
+                        videoPlayerRef.current?.play().catch(() => {});
+                      }, 150);
                     }
                   }}
                   onTimeUpdate={(e) => {
@@ -1446,113 +1488,297 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
               )}
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-              {/* Row 1: Text Reply Input (Insta / WhatsApp style) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: 'space-between' }}>
+              {/* 💬 Reply Button */}
+              <button
+                type="button"
+                onClick={() => setShowReplySheet(true)}
+                style={{
+                  flex: 1,
+                  background: 'rgba(255, 255, 255, 0.14)',
+                  backdropFilter: 'blur(16px)',
+                  border: '1px solid rgba(255, 255, 255, 0.22)',
+                  borderRadius: '24px',
+                  padding: '10px 12px',
+                  color: '#ffffff',
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <MessageSquare size={16} />
+                <span>Reply</span>
+              </button>
+
+              {/* ⚡ Tip Sparks Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (isMine) {
+                    setSparksMsg('You cannot tip your own story');
+                    setTimeout(() => setSparksMsg(''), 2500);
+                    return;
+                  }
+                  setShowSparksTipModal(true);
+                }}
+                style={{
+                  flex: 1.15,
+                  background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
+                  border: 'none',
+                  borderRadius: '24px',
+                  padding: '10px 12px',
+                  color: '#ffffff',
+                  fontSize: '0.84rem',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(245, 158, 11, 0.4)',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <Zap size={16} fill="#fff" />
+                <span>Tip Sparks</span>
+              </button>
+
+              {/* 😊 React (Unlimited Emojis) Button */}
+              <button
+                type="button"
+                onClick={() => setShowUnlimitedEmojiModal(true)}
+                style={{
+                  flex: 1,
+                  background: 'rgba(255, 255, 255, 0.14)',
+                  backdropFilter: 'blur(16px)',
+                  border: '1px solid rgba(255, 255, 255, 0.22)',
+                  borderRadius: '24px',
+                  padding: '10px 12px',
+                  color: '#ffffff',
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <Smile size={17} />
+                <span>React</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Reply Sliding Sheet (Clean & Non-intrusive) */}
+        {showReplySheet && (
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget) setShowReplySheet(false); }}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 110,
+              background: 'rgba(0, 0, 0, 0.65)',
+              backdropFilter: 'blur(10px)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'flex-end'
+            }}
+          >
+            <div
+              style={{
+                background: 'rgba(15, 23, 42, 0.98)',
+                borderTopLeftRadius: '24px',
+                borderTopRightRadius: '24px',
+                borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+                padding: '16px',
+                boxShadow: '0 -10px 40px rgba(0, 0, 0, 0.8)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#f8fafc' }}>
+                  💬 Reply to {vibeGroup?.displayName || vibeGroup?.username || 'User'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowReplySheet(false)}
+                  style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (replyText.trim()) {
                     handleReact('', 0, replyText.trim());
+                    setReplyText('');
+                    setShowReplySheet(false);
                   }
                 }}
                 style={{ display: 'flex', width: '100%', gap: '8px', alignItems: 'center' }}
               >
                 <input
                   type="text"
+                  autoFocus
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
                   placeholder={`Reply to ${vibeGroup?.displayName || 'User'}...`}
                   style={{
                     flex: 1,
-                    background: 'rgba(255,255,255,0.12)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: '20px',
-                    padding: '8px 14px',
+                    background: 'rgba(255, 255, 255, 0.12)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '24px',
+                    padding: '10px 16px',
                     color: '#fff',
-                    fontSize: '0.86rem',
+                    fontSize: '0.9rem',
                     outline: 'none'
                   }}
                 />
                 <button
                   type="submit"
+                  disabled={!replyText.trim()}
                   style={{
-                    background: 'var(--accent, #6366f1)',
+                    background: replyText.trim() ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'rgba(255, 255, 255, 0.1)',
                     color: '#fff',
                     border: 'none',
                     borderRadius: '50%',
-                    width: '38px',
-                    height: '38px',
+                    width: '42px',
+                    height: '42px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    cursor: 'pointer',
+                    cursor: replyText.trim() ? 'pointer' : 'default',
                     flexShrink: 0,
-                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)'
+                    boxShadow: replyText.trim() ? '0 4px 12px rgba(99, 102, 241, 0.5)' : 'none'
                   }}
                 >
-                  <Send size={16} />
+                  <Send size={18} />
                 </button>
               </form>
+            </div>
+          </div>
+        )}
 
-              {/* Row 2: Quick Emojis & Tip Sparks (Never cropped) */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', width: '100%' }}>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {['❤️', '🔥', '😂', '👏'].map(emoji => (
-                    <button
-                      key={emoji}
-                      onClick={() => handleReact(emoji)}
-                      style={{
-                        background: 'rgba(255,255,255,0.14)',
-                        border: '1px solid rgba(255,255,255,0.18)',
-                        borderRadius: '50%',
-                        width: '38px',
-                        height: '38px',
-                        fontSize: '1.15rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'transform 0.15s ease'
-                      }}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Tip Sparks Button */}
+        {/* Unlimited Emojis Reaction Sheet */}
+        {showUnlimitedEmojiModal && (
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget) setShowUnlimitedEmojiModal(false); }}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 110,
+              background: 'rgba(0, 0, 0, 0.65)',
+              backdropFilter: 'blur(10px)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'flex-end'
+            }}
+          >
+            <div
+              style={{
+                background: 'rgba(15, 23, 42, 0.98)',
+                borderTopLeftRadius: '24px',
+                borderTopRightRadius: '24px',
+                borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+                padding: '16px',
+                maxHeight: '62%',
+                boxShadow: '0 -10px 40px rgba(0, 0, 0, 0.8)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  😊 React with Any Emoji
+                </span>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (isMine) {
-                      setSparksMsg('You cannot tip your own story');
-                      setTimeout(() => setSparksMsg(''), 2500);
-                      return;
-                    }
-                    setShowSparksTipModal(true);
-                  }}
-                  title="Send Sparks to Author"
-                  style={{
-                    background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '16px',
-                    padding: '7px 12px',
-                    fontSize: '0.78rem',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    boxShadow: '0 3px 10px rgba(245, 158, 11, 0.4)'
-                  }}
+                  onClick={() => setShowUnlimitedEmojiModal(false)}
+                  style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
                 >
-                  <Zap size={14} fill="#fff" /> Tip Sparks
+                  <X size={18} />
                 </button>
               </div>
+
+              {/* Category Pills */}
+              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '4px' }}>
+                {EMOJI_CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setActiveEmojiCategory(cat.id)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '16px',
+                      background: activeEmojiCategory === cat.id ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'rgba(255, 255, 255, 0.1)',
+                      border: activeEmojiCategory === cat.id ? '1px solid #a5b4fc' : '1px solid rgba(255, 255, 255, 0.1)',
+                      color: '#ffffff',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      cursor: 'pointer',
+                      flexShrink: 0
+                    }}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Unlimited Emojis Grid */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(7, 1fr)',
+                  gap: '8px',
+                  overflowY: 'auto',
+                  maxHeight: '260px',
+                  padding: '6px 2px'
+                }}
+              >
+                {(EMOJI_CATEGORIES.find(c => c.id === activeEmojiCategory)?.emojis || EMOJI_CATEGORIES[0].emojis).map((em, idx) => (
+                  <button
+                    key={`${em}_${idx}`}
+                    type="button"
+                    onClick={() => {
+                      handleReact(em);
+                      setShowUnlimitedEmojiModal(false);
+                    }}
+                    style={{
+                      fontSize: '1.75rem',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '6px 0',
+                      borderRadius: '12px',
+                      transition: 'transform 0.12s ease'
+                    }}
+                  >
+                    {em}
+                  </button>
+                ))}
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Viewers Sliding Sheet (Instagram / WhatsApp style) */}
         {showViewersSheet && isMine && (
