@@ -68,22 +68,18 @@ router.post('/daily-trivia/vote', authMiddleware, async (req, res) => {
     targetOpt.votes.push(userId);
 
     const isObjectId = mongoose.Types.ObjectId.isValid(userId);
-    const updatedUser = await User.findOneAndUpdate(
-      {
-        $or: [
-          { id: userId },
-          ...(isObjectId ? [{ _id: userId }] : []),
-          { username: userId }
-        ]
-      },
-      { $inc: { pulseSparks: 20 } },
-      { new: true }
-    ).select('id pulseSparks').lean();
+    const updatedUser = await User.findOne({
+      $or: [
+        { id: userId },
+        ...(isObjectId ? [{ _id: userId }] : []),
+        { username: userId }
+      ]
+    }).select('id pulseSparks').lean();
 
     res.json({
       success: true,
-      rewardSparks: 20,
-      newSparksBalance: updatedUser?.pulseSparks || 120
+      rewardSparks: 0,
+      newSparksBalance: updatedUser?.pulseSparks || 0
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to submit vote' });
@@ -396,21 +392,20 @@ router.post('/game-score', authMiddleware, async (req, res) => {
     const isNowRank1 = rank1UserId === resolvedUserId;
     const isNowRank2 = rank2UserId === resolvedUserId;
 
-    // Performance Sparks earned for playing
-    let earnedSparks = Math.min(Math.floor(rawScore / 50), 50);
+    // Mini-games are purely for arcade skill, scores, leaderboards, and exclusive crowns (No free sparks farming)
+    const earnedSparks = 0;
 
     // Daily Gaming Task & 7-Day Streak Evaluation
     const todayStr = new Date().toISOString().split('T')[0];
     const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
     let taskCompletedToday = user.lastGamingTaskDate === todayStr;
-    let dailyTaskSparks = 0;
+    const dailyTaskSparks = 0;
     let newStreak = user.gamingStreakCount || 0;
     let unlocked7DayStreakReward = false;
 
     if (!taskCompletedToday) {
       taskCompletedToday = true;
-      dailyTaskSparks = 30; // +30 Sparks for Daily Game Task!
 
       if (user.lastGamingTaskDate === yesterdayStr) {
         newStreak = (user.gamingStreakCount || 0) + 1;
@@ -454,15 +449,13 @@ router.post('/game-score', authMiddleware, async (req, res) => {
       user.hasSilverCrown = false;
     }
 
-    // Daily #1 Champion Reward (+100 Sparks)
-    let dailyRankOneSparks = 0;
+    // Daily #1 Champion: Prestigious Gold King Crown on DP (No free sparks inflation)
+    const dailyRankOneSparks = 0;
     if (isNowRank1 && user.claimedDailyFirstReward !== todayStr) {
-      dailyRankOneSparks = 100;
       user.claimedDailyFirstReward = todayStr;
     }
 
-    const totalSparksGained = earnedSparks + dailyTaskSparks + dailyRankOneSparks;
-    user.pulseSparks = (user.pulseSparks || 0) + totalSparksGained;
+    const totalSparksGained = 0;
     await user.save();
 
     // Fetch fresh top 30 scores from MongoDB for real-time broadcast
@@ -537,33 +530,28 @@ router.post('/game-score', authMiddleware, async (req, res) => {
   }
 });
 
-// Claim Ad Reward (Rewarded Video Ad completion for Revive / Sparks)
+// Claim Ad Reward (Rewarded Video Ad completion for in-game Revive)
 router.post('/claim-ad-reward', authMiddleware, async (req, res) => {
   try {
     const { rewardType } = req.body;
     const userId = req.userId || req.user?.id || req.user?.userId;
     const isObjectId = mongoose.Types.ObjectId.isValid(userId);
 
-    const bonusSparks = rewardType === 'revive_hearts' ? 15 : 20;
-
-    const user = await User.findOneAndUpdate(
-      {
-        $or: [
-          { id: userId },
-          ...(isObjectId ? [{ _id: userId }] : []),
-          { username: userId }
-        ]
-      },
-      { $inc: { pulseSparks: bonusSparks } },
-      { new: true }
-    );
+    const user = await User.findOne({
+      $or: [
+        { id: userId },
+        ...(isObjectId ? [{ _id: userId }] : []),
+        { username: userId }
+      ]
+    }).select('id pulseSparks').lean();
 
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     res.json({
       success: true,
-      rewardSparks: bonusSparks,
-      pulseSparks: user.pulseSparks
+      rewardType: rewardType || 'revive',
+      rewardSparks: 0,
+      pulseSparks: user.pulseSparks || 0
     });
   } catch (err) {
     console.error('Error claiming ad reward:', err);

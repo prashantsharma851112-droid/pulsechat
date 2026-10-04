@@ -114,7 +114,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
     setHearts(3);
     setScreen('playing');
     setAdModalOpen(false);
-    setRestoreNotification('🎉 Revived! +3 Hearts Refilled & +15 Bonus Sparks Granted!');
+    setRestoreNotification('🎉 Revived! +3 Hearts Refilled! Back in the game!');
     setTimeout(() => setRestoreNotification(''), 4500);
 
     const token = localStorage.getItem('pulsechat_token');

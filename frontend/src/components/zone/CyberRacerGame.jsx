@@ -155,7 +155,7 @@ export default function CyberRacerGame({ onScoreUpdate, onBack }) {
   const [distance, setDistance] = useState(0);
   const [speedKmh, setSpeedKmh] = useState(0);
   const [score, setScore] = useState(0);
-  const [sparksEarned, setSparksEarned] = useState(0);
+  const [coinsCollected, setCoinsCollected] = useState(0);
   const [nitroLevel, setNitroLevel] = useState(100); // 0 to 100
   const [hasShield, setHasShield] = useState(false);
   const [highScore, setHighScore] = useState(() => {
@@ -308,7 +308,7 @@ export default function CyberRacerGame({ onScoreUpdate, onBack }) {
 
     setDistance(0);
     setScore(0);
-    setSparksEarned(0);
+    setCoinsCollected(0);
     setNitroLevel(100);
     setHasShield(false);
     setCanRevive(true);
@@ -360,10 +360,7 @@ export default function CyberRacerGame({ onScoreUpdate, onBack }) {
     const finalDistance = Math.floor(stateRef.current.distanceMeters);
     const finalScore = stateRef.current.currentScore;
     const finalCoins = stateRef.current.coinsCollected;
-
-    // Calculate earned sparks (1 spark per 2 coins + distance milestones)
-    const bonusSparks = Math.min(50, Math.floor(finalCoins / 2) + (finalDistance > 1000 ? 15 : finalDistance > 500 ? 5 : 0));
-    setSparksEarned(bonusSparks);
+    setCoinsCollected(finalCoins);
 
     if (finalScore > highScore) {
       setHighScore(finalScore);
@@ -996,7 +993,7 @@ export default function CyberRacerGame({ onScoreUpdate, onBack }) {
               </span>
             </div>
             <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
-              Dodge traffic • Collect Sparks • Hit Nitro
+              Dodge traffic • Collect Coins • Hit Nitro
             </div>
           </div>
         </div>
@@ -1367,7 +1364,7 @@ export default function CyberRacerGame({ onScoreUpdate, onBack }) {
               Cyber Racer Turbo
             </h2>
             <p style={{ fontSize: '0.82rem', color: '#cbd5e1', maxWidth: '300px', lineHeight: 1.4, margin: '0 0 20px 0' }}>
-              Dodge highway traffic at 300+ KM/H, grab gold Sparks, and ignite Nitro thrusters!
+              Dodge highway traffic at 300+ KM/H, grab Gold Coins, and ignite Nitro thrusters!
             </p>
 
             <button
@@ -1451,8 +1448,8 @@ export default function CyberRacerGame({ onScoreUpdate, onBack }) {
                 <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#fbbf24' }}>{score}</div>
               </div>
               <div>
-                <div style={{ fontSize: '0.66rem', color: '#94a3b8', fontWeight: 800 }}>SPARKS</div>
-                <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#10b981' }}>+{sparksEarned}⚡</div>
+                <div style={{ fontSize: '0.66rem', color: '#94a3b8', fontWeight: 800 }}>COINS</div>
+                <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#f59e0b' }}>🪙 {coinsCollected}</div>
               </div>
             </div>
 

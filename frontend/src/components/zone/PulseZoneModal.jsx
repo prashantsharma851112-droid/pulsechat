@@ -367,8 +367,8 @@ export default function PulseZoneModal({ onClose }) {
             }}>
               <span>
                 {dailyTask?.taskCompletedToday
-                  ? '✅ Daily Task Complete (+30⚡ Sparks Earned!)'
-                  : '⚡ Play 1 game today to earn +30 Sparks & level up 7-Day Streak!'}
+                  ? '✅ Daily Task Complete (Streak Maintained!)'
+                  : '🔥 Play 1 game today to keep your 7-Day Streak & unlock the Streak Crown!'}
               </span>
               {dailyTask?.hasKingCrown && (
                 <span style={{ color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 900 }}>
@@ -469,8 +469,8 @@ export default function PulseZoneModal({ onClose }) {
                       <Flame size={18} color="#f59e0b" />
                       <span>Pulse Speed Tapper</span>
                     </div>
-                    <span style={{ fontSize: '0.74rem', color: '#f59e0b', fontWeight: 700 }}>
-                      Earn Sparks per game!
+                    <span style={{ fontSize: '0.74rem', color: '#38bdf8', fontWeight: 700 }}>
+                      Compete for #1 Rank & Crown!
                     </span>
                   </div>
 
@@ -562,9 +562,9 @@ export default function PulseZoneModal({ onClose }) {
                         <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#10b981', fontWeight: 900 }}>
                           🎉 Time's Up! Final Score: {score}
                         </h3>
-                        {gameResult?.rewardSparks > 0 && (
-                          <div style={{ fontSize: '0.84rem', color: '#f59e0b', fontWeight: 800 }}>
-                            ⚡ +{gameResult.rewardSparks} Sparks Credited!
+                        {gameResult && (
+                          <div style={{ fontSize: '0.84rem', color: '#38bdf8', fontWeight: 800 }}>
+                            🏆 Score Submitted to Global Leaderboard!
                           </div>
                         )}
                         <button
