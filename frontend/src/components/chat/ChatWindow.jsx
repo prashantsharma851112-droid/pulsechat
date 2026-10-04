@@ -2711,12 +2711,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               </div>
               <p style={{ fontSize: '0.8rem', color: isTyping ? '#22c55e' : 'var(--text-muted)', fontWeight: isTyping ? 600 : 400, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {isGroup
-                  ? (isTyping ? `✍️ ${typingUser} is typing...` : `${activeChat.members?.length || 0} members • Click for info`)
+                  ? (isTyping ? `✍️ ${typingUser} is typing...` : `${activeChat.members?.length || 0} members`)
                   : isTyping
                     ? '✍️ typing...'
                     : isOnline
                       ? 'Online'
-                      : 'Offline • Click for Bio'}
+                      : 'Offline'}
               </p>
             </div>
           </div>
