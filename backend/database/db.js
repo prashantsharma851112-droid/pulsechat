@@ -528,15 +528,16 @@ module.exports = {
 
   getChatSetting: async (rawChatId) => {
     if (!rawChatId) return { disappearingEnabled: false, disappearingDuration: 86400, wallpaperId: 'none', customWallpaperUrl: null, chatTheme: 'midnight_amoled' };
-    let query = { chatId: rawChatId };
+    const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
+    let query = { chatId: canonicalChatId };
     if (rawChatId.includes('_')) {
       const parts = rawChatId.split('_');
-      query = { $or: [{ chatId: rawChatId }, { chatId: `${parts[1]}_${parts[0]}` }] };
+      query = { $or: [{ chatId: canonicalChatId }, { chatId: rawChatId }, { chatId: `${parts[1]}_${parts[0]}` }] };
     }
     let setting = await ChatSetting.findOne(query).lean();
     if (!setting) {
       setting = {
-        chatId: rawChatId.includes('_') ? rawChatId.split('_').sort().join('_') : rawChatId,
+        chatId: canonicalChatId,
         disappearingEnabled: false,
         disappearingDuration: 86400,
         wallpaperId: 'none',
@@ -548,65 +549,115 @@ module.exports = {
   },
 
   setDisappearingMessages: async (rawChatId, enabled, userId) => {
+    if (!rawChatId) return null;
     const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
-    let query = { chatId: rawChatId };
-    if (rawChatId && rawChatId.includes('_')) {
+    let query = { chatId: canonicalChatId };
+    if (rawChatId.includes('_')) {
       const parts = rawChatId.split('_');
-      query = { $or: [{ chatId: rawChatId }, { chatId: `${parts[1]}_${parts[0]}` }] };
+      query = { $or: [{ chatId: canonicalChatId }, { chatId: rawChatId }, { chatId: `${parts[1]}_${parts[0]}` }] };
     }
-    const updated = await ChatSetting.findOneAndUpdate(
-      query,
-      { $set: { chatId: canonicalChatId, disappearingEnabled: !!enabled, disappearingDuration: 86400, updatedAt: new Date(), updatedBy: userId || '' } },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    ).lean();
-    return updated;
+    let setting = await ChatSetting.findOne(query);
+    if (!setting) {
+      try {
+        setting = await ChatSetting.create({
+          chatId: canonicalChatId,
+          disappearingEnabled: !!enabled,
+          disappearingDuration: 86400,
+          updatedAt: new Date(),
+          updatedBy: userId || ''
+        });
+      } catch (err) {
+        setting = await ChatSetting.findOne({ chatId: canonicalChatId });
+        if (setting) {
+          setting.disappearingEnabled = !!enabled;
+          setting.updatedAt = new Date();
+          setting.updatedBy = userId || '';
+          await setting.save();
+        }
+      }
+    } else {
+      setting.chatId = canonicalChatId;
+      setting.disappearingEnabled = !!enabled;
+      setting.updatedAt = new Date();
+      setting.updatedBy = userId || '';
+      await setting.save();
+    }
+    return setting ? (setting.toObject ? setting.toObject() : setting) : { chatId: canonicalChatId, disappearingEnabled: !!enabled };
   },
 
   setChatWallpaper: async (rawChatId, wallpaperId, customWallpaperUrl, userId) => {
     if (!rawChatId) return null;
-    const canonicalChatId = rawChatId.includes('_') ? rawChatId.split('_').sort().join('_') : rawChatId;
-    let query = { chatId: rawChatId };
+    const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
+    let query = { chatId: canonicalChatId };
     if (rawChatId.includes('_')) {
       const parts = rawChatId.split('_');
-      query = { $or: [{ chatId: rawChatId }, { chatId: `${parts[1]}_${parts[0]}` }] };
+      query = { $or: [{ chatId: canonicalChatId }, { chatId: rawChatId }, { chatId: `${parts[1]}_${parts[0]}` }] };
     }
-    const updated = await ChatSetting.findOneAndUpdate(
-      query,
-      {
-        $set: {
+    let setting = await ChatSetting.findOne(query);
+    if (!setting) {
+      try {
+        setting = await ChatSetting.create({
           chatId: canonicalChatId,
           wallpaperId: wallpaperId || 'none',
           customWallpaperUrl: customWallpaperUrl || null,
           updatedAt: new Date(),
           updatedBy: userId || ''
+        });
+      } catch (err) {
+        setting = await ChatSetting.findOne({ chatId: canonicalChatId });
+        if (setting) {
+          setting.wallpaperId = wallpaperId || 'none';
+          setting.customWallpaperUrl = customWallpaperUrl || null;
+          setting.updatedAt = new Date();
+          setting.updatedBy = userId || '';
+          await setting.save();
         }
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    ).lean();
-    return updated;
+      }
+    } else {
+      setting.chatId = canonicalChatId;
+      setting.wallpaperId = wallpaperId || 'none';
+      setting.customWallpaperUrl = customWallpaperUrl || null;
+      setting.updatedAt = new Date();
+      setting.updatedBy = userId || '';
+      await setting.save();
+    }
+    return setting ? (setting.toObject ? setting.toObject() : setting) : { chatId: canonicalChatId, wallpaperId: wallpaperId || 'none', customWallpaperUrl };
   },
 
   setChatTheme: async (rawChatId, themeId, userId) => {
     if (!rawChatId) return null;
-    const canonicalChatId = rawChatId.includes('_') ? rawChatId.split('_').sort().join('_') : rawChatId;
-    let query = { chatId: rawChatId };
+    const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
+    let query = { chatId: canonicalChatId };
     if (rawChatId.includes('_')) {
       const parts = rawChatId.split('_');
-      query = { $or: [{ chatId: rawChatId }, { chatId: `${parts[1]}_${parts[0]}` }] };
+      query = { $or: [{ chatId: canonicalChatId }, { chatId: rawChatId }, { chatId: `${parts[1]}_${parts[0]}` }] };
     }
-    const updated = await ChatSetting.findOneAndUpdate(
-      query,
-      {
-        $set: {
+    let setting = await ChatSetting.findOne(query);
+    if (!setting) {
+      try {
+        setting = await ChatSetting.create({
           chatId: canonicalChatId,
           chatTheme: themeId || 'midnight_amoled',
           updatedAt: new Date(),
           updatedBy: userId || ''
+        });
+      } catch (err) {
+        setting = await ChatSetting.findOne({ chatId: canonicalChatId });
+        if (setting) {
+          setting.chatTheme = themeId || 'midnight_amoled';
+          setting.updatedAt = new Date();
+          setting.updatedBy = userId || '';
+          await setting.save();
         }
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    ).lean();
-    return updated;
+      }
+    } else {
+      setting.chatId = canonicalChatId;
+      setting.chatTheme = themeId || 'midnight_amoled';
+      setting.updatedAt = new Date();
+      setting.updatedBy = userId || '';
+      await setting.save();
+    }
+    return setting ? (setting.toObject ? setting.toObject() : setting) : { chatId: canonicalChatId, chatTheme: themeId || 'midnight_amoled' };
   },
 
   blockUser: async (userId, targetUserId) => {

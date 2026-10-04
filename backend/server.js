@@ -947,22 +947,27 @@ io.on('connection', (socket) => {
     const finalCustomUrl = customWallpaperUrl || customImage || null;
     const finalUserId = userId || setBy || null;
 
+    let setting = null;
     try {
-      await db.setChatWallpaper(chatId, wallpaperId, finalCustomUrl, finalUserId);
+      setting = await db.setChatWallpaper(chatId, wallpaperId, finalCustomUrl, finalUserId);
     } catch (e) {
       console.error('Error saving chat wallpaper to database:', e);
     }
 
     const payload = {
-      chatId,
-      wallpaperId,
-      customWallpaperUrl: finalCustomUrl,
-      customImage: finalCustomUrl,
+      chatId: setting?.chatId || chatId,
+      originalChatId: chatId,
+      wallpaperId: setting?.wallpaperId || wallpaperId,
+      customWallpaperUrl: setting?.customWallpaperUrl || finalCustomUrl,
+      customImage: setting?.customWallpaperUrl || finalCustomUrl,
       userId: finalUserId,
       setBy: finalUserId
     };
 
     io.to(chatId).emit('chat_wallpaper_updated', payload);
+    if (setting?.chatId && setting.chatId !== chatId) {
+      io.to(setting.chatId).emit('chat_wallpaper_updated', payload);
+    }
     if (chatId && chatId.includes('_')) {
       const parts = chatId.split('_');
       io.to(`${parts[1]}_${parts[0]}`).emit('chat_wallpaper_updated', payload);
@@ -976,14 +981,23 @@ io.on('connection', (socket) => {
   // Chat Solid Color Theme Real-Time Synchronization
   socket.on('set_chat_theme', async ({ chatId, themeId, setBy, userId }) => {
     const finalUserId = userId || setBy || null;
+    let setting = null;
     try {
-      await db.setChatTheme(chatId, themeId, finalUserId);
+      setting = await db.setChatTheme(chatId, themeId, finalUserId);
     } catch (e) {
       console.error('Error saving chat theme to database:', e);
     }
 
-    const payload = { chatId, themeId, setBy: finalUserId };
+    const payload = {
+      chatId: setting?.chatId || chatId,
+      originalChatId: chatId,
+      themeId: setting?.chatTheme || themeId,
+      setBy: finalUserId
+    };
     io.to(chatId).emit('chat_theme_updated', payload);
+    if (setting?.chatId && setting.chatId !== chatId) {
+      io.to(setting.chatId).emit('chat_theme_updated', payload);
+    }
     if (chatId && chatId.includes('_')) {
       const parts = chatId.split('_');
       io.to(`${parts[1]}_${parts[0]}`).emit('chat_theme_updated', payload);

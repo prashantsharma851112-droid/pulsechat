@@ -91,10 +91,16 @@ router.put('/settings/:chatId/wallpaper', authMiddleware, async (req, res) => {
     const io = req.app.get('io');
     if (io) {
       io.to(req.params.chatId).emit('chat_wallpaper_updated', payload);
+      if (setting?.chatId && setting.chatId !== req.params.chatId) {
+        io.to(setting.chatId).emit('chat_wallpaper_updated', payload);
+      }
       if (req.params.chatId.includes('_')) {
         const parts = req.params.chatId.split('_');
         io.to(`${parts[1]}_${parts[0]}`).emit('chat_wallpaper_updated', payload);
-        parts.forEach(uId => io.to(`user_${uId}`).emit('chat_wallpaper_updated', payload));
+        parts.forEach(uId => {
+          io.to(`user_${uId}`).emit('chat_wallpaper_updated', payload);
+          io.to(uId).emit('chat_wallpaper_updated', payload);
+        });
       }
     }
 
@@ -112,19 +118,25 @@ router.put('/settings/:chatId/theme', authMiddleware, async (req, res) => {
     const setting = await db.setChatTheme(req.params.chatId, themeId, req.user?.id);
 
     const payload = {
-      chatId: setting.chatId,
+      chatId: setting?.chatId || req.params.chatId,
       originalChatId: req.params.chatId,
-      themeId: setting.chatTheme,
+      themeId: setting?.chatTheme || themeId,
       setBy: req.user?.id
     };
 
     const io = req.app.get('io');
     if (io) {
       io.to(req.params.chatId).emit('chat_theme_updated', payload);
+      if (setting?.chatId && setting.chatId !== req.params.chatId) {
+        io.to(setting.chatId).emit('chat_theme_updated', payload);
+      }
       if (req.params.chatId.includes('_')) {
         const parts = req.params.chatId.split('_');
         io.to(`${parts[1]}_${parts[0]}`).emit('chat_theme_updated', payload);
-        parts.forEach(uId => io.to(`user_${uId}`).emit('chat_theme_updated', payload));
+        parts.forEach(uId => {
+          io.to(`user_${uId}`).emit('chat_theme_updated', payload);
+          io.to(uId).emit('chat_theme_updated', payload);
+        });
       }
     }
 

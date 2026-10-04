@@ -643,6 +643,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const [friendshipStatus, setFriendshipStatus] = useState(() => isDirectFriend ? 'friends' : 'checking');
   const [friendRequestId, setFriendRequestId] = useState(null);
+  const lastWallpaperUpdateTimestamp = useRef(0);
 
   const [chatWallpaper, setChatWallpaper] = useState(() => {
     return localStorage.getItem(`pulsechat_chat_wallpaper_${chatId}`) || 'none';
@@ -655,7 +656,24 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (!c1 || !c2) return false;
     if (c1 === c2) return true;
     if (c1.includes('_') && c2.includes('_')) {
-      return c1.split('_').sort().join('_') === c2.split('_').sort().join('_');
+      if (c1.split('_').sort().join('_') === c2.split('_').sort().join('_')) return true;
+    }
+    if (!isGroup && activeChat && user) {
+      const myIds = [user.id, user._id, user.username].filter(Boolean).map(String);
+      const otherIds = [activeChat.id, activeChat._id, activeChat.userId, activeChat.username].filter(Boolean).map(String);
+
+      const checkMatches = (target) => {
+        if (!target || !target.includes('_')) return false;
+        const parts = target.split('_');
+        if (parts.length === 2) {
+          const hasMe = myIds.includes(parts[0]) || myIds.includes(parts[1]);
+          const hasOther = otherIds.includes(parts[0]) || otherIds.includes(parts[1]);
+          return hasMe && hasOther;
+        }
+        return false;
+      };
+
+      if (checkMatches(c1) || checkMatches(c2)) return true;
     }
     return false;
   };
@@ -672,6 +690,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       const incomingChatId = e.detail?.chatId;
       const originalChatId = e.detail?.originalChatId;
       if (isMatchingChatId(incomingChatId, chatId) || isMatchingChatId(originalChatId, chatId)) {
+        lastWallpaperUpdateTimestamp.current = Date.now();
         const newWall = e.detail.wallpaperId || 'none';
         const incomingCustomUrl = e.detail.customWallpaperUrl || e.detail.customImage;
         const fallbackCustomUrl = localStorage.getItem(`pulsechat_custom_wallpaper_${chatId}`);
@@ -717,7 +736,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       window.removeEventListener('pulsechat_wallpaper_updated', handleWallpaperUpdated);
       window.removeEventListener('pulsechat_theme_updated', handleThemeUpdated);
     };
-  }, [chatId]);
+  }, [chatId, activeChat, isGroup, user]);
 
   const handleSelectChatTheme = (newTheme) => {
     setChatTheme(newTheme);
@@ -742,26 +761,30 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   };
 
-  const handleSelectChatWallpaper = (newWall, customUrl = customWallpaper) => {
+  const handleSelectChatWallpaper = (newWall, customUrl = null) => {
+    lastWallpaperUpdateTimestamp.current = Date.now();
+    const finalCustom = newWall === 'custom_image' ? (customUrl || customWallpaper) : null;
     setChatWallpaper(newWall);
+    setCustomWallpaper(finalCustom);
+
     if (newWall === 'none') {
       localStorage.removeItem(`pulsechat_chat_wallpaper_${chatId}`);
       localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
     } else {
       localStorage.setItem(`pulsechat_chat_wallpaper_${chatId}`, newWall);
-    }
-    if (newWall === 'custom_image' && customUrl) {
-      localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, customUrl);
-    } else if (newWall !== 'custom_image') {
-      localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
+      if (newWall === 'custom_image' && finalCustom) {
+        localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, finalCustom);
+      } else {
+        localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
+      }
     }
 
     if (socket) {
       socket.emit('set_chat_wallpaper', {
         chatId,
         wallpaperId: newWall,
-        customWallpaperUrl: customUrl,
-        customImage: customUrl,
+        customWallpaperUrl: finalCustom,
+        customImage: finalCustom,
         userId: user?.id,
         setBy: user?.id
       });
@@ -776,7 +799,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         },
         body: JSON.stringify({
           wallpaperId: newWall,
-          customWallpaperUrl: customUrl
+          customWallpaperUrl: finalCustom
         })
       }).catch(() => {});
     }
@@ -1268,16 +1291,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         .then(data => {
           if (data) {
             if (data.disappearingEnabled !== undefined) setChatSetting(data);
+            const isRecentUpdate = (Date.now() - (lastWallpaperUpdateTimestamp.current || 0)) < 4000;
             if (data.wallpaperId !== undefined) {
-              setChatWallpaper(data.wallpaperId);
-              localStorage.setItem(`pulsechat_chat_wallpaper_${chatId}`, data.wallpaperId);
-            }
-            if (data.customWallpaperUrl !== undefined) {
-              setCustomWallpaper(data.customWallpaperUrl);
-              if (data.customWallpaperUrl) {
-                localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, data.customWallpaperUrl);
-              } else {
-                localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
+              if (!isRecentUpdate || data.wallpaperId !== 'none') {
+                setChatWallpaper(data.wallpaperId);
+                localStorage.setItem(`pulsechat_chat_wallpaper_${chatId}`, data.wallpaperId);
+                if (data.customWallpaperUrl !== undefined) {
+                  setCustomWallpaper(data.customWallpaperUrl);
+                  if (data.customWallpaperUrl) {
+                    localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, data.customWallpaperUrl);
+                  } else {
+                    localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
+                  }
+                }
               }
             }
             if (data.chatTheme) {
