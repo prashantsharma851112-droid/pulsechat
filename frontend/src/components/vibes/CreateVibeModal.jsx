@@ -101,10 +101,29 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   // Refs
   const stageRef = useRef(null);
   const videoRef = useRef(null);
+  const previewVideoRef = useRef(null);
   const cameraStreamRef = useRef(null);
   const fileInputRef = useRef(null);
   const textInputRef = useRef(null);
   const previewAudioRef = useRef(null);
+
+  // Video Sound & Autoplay Management
+  const [isVideoMuted, setIsVideoMuted] = useState(false);
+  const [showUnmuteHint, setShowUnmuteHint] = useState(false);
+
+  const toggleVideoMute = useCallback((e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    setIsVideoMuted(prev => {
+      const next = !prev;
+      if (previewVideoRef.current) {
+        previewVideoRef.current.muted = next;
+        previewVideoRef.current.volume = 1.0;
+        if (!next) previewVideoRef.current.play().catch(() => {});
+      }
+      return next;
+    });
+    setShowUnmuteHint(false);
+  }, []);
 
   // Hardware Back Handler
   useBackHandler(() => setShowMusicPicker(false), showMusicPicker);
@@ -202,15 +221,27 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
 
-    if (file.size > 50 * 1024 * 1024) {
-      setError('File size exceeds 50MB limit.');
+    if (file.size > 80 * 1024 * 1024) {
+      setError('File size exceeds 80MB limit.');
       return;
     }
 
     stopCameraStream();
     setError('');
+    setIsVideoMuted(false);
+    setShowUnmuteHint(false);
 
-    const isVid = file.type.startsWith('video/') || Boolean(file.name?.match(/\.(mp4|webm|mov|ogg|m4v)($|\?)/i));
+    // Reliable video detection across Android WebView and browsers
+    const isVidMime = Boolean(file.type && (
+      file.type.startsWith('video/') ||
+      file.type.includes('video') ||
+      file.type.includes('mp4') ||
+      file.type.includes('quicktime') ||
+      file.type.includes('webm')
+    ));
+    const isVidExt = Boolean(file.name && file.name.match(/\.(mp4|webm|mov|ogg|m4v|3gp|mkv)($|\?)/i));
+    const isVid = isVidMime || isVidExt;
+
     setMediaType(isVid ? 'video' : 'image');
     setSelectedMediaFile(file);
 
@@ -218,6 +249,20 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       const objectUrl = URL.createObjectURL(file);
       setMediaUrl(objectUrl);
       setViewMode('media');
+
+      // Ambiguity probe: if file has no extension or generic application/octet-stream
+      if (!isVidMime && !isVidExt && (!file.type || !file.type.startsWith('image/'))) {
+        const probe = document.createElement('video');
+        probe.preload = 'metadata';
+        probe.src = objectUrl;
+        probe.onloadedmetadata = () => {
+          setMediaType('video');
+        };
+        probe.onerror = () => {
+          setMediaType('image');
+        };
+      }
+
       playSound('pop');
     } catch (err) {
       setError('Could not load media preview.');
@@ -355,23 +400,23 @@ export default function CreateVibeModal({ onClose, onCreated }) {
 
     let finalMediaUrl = mediaUrl;
     const isVideo = (mediaType === 'video') ||
-      (selectedMediaFile && selectedMediaFile.type?.startsWith('video/')) ||
-      (mediaUrl && (mediaUrl.includes('/video/') || mediaUrl.match(/\.(mp4|webm|mov|ogg|m4v)($|\?)/i)));
+      Boolean(selectedMediaFile && (selectedMediaFile.type?.startsWith('video/') || selectedMediaFile.type?.includes('video') || selectedMediaFile.name?.match(/\.(mp4|webm|mov|ogg|m4v|3gp|mkv)($|\?)/i))) ||
+      Boolean(mediaUrl && (mediaUrl.includes('/video/') || mediaUrl.match(/\.(mp4|webm|mov|ogg|m4v|3gp|mkv)($|\?)/i) || mediaUrl.startsWith('data:video')));
 
     // Direct Cloudinary Edge Upload (zero load on Render backend!)
     if (selectedMediaFile) {
       try {
-        const cdnUrl = await uploadMediaDirect(selectedMediaFile, 'pulsechat_vibes', token);
+        const cdnUrl = await uploadMediaDirect(selectedMediaFile, 'pulsechat_vibes', token, isVideo);
         if (cdnUrl) finalMediaUrl = cdnUrl;
       } catch (err) {
         console.warn('Direct media upload fallback:', err);
       }
-    } else if (mediaUrl && (mediaUrl.startsWith('data:image') || mediaUrl.startsWith('blob:'))) {
+    } else if (mediaUrl && (mediaUrl.startsWith('data:') || mediaUrl.startsWith('blob:'))) {
       try {
-        const cdnUrl = await uploadMediaDirect(mediaUrl, 'pulsechat_vibes', token);
+        const cdnUrl = await uploadMediaDirect(mediaUrl, 'pulsechat_vibes', token, isVideo);
         if (cdnUrl) finalMediaUrl = cdnUrl;
       } catch (err) {
-        console.warn('Direct image upload fallback:', err);
+        console.warn('Direct media upload fallback:', err);
       }
     }
 
@@ -477,6 +522,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         ref={fileInputRef}
         type="file"
         accept="image/*,video/*"
+        onClick={(e) => { e.target.value = null; }}
         onChange={handleFileChange}
         style={{ display: 'none' }}
       />
@@ -527,10 +573,30 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         {viewMode === 'media' && mediaUrl && (
           mediaType === 'video' ? (
             <video
+              ref={previewVideoRef}
+              key={`preview_vid_${mediaUrl}`}
               src={mediaUrl}
               autoPlay
               loop
               playsInline
+              webkit-playsinline="true"
+              preload="auto"
+              muted={isVideoMuted}
+              onLoadedData={() => {
+                const vid = previewVideoRef.current;
+                if (!vid) return;
+                vid.volume = 1.0;
+                vid.muted = isVideoMuted;
+                const p = vid.play();
+                if (p !== undefined) {
+                  p.catch(() => {
+                    vid.muted = true;
+                    setIsVideoMuted(true);
+                    setShowUnmuteHint(true);
+                    vid.play().catch(() => {});
+                  });
+                }
+              }}
               style={{
                 width: '100%',
                 height: '100%',
@@ -625,6 +691,31 @@ export default function CreateVibeModal({ onClose, onCreated }) {
 
         {/* Right Side: Circular Tools Row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Sound / Volume Mute Toggle (Shown when a video is loaded, identical to Instagram Stories) */}
+          {viewMode === 'media' && mediaType === 'video' && (
+            <button
+              type="button"
+              onClick={toggleVideoMute}
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                background: isVideoMuted ? 'rgba(239, 68, 68, 0.45)' : 'rgba(16, 185, 129, 0.45)',
+                backdropFilter: 'blur(12px)',
+                border: isVideoMuted ? '1.5px solid #f87171' : '1.5px solid #34d399',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                boxShadow: isVideoMuted ? 'none' : '0 0 12px rgba(16, 185, 129, 0.5)'
+              }}
+              title={isVideoMuted ? 'Unmute Story Video' : 'Mute Story Video'}
+            >
+              {isVideoMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+            </button>
+          )}
+
           {/* Aa (Text) */}
           <button
             type="button"
@@ -753,8 +844,8 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           INTERACTIVE ON-SCREEN ELEMENTS (Hand Dragged & Pinched)
       ========================================================================= */}
 
-      {/* 1. Main Text ("Tap to type your vibe..." when empty, or draggable formatted text) */}
-      {!isEditingText && (
+      {/* 1. Main Text (Draggable formatted text - rendered ONLY when caption has text, zero placeholder) */}
+      {!isEditingText && caption.trim() && (
         <div
           onMouseDown={(e) => handleElementTouchStart('text', e)}
           onTouchStart={(e) => handleElementTouchStart('text', e)}
@@ -775,40 +866,54 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             textAlign
           }}
         >
-          {caption.trim() ? (
-            <div
-              className={textStyle3D !== 'none' ? textStyle3D : ''}
-              style={{
-                fontSize: `${textSize}rem`,
-                fontWeight: 800,
-                color: textColor,
-                lineHeight: 1.35,
-                background: textBgStyle === 'box' ? 'rgba(0, 0, 0, 0.65)' : 'transparent',
-                backdropFilter: textBgStyle === 'box' ? 'blur(10px)' : 'none',
-                padding: textBgStyle === 'box' ? '10px 18px' : '4px 8px',
-                borderRadius: '16px',
-                textShadow: textStyle3D === 'none' ? '0 2px 14px rgba(0,0,0,0.85)' : 'none',
-                wordBreak: 'break-word',
-                border: textBgStyle === 'box' ? '1px solid rgba(255,255,255,0.18)' : 'none'
-              }}
-            >
-              {caption}
-            </div>
-          ) : (
-            <div
-              style={{
-                fontSize: '1.5rem',
-                fontWeight: 800,
-                color: 'rgba(255, 255, 255, 0.95)',
-                textShadow: '0 2px 16px rgba(0, 0, 0, 0.85)',
-                letterSpacing: '0.4px',
-                cursor: 'pointer',
-                textAlign: 'center'
-              }}
-            >
-              Tap to type your vibe...
-            </div>
-          )}
+          <div
+            className={textStyle3D !== 'none' ? textStyle3D : ''}
+            style={{
+              fontSize: `${textSize}rem`,
+              fontWeight: 800,
+              color: textColor,
+              lineHeight: 1.35,
+              background: textBgStyle === 'box' ? 'rgba(0, 0, 0, 0.65)' : 'transparent',
+              backdropFilter: textBgStyle === 'box' ? 'blur(10px)' : 'none',
+              padding: textBgStyle === 'box' ? '10px 18px' : '4px 8px',
+              borderRadius: '16px',
+              textShadow: textStyle3D === 'none' ? '0 2px 14px rgba(0,0,0,0.85)' : 'none',
+              wordBreak: 'break-word',
+              border: textBgStyle === 'box' ? '1px solid rgba(255,255,255,0.18)' : 'none'
+            }}
+          >
+            {caption}
+          </div>
+        </div>
+      )}
+
+      {/* Floating Unmute Hint if autoplay blocked audio */}
+      {viewMode === 'media' && mediaType === 'video' && isVideoMuted && showUnmuteHint && (
+        <div
+          onClick={toggleVideoMute}
+          style={{
+            position: 'absolute',
+            bottom: '100px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 65,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255, 255, 255, 0.25)',
+            color: '#ffffff',
+            padding: '7px 16px',
+            borderRadius: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '0.82rem',
+            fontWeight: 800,
+            cursor: 'pointer',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.5)'
+          }}
+        >
+          <VolumeX size={15} color="#f87171" />
+          <span>Tap for sound 🔊</span>
         </div>
       )}
 

@@ -438,7 +438,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
   const isCurrentStoryVideo = currentVibe?.mediaType === 'video' ||
     Boolean(currentVibe?.mediaUrl && (
       currentVibe.mediaUrl.includes('/video/') ||
-      currentVibe.mediaUrl.match(/\.(mp4|webm|mov|ogg|m4v)($|\?)/i)
+      currentVibe.mediaUrl.startsWith('data:video') ||
+      currentVibe.mediaUrl.match(/\.(mp4|webm|mov|ogg|m4v|3gp|mkv)($|\?)/i)
     ));
 
   // Sync video player lifecycle
@@ -1022,6 +1023,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                   key={`video_${currentVibe.id}_${currentVibe.mediaUrl}`}
                   src={currentVibe.mediaUrl}
                   playsInline
+                  webkit-playsinline="true"
+                  preload="auto"
                   autoPlay
                   muted={isAudioMuted}
                   onTimeUpdate={(e) => {

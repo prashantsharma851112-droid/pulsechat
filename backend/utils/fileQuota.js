@@ -1,23 +1,27 @@
 const User = require('../models/User');
 const mongoose = require('mongoose');
 
-const MAX_SINGLE_FILE_BYTES = 5 * 1024 * 1024; // 5 MB max per file
-const MAX_DAILY_FILE_BYTES = 10 * 1024 * 1024; // 10 MB max per 24 hours (1 day)
+const MAX_SINGLE_FILE_BYTES = 10 * 1024 * 1024; // 10 MB max per file
+const MAX_VIDEO_FILE_BYTES = 50 * 1024 * 1024; // 50 MB max for videos / reels / stories
+const MAX_DAILY_FILE_BYTES = 100 * 1024 * 1024; // 100 MB max per 24 hours (1 day)
 
 /**
- * Checks single file size limit (5MB) and 24h daily quota (10MB total).
+ * Checks single file size limit (10MB image, 50MB video) and 24h daily quota (100MB total).
  * If allowed, automatically updates user's dailyFileBytesUsed in MongoDB.
  */
-async function checkAndUpdateFileQuota(userId, fileSizeBytes) {
+async function checkAndUpdateFileQuota(userId, fileSizeBytes, isVideo = false) {
   const bytes = Number(fileSizeBytes) || 0;
   if (bytes <= 0) return { success: true };
 
-  // 1. Single file limit check (5MB)
-  if (bytes > MAX_SINGLE_FILE_BYTES) {
+  const singleFileLimit = isVideo ? MAX_VIDEO_FILE_BYTES : MAX_SINGLE_FILE_BYTES;
+
+  // 1. Single file limit check
+  if (bytes > singleFileLimit) {
+    const limitMB = (singleFileLimit / (1024 * 1024)).toFixed(0);
     return {
       success: false,
       code: 'SINGLE_FILE_LIMIT_EXCEEDED',
-      error: `File size exceeds the 5MB limit (${(bytes / (1024 * 1024)).toFixed(2)}MB). Max allowed file size is 5MB.`
+      error: `File size exceeds the ${limitMB}MB limit (${(bytes / (1024 * 1024)).toFixed(2)}MB). Max allowed is ${limitMB}MB.`
     };
   }
 

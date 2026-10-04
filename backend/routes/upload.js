@@ -56,7 +56,8 @@ router.post('/', authMiddleware, async (req, res) => {
       ? Math.ceil((file.length * 3) / 4)
       : (req.headers['content-length'] ? parseInt(req.headers['content-length'], 10) : 0);
 
-    const quotaResult = await checkAndUpdateFileQuota(req.user?.id || req.userId, fileSizeBytes);
+    const isVideo = resourceType === 'video' || (typeof file === 'string' && (file.startsWith('data:video/') || file.includes('/video/')));
+    const quotaResult = await checkAndUpdateFileQuota(req.user?.id || req.userId, fileSizeBytes, isVideo);
     if (!quotaResult.success) {
       return res.status(400).json({ error: quotaResult.error });
     }

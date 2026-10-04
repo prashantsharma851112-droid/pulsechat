@@ -73,7 +73,7 @@ export async function compressImageOnDevice(fileOrDataUrl, maxWidth = 1280, qual
  * @param {string} token
  * @returns {Promise<string>}
  */
-export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media', token = '') {
+export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media', token = '', isExplicitVideo = false) {
   if (!fileOrDataUrl) return '';
 
   // If already an HTTP/HTTPS URL, don't re-upload
@@ -83,9 +83,23 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
 
   let finalPayload = fileOrDataUrl;
 
-  // 1. Client-side canvas compression for images
-  const isImage = (typeof fileOrDataUrl === 'string' && fileOrDataUrl.startsWith('data:image/')) ||
-                  (fileOrDataUrl instanceof File && fileOrDataUrl.type.startsWith('image/'));
+  const isVideo = isExplicitVideo ||
+                  (finalPayload instanceof File && (
+                    finalPayload.type.startsWith('video/') ||
+                    finalPayload.type.includes('video') ||
+                    Boolean(finalPayload.name?.match(/\.(mp4|webm|mov|ogg|m4v|3gp|mkv)($|\?)/i))
+                  )) ||
+                  (typeof finalPayload === 'string' && (
+                    finalPayload.startsWith('data:video/') ||
+                    finalPayload.includes('/video/') ||
+                    Boolean(finalPayload.match(/\.(mp4|webm|mov|ogg|m4v|3gp|mkv)($|\?)/i))
+                  ));
+
+  // 1. Client-side canvas compression for images only (do not touch videos!)
+  const isImage = !isVideo && (
+    (typeof fileOrDataUrl === 'string' && fileOrDataUrl.startsWith('data:image/')) ||
+    (fileOrDataUrl instanceof File && (fileOrDataUrl.type.startsWith('image/') || (!fileOrDataUrl.type && !isVideo)))
+  );
 
   if (isImage) {
     try {
@@ -104,6 +118,8 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
       const sigData = await sigRes.json();
       if (sigData.directUpload && sigData.cloudName && sigData.apiKey && sigData.signature) {
         // 3. Direct upload to Cloudinary Edge CDN (bypasses Render entirely!)
+        const resourceType = isVideo ? 'video' : 'image';
+
         const formData = new FormData();
         formData.append('file', finalPayload);
         formData.append('api_key', sigData.apiKey);
@@ -111,10 +127,18 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
         formData.append('signature', sigData.signature);
         formData.append('folder', sigData.folder || folder);
 
-        const cdnRes = await fetch(`https://api.cloudinary.com/v1_1/${sigData.cloudName}/auto/upload`, {
+        let cdnRes = await fetch(`https://api.cloudinary.com/v1_1/${sigData.cloudName}/${resourceType}/upload`, {
           method: 'POST',
           body: formData
         });
+
+        if (!cdnRes.ok) {
+          // Try auto upload if resource specific failed
+          cdnRes = await fetch(`https://api.cloudinary.com/v1_1/${sigData.cloudName}/auto/upload`, {
+            method: 'POST',
+            body: formData
+          });
+        }
 
         if (cdnRes.ok) {
           const cdnData = await cdnRes.json();
@@ -129,8 +153,8 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
   }
 
   // 4. Graceful Fallback: If direct Cloudinary CDN upload failed, use backend upload route
+  let payloadToSend = typeof finalPayload === 'string' ? finalPayload : '';
   try {
-    let payloadToSend = finalPayload;
     if (finalPayload instanceof File || finalPayload instanceof Blob) {
       payloadToSend = await new Promise((res) => {
         const reader = new FileReader();
@@ -150,7 +174,8 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
         },
         body: JSON.stringify({
           file: payloadToSend,
-          folder
+          folder,
+          resourceType: isVideo ? 'video' : 'auto'
         })
       });
 
@@ -165,5 +190,5 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
     console.error('All upload strategies failed:', err);
   }
 
-  return typeof finalPayload === 'string' ? finalPayload : '';
+  return payloadToSend || (typeof finalPayload === 'string' ? finalPayload : '');
 }
