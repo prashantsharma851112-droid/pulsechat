@@ -85,22 +85,109 @@ const createTempleAudio = () => {
     }
   };
 
+  // Authentic Temple Run Ascending Pentatonic Coin Scale
+  const PENTATONIC_SCALE = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51, 1567.98];
+  let coinStreak = 0;
+  let lastCoinTime = 0;
+
   const playCoinDing = () => {
+    init();
+    if (isMuted || !ctx) return { streak: 1 };
+    try {
+      const now = ctx.currentTime;
+      if (now - lastCoinTime > 1.8) {
+        coinStreak = 0;
+      }
+      lastCoinTime = now;
+      const noteIdx = Math.min(coinStreak, PENTATONIC_SCALE.length - 1);
+      const freq = PENTATONIC_SCALE[noteIdx];
+      coinStreak++;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.5, now + 0.07);
+
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.26);
+
+      // Harmonious chime if high streak (authentic dopamine hit!)
+      if (coinStreak >= 5) {
+        const overtone = ctx.createOscillator();
+        const overGain = ctx.createGain();
+        overtone.type = 'triangle';
+        overtone.frequency.setValueAtTime(freq * 2, now);
+        overGain.gain.setValueAtTime(0.07, now);
+        overGain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+        overtone.connect(overGain);
+        overGain.connect(ctx.destination);
+        overtone.start(now);
+        overtone.stop(now + 0.32);
+      }
+
+      return { streak: coinStreak };
+    } catch (e) {
+      return { streak: 1 };
+    }
+  };
+
+  // Deep pounding heartbeat pulse when Demon Monkey is close
+  const playHeartbeat = () => {
+    init();
+    if (isMuted || !ctx) return;
+    try {
+      const now = ctx.currentTime;
+      // Lub
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(65, now);
+      osc1.frequency.exponentialRampToValueAtTime(32, now + 0.12);
+      gain1.gain.setValueAtTime(0.22, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.14);
+
+      // Dub
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(52, now + 0.15);
+      osc2.frequency.exponentialRampToValueAtTime(28, now + 0.26);
+      gain2.gain.setValueAtTime(0.17, now + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.15);
+      osc2.stop(now + 0.28);
+    } catch (e) {}
+  };
+
+  // Turn swoosh
+  const playTurnWhoosh = () => {
     init();
     if (isMuted || !ctx) return;
     try {
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(1320, now);
-      osc.frequency.setValueAtTime(1980, now + 0.06);
-      gain.gain.setValueAtTime(0.09, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(380, now);
+      osc.frequency.exponentialRampToValueAtTime(110, now + 0.28);
+      gain.gain.setValueAtTime(0.14, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(now + 0.22);
+      osc.start(now);
+      osc.stop(now + 0.3);
     } catch (e) {}
   };
 
@@ -114,7 +201,7 @@ const createTempleAudio = () => {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(220, now);
       osc.frequency.exponentialRampToValueAtTime(650, now + 0.18);
-      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.setValueAtTime(0.09, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -133,7 +220,7 @@ const createTempleAudio = () => {
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(450, now);
       osc.frequency.exponentialRampToValueAtTime(140, now + 0.25);
-      gain.gain.setValueAtTime(0.09, now);
+      gain.gain.setValueAtTime(0.1, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -152,11 +239,11 @@ const createTempleAudio = () => {
       const gain = ctx.createGain();
       osc1.type = 'sawtooth';
       osc2.type = 'triangle';
-      osc1.frequency.setValueAtTime(150, now);
-      osc1.frequency.exponentialRampToValueAtTime(60, now + 0.45);
-      osc2.frequency.setValueAtTime(240, now);
-      osc2.frequency.exponentialRampToValueAtTime(75, now + 0.45);
-      gain.gain.setValueAtTime(0.14, now);
+      osc1.frequency.setValueAtTime(160, now);
+      osc1.frequency.exponentialRampToValueAtTime(55, now + 0.45);
+      osc2.frequency.setValueAtTime(250, now);
+      osc2.frequency.exponentialRampToValueAtTime(70, now + 0.45);
+      gain.gain.setValueAtTime(0.16, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
       osc1.connect(gain);
       osc2.connect(gain);
@@ -178,7 +265,7 @@ const createTempleAudio = () => {
       osc.type = 'square';
       osc.frequency.setValueAtTime(130, now);
       osc.frequency.exponentialRampToValueAtTime(35, now + 0.22);
-      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.setValueAtTime(0.18, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -197,8 +284,8 @@ const createTempleAudio = () => {
       const gain = ctx.createGain();
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(320, now);
-      osc.frequency.exponentialRampToValueAtTime(50, now + 0.7);
-      gain.gain.setValueAtTime(0.18, now);
+      osc.frequency.exponentialRampToValueAtTime(45, now + 0.7);
+      gain.gain.setValueAtTime(0.2, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -212,6 +299,8 @@ const createTempleAudio = () => {
     startTribalMusic,
     stopTribalMusic,
     playCoinDing,
+    playHeartbeat,
+    playTurnWhoosh,
     playJumpWhoosh,
     playSlideSwoosh,
     playDemonRoar,
@@ -558,6 +647,100 @@ const buildDemonApe = () => {
   };
 };
 
+// =========================================================================
+// 90-DEGREE TEMPLE CORNER TURN INTERSECTION (AUTHENTIC AZTEC ARROW & WALL)
+// =========================================================================
+const buildCornerTurnChunk = (direction = 'right') => {
+  const group = new THREE.Group();
+
+  // 1. Ancient Stone Temple Wall Blocking Forward Runway
+  const wallGeo = new THREE.BoxGeometry(7.4, 5.8, 1.2);
+  const wallMat = new THREE.MeshStandardMaterial({
+    color: 0x44403c,
+    roughness: 0.9,
+    metalness: 0.1
+  });
+  const wall = new THREE.Mesh(wallGeo, wallMat);
+  wall.position.set(0, 2.3, 0.6);
+  wall.castShadow = true;
+  group.add(wall);
+
+  // 2. Giant Glowing Emerald Aztec Turn Chevron Arrow
+  const arrowMat = new THREE.MeshStandardMaterial({
+    color: 0x10b981,
+    emissive: 0x059669,
+    emissiveIntensity: 1.5,
+    roughness: 0.15
+  });
+
+  const arrowGroup = new THREE.Group();
+  const b1 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.44, 0.3), arrowMat);
+  b1.rotation.z = direction === 'right' ? Math.PI / 4 : -Math.PI / 4;
+  b1.position.y = 0.5;
+
+  const b2 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.44, 0.3), arrowMat);
+  b2.rotation.z = direction === 'right' ? -Math.PI / 4 : Math.PI / 4;
+  b2.position.y = -0.5;
+
+  arrowGroup.add(b1);
+  arrowGroup.add(b2);
+  arrowGroup.position.set(0, 2.5, -0.05);
+  group.add(arrowGroup);
+
+  // 3. Side Runway Branch Extending 90 degrees
+  const branchGeo = new THREE.BoxGeometry(14, 1.2, 6.6);
+  const branchMat = new THREE.MeshStandardMaterial({ color: 0xca8a04, roughness: 0.8 });
+  const branch = new THREE.Mesh(branchGeo, branchMat);
+  const branchOffsetX = direction === 'right' ? 7.0 : -7.0;
+  branch.position.set(branchOffsetX, -0.6, 0);
+  group.add(branch);
+
+  return group;
+};
+
+// =========================================================================
+// BROKEN BRIDGE ABYSS GAP (CRUMBLED ROADWAY OVER MISTY MOUNTAINS)
+// =========================================================================
+const buildBrokenGapMesh = () => {
+  const group = new THREE.Group();
+
+  // Dark bottomless chasm void
+  const voidGeo = new THREE.BoxGeometry(6.6, 0.5, 4.8);
+  const voidMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
+  const abyssVoid = new THREE.Mesh(voidGeo, voidMat);
+  abyssVoid.position.y = -0.55;
+  group.add(abyssVoid);
+
+  // Jagged stone edge teeth
+  const edgeGeo = new THREE.ConeGeometry(0.35, 1.1, 5);
+  edgeGeo.rotateX(Math.PI / 2);
+  const stoneMat = new THREE.MeshStandardMaterial({ color: 0x44403c, roughness: 0.9 });
+  for (let x = -2.6; x <= 2.6; x += 1.3) {
+    const t1 = new THREE.Mesh(edgeGeo, stoneMat);
+    t1.position.set(x + (Math.random() - 0.5) * 0.2, -0.35, -2.2);
+    group.add(t1);
+
+    const t2 = new THREE.Mesh(edgeGeo, stoneMat);
+    t2.position.set(x + (Math.random() - 0.5) * 0.2, -0.35, 2.2);
+    group.add(t2);
+  }
+
+  // Dangling broken frayed rope bridge remnants
+  const ropeMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.8 });
+  const ropeGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.8, 8);
+  const rL = new THREE.Mesh(ropeGeo, ropeMat);
+  rL.position.set(-3.1, -0.7, 0);
+  rL.rotation.z = 0.3;
+  group.add(rL);
+
+  const rR = new THREE.Mesh(ropeGeo, ropeMat);
+  rR.position.set(3.1, -0.7, 0);
+  rR.rotation.z = -0.3;
+  group.add(rR);
+
+  return group;
+};
+
 export default function TempleRunGame({ onScoreUpdate, onBack }) {
   const containerRef = useRef(null);
   const audioRef = useRef(null);
@@ -576,6 +759,18 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
   });
   const [isMuted, setIsMuted] = useState(false);
   const [powerMeter, setPowerMeter] = useState(0); // 0 to 100%
+  const [dangerOpacity, setDangerOpacity] = useState(0); // 0 to 1 for red danger vignette pulse
+  const [turnWarning, setTurnWarning] = useState(null); // 'left' | 'right' | null
+  const [popups, setPopups] = useState([]); // Floating score & combo popups
+
+  // Helper for floating score popups
+  const addPopup = useCallback((text, color = '#fbbf24') => {
+    const id = Date.now() + Math.random();
+    setPopups(prev => [...prev.slice(-3), { id, text, color }]);
+    setTimeout(() => {
+      setPopups(prev => prev.filter(p => p.id !== id));
+    }, 900);
+  }, []);
 
   // 100% Natural Touch Swipe Gestures (ZERO BUTTONS)
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
@@ -594,6 +789,16 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     obstacles: [],
     coinsList: [],
     cloudsList: [],
+    speedLines: [],
+    sparkParticles: [],
+
+    // Corner Turns & Dynamic Events
+    upcomingCorner: null, // { mesh, direction: 'left' | 'right', handled: false }
+    lastCornerDist: 0,
+    trauma: 0, // Camera trauma screen shake
+    heartbeatTimer: 0,
+    turnAnimProgress: 0,
+    lastTurnDir: null,
 
     // Game Variables
     speed: 42,
@@ -637,26 +842,91 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     });
   };
 
+  // Spark burst helper
+  const triggerSparkBurst = (x, y, z) => {
+    const sparks = gameRef.current.sparkParticles;
+    if (!sparks) return;
+    let spawned = 0;
+    for (let i = 0; i < sparks.length && spawned < 12; i++) {
+      const sp = sparks[i];
+      if (!sp.visible) {
+        sp.visible = true;
+        sp.position.set(x, y, z);
+        const theta = Math.random() * Math.PI * 2;
+        const phi = (Math.random() - 0.5) * Math.PI;
+        const s = 4.5 + Math.random() * 5;
+        sp.userData = {
+          vx: Math.cos(theta) * Math.cos(phi) * s,
+          vy: Math.sin(phi) * s + 2.5,
+          vz: Math.sin(theta) * Math.cos(phi) * s,
+          life: 0.38
+        };
+        spawned++;
+      }
+    }
+  };
+
   // =========================================================================
   // FINGER SWIPE CONTROLS & ACTIONS (ZERO BUTTONS ON SCREEN)
+  // Handles both natural Lane Changes AND Authentic 90-Degree Corner Turns!
   // =========================================================================
   const moveLeft = useCallback(() => {
     const g = gameRef.current;
+    // Check if player is approaching a Left Corner Turn
+    if (g.upcomingCorner && !g.upcomingCorner.handled && g.upcomingCorner.direction === 'left') {
+      const zDist = g.upcomingCorner.mesh.position.z;
+      if (zDist > -8.5 && zDist < 5.0) {
+        // Successful 90° Turn!
+        g.upcomingCorner.handled = true;
+        g.turnAnimProgress = 1.0;
+        g.lastTurnDir = 'left';
+        g.playerLane = 1;
+        g.targetX = 0;
+        g.currentX = 0;
+        g.score += 50;
+        setScore(g.score);
+        setTurnWarning(null);
+        addPopup('PERFECT TURN! +50', '#10b981');
+        if (audioRef.current) audioRef.current.playTurnWhoosh();
+        return;
+      }
+    }
+
     if (g.playerLane > 0) {
       g.playerLane -= 1;
       g.targetX = (g.playerLane - 1) * 1.85;
       if (audioRef.current) audioRef.current.playSlideSwoosh();
     }
-  }, []);
+  }, [addPopup]);
 
   const moveRight = useCallback(() => {
     const g = gameRef.current;
+    // Check if player is approaching a Right Corner Turn
+    if (g.upcomingCorner && !g.upcomingCorner.handled && g.upcomingCorner.direction === 'right') {
+      const zDist = g.upcomingCorner.mesh.position.z;
+      if (zDist > -8.5 && zDist < 5.0) {
+        // Successful 90° Turn!
+        g.upcomingCorner.handled = true;
+        g.turnAnimProgress = 1.0;
+        g.lastTurnDir = 'right';
+        g.playerLane = 1;
+        g.targetX = 0;
+        g.currentX = 0;
+        g.score += 50;
+        setScore(g.score);
+        setTurnWarning(null);
+        addPopup('PERFECT TURN! +50', '#10b981');
+        if (audioRef.current) audioRef.current.playTurnWhoosh();
+        return;
+      }
+    }
+
     if (g.playerLane < 2) {
       g.playerLane += 1;
       g.targetX = (g.playerLane - 1) * 1.85;
       if (audioRef.current) audioRef.current.playSlideSwoosh();
     }
-  }, []);
+  }, [addPopup]);
 
   const jump = useCallback(() => {
     const g = gameRef.current;
@@ -905,6 +1175,48 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       trackChunks.push(createTrackChunk(-i * CHUNK_LENGTH));
     }
 
+    // 10. SPEED LINES SYSTEM (High velocity speed rush streaks)
+    const speedLines = [];
+    const speedMat = new THREE.MeshBasicMaterial({
+      color: 0xfef08a,
+      transparent: true,
+      opacity: 0.65
+    });
+    const speedLineGeo = new THREE.CylinderGeometry(0.018, 0.018, 5.5, 4);
+    speedLineGeo.rotateX(Math.PI / 2);
+
+    for (let s = 0; s < 22; s++) {
+      const lineMesh = new THREE.Mesh(speedLineGeo, speedMat);
+      const angle = (s / 22) * Math.PI * 2;
+      const radius = 3.6 + Math.random() * 2.8;
+      lineMesh.position.set(
+        Math.cos(angle) * radius,
+        2.5 + Math.sin(angle) * (radius * 0.7),
+        -Math.random() * 30
+      );
+      lineMesh.visible = false;
+      scene.add(lineMesh);
+      speedLines.push(lineMesh);
+    }
+    gameRef.current.speedLines = speedLines;
+
+    // 11. GOLDEN COIN SPARKLE PARTICLES
+    const sparkParticles = [];
+    const sparkMat = new THREE.MeshBasicMaterial({
+      color: 0xfde047,
+      transparent: true,
+      opacity: 0.95
+    });
+    const sparkGeo = new THREE.OctahedronGeometry(0.09, 0);
+    for (let p = 0; p < 36; p++) {
+      const spark = new THREE.Mesh(sparkGeo, sparkMat);
+      spark.visible = false;
+      spark.userData = { vx: 0, vy: 0, vz: 0, life: 0 };
+      scene.add(spark);
+      sparkParticles.push(spark);
+    }
+    gameRef.current.sparkParticles = sparkParticles;
+
     // Save references to gameRef
     gameRef.current.scene = scene;
     gameRef.current.camera = camera;
@@ -953,8 +1265,17 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     g.slideTimer = 0;
     g.stumbleTimer = 0;
     g.monkeyDist = 90;
+    g.trauma = 0;
+    g.heartbeatTimer = 0;
+    g.turnAnimProgress = 0;
+    g.lastTurnDir = null;
+    g.lastCornerDist = 0;
 
-    // Clear active obstacles & coins
+    // Clear active obstacles & coins & upcoming corner
+    if (g.upcomingCorner && g.upcomingCorner.mesh) {
+      g.scene.remove(g.upcomingCorner.mesh);
+      g.upcomingCorner = null;
+    }
     g.obstacles.forEach(o => g.scene.remove(o.mesh));
     g.obstacles = [];
     g.coinsList.forEach(c => g.scene.remove(c.mesh));
@@ -964,6 +1285,9 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     setCoins(0);
     setScore(0);
     setPowerMeter(0);
+    setDangerOpacity(0);
+    setTurnWarning(null);
+    setPopups([]);
     setGameState('playing');
 
     if (audioRef.current) {
@@ -1000,29 +1324,31 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
   }, [gameState]);
 
   // =========================================================================
-  // REAL-TIME PHYSICS, ANIMATION & COLLISION ENGINE
+  // REAL-TIME PHYSICS, ANIMATION & COLLISION ENGINE (AAA WORLD-CLASS FEEL)
   // =========================================================================
   const updateGame = (dt) => {
     const g = gameRef.current;
     if (!g.playerObj) return;
 
-    // 1. Distance & Progression
+    // 1. Distance & Speed Progression
     const currentSpeed = g.speed;
     g.distance += currentSpeed * dt;
-    g.speed = Math.min(85, 42 + g.distance * 0.035);
+    g.speed = Math.min(88, 42 + g.distance * 0.035);
 
     setDistance(Math.floor(g.distance));
     const computedScore = Math.floor(g.distance * 2 + g.coins * 15);
     g.score = computedScore;
     setScore(computedScore);
 
-    // 2. Smooth Lateral Lane Movement
+    // 2. Smooth Lateral Lane Movement & Natural Runner Banking
     g.currentX += (g.targetX - g.currentX) * (dt * 14);
     g.playerObj.group.position.x = g.currentX;
-    // Dynamic runner tilt
-    g.playerObj.group.rotation.z = (g.targetX - g.currentX) * -0.28;
+    // Dynamic runner tilt into turns
+    const laneBank = (g.targetX - g.currentX) * -0.28;
+    const cornerBank = g.turnAnimProgress > 0 ? (g.lastTurnDir === 'left' ? -0.45 : 0.45) * Math.sin(g.turnAnimProgress * Math.PI) : 0;
+    g.playerObj.group.rotation.z = laneBank + cornerBank;
 
-    // 3. Jump Physics (Parabolic Arc)
+    // 3. Jump Physics (Authentic Parabolic Arc with Air Gravity)
     if (g.isJumping) {
       g.jumpY += g.jumpVelocity * dt;
       g.jumpVelocity -= 36 * dt; // Gravity
@@ -1048,7 +1374,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       g.playerObj.group.rotation.x = 0;
     }
 
-    // 5. Articulated Runner Kinematics (Natural human running gait!)
+    // 5. Articulated Runner Kinematics (Natural human running gait)
     g.runAnimTime += dt * (currentSpeed * 0.35);
     const { leftLeg, rightLeg, leftArm, rightArm } = g.playerObj;
 
@@ -1076,12 +1402,26 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       rightArm.shoulder.rotation.x = -2.2;
     }
 
-    // 6. Demon Ape Pursuit Dynamics (Bounding Gorilla Gait)
+    // 6. Demon Ape Pursuit Dynamics & Visceral Threat
     if (g.stumbleTimer > 0) {
       g.stumbleTimer -= dt;
       g.monkeyDist = 28; // Roaring right behind runner!
     } else {
-      g.monkeyDist += (90 - g.monkeyDist) * (dt * 0.8);
+      g.monkeyDist += (90 - g.monkeyDist) * (dt * 0.75);
+    }
+
+    // Threat danger level (0 = far away, 1 = right behind runner)
+    const danger = Math.max(0, Math.min(1, (52 - g.monkeyDist) / 42));
+    setDangerOpacity(danger);
+
+    // Deep pounding heartbeat pulse when Demon Monkey is close
+    if (g.monkeyDist < 52) {
+      g.heartbeatTimer = (g.heartbeatTimer || 0) - dt;
+      const hbInterval = Math.max(0.35, (g.monkeyDist / 52) * 0.85);
+      if (g.heartbeatTimer <= 0) {
+        g.heartbeatTimer = hbInterval;
+        if (audioRef.current) audioRef.current.playHeartbeat();
+      }
     }
 
     if (g.monkeyObj) {
@@ -1109,7 +1449,38 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       spawnChunkElements(first.position.z);
     }
 
-    // 8. Move Clouds
+    // 8. 90-Degree Corner Turn Dynamics
+    if (g.upcomingCorner) {
+      g.upcomingCorner.mesh.position.z += currentSpeed * dt;
+      const cz = g.upcomingCorner.mesh.position.z;
+
+      // Display warning banner when approaching intersection
+      if (cz > -24 && cz < 5.0 && !g.upcomingCorner.handled) {
+        setTurnWarning(g.upcomingCorner.direction);
+      } else {
+        setTurnWarning(null);
+      }
+
+      // Check if runner failed to turn in time (crashed into Mayan wall!)
+      if (cz >= 5.0 && !g.upcomingCorner.handled) {
+        g.trauma = 1.0;
+        triggerGameOver();
+        return;
+      }
+
+      // Cleanup past corner
+      if (cz > 16) {
+        g.scene.remove(g.upcomingCorner.mesh);
+        g.upcomingCorner = null;
+      }
+    }
+
+    // Decay corner turn animation progress
+    if (g.turnAnimProgress > 0) {
+      g.turnAnimProgress = Math.max(0, g.turnAnimProgress - dt * 2.8);
+    }
+
+    // 9. Move Clouds
     g.cloudsList.forEach(cloud => {
       cloud.position.z += currentSpeed * dt * 0.4;
       if (cloud.position.z > 20) {
@@ -1117,7 +1488,37 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       }
     });
 
-    // 9. Move & Collide Obstacles
+    // 10. Speed Lines / Warp Rush Animation
+    if (g.speedLines && g.speedLines.length > 0) {
+      const isHighSpeed = currentSpeed > 55;
+      g.speedLines.forEach(line => {
+        line.visible = isHighSpeed;
+        if (isHighSpeed) {
+          line.position.z += currentSpeed * dt * 1.8;
+          if (line.position.z > 8) {
+            line.position.z = -35 - Math.random() * 25;
+          }
+        }
+      });
+    }
+
+    // 11. Golden Coin Sparkle Particles Update
+    if (g.sparkParticles && g.sparkParticles.length > 0) {
+      g.sparkParticles.forEach(sp => {
+        if (sp.visible) {
+          sp.position.x += sp.userData.vx * dt;
+          sp.position.y += sp.userData.vy * dt;
+          sp.position.z += sp.userData.vz * dt;
+          sp.userData.vy -= 18 * dt; // gravity on sparks
+          sp.userData.life -= dt;
+          if (sp.userData.life <= 0) {
+            sp.visible = false;
+          }
+        }
+      });
+    }
+
+    // 12. Move & Collide Obstacles (Logs, Spikes, Fire Rings & Broken Gaps)
     for (let i = g.obstacles.length - 1; i >= 0; i--) {
       const obs = g.obstacles[i];
       obs.mesh.position.z += currentSpeed * dt;
@@ -1129,14 +1530,19 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         if (laneMatches) {
           let dodged = false;
           if (obs.type === 'log' || obs.type === 'spikes') {
-            if (g.isJumping && g.jumpY > 1.2) dodged = true;
+            if (g.isJumping && g.jumpY > 1.1) dodged = true;
           } else if (obs.type === 'fire_ring') {
             if (g.isSliding) dodged = true;
+          } else if (obs.type === 'broken_gap') {
+            if (g.isJumping && g.jumpY > 0.85) dodged = true;
           }
 
           if (!dodged) {
             obs.hit = true;
-            if (g.monkeyDist < 35) {
+            g.trauma = 0.85; // Violent camera shake
+
+            // Broken abyss gap means instant plunge!
+            if (obs.type === 'broken_gap' || g.monkeyDist < 35) {
               triggerGameOver();
               return;
             } else {
@@ -1146,6 +1552,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
                 audioRef.current.playStumble();
                 audioRef.current.playDemonRoar();
               }
+              addPopup('STUMBLE!', '#ef4444');
             }
           }
         }
@@ -1157,7 +1564,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       }
     }
 
-    // 10. Move & Collect 3D Coins
+    // 13. Move & Collect 3D Coins (Ascending Pentatonic Scale & Spark Bursts)
     for (let i = g.coinsList.length - 1; i >= 0; i--) {
       const c = g.coinsList[i];
       c.mesh.position.z += currentSpeed * dt;
@@ -1172,7 +1579,24 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         setCoins(g.coins);
         g.powerMeter = Math.min(100, g.powerMeter + 2.5);
         setPowerMeter(g.powerMeter);
-        if (audioRef.current) audioRef.current.playCoinDing();
+
+        // Play Ascending Pentatonic Dopamine Bell
+        let streak = 1;
+        if (audioRef.current) {
+          const res = audioRef.current.playCoinDing();
+          if (res) streak = res.streak;
+        }
+
+        // Trigger Golden Sparkle Particle Burst
+        triggerSparkBurst(c.mesh.position.x, c.mesh.position.y, c.mesh.position.z);
+
+        // Floating combo text
+        if (streak >= 5) {
+          addPopup(`STREAK x${streak}! +${streak * 5}`, '#f59e0b');
+          g.score += streak * 5;
+        } else {
+          addPopup('+10', '#fbbf24');
+        }
 
         g.scene.remove(c.mesh);
         g.coinsList.splice(i, 1);
@@ -1184,20 +1608,73 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         g.coinsList.splice(i, 1);
       }
     }
+
+    // 14. WORLD-CLASS DYNAMIC CAMERA KINEMATICS (The AAA "Secret Sauce")
+    if (g.camera) {
+      // Lateral tracking: follows player lane smoothly with spring inertia
+      const targetCamX = g.currentX * 0.72;
+
+      // Height tracking:
+      // - Drops low when sliding (intense low-angle stone rush)
+      // - Rises when jumping (tracking airborne apex)
+      // - Subtle natural human head-bob while grounded
+      const headBob = (!g.isJumping && !g.isSliding) ? Math.sin(g.runAnimTime * 2) * 0.08 : 0;
+      const targetCamY = (g.isSliding ? 2.15 : (4.3 + g.jumpY * 0.45)) + headBob;
+
+      // Depth tracking with high-speed pushback
+      const targetCamZ = 7.6 + (currentSpeed > 65 ? 0.7 : 0);
+
+      // Screen trauma / stumble impact jitter shake
+      let shakeX = 0;
+      let shakeY = 0;
+      if (g.trauma > 0) {
+        g.trauma = Math.max(0, g.trauma - dt * 2.2);
+        shakeX = (Math.random() - 0.5) * g.trauma * 0.9;
+        shakeY = (Math.random() - 0.5) * g.trauma * 0.9;
+      }
+
+      // Smooth camera interpolation
+      g.camera.position.x += (targetCamX + shakeX - g.camera.position.x) * (dt * 12);
+      g.camera.position.y += (targetCamY + shakeY - g.camera.position.y) * (dt * 12);
+      g.camera.position.z += (targetCamZ - g.camera.position.z) * (dt * 8);
+
+      // Dynamic FOV based on speed and slide rush (wider lens at speed!)
+      const targetFov = 62 + ((currentSpeed - 42) / 46) * 12 + (g.isSliding ? 10 : 0);
+      g.camera.fov += (targetFov - g.camera.fov) * (dt * 6);
+
+      // Camera roll / bank during lane changes and turns
+      const turnCameraRoll = g.turnAnimProgress > 0 ? (g.lastTurnDir === 'left' ? -0.15 : 0.15) * Math.sin(g.turnAnimProgress * Math.PI) : 0;
+      g.camera.rotation.z = (g.targetX - g.currentX) * -0.04 + turnCameraRoll;
+      g.camera.updateProjectionMatrix();
+
+      // Camera dynamically tracks ahead down the runway
+      g.camera.lookAt(g.currentX * 0.35, 2.1 + g.jumpY * 0.3, -16);
+    }
   };
 
   // =========================================================================
-  // SPAWN 3D OBSTACLES & COINS (GNARLY LOGS, FIRE RINGS, SPIKES)
+  // SPAWN 3D OBSTACLES, COINS & CORNER TURNS
   // =========================================================================
   const spawnChunkElements = (zPos) => {
     const g = gameRef.current;
     if (!g.scene) return;
 
-    // 1. Obstacles (35% chance)
+    // 0. Procedural 90-Degree Aztec Corner Turns (Every ~220m)
+    if (g.distance > 80 && (g.distance - g.lastCornerDist > 220) && !g.upcomingCorner) {
+      const dir = Math.random() < 0.5 ? 'left' : 'right';
+      const cornerMesh = buildCornerTurnChunk(dir);
+      cornerMesh.position.set(0, 0, zPos);
+      g.scene.add(cornerMesh);
+      g.upcomingCorner = { mesh: cornerMesh, direction: dir, handled: false };
+      g.lastCornerDist = g.distance;
+      return; // Do not spawn obstacles right on top of corner intersection
+    }
+
+    // 1. Obstacles (36% chance)
     if (Math.random() < 0.36) {
-      const types = ['log', 'spikes', 'fire_ring'];
+      const types = ['log', 'spikes', 'fire_ring', 'broken_gap'];
       const chosenType = types[Math.floor(Math.random() * types.length)];
-      const lane = chosenType === 'fire_ring' ? 'all' : Math.floor(Math.random() * 3);
+      const lane = (chosenType === 'fire_ring' || chosenType === 'broken_gap') ? 'all' : Math.floor(Math.random() * 3);
       const laneX = lane === 'all' ? 0 : (lane - 1) * 1.85;
 
       let mesh = null;
@@ -1253,6 +1730,10 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         fireTorus.position.set(0, 1.6, 0);
         mesh.add(fireTorus);
 
+        mesh.position.set(0, 0, zPos);
+      } else if (chosenType === 'broken_gap') {
+        // Broken Bridge Abyss Gap (Jump Over It!)
+        mesh = buildBrokenGapMesh();
         mesh.position.set(0, 0, zPos);
       }
 
@@ -1467,6 +1948,96 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
           <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 4px #10b981' }} />
         </button>
       )}
+
+      {/* DEMON MONKEY DANGER RED VIGNETTE PULSE OVERLAY */}
+      {dangerOpacity > 0 && gameState === 'playing' && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            zIndex: 20,
+            boxShadow: `inset 0 0 ${Math.floor(dangerOpacity * 110)}px rgba(220, 38, 38, ${dangerOpacity * 0.9})`,
+            border: `${Math.floor(dangerOpacity * 6)}px solid rgba(239, 68, 68, ${dangerOpacity * 0.75})`,
+            borderRadius: '24px',
+            transition: 'box-shadow 0.12s ease'
+          }}
+        />
+      )}
+
+      {/* 90-DEGREE CORNER TURN WARNING BANNER */}
+      {turnWarning && gameState === 'playing' && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 75,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 30,
+            background: 'linear-gradient(135deg, rgba(6, 78, 59, 0.94) 0%, rgba(4, 47, 46, 0.98) 100%)',
+            border: '2px solid #10b981',
+            borderRadius: '24px',
+            padding: '8px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            boxShadow: '0 0 25px rgba(16, 185, 129, 0.9), 0 4px 15px rgba(0,0,0,0.8)',
+            animation: 'templeTurnPulse 0.4s infinite alternate',
+            color: '#fff',
+            fontWeight: 900,
+            fontSize: '1.05rem',
+            letterSpacing: '1px'
+          }}
+        >
+          <span style={{ fontSize: '1.4rem' }}>{turnWarning === 'left' ? '⬅️' : '➡️'}</span>
+          <span>{turnWarning === 'left' ? 'SWIPE LEFT TO TURN!' : 'SWIPE RIGHT TO TURN!'}</span>
+        </div>
+      )}
+
+      {/* FLOATING COMBO & SCORE POPUPS */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '38%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          pointerEvents: 'none',
+          zIndex: 35,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '8px'
+        }}
+      >
+        {popups.map(p => (
+          <div
+            key={p.id}
+            style={{
+              fontFamily: 'serif, monospace',
+              fontSize: '1.5rem',
+              fontWeight: 900,
+              color: p.color,
+              textShadow: '0 2px 10px rgba(0,0,0,0.9), 0 0 16px currentColor',
+              animation: 'templeFloatUp 0.85s ease-out forwards'
+            }}
+          >
+            {p.text}
+          </div>
+        ))}
+      </div>
+
+      <style>{`
+        @keyframes templeFloatUp {
+          0% { opacity: 0; transform: translateY(14px) scale(0.8); }
+          25% { opacity: 1; transform: translateY(0px) scale(1.15); }
+          75% { opacity: 1; transform: translateY(-20px) scale(1.0); }
+          100% { opacity: 0; transform: translateY(-38px) scale(0.85); }
+        }
+        @keyframes templeTurnPulse {
+          0% { transform: translateX(-50%) scale(1.0); }
+          100% { transform: translateX(-50%) scale(1.06); }
+        }
+      `}</style>
 
       {/* 3D WebGL Canvas Container */}
       <div
