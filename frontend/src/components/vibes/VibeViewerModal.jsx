@@ -435,23 +435,32 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     onClose();
   };
 
-  const isCurrentStoryVideo = currentVibe?.mediaType === 'video' || Boolean(currentVibe?.mediaUrl?.match(/\.(mp4|webm|mov|ogg)($|\?)/i));
+  const isCurrentStoryVideo = currentVibe?.mediaType === 'video' ||
+    Boolean(currentVibe?.mediaUrl && (
+      currentVibe.mediaUrl.includes('/video/') ||
+      currentVibe.mediaUrl.match(/\.(mp4|webm|mov|ogg|m4v)($|\?)/i)
+    ));
 
   // Sync video player lifecycle
   useEffect(() => {
     if (videoPlayerRef.current) {
       try {
         videoPlayerRef.current.currentTime = 0;
-        videoPlayerRef.current.play().catch(() => {});
+        videoPlayerRef.current.volume = 1.0;
+        videoPlayerRef.current.muted = isAudioMuted;
+        const playPromise = videoPlayerRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {
+            // If browser autoplay policy blocked audio, fall back to muted
+            if (videoPlayerRef.current && !videoPlayerRef.current.muted) {
+              videoPlayerRef.current.muted = true;
+              videoPlayerRef.current.play().catch(() => {});
+            }
+          });
+        }
       } catch (e) {}
     }
-  }, [currentIndex, currentVibe?.id]);
-
-  useEffect(() => {
-    if (videoPlayerRef.current) {
-      videoPlayerRef.current.muted = isAudioMuted;
-    }
-  }, [isAudioMuted]);
+  }, [currentIndex, currentVibe?.id, isAudioMuted]);
 
   useEffect(() => {
     if (videoPlayerRef.current) {
@@ -810,13 +819,25 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setIsAudioMuted(prev => !prev);
+                  setIsAudioMuted(prev => {
+                    const next = !prev;
+                    if (videoPlayerRef.current) {
+                      videoPlayerRef.current.muted = next;
+                      videoPlayerRef.current.volume = 1.0;
+                      if (!next) videoPlayerRef.current.play().catch(() => {});
+                    }
+                    if (audioRef.current) {
+                      audioRef.current.volume = next ? 0 : 0.85;
+                      if (!next) audioRef.current.play().catch(() => {});
+                    }
+                    return next;
+                  });
                 }}
                 className="icon-btn-ghost"
-                style={{ color: '#fff', background: 'rgba(0,0,0,0.4)', borderRadius: '50%', padding: '6px' }}
+                style={{ color: '#fff', background: 'rgba(0,0,0,0.5)', borderRadius: '50%', padding: '6px' }}
                 title={isAudioMuted ? "Unmute Story Audio" : "Mute Story Audio"}
               >
-                {isAudioMuted ? <VolumeX size={16} color="#ef4444" /> : <Volume2 size={16} color="#f59e0b" />}
+                {isAudioMuted ? <VolumeX size={17} color="#ef4444" /> : <Volume2 size={17} color="#38bdf8" />}
               </button>
             )}
             {isMine && (

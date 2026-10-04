@@ -130,23 +130,35 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
 
   // 4. Graceful Fallback: If direct Cloudinary CDN upload failed, use backend upload route
   try {
-    const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
-    const fallbackRes = await fetch(`${BACKEND_URL}/api/upload`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeader
-      },
-      body: JSON.stringify({
-        file: finalPayload,
-        folder
-      })
-    });
+    let payloadToSend = finalPayload;
+    if (finalPayload instanceof File || finalPayload instanceof Blob) {
+      payloadToSend = await new Promise((res) => {
+        const reader = new FileReader();
+        reader.onload = (e) => res(e.target.result);
+        reader.onerror = () => res('');
+        reader.readAsDataURL(finalPayload);
+      });
+    }
 
-    if (fallbackRes.ok) {
-      const fallbackData = await fallbackRes.json();
-      if (fallbackData.url) {
-        return fallbackData.url;
+    if (payloadToSend) {
+      const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+      const fallbackRes = await fetch(`${BACKEND_URL}/api/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeader
+        },
+        body: JSON.stringify({
+          file: payloadToSend,
+          folder
+        })
+      });
+
+      if (fallbackRes.ok) {
+        const fallbackData = await fallbackRes.json();
+        if (fallbackData.url) {
+          return fallbackData.url;
+        }
       }
     }
   } catch (err) {

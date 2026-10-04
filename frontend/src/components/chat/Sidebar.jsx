@@ -1314,8 +1314,32 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     });
   }, [allUsers, recentChats, user?.id, user?.username]);
 
+  // Instagram-style swipe right from left edge to open Story camera
+  const swipeStartXRef = useRef(0);
+  const swipeStartYRef = useRef(0);
+
+  const handleSidebarTouchStart = (e) => {
+    if (activeChat || !e.touches || e.touches.length === 0) return;
+    swipeStartXRef.current = e.touches[0].clientX;
+    swipeStartYRef.current = e.touches[0].clientY;
+  };
+
+  const handleSidebarTouchEnd = (e) => {
+    if (activeChat || !e.changedTouches || e.changedTouches.length === 0) return;
+    const deltaX = e.changedTouches[0].clientX - swipeStartXRef.current;
+    const deltaY = Math.abs(e.changedTouches[0].clientY - swipeStartYRef.current);
+    // If started from left edge (< 70px) and swiped right (> 65px) horizontally
+    if (swipeStartXRef.current < 70 && deltaX > 65 && deltaY < 80) {
+      setShowCreateVibe(true);
+    }
+  };
+
   return (
-    <div className={`sidebar-container ${activeChat ? 'mobile-hidden' : ''}`}>
+    <div
+      className={`sidebar-container ${activeChat ? 'mobile-hidden' : ''}`}
+      onTouchStart={handleSidebarTouchStart}
+      onTouchEnd={handleSidebarTouchEnd}
+    >
       {/* WhatsApp-Style Top App Header */}
       <div className="sidebar-header" style={{ padding: '0.85rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)' }}>
         {/* Brand & User Chip */}
