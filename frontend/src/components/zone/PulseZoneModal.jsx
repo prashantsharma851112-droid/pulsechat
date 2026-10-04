@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Sparkles, Award } from 'lucide-react';
+import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Sparkles, Award, ArrowLeft } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 import ArrowPuzzleGame from './ArrowPuzzleGame';
@@ -13,7 +13,7 @@ export default function PulseZoneModal({ onClose }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
   const [activeTab, setActiveTab] = useState('games'); // 'games' | 'leaderboard'
-  const [selectedGame, setSelectedGame] = useState('arrow'); // 'arrow' | 'tapper'
+  const [selectedGame, setSelectedGame] = useState(null); // null = games launcher hub, 'racer' | 'arrow' | 'tapper'
 
   // Speed Tapper Game State
   const [tapperState, setTapperState] = useState('idle'); // 'idle' | 'playing' | 'ended'
@@ -184,7 +184,7 @@ export default function PulseZoneModal({ onClose }) {
         className="modal-card modal-responsive"
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: '540px',
+          maxWidth: selectedGame === 'racer' ? '960px' : '540px',
           width: '100%',
           maxHeight: '94dvh',
           display: 'flex',
@@ -222,9 +222,6 @@ export default function PulseZoneModal({ onClose }) {
                 <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '6px' }}>
                   Pulse Zone <span style={{ color: '#fbbf24' }}>🎮</span>
                 </h2>
-                <span style={{ fontSize: '0.76rem', color: 'rgba(255,255,255,0.78)' }}>
-                  Arrow Puzzle, Mini-Games & Live Leaderboard
-                </span>
               </div>
             </div>
             <button className="icon-btn-ghost" onClick={onClose} style={{ color: '#fff', background: 'rgba(0,0,0,0.3)', borderRadius: '50%' }}>
@@ -381,80 +378,235 @@ export default function PulseZoneModal({ onClose }) {
           {activeTab === 'games' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
-              {/* Game Selector Chips */}
-              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-                <button
-                  onClick={() => setSelectedGame('arrow')}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: '20px',
-                    border: selectedGame === 'arrow' ? '1.5px solid #3b82f6' : '1px solid var(--border)',
-                    background: selectedGame === 'arrow' ? 'rgba(37, 99, 235, 0.2)' : 'var(--bg-card)',
-                    color: selectedGame === 'arrow' ? '#38bdf8' : 'var(--text-muted)',
-                    fontWeight: 800,
-                    fontSize: '0.78rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  🎯 Arrow Puzzle <span style={{ fontSize: '0.65rem', background: '#3b82f6', color: '#fff', padding: '1px 5px', borderRadius: '8px' }}>HOT</span>
-                </button>
+              {/* When no game is selected: Clean Arcade Launcher Cards */}
+              {selectedGame === null ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {/* Cyber Racer Card */}
+                  <div
+                    onClick={() => setSelectedGame('racer')}
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.18), rgba(59, 130, 246, 0.12))',
+                      border: '1.5px solid rgba(6, 182, 212, 0.45)',
+                      borderRadius: '16px',
+                      padding: '14px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 4px 16px rgba(6, 182, 212, 0.15)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div style={{
+                        width: '52px',
+                        height: '52px',
+                        borderRadius: '14px',
+                        background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.8rem',
+                        boxShadow: '0 4px 14px rgba(6, 182, 212, 0.4)'
+                      }}>
+                        🏎️
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                          <span style={{ fontWeight: 900, fontSize: '1rem', color: '#fff' }}>Cyber Racer 3D</span>
+                          <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>LANDSCAPE</span>
+                        </div>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                          3D Highway Racing • Nitro Boost • Multi-Lane AI Traffic
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedGame('racer'); }}
+                      style={{
+                        background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '8px 16px',
+                        fontWeight: 900,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        boxShadow: '0 4px 12px rgba(6, 182, 212, 0.4)'
+                      }}
+                    >
+                      <Play size={14} fill="#fff" /> PLAY
+                    </button>
+                  </div>
 
-                <button
-                  onClick={() => setSelectedGame('racer')}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: '20px',
-                    border: selectedGame === 'racer' ? '1.5px solid #06b6d4' : '1px solid var(--border)',
-                    background: selectedGame === 'racer' ? 'rgba(6, 182, 212, 0.2)' : 'var(--bg-card)',
-                    color: selectedGame === 'racer' ? '#38bdf8' : 'var(--text-muted)',
-                    fontWeight: 800,
-                    fontSize: '0.78rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    whiteSpace: 'nowrap',
-                    boxShadow: selectedGame === 'racer' ? '0 0 12px rgba(6, 182, 212, 0.4)' : 'none'
-                  }}
-                >
-                  🏎️ Cyber Racer <span style={{ fontSize: '0.65rem', background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', color: '#fff', padding: '1px 5px', borderRadius: '8px' }}>NEW</span>
-                </button>
+                  {/* Arrow Puzzle Card */}
+                  <div
+                    onClick={() => setSelectedGame('arrow')}
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.1))',
+                      border: '1.5px solid rgba(59, 130, 246, 0.35)',
+                      borderRadius: '16px',
+                      padding: '14px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 4px 16px rgba(59, 130, 246, 0.12)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div style={{
+                        width: '52px',
+                        height: '52px',
+                        borderRadius: '14px',
+                        background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.8rem',
+                        boxShadow: '0 4px 14px rgba(59, 130, 246, 0.4)'
+                      }}>
+                        🎯
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                          <span style={{ fontWeight: 900, fontSize: '1rem', color: '#fff' }}>Arrow Puzzle</span>
+                          <span style={{ fontSize: '0.62rem', background: '#3b82f6', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>BRAIN</span>
+                        </div>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                          Daily Logic Challenge • Untangle Arrows & Clear Blocks
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedGame('arrow'); }}
+                      style={{
+                        background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '8px 16px',
+                        fontWeight: 900,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)'
+                      }}
+                    >
+                      <Play size={14} fill="#fff" /> PLAY
+                    </button>
+                  </div>
 
-                <button
-                  onClick={() => setSelectedGame('tapper')}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: '20px',
-                    border: selectedGame === 'tapper' ? '1.5px solid #f59e0b' : '1px solid var(--border)',
-                    background: selectedGame === 'tapper' ? 'rgba(245, 158, 11, 0.2)' : 'var(--bg-card)',
-                    color: selectedGame === 'tapper' ? '#f59e0b' : 'var(--text-muted)',
-                    fontWeight: 800,
-                    fontSize: '0.78rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  ⚡ Speed Tapper
-                </button>
-              </div>
-
-              {/* Selected Game Screen */}
-              {selectedGame === 'arrow' ? (
-                <ArrowPuzzleGame
-                  onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
-                />
-              ) : selectedGame === 'racer' ? (
-                <CyberRacerGame
-                  onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
-                />
+                  {/* Speed Tapper Card */}
+                  <div
+                    onClick={() => setSelectedGame('tapper')}
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(239, 68, 68, 0.1))',
+                      border: '1.5px solid rgba(245, 158, 11, 0.35)',
+                      borderRadius: '16px',
+                      padding: '14px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 4px 16px rgba(245, 158, 11, 0.12)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div style={{
+                        width: '52px',
+                        height: '52px',
+                        borderRadius: '14px',
+                        background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.8rem',
+                        boxShadow: '0 4px 14px rgba(245, 158, 11, 0.4)'
+                      }}>
+                        ⚡
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                          <span style={{ fontWeight: 900, fontSize: '1rem', color: '#fff' }}>Speed Tapper</span>
+                          <span style={{ fontSize: '0.62rem', background: '#f59e0b', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>REFLEX</span>
+                        </div>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                          15-Second Blitz • Tap Glowing Targets • Climb Ranks
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedGame('tapper'); }}
+                      style={{
+                        background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '8px 16px',
+                        fontWeight: 900,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
+                      }}
+                    >
+                      <Play size={14} fill="#fff" /> PLAY
+                    </button>
+                  </div>
+                </div>
               ) : (
+                /* When a game is selected: Top Back Bar + Active Game */
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <button
+                      onClick={() => setSelectedGame(null)}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        borderRadius: '20px',
+                        color: '#fff',
+                        padding: '6px 14px',
+                        fontSize: '0.8rem',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <ArrowLeft size={15} /> All Games
+                    </button>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {selectedGame === 'racer' && <span>🏎️ Cyber Racer 3D</span>}
+                      {selectedGame === 'arrow' && <span>🎯 Arrow Puzzle</span>}
+                      {selectedGame === 'tapper' && <span>⚡ Speed Tapper</span>}
+                    </div>
+                  </div>
+
+                  {selectedGame === 'arrow' && (
+                    <ArrowPuzzleGame
+                      onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
+                    />
+                  )}
+
+                  {selectedGame === 'racer' && (
+                    <CyberRacerGame
+                      onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
+                    />
+                  )}
+
+                  {selectedGame === 'tapper' && (
                 <div style={{
                   background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(239, 68, 68, 0.08))',
                   borderRadius: '18px',
@@ -591,6 +743,8 @@ export default function PulseZoneModal({ onClose }) {
               )}
             </div>
           )}
+        </div>
+      )}
 
           {activeTab === 'leaderboard' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

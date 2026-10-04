@@ -328,11 +328,6 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
       localStorage.setItem('pulsechat_arrow_level', nextLvl.toString());
     } catch (e) {}
 
-    const reward = isDailyChallenge ? 30 : 15;
-    const currentSparks = user?.pulseSparks || 100;
-    if (updateUserProfile) {
-      updateUserProfile({ ...user, pulseSparks: currentSparks + reward });
-    }
     if (onScoreUpdate) {
       onScoreUpdate('Arrow Puzzle', nextLvl * 50, nextLvl);
     }
@@ -427,7 +422,7 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                 cursor: 'pointer'
               }}
             >
-              Play (+30⚡)
+              Play Daily Challenge 🎯
             </button>
           </div>
 
