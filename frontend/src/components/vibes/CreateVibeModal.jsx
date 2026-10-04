@@ -434,26 +434,29 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     setSubmitting(true);
     setError('');
 
-    let finalMediaUrl = mediaUrl;
+    let finalMediaUrl = (mediaUrl && (mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://'))) ? mediaUrl : '';
     const isVideo = (mediaType === 'video') ||
       Boolean(selectedMediaFile && (selectedMediaFile.type?.startsWith('video/') || selectedMediaFile.type?.includes('video') || selectedMediaFile.name?.match(/\.(mp4|webm|mov|ogg|m4v|3gp|mkv)($|\?)/i))) ||
       Boolean(mediaUrl && (mediaUrl.includes('/video/') || mediaUrl.match(/\.(mp4|webm|mov|ogg|m4v|3gp|mkv)($|\?)/i) || mediaUrl.startsWith('data:video')));
 
     // Direct Cloudinary Edge Upload (zero load on Render backend!)
-    if (selectedMediaFile) {
+    const payloadToUpload = selectedMediaFile || mediaUrl;
+    if (payloadToUpload) {
       try {
-        const cdnUrl = await uploadMediaDirect(selectedMediaFile, 'pulsechat_vibes', token, isVideo);
-        if (cdnUrl) finalMediaUrl = cdnUrl;
+        const cdnUrl = await uploadMediaDirect(payloadToUpload, 'pulsechat_vibes', token, isVideo);
+        if (cdnUrl && (cdnUrl.startsWith('http://') || cdnUrl.startsWith('https://'))) {
+          finalMediaUrl = cdnUrl;
+        }
       } catch (err) {
-        console.warn('Direct media upload fallback:', err);
+        console.warn('Direct media upload fallback error:', err);
       }
-    } else if (mediaUrl && (mediaUrl.startsWith('data:') || mediaUrl.startsWith('blob:'))) {
-      try {
-        const cdnUrl = await uploadMediaDirect(mediaUrl, 'pulsechat_vibes', token, isVideo);
-        if (cdnUrl) finalMediaUrl = cdnUrl;
-      } catch (err) {
-        console.warn('Direct media upload fallback:', err);
-      }
+    }
+
+    // STRICT GUARD: Local blob URLs must NEVER be saved to server database!
+    if ((selectedMediaFile || (mediaUrl && (mediaUrl.startsWith('blob:') || mediaUrl.startsWith('data:')))) && !finalMediaUrl) {
+      setError(isVideo ? 'Video upload failed. Please check your internet connection and try again.' : 'Photo upload failed. Please try again.');
+      setSubmitting(false);
+      return;
     }
 
     const calculatedMediaType = isVideo ? 'video' : 'image';

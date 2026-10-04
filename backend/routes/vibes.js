@@ -35,6 +35,10 @@ router.post('/create', authMiddleware, async (req, res) => {
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
     const vibeId = id || ('vibe_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
 
+    if (mediaUrl && typeof mediaUrl === 'string' && mediaUrl.startsWith('blob:')) {
+      return res.status(400).json({ error: 'Local blob URLs cannot be saved as media. Please ensure cloud upload completes.' });
+    }
+
     // Duplicate guard: prevent duplicate submission within 15s
     const existingRecent = await Vibe.findOne({
       userId: resolvedUserId,

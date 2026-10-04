@@ -95,6 +95,18 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
                     Boolean(finalPayload.match(/\.(mp4|webm|mov|ogg|m4v|3gp|mkv)($|\?)/i))
                   ));
 
+  // 0. If payload is a local blob: URL, resolve it to an actual binary Blob
+  if (typeof finalPayload === 'string' && finalPayload.startsWith('blob:')) {
+    try {
+      const bRes = await fetch(finalPayload);
+      if (bRes.ok) {
+        finalPayload = await bRes.blob();
+      }
+    } catch (bErr) {
+      console.warn('Could not resolve blob URL to Blob object:', bErr);
+    }
+  }
+
   // 1. Client-side canvas compression for images only (do not touch videos!)
   const isImage = !isVideo && (
     (typeof fileOrDataUrl === 'string' && fileOrDataUrl.startsWith('data:image/')) ||
@@ -119,9 +131,12 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
       if (sigData.directUpload && sigData.cloudName && sigData.apiKey && sigData.signature) {
         // 3. Direct upload to Cloudinary Edge CDN (bypasses Render entirely!)
         const resourceType = isVideo ? 'video' : 'image';
+        const filename = (finalPayload instanceof File && finalPayload.name)
+          ? finalPayload.name
+          : (isVideo ? 'pulse_video.mp4' : 'pulse_image.jpg');
 
         const formData = new FormData();
-        formData.append('file', finalPayload);
+        formData.append('file', finalPayload, filename);
         formData.append('api_key', sigData.apiKey);
         formData.append('timestamp', sigData.timestamp);
         formData.append('signature', sigData.signature);
@@ -133,10 +148,16 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
         });
 
         if (!cdnRes.ok) {
-          // Try auto upload if resource specific failed
+          const autoFormData = new FormData();
+          autoFormData.append('file', finalPayload, filename);
+          autoFormData.append('api_key', sigData.apiKey);
+          autoFormData.append('timestamp', sigData.timestamp);
+          autoFormData.append('signature', sigData.signature);
+          autoFormData.append('folder', sigData.folder || folder);
+
           cdnRes = await fetch(`https://api.cloudinary.com/v1_1/${sigData.cloudName}/auto/upload`, {
             method: 'POST',
-            body: formData
+            body: autoFormData
           });
         }
 
@@ -145,6 +166,9 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
           if (cdnData.secure_url) {
             return cdnData.secure_url;
           }
+        } else {
+          const errText = await cdnRes.text();
+          console.warn('Cloudinary direct upload failed:', errText);
         }
       }
     }
@@ -190,5 +214,8 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
     console.error('All upload strategies failed:', err);
   }
 
-  return payloadToSend || (typeof finalPayload === 'string' ? finalPayload : '');
+  if (typeof payloadToSend === 'string' && (payloadToSend.startsWith('http://') || payloadToSend.startsWith('https://'))) {
+    return payloadToSend;
+  }
+  return '';
 }
