@@ -106,9 +106,11 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const fileInputRef = useRef(null);
   const textInputRef = useRef(null);
   const previewAudioRef = useRef(null);
+  const mediaDataUrlRef = useRef(null);
+  const dragStartCoordRef = useRef({ x: 0, y: 0, startPos: { x: 50, y: 50 } });
 
-  // Video Sound & Autoplay Management
-  const [isVideoMuted, setIsVideoMuted] = useState(false);
+  // Video Sound & Autoplay Management (Starts muted to strictly respect Android WebView autoplay policies)
+  const [isVideoMuted, setIsVideoMuted] = useState(true);
   const [showUnmuteHint, setShowUnmuteHint] = useState(false);
 
   const toggleVideoMute = useCallback((e) => {
@@ -228,8 +230,10 @@ export default function CreateVibeModal({ onClose, onCreated }) {
 
     stopCameraStream();
     setError('');
-    setIsVideoMuted(false);
-    setShowUnmuteHint(false);
+    setIsVideoMuted(true);
+    setShowUnmuteHint(true);
+    setImagePos({ x: 50, y: 50 });
+    setImageZoom(1.0);
 
     // Reliable video detection across Android WebView and browsers
     const isVidMime = Boolean(file.type && (
@@ -250,8 +254,14 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       setMediaUrl(objectUrl);
       setViewMode('media');
 
-      // Ambiguity probe: if file has no extension or generic application/octet-stream
-      if (!isVidMime && !isVidExt && (!file.type || !file.type.startsWith('image/'))) {
+      if (isVid) {
+        // Fallback data URL if Android WebView has issues with object URL stream
+        const reader = new FileReader();
+        reader.onload = () => {
+          mediaDataUrlRef.current = reader.result;
+        };
+        reader.readAsDataURL(file);
+      } else if (!file.type || !file.type.startsWith('image/')) {
         const probe = document.createElement('video');
         probe.preload = 'metadata';
         probe.src = objectUrl;
@@ -289,8 +299,11 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     if (e && e.stopPropagation) e.stopPropagation();
     setSelectedElement(elementId);
 
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
     // Multi-touch pinch check
-    if (e.touches && e.touches.length === 2) {
+    if (e.touches && e.touches.length >= 2) {
       const dist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
@@ -307,6 +320,17 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       return;
     }
 
+    if (elementId === 'image') {
+      dragStartCoordRef.current = { x: clientX, y: clientY, startPos: { ...imagePos } };
+    } else if (elementId === 'text') {
+      dragStartCoordRef.current = { x: clientX, y: clientY, startPos: { ...textPos } };
+    } else if (elementId === 'music') {
+      dragStartCoordRef.current = { x: clientX, y: clientY, startPos: { ...musicPos } };
+    } else if (typeof elementId === 'string' && elementId.startsWith('st_')) {
+      const st = stickersList.find(s => s.id === elementId);
+      dragStartCoordRef.current = { x: clientX, y: clientY, startPos: { x: st?.x || 50, y: st?.y || 50 } };
+    }
+
     setDraggingElement(elementId);
   };
 
@@ -314,7 +338,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     if (!stageRef.current) return;
 
     // 1. Multi-touch pinch-to-scale
-    if (e.touches && e.touches.length === 2 && touchStartDistRef.current) {
+    if (e.touches && e.touches.length >= 2 && touchStartDistRef.current) {
       const currentDist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
@@ -332,34 +356,46 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         setStickersList(prev => prev.map(s => s.id === selectedElement ? { ...s, scale: Math.min(3.0, Math.max(0.5, nextScale)) } : s));
       } else {
         const nextZoom = Number((initialPinchScaleRef.current * ratio).toFixed(2));
-        setImageZoom(Math.min(3.0, Math.max(0.4, nextZoom)));
+        setImageZoom(Math.min(4.0, Math.max(0.35, nextZoom)));
       }
       return;
     }
 
-    // 2. Single-finger drag
+    // 2. Single-finger drag with relative smooth displacement
     if (!draggingElement) return;
     const rect = stageRef.current.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-    const x = Math.max(5, Math.min(95, Math.round(((clientX - rect.left) / rect.width) * 100)));
-    const y = Math.max(5, Math.min(95, Math.round(((clientY - rect.top) / rect.height) * 100)));
+    const deltaX = ((clientX - dragStartCoordRef.current.x) / rect.width) * 100;
+    const deltaY = ((clientY - dragStartCoordRef.current.y) / rect.height) * 100;
 
-    // Trash can detection (bottom center: y > 76, x between 30 and 70)
-    if (y > 76 && x >= 30 && x <= 70) {
+    // Trash can detection (bottom center: screenY > 76, screenX between 30 and 70)
+    const screenX = Math.round(((clientX - rect.left) / rect.width) * 100);
+    const screenY = Math.round(((clientY - rect.top) / rect.height) * 100);
+    if (screenY > 76 && screenX >= 30 && screenX <= 70) {
       setIsOverTrash(true);
     } else {
       setIsOverTrash(false);
     }
 
+    const startPos = dragStartCoordRef.current.startPos;
     if (draggingElement === 'text') {
+      const x = Math.max(5, Math.min(95, Math.round(startPos.x + deltaX)));
+      const y = Math.max(5, Math.min(95, Math.round(startPos.y + deltaY)));
       setTextPos({ x, y });
     } else if (draggingElement === 'music') {
+      const x = Math.max(5, Math.min(95, Math.round(startPos.x + deltaX)));
+      const y = Math.max(5, Math.min(95, Math.round(startPos.y + deltaY)));
       setMusicPos({ x, y });
     } else if (draggingElement === 'image') {
+      // Photo/video repositioning across wide boundaries
+      const x = Math.max(-50, Math.min(150, Math.round(startPos.x + deltaX)));
+      const y = Math.max(-50, Math.min(150, Math.round(startPos.y + deltaY)));
       setImagePos({ x, y });
     } else if (typeof draggingElement === 'string' && draggingElement.startsWith('st_')) {
+      const x = Math.max(5, Math.min(95, Math.round(startPos.x + deltaX)));
+      const y = Math.max(5, Math.min(95, Math.round(startPos.y + deltaY)));
       setStickersList(prev => prev.map(s => s.id === draggingElement ? { ...s, x, y } : s));
     }
   };
@@ -569,55 +605,94 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           />
         )}
 
-        {/* Uploaded Media View (Photo or Video with sound) */}
+        {/* Uploaded Media View (Photo or Video with sound and full touch drag + pinch zoom) */}
         {viewMode === 'media' && mediaUrl && (
-          mediaType === 'video' ? (
-            <video
-              ref={previewVideoRef}
-              key={`preview_vid_${mediaUrl}`}
-              src={mediaUrl}
-              autoPlay
-              loop
-              playsInline
-              webkit-playsinline="true"
-              preload="auto"
-              muted={isVideoMuted}
-              onLoadedData={() => {
-                const vid = previewVideoRef.current;
-                if (!vid) return;
-                vid.volume = 1.0;
-                vid.muted = isVideoMuted;
-                const p = vid.play();
-                if (p !== undefined) {
-                  p.catch(() => {
-                    vid.muted = true;
-                    setIsVideoMuted(true);
-                    setShowUnmuteHint(true);
-                    vid.play().catch(() => {});
-                  });
-                }
-              }}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                filter: IMAGE_FILTERS.find(f => f.id === imageFilter)?.css || 'none',
-                transform: `scale(${imageZoom})`
-              }}
-            />
-          ) : (
-            <img
-              src={mediaUrl}
-              alt=""
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                filter: IMAGE_FILTERS.find(f => f.id === imageFilter)?.css || 'none',
-                transform: `scale(${imageZoom})`
-              }}
-            />
-          )
+          <div
+            onMouseDown={(e) => handleElementTouchStart('image', e)}
+            onTouchStart={(e) => handleElementTouchStart('image', e)}
+            style={{
+              position: 'absolute',
+              left: `${imagePos.x}%`,
+              top: `${imagePos.y}%`,
+              transform: `translate(-50%, -50%) scale(${imageZoom})`,
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'grab',
+              touchAction: 'none',
+              zIndex: 10,
+              filter: IMAGE_FILTERS.find(f => f.id === imageFilter)?.css || 'none'
+            }}
+          >
+            {mediaType === 'video' ? (
+              <video
+                ref={(el) => {
+                  previewVideoRef.current = el;
+                  if (el) {
+                    el.defaultMuted = isVideoMuted;
+                    el.muted = isVideoMuted;
+                    el.playsInline = true;
+                    const p = el.play();
+                    if (p !== undefined) {
+                      p.catch(() => {
+                        el.muted = true;
+                        setIsVideoMuted(true);
+                        el.play().catch(() => {});
+                      });
+                    }
+                  }
+                }}
+                key={`preview_vid_${mediaUrl}`}
+                src={mediaUrl}
+                autoPlay
+                loop
+                playsInline
+                webkit-playsinline="true"
+                preload="auto"
+                muted={isVideoMuted}
+                onError={(e) => {
+                  console.warn('Video failed to load via object URL, switching to fallback data URL', e);
+                  if (mediaDataUrlRef.current && e.target.src !== mediaDataUrlRef.current) {
+                    e.target.src = mediaDataUrlRef.current;
+                    e.target.play().catch(() => {});
+                  }
+                }}
+                onLoadedMetadata={(e) => {
+                  const vid = e.target;
+                  vid.muted = isVideoMuted;
+                  vid.volume = 1.0;
+                  const p = vid.play();
+                  if (p !== undefined) {
+                    p.catch(() => {
+                      vid.muted = true;
+                      setIsVideoMuted(true);
+                      setShowUnmuteHint(true);
+                      vid.play().catch(() => {});
+                    });
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  pointerEvents: 'none'
+                }}
+              />
+            ) : (
+              <img
+                src={mediaUrl}
+                alt=""
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  pointerEvents: 'none'
+                }}
+              />
+            )}
+          </div>
         )}
 
         {/* Animated Wallpaper if selected */}
@@ -866,24 +941,51 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             textAlign
           }}
         >
-          <div
-            className={textStyle3D !== 'none' ? textStyle3D : ''}
-            style={{
-              fontSize: `${textSize}rem`,
-              fontWeight: 800,
-              color: textColor,
-              lineHeight: 1.35,
-              background: textBgStyle === 'box' ? 'rgba(0, 0, 0, 0.65)' : 'transparent',
-              backdropFilter: textBgStyle === 'box' ? 'blur(10px)' : 'none',
-              padding: textBgStyle === 'box' ? '10px 18px' : '4px 8px',
-              borderRadius: '16px',
-              textShadow: textStyle3D === 'none' ? '0 2px 14px rgba(0,0,0,0.85)' : 'none',
-              wordBreak: 'break-word',
-              border: textBgStyle === 'box' ? '1px solid rgba(255,255,255,0.18)' : 'none'
-            }}
-          >
-            {caption}
-          </div>
+          {textStyle3D && textStyle3D !== 'none' ? (
+            <div className={`animated-3d-stage ${textStyle3D}`} style={{ position: 'relative', zIndex: 4, maxWidth: '100%' }}>
+              <div
+                className="animated-3d-card"
+                style={{
+                  padding: textBgStyle === 'box' ? '10px 18px' : '4px',
+                  background: textBgStyle === 'box' ? 'rgba(0, 0, 0, 0.65)' : 'transparent',
+                  backdropFilter: textBgStyle === 'box' ? 'blur(10px)' : 'none',
+                  borderRadius: '16px',
+                  border: textBgStyle === 'box' ? '1px solid rgba(255, 255, 255, 0.18)' : 'none'
+                }}
+              >
+                <span
+                  className="text-3d-content"
+                  style={{
+                    fontSize: `${textSize}rem`,
+                    textAlign,
+                    wordBreak: 'break-word',
+                    display: 'inline-block'
+                  }}
+                >
+                  {caption}
+                </span>
+                <div className="text-3d-shadow" />
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                fontSize: `${textSize}rem`,
+                fontWeight: 800,
+                color: textColor,
+                lineHeight: 1.35,
+                background: textBgStyle === 'box' ? 'rgba(0, 0, 0, 0.65)' : 'transparent',
+                backdropFilter: textBgStyle === 'box' ? 'blur(10px)' : 'none',
+                padding: textBgStyle === 'box' ? '10px 18px' : '4px 8px',
+                borderRadius: '16px',
+                textShadow: '0 2px 14px rgba(0, 0, 0, 0.85)',
+                wordBreak: 'break-word',
+                border: textBgStyle === 'box' ? '1px solid rgba(255, 255, 255, 0.18)' : 'none'
+              }}
+            >
+              {caption}
+            </div>
+          )}
         </div>
       )}
 
@@ -1090,6 +1192,42 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             }}
           />
 
+          {/* Live 3D Text Preview if 3D style is selected */}
+          {textStyle3D && textStyle3D !== 'none' && caption.trim() && (
+            <div
+              className={`animated-3d-stage ${textStyle3D}`}
+              style={{
+                margin: '8px 0',
+                pointerEvents: 'none',
+                maxWidth: '90%'
+              }}
+            >
+              <div
+                className="animated-3d-card"
+                style={{
+                  padding: textBgStyle === 'box' ? '8px 16px' : '4px',
+                  background: textBgStyle === 'box' ? 'rgba(0, 0, 0, 0.65)' : 'transparent',
+                  backdropFilter: textBgStyle === 'box' ? 'blur(10px)' : 'none',
+                  borderRadius: '14px',
+                  border: textBgStyle === 'box' ? '1px solid rgba(255, 255, 255, 0.18)' : 'none'
+                }}
+              >
+                <span
+                  className="text-3d-content"
+                  style={{
+                    fontSize: '1.6rem',
+                    textAlign,
+                    wordBreak: 'break-word',
+                    display: 'inline-block'
+                  }}
+                >
+                  {caption}
+                </span>
+                <div className="text-3d-shadow" />
+              </div>
+            </div>
+          )}
+
           {/* Bottom 3D Typography & Colors Selector */}
           <div
             style={{
@@ -1102,22 +1240,23 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             onClick={(e) => e.stopPropagation()}
           >
             {/* 3D Typography styles */}
-            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', padding: '4px 0' }}>
+            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', padding: '6px 2px' }}>
               {TEXT_STYLES_3D.map((t) => (
                 <button
                   key={t.id}
                   type="button"
                   onClick={() => setTextStyle3D(t.id)}
                   style={{
-                    padding: '6px 12px',
+                    padding: '7px 14px',
                     borderRadius: '16px',
-                    background: textStyle3D === t.id ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.1)',
-                    border: textStyle3D === t.id ? '1.5px solid #ffffff' : '1px solid transparent',
+                    background: textStyle3D === t.id ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'rgba(255, 255, 255, 0.12)',
+                    border: textStyle3D === t.id ? '1.5px solid #ffffff' : '1px solid rgba(255, 255, 255, 0.15)',
                     color: '#ffffff',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
+                    fontSize: '0.82rem',
+                    fontWeight: 800,
                     whiteSpace: 'nowrap',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    boxShadow: textStyle3D === t.id ? '0 0 14px rgba(168, 85, 247, 0.65)' : 'none'
                   }}
                 >
                   {t.label}

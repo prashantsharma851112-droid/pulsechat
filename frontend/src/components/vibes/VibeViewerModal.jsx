@@ -1027,6 +1027,18 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                   preload="auto"
                   autoPlay
                   muted={isAudioMuted}
+                  onLoadedData={(e) => {
+                    const vid = e.currentTarget;
+                    vid.muted = isAudioMuted;
+                    const p = vid.play();
+                    if (p !== undefined) {
+                      p.catch(() => {
+                        vid.muted = true;
+                        setIsAudioMuted(true);
+                        vid.play().catch(() => {});
+                      });
+                    }
+                  }}
                   onTimeUpdate={(e) => {
                     const v = e.currentTarget;
                     if (v.duration && !isNaN(v.duration) && v.duration > 0) {
