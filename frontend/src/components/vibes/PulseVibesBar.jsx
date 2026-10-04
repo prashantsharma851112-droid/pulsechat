@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Plus, Sparkles } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { getCachedAllUsers } from '../../utils/offlineStorage';
 
-export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
+export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOpenVibeSelector, myAura }) {
   const { user, token } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
   const [groupedVibes, setGroupedVibes] = useState([]);
@@ -212,29 +212,31 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
       gap: '8px',
       overflow: 'hidden'
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', fontWeight: 800, color: 'var(--text-main)' }}>
-          <Sparkles size={16} color="#f59e0b" />
-          <span>Pulse Vibes ⚡</span>
-        </div>
+      {/* Vibe Status Pill Button (replaces Pulse Vibes text & Post Vibe button) */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
         <button
-          onClick={onOpenCreateVibe}
+          type="button"
+          onClick={onOpenVibeSelector}
+          title="Tap to change your Vibe Aura & Status"
           style={{
-            background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '12px',
-            padding: '3px 9px',
-            fontSize: '0.72rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '5px 14px',
+            borderRadius: '18px',
+            background: myAura?.mood ? 'rgba(99, 102, 241, 0.16)' : 'rgba(255, 255, 255, 0.08)',
+            border: `1.5px solid ${myAura?.auraColor || 'rgba(255, 255, 255, 0.2)'}`,
+            color: myAura?.auraColor || 'var(--text-main)',
+            fontSize: '0.82rem',
             fontWeight: 700,
             cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            boxShadow: '0 2px 8px rgba(99, 102, 241, 0.35)'
+            transition: 'all 0.2s ease',
+            boxShadow: myAura?.auraColor ? `0 0 12px ${myAura.auraColor}33` : 'none'
           }}
         >
-          <Plus size={12} /> Post Vibe
+          <span style={{ fontSize: '1rem' }}>{myAura?.emoji || '⚡'}</span>
+          <span>{myAura?.mood ? `Vibe: ${myAura.mood}` : 'Set Your Vibe & Aura'}</span>
+          <span style={{ fontSize: '0.72rem', opacity: 0.65, marginLeft: '2px' }}>✎</span>
         </button>
       </div>
 

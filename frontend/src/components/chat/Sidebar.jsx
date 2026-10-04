@@ -1559,33 +1559,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
         {/* Topbar Actions: Direct Refresh + Pulse Zone + 3-Dot More Menu */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          {/* Pulse Vibe Aura & Battery Radar Selector */}
-          <button
-            onClick={() => setShowVibeSelector(true)}
-            title={myAura?.mood ? `Your Vibe: ${myAura.mood}` : "Set Your Pulse Vibe & Aura"}
-            className="icon-btn-ghost"
-            style={{
-              height: '34px',
-              padding: '0 10px',
-              borderRadius: '17px',
-              background: myAura?.mood ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255, 255, 255, 0.08)',
-              color: myAura?.auraColor || 'var(--text-main)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: `1px solid ${myAura?.auraColor || 'rgba(255, 255, 255, 0.15)'}`,
-              fontSize: '0.82rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <span style={{ fontSize: '1rem' }}>{myAura?.emoji || '⚡'}</span>
-            <span style={{ maxWidth: '65px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {myAura?.mood || 'Vibe'}
-            </span>
-          </button>
-
           <button
             onClick={() => setShowPulseZone(true)}
             title="Pulse Zone (Mini-Games, Trivia & Leaderboards)"
@@ -2019,6 +1992,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       <PulseVibesBar
         onOpenCreateVibe={() => setShowCreateVibe(true)}
         onOpenVibeViewer={(group) => setSelectedVibeGroup(group)}
+        onOpenVibeSelector={() => setShowVibeSelector(true)}
+        myAura={myAura}
       />
 
       {/* WhatsApp-Style Navigation Tabs: Chats vs Groups */}
