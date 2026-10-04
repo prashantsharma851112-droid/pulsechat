@@ -5,6 +5,7 @@ import { BACKEND_URL } from '../../utils/config';
 import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward, Edit3 } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
+import FogSnapModal from './FogSnapModal';
 import EditPollModal from './EditPollModal';
 import { getPollTheme, getPollAura } from './pollThemes';
 import PulseVipBadge from '../common/PulseVipBadge';
@@ -514,6 +515,8 @@ export default function MessageItem({
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [showThread, setShowThread] = useState(false);
   const [showViewOnceModal, setShowViewOnceModal] = useState(false);
+  const [showFogSnapModal, setShowFogSnapModal] = useState(false);
+  const [fogStatus, setFogStatus] = useState(message.fogSnapStatus || 'unrevealed');
   const [showEditPoll, setShowEditPoll] = useState(false);
   const [viewedByState, setViewedByState] = useState(message.viewedBy || []);
   const [downloadState, setDownloadState] = useState(''); // '' | 'Saving...' | 'Saved!'
@@ -567,6 +570,22 @@ export default function MessageItem({
     return () => socket.off('view_once_updated', handleViewOnceUpdate);
   }, [socket, message.id]);
 
+  useEffect(() => {
+    if (!socket || !message.isFogSnap) return;
+    const handleFogBurned = ({ messageId }) => {
+      if (messageId === message.id) setFogStatus('burned');
+    };
+    const handleFogRevealed = ({ messageId }) => {
+      if (messageId === message.id) setFogStatus('revealed');
+    };
+    socket.on('fog_snap_burned', handleFogBurned);
+    socket.on('fog_snap_revealed', handleFogRevealed);
+    return () => {
+      socket.off('fog_snap_burned', handleFogBurned);
+      socket.off('fog_snap_revealed', handleFogRevealed);
+    };
+  }, [socket, message.id, message.isFogSnap]);
+
   const hasRecipientOpened = message.isViewOnce && viewedByState.length > 0;
   const isConsumedByMe = !isMine && (viewedByState.includes(currentUser?.id) || message.isViewed);
   const isAlreadyViewed = isMine ? hasRecipientOpened : isConsumedByMe;
@@ -588,7 +607,7 @@ export default function MessageItem({
       e.preventDefault();
     }
     const targetUrl = customUrl || message.mediaUrl;
-    if (!targetUrl || message.isViewOnce) return;
+    if (!targetUrl || message.isViewOnce || message.isFogSnap) return;
 
     setDownloadState('Saving...');
 
@@ -1090,7 +1109,7 @@ export default function MessageItem({
         ))}
 
         {/* View Once Media Message */}
-        {(message.type === 'image' || message.type === 'video') && message.isViewOnce && (
+        {(message.type === 'image' || message.type === 'video') && message.isViewOnce && !message.isFogSnap && (
           <div style={{ padding: '2px 0' }}>
             {isAlreadyViewed ? (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 14px', borderRadius: '20px', background: 'rgba(0,0,0,0.25)', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
@@ -1123,8 +1142,78 @@ export default function MessageItem({
           </div>
         )}
 
+        {/* Fog Snap (Scratch-to-Reveal) Media Message */}
+        {(message.type === 'image' || message.type === 'video') && message.isFogSnap && (
+          <div style={{ padding: '4px 0' }}>
+            {fogStatus === 'burned' ? (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '9px 16px',
+                borderRadius: '16px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px dashed rgba(255, 255, 255, 0.2)',
+                color: 'rgba(255, 255, 255, 0.55)',
+                fontSize: '0.85rem'
+              }}>
+                <span style={{ fontSize: '1.25rem' }}>🌫️</span>
+                <div>
+                  <div style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)' }}>Fog Snap Evaporated</div>
+                  <div style={{ fontSize: '0.72rem', opacity: 0.8 }}>Burned into smoke forever</div>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowFogSnapModal(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '10px 16px',
+                  borderRadius: '16px',
+                  background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.25) 0%, rgba(236, 72, 153, 0.25) 50%, rgba(56, 189, 248, 0.2) 100%)',
+                  border: '1px solid rgba(255, 255, 255, 0.35)',
+                  boxShadow: '0 4px 15px rgba(236, 72, 153, 0.25)',
+                  backdropFilter: 'blur(10px)',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #a855f7, #ec4899)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.3rem',
+                  boxShadow: '0 2px 8px rgba(236,72,153,0.4)',
+                  flexShrink: 0
+                }}>
+                  🌫️
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>Secret Fog Snap</span>
+                    <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      {message.fogSnapDuration || 7}s
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.74rem', opacity: 0.82, marginTop: '2px' }}>
+                    👆 Scratch mist to reveal • Self-destructs
+                  </div>
+                </div>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Standard Media / Image / Video Message */}
-        {(message.type === 'image' || message.type === 'video') && !message.isViewOnce && message.mediaUrl && (
+        {(message.type === 'image' || message.type === 'video') && !message.isViewOnce && !message.isFogSnap && message.mediaUrl && (
           <div style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', marginBottom: '4px', maxWidth: '100%' }}>
             {message.type === 'video' ? (
               <div style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
@@ -1864,7 +1953,7 @@ export default function MessageItem({
       )}
 
       {/* Fullscreen Image / Drawing Preview Modal */}
-      {showImagePreview && message.mediaUrl && !message.isViewOnce && (
+      {showImagePreview && message.mediaUrl && !message.isViewOnce && !message.isFogSnap && (
         <div
           onClick={() => setShowImagePreview(false)}
           style={{
@@ -2021,6 +2110,21 @@ export default function MessageItem({
           message={message}
           onMarkViewed={handleMarkViewed}
           onClose={() => setShowViewOnceModal(false)}
+        />
+      )}
+
+      {showFogSnapModal && (
+        <FogSnapModal
+          message={message}
+          chatId={chatId}
+          currentUserId={currentUser?.id}
+          currentUserName={currentUser?.name || currentUser?.username}
+          onRevealed={() => setFogStatus('revealed')}
+          onBurned={() => {
+            setFogStatus('burned');
+            setShowFogSnapModal(false);
+          }}
+          onClose={() => setShowFogSnapModal(false)}
         />
       )}
 

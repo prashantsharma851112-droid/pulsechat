@@ -21,6 +21,11 @@ const messageSchema = new mongoose.Schema({
   callData: { type: Object, default: null }, // { isVideo: Boolean, status: String, duration: Number }
   isViewOnce: { type: Boolean, default: false },
   viewedBy: { type: Array, default: [] },
+  // Scratch-to-Reveal Fog Snaps (Option 2)
+  isFogSnap: { type: Boolean, default: false },
+  fogSnapDuration: { type: Number, default: 7 }, // 7s timer once revealed
+  fogSnapStatus: { type: String, default: 'unrevealed' }, // 'unrevealed' | 'revealed' | 'burned'
+  screenshotAlert: { type: Object, default: null }, // { takenBy: String, timestamp: String }
   status: { type: String, default: 'sent' }, // 'sent' | 'delivered' | 'read'
   readBy: { type: [String], default: [] }, // User IDs who have read this message
   timestamp: { type: String, default: () => new Date().toISOString() },

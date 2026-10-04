@@ -12,6 +12,7 @@ export function SocketProvider({ children }) {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingMap, setTypingMap] = useState({});
   const [lastNotification, setLastNotification] = useState(null);
+  const [vibeAuras, setVibeAuras] = useState({});
 
   const userRef = useRef(user);
   useEffect(() => {
@@ -85,6 +86,24 @@ export function SocketProvider({ children }) {
 
       newSocket.on('online_users_list', (users) => {
         setOnlineUsers(users);
+        try {
+          newSocket.emit('get_vibe_auras');
+        } catch (e) {}
+      });
+
+      newSocket.on('vibe_auras_list', (aurasList) => {
+        if (aurasList) {
+          setVibeAuras(aurasList);
+        }
+      });
+
+      newSocket.on('vibe_aura_updated', (cleanAura) => {
+        if (cleanAura && cleanAura.userId) {
+          setVibeAuras(prev => ({
+            ...prev,
+            [cleanAura.userId]: cleanAura
+          }));
+        }
       });
 
       newSocket.on('typing_start', ({ chatId, username }) => {
@@ -269,7 +288,7 @@ export function SocketProvider({ children }) {
   }, [user?.id]);
 
   return (
-    <SocketContext.Provider value={{ socket, onlineUsers, typingMap, lastNotification }}>
+    <SocketContext.Provider value={{ socket, onlineUsers, typingMap, lastNotification, vibeAuras }}>
       {children}
     </SocketContext.Provider>
   );

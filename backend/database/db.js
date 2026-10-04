@@ -747,5 +747,140 @@ module.exports = {
       console.error('[Auto-Cleanup Job] Error performing cleanup:', err);
       return { success: false, error: err.message, deletedCount: 0 };
     }
+  },
+
+  // =========================================================================
+  // PULSE STREAKS ENGINE (Daily Snap & Chat Streaks, Sparks, and Freeze)
+  // =========================================================================
+  updateChatStreak: async (rawChatId, senderId, receiverId) => {
+    if (!rawChatId || !senderId || !receiverId) return null;
+    const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
+    let setting = await ChatSetting.findOne({ chatId: canonicalChatId });
+    if (!setting) {
+      setting = await ChatSetting.create({ chatId: canonicalChatId });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const lastDate = setting.lastStreakDate;
+
+    let streakUpdated = false;
+    let bonusSparks = 0;
+    let milestoneHit = null;
+
+    if (lastDate === today) {
+      return {
+        chatId: canonicalChatId,
+        streakCount: setting.streakCount || 0,
+        lastStreakDate: setting.lastStreakDate,
+        streakShields: setting.streakShields ? (setting.streakShields instanceof Map ? Object.fromEntries(setting.streakShields) : setting.streakShields) : {},
+        alreadyMaintainedToday: true
+      };
+    } else if (lastDate === yesterday) {
+      setting.streakCount = (setting.streakCount || 0) + 1;
+      setting.lastStreakDate = today;
+      setting.lastStreakSenderId = senderId;
+      streakUpdated = true;
+
+      const current = setting.streakCount;
+      if (current === 3 && (!setting.streakMilestonesClaimed || !setting.streakMilestonesClaimed.includes(3))) {
+        bonusSparks = 5;
+        milestoneHit = 3;
+        setting.streakMilestonesClaimed = [...(setting.streakMilestonesClaimed || []), 3];
+      } else if (current === 7 && (!setting.streakMilestonesClaimed || !setting.streakMilestonesClaimed.includes(7))) {
+        bonusSparks = 15;
+        milestoneHit = 7;
+        setting.streakMilestonesClaimed = [...(setting.streakMilestonesClaimed || []), 7];
+      } else if (current === 30 && (!setting.streakMilestonesClaimed || !setting.streakMilestonesClaimed.includes(30))) {
+        bonusSparks = 50;
+        milestoneHit = 30;
+        setting.streakMilestonesClaimed = [...(setting.streakMilestonesClaimed || []), 30];
+      } else {
+        bonusSparks = 1; // +1 daily maintenance spark reward!
+      }
+
+      if (bonusSparks > 0) {
+        await User.updateMany(
+          { $or: [{ id: { $in: [senderId, receiverId] } }, { username: { $in: [senderId, receiverId] } }] },
+          { $inc: { pulseSparks: bonusSparks } }
+        );
+      }
+    } else if (!lastDate) {
+      setting.streakCount = 1;
+      setting.lastStreakDate = today;
+      setting.lastStreakSenderId = senderId;
+      streakUpdated = true;
+    } else {
+      // More than 1 day missed: Check Streak Freeze shields!
+      const isFrozen = setting.streakFrozenUntil && new Date(setting.streakFrozenUntil) > new Date();
+      let senderShields = (setting.streakShields && setting.streakShields.get && setting.streakShields.get(senderId)) || 0;
+      let receiverShields = (setting.streakShields && setting.streakShields.get && setting.streakShields.get(receiverId)) || 0;
+
+      if (isFrozen) {
+        setting.lastStreakDate = today;
+        setting.streakFrozenUntil = null;
+        streakUpdated = true;
+      } else if (senderShields > 0) {
+        setting.streakShields.set(senderId, senderShields - 1);
+        setting.lastStreakDate = today;
+        streakUpdated = true;
+      } else if (receiverShields > 0) {
+        setting.streakShields.set(receiverId, receiverShields - 1);
+        setting.lastStreakDate = today;
+        streakUpdated = true;
+      } else {
+        setting.streakCount = 1;
+        setting.lastStreakDate = today;
+        setting.lastStreakSenderId = senderId;
+        setting.streakMilestonesClaimed = [];
+        streakUpdated = true;
+      }
+    }
+
+    setting.markModified('streakShields');
+    setting.markModified('streakMilestonesClaimed');
+    await setting.save();
+
+    return {
+      chatId: canonicalChatId,
+      streakCount: setting.streakCount,
+      lastStreakDate: setting.lastStreakDate,
+      streakShields: setting.streakShields ? (setting.streakShields instanceof Map ? Object.fromEntries(setting.streakShields) : setting.streakShields) : {},
+      bonusSparks,
+      milestoneHit,
+      streakUpdated
+    };
+  },
+
+  buyStreakFreeze: async (rawChatId, userId) => {
+    if (!rawChatId || !userId) return { success: false, error: 'Invalid parameters' };
+    const user = await User.findOne({ $or: [{ id: userId }, { username: userId }] });
+    if (!user) return { success: false, error: 'User not found' };
+
+    const FREEZE_COST = 20; // 20 Sparks for 1 Freeze Shield
+    if ((user.pulseSparks || 0) < FREEZE_COST) {
+      return { success: false, error: `Sparks kam hain! Streak Freeze ke liye ${FREEZE_COST} Sparks chahiye.` };
+    }
+
+    user.pulseSparks -= FREEZE_COST;
+    await user.save();
+
+    const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
+    let setting = await ChatSetting.findOne({ chatId: canonicalChatId });
+    if (!setting) {
+      setting = await ChatSetting.create({ chatId: canonicalChatId });
+    }
+
+    if (!setting.streakShields) setting.streakShields = new Map();
+    const currentShields = (setting.streakShields.get && setting.streakShields.get(userId)) || 0;
+    setting.streakShields.set(userId, currentShields + 1);
+    setting.markModified('streakShields');
+    await setting.save();
+
+    return {
+      success: true,
+      shields: currentShields + 1,
+      pulseSparks: user.pulseSparks
+    };
   }
 };

@@ -48,6 +48,8 @@ const userSchema = new mongoose.Schema({
   claimedDailyFirstReward: { type: String, default: '' },
   dailyFileBytesUsed: { type: Number, default: 0 },
   dailyFileBytesResetDate: { type: String, default: '' },
+  // Pulse Vibe Radar & Battery/Mood Aura (Option 3)
+  vibeAura: { type: Object, default: null }, // { mood: String, emoji: String, auraColor: String, auraType: String, batteryLevel: Number, isLowBattery: Boolean, inGame: String, updatedAt: String }
   createdAt: { type: Date, default: Date.now }
 });
 

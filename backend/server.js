@@ -157,6 +157,7 @@ const resolveGhostMode = async (userId) => {
 
 const onlineUsers = new Map(); // userId -> socketId
 const hiddenOnlineUsers = new Set(); // userId set of users with hideOnlineStatus enabled
+const userVibeAuras = new Map(); // userId -> { mood, emoji, auraColor, auraType, isLowBattery, batteryLevel, inGame, updatedAt }
 
 const getPublicOnlineUsers = () => {
   return Array.from(onlineUsers.keys()).filter(id => !hiddenOnlineUsers.has(id));
@@ -742,6 +743,9 @@ io.on('connection', (socket) => {
         giftData: giftData || null,
         callData: callData || null,
         isViewOnce: !!isViewOnce,
+        isFogSnap: Boolean(messageData.isFogSnap),
+        fogSnapDuration: messageData.fogSnapDuration || 7,
+        fogSnapStatus: 'unrevealed',
         viewedBy: [],
         status: initialStatus,
         timestamp: new Date().toISOString(),
@@ -757,6 +761,21 @@ io.on('connection', (socket) => {
 
       // 2. Immediate zero-latency emission to chat room
       io.to(chatId).emit('new_message', newMsg);
+
+      // Auto-update Pulse Streak for 1-on-1 chats
+      if (!isGroup && resolvedReceiverId && senderId !== resolvedReceiverId) {
+        db.updateChatStreak(chatId, senderId, resolvedReceiverId).then(streakInfo => {
+          if (streakInfo && streakInfo.streakUpdated) {
+            io.to(chatId).emit('streak_updated', streakInfo);
+            io.to(`user_${senderId}`).emit('streak_updated', streakInfo);
+            io.to(`user_${resolvedReceiverId}`).emit('streak_updated', streakInfo);
+            if (streakInfo.bonusSparks > 0) {
+              io.to(`user_${senderId}`).emit('streak_sparks_reward', { bonusSparks: streakInfo.bonusSparks, streakCount: streakInfo.streakCount });
+              io.to(`user_${resolvedReceiverId}`).emit('streak_sparks_reward', { bonusSparks: streakInfo.bonusSparks, streakCount: streakInfo.streakCount });
+            }
+          }
+        }).catch(() => {});
+      }
 
       // Notify recipient private room for badge/sound if they are outside the active chat room
       if (resolvedReceiverId && !isGroup) {
@@ -1106,6 +1125,69 @@ io.on('connection', (socket) => {
     if (chatId && chatId.includes('_')) {
       const parts = chatId.split('_');
       parts.forEach(uId => io.to(`user_${uId}`).emit('emoji_burst_received', { chatId, emoji, userId }));
+    }
+  });
+
+  // =========================================================================
+  // OPTION 3: PULSE VIBE RADAR & LIVE AURA SYNCHRONIZATION
+  // =========================================================================
+  socket.on('update_vibe_aura', async (auraData) => {
+    if (!auraData || !auraData.userId) return;
+    const clean = {
+      userId: auraData.userId,
+      mood: auraData.mood || '',
+      emoji: auraData.emoji || '⚡',
+      auraColor: auraData.auraColor || '#10b981',
+      auraType: auraData.auraType || 'neon_pulse',
+      isLowBattery: Boolean(auraData.isLowBattery),
+      batteryLevel: typeof auraData.batteryLevel === 'number' ? auraData.batteryLevel : null,
+      inGame: auraData.inGame || '',
+      updatedAt: new Date().toISOString()
+    };
+    userVibeAuras.set(auraData.userId, clean);
+    try {
+      await User.updateOne({ $or: [{ id: auraData.userId }, { username: auraData.userId }] }, { vibeAura: clean });
+    } catch (e) {}
+    io.emit('vibe_aura_updated', clean);
+  });
+
+  socket.on('get_vibe_auras', () => {
+    socket.emit('vibe_auras_list', Object.fromEntries(userVibeAuras.entries()));
+  });
+
+  // =========================================================================
+  // OPTION 2: FOG SNAPS (SCRATCH-TO-REVEAL & SCREENSHOT ALERT)
+  // =========================================================================
+  socket.on('reveal_fog_snap', async ({ messageId, chatId, userId }) => {
+    try {
+      await Message.updateOne({ id: messageId }, { fogSnapStatus: 'revealed' });
+      if (chatId) io.to(chatId).emit('fog_snap_revealed', { messageId, chatId, revealedBy: userId });
+    } catch (e) {}
+  });
+
+  socket.on('burn_fog_snap', async ({ messageId, chatId }) => {
+    try {
+      await Message.updateOne({ id: messageId }, { fogSnapStatus: 'burned', content: '🌫️ Fog Snap Evaporated', mediaUrl: null });
+      if (chatId) io.to(chatId).emit('fog_snap_burned', { messageId, chatId });
+    } catch (e) {}
+  });
+
+  socket.on('snap_screenshot_alert', async ({ messageId, chatId, userId, userName }) => {
+    const alertData = {
+      messageId,
+      chatId,
+      takenBy: userId,
+      userName: userName || 'User',
+      timestamp: new Date().toISOString()
+    };
+    try {
+      await Message.updateOne({ id: messageId }, { screenshotAlert: alertData });
+    } catch (e) {}
+    if (chatId) {
+      io.to(chatId).emit('snap_screenshot_alert', alertData);
+      if (chatId.includes('_')) {
+        chatId.split('_').forEach(uId => io.to(`user_${uId}`).emit('snap_screenshot_alert', alertData));
+      }
     }
   });
 

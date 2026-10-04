@@ -15,6 +15,8 @@ import CreateVibeModal from '../vibes/CreateVibeModal';
 import VibeViewerModal from '../vibes/VibeViewerModal';
 import PulseZoneModal from '../zone/PulseZoneModal';
 import SparksWalletModal from './SparksWalletModal';
+import VibeAuraRing from '../common/VibeAuraRing';
+import VibeAuraSelectorModal from './VibeAuraSelectorModal';
 import { Gamepad2 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
@@ -80,8 +82,12 @@ class ModalErrorBoundary extends React.Component {
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
   const { user, logout, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
-  const { socket, onlineUsers, typingMap, lastNotification } = useContext(SocketContext);
+  const { socket, onlineUsers, typingMap, lastNotification, vibeAuras } = useContext(SocketContext);
   const currentUid = user?.id || getCachedUser()?.id;
+
+  const myAura = useMemo(() => {
+    return (vibeAuras && currentUid && vibeAuras[currentUid]) || user?.vibeAura || null;
+  }, [vibeAuras, currentUid, user?.vibeAura]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -105,6 +111,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [selectedVibeGroup, setSelectedVibeGroup] = useState(null);
   const [showPulseZone, setShowPulseZone] = useState(false);
   const [showSparksWallet, setShowSparksWallet] = useState(false);
+  const [showVibeSelector, setShowVibeSelector] = useState(false);
   const [showTopMenu, setShowTopMenu] = useState(false);
   const [showSwitchAccountMenu, setShowSwitchAccountMenu] = useState(false);
 
@@ -1424,101 +1431,124 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0, cursor: 'pointer' }}
           title="Click to view & edit your profile"
         >
-          <div
-            className={user?.isPro ? 'pro-neon-avatar' : ''}
-            style={{ position: 'relative', flexShrink: 0 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenFullDp && onOpenFullDp(user?.avatar, user?.displayName || user?.username, user?.username);
-            }}
-            title="Click to view full photo"
-          >
-            {user?.hasKingCrown ? (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '-12px',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  fontSize: '1.2rem',
-                  filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))',
-                  zIndex: 10,
-                  pointerEvents: 'none'
-                }}
-                title="👑 #1 Gold Leaderboard King"
-              >
-                👑
-              </div>
-            ) : user?.hasSilverCrown ? (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '-12px',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  fontSize: '1.2rem',
-                  filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))',
-                  zIndex: 10,
-                  pointerEvents: 'none'
-                }}
-                title="👑 #2 Silver Leaderboard Champion"
-              >
-                👑
-              </div>
-            ) : user?.hasStreakCrown ? (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '-12px',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  fontSize: '1.2rem',
-                  filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))',
-                  zIndex: 10,
-                  pointerEvents: 'none'
-                }}
-                title="👑 7-Day Gaming Streak Crown"
-              >
-                👑
-              </div>
-            ) : null}
-            <img
-              src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.username || 'Pulse')}`}
-              alt="Profile"
-              className="user-avatar"
-              onError={(e) => {
-                e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.username || 'Pulse')}`;
+          <VibeAuraRing aura={myAura} size={44}>
+            <div
+              className={user?.isPro ? 'pro-neon-avatar' : ''}
+              style={{ position: 'relative', flexShrink: 0 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenFullDp && onOpenFullDp(user?.avatar, user?.displayName || user?.username, user?.username);
               }}
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                objectFit: 'cover',
-                border: user?.hasKingCrown
-                  ? '2.5px solid #fbbf24'
-                  : user?.hasSilverCrown
-                  ? '2.5px solid #cbd5e1'
-                  : user?.hasStreakCrown
-                  ? '2.5px solid #f97316'
-                  : (user?.isPro ? 'none' : '2px solid var(--accent)'),
-                cursor: 'pointer'
-              }}
-            />
-            {user?.isEmailVerified && (
-              <CheckCircle2
-                size={14}
-                color="#10b981"
-                style={{ position: 'absolute', bottom: 0, right: 0, background: '#fff', borderRadius: '50%', zIndex: 4 }}
+              title="Click to view full photo"
+            >
+              {user?.hasKingCrown ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '-12px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    fontSize: '1.2rem',
+                    filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))',
+                    zIndex: 10,
+                    pointerEvents: 'none'
+                  }}
+                  title="👑 #1 Gold Leaderboard King"
+                >
+                  👑
+                </div>
+              ) : user?.hasSilverCrown ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '-12px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    fontSize: '1.2rem',
+                    filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))',
+                    zIndex: 10,
+                    pointerEvents: 'none'
+                  }}
+                  title="👑 #2 Silver Leaderboard Champion"
+                >
+                  👑
+                </div>
+              ) : user?.hasStreakCrown ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '-12px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    fontSize: '1.2rem',
+                    filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))',
+                    zIndex: 10,
+                    pointerEvents: 'none'
+                  }}
+                  title="👑 7-Day Gaming Streak Crown"
+                >
+                  👑
+                </div>
+              ) : null}
+              <img
+                src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.username || 'Pulse')}`}
+                alt="Profile"
+                className="user-avatar"
+                onError={(e) => {
+                  e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.username || 'Pulse')}`;
+                }}
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: user?.hasKingCrown
+                    ? '2.5px solid #fbbf24'
+                    : user?.hasSilverCrown
+                    ? '2.5px solid #cbd5e1'
+                    : user?.hasStreakCrown
+                    ? '2.5px solid #f97316'
+                    : (user?.isPro ? 'none' : '2px solid var(--accent)'),
+                  cursor: 'pointer'
+                }}
               />
-            )}
-          </div>
+              {user?.isEmailVerified && (
+                <CheckCircle2
+                  size={14}
+                  color="#10b981"
+                  style={{ position: 'absolute', bottom: 0, right: 0, background: '#fff', borderRadius: '50%', zIndex: 4 }}
+                />
+              )}
+            </div>
+          </VibeAuraRing>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap' }}>
               <h3 style={{ fontSize: '1.02rem', fontWeight: 700, margin: 0, color: 'var(--text-main)', letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user?.displayName || user?.username || 'PulseChat'}
               </h3>
               {user?.isPro && (
                 <PulseVipBadge size={16} showLabel={false} />
+              )}
+              {myAura?.mood && (
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    padding: '1px 6px',
+                    borderRadius: '8px',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: `1px solid ${myAura.auraColor || 'rgba(255,255,255,0.2)'}`,
+                    color: myAura.auraColor || 'var(--accent)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    fontWeight: 600,
+                    flexShrink: 0
+                  }}
+                  title={`My Vibe: ${myAura.mood}`}
+                >
+                  <span>{myAura.emoji || '⚡'}</span>
+                  <span>{myAura.mood}</span>
+                </span>
               )}
             </div>
             <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1529,6 +1559,33 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
         {/* Topbar Actions: Direct Refresh + Pulse Zone + 3-Dot More Menu */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* Pulse Vibe Aura & Battery Radar Selector */}
+          <button
+            onClick={() => setShowVibeSelector(true)}
+            title={myAura?.mood ? `Your Vibe: ${myAura.mood}` : "Set Your Pulse Vibe & Aura"}
+            className="icon-btn-ghost"
+            style={{
+              height: '34px',
+              padding: '0 10px',
+              borderRadius: '17px',
+              background: myAura?.mood ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+              color: myAura?.auraColor || 'var(--text-main)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              border: `1px solid ${myAura?.auraColor || 'rgba(255, 255, 255, 0.15)'}`,
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <span style={{ fontSize: '1rem' }}>{myAura?.emoji || '⚡'}</span>
+            <span style={{ maxWidth: '65px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {myAura?.mood || 'Vibe'}
+            </span>
+          </button>
+
           <button
             onClick={() => setShowPulseZone(true)}
             title="Pulse Zone (Mini-Games, Trivia & Leaderboards)"
@@ -2366,55 +2423,99 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             {recentChats.length > 0 && (
               <>
                 <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', padding: '0.5rem 0.75rem', letterSpacing: '0.03em' }}>CHATS</p>
-                {recentChats.map(u => (
+                {recentChats.map(u => {
+                  const friendAura = (vibeAuras && (vibeAuras[u.id] || vibeAuras[u.username])) || u.vibeAura || null;
+                  return (
                   <div
                     key={u.id}
                     onClick={() => u.isGroup ? handleSelectGroup(u) : handleSelectUser(u)}
                     className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
                     style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
                   >
-                    <div
-                      className={u.isPro ? 'pro-neon-avatar' : ''}
-                      style={{ position: 'relative', flexShrink: 0 }}
-                    >
-                      {u.hasKingCrown ? (
-                        <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
-                      ) : u.hasSilverCrown ? (
-                        <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
-                      ) : u.hasStreakCrown ? (
-                        <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
-                      ) : null}
-                      <img
-                        src={u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`}
-                        alt="Avatar"
-                        onClick={(e) => handleAvatarStoryClick(e, u)}
-                        onError={(e) => {
-                          e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
-                        }}
-                        style={{
-                          width: '48px',
-                          height: '48px',
-                          borderRadius: '50%',
-                          cursor: 'pointer',
-                          objectFit: 'cover',
-                          border: u.hasKingCrown
-                            ? '2.5px solid #fbbf24'
-                            : u.hasSilverCrown
-                            ? '2.5px solid #cbd5e1'
-                            : u.hasStreakCrown
-                            ? '2.5px solid #f97316'
-                            : 'none'
-                        }}
-                        title="Click to view full screen DP"
-                      />
-                      {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
-                    </div>
+                    <VibeAuraRing aura={friendAura} size={48} isGroup={u.isGroup}>
+                      <div
+                        className={u.isPro ? 'pro-neon-avatar' : ''}
+                        style={{ position: 'relative', flexShrink: 0 }}
+                      >
+                        {u.hasKingCrown ? (
+                          <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+                        ) : u.hasSilverCrown ? (
+                          <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+                        ) : u.hasStreakCrown ? (
+                          <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+                        ) : null}
+                        <img
+                          src={u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`}
+                          alt="Avatar"
+                          onClick={(e) => handleAvatarStoryClick(e, u)}
+                          onError={(e) => {
+                            e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
+                          }}
+                          style={{
+                            width: '48px',
+                            height: '48px',
+                            borderRadius: '50%',
+                            cursor: 'pointer',
+                            objectFit: 'cover',
+                            border: u.hasKingCrown
+                              ? '2.5px solid #fbbf24'
+                              : u.hasSilverCrown
+                              ? '2.5px solid #cbd5e1'
+                              : u.hasStreakCrown
+                              ? '2.5px solid #f97316'
+                              : 'none'
+                          }}
+                          title="Click to view full screen DP"
+                        />
+                        {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
+                      </div>
+                    </VibeAuraRing>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <h4 style={{ fontSize: '1.02rem', fontWeight: u.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
                           <span>{u.displayName}</span>
                           {u.isPro && (
                             <PulseVipBadge size={14} showLabel={false} />
+                          )}
+                          {friendAura?.mood && (
+                            <span
+                              style={{
+                                fontSize: '0.68rem',
+                                padding: '1px 6px',
+                                borderRadius: '8px',
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                border: `1px solid ${friendAura.auraColor || 'rgba(255,255,255,0.2)'}`,
+                                color: friendAura.auraColor || 'var(--accent)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                fontWeight: 600,
+                                flexShrink: 0
+                              }}
+                            >
+                              <span>{friendAura.emoji || '✨'}</span>
+                              <span>{friendAura.mood}</span>
+                            </span>
+                          )}
+                          {u.streakCount > 0 && (
+                            <span
+                              style={{
+                                fontSize: '0.72rem',
+                                padding: '1px 6px',
+                                borderRadius: '8px',
+                                background: 'rgba(239, 68, 68, 0.16)',
+                                color: '#ff7a29',
+                                border: '1px solid rgba(249, 115, 22, 0.5)',
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '2px',
+                                flexShrink: 0
+                              }}
+                              title={`🔥 ${u.streakCount}-day Pulse Streak!`}
+                            >
+                              🔥 {u.streakCount}
+                            </span>
                           )}
                         </h4>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -2455,7 +2556,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                       </p>
                     </div>
                   </div>
-                ))}
+                ); })}
               </>
             )}
 
@@ -2674,6 +2775,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       {showSparksWallet && (
         <SparksWalletModal
           onClose={() => setShowSparksWallet(false)}
+        />
+      )}
+
+      {showVibeSelector && (
+        <VibeAuraSelectorModal
+          onClose={() => setShowVibeSelector(false)}
+          currentAura={myAura}
         />
       )}
     </div>

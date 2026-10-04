@@ -17,6 +17,8 @@ import PulseProModal from './PulseProModal';
 import GiftPickerModal from './GiftPickerModal';
 import Animated3DTextModal from './Animated3DTextModal';
 import LiveArrowGameModal from './LiveArrowGameModal';
+import PulseStreakModal from './PulseStreakModal';
+import VibeAuraRing from '../common/VibeAuraRing';
 import PulseVipBadge from '../common/PulseVipBadge';
 import MusicPickerModal from '../vibes/MusicPickerModal';
 import ForwardModal from './ForwardModal';
@@ -51,7 +53,7 @@ import {
 
 export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGroupCall, onOpenFullDp }) {
   const { user, token, blockUser, unblockUser, updateUserProfile } = useContext(AuthContext);
-  const { socket, onlineUsers, typingMap, lastNotification } = useContext(SocketContext);
+  const { socket, onlineUsers, typingMap, lastNotification, vibeAuras } = useContext(SocketContext);
 
   const isGroup = !!activeChat.isGroup;
   const currentUserId = user?.id || user?._id || '';
@@ -61,6 +63,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const typingUser = typingMap[chatId];
   const isTyping = Boolean(typingUser && typingUser !== user?.username && typingUser !== user?.id && typingUser !== user?.displayName);
   const typingTimeoutRef = useRef(null);
+
+  const partnerAura = useMemo(() => {
+    if (isGroup) return null;
+    const pId = activeChat?.id || activeChat?._id;
+    const pUser = activeChat?.username;
+    return (vibeAuras && (vibeAuras[pId] || vibeAuras[pUser])) || activeChat?.vibeAura || null;
+  }, [isGroup, activeChat, vibeAuras]);
 
   const getSenderPayload = () => ({
     senderName: user?.displayName || user?.username || 'User',
@@ -977,6 +986,78 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   // Chat settings & block status
   const [chatSetting, setChatSetting] = useState({ disappearingEnabled: false });
   const [blockStatus, setBlockStatus] = useState({ isBlockedByMe: false, isBlockedByThem: false });
+
+  // Pulse Streaks, Sparks Reward & Freeze Shield
+  const [streakData, setStreakData] = useState({ streakCount: 0, streakShields: 0, lastStreakDate: null });
+  const [showStreakModal, setShowStreakModal] = useState(false);
+  const [screenshotAlert, setScreenshotAlert] = useState(null);
+
+  useEffect(() => {
+    if (!chatId || isGroup) return;
+    let isMounted = true;
+    const fetchStreak = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/messages/settings/${encodeURIComponent(chatId)}/streak`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data?.success) {
+            setStreakData({
+              streakCount: data.streakCount || 0,
+              streakShields: data.streakShields || 0,
+              lastStreakDate: data.lastStreakDate || null
+            });
+          }
+        }
+      } catch (e) {}
+    };
+    fetchStreak();
+    return () => { isMounted = false; };
+  }, [chatId, isGroup, token]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleStreakUpdate = (data) => {
+      if (data.chatId === chatId) {
+        setStreakData(prev => ({
+          ...prev,
+          streakCount: data.streakCount,
+          streakShields: data.streakShields,
+          lastStreakDate: data.lastStreakDate
+        }));
+      }
+    };
+
+    const handleStreakReward = (data) => {
+      if (data.chatId === chatId && (data.userId === currentUserId || data.userId === user?.id)) {
+        setActionToast(`🔥 Streak Milestone! +${data.rewardSparks} Sparks reward added!`);
+        setTimeout(() => setActionToast(''), 4500);
+        try { playSound('notification'); } catch (e) {}
+      }
+    };
+
+    const handleScreenshotAlert = (data) => {
+      if (data.chatId === chatId) {
+        setScreenshotAlert({
+          takerName: data.takerName || 'Someone',
+          timestamp: data.timestamp || Date.now()
+        });
+        try { playSound('notification'); } catch (e) {}
+        setTimeout(() => setScreenshotAlert(null), 8000);
+      }
+    };
+
+    socket.on('streak_updated', handleStreakUpdate);
+    socket.on('streak_sparks_reward', handleStreakReward);
+    socket.on('snap_screenshot_alert', handleScreenshotAlert);
+
+    return () => {
+      socket.off('streak_updated', handleStreakUpdate);
+      socket.off('streak_sparks_reward', handleStreakReward);
+      socket.off('snap_screenshot_alert', handleScreenshotAlert);
+    };
+  }, [socket, chatId, currentUserId, user?.id]);
 
   // Pagination for infinite fast scroll
   const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState(false);
@@ -2762,44 +2843,46 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               </button>
             )}
 
-            <div
-              className={!isGroup && chatIsPro ? 'pro-neon-avatar' : ''}
-              style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
-            >
-              {!isGroup && chatHasKingCrown ? (
-                <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
-              ) : !isGroup && chatHasSilverCrown ? (
-                <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
-              ) : !isGroup && chatHasStreakCrown ? (
-                <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
-              ) : null}
-              <img
-                src={chatAvatar || activeChat.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeChat.username || 'pulse'}`}
-                alt="Avatar"
-                onClick={() => isGroup ? setShowGroupProfileModal(true) : (onOpenFullDp && onOpenFullDp(chatAvatar || activeChat.avatar, chatDisplayName || activeChat.displayName, activeChat.username))}
-                onError={(e) => {
-                  e.target.src = isGroup
-                    ? `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(chatDisplayName || activeChat.name || 'Group')}`
-                    : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(activeChat.username || chatDisplayName || 'User')}`;
-                }}
-                style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: isGroup ? '12px' : '50%',
-                  cursor: 'pointer',
-                  objectFit: 'cover',
-                  flexShrink: 0,
-                  border: !isGroup && chatHasKingCrown
-                    ? '2.5px solid #fbbf24'
-                    : !isGroup && chatHasSilverCrown
-                    ? '2.5px solid #cbd5e1'
-                    : !isGroup && chatHasStreakCrown
-                    ? '2.5px solid #f97316'
-                    : (!isGroup && chatIsPro ? 'none' : 'none')
-                }}
-                title={isGroup ? 'Click for group details & members' : 'Click to view full screen DP'}
-              />
-            </div>
+            <VibeAuraRing aura={partnerAura} size={42} isGroup={isGroup}>
+              <div
+                className={!isGroup && chatIsPro ? 'pro-neon-avatar' : ''}
+                style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
+              >
+                {!isGroup && chatHasKingCrown ? (
+                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+                ) : !isGroup && chatHasSilverCrown ? (
+                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+                ) : !isGroup && chatHasStreakCrown ? (
+                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+                ) : null}
+                <img
+                  src={chatAvatar || activeChat.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeChat.username || 'pulse'}`}
+                  alt="Avatar"
+                  onClick={() => isGroup ? setShowGroupProfileModal(true) : (onOpenFullDp && onOpenFullDp(chatAvatar || activeChat.avatar, chatDisplayName || activeChat.displayName, activeChat.username))}
+                  onError={(e) => {
+                    e.target.src = isGroup
+                      ? `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(chatDisplayName || activeChat.name || 'Group')}`
+                      : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(activeChat.username || chatDisplayName || 'User')}`;
+                  }}
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: isGroup ? '12px' : '50%',
+                    cursor: 'pointer',
+                    objectFit: 'cover',
+                    flexShrink: 0,
+                    border: !isGroup && chatHasKingCrown
+                      ? '2.5px solid #fbbf24'
+                      : !isGroup && chatHasSilverCrown
+                      ? '2.5px solid #cbd5e1'
+                      : !isGroup && chatHasStreakCrown
+                      ? '2.5px solid #f97316'
+                      : (!isGroup && chatIsPro ? 'none' : 'none')
+                  }}
+                  title={isGroup ? 'Click for group details & members' : 'Click to view full screen DP'}
+                />
+              </div>
+            </VibeAuraRing>
 
             <div
               className="chat-header-title-box"
@@ -2807,12 +2890,33 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
               title={isGroup ? 'Click to view group bio, members & edit info' : 'Click to view profile & bio'}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap' }}>
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)' }}>
                   {chatDisplayName || activeChat.displayName}
                 </h3>
                 {!isGroup && chatIsPro && (
                   <PulseVipBadge size={16} showLabel={false} />
+                )}
+                {!isGroup && partnerAura?.mood && (
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      padding: '1px 7px',
+                      borderRadius: '10px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: `1px solid ${partnerAura.auraColor || 'rgba(255,255,255,0.2)'}`,
+                      color: partnerAura.auraColor || 'var(--accent)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      fontWeight: 600,
+                      flexShrink: 0
+                    }}
+                    title={`Vibe: ${partnerAura.mood}`}
+                  >
+                    <span>{partnerAura.emoji || '✨'}</span>
+                    <span>{partnerAura.mood}</span>
+                  </span>
                 )}
                 {isGroup && <span className="group-pill-badge"><Users size={12} /> Group</span>}
                 {chatSetting?.disappearingEnabled && (
@@ -2848,6 +2952,37 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
 
           <div className="chat-header-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+            {/* Pulse Streaks & Sparks Badge */}
+            {!isGroup && (
+              <button
+                onClick={() => setShowStreakModal(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: (streakData?.streakCount || 0) > 0 ? 'rgba(239, 68, 68, 0.18)' : 'rgba(255, 255, 255, 0.08)',
+                  border: `1px solid ${(streakData?.streakCount || 0) > 0 ? 'rgba(249, 115, 22, 0.6)' : 'rgba(255, 255, 255, 0.15)'}`,
+                  borderRadius: '14px',
+                  padding: '4px 9px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: (streakData?.streakCount || 0) > 0 ? '#ff7a29' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  boxShadow: (streakData?.streakCount || 0) > 0 ? '0 0 10px rgba(249, 115, 22, 0.35)' : 'none',
+                  transition: 'all 0.15s ease'
+                }}
+                title="Pulse Streaks with Sparks Reward & Streak Freeze"
+              >
+                <span style={{ fontSize: '0.95rem' }}>🔥</span>
+                <span>{streakData?.streakCount || 0}</span>
+                {(streakData?.streakShields || 0) > 0 && (
+                  <span style={{ fontSize: '0.72rem', marginLeft: '2px' }} title={`${streakData.streakShields} Freeze Shield Active`}>
+                    ❄️{streakData.streakShields}
+                  </span>
+                )}
+              </button>
+            )}
+
             {/* Live 2-Player Arrow Battle Game Button in Top Header Bar */}
             <button
               onClick={handleOpenArrowGame}
@@ -3359,6 +3494,37 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Screenshot Alert Floating Banner */}
+      {screenshotAlert && (
+        <div style={{
+          position: 'sticky',
+          top: '8px',
+          zIndex: 9999,
+          margin: '6px 16px',
+          background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+          color: '#fff',
+          padding: '9px 16px',
+          borderRadius: '16px',
+          boxShadow: '0 6px 20px rgba(239, 68, 68, 0.45)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '10px',
+          fontSize: '0.85rem',
+          fontWeight: 700,
+          border: '1px solid rgba(255,255,255,0.3)',
+          animation: 'pulse 1.2s infinite'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldAlert size={18} />
+            <span>🚨 {screenshotAlert.takerName} took a screenshot of a Fog Snap!</span>
+          </div>
+          <button onClick={() => setScreenshotAlert(null)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '2px', display: 'flex' }}>
+            <X size={15} />
+          </button>
         </div>
       )}
 
@@ -4906,6 +5072,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {/* Sparks Wallet Modal */}
       {showSparksWallet && (
         <SparksWalletModal onClose={() => setShowSparksWallet(false)} />
+      )}
+
+      {/* Pulse Streaks & Freeze Shield Modal */}
+      {showStreakModal && (
+        <PulseStreakModal
+          chatId={chatId}
+          currentUserId={currentUserId}
+          streakCount={streakData?.streakCount || 0}
+          streakShields={streakData?.streakShields || 0}
+          lastStreakDate={streakData?.lastStreakDate}
+          onClose={() => setShowStreakModal(false)}
+          onStreakUpdated={(updated) => setStreakData(prev => ({ ...prev, ...updated }))}
+        />
       )}
     </div>
   );

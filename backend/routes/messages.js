@@ -147,6 +147,144 @@ router.put('/settings/:chatId/theme', authMiddleware, async (req, res) => {
   }
 });
 
+// =========================================================================
+// OPTION 1: PULSE STREAKS & FREEZE SHIELDS
+// =========================================================================
+router.get('/settings/:chatId/streak', authMiddleware, async (req, res) => {
+  try {
+    const setting = await db.getChatSetting(req.params.chatId);
+    const userId = req.user.id;
+    let shields = 0;
+    if (setting.streakShields) {
+      if (typeof setting.streakShields.get === 'function') {
+        shields = setting.streakShields.get(userId) || 0;
+      } else {
+        shields = setting.streakShields[userId] || 0;
+      }
+    }
+
+    res.json({
+      chatId: req.params.chatId,
+      streakCount: setting.streakCount || 0,
+      lastStreakDate: setting.lastStreakDate || '',
+      shields,
+      streakFrozenUntil: setting.streakFrozenUntil || null,
+      milestonesClaimed: setting.streakMilestonesClaimed || []
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch streak data' });
+  }
+});
+
+router.post('/settings/:chatId/streak/freeze', authMiddleware, async (req, res) => {
+  try {
+    const result = await db.buyStreakFreeze(req.params.chatId, req.user.id);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user_${req.user.id}`).emit('sparks_updated', { pulseSparks: result.pulseSparks });
+      io.to(req.params.chatId).emit('streak_freeze_bought', {
+        chatId: req.params.chatId,
+        userId: req.user.id,
+        shields: result.shields
+      });
+    }
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to buy streak freeze' });
+  }
+});
+
+// =========================================================================
+// OPTION 2: FOG SNAPS (SCRATCH-TO-REVEAL & SCREENSHOT ALERT)
+// =========================================================================
+router.post('/fog-snap/reveal', authMiddleware, async (req, res) => {
+  try {
+    const { messageId, chatId } = req.body;
+    const Message = require('../models/Message');
+    const msg = await Message.findOneAndUpdate(
+      { id: messageId },
+      { fogSnapStatus: 'revealed' },
+      { new: true }
+    );
+
+    const io = req.app.get('io');
+    if (io && chatId) {
+      io.to(chatId).emit('fog_snap_revealed', { messageId, chatId, revealedBy: req.user.id });
+    }
+
+    res.json({ success: true, message: msg });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reveal fog snap' });
+  }
+});
+
+router.post('/fog-snap/burn', authMiddleware, async (req, res) => {
+  try {
+    const { messageId, chatId } = req.body;
+    const Message = require('../models/Message');
+    const msg = await Message.findOneAndUpdate(
+      { id: messageId },
+      { fogSnapStatus: 'burned', content: '🌫️ Fog Snap Evaporated', mediaUrl: null },
+      { new: true }
+    );
+
+    const io = req.app.get('io');
+    if (io && chatId) {
+      io.to(chatId).emit('fog_snap_burned', { messageId, chatId });
+    }
+
+    res.json({ success: true, message: msg });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to burn fog snap' });
+  }
+});
+
+router.post('/fog-snap/screenshot', authMiddleware, async (req, res) => {
+  try {
+    const { messageId, chatId } = req.body;
+    const Message = require('../models/Message');
+    const alertData = {
+      takenBy: req.user.id,
+      userName: req.user.displayName || req.user.username,
+      timestamp: new Date().toISOString()
+    };
+    await Message.updateOne({ id: messageId }, { screenshotAlert: alertData });
+
+    // Broadcast immediate alert to chat room!
+    const io = req.app.get('io');
+    if (io && chatId) {
+      io.to(chatId).emit('snap_screenshot_alert', {
+        messageId,
+        chatId,
+        takenBy: req.user.id,
+        userName: alertData.userName,
+        timestamp: alertData.timestamp
+      });
+      if (chatId.includes('_')) {
+        const parts = chatId.split('_');
+        parts.forEach(uId => {
+          io.to(`user_${uId}`).emit('snap_screenshot_alert', {
+            messageId,
+            chatId,
+            takenBy: req.user.id,
+            userName: alertData.userName,
+            timestamp: alertData.timestamp
+          });
+        });
+      }
+    }
+
+    res.json({ success: true, alert: alertData });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to record screenshot alert' });
+  }
+});
+
 // Get Chat Message History - ultra fast response with Redis RAM cache, non-blocking background read receipts
 router.get('/:chatId', authMiddleware, async (req, res) => {
   try {
