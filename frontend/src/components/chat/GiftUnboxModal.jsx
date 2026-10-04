@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useId } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Zap, RotateCcw } from 'lucide-react';
 import Sticker3D from '../common/Sticker3D';
 import { playSound } from '../../utils/audio';
@@ -86,14 +87,16 @@ export default function GiftUnboxModal({
     setStep('box');
   };
 
-  return (
+  const modalContent = (
     <div
       onClick={onClose}
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 1400,
-        background: 'rgba(5, 4, 12, 0.88)',
+        width: '100vw',
+        height: '100dvh',
+        zIndex: 9999,
+        background: 'rgba(5, 4, 12, 0.92)',
         backdropFilter: 'blur(26px)',
         WebkitBackdropFilter: 'blur(26px)',
         display: 'flex',
@@ -430,23 +433,6 @@ export default function GiftUnboxModal({
             <Sticker3D giftId={giftId} sparkAmount={sparkAmount} showFooter={false} />
           </div>
 
-          {/* Clean Gift Title (Zero cluttered card) */}
-          <h2
-            style={{
-              margin: '0 0 8px 0',
-              fontSize: '1.7rem',
-              fontWeight: 900,
-              background: 'linear-gradient(90deg, #ffffff 0%, #fef08a 60%, #f59e0b 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              letterSpacing: '0.5px',
-              textAlign: 'center',
-              textShadow: '0 0 24px rgba(245, 158, 11, 0.4)'
-            }}
-          >
-            {giftName}
-          </h2>
-
           {/* Minimal Spark Badge */}
           <div
             style={{
@@ -497,4 +483,9 @@ export default function GiftUnboxModal({
       `}</style>
     </div>
   );
+
+  if (typeof document !== 'undefined' && document.body) {
+    return createPortal(modalContent, document.body);
+  }
+  return modalContent;
 }
