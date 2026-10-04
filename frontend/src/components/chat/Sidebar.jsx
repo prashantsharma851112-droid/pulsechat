@@ -390,6 +390,81 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Instagram-Style Pull-to-Refresh & Swipe Tabs State
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const touchStartRef = useRef({ x: 0, y: 0, time: 0, isTop: false });
+  const listContainerRef = useRef(null);
+
+  useEffect(() => {
+    if (isRefreshing) {
+      setPullDistance(52);
+    } else {
+      setPullDistance(0);
+    }
+  }, [isRefreshing]);
+
+  const handleTouchStart = (e) => {
+    if (!e.touches || e.touches.length === 0) return;
+    const touch = e.touches[0];
+    const isAtTop = listContainerRef.current ? listContainerRef.current.scrollTop <= 2 : true;
+    touchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      time: Date.now(),
+      isTop: isAtTop
+    };
+  };
+
+  const handleTouchMove = (e) => {
+    if (!e.touches || e.touches.length === 0) return;
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+
+    // Pull-to-Refresh: downward drag when scrolled to top
+    if (touchStartRef.current.isTop && deltaY > 0 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
+      setIsPulling(true);
+      const pull = Math.min(75, deltaY * 0.42);
+      setPullDistance(pull);
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!e.changedTouches || e.changedTouches.length === 0) return;
+    const touch = e.changedTouches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+    const elapsed = Date.now() - touchStartRef.current.time;
+
+    // Trigger Pull-to-Refresh if pulled past threshold
+    if (pullDistance >= 45 && !isRefreshing) {
+      handleManualRefresh();
+    } else if (!isRefreshing) {
+      setPullDistance(0);
+    }
+    setIsPulling(false);
+
+    // Horizontal Swipe for Tabs (CHATS <-> GROUPS <-> SYNC)
+    if (Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3 && elapsed < 800) {
+      if (deltaX < -45) {
+        // Swipe Left -> next tab
+        if (activeTab === 'chats') {
+          setActiveTab('groups');
+        } else if (activeTab === 'groups') {
+          setActiveTab('friends');
+        }
+      } else if (deltaX > 45) {
+        // Swipe Right -> previous tab
+        if (activeTab === 'friends') {
+          setActiveTab('groups');
+        } else if (activeTab === 'groups') {
+          setActiveTab('chats');
+        }
+      }
+    }
+  };
+
   const handleManualRefresh = async () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
@@ -1476,33 +1551,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             <Gamepad2 size={18} />
           </button>
 
-          <button
-            onClick={handleManualRefresh}
-            disabled={isRefreshing}
-            title="Refresh & Sync Chats"
-            className="icon-btn-ghost"
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              background: 'var(--bg-card)',
-              color: isRefreshing ? 'var(--accent)' : 'var(--text-muted)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '1px solid var(--border)',
-              transition: 'all 0.2s ease',
-              cursor: isRefreshing ? 'not-allowed' : 'pointer',
-              opacity: isRefreshing ? 0.7 : 1
-            }}
-          >
-            <RotateCw
-              size={18}
-              className={isRefreshing ? 'animate-spin' : ''}
-            />
-          </button>
-
-          {/* Quick Switch Account Button right next to Refresh */}
+          {/* Quick Switch Account Button */}
           <div style={{ position: 'relative' }} ref={switchAccountMenuRef}>
             <button
               onClick={() => {
@@ -1874,34 +1923,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 <span>Feature Tour Guide</span>
               </button>
 
-              {/* Create New Group */}
-              <button
-                onClick={() => {
-                  setShowCreateGroupModal(true);
-                  setShowTopMenu(false);
-                }}
-                className="dropdown-menu-item"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: 'transparent',
-                  color: 'var(--text-main)',
-                  fontSize: '0.88rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  width: '100%',
-                  transition: 'background 0.15s ease'
-                }}
-              >
-                <Plus size={17} color="var(--accent)" />
-                <span>Create New Group</span>
-              </button>
-
               <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
 
               {/* Settings & Profile */}
@@ -2128,8 +2149,52 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         </div>
       )}
 
-      {/* WhatsApp Chat / Group List Area */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0.4rem', position: 'relative' }}>
+      {/* WhatsApp Chat / Group List Area with Instagram Pull-to-Refresh & Swipe Tabs */}
+      <div
+        ref={listContainerRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '0.4rem',
+          position: 'relative',
+          touchAction: 'pan-y'
+        }}
+      >
+        {/* Instagram-Style Pull-to-Refresh Spinner */}
+        <div
+          style={{
+            height: isRefreshing ? '48px' : `${pullDistance}px`,
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: isPulling ? 'none' : 'height 0.24s cubic-bezier(0.16, 1, 0.3, 1)',
+            opacity: pullDistance > 8 || isRefreshing ? 1 : 0,
+            pointerEvents: 'none',
+            margin: (pullDistance > 8 || isRefreshing) ? '4px 0' : '0'
+          }}
+        >
+          <div
+            style={{
+              width: '34px',
+              height: '34px',
+              borderRadius: '50%',
+              background: 'var(--bg-card)',
+              border: '1.5px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.35)',
+              transform: isRefreshing ? 'none' : `scale(${Math.min(1, Math.max(0.4, pullDistance / 40))}) rotate(${pullDistance * 5}deg)`,
+              color: 'var(--accent)'
+            }}
+          >
+            <RotateCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+          </div>
+        </div>
 
         {/* SEARCH RESULTS — shown when user types in search box (works offline too) */}
         {searchQuery.trim().length > 0 ? (

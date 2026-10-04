@@ -412,12 +412,9 @@ export default function PulseZoneModal({ onClose }) {
                         🏎️
                       </div>
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                          <span style={{ fontWeight: 900, fontSize: '1rem', color: '#fff' }}>Cyber Racer 3D</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Cyber Racer 3D</span>
                           <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>LANDSCAPE</span>
-                        </div>
-                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                          3D Highway Racing • Nitro Boost • Multi-Lane AI Traffic
                         </div>
                       </div>
                     </div>
@@ -473,12 +470,9 @@ export default function PulseZoneModal({ onClose }) {
                         🎯
                       </div>
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                          <span style={{ fontWeight: 900, fontSize: '1rem', color: '#fff' }}>Arrow Puzzle</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Arrow Puzzle</span>
                           <span style={{ fontSize: '0.62rem', background: '#3b82f6', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>BRAIN</span>
-                        </div>
-                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                          Daily Logic Challenge • Untangle Arrows & Clear Blocks
                         </div>
                       </div>
                     </div>
@@ -534,12 +528,9 @@ export default function PulseZoneModal({ onClose }) {
                         ⚡
                       </div>
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                          <span style={{ fontWeight: 900, fontSize: '1rem', color: '#fff' }}>Speed Tapper</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Speed Tapper</span>
                           <span style={{ fontSize: '0.62rem', background: '#f59e0b', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>REFLEX</span>
-                        </div>
-                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                          15-Second Blitz • Tap Glowing Targets • Climb Ranks
                         </div>
                       </div>
                     </div>

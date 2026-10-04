@@ -216,7 +216,6 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', fontWeight: 800, color: 'var(--text-main)' }}>
           <Sparkles size={16} color="#f59e0b" />
           <span>Pulse Vibes ⚡</span>
-          <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)', fontWeight: 500 }}>(24h Stories)</span>
         </div>
         <button
           onClick={onOpenCreateVibe}
