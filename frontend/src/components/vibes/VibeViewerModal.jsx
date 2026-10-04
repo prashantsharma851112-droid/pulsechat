@@ -736,20 +736,33 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
   if (!currentVibe) return null;
 
   return (
-    <div className="modal-overlay" style={{ zIndex: 1400, background: 'rgba(0,0,0,0.92)' }}>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100vw',
+        height: '100dvh',
+        zIndex: 1400,
+        background: '#000000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden'
+      }}
+    >
       <div
         style={{
           position: 'relative',
-          maxWidth: '420px',
           width: '100%',
-          height: 'min(760px, 92dvh)',
-          borderRadius: '24px',
+          maxWidth: typeof window !== 'undefined' && window.innerWidth <= 768 ? '100vw' : '440px',
+          height: typeof window !== 'undefined' && window.innerWidth <= 768 ? '100dvh' : 'min(880px, 98dvh)',
+          borderRadius: typeof window !== 'undefined' && window.innerWidth <= 768 ? '0px' : '24px',
           overflow: 'hidden',
           background: currentVibe.bgGradient || 'linear-gradient(135deg, #6366f1, #a855f7)',
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
-          border: '1px solid rgba(255,255,255,0.15)'
+          border: typeof window !== 'undefined' && window.innerWidth <= 768 ? 'none' : '1px solid rgba(255,255,255,0.15)'
         }}
       >
         {/* Top Progress Bars */}
@@ -1342,19 +1355,18 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
           )}
         </div>
 
-        {/* Bottom Reaction Bar (Safe-Area padded to prevent mobile navigation bar cropping) */}
+        {/* Bottom Floating Action Buttons (Transparent Floating Circular Buttons, Zero Bottom Border/Bar) */}
         <div style={{
-          padding: '12px 16px calc(24px + env(safe-area-inset-bottom, 16px))',
-          background: 'rgba(0,0,0,0.75)',
-          backdropFilter: 'blur(12px)',
-          borderTop: '1px solid rgba(255,255,255,0.12)',
+          position: 'absolute',
+          bottom: 'max(20px, env(safe-area-inset-bottom, 20px))',
+          left: '16px',
+          right: '16px',
           display: 'flex',
-          flexDirection: 'column',
-          gap: '10px',
-          flexShrink: 0,
-          zIndex: 10,
-          opacity: isHolding ? 0 : 1,
+          alignItems: 'center',
+          justifyContent: isMine ? 'space-between' : 'flex-end',
+          zIndex: 35,
           pointerEvents: isHolding ? 'none' : 'auto',
+          opacity: isHolding ? 0 : 1,
           transition: 'opacity 0.22s ease'
         }}>
           {isMine ? (
@@ -1370,24 +1382,38 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                   alignItems: 'center',
                   gap: '6px',
                   color: '#ffffff',
-                  background: showViewersSheet ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255,255,255,0.14)',
-                  border: '1px solid rgba(129, 140, 248, 0.45)',
-                  borderRadius: '20px',
-                  padding: '6px 14px',
+                  background: 'rgba(0, 0, 0, 0.45)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: '24px',
+                  padding: '7px 14px',
                   fontSize: '0.84rem',
                   fontWeight: 700,
                   cursor: 'pointer',
-                  transition: 'all 0.2s ease'
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)'
                 }}
               >
-                <Eye size={16} color="#a5b4fc" />
-                <span>{viewCount} {viewCount === 1 ? 'Viewer' : 'Viewers'}</span>
+                <Eye size={16} color="#38bdf8" />
+                <span>{viewCount}</span>
               </button>
 
               {currentVibe.sparksEarned > 0 && (
-                <span style={{ color: '#f59e0b', fontSize: '0.8rem', fontWeight: 800 }}>
-                  ⚡ {currentVibe.sparksEarned} Sparks Tipped!
-                </span>
+                <div style={{
+                  background: 'rgba(0, 0, 0, 0.45)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  borderRadius: '20px',
+                  padding: '6px 12px',
+                  color: '#f59e0b',
+                  fontSize: '0.78rem',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <Zap size={14} fill="#f59e0b" />
+                  <span>{currentVibe.sparksEarned}</span>
+                </div>
               )}
             </div>
           ) : !isMine && authorFriendStatus !== 'friends' ? (
@@ -1396,127 +1422,67 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: '10px',
-              background: 'rgba(15, 23, 42, 0.82)',
+              background: 'rgba(0, 0, 0, 0.55)',
               backdropFilter: 'blur(16px)',
-              border: '1px solid rgba(255, 255, 255, 0.16)',
-              borderRadius: '20px',
-              padding: '10px 14px',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              borderRadius: '24px',
+              padding: '8px 14px',
               width: '100%',
               color: '#fff',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.5)'
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                <div style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '50%',
-                  background: 'rgba(239, 68, 68, 0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                  border: '1px solid rgba(239, 68, 68, 0.4)'
-                }}>
-                  <Lock size={16} color="#f87171" />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    Only Synced Friends Can Reply
-                  </span>
-                  <span style={{ fontSize: '0.67rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    Sync with {vibeGroup?.displayName || vibeGroup?.username || 'user'} to reply, react or tip sparks
-                  </span>
-                </div>
-              </div>
-
-              {authorFriendStatus === 'pending_sent' ? (
-                <span style={{
-                  fontSize: '0.74rem',
-                  fontWeight: 700,
-                  color: '#f59e0b',
-                  background: 'rgba(245, 158, 11, 0.15)',
-                  border: '1px solid rgba(245, 158, 11, 0.3)',
-                  padding: '6px 12px',
-                  borderRadius: '14px',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0
-                }}>
-                  Pending ⏳
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                <Lock size={15} color="#f87171" />
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  Sync with {vibeGroup?.displayName || vibeGroup?.username || 'user'} to reply
                 </span>
-              ) : authorFriendStatus === 'pending_received' ? (
-                <button
-                  type="button"
-                  onClick={handleAcceptSyncRequest}
-                  disabled={authorActionLoading}
-                  style={{
-                    background: 'linear-gradient(135deg, #10b981, #059669)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '14px',
-                    padding: '7px 14px',
-                    fontSize: '0.78rem',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.4)'
-                  }}
-                >
-                  Accept Sync ⚡
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSendSyncRequest}
-                  disabled={authorActionLoading || authorFriendStatus === 'checking'}
-                  style={{
-                    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '14px',
-                    padding: '7px 14px',
-                    fontSize: '0.78rem',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)'
-                  }}
-                >
-                  ⚡ Sync
-                </button>
-              )}
+              </div>
+              <button
+                type="button"
+                onClick={handleSendSyncRequest}
+                disabled={authorActionLoading || authorFriendStatus === 'checking'}
+                style={{
+                  background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '16px',
+                  padding: '6px 12px',
+                  fontSize: '0.76rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  flexShrink: 0
+                }}
+              >
+                ⚡ Sync
+              </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: 'space-between' }}>
-              {/* 💬 Reply Button */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', width: '100%', justifyContent: 'flex-end' }}>
+              {/* 💬 Reply Circular Button (Transparent, matching mute button style) */}
               <button
                 type="button"
                 onClick={() => setShowReplySheet(true)}
+                title="Reply"
                 style={{
-                  flex: 1,
-                  background: 'rgba(255, 255, 255, 0.14)',
-                  backdropFilter: 'blur(16px)',
-                  border: '1px solid rgba(255, 255, 255, 0.22)',
-                  borderRadius: '24px',
-                  padding: '10px 12px',
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
+                  background: 'rgba(0, 0, 0, 0.45)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
                   color: '#ffffff',
-                  fontSize: '0.84rem',
-                  fontWeight: 700,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '6px',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
                   transition: 'transform 0.15s ease'
                 }}
               >
-                <MessageSquare size={16} />
-                <span>Reply</span>
+                <MessageSquare size={18} />
               </button>
 
-              {/* ⚡ Tip Sparks Button */}
+              {/* ⚡ Tip Sparks Circular Button (Matching top buttons style with warm glow) */}
               <button
                 type="button"
                 onClick={() => {
@@ -1527,53 +1493,48 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                   }
                   setShowSparksTipModal(true);
                 }}
+                title="Tip Sparks"
                 style={{
-                  flex: 1.15,
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
                   background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
-                  border: 'none',
-                  borderRadius: '24px',
-                  padding: '10px 12px',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
                   color: '#ffffff',
-                  fontSize: '0.84rem',
-                  fontWeight: 800,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '6px',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(245, 158, 11, 0.4)',
+                  boxShadow: '0 4px 16px rgba(245, 158, 11, 0.5)',
                   transition: 'transform 0.15s ease'
                 }}
               >
-                <Zap size={16} fill="#fff" />
-                <span>Tip Sparks</span>
+                <Zap size={18} fill="#fff" />
               </button>
 
-              {/* 😊 React (Unlimited Emojis) Button */}
+              {/* 😊 React Circular Button (Transparent, matching mute button style) */}
               <button
                 type="button"
                 onClick={() => setShowUnlimitedEmojiModal(true)}
+                title="React with Emoji"
                 style={{
-                  flex: 1,
-                  background: 'rgba(255, 255, 255, 0.14)',
-                  backdropFilter: 'blur(16px)',
-                  border: '1px solid rgba(255, 255, 255, 0.22)',
-                  borderRadius: '24px',
-                  padding: '10px 12px',
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
+                  background: 'rgba(0, 0, 0, 0.45)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
                   color: '#ffffff',
-                  fontSize: '0.84rem',
-                  fontWeight: 700,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '6px',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
                   transition: 'transform 0.15s ease'
                 }}
               >
-                <Smile size={17} />
-                <span>React</span>
+                <Smile size={19} />
               </button>
             </div>
           )}
