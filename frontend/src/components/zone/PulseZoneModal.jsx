@@ -5,6 +5,7 @@ import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Sparkles, Award } f
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 import ArrowPuzzleGame from './ArrowPuzzleGame';
+import CyberRacerGame from './CyberRacerGame';
 import { useBackHandler } from '../../utils/backNavigation';
 
 export default function PulseZoneModal({ onClose }) {
@@ -403,6 +404,27 @@ export default function PulseZoneModal({ onClose }) {
                 </button>
 
                 <button
+                  onClick={() => setSelectedGame('racer')}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '20px',
+                    border: selectedGame === 'racer' ? '1.5px solid #06b6d4' : '1px solid var(--border)',
+                    background: selectedGame === 'racer' ? 'rgba(6, 182, 212, 0.2)' : 'var(--bg-card)',
+                    color: selectedGame === 'racer' ? '#38bdf8' : 'var(--text-muted)',
+                    fontWeight: 800,
+                    fontSize: '0.78rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    whiteSpace: 'nowrap',
+                    boxShadow: selectedGame === 'racer' ? '0 0 12px rgba(6, 182, 212, 0.4)' : 'none'
+                  }}
+                >
+                  🏎️ Cyber Racer <span style={{ fontSize: '0.65rem', background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', color: '#fff', padding: '1px 5px', borderRadius: '8px' }}>NEW</span>
+                </button>
+
+                <button
                   onClick={() => setSelectedGame('tapper')}
                   style={{
                     padding: '6px 14px',
@@ -426,6 +448,10 @@ export default function PulseZoneModal({ onClose }) {
               {/* Selected Game Screen */}
               {selectedGame === 'arrow' ? (
                 <ArrowPuzzleGame
+                  onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
+                />
+              ) : selectedGame === 'racer' ? (
+                <CyberRacerGame
                   onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
                 />
               ) : (
