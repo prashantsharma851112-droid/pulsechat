@@ -5,7 +5,7 @@ import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Sparkles, Award, Ar
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 import ArrowPuzzleGame from './ArrowPuzzleGame';
-import CyberRacerGame from './CyberRacerGame';
+import TempleRunGame from './TempleRunGame';
 import { useBackHandler } from '../../utils/backNavigation';
 
 export default function PulseZoneModal({ onClose }) {
@@ -184,7 +184,7 @@ export default function PulseZoneModal({ onClose }) {
         className="modal-card modal-responsive"
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: selectedGame === 'racer' ? '960px' : '540px',
+          maxWidth: (selectedGame === 'temple' || selectedGame === 'racer') ? '960px' : '540px',
           width: '100%',
           maxHeight: '94dvh',
           display: 'flex',
@@ -381,12 +381,12 @@ export default function PulseZoneModal({ onClose }) {
               {/* When no game is selected: Clean Arcade Launcher Cards */}
               {selectedGame === null ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {/* Cyber Racer Card */}
+                  {/* Temple Run 3D Card */}
                   <div
-                    onClick={() => setSelectedGame('racer')}
+                    onClick={() => setSelectedGame('temple')}
                     style={{
-                      background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.18), rgba(59, 130, 246, 0.12))',
-                      border: '1.5px solid rgba(6, 182, 212, 0.45)',
+                      background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(234, 88, 12, 0.16))',
+                      border: '1.5px solid rgba(245, 158, 11, 0.55)',
                       borderRadius: '16px',
                       padding: '14px 16px',
                       display: 'flex',
@@ -394,7 +394,7 @@ export default function PulseZoneModal({ onClose }) {
                       justifyContent: 'space-between',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
-                      boxShadow: '0 4px 16px rgba(6, 182, 212, 0.15)'
+                      boxShadow: '0 4px 16px rgba(245, 158, 11, 0.2)'
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -402,26 +402,26 @@ export default function PulseZoneModal({ onClose }) {
                         width: '52px',
                         height: '52px',
                         borderRadius: '14px',
-                        background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+                        background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontSize: '1.8rem',
-                        boxShadow: '0 4px 14px rgba(6, 182, 212, 0.4)'
+                        boxShadow: '0 4px 14px rgba(245, 158, 11, 0.45)'
                       }}>
-                        🏎️
+                        🗿
                       </div>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Cyber Racer 3D</span>
-                          <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>LANDSCAPE</span>
+                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Temple Run 3D</span>
+                          <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #f59e0b, #ea580c)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>POPULAR</span>
                         </div>
                       </div>
                     </div>
                     <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedGame('racer'); }}
+                      onClick={(e) => { e.stopPropagation(); setSelectedGame('temple'); }}
                       style={{
-                        background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+                        background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
                         color: '#fff',
                         border: 'none',
                         borderRadius: '12px',
@@ -432,7 +432,7 @@ export default function PulseZoneModal({ onClose }) {
                         display: 'flex',
                         alignItems: 'center',
                         gap: '5px',
-                        boxShadow: '0 4px 12px rgba(6, 182, 212, 0.4)'
+                        boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
                       }}
                     >
                       <Play size={14} fill="#fff" /> PLAY
@@ -579,7 +579,7 @@ export default function PulseZoneModal({ onClose }) {
                       <ArrowLeft size={15} /> All Games
                     </button>
                     <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {selectedGame === 'racer' && <span>🏎️ Cyber Racer 3D</span>}
+                      {selectedGame === 'temple' && <span>🗿 Temple Run 3D</span>}
                       {selectedGame === 'arrow' && <span>🎯 Arrow Puzzle</span>}
                       {selectedGame === 'tapper' && <span>⚡ Speed Tapper</span>}
                     </div>
@@ -591,9 +591,10 @@ export default function PulseZoneModal({ onClose }) {
                     />
                   )}
 
-                  {selectedGame === 'racer' && (
-                    <CyberRacerGame
+                  {selectedGame === 'temple' && (
+                    <TempleRunGame
                       onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
+                      onBack={() => setSelectedGame(null)}
                     />
                   )}
 
