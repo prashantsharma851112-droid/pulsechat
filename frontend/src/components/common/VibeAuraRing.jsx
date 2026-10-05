@@ -172,7 +172,7 @@ export default function VibeAuraRing({
       />
 
       {/* Avatar Children */}
-      <div style={{ position: 'relative', zIndex: 2, borderRadius: isGroup ? '12px' : '50%', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', zIndex: 2, borderRadius: isGroup ? '12px' : '50%', overflow: 'visible' }}>
         {children}
       </div>
 

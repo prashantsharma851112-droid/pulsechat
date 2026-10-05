@@ -121,7 +121,8 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
 
   // 2. Request presigned upload signature from backend
   try {
-    const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+    const effectiveToken = token || (typeof window !== 'undefined' ? (localStorage.getItem('pulsechat_token') || '') : '');
+    const authHeader = effectiveToken ? { Authorization: `Bearer ${effectiveToken}` } : {};
     const sigRes = await fetch(`${BACKEND_URL}/api/upload/signature?folder=${encodeURIComponent(folder)}`, {
       headers: { ...authHeader }
     });
@@ -189,7 +190,8 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
     }
 
     if (payloadToSend) {
-      const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+      const effectiveToken = token || (typeof window !== 'undefined' ? (localStorage.getItem('pulsechat_token') || '') : '');
+      const authHeader = effectiveToken ? { Authorization: `Bearer ${effectiveToken}` } : {};
       const fallbackRes = await fetch(`${BACKEND_URL}/api/upload`, {
         method: 'POST',
         headers: {

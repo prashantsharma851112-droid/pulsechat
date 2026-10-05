@@ -153,6 +153,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   }, []);
 
   useEffect(() => {
+    const handleNavHome = () => {
+      setActiveChat(null);
+      setActiveTab('chats');
+      setShowCreateVibe(false);
+    };
+    window.addEventListener('pulsechat_navigate_home', handleNavHome);
+    return () => window.removeEventListener('pulsechat_navigate_home', handleNavHome);
+  }, [setActiveChat]);
+
+  useEffect(() => {
     const handleOutsideClick = (e) => {
       if (topMenuRef.current && !topMenuRef.current.contains(e.target)) {
         setShowTopMenu(false);
@@ -1423,18 +1433,19 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       onTouchEnd={handleSidebarTouchEnd}
     >
       {/* WhatsApp-Style Top App Header */}
-      <div className="sidebar-header" style={{ padding: '0.85rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)' }}>
+      <div className="sidebar-header" style={{ padding: '0.9rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)', overflow: 'visible' }}>
         {/* Brand & User Chip */}
         <div
           className="user-profile-badge"
           onClick={openProfileModal}
-          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0, cursor: 'pointer' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0, cursor: 'pointer', overflow: 'visible' }}
           title="Click to view & edit your profile"
         >
-          <VibeAuraRing aura={myAura} size={44}>
-            <div
-              className={user?.isPro ? 'pro-neon-avatar' : ''}
-              style={{ position: 'relative', flexShrink: 0 }}
+          <div style={{ position: 'relative', flexShrink: 0, padding: '4px 3px 3px 4px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', overflow: 'visible' }}>
+            <VibeAuraRing aura={myAura} size={44} hasCrown={Boolean(user?.hasKingCrown || user?.hasSilverCrown || user?.hasStreakCrown)}>
+              <div
+                className={user?.isPro ? 'pro-neon-avatar' : ''}
+                style={{ position: 'relative', flexShrink: 0 }}
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenFullDp && onOpenFullDp(user?.avatar, user?.displayName || user?.username, user?.username);
@@ -1521,6 +1532,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               )}
             </div>
           </VibeAuraRing>
+        </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap' }}>
               <h3 style={{ fontSize: '1.02rem', fontWeight: 700, margin: 0, color: 'var(--text-main)', letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -2736,6 +2748,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           <CreateVibeModal
             onClose={() => setShowCreateVibe(false)}
             onCreated={() => {
+              setShowCreateVibe(false);
+              setActiveChat(null);
+              setActiveTab('chats');
               if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
               }

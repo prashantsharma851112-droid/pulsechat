@@ -438,7 +438,7 @@ input, textarea {
   align-items: center;
   gap: 0.75rem;
   cursor: pointer;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .user-avatar {

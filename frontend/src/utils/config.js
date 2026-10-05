@@ -1,8 +1,18 @@
 const getBackendUrl = () => {
   if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL;
   if (typeof window !== 'undefined') {
+    // 1. Mobile App Container (Capacitor Android/iOS or Android WebView on phone)
+    const isMobileApp = Boolean(
+      window.Capacitor?.isNativePlatform?.() ||
+      window.location.protocol === 'capacitor:' ||
+      (window.location.hostname === 'localhost' && window.location.port === '' && /Android|iPhone|iPad/i.test(navigator.userAgent))
+    );
+    if (isMobileApp) {
+      return 'https://pulsechat-api-v2.onrender.com';
+    }
+
     const hostname = window.location.hostname;
-    // Local PC development
+    // Local PC development (Vite on port 5173 / localhost)
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:5000';
     }

@@ -3,7 +3,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { 
   X, Camera, SwitchCamera, Image as ImageIcon, Music, Palette, Sparkles, 
   Send, Loader2, Type, Trash2, Smile, Disc, Check, FlipHorizontal,
-  RotateCcw, Volume2, VolumeX, Clock, Play, Pause, ChevronRight, Layers
+  RotateCcw, Volume2, VolumeX, Clock, Play, Pause, ChevronRight, Layers, AlertCircle
 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { registerGlobalMusicAudio, stopGlobalMusicAudio, playSound } from '../../utils/audio';
@@ -536,13 +536,14 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       sparksEarned: 0
     };
 
-    if (token) {
+    const effectiveToken = token || (typeof window !== 'undefined' ? localStorage.getItem('pulsechat_token') : '');
+    if (effectiveToken) {
       try {
         await fetch(`${BACKEND_URL}/api/vibes/create`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${effectiveToken}`
           },
           body: JSON.stringify(createdVibe)
         });
@@ -560,9 +561,10 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     } catch (e) {}
 
     window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
+    window.dispatchEvent(new CustomEvent('pulsechat_navigate_home'));
     setSubmitting(false);
-    if (onCreated) onCreated();
     stopCameraStream();
+    if (onCreated) onCreated();
     onClose();
   };
 
@@ -610,6 +612,37 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         WebkitUserSelect: 'none'
       }}
     >
+      {error && (
+        <div
+          onClick={() => setError('')}
+          style={{
+            position: 'absolute',
+            top: '70px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(239, 68, 68, 0.94)',
+            color: '#ffffff',
+            padding: '9px 18px',
+            borderRadius: '24px',
+            fontSize: '0.84rem',
+            fontWeight: 700,
+            zIndex: 9999,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            backdropFilter: 'blur(10px)',
+            maxWidth: '90%',
+            textAlign: 'center',
+            cursor: 'pointer'
+          }}
+        >
+          <AlertCircle size={16} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
+          <X size={14} style={{ opacity: 0.8, marginLeft: '4px', flexShrink: 0 }} />
+        </div>
+      )}
+
       <input
         ref={fileInputRef}
         type="file"
