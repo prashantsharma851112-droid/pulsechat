@@ -2543,9 +2543,8 @@ input, textarea {
 }
 .bottom-round-vibe-btn:active {
   transform: scale(0.94);
+}@keyframes pulseShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
-
-
-
-
 

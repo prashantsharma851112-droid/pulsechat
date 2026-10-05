@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3 } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3, Ghost } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -17,6 +17,7 @@ import PulseProModal from './PulseProModal';
 import GiftPickerModal from './GiftPickerModal';
 import Animated3DTextModal from './Animated3DTextModal';
 import LiveArrowGameModal from './LiveArrowGameModal';
+import TicTacToeModal from './TicTacToeModal';
 import PulseStreakModal from './PulseStreakModal';
 import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
 import VibeAuraSelectorModal from './VibeAuraSelectorModal';
@@ -90,6 +91,32 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     return resolveUserAura(user, vibeAuras);
   }, [vibeAuras, user]);
   const [showVibeSelector, setShowVibeSelector] = useState(false);
+  const [showTicTacToeModal, setShowTicTacToeModal] = useState(false);
+  const [isGhostMode, setIsGhostMode] = useState(() => {
+    try {
+      return localStorage.getItem(`pulsechat_ghost_${chatId}`) === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      setIsGhostMode(localStorage.getItem(`pulsechat_ghost_${chatId}`) === 'true');
+    } catch (e) {
+      setIsGhostMode(false);
+    }
+  }, [chatId]);
+
+  const toggleGhostMode = () => {
+    setIsGhostMode(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem(`pulsechat_ghost_${chatId}`, String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
 
   const getSenderPayload = () => ({
     senderName: user?.displayName || user?.username || 'User',
@@ -914,6 +941,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [pendingMedia, setPendingMedia] = useState(null);
   const [groupMembersMap, setGroupMembersMap] = useState({});
   const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const deduplicatedMessages = useMemo(() => {
@@ -1456,8 +1484,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
       }
 
-      // Explicitly mark read via REST endpoint to guarantee DB update
-      if (token && chatId) {
+      // Explicitly mark read via REST endpoint to guarantee DB update (bypassed in Ghost Mode)
+      if (token && chatId && !isGhostMode) {
         fetch(`${BACKEND_URL}/api/messages/${chatId}/read`, {
           method: 'PUT',
           headers: { Authorization: `Bearer ${token}` }
@@ -1536,7 +1564,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       });
       if (lastNotification.senderId !== user.id) {
         playSound('received');
-        socket?.emit('mark_read', { messageId: lastNotification.id, chatId });
+        if (!isGhostMode) {
+          socket?.emit('mark_read', { messageId: lastNotification.id, chatId });
+        }
       }
     }
   }, [lastNotification, chatId, user.id, socket]);
@@ -1718,7 +1748,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
         if (msg.senderId !== user.id) {
           playSound('received');
-          socket.emit('mark_read', { messageId: msg.id, chatId });
+          if (!isGhostMode) {
+            socket.emit('mark_read', { messageId: msg.id, chatId });
+          }
         }
       }
     };
@@ -2055,6 +2087,22 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       console.warn('Failed to load older messages:', err);
     } finally {
       setIsLoadingOlder(false);
+    }
+  };
+
+  const handleChatContainerScroll = (e) => {
+    const target = e.currentTarget;
+    if (target.scrollTop <= 75 && hasMoreOlderMessages && !isLoadingOlder) {
+      const prevScrollHeight = target.scrollHeight;
+      const prevScrollTop = target.scrollTop;
+      handleLoadOlderMessages().then(() => {
+        requestAnimationFrame(() => {
+          if (chatContainerRef.current) {
+            const diff = chatContainerRef.current.scrollHeight - prevScrollHeight;
+            chatContainerRef.current.scrollTop = prevScrollTop + diff;
+          }
+        });
+      });
     }
   };
 
@@ -2978,6 +3026,26 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     <Clock size={11} /> 24h
                   </span>
                 )}
+                {isGhostMode && (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      fontSize: '0.68rem',
+                      padding: '2px 7px',
+                      borderRadius: '10px',
+                      background: 'rgba(168, 85, 247, 0.22)',
+                      color: '#c084fc',
+                      fontWeight: 700,
+                      border: '1px solid rgba(168, 85, 247, 0.45)',
+                      flexShrink: 0
+                    }}
+                    title="Ghost Mode is Active: Your contact cannot see blue double ticks or when you read messages!"
+                  >
+                    👻 Ghost Mode
+                  </span>
+                )}
               </div>
               <p style={{ fontSize: '0.8rem', color: isTyping ? '#22c55e' : 'var(--text-muted)', fontWeight: isTyping ? 600 : 400, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {isGroup
@@ -3139,6 +3207,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                       <span>{blockStatus.isBlockedByMe ? 'Unblock Contact' : 'Block Contact'}</span>
                     </button>
                   )}
+                  {/* Ghost Mode (Stealth Read) */}
+                  <button onClick={() => { setShowMoreMenu(false); toggleGhostMode(); }}>
+                    <Ghost size={16} color={isGhostMode ? '#c084fc' : 'var(--accent)'} />
+                    <span style={{ color: isGhostMode ? '#c084fc' : 'inherit', fontWeight: isGhostMode ? 700 : 500 }}>
+                      {isGhostMode ? '👻 Ghost Mode: ON (Stealth)' : '👻 Ghost Mode: OFF'}
+                    </span>
+                  </button>
+
                   <button onClick={() => { setShowMoreMenu(false); handleClearCurrentChat(); }} style={{ color: '#ef4444' }}>
                     <Trash2 size={16} color="#ef4444" />
                     <span>Clear Chat</span>
@@ -3627,6 +3703,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {/* Message Stream with Live Wallpaper Overlay & WhatsApp-Style Date Dividers */}
       <div
+        ref={chatContainerRef}
+        onScroll={handleChatContainerScroll}
         onClick={() => {
           if (selectedActionMessage) handleDismissActionMessage();
         }}
@@ -4357,6 +4435,44 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 </div>
                 <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Create Poll</span>
               </button>
+
+              {/* Tic-Tac-Toe Arena */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  setShowTicTacToeModal(true);
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #38bdf8, #ec4899)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(56, 189, 248, 0.35)',
+                  fontSize: '1.3rem'
+                }}>
+                  🎮
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Tic-Tac-Toe</span>
+              </button>
             </div>
           )}
 
@@ -4947,6 +5063,48 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   Music {!user?.isPro ? '👑' : ''}
                 </span>
               </button>
+
+              {/* App 4: Tic-Tac-Toe Arena */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAppsFolderModal(false);
+                  setShowTicTacToeModal(true);
+                }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '6px 4px',
+                  borderRadius: '16px',
+                  transition: 'transform 0.18s ease'
+                }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <div style={{
+                  width: '54px',
+                  height: '54px',
+                  borderRadius: '17px',
+                  background: 'linear-gradient(135deg, #38bdf8, #ec4899)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 6px 16px rgba(56, 189, 248, 0.4)',
+                  marginBottom: '7px',
+                  position: 'relative',
+                  fontSize: '1.6rem'
+                }}>
+                  🎮
+                </div>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                  Tic-Tac-Toe
+                </span>
+              </button>
             </div>
             <style>{`
               @keyframes folderPopIn {
@@ -4956,6 +5114,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             `}</style>
           </div>
         </div>
+      )}
+
+      {showTicTacToeModal && (
+        <TicTacToeModal
+          chatId={chatId}
+          partnerName={chatDisplayName || activeChat?.displayName}
+          onClose={() => setShowTicTacToeModal(false)}
+          onOpenSparksWallet={() => setShowSparksWallet(true)}
+        />
       )}
 
       {showArrowGameModal && (

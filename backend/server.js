@@ -1433,6 +1433,19 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Real-Time Tic-Tac-Toe Arena Handlers
+  socket.on('tictactoe_move', (data) => {
+    if (data && data.chatId) {
+      socket.to(data.chatId).emit('tictactoe_move', data);
+    }
+  });
+
+  socket.on('tictactoe_reset', (data) => {
+    if (data && data.chatId) {
+      socket.to(data.chatId).emit('tictactoe_reset', data);
+    }
+  });
+
   // Audio/Video Call WebRTC Signaling (1-to-1)
   socket.on('call_user', async ({ userToCall, signalData, from, callerName, callerAvatar, isVideo }) => {
     // Check if target user has blocked caller or caller has blocked target user

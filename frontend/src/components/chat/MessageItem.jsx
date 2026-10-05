@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
 import { BACKEND_URL } from '../../utils/config';
-import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward, Edit3 } from 'lucide-react';
+import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward, Edit3, ExternalLink } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 import FogSnapModal from './FogSnapModal';
@@ -485,6 +485,226 @@ function StoryReplyCard({ message, isMine, onOpenStory, onOpenSparksWallet }) {
   );
 }
 
+function RichLinkPreview({ url, isMine }) {
+  let hostname = '';
+  try {
+    hostname = new URL(url).hostname.replace(/^www\./, '');
+  } catch (e) {
+    return null;
+  }
+  if (!hostname) return null;
+
+  const faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`;
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={e => e.stopPropagation()}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '8px 12px',
+        borderRadius: '12px',
+        background: isMine ? 'rgba(0, 0, 0, 0.22)' : 'rgba(255, 255, 255, 0.08)',
+        border: `1px solid ${isMine ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.12)'}`,
+        marginTop: '6px',
+        textDecoration: 'none',
+        color: 'inherit',
+        maxWidth: '100%',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        transition: 'background 0.15s ease'
+      }}
+    >
+      <img
+        src={faviconUrl}
+        alt=""
+        onError={(e) => { e.target.style.display = 'none'; }}
+        style={{ width: '22px', height: '22px', borderRadius: '6px', flexShrink: 0 }}
+      />
+      <div style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {hostname}
+        </div>
+        <div style={{ fontSize: '0.72rem', color: isMine ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {url}
+        </div>
+      </div>
+      <ExternalLink size={14} style={{ opacity: 0.7, flexShrink: 0 }} />
+    </a>
+  );
+}
+
+function VoiceNotePlayer({ audioUrl, isMine }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const audioRef = useRef(null);
+
+  const bars = React.useMemo(() => {
+    let hash = 0;
+    const s = audioUrl || 'pulse_voice_audio';
+    for (let i = 0; i < s.length; i++) hash = (hash << 5) - hash + s.charCodeAt(i);
+    const res = [];
+    for (let i = 0; i < 24; i++) {
+      const v = Math.abs(Math.sin((hash + i * 31) * 0.35));
+      res.push(Math.max(0.25, Math.min(1.0, v)));
+    }
+    return res;
+  }, [audioUrl]);
+
+  useEffect(() => {
+    const audio = new Audio(audioUrl);
+    audioRef.current = audio;
+
+    audio.onloadedmetadata = () => {
+      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+        setDuration(audio.duration);
+      }
+    };
+    audio.ontimeupdate = () => {
+      setCurrentTime(audio.currentTime);
+      if (!duration && audio.duration && isFinite(audio.duration)) {
+        setDuration(audio.duration);
+      }
+    };
+    audio.onended = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+    audio.onpause = () => setIsPlaying(false);
+
+    return () => {
+      audio.pause();
+      audio.src = '';
+    };
+  }, [audioUrl]);
+
+  const togglePlay = (e) => {
+    e.stopPropagation();
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      audio.playbackRate = playbackRate;
+      audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    }
+  };
+
+  const handleSpeedToggle = (e) => {
+    e.stopPropagation();
+    const speeds = [1, 1.5, 2];
+    const nextIdx = (speeds.indexOf(playbackRate) + 1) % speeds.length;
+    const nextSpeed = speeds[nextIdx];
+    setPlaybackRate(nextSpeed);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = nextSpeed;
+    }
+  };
+
+  const handleSeek = (e, barIdx) => {
+    e.stopPropagation();
+    const audio = audioRef.current;
+    if (!audio || !duration) return;
+    const progress = (barIdx + 1) / bars.length;
+    audio.currentTime = progress * duration;
+    setCurrentTime(audio.currentTime);
+  };
+
+  const formatTime = (secs) => {
+    if (!secs || isNaN(secs) || !isFinite(secs)) return '0:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const progressPct = duration > 0 ? (currentTime / duration) : 0;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', minWidth: '220px', maxWidth: '270px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <button
+          type="button"
+          onClick={togglePlay}
+          style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: '50%',
+            background: isMine ? '#fff' : 'var(--accent)',
+            color: isMine ? 'var(--accent)' : '#fff',
+            border: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            flexShrink: 0,
+            boxShadow: '0 3px 10px rgba(0,0,0,0.25)',
+            transition: 'transform 0.15s ease'
+          }}
+          title={isPlaying ? 'Pause' : 'Play voice note'}
+        >
+          {isPlaying ? <Pause size={18} /> : <Play size={18} style={{ marginLeft: '2px' }} />}
+        </button>
+
+        {/* Waveform Bars */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2.5px', flex: 1, height: '32px', cursor: 'pointer' }}>
+          {bars.map((barHeight, idx) => {
+            const barProgress = idx / bars.length;
+            const isPlayed = barProgress <= progressPct;
+            return (
+              <div
+                key={idx}
+                onClick={(e) => handleSeek(e, idx)}
+                style={{
+                  flex: 1,
+                  height: `${Math.round(barHeight * 28)}px`,
+                  minHeight: '4px',
+                  borderRadius: '3px',
+                  background: isPlayed
+                    ? (isMine ? '#ffffff' : 'var(--accent)')
+                    : (isMine ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.2)'),
+                  transition: 'background 0.15s ease, transform 0.15s ease',
+                  transform: isPlaying && isPlayed ? 'scaleY(1.08)' : 'scaleY(1.0)'
+                }}
+              />
+            );
+          })}
+        </div>
+
+        {/* Playback Speed Toggle (1x -> 1.5x -> 2x) */}
+        <button
+          type="button"
+          onClick={handleSpeedToggle}
+          style={{
+            padding: '2px 7px',
+            borderRadius: '10px',
+            background: isMine ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.25)',
+            border: `1px solid ${isMine ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.15)'}`,
+            color: '#fff',
+            fontSize: '0.68rem',
+            fontWeight: 800,
+            cursor: 'pointer',
+            flexShrink: 0,
+            letterSpacing: '0.2px'
+          }}
+          title="Change playback speed"
+        >
+          {playbackRate}x
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', opacity: 0.8, padding: '0 4px' }}>
+        <span>{isPlaying ? formatTime(currentTime) : (duration > 0 ? formatTime(duration) : 'Voice note')}</span>
+        <span>{duration > 0 ? formatTime(duration) : ''}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function MessageItem({
   message,
   isMine,
@@ -511,6 +731,7 @@ export default function MessageItem({
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
   const [audioObj, setAudioObj] = useState(null);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [showThread, setShowThread] = useState(false);
@@ -1110,15 +1331,8 @@ export default function MessageItem({
 
         {/* Voice Note Message */}
         {message.type === 'voice' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '200px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <button onClick={toggleAudio} style={{ background: 'var(--accent)', color: '#fff', border: 'none', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-              </button>
-              <div style={{ flex: 1, height: '4px', background: 'rgba(255,255,255,0.3)', borderRadius: '2px', overflow: 'hidden' }}>
-                <div style={{ width: isPlaying ? '100%' : '0%', height: '100%', background: '#fff', transition: 'width 3s linear' }} />
-              </div>
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <VoiceNotePlayer audioUrl={message.audioUrl} isMine={isMine} />
 
             {/* AI Voice Emotion Tag */}
             {(() => {
@@ -1147,11 +1361,19 @@ export default function MessageItem({
             onOpenStory={onOpenStory}
             onOpenSparksWallet={onOpenSparksWallet}
           />
-        ) : (message.type === 'text' && (
-          <p style={{ fontSize: '0.98rem', wordBreak: 'break-word', margin: 0, lineHeight: 1.45 }}>
-            {message.content}
-          </p>
-        ))}
+        ) : (message.type === 'text' && (() => {
+          const urlMatch = message.content && message.content.match(/(https?:\/\/[^\s]+)/);
+          return (
+            <div>
+              <p style={{ fontSize: '0.98rem', wordBreak: 'break-word', margin: 0, lineHeight: 1.45 }}>
+                {message.content}
+              </p>
+              {urlMatch && urlMatch[0] && (
+                <RichLinkPreview url={urlMatch[0]} isMine={isMine} />
+              )}
+            </div>
+          );
+        })())}
 
         {/* View Once Media Message */}
         {(message.type === 'image' || message.type === 'video') && message.isViewOnce && !message.isFogSnap && (
@@ -1342,18 +1564,38 @@ export default function MessageItem({
                 </button>
               </div>
             ) : (
-              <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%' }}>
+              <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%', minWidth: '160px', minHeight: '120px', borderRadius: '10px', overflow: 'hidden', background: 'rgba(255,255,255,0.06)' }}>
+                {!imgLoaded && (
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.04) 75%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'pulseShimmer 1.5s infinite',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--text-muted)',
+                    fontSize: '0.75rem'
+                  }}>
+                    <span>🖼️ Loading...</span>
+                  </div>
+                )}
                 <img
                   src={message.mediaUrl}
                   alt={message.fileName || "Attached Media"}
                   onClick={() => setShowImagePreview(true)}
+                  onLoad={() => setImgLoaded(true)}
                   style={{
                     maxWidth: '100%',
                     maxHeight: '280px',
                     objectFit: 'cover',
                     borderRadius: '10px',
                     display: 'block',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    opacity: imgLoaded ? 1 : 0.15,
+                    filter: imgLoaded ? 'none' : 'blur(8px)',
+                    transition: 'opacity 0.35s ease, filter 0.35s ease'
                   }}
                 />
                 {/* Floating Download, Edit & Fullscreen Controls */}
