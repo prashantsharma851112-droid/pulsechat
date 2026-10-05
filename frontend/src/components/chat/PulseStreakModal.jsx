@@ -8,10 +8,12 @@ export default function PulseStreakModal({
   streakCount = 0,
   lastStreakDate = '',
   shieldsCount = 0,
+  streakShields,
   userSparks = 0,
   onFreezeBought,
   onClose
 }) {
+  const activeShields = streakShields !== undefined ? streakShields : shieldsCount;
   const [buyingFreeze, setBuyingFreeze] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
@@ -203,7 +205,7 @@ export default function PulseStreakModal({
               <div>
                 <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#38bdf8' }}>Streak Freeze Shield</div>
                 <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
-                  {shieldsCount > 0 ? `${shieldsCount} Shield(s) active! Streak won't break if you miss 1 day.` : 'Protect your streak when traveling or offline!'}
+                  {activeShields > 0 ? `${activeShields} Shield(s) active! Streak won't break if you miss 1 day.` : 'Protect your streak when traveling or offline!'}
                 </div>
               </div>
             </div>

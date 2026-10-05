@@ -164,10 +164,12 @@ router.get('/settings/:chatId/streak', authMiddleware, async (req, res) => {
     }
 
     res.json({
+      success: true,
       chatId: req.params.chatId,
       streakCount: setting.streakCount || 0,
       lastStreakDate: setting.lastStreakDate || '',
       shields,
+      streakShields: shields,
       streakFrozenUntil: setting.streakFrozenUntil || null,
       milestonesClaimed: setting.streakMilestonesClaimed || []
     });

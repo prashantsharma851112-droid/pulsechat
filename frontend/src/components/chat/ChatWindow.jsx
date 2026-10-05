@@ -1026,10 +1026,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         });
         if (res.ok) {
           const data = await res.json();
-          if (isMounted && data?.success) {
+          if (isMounted && (data?.success || data?.streakCount !== undefined)) {
             setStreakData({
               streakCount: data.streakCount || 0,
-              streakShields: data.streakShields || 0,
+              streakShields: data.shields !== undefined ? data.shields : (data.streakShields || 0),
               lastStreakDate: data.lastStreakDate || null
             });
           }
@@ -1043,12 +1043,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   useEffect(() => {
     if (!socket) return;
     const handleStreakUpdate = (data) => {
-      if (data.chatId === chatId) {
+      const isMatch = !data.chatId || data.chatId === chatId || 
+        (chatId && data.chatId.includes('_') && chatId.includes('_') &&
+         data.chatId.split('_').sort().join('_') === chatId.split('_').sort().join('_'));
+      if (isMatch) {
         setStreakData(prev => ({
           ...prev,
-          streakCount: data.streakCount,
-          streakShields: data.streakShields,
-          lastStreakDate: data.lastStreakDate
+          streakCount: data.streakCount !== undefined ? data.streakCount : prev.streakCount,
+          streakShields: data.shields !== undefined ? data.shields : (data.streakShields !== undefined ? data.streakShields : prev.streakShields),
+          lastStreakDate: data.lastStreakDate || prev.lastStreakDate
         }));
       }
     };
@@ -3014,117 +3017,120 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
 
           <div className="chat-header-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
-            {/* Pulse Streaks & Sparks Badge */}
+            {/* Pulse Streaks & Sparks Badge with Animated Neon Aesthetic */}
             {!isGroup && (
               <button
                 onClick={() => setShowStreakModal(true)}
+                className="chat-neon-streak-pill"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '3px',
-                  background: (streakData?.streakCount || 0) > 0 ? 'rgba(239, 68, 68, 0.18)' : 'rgba(255, 255, 255, 0.08)',
-                  border: `1px solid ${(streakData?.streakCount || 0) > 0 ? 'rgba(249, 115, 22, 0.6)' : 'rgba(255, 255, 255, 0.15)'}`,
-                  borderRadius: '12px',
-                  padding: '3px 7px',
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
-                  color: (streakData?.streakCount || 0) > 0 ? '#ff7a29' : 'var(--text-muted)',
+                  gap: '4px',
+                  background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.22), rgba(239, 68, 68, 0.15))',
+                  border: '1.5px solid rgba(249, 115, 22, 0.7)',
+                  borderRadius: '14px',
+                  padding: '4px 9px',
+                  fontSize: '0.82rem',
+                  fontWeight: 800,
+                  color: '#ff8a3d',
                   cursor: 'pointer',
-                  boxShadow: (streakData?.streakCount || 0) > 0 ? '0 0 8px rgba(249, 115, 22, 0.3)' : 'none',
-                  transition: 'all 0.15s ease',
                   flexShrink: 0,
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  backdropFilter: 'blur(8px)'
                 }}
                 title="Pulse Streaks with Sparks Reward & Streak Freeze"
               >
-                <span style={{ fontSize: '0.9rem' }}>🔥</span>
-                <span>{streakData?.streakCount || 0}</span>
+                <span className="chat-neon-streak-flame" style={{ fontSize: '0.95rem' }}>🔥</span>
+                <span style={{
+                  background: 'linear-gradient(135deg, #ffb347, #ff4500)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  fontWeight: 800,
+                  fontSize: '0.86rem'
+                }}>
+                  {streakData?.streakCount || 0}
+                </span>
                 {(streakData?.streakShields || 0) > 0 && (
-                  <span style={{ fontSize: '0.7rem', marginLeft: '1px' }} title={`${streakData.streakShields} Freeze Shield Active`}>
+                  <span style={{ fontSize: '0.72rem', marginLeft: '2px', filter: 'drop-shadow(0 0 4px #38bdf8)' }} title={`${streakData.streakShields} Freeze Shield Active`}>
                     ❄️{streakData.streakShields}
                   </span>
                 )}
               </button>
             )}
 
-            {/* Mobile App Folder Button (like Android folder icon) */}
+            {/* Mobile App Folder Button (Animated Cyber-Neon Glassmorphic Folder) */}
             <button
               onClick={() => setShowAppsFolderModal(true)}
-              className="chat-apps-folder-btn"
+              className="chat-apps-folder-btn chat-neon-app-folder"
               title="Apps & Games (Arrow Battle, Drawboard, Music)"
               style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '11px',
-                background: 'rgba(255, 255, 255, 0.12)',
-                border: '1px solid rgba(255, 255, 255, 0.22)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                width: '38px',
+                height: '38px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(236, 72, 153, 0.16))',
+                border: '1.5px solid rgba(168, 85, 247, 0.6)',
+                backdropFilter: 'blur(12px)',
                 display: 'grid',
                 gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: '2.5px',
-                padding: '4px',
+                gap: '3px',
+                padding: '4.5px',
                 cursor: 'pointer',
-                transition: 'all 0.18s ease',
                 flexShrink: 0,
                 alignItems: 'center',
                 justifyItems: 'center'
               }}
-              onMouseEnter={e => {
-                e.currentTarget.style.transform = 'scale(1.06)';
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
-              }}
             >
               {/* Mini App 1: Game */}
               <div style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '3.5px',
+                width: '12.5px',
+                height: '12.5px',
+                borderRadius: '4px',
                 background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                boxShadow: '0 0 6px rgba(236, 72, 153, 0.6)'
               }}>
-                <Gamepad2 size={7.5} color="#fff" />
+                <Gamepad2 size={8} color="#fff" />
               </div>
               {/* Mini App 2: Drawboard */}
               <div style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '3.5px',
-                background: 'linear-gradient(135deg, #10b981, #059669)',
+                width: '12.5px',
+                height: '12.5px',
+                borderRadius: '4px',
+                background: 'linear-gradient(135deg, #10b981, #06b6d4)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                boxShadow: '0 0 6px rgba(16, 185, 129, 0.6)'
               }}>
-                <Presentation size={7.5} color="#fff" />
+                <Presentation size={8} color="#fff" />
               </div>
               {/* Mini App 3: Music */}
               <div style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '3.5px',
-                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                width: '12.5px',
+                height: '12.5px',
+                borderRadius: '4px',
+                background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                boxShadow: '0 0 6px rgba(245, 158, 11, 0.6)'
               }}>
-                <Music size={7.5} color="#fff" />
+                <Music size={8} color="#fff" />
               </div>
               {/* Mini App 4: Sparks / Live */}
               <div style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '3.5px',
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                width: '12.5px',
+                height: '12.5px',
+                borderRadius: '4px',
+                background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                boxShadow: '0 0 6px rgba(139, 92, 246, 0.6)'
               }}>
-                <Sparkles size={7.5} color="#fff" />
+                <Sparkles size={8} color="#fff" />
               </div>
             </button>
 
@@ -3141,29 +3147,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
               {showMoreMenu && (
                 <div className="chat-header-dropdown-menu">
-                  {/* Live Arrow Battle Game */}
-                  <button onClick={() => { setShowMoreMenu(false); handleOpenArrowGame(); }}>
-                    <Gamepad2 size={16} color="#ec4899" />
-                    <span>Live Arrow Battle</span>
-                  </button>
-
-                  {/* Background Music */}
-                  <button onClick={() => {
-                    setShowMoreMenu(false);
-                    if (!user?.isPro) {
-                      setProModalTab('pro');
-                      setShowProModal(true);
-                      return;
-                    }
-                    setShowChatMusicPicker(true);
-                  }}>
-                    <Music size={16} color="#f59e0b" />
-                    <span>Background Music {user?.isPro ? '' : '👑'}</span>
-                  </button>
-
-                  <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
-
-                  {/* Voice & Video Calls moved inside 3-dots menu */}
+                  {/* Voice & Video Calls */}
                   <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, false)) : onStartCall(false); }}>
                     <Phone size={16} color="var(--accent)" />
                     <span>{isGroup ? 'Group Voice Call' : 'Voice Call'}</span>
@@ -5336,11 +5320,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {showStreakModal && (
         <PulseStreakModal
           chatId={chatId}
+          partnerName={chatDisplayName || activeChat?.displayName || activeChat?.name || 'Friend'}
           currentUserId={currentUserId}
           streakCount={streakData?.streakCount || 0}
           streakShields={streakData?.streakShields || 0}
+          shieldsCount={streakData?.streakShields || 0}
+          userSparks={user?.pulseSparks || 0}
           lastStreakDate={streakData?.lastStreakDate}
           onClose={() => setShowStreakModal(false)}
+          onFreezeBought={(newShields, newSparks) => {
+            setStreakData(prev => ({ ...prev, streakShields: newShields }));
+            if (typeof updateUserProfile === 'function' && newSparks !== undefined) {
+              updateUserProfile({ ...user, pulseSparks: newSparks });
+            }
+          }}
           onStreakUpdated={(updated) => setStreakData(prev => ({ ...prev, ...updated }))}
         />
       )}

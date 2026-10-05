@@ -421,6 +421,7 @@ input, textarea {
   height: 100%;
   height: 100dvh;
   flex-shrink: 0;
+  position: relative;
   transition: transform 0.3s ease;
 }
 
@@ -2449,6 +2450,82 @@ input, textarea {
 
 .gift-item-emerging {
   animation: giftItemPopOut 0.85s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, giftPulseGlowAura 3s ease-in-out infinite 0.85s;
+}
+
+/* Neon Glow Animations for Chat Header Streak & App Folder */
+@keyframes streakFlamePulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 5px rgba(255, 107, 0, 0.85));
+  }
+  50% {
+    transform: scale(1.18) rotate(-4deg);
+    filter: drop-shadow(0 0 12px rgba(255, 60, 0, 1));
+  }
+}
+
+@keyframes streakPillGlow {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(249, 115, 22, 0.45), inset 0 0 6px rgba(255, 120, 0, 0.2);
+    border-color: rgba(249, 115, 22, 0.65);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.7), inset 0 0 10px rgba(255, 160, 0, 0.35);
+    border-color: rgba(255, 138, 76, 0.9);
+  }
+}
+
+@keyframes appFolderNeonPulse {
+  0%, 100% {
+    box-shadow: 0 0 14px rgba(139, 92, 246, 0.4), 0 0 3px rgba(56, 189, 248, 0.3), inset 0 0 8px rgba(255, 255, 255, 0.12);
+    border-color: rgba(168, 85, 247, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 22px rgba(236, 72, 153, 0.6), 0 0 8px rgba(139, 92, 246, 0.5), inset 0 0 12px rgba(255, 255, 255, 0.22);
+    border-color: rgba(244, 114, 182, 0.85);
+  }
+}
+
+@keyframes vibeBottomFabGlow {
+  0%, 100% {
+    box-shadow: 0 0 18px rgba(139, 92, 246, 0.55), 0 8px 24px rgba(0, 0, 0, 0.45);
+    border-color: rgba(168, 85, 247, 0.65);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(236, 72, 153, 0.8), 0 0 12px rgba(56, 189, 248, 0.6), 0 10px 28px rgba(0, 0, 0, 0.55);
+    border-color: rgba(244, 114, 182, 0.95);
+  }
+}
+
+.chat-neon-streak-pill {
+  animation: streakPillGlow 2.8s ease-in-out infinite;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.chat-neon-streak-pill:hover {
+  transform: scale(1.08);
+}
+.chat-neon-streak-flame {
+  display: inline-block;
+  animation: streakFlamePulse 1.8s ease-in-out infinite;
+}
+
+.chat-neon-app-folder {
+  animation: appFolderNeonPulse 3.2s ease-in-out infinite;
+  transition: all 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.chat-neon-app-folder:hover {
+  transform: scale(1.09);
+}
+
+.bottom-round-vibe-btn {
+  animation: vibeBottomFabGlow 3s ease-in-out infinite;
+  transition: all 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.bottom-round-vibe-btn:hover {
+  transform: scale(1.1) translateY(-2px);
+}
+.bottom-round-vibe-btn:active {
+  transform: scale(0.94);
 }
 
 

@@ -765,16 +765,29 @@ io.on('connection', (socket) => {
       // Auto-update Pulse Streak for 1-on-1 chats
       if (!isGroup && resolvedReceiverId && senderId !== resolvedReceiverId) {
         db.updateChatStreak(chatId, senderId, resolvedReceiverId).then(streakInfo => {
-          if (streakInfo && streakInfo.streakUpdated) {
+          if (streakInfo) {
+            const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
             io.to(chatId).emit('streak_updated', streakInfo);
+            if (canonicalChatId && canonicalChatId !== chatId) {
+              io.to(canonicalChatId).emit('streak_updated', streakInfo);
+            }
             io.to(`user_${senderId}`).emit('streak_updated', streakInfo);
+            io.to(senderId).emit('streak_updated', streakInfo);
             io.to(`user_${resolvedReceiverId}`).emit('streak_updated', streakInfo);
+            io.to(resolvedReceiverId).emit('streak_updated', streakInfo);
+
             if (streakInfo.bonusSparks > 0) {
               io.to(`user_${senderId}`).emit('streak_sparks_reward', { bonusSparks: streakInfo.bonusSparks, streakCount: streakInfo.streakCount });
               io.to(`user_${resolvedReceiverId}`).emit('streak_sparks_reward', { bonusSparks: streakInfo.bonusSparks, streakCount: streakInfo.streakCount });
+              // Fetch latest sparks and notify
+              User.findOne({ $or: [{ id: senderId }, { username: senderId }] }).select('pulseSparks').lean().then(u => {
+                if (u) io.to(`user_${senderId}`).emit('sparks_updated', { pulseSparks: u.pulseSparks });
+              }).catch(() => {});
             }
           }
-        }).catch(() => {});
+        }).catch(err => {
+          console.error('Streak update error:', err);
+        });
       }
 
       // Notify recipient private room for badge/sound if they are outside the active chat room

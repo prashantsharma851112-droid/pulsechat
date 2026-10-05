@@ -204,42 +204,13 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
 
   return (
     <div style={{
-      padding: '12px 14px 10px 14px',
+      padding: '10px 14px 8px 14px',
       background: 'rgba(0,0,0,0.2)',
       borderBottom: '1px solid var(--border)',
       display: 'flex',
       flexDirection: 'column',
-      gap: '8px',
       overflow: 'hidden'
     }}>
-      {/* Vibe Status Pill Button (replaces Pulse Vibes text & Post Vibe button) */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
-        <button
-          type="button"
-          onClick={onOpenVibeSelector}
-          title="Tap to change your Vibe Aura & Status"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '5px 14px',
-            borderRadius: '18px',
-            background: myAura?.mood ? 'rgba(99, 102, 241, 0.16)' : 'rgba(255, 255, 255, 0.08)',
-            border: `1.5px solid ${myAura?.auraColor || 'rgba(255, 255, 255, 0.2)'}`,
-            color: myAura?.auraColor || 'var(--text-main)',
-            fontSize: '0.82rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            boxShadow: myAura?.auraColor ? `0 0 12px ${myAura.auraColor}33` : 'none'
-          }}
-        >
-          <span style={{ fontSize: '1rem' }}>{myAura?.emoji || '⚡'}</span>
-          <span>{myAura?.mood ? `Vibe: ${myAura.mood}` : 'Set Your Vibe & Aura'}</span>
-          <span style={{ fontSize: '0.72rem', opacity: 0.65, marginLeft: '2px' }}>✎</span>
-        </button>
-      </div>
-
       {/* Story Bubbles Horizontal Scroll Tray */}
       <div style={{
         display: 'flex',

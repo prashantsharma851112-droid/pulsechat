@@ -755,10 +755,20 @@ module.exports = {
   updateChatStreak: async (rawChatId, senderId, receiverId) => {
     if (!rawChatId || !senderId || !receiverId) return null;
     const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
-    let setting = await ChatSetting.findOne({ chatId: canonicalChatId });
-    if (!setting) {
-      setting = await ChatSetting.create({ chatId: canonicalChatId });
+    let query = { chatId: canonicalChatId };
+    if (rawChatId.includes('_')) {
+      const parts = rawChatId.split('_');
+      query = { $or: [{ chatId: canonicalChatId }, { chatId: rawChatId }, { chatId: `${parts[1]}_${parts[0]}` }] };
     }
+    let setting = await ChatSetting.findOne(query);
+    if (!setting) {
+      try {
+        setting = await ChatSetting.create({ chatId: canonicalChatId });
+      } catch (err) {
+        setting = await ChatSetting.findOne(query);
+      }
+    }
+    if (!setting) return null;
 
     const today = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
@@ -768,14 +778,20 @@ module.exports = {
     let bonusSparks = 0;
     let milestoneHit = null;
 
-    if (lastDate === today) {
-      return {
-        chatId: canonicalChatId,
-        streakCount: setting.streakCount || 0,
-        lastStreakDate: setting.lastStreakDate,
-        streakShields: setting.streakShields ? (setting.streakShields instanceof Map ? Object.fromEntries(setting.streakShields) : setting.streakShields) : {},
-        alreadyMaintainedToday: true
-      };
+    if (!lastDate || (setting.streakCount || 0) <= 0) {
+      // First chat interaction or streak was at 0: Start Day 1!
+      setting.streakCount = 1;
+      setting.lastStreakDate = today;
+      setting.lastStreakSenderId = senderId;
+      streakUpdated = true;
+      bonusSparks = 1;
+      await User.updateMany(
+        { $or: [{ id: { $in: [senderId, receiverId] } }, { username: { $in: [senderId, receiverId] } }] },
+        { $inc: { pulseSparks: bonusSparks } }
+      ).catch(() => {});
+    } else if (lastDate === today) {
+      // Already chatted today - streak maintained
+      streakUpdated = true;
     } else if (lastDate === yesterday) {
       setting.streakCount = (setting.streakCount || 0) + 1;
       setting.lastStreakDate = today;
@@ -803,13 +819,8 @@ module.exports = {
         await User.updateMany(
           { $or: [{ id: { $in: [senderId, receiverId] } }, { username: { $in: [senderId, receiverId] } }] },
           { $inc: { pulseSparks: bonusSparks } }
-        );
+        ).catch(() => {});
       }
-    } else if (!lastDate) {
-      setting.streakCount = 1;
-      setting.lastStreakDate = today;
-      setting.lastStreakSenderId = senderId;
-      streakUpdated = true;
     } else {
       // More than 1 day missed: Check Streak Freeze shields!
       const isFrozen = setting.streakFrozenUntil && new Date(setting.streakFrozenUntil) > new Date();
@@ -839,16 +850,19 @@ module.exports = {
 
     setting.markModified('streakShields');
     setting.markModified('streakMilestonesClaimed');
-    await setting.save();
+    await setting.save().catch(() => {});
 
+    const shieldsObj = setting.streakShields ? (setting.streakShields instanceof Map ? Object.fromEntries(setting.streakShields) : setting.streakShields) : {};
     return {
       chatId: canonicalChatId,
-      streakCount: setting.streakCount,
+      rawChatId,
+      streakCount: Math.max(1, setting.streakCount || 1),
       lastStreakDate: setting.lastStreakDate,
-      streakShields: setting.streakShields ? (setting.streakShields instanceof Map ? Object.fromEntries(setting.streakShields) : setting.streakShields) : {},
+      streakShields: shieldsObj,
+      shields: shieldsObj,
       bonusSparks,
       milestoneHit,
-      streakUpdated
+      streakUpdated: true
     };
   },
 
