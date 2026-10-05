@@ -726,7 +726,8 @@ export default function MessageItem({
   onDismissAction,
   onOpenStory,
   onOpenSparksWallet,
-  onEditDrawing
+  onEditDrawing,
+  highlightSearchTerm = ''
 }) {
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
@@ -737,6 +738,37 @@ export default function MessageItem({
   const [showThread, setShowThread] = useState(false);
   const [showViewOnceModal, setShowViewOnceModal] = useState(false);
   const [showFogSnapModal, setShowFogSnapModal] = useState(false);
+
+  // Swipe-down to dismiss physics on fullscreen media lightbox
+  const [imageDragY, setImageDragY] = useState(0);
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const imageTouchStartRef = useRef({ y: 0, time: 0 });
+
+  const handleImageTouchStart = (e) => {
+    if (!e.touches || e.touches.length === 0) return;
+    imageTouchStartRef.current = { y: e.touches[0].clientY, time: Date.now() };
+    setIsDraggingImage(true);
+  };
+
+  const handleImageTouchMove = (e) => {
+    if (!isDraggingImage || !e.touches || e.touches.length === 0) return;
+    const diff = e.touches[0].clientY - imageTouchStartRef.current.y;
+    if (diff > 0) {
+      setImageDragY(diff);
+    }
+  };
+
+  const handleImageTouchEnd = () => {
+    if (!isDraggingImage) return;
+    setIsDraggingImage(false);
+    const elapsed = Date.now() - imageTouchStartRef.current.time;
+    if (imageDragY > 80 || (imageDragY > 35 && elapsed < 250)) {
+      setShowImagePreview(false);
+      setImageDragY(0);
+    } else {
+      setImageDragY(0);
+    }
+  };
   const fogStorageKey = message?.id ? `pulse_fog_burned_${message.id}` : (message?._id ? `pulse_fog_burned_${message._id}` : null);
   const isFogBurnedLocally = (() => {
     if (!fogStorageKey) return false;
@@ -1363,10 +1395,35 @@ export default function MessageItem({
           />
         ) : (message.type === 'text' && (() => {
           const urlMatch = message.content && message.content.match(/(https?:\/\/[^\s]+)/);
+          const renderTextWithHighlight = (content) => {
+            if (!highlightSearchTerm || !content) return content;
+            const term = highlightSearchTerm.trim().toLowerCase();
+            if (!term) return content;
+            const parts = content.split(new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+            return parts.map((part, i) =>
+              part.toLowerCase() === term ? (
+                <mark
+                  key={i}
+                  style={{
+                    background: '#f59e0b',
+                    color: '#000',
+                    borderRadius: '4px',
+                    padding: '0 3px',
+                    fontWeight: 800,
+                    boxShadow: '0 0 8px rgba(245, 158, 11, 0.6)'
+                  }}
+                >
+                  {part}
+                </mark>
+              ) : (
+                part
+              )
+            );
+          };
           return (
             <div>
               <p style={{ fontSize: '0.98rem', wordBreak: 'break-word', margin: 0, lineHeight: 1.45 }}>
-                {message.content}
+                {renderTextWithHighlight(message.content)}
               </p>
               {urlMatch && urlMatch[0] && (
                 <RichLinkPreview url={urlMatch[0]} isMine={isMine} />
@@ -1534,6 +1591,38 @@ export default function MessageItem({
                   preload="metadata"
                   style={{ maxWidth: '100%', maxHeight: '280px', objectFit: 'contain', borderRadius: '10px', display: 'block', background: '#000' }}
                 />
+                {/* 0ms Optimistic Video Upload Spinner */}
+                {(message.isUploading || message.status === 'uploading') && (
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'rgba(0, 0, 0, 0.6)',
+                    backdropFilter: 'blur(3px)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    zIndex: 20
+                  }}>
+                    <div style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '50%',
+                      background: 'rgba(15, 23, 42, 0.85)',
+                      border: '2.5px solid rgba(255,255,255,0.2)',
+                      borderTopColor: 'var(--accent)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                      animation: 'spin 0.9s linear infinite'
+                    }} />
+                    <span style={{ fontSize: '0.74rem', color: '#fff', fontWeight: 700, letterSpacing: '0.3px', textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
+                      Uploading video...
+                    </span>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={(e) => handleDownloadMedia(e, message.mediaUrl, message.fileName || `pulsechat_video_${Date.now()}.mp4`)}
@@ -1598,6 +1687,38 @@ export default function MessageItem({
                     transition: 'opacity 0.35s ease, filter 0.35s ease'
                   }}
                 />
+                {/* Telegram-style 0ms Optimistic Upload Spinner */}
+                {(message.isUploading || message.status === 'uploading') && (
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'rgba(0, 0, 0, 0.55)',
+                    backdropFilter: 'blur(3px)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    zIndex: 20
+                  }}>
+                    <div style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '50%',
+                      background: 'rgba(15, 23, 42, 0.85)',
+                      border: '2.5px solid rgba(255,255,255,0.2)',
+                      borderTopColor: 'var(--accent)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                      animation: 'spin 0.9s linear infinite'
+                    }} />
+                    <span style={{ fontSize: '0.74rem', color: '#fff', fontWeight: 700, letterSpacing: '0.3px', textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
+                      Uploading...
+                    </span>
+                  </div>
+                )}
                 {/* Floating Download, Edit & Fullscreen Controls */}
                 <div style={{
                   position: 'absolute',
@@ -2401,9 +2522,12 @@ export default function MessageItem({
             </div>
           </div>
 
-          {/* Centered Image View */}
+          {/* Centered Image View with Instagram-style Swipe Down to Dismiss */}
           <div
             onClick={(e) => e.stopPropagation()}
+            onTouchStart={handleImageTouchStart}
+            onTouchMove={handleImageTouchMove}
+            onTouchEnd={handleImageTouchEnd}
             style={{
               flex: 1,
               display: 'flex',
@@ -2413,18 +2537,24 @@ export default function MessageItem({
               maxHeight: 'calc(100vh - 120px)',
               padding: '16px',
               overflow: 'hidden',
-              boxSizing: 'border-box'
+              boxSizing: 'border-box',
+              touchAction: 'none',
+              transform: imageDragY > 0 ? `translateY(${imageDragY}px) scale(${Math.max(0.72, 1 - imageDragY / 700)})` : 'none',
+              transition: isDraggingImage ? 'none' : 'transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.24s ease',
+              opacity: imageDragY > 0 ? Math.max(0.3, 1 - imageDragY / 380) : 1
             }}
           >
             <img
               src={message.mediaUrl}
               alt="Fullscreen Preview"
+              draggable={false}
               style={{
                 maxWidth: '92vw',
                 maxHeight: '82vh',
                 objectFit: 'contain',
                 borderRadius: '12px',
-                boxShadow: '0 16px 48px rgba(0,0,0,0.7)'
+                boxShadow: '0 16px 48px rgba(0,0,0,0.7)',
+                userSelect: 'none'
               }}
             />
           </div>

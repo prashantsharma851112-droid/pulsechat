@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3, Ghost } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3, Ghost, Search, ChevronUp, ChevronDown, ArrowDown } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -126,6 +126,17 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     senderProTier: user?.proTier || 'none',
     senderCustomBadge: user?.customBadge || ''
   });
+
+  // In-Chat Search Feature States
+  const [showInChatSearch, setShowInChatSearch] = useState(false);
+  const [inChatSearchQuery, setInChatSearchQuery] = useState('');
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0);
+  const inChatSearchInputRef = useRef(null);
+
+  // Floating Scroll-to-Bottom Button States
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const showScrollBottomRef = useRef(false);
+  const [newScrolledMessagesCount, setNewScrolledMessagesCount] = useState(0);
 
   // Instagram-style Story preview modal state
   const [selectedStoryVibeGroup, setSelectedStoryVibeGroup] = useState(null);
@@ -1748,6 +1759,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
         if (msg.senderId !== user.id) {
           playSound('received');
+          if (showScrollBottomRef.current) {
+            setNewScrolledMessagesCount(prev => prev + 1);
+          }
           if (!isGhostMode) {
             socket.emit('mark_read', { messageId: msg.id, chatId });
           }
@@ -1975,8 +1989,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
       isInitialLoad.current = false;
     } else {
-      // Naya message aaye toh smoothly scroll karo
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      // Naya message aaye toh agar user bottom ke paas hai toh smoothly scroll karo
+      if (!showScrollBottomRef.current) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
     }
   }, [messages]);
 
@@ -2103,6 +2119,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           }
         });
       });
+    }
+
+    // Track if user has scrolled away from the latest messages (> 220px)
+    const distFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+    const isScrolledUp = distFromBottom > 220;
+    setShowScrollBottom(isScrolledUp);
+    showScrollBottomRef.current = isScrolledUp;
+    if (!isScrolledUp) {
+      setNewScrolledMessagesCount(0);
     }
   };
 
@@ -2450,26 +2475,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       localStorage.setItem(storageKey, String(todayUsed + pendingMedia.rawSizeBytes));
     }
 
+    const currentReplyTo = replyTo;
     setPendingMedia(null);
     setReplyTo(null);
 
-    // Direct upload to Cloudinary Edge CDN (bypasses Render Node.js bandwidth!)
-    let finalMediaUrl = mediaUrl;
-    if (mediaUrl && mediaUrl.startsWith('data:')) {
-      try {
-        finalMediaUrl = await uploadMediaDirect(mediaUrl, 'pulsechat_media', token);
-      } catch (e) {
-        console.warn('Direct media upload error:', e);
-      }
-    }
-
-    socket.emit('send_message', {
-      ...getSenderPayload(),
+    // 0ms Optimistic Media Bubble (Telegram Magic):
+    // Instantly renders in chat with circular progress ring while uploading in background!
+    const tempMediaId = 'temp_media_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    const optimisticMediaMsg = {
+      id: tempMediaId,
+      clientTempId: tempMediaId,
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
       isGroup,
-      mediaUrl: finalMediaUrl,
+      mediaUrl, // local preview instantly visible
       type: msgType,
       isViewOnce: msgType === 'document' ? false : Boolean(isViewOnce || isFogSnap),
       isFogSnap: Boolean(isFogSnap),
@@ -2477,9 +2497,52 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       fogSnapStatus: isFogSnap ? 'unrevealed' : undefined,
       fileName: fileName || null,
       fileSize: fileSize || null,
-      replyTo
-    });
+      status: 'uploading',
+      isUploading: true,
+      timestamp: new Date().toISOString(),
+      reactions: {},
+      replyTo: currentReplyTo
+    };
+
+    setMessages(prev => [...prev, optimisticMediaMsg]);
+    appendCachedMessage(chatId, optimisticMediaMsg);
+    updateRecentChatSnippet(user.id, chatId, optimisticMediaMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
+    window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     playSound('sent');
+
+    // Direct background upload to Cloudinary Edge CDN (bypasses Render Node.js bandwidth!)
+    (async () => {
+      let finalMediaUrl = mediaUrl;
+      if (mediaUrl && (mediaUrl.startsWith('data:') || mediaUrl.startsWith('blob:'))) {
+        try {
+          finalMediaUrl = await uploadMediaDirect(mediaUrl, 'pulsechat_media', token);
+        } catch (e) {
+          console.warn('Direct media upload error:', e);
+        }
+      }
+
+      // Update local optimistic message with finalized CDN URL
+      setMessages(prev => prev.map(m => m.id === tempMediaId ? { ...m, mediaUrl: finalMediaUrl, status: 'sent', isUploading: false } : m));
+
+      socket.emit('send_message', {
+        ...getSenderPayload(),
+        clientTempId: tempMediaId,
+        chatId,
+        senderId: user.id,
+        receiverId: isGroup ? '' : activeChat.id,
+        isGroup,
+        mediaUrl: finalMediaUrl,
+        type: msgType,
+        isViewOnce: msgType === 'document' ? false : Boolean(isViewOnce || isFogSnap),
+        isFogSnap: Boolean(isFogSnap),
+        fogSnapDuration: fogSnapDuration || 7,
+        fogSnapStatus: isFogSnap ? 'unrevealed' : undefined,
+        fileName: fileName || null,
+        fileSize: fileSize || null,
+        replyTo: currentReplyTo
+      });
+    })();
   };
 
   const handleDeleteLocalMessage = (msgId) => {
@@ -2558,6 +2621,41 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }, 1000);
     }
   }, []);
+
+  // Compute matched message IDs for In-Chat Search
+  const matchedMessageIds = useMemo(() => {
+    if (!inChatSearchQuery.trim()) return [];
+    const q = inChatSearchQuery.trim().toLowerCase();
+    return messages
+      .filter(m => {
+        if (!m || m.type === 'deleted') return false;
+        const c = (m.content || '').toLowerCase();
+        const fn = (m.fileName || '').toLowerCase();
+        return c.includes(q) || fn.includes(q);
+      })
+      .map(m => m.id);
+  }, [messages, inChatSearchQuery]);
+
+  useEffect(() => {
+    setSearchMatchIndex(0);
+    if (matchedMessageIds.length > 0) {
+      handleJumpToMessage(matchedMessageIds[0]);
+    }
+  }, [inChatSearchQuery, matchedMessageIds.length, handleJumpToMessage]);
+
+  const handleNextSearchMatch = () => {
+    if (matchedMessageIds.length === 0) return;
+    const nextIdx = (searchMatchIndex + 1) % matchedMessageIds.length;
+    setSearchMatchIndex(nextIdx);
+    handleJumpToMessage(matchedMessageIds[nextIdx]);
+  };
+
+  const handlePrevSearchMatch = () => {
+    if (matchedMessageIds.length === 0) return;
+    const prevIdx = (searchMatchIndex - 1 + matchedMessageIds.length) % matchedMessageIds.length;
+    setSearchMatchIndex(prevIdx);
+    handleJumpToMessage(matchedMessageIds[prevIdx]);
+  };
 
   const handleForwardMessage = useCallback(async (selectedTargets, msg) => {
     if (!selectedTargets || !msg) return;
@@ -3136,6 +3234,34 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               </div>
             </button>
 
+            {/* In-Chat Search Toggle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowInChatSearch(prev => !prev);
+                if (!showInChatSearch) {
+                  setTimeout(() => inChatSearchInputRef.current?.focus(), 120);
+                } else {
+                  setInChatSearchQuery('');
+                }
+              }}
+              className="icon-btn-ghost"
+              title="Search in chat (Message Finder)"
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                color: showInChatSearch ? 'var(--accent)' : 'var(--text-main)',
+                background: showInChatSearch ? 'var(--hover-bg)' : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <Search size={19} />
+            </button>
+
             {/* 3-Dots More Options Menu */}
             <div className="chat-header-more-container" style={{ position: 'relative' }}>
               <button
@@ -3701,6 +3827,94 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
         )}
 
+        {/* In-Chat Search Bar Overlay (Message Finder) */}
+        {showInChatSearch && (
+          <div
+            style={{
+              padding: '8px 14px',
+              background: 'rgba(15, 23, 42, 0.96)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              borderBottom: '1px solid var(--accent)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '10px',
+              zIndex: 30,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+              animation: 'pulseFadeIn 0.2s ease'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0, background: 'var(--hover-bg)', borderRadius: '20px', padding: '5px 12px', border: '1px solid var(--border)' }}>
+              <Search size={15} color="var(--accent)" style={{ flexShrink: 0 }} />
+              <input
+                ref={inChatSearchInputRef}
+                type="text"
+                value={inChatSearchQuery}
+                onChange={(e) => setInChatSearchQuery(e.target.value)}
+                placeholder="Search words in conversation..."
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-main)',
+                  fontSize: '0.86rem',
+                  outline: 'none'
+                }}
+              />
+              {inChatSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setInChatSearchQuery('')}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Match Counter & Jump Arrows */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+              <span style={{ fontSize: '0.76rem', color: matchedMessageIds.length > 0 ? 'var(--text-main)' : 'var(--text-muted)', fontWeight: 600, minWidth: '42px', textAlign: 'center' }}>
+                {inChatSearchQuery.trim() ? (matchedMessageIds.length > 0 ? `${searchMatchIndex + 1}/${matchedMessageIds.length}` : '0 found') : ''}
+              </span>
+              <button
+                type="button"
+                onClick={handlePrevSearchMatch}
+                disabled={matchedMessageIds.length === 0}
+                className="icon-btn-ghost"
+                style={{ width: '28px', height: '28px', borderRadius: '50%', padding: 0, opacity: matchedMessageIds.length > 0 ? 1 : 0.35, cursor: matchedMessageIds.length > 0 ? 'pointer' : 'default' }}
+                title="Previous match"
+              >
+                <ChevronUp size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={handleNextSearchMatch}
+                disabled={matchedMessageIds.length === 0}
+                className="icon-btn-ghost"
+                style={{ width: '28px', height: '28px', borderRadius: '50%', padding: 0, opacity: matchedMessageIds.length > 0 ? 1 : 0.35, cursor: matchedMessageIds.length > 0 ? 'pointer' : 'default' }}
+                title="Next match"
+              >
+                <ChevronDown size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowInChatSearch(false);
+                  setInChatSearchQuery('');
+                }}
+                className="icon-btn-ghost"
+                style={{ width: '28px', height: '28px', borderRadius: '50%', padding: 0, color: 'var(--text-muted)' }}
+                title="Close search"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
       {/* Message Stream with Live Wallpaper Overlay & WhatsApp-Style Date Dividers */}
       <div
         ref={chatContainerRef}
@@ -3865,12 +4079,72 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 onOpenStory={handleOpenStory}
                 onOpenSparksWallet={() => setShowSparksWallet(true)}
                 onEditDrawing={handleOpenWhiteboardForEdit}
+                highlightSearchTerm={showInChatSearch ? inChatSearchQuery : ''}
               />
             </React.Fragment>
           );
         })}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Floating "Scroll to Bottom" Button with New Messages Counter */}
+      {showScrollBottom && (
+        <button
+          type="button"
+          onClick={() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            setShowScrollBottom(false);
+            showScrollBottomRef.current = false;
+            setNewScrolledMessagesCount(0);
+          }}
+          style={{
+            position: 'absolute',
+            bottom: replyTo ? '140px' : '78px',
+            right: '18px',
+            width: '42px',
+            height: '42px',
+            borderRadius: '50%',
+            background: 'var(--bg-card)',
+            color: 'var(--accent)',
+            border: '1.5px solid var(--border)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.45), 0 0 12px rgba(99, 102, 241, 0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            zIndex: 35,
+            transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+            animation: 'pulseModalPop 0.18s ease-out'
+          }}
+          title="Jump to latest message"
+        >
+          <ChevronDown size={22} strokeWidth={2.5} />
+          {newScrolledMessagesCount > 0 && (
+            <span
+              style={{
+                position: 'absolute',
+                top: '-6px',
+                right: '-4px',
+                background: 'var(--accent)',
+                color: '#fff',
+                fontSize: '0.68rem',
+                fontWeight: 800,
+                minWidth: '18px',
+                height: '18px',
+                borderRadius: '9px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0 4px',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                border: '1.5px solid var(--bg-card)'
+              }}
+            >
+              {newScrolledMessagesCount}
+            </span>
+          )}
+        </button>
+      )}
 
       {/* Clear Chat Undo Banner */}
       {clearedUndoSecs > 0 && (

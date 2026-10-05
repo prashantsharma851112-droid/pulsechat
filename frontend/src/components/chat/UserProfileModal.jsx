@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { X, CheckCircle2, Phone, Video, Eye, Info, User, ShieldCheck, Clock, Ban, Unlock, UserPlus, UserCheck, Loader2, Sparkles, Zap } from 'lucide-react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
+import { X, CheckCircle2, Phone, Video, Eye, Info, User, ShieldCheck, Clock, Ban, Unlock, UserPlus, UserCheck, Loader2, Sparkles, Zap, Image as ImageIcon, FileText, Link2, Film, Download, ExternalLink } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
 import PulseVipBadge from '../common/PulseVipBadge';
 import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
-import { getCachedAllUsers, getCachedFriends, setCachedFriends } from '../../utils/offlineStorage';
+import { getCachedAllUsers, getCachedFriends, setCachedFriends, getCachedMessages } from '../../utils/offlineStorage';
 
 export default function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp }) {
   const { user, token, blockUser, unblockUser } = useContext(AuthContext);
@@ -19,6 +19,34 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
   const isOnline = onlineUsers.includes(targetUser.id);
   const isBlocked = Boolean(user?.blockedUsers && user.blockedUsers.includes(targetUser.id));
   const chatId = user?.id && targetUser?.id ? [user.id, targetUser.id].sort().join('_') : null;
+
+  // Shared Media, Files & Links States
+  const [sharedTab, setSharedTab] = useState('media'); // 'media' | 'files' | 'links'
+  const [sharedMessages, setSharedMessages] = useState(() => {
+    if (!chatId) return [];
+    return getCachedMessages(chatId) || [];
+  });
+
+  const sharedMediaItems = useMemo(() => {
+    return (sharedMessages || []).filter(m => (m.type === 'image' || m.type === 'video') && m.mediaUrl && !m.isFogSnap && !m.isViewOnce);
+  }, [sharedMessages]);
+
+  const sharedFilesItems = useMemo(() => {
+    return (sharedMessages || []).filter(m => (m.type === 'document' || m.fileName) && m.mediaUrl);
+  }, [sharedMessages]);
+
+  const sharedLinksItems = useMemo(() => {
+    const list = [];
+    (sharedMessages || []).forEach(m => {
+      if (m.type === 'text' && m.content) {
+        const matches = m.content.match(/https?:\/\/[^\s]+/g);
+        if (matches) {
+          matches.forEach(url => list.push({ url, timestamp: m.timestamp, id: m.id }));
+        }
+      }
+    });
+    return list;
+  }, [sharedMessages]);
 
   const fetchFriendStatus = async () => {
     if (!targetUser?.id || targetUser.id === user?.id) return;
@@ -52,8 +80,24 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
 
       fetchFriendStatus();
 
-      // Fetch chat settings (disappearing messages)
+      // Fetch chat settings & shared messages
       if (chatId) {
+        const cached = getCachedMessages(chatId) || [];
+        if (cached.length > 0) setSharedMessages(cached);
+
+        if (token) {
+          fetch(`${BACKEND_URL}/api/messages/${chatId}?limit=100`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+            .then(res => res.json())
+            .then(data => {
+              if (Array.isArray(data)) {
+                setSharedMessages(data);
+              }
+            })
+            .catch(() => {});
+        }
+
         fetch(`${BACKEND_URL}/api/messages/settings/${chatId}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
@@ -792,6 +836,234 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
               {isBlocked ? <Unlock size={16} /> : <Ban size={16} />}
               {isBlocked ? 'Unblock Contact' : 'Block Contact'}
             </button>
+          </div>
+
+          {/* WhatsApp / Telegram-Style Shared Media, Documents & Links Section */}
+          <div style={{
+            background: 'var(--bg-chat)',
+            border: '1px solid var(--border)',
+            borderRadius: '14px',
+            padding: '14px',
+            marginTop: '14px',
+            textAlign: 'left'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <span style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '0.2px' }}>
+                Shared Media & Links
+              </span>
+            </div>
+
+            {/* Tab selector */}
+            <div style={{ display: 'flex', gap: '6px', background: 'var(--hover-bg)', padding: '3px', borderRadius: '10px', marginBottom: '12px' }}>
+              <button
+                type="button"
+                onClick={() => setSharedTab('media')}
+                style={{
+                  flex: 1,
+                  padding: '6px 8px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: sharedTab === 'media' ? 'var(--accent)' : 'transparent',
+                  color: sharedTab === 'media' ? '#fff' : 'var(--text-muted)',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <ImageIcon size={13} />
+                <span>Media ({sharedMediaItems.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSharedTab('files')}
+                style={{
+                  flex: 1,
+                  padding: '6px 8px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: sharedTab === 'files' ? 'var(--accent)' : 'transparent',
+                  color: sharedTab === 'files' ? '#fff' : 'var(--text-muted)',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <FileText size={13} />
+                <span>Files ({sharedFilesItems.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSharedTab('links')}
+                style={{
+                  flex: 1,
+                  padding: '6px 8px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: sharedTab === 'links' ? 'var(--accent)' : 'transparent',
+                  color: sharedTab === 'links' ? '#fff' : 'var(--text-muted)',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Link2 size={13} />
+                <span>Links ({sharedLinksItems.length})</span>
+              </button>
+            </div>
+
+            {/* Tab 1: Media Grid (Photos & Videos) */}
+            {sharedTab === 'media' && (
+              <div>
+                {sharedMediaItems.length > 0 ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', maxHeight: '220px', overflowY: 'auto' }}>
+                    {sharedMediaItems.map((m, idx) => (
+                      <div
+                        key={m.id || idx}
+                        onClick={() => {
+                          if (m.type === 'video') {
+                            window.open(m.mediaUrl, '_blank');
+                          } else if (onOpenFullDp) {
+                            onOpenFullDp(m.mediaUrl, 'Shared Photo', userToDisplay.username);
+                          }
+                        }}
+                        style={{
+                          position: 'relative',
+                          aspectRatio: '1',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          background: 'rgba(0,0,0,0.2)',
+                          cursor: 'pointer'
+                        }}
+                        title="Click to view full photo"
+                      >
+                        {m.type === 'video' ? (
+                          <>
+                            <video src={m.mediaUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <div style={{ position: 'absolute', bottom: '4px', left: '4px', background: 'rgba(0,0,0,0.6)', borderRadius: '4px', padding: '2px 4px', display: 'flex', alignItems: 'center' }}>
+                              <Film size={11} color="#fff" />
+                            </div>
+                          </>
+                        ) : (
+                          <img
+                            src={m.mediaUrl}
+                            alt="Shared media"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            loading="lazy"
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '1.2rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                    No photos or videos shared yet
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab 2: Files List */}
+            {sharedTab === 'files' && (
+              <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {sharedFilesItems.length > 0 ? (
+                  sharedFilesItems.map((f, idx) => (
+                    <div
+                      key={f.id || idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '8px',
+                        padding: '8px 10px',
+                        borderRadius: '8px',
+                        background: 'var(--hover-bg)',
+                        border: '1px solid var(--border)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                        <FileText size={18} color="var(--accent)" style={{ flexShrink: 0 }} />
+                        <div style={{ overflow: 'hidden', minWidth: 0 }}>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {f.fileName || 'Attachment'}
+                          </div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                            {f.fileSize || 'Document'}
+                          </div>
+                        </div>
+                      </div>
+                      <a
+                        href={f.mediaUrl}
+                        download={f.fileName || 'pulse_file'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: 'var(--accent)', padding: '4px', display: 'flex' }}
+                        title="Download file"
+                      >
+                        <Download size={15} />
+                      </a>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '1.2rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                    No documents shared yet
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab 3: Links List */}
+            {sharedTab === 'links' && (
+              <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {sharedLinksItems.length > 0 ? (
+                  sharedLinksItems.map((l, idx) => (
+                    <a
+                      key={idx}
+                      href={l.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '8px',
+                        padding: '8px 10px',
+                        borderRadius: '8px',
+                        background: 'var(--hover-bg)',
+                        border: '1px solid var(--border)',
+                        textDecoration: 'none'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                        <Link2 size={16} color="var(--accent)" style={{ flexShrink: 0 }} />
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {l.url}
+                        </div>
+                      </div>
+                      <ExternalLink size={13} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                    </a>
+                  ))
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '1.2rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                    No web links shared yet
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -9,6 +9,40 @@ export default function FullDpModal({ imageUrl, name, username, onClose }) {
   const [imgLoading, setImgLoading] = useState(true);
   const [hasFailed, setHasFailed] = useState(false);
 
+  // Swipe-down to dismiss physics (Instagram style)
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const touchStartRef = useRef({ y: 0, time: 0 });
+
+  const handleTouchStart = (e) => {
+    if (!e.touches || e.touches.length === 0) return;
+    touchStartRef.current = {
+      y: e.touches[0].clientY,
+      time: Date.now()
+    };
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isDragging || !e.touches || e.touches.length === 0) return;
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - touchStartRef.current.y;
+    if (diff > 0) {
+      setDragY(diff);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    const elapsed = Date.now() - touchStartRef.current.time;
+    if (dragY > 80 || (dragY > 35 && elapsed < 250)) {
+      onClose();
+    } else {
+      setDragY(0);
+    }
+  };
+
   useEffect(() => {
     setImgSrc(imageUrl || defaultFallback);
     setImgLoading(true);
@@ -89,16 +123,23 @@ export default function FullDpModal({ imageUrl, name, username, onClose }) {
         </button>
       </div>
 
-      {/* Main Fullscreen DP Image Container */}
+      {/* Main Fullscreen DP Image Container with Instagram Swipe-down dismiss */}
       <div
         onClick={e => e.stopPropagation()}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         style={{
           position: 'relative',
           maxWidth: '90vw',
           maxHeight: '80vh',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          touchAction: 'none',
+          transform: dragY > 0 ? `translateY(${dragY}px) scale(${Math.max(0.72, 1 - dragY / 700)})` : 'none',
+          transition: isDragging ? 'none' : 'transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.24s ease',
+          opacity: dragY > 0 ? Math.max(0.3, 1 - dragY / 380) : 1
         }}
       >
         {imgLoading && (
@@ -128,6 +169,7 @@ export default function FullDpModal({ imageUrl, name, username, onClose }) {
             alt={name || 'Profile Picture'}
             onLoad={() => setImgLoading(false)}
             onError={handleImageError}
+            draggable={false}
             style={{
               width: 'auto',
               height: 'auto',
@@ -140,15 +182,16 @@ export default function FullDpModal({ imageUrl, name, username, onClose }) {
               boxShadow: '0 25px 70px rgba(0, 0, 0, 0.8)',
               border: '2px solid rgba(255, 255, 255, 0.2)',
               opacity: imgLoading ? 0.3 : 1,
-              transition: 'opacity 0.2s ease'
+              transition: 'opacity 0.2s ease',
+              userSelect: 'none'
             }}
           />
         )}
       </div>
 
-      {/* Click outside hint */}
-      <p style={{ position: 'absolute', bottom: '20px', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.8rem', margin: 0 }}>
-        Tap anywhere outside to close
+      {/* Swipe down or tap outside hint */}
+      <p style={{ position: 'absolute', bottom: '20px', color: 'rgba(255, 255, 255, 0.55)', fontSize: '0.82rem', margin: 0, fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <span>↓ Swipe down or tap outside to close</span>
       </p>
     </div>
   );

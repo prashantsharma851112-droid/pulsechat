@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass, Edit3 } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass, Edit3, Pin } from 'lucide-react';
 import CreateGroupModal from './CreateGroupModal';
 import SettingsModal from '../profile/SettingsModal';
 import AdminDashboardModal from '../admin/AdminDashboardModal';
@@ -93,6 +93,73 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [searchResults, setSearchResults] = useState([]);
   const [recentChats, setRecentChats] = useState(() => getCachedRecentChats(currentUid));
   const [groups, setGroups] = useState(() => getCachedGroups(currentUid));
+  const [pinnedChatIds, setPinnedChatIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`pulsechat_pinned_chats_${currentUid || 'default'}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const togglePinChat = (e, targetId) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    if (!targetId) return;
+    setPinnedChatIds(prev => {
+      let next;
+      if (prev.includes(targetId)) {
+        next = prev.filter(id => id !== targetId);
+      } else {
+        if (prev.length >= 5) {
+          alert('📌 You can pin up to 5 chats/groups at the top!');
+          return prev;
+        }
+        next = [targetId, ...prev];
+      }
+      try {
+        localStorage.setItem(`pulsechat_pinned_chats_${currentUid || 'default'}`, JSON.stringify(next));
+      } catch (err) {}
+      return next;
+    });
+  };
+
+  const sortedRecentChats = useMemo(() => {
+    if (!pinnedChatIds.length) return recentChats;
+    const pinnedSet = new Set(pinnedChatIds);
+    const pinned = [];
+    const unpinned = [];
+    recentChats.forEach(c => {
+      const cid = c.id || c._id;
+      if (pinnedSet.has(cid)) {
+        pinned.push(c);
+      } else {
+        unpinned.push(c);
+      }
+    });
+    pinned.sort((a, b) => pinnedChatIds.indexOf(a.id || a._id) - pinnedChatIds.indexOf(b.id || b._id));
+    return [...pinned, ...unpinned];
+  }, [recentChats, pinnedChatIds]);
+
+  const sortedGroups = useMemo(() => {
+    if (!pinnedChatIds.length) return groups;
+    const pinnedSet = new Set(pinnedChatIds);
+    const pinned = [];
+    const unpinned = [];
+    groups.forEach(g => {
+      const gid = g.id || g._id;
+      if (pinnedSet.has(gid)) {
+        pinned.push(g);
+      } else {
+        unpinned.push(g);
+      }
+    });
+    pinned.sort((a, b) => pinnedChatIds.indexOf(a.id || a._id) - pinnedChatIds.indexOf(b.id || b._id));
+    return [...pinned, ...unpinned];
+  }, [groups, pinnedChatIds]);
+
   const [allUsers, setAllUsers] = useState(() => getCachedAllUsers(currentUid));
   const [isOnline, setIsOnline] = useState(() => isDeviceOnline());
   const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'groups' | 'friends'
@@ -463,20 +530,22 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     setIsPulling(false);
 
     // Horizontal Swipe for Tabs (CHATS <-> GROUPS <-> SYNC)
-    if (Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3 && elapsed < 800) {
-      if (deltaX < -45) {
+    if (Math.abs(deltaX) > 38 && Math.abs(deltaX) > Math.abs(deltaY) * 1.15 && elapsed < 900) {
+      if (deltaX < -38) {
         // Swipe Left -> next tab
         if (activeTab === 'chats') {
           setActiveTab('groups');
         } else if (activeTab === 'groups') {
           setActiveTab('friends');
         }
-      } else if (deltaX > 45) {
-        // Swipe Right -> previous tab
-        if (activeTab === 'friends') {
-          setActiveTab('groups');
-        } else if (activeTab === 'groups') {
-          setActiveTab('chats');
+      } else if (deltaX > 38) {
+        // Swipe Right -> previous tab (only if not starting from ultra-left edge < 55px which opens story modal)
+        if (touchStartRef.current.x >= 55) {
+          if (activeTab === 'friends') {
+            setActiveTab('groups');
+          } else if (activeTab === 'groups') {
+            setActiveTab('chats');
+          }
         }
       }
     }
@@ -1988,7 +2057,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       />
 
       {/* WhatsApp-Style Navigation Tabs: Chats vs Groups */}
-      <div className="sidebar-tabs" style={{ display: 'flex', borderBottom: '2px solid var(--border)', background: 'var(--bg-sidebar)' }}>
+      <div
+        className="sidebar-tabs"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ display: 'flex', borderBottom: '2px solid var(--border)', background: 'var(--bg-sidebar)', touchAction: 'pan-y' }}
+      >
         <button
           className={`tab-btn ${activeTab === 'chats' ? 'active' : ''}`}
           onClick={() => setActiveTab('chats')}
@@ -2341,8 +2416,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               </button>
             </div>
 
-            {groups.length > 0 ? (
-              groups.map(g => (
+            {sortedGroups.length > 0 ? (
+              sortedGroups.map(g => {
+                const isPinned = pinnedChatIds.includes(g.id || g._id);
+                return (
                 <div
                   key={g.id}
                   onClick={() => handleSelectGroup(g)}
@@ -2359,19 +2436,45 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <h4 style={{ fontSize: '1rem', fontWeight: g.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</h4>
-                      {g.unreadCount > 0 && (
-                        <span className="unread-badge">
-                          {g.unreadCount}
-                        </span>
-                      )}
+                      <h4 style={{ fontSize: '1rem', fontWeight: g.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <span>{g.name}</span>
+                        {isPinned && (
+                          <span title="Pinned Group" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center' }}>
+                            📌
+                          </span>
+                        )}
+                      </h4>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {g.unreadCount > 0 && (
+                          <span className="unread-badge">
+                            {g.unreadCount}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => togglePinChat(e, g.id || g._id)}
+                          className="icon-btn-ghost"
+                          title={isPinned ? "Unpin Group" : "Pin Group to Top"}
+                          style={{
+                            padding: '5px',
+                            color: isPinned ? '#f59e0b' : 'var(--text-muted)',
+                            opacity: isPinned ? 1 : 0.45,
+                            borderRadius: '50%',
+                            flexShrink: 0
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; }}
+                          onMouseLeave={(e) => { if (!isPinned) e.currentTarget.style.opacity = 0.45; }}
+                        >
+                          <Pin size={15} style={{ transform: isPinned ? 'rotate(-45deg)' : 'none' }} fill={isPinned ? '#f59e0b' : 'none'} />
+                        </button>
+                      </div>
                     </div>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {g.lastMessage || g.description || `${g.members?.length || 0} members`}
                     </p>
                   </div>
                 </div>
-              ))
+              ); })
             ) : (
               <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: 'var(--text-muted)', fontSize: '0.92rem' }}>
                 <Users size={48} style={{ opacity: 0.3, marginBottom: '0.75rem' }} />
@@ -2391,11 +2494,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           /* CHATS TAB */
           <div>
             {/* Recent Conversations */}
-            {recentChats.length > 0 && (
+            {sortedRecentChats.length > 0 && (
               <>
                 <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', padding: '0.5rem 0.75rem', letterSpacing: '0.03em' }}>CHATS</p>
-                {recentChats.map(u => {
+                {sortedRecentChats.map(u => {
                   const friendAura = resolveUserAura(u, vibeAuras);
+                  const isPinned = pinnedChatIds.includes(u.id || u._id);
                   return (
                   <div
                     key={u.id}
@@ -2445,6 +2549,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <h4 style={{ fontSize: '1.02rem', fontWeight: u.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
                           <span>{u.displayName}</span>
+                          {isPinned && (
+                            <span title="Pinned Chat" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center' }}>
+                              📌
+                            </span>
+                          )}
                           {u.isPro && (
                             <PulseVipBadge size={14} showLabel={false} />
                           )}
@@ -2475,6 +2584,23 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                               {u.unreadCount}
                             </span>
                           )}
+                          <button
+                            type="button"
+                            onClick={(e) => togglePinChat(e, u.id || u._id)}
+                            className="icon-btn-ghost"
+                            title={isPinned ? "Unpin Chat" : "Pin Chat to Top"}
+                            style={{
+                              padding: '5px',
+                              color: isPinned ? '#f59e0b' : 'var(--text-muted)',
+                              opacity: isPinned ? 1 : 0.45,
+                              borderRadius: '50%',
+                              flexShrink: 0
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; }}
+                            onMouseLeave={(e) => { if (!isPinned) e.currentTarget.style.opacity = 0.45; }}
+                          >
+                            <Pin size={15} style={{ transform: isPinned ? 'rotate(-45deg)' : 'none' }} fill={isPinned ? '#f59e0b' : 'none'} />
+                          </button>
                           <button
                             type="button"
                             onClick={(e) => handleDeleteChat(e, u)}
