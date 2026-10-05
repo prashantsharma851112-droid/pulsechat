@@ -18,7 +18,7 @@ import GiftPickerModal from './GiftPickerModal';
 import Animated3DTextModal from './Animated3DTextModal';
 import LiveArrowGameModal from './LiveArrowGameModal';
 import PulseStreakModal from './PulseStreakModal';
-import VibeAuraRing from '../common/VibeAuraRing';
+import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
 import VibeAuraSelectorModal from './VibeAuraSelectorModal';
 import PulseVipBadge from '../common/PulseVipBadge';
 import MusicPickerModal from '../vibes/MusicPickerModal';
@@ -83,15 +83,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const partnerAura = useMemo(() => {
     if (isGroup) return null;
-    const pId = activeChat?.id || activeChat?._id;
-    const pUser = activeChat?.username;
-    return (vibeAuras && (vibeAuras[pId] || vibeAuras[pUser])) || activeChat?.vibeAura || null;
+    return resolveUserAura(activeChat, vibeAuras);
   }, [isGroup, activeChat, vibeAuras]);
 
-  const currentUid = user?.id || user?._id;
   const myAura = useMemo(() => {
-    return (vibeAuras && currentUid && vibeAuras[currentUid]) || user?.vibeAura || null;
-  }, [vibeAuras, currentUid, user?.vibeAura]);
+    return resolveUserAura(user, vibeAuras);
+  }, [vibeAuras, user]);
   const [showVibeSelector, setShowVibeSelector] = useState(false);
 
   const getSenderPayload = () => ({

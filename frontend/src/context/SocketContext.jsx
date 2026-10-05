@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 import { AuthContext } from './AuthContext';
 import { BACKEND_URL } from '../utils/config';
 import { subscribeUserToPush, showPushNotification } from '../utils/notifications';
+import { updateUserProfileInStorage } from '../utils/offlineStorage';
 
 export const SocketContext = createContext();
 
@@ -99,15 +100,20 @@ export function SocketProvider({ children }) {
 
       newSocket.on('vibe_aura_updated', (cleanAura) => {
         if (cleanAura && cleanAura.userId) {
+          const isCleared = Boolean(cleanAura.cleared || cleanAura.auraType === 'none' || (!cleanAura.mood && !cleanAura.isLowBattery && !cleanAura.inGame));
           setVibeAuras(prev => {
             const next = { ...prev };
-            if (cleanAura.cleared || cleanAura.auraType === 'none' || (!cleanAura.mood && !cleanAura.isLowBattery && !cleanAura.inGame)) {
+            if (isCleared) {
               delete next[cleanAura.userId];
             } else {
               next[cleanAura.userId] = cleanAura;
             }
             return next;
           });
+          try {
+            const curId = userRef.current?.id;
+            updateUserProfileInStorage(cleanAura.userId, { vibeAura: isCleared ? null : cleanAura }, curId);
+          } catch (e) {}
         }
       });
 

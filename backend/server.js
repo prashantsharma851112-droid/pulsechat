@@ -1157,6 +1157,17 @@ io.on('connection', (socket) => {
       try {
         await User.updateOne({ $or: [{ id: auraData.userId }, { username: auraData.userId }] }, { $unset: { vibeAura: 1 } });
       } catch (e) {}
+
+      // Invalidate Redis user profile cache so GET /api/users/:id never returns stale vibe
+      redis.invalidateUser(auraData.userId).catch(() => {});
+      if (socket.userMongoId) redis.invalidateUser(socket.userMongoId).catch(() => {});
+      if (socket.userUsername) redis.invalidateUser(socket.userUsername).catch(() => {});
+
+      io.emit('user_profile_updated', {
+        userId: auraData.userId,
+        vibeAura: null
+      });
+
       io.emit('vibe_aura_updated', {
         userId: auraData.userId,
         cleared: true,
@@ -1186,6 +1197,17 @@ io.on('connection', (socket) => {
     try {
       await User.updateOne({ $or: [{ id: auraData.userId }, { username: auraData.userId }] }, { vibeAura: clean });
     } catch (e) {}
+
+    // Invalidate Redis user profile cache
+    redis.invalidateUser(auraData.userId).catch(() => {});
+    if (socket.userMongoId) redis.invalidateUser(socket.userMongoId).catch(() => {});
+    if (socket.userUsername) redis.invalidateUser(socket.userUsername).catch(() => {});
+
+    io.emit('user_profile_updated', {
+      userId: auraData.userId,
+      vibeAura: clean
+    });
+
     io.emit('vibe_aura_updated', clean);
   });
 

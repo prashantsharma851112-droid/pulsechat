@@ -1,5 +1,38 @@
 import React from 'react';
 
+/**
+ * Authoritative real-time vibe resolver:
+ * When vibeAuras dictionary is available, it is the single source of truth.
+ * If user is not in vibeAuras (or cleared), returns null immediately without falling back to stale cache.
+ */
+export function resolveUserAura(userObj, vibeAuras) {
+  if (!userObj) return null;
+  const uid = userObj.id || userObj._id;
+  const uname = userObj.username;
+
+  if (vibeAuras && typeof vibeAuras === 'object') {
+    const live = (uid && vibeAuras[uid]) || (uname && vibeAuras[uname]);
+    if (live && !live.cleared && live.auraType !== 'none' && (
+      (live.mood && live.mood.trim() !== '') ||
+      (live.inGame && live.inGame.trim() !== '') ||
+      Boolean(live.isLowBattery)
+    )) {
+      return live;
+    }
+    return null;
+  }
+
+  const fallback = userObj.vibeAura;
+  if (fallback && !fallback.cleared && fallback.auraType !== 'none' && (
+    (fallback.mood && fallback.mood.trim() !== '') ||
+    (fallback.inGame && fallback.inGame.trim() !== '') ||
+    Boolean(fallback.isLowBattery)
+  )) {
+    return fallback;
+  }
+  return null;
+}
+
 export default function VibeAuraRing({
   children,
   auraData,

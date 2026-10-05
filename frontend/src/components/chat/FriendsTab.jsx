@@ -6,7 +6,7 @@ import { BACKEND_URL } from '../../utils/config';
 import { parseSafeJson } from '../../utils/imageCompressor';
 import { getCachedFriends, setCachedFriends, getCachedAllUsers } from '../../utils/offlineStorage';
 import PulseVipBadge from '../common/PulseVipBadge';
-import VibeAuraRing from '../common/VibeAuraRing';
+import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
 
 export default function FriendsTab({ setActiveChat, onRequestsCountChange, initialSubTab = 'friends', onOpenFullDp }) {
   const { user, token } = useContext(AuthContext);
@@ -763,7 +763,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                         onClick={() => setActiveChat(friend)}
                       >
                         {(() => {
-                          const friendAura = (vibeAuras && (vibeAuras[friend.id] || vibeAuras[friend.username])) || friend.vibeAura || null;
+                          const friendAura = resolveUserAura(friend, vibeAuras);
                           return (
                             <VibeAuraRing aura={friendAura} size={42} hasCrown={Boolean(friend.hasKingCrown || friend.hasSilverCrown || friend.hasStreakCrown)}>
                               <div
@@ -907,7 +907,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                          <VibeAuraRing aura={(vibeAuras && (vibeAuras[sender.id] || vibeAuras[sender.username])) || sender.vibeAura || null} size={40}>
+                          <VibeAuraRing aura={resolveUserAura(sender, vibeAuras)} size={40}>
                             <div
                               className={sender.isPro ? 'pro-neon-avatar' : ''}
                               style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
@@ -1014,7 +1014,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                          <VibeAuraRing aura={(vibeAuras && (vibeAuras[receiver.id] || vibeAuras[receiver.username])) || receiver.vibeAura || null} size={40}>
+                          <VibeAuraRing aura={resolveUserAura(receiver, vibeAuras)} size={40}>
                             <div
                               className={receiver.isPro ? 'pro-neon-avatar' : ''}
                               style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
@@ -1122,7 +1122,7 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                        <VibeAuraRing aura={(vibeAuras && (vibeAuras[target.id] || vibeAuras[target.username])) || target.vibeAura || null} size={40}>
+                        <VibeAuraRing aura={resolveUserAura(target, vibeAuras)} size={40}>
                           <div
                             className={target.isPro ? 'pro-neon-avatar' : ''}
                             style={{ position: 'relative', flexShrink: 0 }}

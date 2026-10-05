@@ -15,7 +15,7 @@ import CreateVibeModal from '../vibes/CreateVibeModal';
 import VibeViewerModal from '../vibes/VibeViewerModal';
 import PulseZoneModal from '../zone/PulseZoneModal';
 import SparksWalletModal from './SparksWalletModal';
-import VibeAuraRing from '../common/VibeAuraRing';
+import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
 import VibeAuraSelectorModal from './VibeAuraSelectorModal';
 import { Gamepad2 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
@@ -86,11 +86,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const currentUid = user?.id || getCachedUser()?.id;
 
   const myAura = useMemo(() => {
-    const raw = (vibeAuras && currentUid && vibeAuras[currentUid]) || user?.vibeAura || null;
-    if (!raw || raw.cleared || raw.auraType === 'none') return null;
-    if (!raw.mood && !raw.inGame && !raw.isLowBattery) return null;
-    return raw;
-  }, [vibeAuras, currentUid, user?.vibeAura]);
+    return resolveUserAura(user, vibeAuras);
+  }, [vibeAuras, user]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -2218,7 +2215,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             </p>
             {searchResults.length > 0 ? (
               searchResults.map(u => {
-                const searchAura = !u.isGroup ? ((vibeAuras && (vibeAuras[u.id] || vibeAuras[u.username])) || u.vibeAura || null) : null;
+                const searchAura = !u.isGroup ? resolveUserAura(u, vibeAuras) : null;
                 return (
                 <div
                   key={u.id}
@@ -2386,7 +2383,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               <>
                 <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', padding: '0.5rem 0.75rem', letterSpacing: '0.03em' }}>CHATS</p>
                 {recentChats.map(u => {
-                  const friendAura = (vibeAuras && (vibeAuras[u.id] || vibeAuras[u.username])) || u.vibeAura || null;
+                  const friendAura = resolveUserAura(u, vibeAuras);
                   return (
                   <div
                     key={u.id}
@@ -2514,7 +2511,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                   </span>
                 </div>
                 {contactsNotInRecent.map(u => {
-                  const contactAura = (vibeAuras && (vibeAuras[u.id] || vibeAuras[u.username])) || u.vibeAura || null;
+                  const contactAura = resolveUserAura(u, vibeAuras);
                   return (
                   <div
                     key={u.id}

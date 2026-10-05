@@ -4,7 +4,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
 import PulseVipBadge from '../common/PulseVipBadge';
-import VibeAuraRing from '../common/VibeAuraRing';
+import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
 import { getCachedAllUsers, getCachedFriends, setCachedFriends } from '../../utils/offlineStorage';
 
 export default function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp }) {
@@ -68,7 +68,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
     }
   }, [targetUser?.id, token, chatId]);
 
-  // Real-time DP / Profile sync
+  // Real-time DP / Profile / Vibe sync
   useEffect(() => {
     const handleProfileUpdate = (data) => {
       if (!data) return;
@@ -85,12 +85,33 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
           ...(data.customBadge !== undefined && { customBadge: data.customBadge }),
           ...(data.displayName !== undefined && data.displayName !== '' && { displayName: data.displayName }),
           ...(data.avatar !== undefined && data.avatar !== '' && { avatar: data.avatar }),
-          ...(data.status !== undefined && { status: data.status })
+          ...(data.status !== undefined && { status: data.status }),
+          ...(data.vibeAura !== undefined && { vibeAura: data.vibeAura })
         }));
       }
     };
 
-    if (socket) socket.on('user_profile_updated', handleProfileUpdate);
+    const handleVibeUpdate = (cleanAura) => {
+      if (!cleanAura) return;
+      const isTarget = targetUser && (
+        targetUser.id === cleanAura.userId ||
+        targetUser._id === cleanAura.userId ||
+        (cleanAura.userMongoId && (targetUser.id === cleanAura.userMongoId || targetUser._id === cleanAura.userMongoId)) ||
+        (cleanAura.username && targetUser.username === cleanAura.username)
+      );
+      if (isTarget) {
+        const isCleared = Boolean(cleanAura.cleared || cleanAura.auraType === 'none' || (!cleanAura.mood && !cleanAura.isLowBattery && !cleanAura.inGame));
+        setProfileData(prev => ({
+          ...prev,
+          vibeAura: isCleared ? null : cleanAura
+        }));
+      }
+    };
+
+    if (socket) {
+      socket.on('user_profile_updated', handleProfileUpdate);
+      socket.on('vibe_aura_updated', handleVibeUpdate);
+    }
     const handleWindowEvent = (e) => {
       if (e.detail?.updates) {
         handleProfileUpdate({ userId: e.detail.targetUserId, ...e.detail.updates });
@@ -99,7 +120,10 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
     window.addEventListener('pulsechat_user_profile_updated', handleWindowEvent);
 
     return () => {
-      if (socket) socket.off('user_profile_updated', handleProfileUpdate);
+      if (socket) {
+        socket.off('user_profile_updated', handleProfileUpdate);
+        socket.off('vibe_aura_updated', handleVibeUpdate);
+      }
       window.removeEventListener('pulsechat_user_profile_updated', handleWindowEvent);
     };
   }, [socket, targetUser]);
@@ -304,15 +328,8 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
   };
   const validAvatar = userToDisplay?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userToDisplay?.username || 'user'}`;
 
-  const targetId = userToDisplay?.id || userToDisplay?._id || targetUser?.id || targetUser?._id;
-  const targetUsername = userToDisplay?.username || targetUser?.username;
-  const userAura = (vibeAuras && targetId && vibeAuras[targetId]) ||
-                   (vibeAuras && targetUsername && vibeAuras[targetUsername]) ||
-                   userToDisplay?.vibeAura ||
-                   profileData?.vibeAura ||
-                   targetUser?.vibeAura ||
-                   null;
-  const hasVibe = Boolean(userAura && !userAura.cleared && userAura.auraType !== 'none' && (userAura.mood || userAura.isLowBattery || userAura.inGame));
+  const userAura = resolveUserAura(userToDisplay, vibeAuras);
+  const hasVibe = Boolean(userAura);
 
   return (
     <div className="modal-overlay" onClick={onClose}>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { X, Zap, Battery, Sparkles, Check, Trash2 } from 'lucide-react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
+import { updateUserProfileInStorage } from '../../utils/offlineStorage';
 
 const PRESET_AURAS = [
   { id: 'lofi', mood: 'Listening to Lofi', emoji: '🎧', auraColor: '#a855f7', auraType: 'violet_wave' },
@@ -74,6 +75,14 @@ export default function VibeAuraSelectorModal({
     if (typeof updateUserProfile === 'function') {
       updateUserProfile({ ...user, vibeAura: auraData });
     }
+    try {
+      updateUserProfileInStorage(effectiveUserId, { vibeAura: auraData }, effectiveUserId);
+    } catch (e) {}
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+        detail: { targetUserId: effectiveUserId, updates: { vibeAura: auraData } }
+      }));
+    }
     if (onAuraUpdated) onAuraUpdated(auraData);
     onClose();
   };
@@ -96,6 +105,14 @@ export default function VibeAuraSelectorModal({
     }
     if (typeof updateUserProfile === 'function') {
       updateUserProfile({ ...user, vibeAura: null });
+    }
+    try {
+      updateUserProfileInStorage(effectiveUserId, { vibeAura: null }, effectiveUserId);
+    } catch (e) {}
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+        detail: { targetUserId: effectiveUserId, updates: { vibeAura: null } }
+      }));
     }
     if (onAuraUpdated) onAuraUpdated(null);
     onClose();
