@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3 } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -178,6 +178,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showSolidThemeModal, setShowSolidThemeModal] = useState(false);
+  const [showAppsFolderModal, setShowAppsFolderModal] = useState(false);
   const [showChatMusicPicker, setShowChatMusicPicker] = useState(false);
   const [chatMusicSong, setChatMusicSong] = useState(() => {
     try {
@@ -3046,6 +3047,87 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               </button>
             )}
 
+            {/* Mobile App Folder Button (like Android folder icon) */}
+            <button
+              onClick={() => setShowAppsFolderModal(true)}
+              className="chat-apps-folder-btn"
+              title="Apps & Games (Arrow Battle, Drawboard, Music)"
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '11px',
+                background: 'rgba(255, 255, 255, 0.12)',
+                border: '1px solid rgba(255, 255, 255, 0.22)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '2.5px',
+                padding: '4px',
+                cursor: 'pointer',
+                transition: 'all 0.18s ease',
+                flexShrink: 0,
+                alignItems: 'center',
+                justifyItems: 'center'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = 'scale(1.06)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
+              }}
+            >
+              {/* Mini App 1: Game */}
+              <div style={{
+                width: '12px',
+                height: '12px',
+                borderRadius: '3.5px',
+                background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Gamepad2 size={7.5} color="#fff" />
+              </div>
+              {/* Mini App 2: Drawboard */}
+              <div style={{
+                width: '12px',
+                height: '12px',
+                borderRadius: '3.5px',
+                background: 'linear-gradient(135deg, #10b981, #059669)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Presentation size={7.5} color="#fff" />
+              </div>
+              {/* Mini App 3: Music */}
+              <div style={{
+                width: '12px',
+                height: '12px',
+                borderRadius: '3.5px',
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Music size={7.5} color="#fff" />
+              </div>
+              {/* Mini App 4: Sparks / Live */}
+              <div style={{
+                width: '12px',
+                height: '12px',
+                borderRadius: '3.5px',
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Sparkles size={7.5} color="#fff" />
+              </div>
+            </button>
+
             {/* 3-Dots More Options Menu */}
             <div className="chat-header-more-container" style={{ position: 'relative' }}>
               <button
@@ -3930,47 +4012,33 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         </div>
       )}
 
-      {/* AI Smart Suggested Reply Chips & Instagram-Style Instant Vibe Pill */}
+      {/* Bottom Set Vibe Button (Clean & Modern, No Smart Replies, No Extra Emojis) */}
       {(isGroup || friendshipStatus === 'friends') && !blockStatus.isBlockedByMe && !blockStatus.isBlockedByThem && (
-        <div style={{ padding: '0.4rem 1rem', display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', background: 'transparent', position: 'relative', zIndex: 2, scrollbarWidth: 'none' }}>
-          {/* Instagram-Style Instant Vibe Pill */}
+        <div style={{ padding: '0.35rem 1rem 0.2rem 1rem', display: 'flex', alignItems: 'center', background: 'transparent', position: 'relative', zIndex: 2 }}>
           <button
             type="button"
             onClick={() => setShowVibeSelector(true)}
             style={{
-              background: myAura?.mood ? 'rgba(99, 102, 241, 0.18)' : 'var(--bg-card)',
-              border: `1.5px solid ${myAura?.auraColor || 'rgba(99, 102, 241, 0.5)'}`,
+              background: myAura?.mood ? 'rgba(99, 102, 241, 0.16)' : 'var(--bg-card)',
+              border: `1.5px solid ${myAura?.auraColor || 'rgba(99, 102, 241, 0.45)'}`,
               color: myAura?.auraColor || 'var(--accent)',
               borderRadius: '16px',
-              padding: '4px 11px',
-              fontSize: '0.74rem',
-              fontWeight: 700,
+              padding: '4px 12px',
+              fontSize: '0.78rem',
+              fontWeight: 600,
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '5px',
+              gap: '6px',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
-              flexShrink: 0,
-              boxShadow: myAura?.mood ? `0 0 10px ${myAura.auraColor || 'rgba(99,102,241,0.3)'}40` : 'none',
+              boxShadow: myAura?.mood ? `0 0 10px ${myAura.auraColor || 'rgba(99,102,241,0.25)'}40` : 'none',
               transition: 'all 0.18s ease'
             }}
-            title="Instant Vibe & Live Aura (Tap to Edit)"
+            title="Set Vibe"
           >
-            <span style={{ fontSize: '0.85rem' }}>{myAura?.emoji || '⚡'}</span>
-            <span>{myAura?.mood ? `${myAura.mood}` : '⚡ Set Vibe'}</span>
-            <span style={{ fontSize: '0.65rem', opacity: 0.7, marginLeft: '2px' }}>✏️</span>
+            <span>Set Vibe</span>
+            <Edit3 size={12} style={{ opacity: 0.85 }} />
           </button>
-
-          {smartReplies.map((replyText, i) => (
-            <button
-              key={i}
-              onClick={() => setText(replyText)}
-              style={{ background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '16px', padding: '4px 10px', fontSize: '0.75rem', whiteSpace: 'nowrap', cursor: 'pointer', flexShrink: 0 }}
-            >
-              <Sparkles size={11} color="var(--accent)" style={{ marginRight: '4px' }} />
-              {replyText}
-            </button>
-          ))}
         </div>
       )}
 
@@ -4357,82 +4425,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 </div>
                 <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Create Poll</span>
               </button>
-
-              {/* Live Drawboard */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  handleOpenWhiteboard();
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)'
-                }}>
-                  <Presentation size={20} />
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Live Drawboard</span>
-              </button>
-
-              {/* Live Vibe & Aura */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  setShowVibeSelector(true);
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #6366f1, #ec4899)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)',
-                  fontSize: '1.25rem'
-                }}>
-                  ⚡
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--accent)' }}>Live Vibe</span>
-              </button>
-
             </div>
           )}
 
@@ -4817,6 +4809,221 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             setShowProModal(true);
           }}
         />
+      )}
+
+      {/* Mobile-OS App Folder Expanded Modal */}
+      {showAppsFolderModal && (
+        <div
+          className="modal-overlay"
+          onClick={() => setShowAppsFolderModal(false)}
+          style={{
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '310px',
+              background: 'var(--bg-card)',
+              borderRadius: '26px',
+              border: '1px solid var(--border)',
+              padding: '1.25rem 1.1rem',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08)',
+              animation: 'folderPopIn 0.22s cubic-bezier(0.16, 1, 0.3, 1)'
+            }}
+          >
+            {/* Folder Header */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '1.25rem',
+              paddingBottom: '0.65rem',
+              borderBottom: '1px solid var(--border)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '9px',
+                  background: 'rgba(99, 102, 241, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--accent)'
+                }}>
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                    Chat Apps
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    Instant live features
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAppsFolderModal(false)}
+                className="icon-btn-ghost"
+                style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'transparent' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Folder App Grid (Mobile App Icon Style) */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '14px 10px',
+              textAlign: 'center'
+            }}>
+              {/* App 1: Live Arrow Battle */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAppsFolderModal(false);
+                  handleOpenArrowGame();
+                }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '6px 4px',
+                  borderRadius: '16px',
+                  transition: 'transform 0.18s ease'
+                }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <div style={{
+                  width: '54px',
+                  height: '54px',
+                  borderRadius: '17px',
+                  background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 6px 16px rgba(236, 72, 153, 0.42)',
+                  marginBottom: '7px'
+                }}>
+                  <Gamepad2 size={27} />
+                </div>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                  Arrow Battle
+                </span>
+              </button>
+
+              {/* App 2: Live Drawboard */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAppsFolderModal(false);
+                  handleOpenWhiteboard();
+                }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '6px 4px',
+                  borderRadius: '16px',
+                  transition: 'transform 0.18s ease'
+                }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <div style={{
+                  width: '54px',
+                  height: '54px',
+                  borderRadius: '17px',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 6px 16px rgba(16, 185, 129, 0.42)',
+                  marginBottom: '7px'
+                }}>
+                  <Presentation size={26} />
+                </div>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                  Drawboard
+                </span>
+              </button>
+
+              {/* App 3: Background Music */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAppsFolderModal(false);
+                  if (!user?.isPro) {
+                    setProModalTab('pro');
+                    setShowProModal(true);
+                    return;
+                  }
+                  setShowChatMusicPicker(true);
+                }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '6px 4px',
+                  borderRadius: '16px',
+                  transition: 'transform 0.18s ease'
+                }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <div style={{
+                  width: '54px',
+                  height: '54px',
+                  borderRadius: '17px',
+                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 6px 16px rgba(245, 158, 11, 0.42)',
+                  marginBottom: '7px',
+                  position: 'relative'
+                }}>
+                  <Music size={26} />
+                  {!user?.isPro && (
+                    <span style={{ position: 'absolute', top: -4, right: -4, fontSize: '0.8rem' }}>👑</span>
+                  )}
+                </div>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                  Music {!user?.isPro ? '👑' : ''}
+                </span>
+              </button>
+            </div>
+            <style>{`
+              @keyframes folderPopIn {
+                0% { transform: scale(0.88); opacity: 0; }
+                100% { transform: scale(1); opacity: 1; }
+              }
+            `}</style>
+          </div>
+        </div>
       )}
 
       {showArrowGameModal && (
