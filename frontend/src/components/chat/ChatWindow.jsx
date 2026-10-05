@@ -92,31 +92,39 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   }, [vibeAuras, user]);
   const [showVibeSelector, setShowVibeSelector] = useState(false);
   const [showTicTacToeModal, setShowTicTacToeModal] = useState(false);
-  const [isGhostMode, setIsGhostMode] = useState(() => {
+  const checkGhostModeActive = () => {
     try {
+      if (user?.hideReadReceipts || localStorage.getItem('pulsechat_ghost_global') === 'true') {
+        return true;
+      }
+      const ghostChatsJson = localStorage.getItem('pulsechat_ghost_chats');
+      if (ghostChatsJson) {
+        const list = JSON.parse(ghostChatsJson);
+        if (Array.isArray(list)) {
+          if (list.includes(chatId) || (activeChat?.id && list.includes(activeChat.id))) {
+            return true;
+          }
+        }
+      }
       return localStorage.getItem(`pulsechat_ghost_${chatId}`) === 'true';
     } catch (e) {
       return false;
     }
-  });
+  };
+
+  const [isGhostMode, setIsGhostMode] = useState(() => checkGhostModeActive());
 
   useEffect(() => {
-    try {
-      setIsGhostMode(localStorage.getItem(`pulsechat_ghost_${chatId}`) === 'true');
-    } catch (e) {
-      setIsGhostMode(false);
-    }
-  }, [chatId]);
+    setIsGhostMode(checkGhostModeActive());
+  }, [chatId, user?.hideReadReceipts, activeChat?.id]);
 
-  const toggleGhostMode = () => {
-    setIsGhostMode(prev => {
-      const next = !prev;
-      try {
-        localStorage.setItem(`pulsechat_ghost_${chatId}`, String(next));
-      } catch (e) {}
-      return next;
-    });
-  };
+  useEffect(() => {
+    const handleGhostUpdated = () => {
+      setIsGhostMode(checkGhostModeActive());
+    };
+    window.addEventListener('pulsechat_ghost_mode_updated', handleGhostUpdated);
+    return () => window.removeEventListener('pulsechat_ghost_mode_updated', handleGhostUpdated);
+  }, [chatId, user?.hideReadReceipts, activeChat?.id]);
 
   const getSenderPayload = () => ({
     senderName: user?.displayName || user?.username || 'User',
@@ -3333,13 +3341,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                       <span>{blockStatus.isBlockedByMe ? 'Unblock Contact' : 'Block Contact'}</span>
                     </button>
                   )}
-                  {/* Ghost Mode (Stealth Read) */}
-                  <button onClick={() => { setShowMoreMenu(false); toggleGhostMode(); }}>
-                    <Ghost size={16} color={isGhostMode ? '#c084fc' : 'var(--accent)'} />
-                    <span style={{ color: isGhostMode ? '#c084fc' : 'inherit', fontWeight: isGhostMode ? 700 : 500 }}>
-                      {isGhostMode ? '👻 Ghost Mode: ON (Stealth)' : '👻 Ghost Mode: OFF'}
-                    </span>
-                  </button>
 
                   <button onClick={() => { setShowMoreMenu(false); handleClearCurrentChat(); }} style={{ color: '#ef4444' }}>
                     <Trash2 size={16} color="#ef4444" />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, User as UserIcon } from 'lucide-react';
 import { useBackHandler } from '../../utils/backNavigation';
 

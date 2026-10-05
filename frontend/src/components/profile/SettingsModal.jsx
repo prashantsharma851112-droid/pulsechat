@@ -1,14 +1,16 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useMemo } from 'react';
 import { ThemeContext } from '../../context/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
 import { 
   X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, 
   Sparkles, Bell, BellOff, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2, 
   Crown, Lock, Shield, FileText, HelpCircle, RefreshCw, AlertTriangle, Loader2,
-  ChevronRight, ArrowLeft, HardDrive, Palette, Info, Mail, Compass, Send, CheckCircle2, MessageSquare
+  ChevronRight, ArrowLeft, HardDrive, Palette, Info, Mail, Compass, Send, CheckCircle2, MessageSquare,
+  Ghost, Search
 } from 'lucide-react';
 import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
 import { BACKEND_URL } from '../../utils/config';
+import { getCachedRecentChats, getCachedFriends } from '../../utils/offlineStorage';
 import PulseProModal from '../chat/PulseProModal';
 import PulseVipBadge from '../common/PulseVipBadge';
 import AppFeatureTourModal from '../common/AppFeatureTourModal';
@@ -83,6 +85,121 @@ export default function SettingsModal({
   const [supportSubmitting, setSupportSubmitting] = useState(false);
   const [supportSuccessMsg, setSupportSuccessMsg] = useState('');
   const [supportError, setSupportError] = useState('');
+
+  // WhatsApp-Style Ghost Mode Controls (All chats or Specific chats)
+  const [ghostModeType, setGhostModeType] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pulsechat_ghost_mode_type');
+      if (saved) return saved;
+      if (user?.hideReadReceipts) return 'all';
+      const chats = localStorage.getItem('pulsechat_ghost_chats');
+      if (chats && JSON.parse(chats).length > 0) return 'specific';
+      return 'none';
+    } catch (e) {
+      return user?.hideReadReceipts ? 'all' : 'none';
+    }
+  });
+
+  const [ghostChatIds, setGhostChatIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pulsechat_ghost_chats');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [ghostSearchQuery, setGhostSearchQuery] = useState('');
+  const [showGhostChatPicker, setShowGhostChatPicker] = useState(false);
+
+  const availableGhostContacts = useMemo(() => {
+    const map = new Map();
+    if (user?.id) {
+      const recent = getCachedRecentChats(user.id);
+      if (Array.isArray(recent)) {
+        recent.forEach(c => {
+          const id = c.id || c.chatId || c.userId || c._id;
+          if (id && !map.has(id)) {
+            map.set(id, {
+              id,
+              name: c.displayName || c.name || c.username || 'User',
+              username: c.username || '',
+              avatar: c.avatar || ''
+            });
+          }
+        });
+      }
+      const friends = getCachedFriends(user.id);
+      if (Array.isArray(friends)) {
+        friends.forEach(f => {
+          const id = f.id || f._id;
+          if (id && !map.has(id)) {
+            map.set(id, {
+              id,
+              name: f.displayName || f.username || 'Friend',
+              username: f.username || '',
+              avatar: f.avatar || ''
+            });
+          }
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [user?.id]);
+
+  const filteredGhostContacts = useMemo(() => {
+    const q = ghostSearchQuery.trim().toLowerCase();
+    if (!q) return availableGhostContacts;
+    return availableGhostContacts.filter(c => 
+      c.name.toLowerCase().includes(q) || (c.username && c.username.toLowerCase().includes(q))
+    );
+  }, [availableGhostContacts, ghostSearchQuery]);
+
+  const handleSelectGhostModeType = (type) => {
+    setGhostModeType(type);
+    localStorage.setItem('pulsechat_ghost_mode_type', type);
+
+    if (type === 'all') {
+      localStorage.setItem('pulsechat_ghost_global', 'true');
+      toggleHideReadReceipts(true);
+    } else if (type === 'specific') {
+      localStorage.removeItem('pulsechat_ghost_global');
+      toggleHideReadReceipts(false);
+      setShowGhostChatPicker(true);
+    } else {
+      localStorage.removeItem('pulsechat_ghost_global');
+      toggleHideReadReceipts(false);
+      localStorage.removeItem('pulsechat_ghost_chats');
+      setGhostChatIds([]);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechat_ghost_mode_updated', {
+        detail: { type, ghostChatIds }
+      }));
+    }
+  };
+
+  const toggleChatInGhostMode = (targetId) => {
+    setGhostChatIds(prev => {
+      let next;
+      if (prev.includes(targetId)) {
+        next = prev.filter(id => id !== targetId);
+        localStorage.removeItem(`pulsechat_ghost_${targetId}`);
+      } else {
+        next = [...prev, targetId];
+        localStorage.setItem(`pulsechat_ghost_${targetId}`, 'true');
+      }
+      localStorage.setItem('pulsechat_ghost_chats', JSON.stringify(next));
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('pulsechat_ghost_mode_updated', {
+          detail: { type: 'specific', ghostChatIds: next }
+        }));
+      }
+      return next;
+    });
+  };
 
   const handleSupportSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -457,7 +574,7 @@ export default function SettingsModal({
                         Privacy & Security
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        Blue ticks, online status, blocked users, account deletion
+                        Ghost Mode (all or specific chats), online status & blocked users
                       </div>
                     </div>
                   </div>
@@ -860,53 +977,247 @@ export default function SettingsModal({
               ============================================================== */}
           {activeSection === 'privacy' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {/* Hide Read Receipts (Unseen Privacy Mode) */}
-              <div
-                onClick={() => toggleHideReadReceipts(!user?.hideReadReceipts)}
-                style={{
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '14px',
-                  padding: '12px 14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  cursor: 'pointer'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: user?.hideReadReceipts ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <EyeOff size={18} color={user?.hideReadReceipts ? 'var(--accent)' : 'var(--text-muted)'} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      Hide Read Receipts (Ghost Seen)
+              {/* WhatsApp-Style Ghost Mode (Stealth Read Receipts) */}
+              <div style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: '16px',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                {/* Card Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(192, 132, 252, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Ghost size={20} color="#c084fc" />
                     </div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                      Read messages without sending blue ticks or seen timestamps
+                    <div>
+                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        Ghost Mode (Stealth Read)
+                        <span style={{
+                          fontSize: '0.66rem',
+                          fontWeight: 800,
+                          padding: '2px 7px',
+                          borderRadius: '6px',
+                          background: ghostModeType === 'all' ? 'rgba(192, 132, 252, 0.25)' : (ghostModeType === 'specific' ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.08)'),
+                          color: ghostModeType === 'all' ? '#c084fc' : (ghostModeType === 'specific' ? '#818cf8' : 'var(--text-muted)')
+                        }}>
+                          {ghostModeType === 'all' ? 'EVERYONE (ON)' : (ghostModeType === 'specific' ? `${ghostChatIds.length} SPECIFIC CHATS` : 'OFF')}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Read messages without sending blue double ticks or seen status
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div style={{
-                  width: '38px',
-                  height: '22px',
-                  borderRadius: '11px',
-                  background: user?.hideReadReceipts ? 'var(--accent)' : 'var(--border)',
-                  position: 'relative',
-                  transition: 'all 0.2s ease',
-                  flexShrink: 0
-                }}>
+
+                {/* WhatsApp-Style 3 Options */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                  {/* Option 1: All Chats */}
+                  <div
+                    onClick={() => handleSelectGhostModeType('all')}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '12px',
+                      background: ghostModeType === 'all' ? 'rgba(192, 132, 252, 0.15)' : 'var(--hover-bg)',
+                      border: ghostModeType === 'all' ? '1px solid #c084fc' : '1px solid var(--border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: ghostModeType === 'all' ? '5px solid #c084fc' : '2px solid var(--text-muted)', boxSizing: 'border-box' }} />
+                      <div>
+                        <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                          All Chats (Everyone)
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                          Disable blue ticks across all contacts and chats at once
+                        </div>
+                      </div>
+                    </div>
+                    {ghostModeType === 'all' && <Check size={16} color="#c084fc" />}
+                  </div>
+
+                  {/* Option 2: Specific Chats Only */}
+                  <div
+                    onClick={() => handleSelectGhostModeType('specific')}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '12px',
+                      background: ghostModeType === 'specific' ? 'rgba(99, 102, 241, 0.15)' : 'var(--hover-bg)',
+                      border: ghostModeType === 'specific' ? '1px solid var(--accent)' : '1px solid var(--border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: ghostModeType === 'specific' ? '5px solid var(--accent)' : '2px solid var(--text-muted)', boxSizing: 'border-box' }} />
+                      <div>
+                        <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                          Specific Chats Only ({ghostChatIds.length} Selected)
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                          Choose custom contacts to read incognito
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleSelectGhostModeType('specific'); setShowGhostChatPicker(prev => !prev); }}
+                      style={{
+                        background: 'var(--accent)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '4px 10px',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {showGhostChatPicker ? 'Hide Contacts' : 'Select Contacts'}
+                    </button>
+                  </div>
+
+                  {/* Option 3: OFF (Normal Blue Ticks) */}
+                  <div
+                    onClick={() => handleSelectGhostModeType('none')}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '12px',
+                      background: ghostModeType === 'none' ? 'rgba(255, 255, 255, 0.06)' : 'var(--hover-bg)',
+                      border: ghostModeType === 'none' ? '1px solid var(--text-muted)' : '1px solid var(--border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: ghostModeType === 'none' ? '5px solid var(--text-muted)' : '2px solid var(--text-muted)', boxSizing: 'border-box' }} />
+                      <div>
+                        <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                          Disabled (Normal Blue Ticks)
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                          Everyone can see double blue ticks when you read
+                        </div>
+                      </div>
+                    </div>
+                    {ghostModeType === 'none' && <Check size={16} color="var(--text-muted)" />}
+                  </div>
+                </div>
+
+                {/* Specific Chat Selector & Search Bar */}
+                {ghostModeType === 'specific' && showGhostChatPicker && (
                   <div style={{
-                    width: '18px',
-                    height: '18px',
-                    borderRadius: '50%',
-                    background: '#fff',
-                    position: 'absolute',
-                    top: '2px',
-                    left: user?.hideReadReceipts ? '18px' : '2px',
-                    transition: 'all 0.2s ease'
-                  }} />
-                </div>
+                    marginTop: '8px',
+                    padding: '12px',
+                    background: 'rgba(0,0,0,0.25)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px'
+                  }}>
+                    {/* Search Input */}
+                    <div style={{ position: 'relative' }}>
+                      <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                      <input
+                        type="text"
+                        value={ghostSearchQuery}
+                        onChange={(e) => setGhostSearchQuery(e.target.value)}
+                        placeholder="Search friend or chat username..."
+                        style={{
+                          width: '100%',
+                          padding: '7px 10px 7px 32px',
+                          borderRadius: '8px',
+                          border: '1px solid var(--border)',
+                          background: 'var(--bg-main)',
+                          color: 'var(--text-main)',
+                          fontSize: '0.8rem',
+                          outline: 'none',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+
+                    {/* Contacts List */}
+                    <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {filteredGhostContacts.length > 0 ? (
+                        filteredGhostContacts.map(c => {
+                          const isSelected = ghostChatIds.includes(c.id);
+                          return (
+                            <div
+                              key={c.id}
+                              onClick={() => toggleChatInGhostMode(c.id)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '6px 10px',
+                                borderRadius: '8px',
+                                background: isSelected ? 'rgba(192, 132, 252, 0.12)' : 'var(--hover-bg)',
+                                cursor: 'pointer',
+                                border: isSelected ? '1px solid rgba(192, 132, 252, 0.4)' : '1px solid transparent'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                <img
+                                  src={c.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.username || c.name}`}
+                                  alt=""
+                                  style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
+                                />
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {c.name}
+                                  </div>
+                                  {c.username && (
+                                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                                      @{c.username}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div style={{
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                background: isSelected ? '#c084fc' : 'rgba(255,255,255,0.08)',
+                                color: isSelected ? '#000' : 'var(--text-muted)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}>
+                                {isSelected ? (
+                                  <>
+                                    <Ghost size={12} />
+                                    <span>GHOST ON</span>
+                                  </>
+                                ) : (
+                                  <span>OFF</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '12px', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                          No chats or contacts found
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Hide Online Status (Incognito) */}
