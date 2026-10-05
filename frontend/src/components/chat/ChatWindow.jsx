@@ -2903,7 +2903,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               </button>
             )}
 
-            <VibeAuraRing aura={partnerAura} size={42} isGroup={isGroup}>
+            <VibeAuraRing aura={partnerAura} size={42} isGroup={isGroup} hasCrown={Boolean(!isGroup && (chatHasKingCrown || chatHasSilverCrown || chatHasStreakCrown))}>
               <div
                 className={!isGroup && chatIsPro ? 'pro-neon-avatar' : ''}
                 style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}

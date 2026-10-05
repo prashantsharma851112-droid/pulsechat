@@ -6,10 +6,11 @@ import { BACKEND_URL } from '../../utils/config';
 import { parseSafeJson } from '../../utils/imageCompressor';
 import { getCachedFriends, setCachedFriends, getCachedAllUsers } from '../../utils/offlineStorage';
 import PulseVipBadge from '../common/PulseVipBadge';
+import VibeAuraRing from '../common/VibeAuraRing';
 
 export default function FriendsTab({ setActiveChat, onRequestsCountChange, initialSubTab = 'friends', onOpenFullDp }) {
   const { user, token } = useContext(AuthContext);
-  const { socket, onlineUsers } = useContext(SocketContext);
+  const { socket, onlineUsers, vibeAuras } = useContext(SocketContext);
 
   // Sub-view: 'friends' | 'requests' | 'add'
   const [subTab, setSubTab] = useState(initialSubTab || 'friends');
@@ -761,53 +762,60 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                         style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0, cursor: 'pointer' }}
                         onClick={() => setActiveChat(friend)}
                       >
-                        <div
-                          className={friend.isPro ? 'pro-neon-avatar' : ''}
-                          style={{ position: 'relative', flexShrink: 0 }}
-                        >
-                          {friend.hasKingCrown ? (
-                            <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
-                          ) : friend.hasSilverCrown ? (
-                            <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
-                          ) : friend.hasStreakCrown ? (
-                            <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
-                          ) : null}
-                          <img
-                            src={friend.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.username}`}
-                            alt={friend.displayName}
-                            style={{
-                              width: '42px',
-                              height: '42px',
-                              borderRadius: '50%',
-                              objectFit: 'cover',
-                              border: friend.hasKingCrown
-                                ? '2.5px solid #fbbf24'
-                                : friend.hasSilverCrown
-                                ? '2.5px solid #cbd5e1'
-                                : friend.hasStreakCrown
-                                ? '2.5px solid #f97316'
-                                : 'none'
-                            }}
-                            onClick={(e) => {
-                              if (onOpenFullDp) {
-                                e.stopPropagation();
-                                onOpenFullDp(friend.avatar, friend.displayName, friend.username);
-                              }
-                            }}
-                          />
-                          <span
-                            style={{
-                              position: 'absolute',
-                              bottom: 1,
-                              right: 1,
-                              width: '10px',
-                              height: '10px',
-                              borderRadius: '50%',
-                              backgroundColor: isFriendOnline ? '#10b981' : '#9ca3af',
-                              border: '2px solid var(--bg-card)'
-                            }}
-                          />
-                        </div>
+                        {(() => {
+                          const friendAura = (vibeAuras && (vibeAuras[friend.id] || vibeAuras[friend.username])) || friend.vibeAura || null;
+                          return (
+                            <VibeAuraRing aura={friendAura} size={42} hasCrown={Boolean(friend.hasKingCrown || friend.hasSilverCrown || friend.hasStreakCrown)}>
+                              <div
+                                className={friend.isPro ? 'pro-neon-avatar' : ''}
+                                style={{ position: 'relative', flexShrink: 0 }}
+                              >
+                                {friend.hasKingCrown ? (
+                                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+                                ) : friend.hasSilverCrown ? (
+                                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+                                ) : friend.hasStreakCrown ? (
+                                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+                                ) : null}
+                                <img
+                                  src={friend.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.username}`}
+                                  alt={friend.displayName}
+                                  style={{
+                                    width: '42px',
+                                    height: '42px',
+                                    borderRadius: '50%',
+                                    objectFit: 'cover',
+                                    border: friend.hasKingCrown
+                                      ? '2.5px solid #fbbf24'
+                                      : friend.hasSilverCrown
+                                      ? '2.5px solid #cbd5e1'
+                                      : friend.hasStreakCrown
+                                      ? '2.5px solid #f97316'
+                                      : 'none'
+                                  }}
+                                  onClick={(e) => {
+                                    if (onOpenFullDp) {
+                                      e.stopPropagation();
+                                      onOpenFullDp(friend.avatar, friend.displayName, friend.username);
+                                    }
+                                  }}
+                                />
+                                <span
+                                  style={{
+                                    position: 'absolute',
+                                    bottom: 1,
+                                    right: 1,
+                                    width: '10px',
+                                    height: '10px',
+                                    borderRadius: '50%',
+                                    backgroundColor: isFriendOnline ? '#10b981' : '#9ca3af',
+                                    border: '2px solid var(--bg-card)'
+                                  }}
+                                />
+                              </div>
+                            </VibeAuraRing>
+                          );
+                        })()}
 
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -899,23 +907,25 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                          <div
-                            className={sender.isPro ? 'pro-neon-avatar' : ''}
-                            style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
-                          >
-                            <img
-                              src={sender.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${sender.username}`}
-                              alt={sender.displayName}
-                              onClick={(e) => {
-                                if (onOpenFullDp) {
-                                  e.stopPropagation();
-                                  onOpenFullDp(sender.avatar, sender.displayName, sender.username);
-                                }
-                              }}
-                              style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, cursor: 'pointer' }}
-                              title="Click to view full photo"
-                            />
-                          </div>
+                          <VibeAuraRing aura={(vibeAuras && (vibeAuras[sender.id] || vibeAuras[sender.username])) || sender.vibeAura || null} size={40}>
+                            <div
+                              className={sender.isPro ? 'pro-neon-avatar' : ''}
+                              style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
+                            >
+                              <img
+                                src={sender.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${sender.username}`}
+                                alt={sender.displayName}
+                                onClick={(e) => {
+                                  if (onOpenFullDp) {
+                                    e.stopPropagation();
+                                    onOpenFullDp(sender.avatar, sender.displayName, sender.username);
+                                  }
+                                }}
+                                style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, cursor: 'pointer' }}
+                                title="Click to view full photo"
+                              />
+                            </div>
+                          </VibeAuraRing>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1004,23 +1014,25 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                          <div
-                            className={receiver.isPro ? 'pro-neon-avatar' : ''}
-                            style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
-                          >
-                            <img
-                              src={receiver.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${receiver.username}`}
-                              alt={receiver.displayName}
-                              onClick={(e) => {
-                                if (onOpenFullDp) {
-                                  e.stopPropagation();
-                                  onOpenFullDp(receiver.avatar, receiver.displayName, receiver.username);
-                                }
-                              }}
-                              style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, cursor: 'pointer' }}
-                              title="Click to view full photo"
-                            />
-                          </div>
+                          <VibeAuraRing aura={(vibeAuras && (vibeAuras[receiver.id] || vibeAuras[receiver.username])) || receiver.vibeAura || null} size={40}>
+                            <div
+                              className={receiver.isPro ? 'pro-neon-avatar' : ''}
+                              style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
+                            >
+                              <img
+                                src={receiver.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${receiver.username}`}
+                                alt={receiver.displayName}
+                                onClick={(e) => {
+                                  if (onOpenFullDp) {
+                                    e.stopPropagation();
+                                    onOpenFullDp(receiver.avatar, receiver.displayName, receiver.username);
+                                  }
+                                }}
+                                style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, cursor: 'pointer' }}
+                                title="Click to view full photo"
+                              />
+                            </div>
+                          </VibeAuraRing>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1110,35 +1122,37 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                        <div
-                          className={target.isPro ? 'pro-neon-avatar' : ''}
-                          style={{ position: 'relative', flexShrink: 0 }}
-                        >
-                          <img
-                            src={target.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${target.username}`}
-                            alt={target.displayName}
-                            onClick={(e) => {
-                              if (onOpenFullDp) {
-                                e.stopPropagation();
-                                onOpenFullDp(target.avatar, target.displayName, target.username);
-                              }
-                            }}
-                            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', cursor: 'pointer' }}
-                            title="Click to view full photo"
-                          />
-                          {isTargetOnline && (
-                            <span style={{
-                              position: 'absolute',
-                              bottom: 1,
-                              right: 1,
-                              width: '9px',
-                              height: '9px',
-                              borderRadius: '50%',
-                              backgroundColor: '#10b981',
-                              border: '2px solid var(--bg-card)'
-                            }} />
-                          )}
-                        </div>
+                        <VibeAuraRing aura={(vibeAuras && (vibeAuras[target.id] || vibeAuras[target.username])) || target.vibeAura || null} size={40}>
+                          <div
+                            className={target.isPro ? 'pro-neon-avatar' : ''}
+                            style={{ position: 'relative', flexShrink: 0 }}
+                          >
+                            <img
+                              src={target.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${target.username}`}
+                              alt={target.displayName}
+                              onClick={(e) => {
+                                if (onOpenFullDp) {
+                                  e.stopPropagation();
+                                  onOpenFullDp(target.avatar, target.displayName, target.username);
+                                }
+                              }}
+                              style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', cursor: 'pointer' }}
+                              title="Click to view full photo"
+                            />
+                            {isTargetOnline && (
+                              <span style={{
+                                position: 'absolute',
+                                bottom: 1,
+                                right: 1,
+                                width: '9px',
+                                height: '9px',
+                                borderRadius: '50%',
+                                backgroundColor: '#10b981',
+                                border: '2px solid var(--bg-card)'
+                              }} />
+                            )}
+                          </div>
+                        </VibeAuraRing>
 
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
