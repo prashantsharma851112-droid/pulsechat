@@ -2994,47 +2994,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
 
           <div className="chat-header-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
-            {/* Pulse Streaks & Sparks Badge with Animated Neon Aesthetic */}
-            {!isGroup && (
-              <button
-                onClick={() => setShowStreakModal(true)}
-                className="chat-neon-streak-pill"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.22), rgba(239, 68, 68, 0.15))',
-                  border: '1.5px solid rgba(249, 115, 22, 0.7)',
-                  borderRadius: '14px',
-                  padding: '4px 9px',
-                  fontSize: '0.82rem',
-                  fontWeight: 800,
-                  color: '#ff8a3d',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                  whiteSpace: 'nowrap',
-                  backdropFilter: 'blur(8px)'
-                }}
-                title="Pulse Streaks with Sparks Reward & Streak Freeze"
-              >
-                <span className="chat-neon-streak-flame" style={{ fontSize: '0.95rem' }}>🔥</span>
-                <span style={{
-                  background: 'linear-gradient(135deg, #ffb347, #ff4500)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  fontWeight: 800,
-                  fontSize: '0.86rem'
-                }}>
-                  {streakData?.streakCount || 0}
-                </span>
-                {(streakData?.streakShields || 0) > 0 && (
-                  <span style={{ fontSize: '0.72rem', marginLeft: '2px', filter: 'drop-shadow(0 0 4px #38bdf8)' }} title={`${streakData.streakShields} Freeze Shield Active`}>
-                    ❄️{streakData.streakShields}
-                  </span>
-                )}
-              </button>
-            )}
-
             {/* Mobile App Folder Button (Animated Cyber-Neon Glassmorphic Folder) */}
             <button
               onClick={() => setShowAppsFolderModal(true)}
@@ -3973,32 +3932,46 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         </div>
       )}
 
-      {/* Bottom Set Vibe Button (Clean & Modern, No Smart Replies, No Extra Emojis) */}
-      {(isGroup || friendshipStatus === 'friends') && !blockStatus.isBlockedByMe && !blockStatus.isBlockedByThem && (
+      {/* Bottom Pulse Streaks Badge (in place of Set Vibe) */}
+      {!isGroup && !blockStatus.isBlockedByMe && !blockStatus.isBlockedByThem && (
         <div style={{ padding: '0.35rem 1rem 0.2rem 1rem', display: 'flex', alignItems: 'center', background: 'transparent', position: 'relative', zIndex: 2 }}>
           <button
             type="button"
-            onClick={() => setShowVibeSelector(true)}
+            onClick={() => setShowStreakModal(true)}
+            className="chat-neon-streak-pill"
             style={{
-              background: myAura?.mood ? 'rgba(99, 102, 241, 0.16)' : 'var(--bg-card)',
-              border: `1.5px solid ${myAura?.auraColor || 'rgba(99, 102, 241, 0.45)'}`,
-              color: myAura?.auraColor || 'var(--accent)',
-              borderRadius: '16px',
-              padding: '4px 12px',
-              fontSize: '0.78rem',
-              fontWeight: 600,
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
+              background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.22), rgba(239, 68, 68, 0.15))',
+              border: '1.5px solid rgba(249, 115, 22, 0.7)',
+              borderRadius: '16px',
+              padding: '4px 12px',
+              fontSize: '0.82rem',
+              fontWeight: 800,
+              color: '#ff8a3d',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
-              boxShadow: myAura?.mood ? `0 0 10px ${myAura.auraColor || 'rgba(99,102,241,0.25)'}40` : 'none',
-              transition: 'all 0.18s ease'
+              backdropFilter: 'blur(8px)',
+              boxShadow: '0 0 12px rgba(249, 115, 22, 0.3)'
             }}
-            title="Set Vibe"
+            title="Pulse Streaks with Sparks Reward & Streak Freeze"
           >
-            <span>Set Vibe</span>
-            <Edit3 size={12} style={{ opacity: 0.85 }} />
+            <span className="chat-neon-streak-flame" style={{ fontSize: '1rem' }}>🔥</span>
+            <span style={{
+              background: 'linear-gradient(135deg, #ffb347, #ff4500)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              fontWeight: 800,
+              fontSize: '0.88rem'
+            }}>
+              Streak: {streakData?.streakCount || 0}
+            </span>
+            {(streakData?.streakShields || 0) > 0 && (
+              <span style={{ fontSize: '0.74rem', marginLeft: '2px', filter: 'drop-shadow(0 0 4px #38bdf8)' }} title={`${streakData.streakShields} Freeze Shield Active`}>
+                ❄️{streakData.streakShields}
+              </span>
+            )}
           </button>
         </div>
       )}

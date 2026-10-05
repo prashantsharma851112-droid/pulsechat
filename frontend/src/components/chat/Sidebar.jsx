@@ -2606,88 +2606,76 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             )}
           </div>
         )}
+      </div>
 
-        {/* Attractive Round Floating Neon Vibe & Aura Button */}
-        <div
-          className="bottom-floating-actions"
+      {/* Attractive Round Floating Neon Vibe & Aura Button (Fixed in place, never scrolls) */}
+      <div className="bottom-floating-actions">
+        {activeTab === 'groups' && (
+          <button
+            onClick={() => setShowCreateGroupModal(true)}
+            title="Create New Group"
+            style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '50%',
+              background: 'var(--accent)',
+              color: '#fff',
+              border: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
+              cursor: 'pointer',
+              transition: 'transform 0.2s ease'
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            <Users size={20} />
+          </button>
+        )}
+
+        <button
+          className="bottom-round-vibe-btn"
+          onClick={() => setShowVibeSelector(true)}
+          title={myAura?.mood ? `Vibe: ${myAura.mood} (Tap to change)` : 'Set Your Vibe & Aura'}
           style={{
-            position: 'absolute',
-            bottom: 'calc(20px + env(safe-area-inset-bottom, 0px))',
-            right: '20px',
-            zIndex: 100,
+            width: '56px',
+            height: '56px',
+            borderRadius: '50%',
+            background: myAura?.auraColor
+              ? `radial-gradient(circle at 35% 35%, ${myAura.auraColor}ee, #09090b)`
+              : 'radial-gradient(circle at 35% 35%, #8b5cf6, #09090b)',
+            border: `2px solid ${myAura?.auraColor || 'rgba(168, 85, 247, 0.75)'}`,
+            color: '#ffffff',
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
-            gap: '10px'
+            justifyContent: 'center',
+            cursor: 'pointer',
+            position: 'relative',
+            padding: 0
           }}
         >
-          {activeTab === 'groups' && (
-            <button
-              onClick={() => setShowCreateGroupModal(true)}
-              title="Create New Group"
-              style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: '50%',
-                background: 'var(--accent)',
-                color: '#fff',
-                border: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
-                cursor: 'pointer',
-                transition: 'transform 0.2s ease'
-              }}
-              onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
-              onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-            >
-              <Users size={20} />
-            </button>
-          )}
-
-          <button
-            className="bottom-round-vibe-btn"
-            onClick={() => setShowVibeSelector(true)}
-            title={myAura?.mood ? `Vibe: ${myAura.mood} (Tap to change)` : 'Set Your Vibe & Aura'}
-            style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '50%',
-              background: myAura?.auraColor
-                ? `radial-gradient(circle at 35% 35%, ${myAura.auraColor}ee, #09090b)`
-                : 'radial-gradient(circle at 35% 35%, #8b5cf6, #09090b)',
-              border: `2px solid ${myAura?.auraColor || 'rgba(168, 85, 247, 0.75)'}`,
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              position: 'relative',
-              padding: 0
-            }}
-          >
-            <span style={{ fontSize: '1.5rem', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.65))' }}>
-              {myAura?.emoji || '⚡'}
-            </span>
-            <div style={{
-              position: 'absolute',
-              bottom: '-1px',
-              right: '-1px',
-              background: '#09090b',
-              border: '1.5px solid rgba(255, 255, 255, 0.4)',
-              borderRadius: '50%',
-              width: '20px',
-              height: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.6)'
-            }}>
-              <Edit3 size={11} color="#e2e8f0" />
-            </div>
-          </button>
-        </div>
+          <span style={{ fontSize: '1.5rem', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.65))' }}>
+            {myAura?.emoji || '⚡'}
+          </span>
+          <div style={{
+            position: 'absolute',
+            bottom: '-1px',
+            right: '-1px',
+            background: '#09090b',
+            border: '1.5px solid rgba(255, 255, 255, 0.4)',
+            borderRadius: '50%',
+            width: '20px',
+            height: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.6)'
+          }}>
+            <Edit3 size={11} color="#e2e8f0" />
+          </div>
+        </button>
       </div>
 
       {showCreateGroupModal && (
