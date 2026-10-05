@@ -196,18 +196,39 @@ export default function FogSnapModal({
   }, [isRevealed, isBurned]);
 
   const handleBurn = () => {
+    if (isBurned) return;
     setIsBurned(true);
+    const msgId = message?.id || message?._id;
+    try {
+      if (message?.id) localStorage.setItem(`pulse_fog_burned_${message.id}`, 'true');
+      if (message?._id) localStorage.setItem(`pulse_fog_burned_${message._id}`, 'true');
+    } catch (e) {}
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechat_fog_snap_burned', {
+        detail: { messageId: msgId, chatId }
+      }));
+    }
+
     fetch(`${BACKEND_URL}/api/messages/fog-snap/burn`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ messageId: message.id, chatId })
+      body: JSON.stringify({ messageId: msgId, chatId })
     }).catch(() => {});
 
-    if (onBurned) onBurned(message.id);
+    if (onBurned) onBurned(msgId);
 
     setTimeout(() => {
       onClose();
-    }, 1200);
+    }, 600);
+  };
+
+  const handleCloseClick = () => {
+    if (isRevealed) {
+      handleBurn();
+    } else {
+      onClose();
+    }
   };
 
   // Screenshot Detection Guard
@@ -304,7 +325,7 @@ export default function FogSnapModal({
         )}
 
         <button
-          onClick={onClose}
+          onClick={handleCloseClick}
           style={{
             background: 'rgba(255,255,255,0.12)',
             border: 'none',

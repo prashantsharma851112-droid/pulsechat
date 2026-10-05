@@ -51,6 +51,22 @@ import {
   clearUnreadCount
 } from '../../utils/offlineStorage';
 
+const sanitizeFogSnapMessage = (m) => {
+  if (!m || !m.isFogSnap) return m;
+  const isBurnedLocally = (() => {
+    try {
+      return (m.id && localStorage.getItem(`pulse_fog_burned_${m.id}`) === 'true') ||
+             (m._id && localStorage.getItem(`pulse_fog_burned_${m._id}`) === 'true');
+    } catch {
+      return false;
+    }
+  })();
+  if (m.fogSnapStatus === 'burned' || m.content === '🌫️ Fog Snap Evaporated' || (!m.mediaUrl && m.isFogSnap) || isBurnedLocally) {
+    return { ...m, fogSnapStatus: 'burned', content: '🌫️ Fog Snap Evaporated', mediaUrl: null };
+  }
+  return m;
+};
+
 export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGroupCall, onOpenFullDp }) {
   const { user, token, blockUser, unblockUser, updateUserProfile } = useContext(AuthContext);
   const { socket, onlineUsers, typingMap, lastNotification, vibeAuras } = useContext(SocketContext);
@@ -1335,7 +1351,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       const outbox = getOutbox(user?.id);
       const pendingForThisChat = outbox.filter(m => m.chatId === chatId);
       const cachedIds = new Set(cached.map(m => m.id));
-      const combinedInitial = [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))];
+      const combinedInitial = [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))].map(sanitizeFogSnapMessage);
       setMessages(combinedInitial);
 
       // Cache this contact/group into allUsers for future offline searches
@@ -1355,7 +1371,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             const pendingForChat = currentOutbox.filter(m => m.chatId === chatId);
             const serverIds = new Set(data.map(m => m.id));
             const activePending = pendingForChat.filter(p => !serverIds.has(p.id) && !serverIds.has(p.clientTempId));
-            const merged = [...data, ...activePending];
+            const merged = [...data, ...activePending].map(sanitizeFogSnapMessage);
             setMessages(merged);
             setCachedMessages(chatId, merged);
           }
@@ -1667,18 +1683,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       );
 
       if (isThisChat) {
+        const sanitizedMsg = sanitizeFogSnapMessage(msg);
         setMessages(prev => {
           const matchIdx = prev.findIndex(m =>
-            (msg.clientTempId && (String(m.id) === String(msg.clientTempId) || String(m.clientTempId) === String(msg.clientTempId))) ||
-            String(m.id) === String(msg.id) ||
-            (m._id && msg._id && String(m._id) === String(msg._id))
+            (sanitizedMsg.clientTempId && (String(m.id) === String(sanitizedMsg.clientTempId) || String(m.clientTempId) === String(sanitizedMsg.clientTempId))) ||
+            String(m.id) === String(sanitizedMsg.id) ||
+            (m._id && sanitizedMsg._id && String(m._id) === String(sanitizedMsg._id))
           );
           let updated;
           if (matchIdx !== -1) {
             updated = [...prev];
-            updated[matchIdx] = msg;
+            updated[matchIdx] = sanitizedMsg;
           } else {
-            updated = [...prev, msg];
+            updated = [...prev, sanitizedMsg];
           }
           setCachedMessages(chatId, updated);
           return updated;
@@ -1825,6 +1842,36 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     socket.on('message_blocked', handleMessageBlocked);
     socket.on('group_updated', handleGroupUpdated);
 
+    const handleFogBurned = ({ messageId }) => {
+      if (!messageId) return;
+      try {
+        localStorage.setItem(`pulse_fog_burned_${messageId}`, 'true');
+      } catch (e) {}
+      setMessages(prev => {
+        const updated = prev.map(m => {
+          if (m.id === messageId || m._id === messageId) {
+            return { ...m, fogSnapStatus: 'burned', content: '🌫️ Fog Snap Evaporated', mediaUrl: null };
+          }
+          return m;
+        });
+        setCachedMessages(chatId, updated);
+        return updated;
+      });
+      updateCachedMessageStatus(chatId, messageId, {
+        fogSnapStatus: 'burned',
+        content: '🌫️ Fog Snap Evaporated',
+        mediaUrl: null
+      });
+    };
+    socket.on('fog_snap_burned', handleFogBurned);
+
+    const handleWindowFogBurned = (e) => {
+      if (e.detail?.messageId) {
+        handleFogBurned({ messageId: e.detail.messageId });
+      }
+    };
+    window.addEventListener('pulsechat_fog_snap_burned', handleWindowFogBurned);
+
     const handleGroupWindowEvent = (e) => {
       if (e.detail?.groupId && e.detail?.updates) {
         if (isGroup && (activeChat?.id === e.detail.groupId || activeChat?._id === e.detail.groupId)) {
@@ -1859,6 +1906,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.off('chat_setting_updated', handleChatSettingUpdated);
       socket.off('message_blocked', handleMessageBlocked);
       socket.off('group_updated', handleGroupUpdated);
+      socket.off('fog_snap_burned', handleFogBurned);
+      window.removeEventListener('pulsechat_fog_snap_burned', handleWindowFogBurned);
       window.removeEventListener('pulsechat_group_updated', handleGroupWindowEvent);
     };
   }, [socket, chatId, user.id, token, isGroup, activeChat]);
@@ -2894,32 +2943,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               title={isGroup ? 'Click to view group bio, members & edit info' : 'Click to view profile & bio'}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap' }}>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)' }}>
+                <h3 style={{ fontSize: '1.02rem', fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)' }}>
                   {chatDisplayName || activeChat.displayName}
                 </h3>
                 {!isGroup && chatIsPro && (
                   <PulseVipBadge size={16} showLabel={false} />
-                )}
-                {!isGroup && partnerAura?.mood && (
-                  <span
-                    style={{
-                      fontSize: '0.7rem',
-                      padding: '1px 7px',
-                      borderRadius: '10px',
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      border: `1px solid ${partnerAura.auraColor || 'rgba(255,255,255,0.2)'}`,
-                      color: partnerAura.auraColor || 'var(--accent)',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '3px',
-                      fontWeight: 600,
-                      flexShrink: 0
-                    }}
-                    title={`Vibe: ${partnerAura.mood}`}
-                  >
-                    <span>{partnerAura.emoji || '✨'}</span>
-                    <span>{partnerAura.mood}</span>
-                  </span>
                 )}
                 {isGroup && <span className="group-pill-badge"><Users size={12} /> Group</span>}
                 {chatSetting?.disappearingEnabled && (
@@ -2942,14 +2970,37 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   </span>
                 )}
               </div>
-              <p style={{ fontSize: '0.8rem', color: isTyping ? '#22c55e' : 'var(--text-muted)', fontWeight: isTyping ? 600 : 400, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {isGroup
-                  ? (isTyping ? `✍️ ${typingUser} is typing...` : `${activeChat.members?.length || 0} members`)
-                  : isTyping
-                    ? '✍️ typing...'
-                    : isOnline
-                      ? 'Online'
-                      : 'Offline'}
+              <p style={{ fontSize: '0.8rem', color: isTyping ? '#22c55e' : 'var(--text-muted)', fontWeight: isTyping ? 600 : 400, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>
+                  {isGroup
+                    ? (isTyping ? `✍️ ${typingUser} is typing...` : `${activeChat.members?.length || 0} members`)
+                    : isTyping
+                      ? '✍️ typing...'
+                      : isOnline
+                        ? 'Online'
+                        : 'Offline'}
+                </span>
+                {!isGroup && partnerAura?.mood && (
+                  <span
+                    style={{
+                      fontSize: '0.68rem',
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: `1px solid ${partnerAura.auraColor || 'rgba(255,255,255,0.2)'}`,
+                      color: partnerAura.auraColor || 'var(--accent)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      fontWeight: 500,
+                      flexShrink: 0
+                    }}
+                    title={`Vibe: ${partnerAura.mood}`}
+                  >
+                    <span>{partnerAura.emoji || '✨'}</span>
+                    <span>{partnerAura.mood}</span>
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -2962,24 +3013,26 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '4px',
+                  gap: '3px',
                   background: (streakData?.streakCount || 0) > 0 ? 'rgba(239, 68, 68, 0.18)' : 'rgba(255, 255, 255, 0.08)',
                   border: `1px solid ${(streakData?.streakCount || 0) > 0 ? 'rgba(249, 115, 22, 0.6)' : 'rgba(255, 255, 255, 0.15)'}`,
-                  borderRadius: '14px',
-                  padding: '4px 9px',
-                  fontSize: '0.8rem',
+                  borderRadius: '12px',
+                  padding: '3px 7px',
+                  fontSize: '0.78rem',
                   fontWeight: 700,
                   color: (streakData?.streakCount || 0) > 0 ? '#ff7a29' : 'var(--text-muted)',
                   cursor: 'pointer',
-                  boxShadow: (streakData?.streakCount || 0) > 0 ? '0 0 10px rgba(249, 115, 22, 0.35)' : 'none',
-                  transition: 'all 0.15s ease'
+                  boxShadow: (streakData?.streakCount || 0) > 0 ? '0 0 8px rgba(249, 115, 22, 0.3)' : 'none',
+                  transition: 'all 0.15s ease',
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap'
                 }}
                 title="Pulse Streaks with Sparks Reward & Streak Freeze"
               >
-                <span style={{ fontSize: '0.95rem' }}>🔥</span>
+                <span style={{ fontSize: '0.9rem' }}>🔥</span>
                 <span>{streakData?.streakCount || 0}</span>
                 {(streakData?.streakShields || 0) > 0 && (
-                  <span style={{ fontSize: '0.72rem', marginLeft: '2px' }} title={`${streakData.streakShields} Freeze Shield Active`}>
+                  <span style={{ fontSize: '0.7rem', marginLeft: '1px' }} title={`${streakData.streakShields} Freeze Shield Active`}>
                     ❄️{streakData.streakShields}
                   </span>
                 )}

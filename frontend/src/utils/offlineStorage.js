@@ -317,7 +317,7 @@ export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
   if (!chatId || !messageIdOrTempId || !updates) return;
   const msgs = getCachedMessages(chatId);
   const updated = msgs.map(m => {
-    if (m.id === messageIdOrTempId || m.clientTempId === messageIdOrTempId || m.tempId === messageIdOrTempId) {
+    if (m.id === messageIdOrTempId || m._id === messageIdOrTempId || m.clientTempId === messageIdOrTempId || m.tempId === messageIdOrTempId) {
       return typeof updates === 'string' ? { ...m, status: updates } : { ...m, ...updates };
     }
     return m;

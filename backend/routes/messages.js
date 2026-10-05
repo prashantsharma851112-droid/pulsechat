@@ -227,15 +227,40 @@ router.post('/fog-snap/burn', authMiddleware, async (req, res) => {
   try {
     const { messageId, chatId } = req.body;
     const Message = require('../models/Message');
+    const mongoose = require('mongoose');
+    const redis = require('../utils/redis');
+
+    const query = { $or: [{ id: messageId }] };
+    if (mongoose.Types.ObjectId.isValid(messageId)) {
+      query.$or.push({ _id: messageId });
+    }
+
     const msg = await Message.findOneAndUpdate(
-      { id: messageId },
-      { fogSnapStatus: 'burned', content: '🌫️ Fog Snap Evaporated', mediaUrl: null },
+      query,
+      { fogSnapStatus: 'burned', content: '🌫️ Fog Snap Evaporated', mediaUrl: null, $addToSet: { viewedBy: req.user.id } },
       { new: true }
     );
+
+    // Invalidate Redis RAM cache
+    if (chatId) {
+      await redis.invalidateChat(chatId).catch(() => {});
+      if (chatId.includes('_')) {
+        const parts = chatId.split('_');
+        const revChatId = `${parts[1]}_${parts[0]}`;
+        await redis.invalidateChat(revChatId).catch(() => {});
+        await redis.invalidateChat(parts[0]).catch(() => {});
+        await redis.invalidateChat(parts[1]).catch(() => {});
+        redis.invalidateRecent(parts[0]).catch(() => {});
+        redis.invalidateRecent(parts[1]).catch(() => {});
+      }
+    }
 
     const io = req.app.get('io');
     if (io && chatId) {
       io.to(chatId).emit('fog_snap_burned', { messageId, chatId });
+      if (chatId.includes('_')) {
+        chatId.split('_').forEach(uId => io.to(`user_${uId}`).emit('fog_snap_burned', { messageId, chatId }));
+      }
     }
 
     res.json({ success: true, message: msg });

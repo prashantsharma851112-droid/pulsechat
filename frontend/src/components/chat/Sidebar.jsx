@@ -1529,27 +1529,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               {user?.isPro && (
                 <PulseVipBadge size={16} showLabel={false} />
               )}
-              {myAura?.mood && (
-                <span
-                  style={{
-                    fontSize: '0.68rem',
-                    padding: '1px 6px',
-                    borderRadius: '8px',
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    border: `1px solid ${myAura.auraColor || 'rgba(255,255,255,0.2)'}`,
-                    color: myAura.auraColor || 'var(--accent)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '3px',
-                    fontWeight: 600,
-                    flexShrink: 0
-                  }}
-                  title={`My Vibe: ${myAura.mood}`}
-                >
-                  <span>{myAura.emoji || '⚡'}</span>
-                  <span>{myAura.mood}</span>
-                </span>
-              )}
             </div>
             <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               @{user?.username}
