@@ -86,7 +86,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const currentUid = user?.id || getCachedUser()?.id;
 
   const myAura = useMemo(() => {
-    return (vibeAuras && currentUid && vibeAuras[currentUid]) || user?.vibeAura || null;
+    const raw = (vibeAuras && currentUid && vibeAuras[currentUid]) || user?.vibeAura || null;
+    if (!raw || raw.cleared || raw.auraType === 'none') return null;
+    if (!raw.mood && !raw.inGame && !raw.isLowBattery) return null;
+    return raw;
   }, [vibeAuras, currentUid, user?.vibeAura]);
 
   const [searchQuery, setSearchQuery] = useState('');

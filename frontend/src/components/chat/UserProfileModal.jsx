@@ -312,7 +312,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                    profileData?.vibeAura ||
                    targetUser?.vibeAura ||
                    null;
-  const hasVibe = Boolean(userAura && (userAura.mood || userAura.isLowBattery || userAura.inGame));
+  const hasVibe = Boolean(userAura && !userAura.cleared && userAura.auraType !== 'none' && (userAura.mood || userAura.isLowBattery || userAura.inGame));
 
   return (
     <div className="modal-overlay" onClick={onClose}>

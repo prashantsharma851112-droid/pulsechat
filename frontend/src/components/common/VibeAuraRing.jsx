@@ -12,7 +12,18 @@ export default function VibeAuraRing({
 }) {
   const effectiveAura = auraData || aura;
 
-  if (!effectiveAura || (!effectiveAura.mood && !effectiveAura.isLowBattery && !effectiveAura.inGame && !effectiveAura.auraType && effectiveAura.batteryLevel === undefined)) {
+  const hasActiveVibe = Boolean(
+    effectiveAura &&
+    !effectiveAura.cleared &&
+    effectiveAura.auraType !== 'none' &&
+    (
+      (effectiveAura.mood && effectiveAura.mood.trim() !== '') ||
+      (effectiveAura.inGame && effectiveAura.inGame.trim() !== '') ||
+      Boolean(effectiveAura.isLowBattery)
+    )
+  );
+
+  if (!hasActiveVibe) {
     return (
       <div style={{ position: 'relative', display: 'inline-block' }} onClick={onClick}>
         {children}
@@ -23,15 +34,17 @@ export default function VibeAuraRing({
   const {
     mood,
     emoji = '⚡',
-    auraColor = '#10b981',
+    auraColor,
     auraType = 'neon_pulse',
     isLowBattery,
     batteryLevel,
     inGame
   } = effectiveAura;
 
-  // Determine glow color
-  const ringColor = isLowBattery ? '#f59e0b' : (inGame ? '#06b6d4' : (auraColor || '#10b981'));
+  // Determine glow color: if specific auraColor is set, use it; if isLowBattery, use amber/red; if inGame, cyan
+  const ringColor = (isLowBattery && batteryLevel && batteryLevel <= 20)
+    ? '#ef4444'
+    : (isLowBattery ? '#f59e0b' : (inGame ? '#06b6d4' : (auraColor || '#a855f7')));
 
   // Calculate top offset for Instagram-style thought note bubble
   // If user has a crown, float slightly higher so it doesn't overlap the crown
@@ -130,15 +143,15 @@ export default function VibeAuraRing({
         {children}
       </div>
 
-      {/* Battery Indicator Badge (shown if isLowBattery OR batteryLevel is provided) */}
-      {(isLowBattery || (batteryLevel !== null && batteryLevel !== undefined)) && (
+      {/* Battery Indicator Badge (shown ONLY IF isLowBattery is explicitly true and batteryLevel is provided) */}
+      {Boolean(isLowBattery && batteryLevel !== null && batteryLevel !== undefined) && (
         <div
-          title={`Battery: ${batteryLevel ? batteryLevel + '%' : 'Alert'}`}
+          title={`Battery: ${batteryLevel}%`}
           style={{
             position: 'absolute',
             bottom: -2,
             right: -3,
-            background: isLowBattery ? '#ef4444' : (batteryLevel <= 20 ? '#ef4444' : '#10b981'),
+            background: batteryLevel <= 20 ? '#ef4444' : '#10b981',
             color: '#fff',
             borderRadius: '11px',
             padding: '1px 5px',
@@ -153,9 +166,7 @@ export default function VibeAuraRing({
           }}
         >
           <span style={{ fontSize: '0.62rem' }}>⚡</span>
-          {batteryLevel !== null && batteryLevel !== undefined && (
-            <span>{batteryLevel}%</span>
-          )}
+          <span>{batteryLevel}%</span>
         </div>
       )}
 

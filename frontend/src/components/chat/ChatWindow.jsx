@@ -2981,37 +2981,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   </span>
                 )}
               </div>
-              <p style={{ fontSize: '0.8rem', color: isTyping ? '#22c55e' : 'var(--text-muted)', fontWeight: isTyping ? 600 : 400, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>
-                  {isGroup
-                    ? (isTyping ? `✍️ ${typingUser} is typing...` : `${activeChat.members?.length || 0} members`)
-                    : isTyping
-                      ? '✍️ typing...'
-                      : isOnline
-                        ? 'Online'
-                        : 'Offline'}
-                </span>
-                {!isGroup && partnerAura?.mood && (
-                  <span
-                    style={{
-                      fontSize: '0.68rem',
-                      padding: '1px 6px',
-                      borderRadius: '8px',
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      border: `1px solid ${partnerAura.auraColor || 'rgba(255,255,255,0.2)'}`,
-                      color: partnerAura.auraColor || 'var(--accent)',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '3px',
-                      fontWeight: 500,
-                      flexShrink: 0
-                    }}
-                    title={`Vibe: ${partnerAura.mood}`}
-                  >
-                    <span>{partnerAura.emoji || '✨'}</span>
-                    <span>{partnerAura.mood}</span>
-                  </span>
-                )}
+              <p style={{ fontSize: '0.8rem', color: isTyping ? '#22c55e' : 'var(--text-muted)', fontWeight: isTyping ? 600 : 400, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {isGroup
+                  ? (isTyping ? `✍️ ${typingUser} is typing...` : `${activeChat.members?.length || 0} members`)
+                  : isTyping
+                    ? '✍️ typing...'
+                    : isOnline
+                      ? 'Online'
+                      : 'Offline'}
               </p>
             </div>
           </div>

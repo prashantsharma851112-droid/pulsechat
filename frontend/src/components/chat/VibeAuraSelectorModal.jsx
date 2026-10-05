@@ -20,51 +20,59 @@ export default function VibeAuraSelectorModal({
   onClose
 }) {
   const { socket } = useContext(SocketContext);
-  const { user } = useContext(AuthContext);
+  const { user, updateUserProfile } = useContext(AuthContext);
   const effectiveUserId = currentUserId || user?.id || user?._id;
   const [selectedMood, setSelectedMood] = useState(currentAura?.mood || '');
   const [selectedEmoji, setSelectedEmoji] = useState(currentAura?.emoji || '⚡');
-  const [selectedColor, setSelectedColor] = useState(currentAura?.auraColor || '#10b981');
+  const [selectedColor, setSelectedColor] = useState(currentAura?.auraColor || '#a855f7');
   const [isLowBattery, setIsLowBattery] = useState(Boolean(currentAura?.isLowBattery));
   const [detectedBattery, setDetectedBattery] = useState(null);
 
-  // Auto-detect Battery Level if API is available
+  // Auto-detect Battery Level if API is available (only for display, do not force enable)
   useEffect(() => {
     if (navigator.getBattery) {
       navigator.getBattery().then(battery => {
         const levelPct = Math.round(battery.level * 100);
         setDetectedBattery(levelPct);
-        if (levelPct <= 15 && !currentAura?.isLowBattery) {
-          // Suggest low battery mode
-          setIsLowBattery(true);
-        }
       }).catch(() => {});
     }
-  }, [currentAura]);
+  }, []);
 
   const handleSelectPreset = (preset) => {
     setSelectedMood(preset.mood);
     setSelectedEmoji(preset.emoji);
     setSelectedColor(preset.auraColor);
-    setIsLowBattery(false);
   };
 
   const handleSave = () => {
     if (!effectiveUserId) return;
-    const isActuallyLow = isLowBattery && detectedBattery && detectedBattery <= 20;
+    const hasBattery = Boolean(isLowBattery);
+    const trimmedMood = (selectedMood || '').trim();
+    const hasMood = Boolean(trimmedMood);
+
+    // If both mood and battery are off, treat as clear!
+    if (!hasBattery && !hasMood) {
+      handleClear();
+      return;
+    }
+
+    const isActuallyLow = hasBattery && detectedBattery && detectedBattery <= 20;
     const auraData = {
       userId: effectiveUserId,
-      mood: selectedMood,
-      emoji: selectedEmoji,
+      mood: trimmedMood,
+      emoji: selectedEmoji || '⚡',
       auraColor: isActuallyLow ? '#ef4444' : selectedColor,
       auraType: isActuallyLow ? 'low_battery' : 'neon_pulse',
-      isLowBattery: Boolean(isLowBattery),
-      batteryLevel: detectedBattery || null,
-      inGame: selectedMood.includes('Temple Run') ? 'Temple Run 3D' : ''
+      isLowBattery: hasBattery,
+      batteryLevel: hasBattery ? (detectedBattery !== null ? detectedBattery : 20) : null,
+      inGame: trimmedMood.includes('Temple Run') ? 'Temple Run 3D' : ''
     };
 
     if (socket) {
       socket.emit('update_vibe_aura', auraData);
+    }
+    if (typeof updateUserProfile === 'function') {
+      updateUserProfile({ ...user, vibeAura: auraData });
     }
     if (onAuraUpdated) onAuraUpdated(auraData);
     onClose();
@@ -76,16 +84,20 @@ export default function VibeAuraSelectorModal({
       userId: effectiveUserId,
       mood: '',
       emoji: '',
-      auraColor: '#10b981',
+      auraColor: null,
       auraType: 'none',
       isLowBattery: false,
       batteryLevel: null,
-      inGame: ''
+      inGame: '',
+      cleared: true
     };
     if (socket) {
       socket.emit('update_vibe_aura', clearData);
     }
-    if (onAuraUpdated) onAuraUpdated(clearData);
+    if (typeof updateUserProfile === 'function') {
+      updateUserProfile({ ...user, vibeAura: null });
+    }
+    if (onAuraUpdated) onAuraUpdated(null);
     onClose();
   };
 
@@ -159,7 +171,7 @@ export default function VibeAuraSelectorModal({
 
         {/* Battery Alert Toggle */}
         <div style={{
-          background: isLowBattery ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+          background: isLowBattery ? 'rgba(245, 158, 11, 0.18)' : 'rgba(255, 255, 255, 0.04)',
           border: isLowBattery ? '1.5px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.08)',
           borderRadius: '16px',
           padding: '12px 16px',
@@ -167,16 +179,17 @@ export default function VibeAuraSelectorModal({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          cursor: 'pointer'
+          cursor: 'pointer',
+          transition: 'all 0.2s ease'
         }} onClick={() => setIsLowBattery(!isLowBattery)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '1.4rem' }}>🪫</span>
+            <span style={{ fontSize: '1.4rem' }}>{isLowBattery ? '⚡' : '🪫'}</span>
             <div>
               <div style={{ fontSize: '0.86rem', fontWeight: 800, color: isLowBattery ? '#fbbf24' : '#fff' }}>
-                Auto-Alert When Battery &lt; 20%
+                Share Battery on DP: <span style={{ color: isLowBattery ? '#10b981' : '#ef4444' }}>{isLowBattery ? 'ON' : 'OFF'}</span>
               </div>
               <div style={{ fontSize: '0.72rem', color: '#9ca3af' }}>
-                {detectedBattery ? `Current: ${detectedBattery}%. Warns friends with amber aura only if battery drops below 20%.` : 'Warns friends with amber aura only when phone is dying (&lt; 20%)'}
+                {detectedBattery ? `Current: ${detectedBattery}%. ${isLowBattery ? 'Shows battery pill on your avatar.' : 'Hidden from everyone.'}` : 'Shows battery percentage badge on your avatar.'}
               </div>
             </div>
           </div>

@@ -1146,14 +1146,39 @@ io.on('connection', (socket) => {
   // =========================================================================
   socket.on('update_vibe_aura', async (auraData) => {
     if (!auraData || !auraData.userId) return;
+    const isCleared = Boolean(
+      auraData.cleared ||
+      auraData.auraType === 'none' ||
+      (!auraData.mood && !auraData.isLowBattery && !auraData.inGame)
+    );
+
+    if (isCleared) {
+      userVibeAuras.delete(auraData.userId);
+      try {
+        await User.updateOne({ $or: [{ id: auraData.userId }, { username: auraData.userId }] }, { $unset: { vibeAura: 1 } });
+      } catch (e) {}
+      io.emit('vibe_aura_updated', {
+        userId: auraData.userId,
+        cleared: true,
+        mood: '',
+        isLowBattery: false,
+        batteryLevel: null,
+        inGame: '',
+        auraType: 'none',
+        auraColor: null
+      });
+      return;
+    }
+
+    const hasLowBattery = Boolean(auraData.isLowBattery);
     const clean = {
       userId: auraData.userId,
-      mood: auraData.mood || '',
+      mood: (auraData.mood || '').trim(),
       emoji: auraData.emoji || '⚡',
-      auraColor: auraData.auraColor || '#10b981',
+      auraColor: auraData.auraColor || '#a855f7',
       auraType: auraData.auraType || 'neon_pulse',
-      isLowBattery: Boolean(auraData.isLowBattery),
-      batteryLevel: typeof auraData.batteryLevel === 'number' ? auraData.batteryLevel : null,
+      isLowBattery: hasLowBattery,
+      batteryLevel: hasLowBattery && typeof auraData.batteryLevel === 'number' ? auraData.batteryLevel : null,
       inGame: auraData.inGame || '',
       updatedAt: new Date().toISOString()
     };

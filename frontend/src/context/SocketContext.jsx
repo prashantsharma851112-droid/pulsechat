@@ -99,10 +99,15 @@ export function SocketProvider({ children }) {
 
       newSocket.on('vibe_aura_updated', (cleanAura) => {
         if (cleanAura && cleanAura.userId) {
-          setVibeAuras(prev => ({
-            ...prev,
-            [cleanAura.userId]: cleanAura
-          }));
+          setVibeAuras(prev => {
+            const next = { ...prev };
+            if (cleanAura.cleared || cleanAura.auraType === 'none' || (!cleanAura.mood && !cleanAura.isLowBattery && !cleanAura.inGame)) {
+              delete next[cleanAura.userId];
+            } else {
+              next[cleanAura.userId] = cleanAura;
+            }
+            return next;
+          });
         }
       });
 
