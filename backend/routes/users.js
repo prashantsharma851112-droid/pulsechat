@@ -23,7 +23,7 @@ router.get('/', authMiddleware, async (req, res) => {
       email: { $ne: 'reviewer@pulsechat.app' }
     })
       .sort({ createdAt: -1, _id: -1 })
-      .select('id username displayName avatar isEmailVerified status email createdAt isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown streakCrownExpiresAt kingCrownExpiresAt')
+      .select('id username displayName avatar isEmailVerified status email createdAt isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown streakCrownExpiresAt kingCrownExpiresAt vibeAura')
       .limit(200)
       .lean();
     res.json(results);
@@ -83,7 +83,7 @@ router.get('/search', authMiddleware, async (req, res) => {
       ]
     })
     .sort({ createdAt: -1, _id: -1 })
-    .select('id username displayName avatar isEmailVerified status email createdAt isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown streakCrownExpiresAt kingCrownExpiresAt')
+    .select('id username displayName avatar isEmailVerified status email createdAt isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown streakCrownExpiresAt kingCrownExpiresAt vibeAura')
     .limit(50)
     .lean();
 
@@ -284,7 +284,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
         ...(isObjectId ? [{ _id: targetId }] : []),
         { username: targetId }
       ]
-    }).select('id username displayName avatar isEmailVerified status createdAt isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown streakCrownExpiresAt kingCrownExpiresAt').lean();
+    }).select('id username displayName avatar isEmailVerified status createdAt isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown streakCrownExpiresAt kingCrownExpiresAt vibeAura').lean();
 
     if (!targetUser) {
       return res.status(404).json({ error: 'User not found' });

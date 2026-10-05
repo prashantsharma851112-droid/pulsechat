@@ -4,11 +4,12 @@ import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
 import PulseVipBadge from '../common/PulseVipBadge';
+import VibeAuraRing from '../common/VibeAuraRing';
 import { getCachedAllUsers, getCachedFriends, setCachedFriends } from '../../utils/offlineStorage';
 
 export default function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp }) {
   const { user, token, blockUser, unblockUser } = useContext(AuthContext);
-  const { socket, onlineUsers } = useContext(SocketContext);
+  const { socket, onlineUsers, vibeAuras } = useContext(SocketContext);
   const [profileData, setProfileData] = useState(targetUser);
   const [loading, setLoading] = useState(false);
   const [disappearingEnabled, setDisappearingEnabled] = useState(false);
@@ -303,6 +304,16 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
   };
   const validAvatar = userToDisplay?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userToDisplay?.username || 'user'}`;
 
+  const targetId = userToDisplay?.id || userToDisplay?._id || targetUser?.id || targetUser?._id;
+  const targetUsername = userToDisplay?.username || targetUser?.username;
+  const userAura = (vibeAuras && targetId && vibeAuras[targetId]) ||
+                   (vibeAuras && targetUsername && vibeAuras[targetUsername]) ||
+                   userToDisplay?.vibeAura ||
+                   profileData?.vibeAura ||
+                   targetUser?.vibeAura ||
+                   null;
+  const hasVibe = Boolean(userAura && (userAura.mood || userAura.isLowBattery || userAura.inGame));
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card modal-responsive" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px', width: '100%', maxHeight: '90dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -398,32 +409,35 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                 👑
               </div>
             ) : null}
-            <img
-              src={validAvatar}
-              alt={userToDisplay.displayName}
-              onClick={() => onOpenFullDp(validAvatar, userToDisplay.displayName, userToDisplay.username)}
-              style={{
-                width: '100px',
-                height: '100px',
-                borderRadius: '50%',
-                objectFit: 'cover',
-                border: userToDisplay?.hasKingCrown
-                  ? '3.5px solid #fbbf24'
-                  : userToDisplay?.hasSilverCrown
-                  ? '3.5px solid #cbd5e1'
-                  : userToDisplay?.hasStreakCrown
-                  ? '3.5px solid #f97316'
-                  : (userToDisplay?.isPro ? 'none' : '4px solid var(--bg-card)'),
-                boxShadow: userToDisplay?.isPro ? 'none' : '0 8px 24px rgba(0,0,0,0.3)',
-                cursor: 'pointer',
-                transition: 'transform 0.2s ease'
-              }}
-              title="Click to view full screen DP"
-            />
+            <VibeAuraRing auraData={userAura} size={100}>
+              <img
+                src={validAvatar}
+                alt={userToDisplay.displayName}
+                onClick={() => onOpenFullDp(validAvatar, userToDisplay.displayName, userToDisplay.username)}
+                style={{
+                  width: '100px',
+                  height: '100px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: userToDisplay?.hasKingCrown
+                    ? '3.5px solid #fbbf24'
+                    : userToDisplay?.hasSilverCrown
+                    ? '3.5px solid #cbd5e1'
+                    : userToDisplay?.hasStreakCrown
+                    ? '3.5px solid #f97316'
+                    : (userToDisplay?.isPro ? 'none' : '4px solid var(--bg-card)'),
+                  boxShadow: userToDisplay?.isPro ? 'none' : '0 8px 24px rgba(0,0,0,0.3)',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s ease',
+                  display: 'block'
+                }}
+                title="Click to view full screen DP"
+              />
+            </VibeAuraRing>
             {isOnline && (
               <div
                 className="online-indicator-dot"
-                style={{ width: '16px', height: '16px', border: '3px solid var(--bg-card)', bottom: '4px', right: '4px' }}
+                style={{ width: '16px', height: '16px', border: '3px solid var(--bg-card)', bottom: '4px', right: '4px', zIndex: 4 }}
                 title="Online Now"
               />
             )}
@@ -435,9 +449,35 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
               {userToDisplay.displayName}
             </h3>
           </div>
-          <p style={{ margin: '2px 0 0.75rem 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+          <p style={{ margin: '2px 0 0.5rem 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             @{userToDisplay.username}
           </p>
+
+          {/* Live Vibe Aura Badge */}
+          {hasVibe && (
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '5px 14px',
+              borderRadius: '20px',
+              background: `${userAura.auraColor || '#10b981'}18`,
+              border: `1.5px solid ${userAura.auraColor || '#10b981'}55`,
+              color: 'var(--text-main)',
+              fontSize: '0.84rem',
+              fontWeight: 700,
+              marginBottom: '0.9rem',
+              boxShadow: `0 2px 10px ${userAura.auraColor || '#10b981'}25`,
+              letterSpacing: '0.2px'
+            }}>
+              <span style={{ fontSize: '1rem' }}>{userAura.emoji || '⚡'}</span>
+              <span>
+                {userAura.isLowBattery
+                  ? `Low Battery (${userAura.batteryLevel || '<20'}%)`
+                  : (userAura.inGame ? `Playing ${userAura.inGame}` : userAura.mood)}
+              </span>
+            </div>
+          )}
 
           {/* Friend Status & Action (Friend count is strictly hidden for privacy) */}
           {user?.id !== userToDisplay?.id && (
@@ -635,6 +675,28 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                 {isOnline ? '🟢 Online' : '⚪ Offline'}
               </span>
             </div>
+
+            {hasVibe && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+                <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <Zap size={14} color={userAura.auraColor || 'var(--accent)'} /> Live Vibe:
+                </span>
+                <span style={{
+                  fontWeight: 600,
+                  color: userAura.auraColor || 'var(--accent)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <span>{userAura.emoji || '⚡'}</span>
+                  <span>
+                    {userAura.isLowBattery
+                      ? `Low Battery (${userAura.batteryLevel || '<20'}%)`
+                      : (userAura.inGame ? `Playing ${userAura.inGame}` : userAura.mood)}
+                  </span>
+                </span>
+              </div>
+            )}
 
             {userToDisplay.isEmailVerified && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
