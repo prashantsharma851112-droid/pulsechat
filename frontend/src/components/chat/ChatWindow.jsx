@@ -19,6 +19,7 @@ import Animated3DTextModal from './Animated3DTextModal';
 import LiveArrowGameModal from './LiveArrowGameModal';
 import PulseStreakModal from './PulseStreakModal';
 import VibeAuraRing from '../common/VibeAuraRing';
+import VibeAuraSelectorModal from './VibeAuraSelectorModal';
 import PulseVipBadge from '../common/PulseVipBadge';
 import MusicPickerModal from '../vibes/MusicPickerModal';
 import ForwardModal from './ForwardModal';
@@ -86,6 +87,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const pUser = activeChat?.username;
     return (vibeAuras && (vibeAuras[pId] || vibeAuras[pUser])) || activeChat?.vibeAura || null;
   }, [isGroup, activeChat, vibeAuras]);
+
+  const currentUid = user?.id || user?._id;
+  const myAura = useMemo(() => {
+    return (vibeAuras && currentUid && vibeAuras[currentUid]) || user?.vibeAura || null;
+  }, [vibeAuras, currentUid, user?.vibeAura]);
+  const [showVibeSelector, setShowVibeSelector] = useState(false);
 
   const getSenderPayload = () => ({
     senderName: user?.displayName || user?.username || 'User',
@@ -2943,7 +2950,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               title={isGroup ? 'Click to view group bio, members & edit info' : 'Click to view profile & bio'}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap' }}>
-                <h3 style={{ fontSize: '1.02rem', fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)' }}>
+                <h3 style={{ fontSize: '1.06rem', fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
                   {chatDisplayName || activeChat.displayName}
                 </h3>
                 {!isGroup && chatIsPro && (
@@ -3039,66 +3046,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               </button>
             )}
 
-            {/* Live 2-Player Arrow Battle Game Button in Top Header Bar */}
-            <button
-              onClick={handleOpenArrowGame}
-              className="icon-btn-ghost"
-              title="Play Live Arrow Battle Game"
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '50%',
-                background: 'rgba(236, 72, 153, 0.18)',
-                border: '1px solid rgba(236, 72, 153, 0.4)'
-              }}
-            >
-              <Gamepad2 size={19} color="#ec4899" />
-            </button>
-
-            {/* Music Button directly next to 3-Dots Menu (VIP Exclusive) */}
-            <button
-              onClick={() => {
-                if (!user?.isPro) {
-                  setProModalTab('pro');
-                  setShowProModal(true);
-                  return;
-                }
-                setShowChatMusicPicker(true);
-              }}
-              className="icon-btn-ghost"
-              title={user?.isPro ? "Search & Play Full Song Background Music" : "🎵 Background Music (VIP Exclusive) - Click to Unlock"}
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '50%',
-                position: 'relative',
-                background: chatMusicSong ? 'rgba(245, 158, 11, 0.22)' : 'transparent',
-                border: chatMusicSong ? '1px solid rgba(245, 158, 11, 0.5)' : 'none'
-              }}
-            >
-              <Music size={19} color="#f59e0b" />
-              <span style={{
-                position: 'absolute',
-                top: '-5px',
-                right: '-4px',
-                background: '#0f172a',
-                border: '1.2px solid #f59e0b',
-                color: '#f59e0b',
-                borderRadius: '50%',
-                width: '18px',
-                height: '18px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 0 8px rgba(245, 158, 11, 0.75)',
-                filter: 'drop-shadow(0 0 3px #f59e0b)'
-              }}
-              title="VIP Feature"
-              >
-                <Crown size={11} color="#f59e0b" strokeWidth={2.4} fill="rgba(245, 158, 11, 0.25)" />
-              </span>
-            </button>
-
             {/* 3-Dots More Options Menu */}
             <div className="chat-header-more-container" style={{ position: 'relative' }}>
               <button
@@ -3112,6 +3059,28 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
               {showMoreMenu && (
                 <div className="chat-header-dropdown-menu">
+                  {/* Live Arrow Battle Game */}
+                  <button onClick={() => { setShowMoreMenu(false); handleOpenArrowGame(); }}>
+                    <Gamepad2 size={16} color="#ec4899" />
+                    <span>Live Arrow Battle</span>
+                  </button>
+
+                  {/* Background Music */}
+                  <button onClick={() => {
+                    setShowMoreMenu(false);
+                    if (!user?.isPro) {
+                      setProModalTab('pro');
+                      setShowProModal(true);
+                      return;
+                    }
+                    setShowChatMusicPicker(true);
+                  }}>
+                    <Music size={16} color="#f59e0b" />
+                    <span>Background Music {user?.isPro ? '' : '👑'}</span>
+                  </button>
+
+                  <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
+
                   {/* Voice & Video Calls moved inside 3-dots menu */}
                   <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, false)) : onStartCall(false); }}>
                     <Phone size={16} color="var(--accent)" />
@@ -3353,46 +3322,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               )}
             </div>
           </div>
-        </div>
-
-        {/* Conversation Mood Timeline Strip — sentence-level progression */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px', overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
-          <span style={{ flexShrink: 0 }}>Mood:</span>
-          {moodSteps.length > 0 ? (
-            <>
-              {moodSteps.map((step, idx) => (
-                <React.Fragment key={step.id}>
-                  <span
-                    style={{
-                      color: step.color,
-                      fontWeight: 600,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '2px',
-                      background: step.bg,
-                      padding: '1px 6px',
-                      borderRadius: '8px',
-                      border: `1px solid ${step.border}`,
-                      whiteSpace: 'nowrap',
-                      fontSize: '0.68rem',
-                      opacity: step.isPending ? 0.6 : 1
-                    }}
-                    title={step.preview}
-                  >
-                    {step.emoji} {step.mood}
-                  </span>
-                  {idx < moodSteps.length - 1 && (
-                    <span style={{ color: 'var(--text-muted)', opacity: 0.4, fontSize: '0.6rem' }}>→</span>
-                  )}
-                </React.Fragment>
-              ))}
-            </>
-          ) : (
-            <span style={{ color: moodInfo.color, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-              {moodInfo.emoji} {moodInfo.mood}
-            </span>
-          )}
-          <div style={{ flex: 1, height: '2px', borderRadius: '2px', background: moodInfo.color, opacity: 0.4 }} />
         </div>
       </div>
       ) : (
@@ -4001,14 +3930,42 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         </div>
       )}
 
-      {/* AI Smart Suggested Reply Chips */}
+      {/* AI Smart Suggested Reply Chips & Instagram-Style Instant Vibe Pill */}
       {(isGroup || friendshipStatus === 'friends') && !blockStatus.isBlockedByMe && !blockStatus.isBlockedByThem && (
-        <div style={{ padding: '0.4rem 1rem', display: 'flex', gap: '6px', overflowX: 'auto', background: 'transparent', position: 'relative', zIndex: 2 }}>
+        <div style={{ padding: '0.4rem 1rem', display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', background: 'transparent', position: 'relative', zIndex: 2, scrollbarWidth: 'none' }}>
+          {/* Instagram-Style Instant Vibe Pill */}
+          <button
+            type="button"
+            onClick={() => setShowVibeSelector(true)}
+            style={{
+              background: myAura?.mood ? 'rgba(99, 102, 241, 0.18)' : 'var(--bg-card)',
+              border: `1.5px solid ${myAura?.auraColor || 'rgba(99, 102, 241, 0.5)'}`,
+              color: myAura?.auraColor || 'var(--accent)',
+              borderRadius: '16px',
+              padding: '4px 11px',
+              fontSize: '0.74rem',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              boxShadow: myAura?.mood ? `0 0 10px ${myAura.auraColor || 'rgba(99,102,241,0.3)'}40` : 'none',
+              transition: 'all 0.18s ease'
+            }}
+            title="Instant Vibe & Live Aura (Tap to Edit)"
+          >
+            <span style={{ fontSize: '0.85rem' }}>{myAura?.emoji || '⚡'}</span>
+            <span>{myAura?.mood ? `${myAura.mood}` : '⚡ Set Vibe'}</span>
+            <span style={{ fontSize: '0.65rem', opacity: 0.7, marginLeft: '2px' }}>✏️</span>
+          </button>
+
           {smartReplies.map((replyText, i) => (
             <button
               key={i}
               onClick={() => setText(replyText)}
-              style={{ background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '16px', padding: '4px 10px', fontSize: '0.75rem', whiteSpace: 'nowrap', cursor: 'pointer' }}
+              style={{ background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '16px', padding: '4px 10px', fontSize: '0.75rem', whiteSpace: 'nowrap', cursor: 'pointer', flexShrink: 0 }}
             >
               <Sparkles size={11} color="var(--accent)" style={{ marginRight: '4px' }} />
               {replyText}
@@ -4436,6 +4393,44 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   <Presentation size={20} />
                 </div>
                 <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Live Drawboard</span>
+              </button>
+
+              {/* Live Vibe & Aura */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  setShowVibeSelector(true);
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #6366f1, #ec4899)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)',
+                  fontSize: '1.25rem'
+                }}>
+                  ⚡
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--accent)' }}>Live Vibe</span>
               </button>
 
             </div>
@@ -5140,6 +5135,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           lastStreakDate={streakData?.lastStreakDate}
           onClose={() => setShowStreakModal(false)}
           onStreakUpdated={(updated) => setStreakData(prev => ({ ...prev, ...updated }))}
+        />
+      )}
+
+      {/* Pulse Vibe & Live Aura Modal */}
+      {showVibeSelector && (
+        <VibeAuraSelectorModal
+          onClose={() => setShowVibeSelector(false)}
+          currentAura={myAura}
         />
       )}
     </div>

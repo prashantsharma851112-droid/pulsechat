@@ -51,14 +51,15 @@ export default function VibeAuraSelectorModal({
 
   const handleSave = () => {
     if (!effectiveUserId) return;
+    const isActuallyLow = isLowBattery && detectedBattery && detectedBattery <= 20;
     const auraData = {
       userId: effectiveUserId,
       mood: selectedMood,
       emoji: selectedEmoji,
-      auraColor: selectedColor,
-      auraType: 'neon_pulse',
-      isLowBattery,
-      batteryLevel: isLowBattery ? (detectedBattery || 12) : null,
+      auraColor: isActuallyLow ? '#ef4444' : selectedColor,
+      auraType: isActuallyLow ? 'low_battery' : 'neon_pulse',
+      isLowBattery: Boolean(isLowBattery),
+      batteryLevel: detectedBattery || null,
       inGame: selectedMood.includes('Temple Run') ? 'Temple Run 3D' : ''
     };
 
@@ -172,10 +173,10 @@ export default function VibeAuraSelectorModal({
             <span style={{ fontSize: '1.4rem' }}>🪫</span>
             <div>
               <div style={{ fontSize: '0.86rem', fontWeight: 800, color: isLowBattery ? '#fbbf24' : '#fff' }}>
-                Low Battery Alert Aura
+                Auto-Alert When Battery &lt; 20%
               </div>
               <div style={{ fontSize: '0.72rem', color: '#9ca3af' }}>
-                {detectedBattery ? `Current battery: ${detectedBattery}%` : 'Pulses amber aura when phone is dying'}
+                {detectedBattery ? `Current: ${detectedBattery}%. Warns friends with amber aura only if battery drops below 20%.` : 'Warns friends with amber aura only when phone is dying (&lt; 20%)'}
               </div>
             </div>
           </div>
