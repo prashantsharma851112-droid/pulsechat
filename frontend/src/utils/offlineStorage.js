@@ -476,3 +476,39 @@ export function updateGroupInStorage(groupId, updates, currentUserId) {
     }));
   }
 }
+
+// Auto-cleanup local cached messages (keeps last N days safe, cleans older)
+export function cleanupLocalMessageStorage(days = 7) {
+  if (typeof window === 'undefined') return 0;
+  let cleanedCount = 0;
+  try {
+    const cutoffTime = Date.now() - (days * 24 * 60 * 60 * 1000);
+    const keysToProcess = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(STORAGE_KEYS.MESSAGES_PREFIX)) {
+        keysToProcess.push(key);
+      }
+    }
+
+    keysToProcess.forEach((key) => {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const remaining = parsed.filter((m) => {
+              const t = new Date(m.timestamp || m.createdAt || 0).getTime();
+              return !t || t >= cutoffTime;
+            });
+            cleanedCount += Math.max(0, parsed.length - remaining.length);
+            localStorage.setItem(key, JSON.stringify(remaining));
+          }
+        }
+      } catch (err) {}
+    });
+  } catch (e) {
+    console.warn('[OfflineStorage] Error cleaning local messages:', e);
+  }
+  return cleanedCount;
+}

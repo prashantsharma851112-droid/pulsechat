@@ -445,7 +445,7 @@ export default function AdminDashboardModal({ onClose }) {
                     {loading ? '...' : (stats?.totalUsers ?? 0)}
                   </div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    User Accounts in MongoDB
+                    Total Registered Accounts
                   </div>
                 </div>
 
@@ -595,7 +595,7 @@ export default function AdminDashboardModal({ onClose }) {
                           </button>
                         </>
                       ) : (
-                        <div>No registered users found in MongoDB database.</div>
+                        <div>No registered users found in database.</div>
                       )}
                     </div>
                   ) : (

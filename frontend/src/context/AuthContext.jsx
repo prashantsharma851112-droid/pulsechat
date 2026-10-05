@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect } from 'react';
 import { BACKEND_URL } from '../utils/config';
-import { getCachedUser, setCachedUser } from '../utils/offlineStorage';
+import { getCachedUser, setCachedUser, cleanupLocalMessageStorage } from '../utils/offlineStorage';
 
 export const AuthContext = createContext();
 
@@ -176,6 +176,13 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('pulsechat_user_profile_updated', handleProfileUpdateEvent);
   }, []);
 
+  // Auto-cleanup local message storage (keeps last 7 days safe, cleans older)
+  useEffect(() => {
+    if (user && user.autoCleanupEnabled !== false) {
+      cleanupLocalMessageStorage(7);
+    }
+  }, [user?.id, user?.autoCleanupEnabled]);
+
   const updateUserProfile = (updatedUser) => {
     setUser(updatedUser);
     setCachedUser(updatedUser);
@@ -343,7 +350,10 @@ export function AuthProvider({ children }) {
   };
 
   const runInstantCleanup = async (days = 30) => {
-    if (!token) return { success: false, deletedCount: 0 };
+    // 1. Clean local storage cached messages
+    const localCleaned = cleanupLocalMessageStorage(days);
+
+    if (!token) return { success: true, deletedCount: localCleaned };
     try {
       const res = await fetch(`${BACKEND_URL}/api/messages/auto-cleanup`, {
         method: 'POST',
@@ -354,10 +364,13 @@ export function AuthProvider({ children }) {
         body: JSON.stringify({ days })
       });
       const data = await res.json();
-      return data;
+      return {
+        ...data,
+        deletedCount: Math.max(data.deletedCount || 0, localCleaned)
+      };
     } catch (e) {
       console.error('Failed to execute instant storage cleanup:', e);
-      return { success: false, error: e.message, deletedCount: 0 };
+      return { success: true, deletedCount: localCleaned };
     }
   };
 

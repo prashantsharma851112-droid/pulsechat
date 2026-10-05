@@ -160,7 +160,7 @@ export default function SettingsModal({
       if (res && res.success) {
         setShowDeleteModal(false);
         onClose();
-        alert('Your account and all associated data have been permanently deleted from MongoDB and servers.');
+        alert('Your account and all associated data have been permanently deleted.');
       } else {
         setDeleteError(res?.error || 'Failed to delete account. Please try again.');
       }
@@ -181,7 +181,7 @@ export default function SettingsModal({
       if (res && res.success) {
         setCleanupResult({ 
           type: 'success', 
-          msg: `Cleaned ${res.deletedCount || 0} messages (${daysNum}+ days old) from MongoDB and local storage!` 
+          msg: `Cleaned ${res.deletedCount || 0} old messages (${daysNum}+ days old) from local storage and cache!` 
         });
       } else {
         setCleanupResult({ type: 'error', msg: res?.error || 'Storage cleanup failed. Please try again.' });
@@ -489,7 +489,7 @@ export default function SettingsModal({
                         Storage & Data Cleanup
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        Auto-cleanup, custom days cleaner & MongoDB purge
+                        Auto-cleanup (keeps last 7 days) & cache cleaner
                       </div>
                     </div>
                   </div>
@@ -1049,7 +1049,7 @@ export default function SettingsModal({
                   </span>
                 </div>
                 <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                  In accordance with Google Play & privacy policies, you can permanently erase your account, all chats, and user profile data from MongoDB.
+                  In accordance with Google Play & privacy policies, you can permanently erase your account, all chats, and user profile data.
                 </div>
                 <button
                   type="button"
@@ -1083,7 +1083,7 @@ export default function SettingsModal({
           )}
 
           {/* ==============================================================
-              VIEW 3: STORAGE & DATA CLEANUP SECTION (MongoDB + Cache)
+              VIEW 3: STORAGE & DATA CLEANUP SECTION (Local Storage & Cache)
               ============================================================== */}
           {activeSection === 'storage' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -1113,7 +1113,7 @@ export default function SettingsModal({
                       </span>
                     </div>
                     <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                      Automatically clean expired 24h stories and old messages
+                      Keeps last 7 days safe & automatically cleans older messages and cache
                     </div>
                   </div>
                 </div>
@@ -1139,7 +1139,7 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* Custom Storage Cleaner (User Enters Days & Cleans MongoDB) */}
+              {/* Custom Storage Cleaner (User Enters Days & Cleans Storage) */}
               <div style={{
                 background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(99, 102, 241, 0.08))',
                 border: '1px solid rgba(16, 185, 129, 0.3)',
@@ -1158,13 +1158,13 @@ export default function SettingsModal({
                       Custom Storage Cleaner
                     </h4>
                     <p style={{ margin: '2px 0 0 0', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                      Purge old messages & media from local storage and MongoDB
+                      Purge old messages & media from local storage and cache
                     </p>
                   </div>
                 </div>
 
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                  Enter the number of days below. All messages older than this threshold will be permanently cleaned from MongoDB and your phone's storage, freeing up space and speeding up the app.
+                  Enter the number of days below. All messages older than this threshold will be cleaned from your phone's storage and cache, freeing up space and speeding up the app.
                 </div>
 
                 {/* Days Input and Quick Chips */}
@@ -1249,7 +1249,7 @@ export default function SettingsModal({
                   {cleaningStorage ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
-                      <span>Cleaning MongoDB & Cache...</span>
+                      <span>Cleaning Local Storage & Cache...</span>
                     </>
                   ) : (
                     <>
@@ -1854,7 +1854,7 @@ export default function SettingsModal({
               </div>
 
               <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                This will permanently delete your account, chats, and files from MongoDB and storage. Please tell us why you are deleting:
+                This will permanently delete your account, chats, and files from storage and cloud servers. Please tell us why you are deleting:
               </div>
 
               {/* Reason Selector */}
