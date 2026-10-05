@@ -1433,7 +1433,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       onTouchEnd={handleSidebarTouchEnd}
     >
       {/* WhatsApp-Style Top App Header */}
-      <div className="sidebar-header" style={{ padding: '0.9rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)', overflow: 'visible' }}>
+      <div className="sidebar-header" style={{ padding: 'calc(24px + env(safe-area-inset-top, 0px)) 1rem 0.85rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)', overflow: 'visible' }}>
         {/* Brand & User Chip */}
         <div
           className="user-profile-badge"

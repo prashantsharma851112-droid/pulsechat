@@ -99,20 +99,26 @@ export function SocketProvider({ children }) {
       });
 
       newSocket.on('vibe_aura_updated', (cleanAura) => {
-        if (cleanAura && cleanAura.userId) {
+        if (cleanAura) {
           const isCleared = Boolean(cleanAura.cleared || cleanAura.auraType === 'none' || (!cleanAura.mood && !cleanAura.isLowBattery && !cleanAura.inGame));
           setVibeAuras(prev => {
             const next = { ...prev };
+            const uId = cleanAura.userId ? String(cleanAura.userId) : null;
+            const uName = cleanAura.username ? String(cleanAura.username) : null;
             if (isCleared) {
-              delete next[cleanAura.userId];
+              if (uId) delete next[uId];
+              if (uName) delete next[uName];
             } else {
-              next[cleanAura.userId] = cleanAura;
+              if (uId) next[uId] = cleanAura;
+              if (uName) next[uName] = cleanAura;
             }
             return next;
           });
           try {
             const curId = userRef.current?.id;
-            updateUserProfileInStorage(cleanAura.userId, { vibeAura: isCleared ? null : cleanAura }, curId);
+            if (cleanAura.userId) {
+              updateUserProfileInStorage(cleanAura.userId, { vibeAura: isCleared ? null : cleanAura }, curId);
+            }
           } catch (e) {}
         }
       });

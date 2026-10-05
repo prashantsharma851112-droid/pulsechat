@@ -1153,7 +1153,10 @@ io.on('connection', (socket) => {
     );
 
     if (isCleared) {
-      userVibeAuras.delete(auraData.userId);
+      userVibeAuras.delete(String(auraData.userId));
+      if (socket.userId) userVibeAuras.delete(String(socket.userId));
+      if (socket.userMongoId) userVibeAuras.delete(String(socket.userMongoId));
+      if (socket.userUsername) userVibeAuras.delete(String(socket.userUsername));
       try {
         await User.updateOne({ $or: [{ id: auraData.userId }, { username: auraData.userId }] }, { $unset: { vibeAura: 1 } });
       } catch (e) {}
@@ -1170,6 +1173,7 @@ io.on('connection', (socket) => {
 
       io.emit('vibe_aura_updated', {
         userId: auraData.userId,
+        username: socket.userUsername || '',
         cleared: true,
         mood: '',
         isLowBattery: false,
@@ -1182,8 +1186,10 @@ io.on('connection', (socket) => {
     }
 
     const hasLowBattery = Boolean(auraData.isLowBattery);
+    const resolvedUsername = socket.userUsername || auraData.username || '';
     const clean = {
       userId: auraData.userId,
+      username: resolvedUsername,
       mood: (auraData.mood || '').trim(),
       emoji: auraData.emoji || '⚡',
       auraColor: auraData.auraColor || '#a855f7',
@@ -1193,7 +1199,11 @@ io.on('connection', (socket) => {
       inGame: auraData.inGame || '',
       updatedAt: new Date().toISOString()
     };
-    userVibeAuras.set(auraData.userId, clean);
+    userVibeAuras.set(String(auraData.userId), clean);
+    if (resolvedUsername) userVibeAuras.set(String(resolvedUsername), clean);
+    if (socket.userId) userVibeAuras.set(String(socket.userId), clean);
+    if (socket.userMongoId) userVibeAuras.set(String(socket.userMongoId), clean);
+
     try {
       await User.updateOne({ $or: [{ id: auraData.userId }, { username: auraData.userId }] }, { vibeAura: clean });
     } catch (e) {}
@@ -1690,6 +1700,28 @@ mongoose.connect(config.MONGO_URI)
       await webpush.syncWithMongo(VapidKey);
     } catch (e) {
       console.warn('VapidKey sync warning:', e.message);
+    }
+
+    // Hydrate userVibeAuras from MongoDB on startup so active vibes survive server restarts
+    try {
+      const usersWithVibes = await User.find({ vibeAura: { $exists: true, $ne: null } })
+        .select('id username vibeAura')
+        .lean();
+      usersWithVibes.forEach(u => {
+        if (u.vibeAura && !u.vibeAura.cleared && u.vibeAura.auraType !== 'none') {
+          const clean = {
+            ...u.vibeAura,
+            userId: u.id || u.username,
+            username: u.username || ''
+          };
+          if (u.id) userVibeAuras.set(String(u.id), clean);
+          if (u._id) userVibeAuras.set(String(u._id), clean);
+          if (u.username) userVibeAuras.set(String(u.username), clean);
+        }
+      });
+      console.log(`[VibeRadar] Hydrated ${userVibeAuras.size} user vibe auras from DB`);
+    } catch (vhErr) {
+      console.warn('[VibeRadar] Vibe hydration warning:', vhErr.message);
     }
     server.listen(config.PORT, () => {
       console.log(`🚀 PulseChat Backend running on port ${config.PORT}`);

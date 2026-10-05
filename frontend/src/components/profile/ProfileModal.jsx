@@ -1,9 +1,11 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
+import { SocketContext } from '../../context/SocketContext';
 import { X, Upload, Camera, Lock, User as UserIcon, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { compressImage, parseSafeJson } from '../../utils/imageCompressor';
 import { useBackHandler } from '../../utils/backNavigation';
+import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
 
 const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/bottts/svg?seed=alex',
@@ -23,6 +25,8 @@ const PRESET_AVATARS = [
 export default function ProfileModal({ onClose, onOpenFullDp }) {
   useBackHandler(onClose, true);
   const { user, token, updateUserProfile } = useContext(AuthContext);
+  const { vibeAuras } = useContext(SocketContext);
+  const myAura = resolveUserAura(user, vibeAuras);
   const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'password'
 
   // Profile Edit States
@@ -334,109 +338,139 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
 
             {/* Current DP Avatar Preview with Upload Trigger */}
             <div style={{ textAlign: 'center', marginBottom: '1.5rem', position: 'relative' }}>
-              <div
-                className={user?.isPro ? 'pro-neon-avatar pro-neon-avatar-lg' : ''}
-                style={{ position: 'relative', display: 'inline-block' }}
-              >
-                {user?.hasKingCrown ? (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '-18px',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      fontSize: '1.6rem',
-                      filter: 'drop-shadow(0 2px 6px rgba(245, 158, 11, 0.95))',
-                      zIndex: 10,
-                      pointerEvents: 'none'
-                    }}
-                    title="👑 #1 Gold Leaderboard King"
-                  >
-                    👑
-                  </div>
-                ) : user?.hasSilverCrown ? (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '-18px',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      fontSize: '1.6rem',
-                      filter: 'drop-shadow(0 2px 6px rgba(203, 213, 225, 0.95))',
-                      zIndex: 10,
-                      pointerEvents: 'none'
-                    }}
-                    title="👑 #2 Silver Leaderboard Champion"
-                  >
-                    👑
-                  </div>
-                ) : user?.hasStreakCrown ? (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '-18px',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      fontSize: '1.6rem',
-                      filter: 'drop-shadow(0 2px 6px rgba(239, 68, 68, 0.95))',
-                      zIndex: 10,
-                      pointerEvents: 'none'
-                    }}
-                    title="👑 7-Day Gaming Streak Crown"
-                  >
-                    👑
-                  </div>
-                ) : null}
-                <img
-                  src={avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}
-                  alt="Current DP"
-                  onClick={() => onOpenFullDp && onOpenFullDp(avatar || user.avatar, displayName || user.displayName || user.username, user.username)}
-                  style={{
-                    width: '96px',
-                    height: '96px',
-                    borderRadius: '50%',
-                    objectFit: 'cover',
-                    border: user?.hasKingCrown
-                      ? '3.5px solid #fbbf24'
-                      : user?.hasSilverCrown
-                      ? '3.5px solid #cbd5e1'
-                      : user?.hasStreakCrown
-                      ? '3.5px solid #f97316'
-                      : (user?.isPro ? 'none' : '3px solid var(--accent)'),
-                    boxShadow: user?.isPro ? 'none' : '0 8px 20px rgba(0,0,0,0.3)',
-                    cursor: 'pointer'
-                  }}
-                  title="Click to view full photo"
-                />
-                <label
-                  htmlFor="dp-file-input"
-                  style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    right: 0,
-                    background: 'var(--accent)',
-                    color: '#fff',
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.4)'
-                  }}
-                  title="Upload Photo (Instant Compressed)"
+              <VibeAuraRing aura={myAura} size={96} showNoteBubble={true} hasCrown={Boolean(user?.hasKingCrown || user?.hasSilverCrown || user?.hasStreakCrown)}>
+                <div
+                  className={user?.isPro ? 'pro-neon-avatar pro-neon-avatar-lg' : ''}
+                  style={{ position: 'relative', display: 'inline-block' }}
                 >
-                  {compressing ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
-                </label>
-                <input
-                  id="dp-file-input"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  style={{ display: 'none' }}
-                />
-              </div>
+                  {user?.hasKingCrown ? (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '-18px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        fontSize: '1.6rem',
+                        filter: 'drop-shadow(0 2px 6px rgba(245, 158, 11, 0.95))',
+                        zIndex: 10,
+                        pointerEvents: 'none'
+                      }}
+                      title="👑 #1 Gold Leaderboard King"
+                    >
+                      👑
+                    </div>
+                  ) : user?.hasSilverCrown ? (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '-18px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        fontSize: '1.6rem',
+                        filter: 'drop-shadow(0 2px 6px rgba(203, 213, 225, 0.95))',
+                        zIndex: 10,
+                        pointerEvents: 'none'
+                      }}
+                      title="👑 #2 Silver Leaderboard Champion"
+                    >
+                      👑
+                    </div>
+                  ) : user?.hasStreakCrown ? (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '-18px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        fontSize: '1.6rem',
+                        filter: 'drop-shadow(0 2px 6px rgba(239, 68, 68, 0.95))',
+                        zIndex: 10,
+                        pointerEvents: 'none'
+                      }}
+                      title="👑 7-Day Gaming Streak Crown"
+                    >
+                      👑
+                    </div>
+                  ) : null}
+                  <img
+                    src={avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}
+                    alt="Current DP"
+                    onClick={() => onOpenFullDp && onOpenFullDp(avatar || user.avatar, displayName || user.displayName || user.username, user.username)}
+                    style={{
+                      width: '96px',
+                      height: '96px',
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                      border: user?.hasKingCrown
+                        ? '3.5px solid #fbbf24'
+                        : user?.hasSilverCrown
+                        ? '3.5px solid #cbd5e1'
+                        : user?.hasStreakCrown
+                        ? '3.5px solid #f97316'
+                        : (user?.isPro ? 'none' : '3px solid var(--accent)'),
+                      boxShadow: user?.isPro ? 'none' : '0 8px 20px rgba(0,0,0,0.3)',
+                      cursor: 'pointer'
+                    }}
+                    title="Click to view full photo"
+                  />
+                  <label
+                    htmlFor="dp-file-input"
+                    style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      right: 0,
+                      background: 'var(--accent)',
+                      color: '#fff',
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                      zIndex: 10
+                    }}
+                    title="Upload Photo (Instant Compressed)"
+                  >
+                    {compressing ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
+                  </label>
+                  <input
+                    id="dp-file-input"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    style={{ display: 'none' }}
+                  />
+                </div>
+              </VibeAuraRing>
+
+              {/* Active Vibe Aura Pill Badge */}
+              {myAura && (
+                <div style={{ marginTop: '0.65rem' }}>
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '5px 14px',
+                    borderRadius: '20px',
+                    background: `${myAura.auraColor || '#10b981'}18`,
+                    border: `1.5px solid ${myAura.auraColor || '#10b981'}55`,
+                    color: 'var(--text-main)',
+                    fontSize: '0.84rem',
+                    fontWeight: 700,
+                    boxShadow: `0 2px 10px ${myAura.auraColor || '#10b981'}25`,
+                    letterSpacing: '0.2px'
+                  }}>
+                    <span style={{ fontSize: '1rem' }}>{myAura.emoji || '⚡'}</span>
+                    <span>
+                      {myAura.isLowBattery
+                        ? `Low Battery (${myAura.batteryLevel || '<20'}%)`
+                        : (myAura.inGame ? `Playing ${myAura.inGame}` : myAura.mood)}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.6rem' }}>
                 {compressing ? (

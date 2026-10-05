@@ -426,7 +426,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                 👑
               </div>
             ) : null}
-            <VibeAuraRing auraData={userAura} size={100} showNoteBubble={false} hasCrown={Boolean(userToDisplay?.hasKingCrown || userToDisplay?.hasSilverCrown || userToDisplay?.hasStreakCrown)}>
+            <VibeAuraRing auraData={userAura} size={100} showNoteBubble={true} hasCrown={Boolean(userToDisplay?.hasKingCrown || userToDisplay?.hasSilverCrown || userToDisplay?.hasStreakCrown)}>
               <img
                 src={validAvatar}
                 alt={userToDisplay.displayName}

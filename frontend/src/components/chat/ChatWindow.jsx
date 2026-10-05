@@ -2873,7 +2873,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {/* Header Bar */}
       {!selectedActionMessage ? (
         <div style={{
-        padding: '0.75rem 1rem',
+        padding: 'calc(24px + env(safe-area-inset-top, 0px)) 1rem 0.75rem 1rem',
         borderBottom: '1px solid var(--border)',
         background: (chatWallpaper && chatWallpaper !== 'none') ? 'rgba(11, 15, 25, 0.78)' : 'var(--bg-sidebar)',
         backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
@@ -2882,7 +2882,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         flexDirection: 'column',
         gap: '4px',
         position: 'relative',
-        zIndex: 2
+        zIndex: 2,
+        overflow: 'visible'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flex: 1, minWidth: 0 }}>

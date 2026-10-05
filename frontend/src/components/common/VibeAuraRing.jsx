@@ -10,18 +10,25 @@ export function resolveUserAura(userObj, vibeAuras) {
   const uid = userObj.id || userObj._id;
   const uname = userObj.username;
 
+  // 1. Check live real-time vibeAuras dictionary
   if (vibeAuras && typeof vibeAuras === 'object') {
     const live = (uid && vibeAuras[uid]) || (uname && vibeAuras[uname]);
-    if (live && !live.cleared && live.auraType !== 'none' && (
-      (live.mood && live.mood.trim() !== '') ||
-      (live.inGame && live.inGame.trim() !== '') ||
-      Boolean(live.isLowBattery)
-    )) {
-      return live;
+    if (live) {
+      if (live.cleared || live.auraType === 'none') {
+        return null;
+      }
+      if (
+        (live.mood && live.mood.trim() !== '') ||
+        (live.inGame && live.inGame.trim() !== '') ||
+        Boolean(live.isLowBattery)
+      ) {
+        return live;
+      }
+      return null;
     }
-    return null;
   }
 
+  // 2. Fallback to userObj.vibeAura (from MongoDB / props / cache)
   const fallback = userObj.vibeAura;
   if (fallback && !fallback.cleared && fallback.auraType !== 'none' && (
     (fallback.mood && fallback.mood.trim() !== '') ||
@@ -80,10 +87,10 @@ export default function VibeAuraRing({
     : (isLowBattery ? '#f59e0b' : (inGame ? '#06b6d4' : (auraColor || '#a855f7')));
 
   // Calculate top offset for Instagram-style thought note bubble
-  // If user has a crown, float slightly higher so it doesn't overlap the crown
+  // Compact offset so it hugs the avatar closely and never clips above the screen
   const noteTop = hasCrown
-    ? (size >= 80 ? '-34px' : '-26px')
-    : (size >= 80 ? '-26px' : '-19px');
+    ? (size >= 80 ? '-26px' : '-20px')
+    : (size >= 80 ? '-20px' : '-15px');
 
   return (
     <div
@@ -112,8 +119,8 @@ export default function VibeAuraRing({
             alignItems: 'center',
             gap: '3.5px',
             whiteSpace: 'nowrap',
-            maxWidth: size >= 80 ? '135px' : '105px',
-            zIndex: 25,
+            maxWidth: size >= 80 ? '135px' : '110px',
+            zIndex: 40,
             pointerEvents: 'none',
             animation: 'instaThoughtFloat 3s infinite ease-in-out'
           }}
@@ -135,22 +142,22 @@ export default function VibeAuraRing({
           {/* Instagram Thought Bubble Trail Dots */}
           <div style={{
             position: 'absolute',
-            bottom: '-4px',
+            bottom: '-3px',
             left: '50%',
             transform: 'translateX(-50%)',
-            width: '5px',
-            height: '5px',
+            width: '4px',
+            height: '4px',
             borderRadius: '50%',
             background: 'rgba(15, 23, 42, 0.94)',
             border: `1px solid ${ringColor}`
           }} />
           <div style={{
             position: 'absolute',
-            bottom: '-7px',
+            bottom: '-5px',
             left: '52%',
             transform: 'translateX(-50%)',
-            width: '3px',
-            height: '3px',
+            width: '2.5px',
+            height: '2.5px',
             borderRadius: '50%',
             background: ringColor
           }} />
