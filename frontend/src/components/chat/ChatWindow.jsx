@@ -33,6 +33,7 @@ import { recordRecentReaction } from '../../utils/quickReactions';
 import { uploadMediaDirect } from '../../utils/mediaUpload';
 import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
+import { executeTranslation } from '../../utils/translator';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
 import {
   getCachedMessages,
@@ -1106,49 +1107,46 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   }, [chatId]);
 
-  const handleTranslateMessage = useCallback(async (msg, customTargetLang) => {
-    if (!msg || !msg.content || typeof msg.content !== 'string') return;
-    const tLang = customTargetLang || targetLang;
+  const handleTranslateMessage = useCallback(async (target, maybeContent, customTargetLang) => {
+    let msgId, textToTranslate;
+    if (target && typeof target === 'object') {
+      msgId = target.id;
+      textToTranslate = target.content;
+    } else if (typeof target === 'string') {
+      msgId = target;
+      textToTranslate = maybeContent || messages.find(m => m.id === msgId)?.content;
+    }
+    if (!msgId || !textToTranslate || typeof textToTranslate !== 'string') return;
+    const tLang = customTargetLang || (typeof maybeContent === 'string' && maybeContent.length === 2 ? maybeContent : targetLang);
 
     setTranslationsByMsgId(prev => ({
       ...prev,
-      [msg.id]: {
-        ...(prev[msg.id] || {}),
+      [msgId]: {
+        ...(prev[msgId] || {}),
         isLoading: true,
-        isVisible: true,
+        showTranslated: true,
         targetLang: tLang
       }
     }));
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/messages/translate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          text: msg.content,
-          targetLang: tLang
-        })
-      });
-      const data = await res.json();
-      if (data.success && data.translatedText) {
+      const result = await executeTranslation(textToTranslate, tLang, token);
+      if (result && result.translatedText) {
         setTranslationsByMsgId(prev => ({
           ...prev,
-          [msg.id]: {
-            translatedText: data.translatedText,
-            sourceLang: data.sourceLang || 'auto',
+          [msgId]: {
+            translatedText: result.translatedText,
+            sourceLang: result.sourceLang || 'auto',
             targetLang: tLang,
-            isVisible: true,
+            showTranslated: true,
             isLoading: false
           }
         }));
       } else {
         setTranslationsByMsgId(prev => ({
           ...prev,
-          [msg.id]: {
-            ...(prev[msg.id] || {}),
+          [msgId]: {
+            ...(prev[msgId] || {}),
             isLoading: false
           }
         }));
@@ -1157,13 +1155,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       console.error('Translation error:', err);
       setTranslationsByMsgId(prev => ({
         ...prev,
-        [msg.id]: {
-          ...(prev[msg.id] || {}),
+        [msgId]: {
+          ...(prev[msgId] || {}),
           isLoading: false
         }
       }));
     }
-  }, [targetLang, token]);
+  }, [targetLang, token, messages]);
 
   const handleToggleTranslation = useCallback((msgId) => {
     setTranslationsByMsgId(prev => {
@@ -1172,7 +1170,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         ...prev,
         [msgId]: {
           ...prev[msgId],
-          isVisible: !prev[msgId].isVisible
+          showTranslated: prev[msgId].showTranslated === false ? true : false
         }
       };
     });
@@ -1182,20 +1180,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (!text || !text.trim() || isTranslatingDraft) return;
     setIsTranslatingDraft(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/messages/translate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          text: text.trim(),
-          targetLang
-        })
-      });
-      const data = await res.json();
-      if (data.success && data.translatedText) {
-        setText(data.translatedText);
+      const result = await executeTranslation(text.trim(), targetLang, token);
+      if (result && result.translatedText) {
+        setText(result.translatedText);
         setActionToast(`Draft translated to ${targetLang.toUpperCase()} ✨`);
         setTimeout(() => setActionToast(''), 2500);
       }

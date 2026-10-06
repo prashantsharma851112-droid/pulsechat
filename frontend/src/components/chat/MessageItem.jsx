@@ -1549,26 +1549,32 @@ export default function MessageItem({
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '3px' }}>
                     <span style={{ fontSize: '0.66rem', fontWeight: 800, color: isMine ? '#fde047' : '#38bdf8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Globe size={11} /> Translated ({translationData.sourceLang?.toUpperCase() || 'AUTO'} ➔ {translationData.targetLang?.toUpperCase()}):
+                      <Globe size={11} /> {translationData.isLoading ? 'Translating...' : `Translated (${translationData.sourceLang?.toUpperCase() || 'AUTO'} ➔ ${translationData.targetLang?.toUpperCase() || targetLang?.toUpperCase()}):`}
                     </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleTranslation && onToggleTranslation(message.id);
-                      }}
-                      style={{ background: 'none', border: 'none', color: isMine ? '#e0e7ff' : '#94a3b8', fontSize: '0.66rem', cursor: 'pointer', padding: 0, fontWeight: 700 }}
-                    >
-                      {translationData.showTranslated ? 'Hide' : 'Show'}
-                    </button>
+                    {!translationData.isLoading && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleTranslation && onToggleTranslation(message.id);
+                        }}
+                        style={{ background: 'none', border: 'none', color: isMine ? '#e0e7ff' : '#94a3b8', fontSize: '0.66rem', cursor: 'pointer', padding: 0, fontWeight: 700 }}
+                      >
+                        {translationData.showTranslated !== false ? 'Hide' : 'Show'}
+                      </button>
+                    )}
                   </div>
-                  {translationData.showTranslated && (
+                  {translationData.isLoading ? (
+                    <div style={{ fontSize: '0.74rem', color: isMine ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.6)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <span>Translating text...</span>
+                    </div>
+                  ) : (translationData.showTranslated !== false && translationData.translatedText) ? (
                     <div style={{ color: isMine ? '#fff' : '#f1f5f9', fontWeight: 500 }}>
                       {translationData.translatedText}
                     </div>
-                  )}
+                  ) : null}
                 </div>
-              ) : !isMine && onTranslateMessage && (
+              ) : onTranslateMessage ? (
                 <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '4px' }}>
                   <button
                     type="button"
@@ -1596,7 +1602,7 @@ export default function MessageItem({
                     <span style={{ color: '#38bdf8', fontWeight: 600 }}>Translate</span>
                   </button>
                 </div>
-              )}
+              ) : null}
             </div>
           );
         })())}
@@ -2599,7 +2605,7 @@ export default function MessageItem({
           </button>
 
           {/* Quick Translate Message Button */}
-          {message.content && message.type === 'text' && onTranslateMessage && (
+          {message.content && typeof message.content === 'string' && (!message.type || message.type === 'text') && onTranslateMessage && (
             <button
               type="button"
               className="reaction-action-btn"

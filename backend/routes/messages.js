@@ -962,6 +962,10 @@ router.post('/dissolve-dust/:messageId', authMiddleware, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('Error in dissolve-dust route:', err);
+    res.status(500).json({ error: 'Failed to dissolve dust message' });
+  }
+});
+
 // Live In-Line Message Translation Endpoint (Sub-100ms ultra-fast with multi-engine fallback)
 const translationCache = new Map();
 
