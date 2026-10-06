@@ -1052,8 +1052,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [pendingMedia, setPendingMedia] = useState(null);
   const [groupMembersMap, setGroupMembersMap] = useState({});
   const messagesEndRef = useRef(null);
-  const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const dustImageInputRef = useRef(null);
+  const viewOnceInputRef = useRef(null);
+  const twiceViewInputRef = useRef(null);
 
   const deduplicatedMessages = useMemo(() => {
     const seen = new Set();
@@ -2659,7 +2661,60 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     e.target.value = '';
   };
 
-  const handleSendMedia = async ({ mediaUrl, rawFile, type, isViewOnce, isFogSnap, fogSnapDuration, fileName, fileSize, rawSizeBytes }) => {
+  const handleSpecificMediaSelect = (e, initialMode) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const MAX_SINGLE_FILE_BYTES = 5 * 1024 * 1024; // 5MB
+    if (file.size > MAX_SINGLE_FILE_BYTES) {
+      alert(`⚠️ File size exceeds 5MB limit (${(file.size / (1024 * 1024)).toFixed(2)}MB). You cannot send files larger than 5MB.`);
+      e.target.value = '';
+      return;
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const storageKey = `pulsechat_daily_file_bytes_${user?.id || 'guest'}_${todayStr}`;
+    const todayUsed = parseInt(localStorage.getItem(storageKey) || '0', 10);
+    const MAX_DAILY_FILE_BYTES = 10 * 1024 * 1024; // 10MB
+    if (todayUsed + file.size > MAX_DAILY_FILE_BYTES) {
+      const usedMB = (todayUsed / (1024 * 1024)).toFixed(1);
+      alert(`⚠️ Daily file sharing limit of 10MB reached! (Used: ${usedMB}MB / 10MB). You cannot send more than 10MB total per day. Try again tomorrow!`);
+      e.target.value = '';
+      return;
+    }
+
+    const localBlobUrl = URL.createObjectURL(file);
+    const formattedSize = (file.size / 1024 < 1024)
+      ? `${(file.size / 1024).toFixed(1)} KB`
+      : `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+
+    setPendingMedia({
+      dataUrl: localBlobUrl,
+      file,
+      fileName: file.name,
+      fileSize: formattedSize,
+      rawSizeBytes: file.size,
+      type: file.type,
+      initialMode
+    });
+
+    e.target.value = '';
+  };
+
+  const handleSendMedia = async ({
+    mediaUrl,
+    rawFile,
+    type,
+    isViewOnce,
+    isViewTwice,
+    viewLimit,
+    isFogSnap,
+    isDustImage,
+    fogSnapDuration,
+    fileName,
+    fileSize,
+    rawSizeBytes
+  }) => {
     const msgType = type === 'document'
       ? 'document'
       : (type?.startsWith('video/') ? 'video' : 'image');
@@ -2676,6 +2731,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setPendingMedia(null);
     setReplyTo(null);
 
+    const isDust = Boolean(isFogSnap || isDustImage);
+    const isTwice = Boolean(isViewTwice);
+    const calculatedLimit = isTwice ? 2 : (viewLimit || (isViewOnce ? 1 : 1));
+
     // 0ms Optimistic Media Bubble (Telegram Magic):
     // Instantly renders in chat with circular progress ring while uploading in background!
     const tempMediaId = 'temp_media_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
@@ -2688,10 +2747,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       isGroup,
       mediaUrl, // local preview instantly visible
       type: msgType,
-      isViewOnce: msgType === 'document' ? false : Boolean(isViewOnce || isFogSnap),
-      isFogSnap: Boolean(isFogSnap),
-      fogSnapDuration: fogSnapDuration || 7,
-      fogSnapStatus: isFogSnap ? 'unrevealed' : undefined,
+      isViewOnce: msgType === 'document' ? false : Boolean(isViewOnce || isTwice || isDust),
+      isViewTwice: isTwice,
+      viewLimit: calculatedLimit,
+      viewCounts: {},
+      isFogSnap: isDust,
+      isDustImage: Boolean(isDustImage || isDust),
+      fogSnapDuration: fogSnapDuration || 10,
+      fogSnapStatus: isDust ? 'unrevealed' : undefined,
       fileName: fileName || null,
       fileSize: fileSize || null,
       status: 'uploading',
@@ -2730,10 +2793,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         isGroup,
         mediaUrl: finalMediaUrl,
         type: msgType,
-        isViewOnce: msgType === 'document' ? false : Boolean(isViewOnce || isFogSnap),
-        isFogSnap: Boolean(isFogSnap),
-        fogSnapDuration: fogSnapDuration || 7,
-        fogSnapStatus: isFogSnap ? 'unrevealed' : undefined,
+        isViewOnce: msgType === 'document' ? false : Boolean(isViewOnce || isTwice || isDust),
+        isViewTwice: isTwice,
+        viewLimit: calculatedLimit,
+        isFogSnap: isDust,
+        isDustImage: Boolean(isDustImage || isDust),
+        fogSnapDuration: fogSnapDuration || 10,
+        fogSnapStatus: isDust ? 'unrevealed' : undefined,
         fileName: fileName || null,
         fileSize: fileSize || null,
         replyTo: currentReplyTo
@@ -4746,6 +4812,27 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             onChange={handleFileSelect}
             style={{ display: 'none' }}
           />
+          <input
+            type="file"
+            ref={dustImageInputRef}
+            accept="image/*"
+            onChange={(e) => handleSpecificMediaSelect(e, 'dust')}
+            style={{ display: 'none' }}
+          />
+          <input
+            type="file"
+            ref={viewOnceInputRef}
+            accept="image/*,video/*"
+            onChange={(e) => handleSpecificMediaSelect(e, 'once')}
+            style={{ display: 'none' }}
+          />
+          <input
+            type="file"
+            ref={twiceViewInputRef}
+            accept="image/*,video/*"
+            onChange={(e) => handleSpecificMediaSelect(e, 'twice')}
+            style={{ display: 'none' }}
+          />
 
           {/* 4-Dot Quick Action Drawer */}
           {showActionGrid && (
@@ -4765,6 +4852,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 gap: '12px',
                 zIndex: 1100,
                 width: 'min(330px, 92vw)',
+                maxHeight: 'min(440px, 80vh)',
+                overflowY: 'auto',
                 animation: 'pulseModalPop 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
               }}
             >
@@ -4921,6 +5010,128 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '3px' }}>
                   <span>Dust text</span>
                   <Crown size={12} color="#f59e0b" />
+                </span>
+              </button>
+
+              {/* 5. Smooth Scratch Dust Image */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  dustImageInputRef.current?.click();
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)',
+                  fontSize: '1.25rem'
+                }}>
+                  🌫️
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>Dust Image</span>
+                </span>
+              </button>
+
+              {/* 6. WhatsApp-Style 1x View Once */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  viewOnceInputRef.current?.click();
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #a855f7, #6366f1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(168, 85, 247, 0.4)',
+                  fontSize: '1.15rem',
+                  fontWeight: 900
+                }}>
+                  1️⃣
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#a855f7' }}>
+                  View Once
+                </span>
+              </button>
+
+              {/* 7. WhatsApp-Style 2x Twice View */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  twiceViewInputRef.current?.click();
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #0ea5e9, #2563eb)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(14, 165, 233, 0.4)',
+                  fontSize: '1.15rem',
+                  fontWeight: 900
+                }}>
+                  2️⃣
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#0ea5e9' }}>
+                  Twice View
                 </span>
               </button>
 

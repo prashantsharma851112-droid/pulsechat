@@ -789,6 +789,7 @@ export default function MessageItem({
   });
   const [showEditPoll, setShowEditPoll] = useState(false);
   const [viewedByState, setViewedByState] = useState(message.viewedBy || []);
+  const [viewCountsState, setViewCountsState] = useState(message.viewCounts || {});
   const [downloadState, setDownloadState] = useState(''); // '' | 'Saving...' | 'Saved!'
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [showGiftUnboxModal, setShowGiftUnboxModal] = useState(false);
@@ -831,9 +832,10 @@ export default function MessageItem({
 
   useEffect(() => {
     if (!socket) return;
-    const handleViewOnceUpdate = ({ messageId, viewedBy }) => {
+    const handleViewOnceUpdate = ({ messageId, viewedBy, viewCounts }) => {
       if (messageId === message.id) {
-        setViewedByState(viewedBy);
+        if (viewedBy) setViewedByState(viewedBy);
+        if (viewCounts) setViewCountsState(viewCounts);
       }
     };
     socket.on('view_once_updated', handleViewOnceUpdate);
@@ -887,8 +889,18 @@ export default function MessageItem({
     isFogBurnedLocally
   );
 
+  const viewLimit = message.viewLimit || (message.isViewTwice ? 2 : 1);
+  const myUserId = currentUser?.id || '';
+  const myLocalViewCount = parseInt(localStorage.getItem(`pulse_view_count_${message.id}`) || '0', 10);
+  const serverViewCount = viewCountsState?.[myUserId] || message.viewCounts?.[myUserId] || 0;
+  const currentViewCount = Math.max(myLocalViewCount, serverViewCount);
+
+  const isConsumedByMe = !isMine && (
+    currentViewCount >= viewLimit ||
+    viewedByState.includes(myUserId) ||
+    message.isViewed
+  );
   const hasRecipientOpened = message.isViewOnce && viewedByState.length > 0;
-  const isConsumedByMe = !isMine && (viewedByState.includes(currentUser?.id) || message.isViewed);
   const isAlreadyViewed = isMine ? hasRecipientOpened : isConsumedByMe;
 
   const handleOpenViewOnce = () => {
@@ -897,8 +909,16 @@ export default function MessageItem({
   };
 
   const handleMarkViewed = () => {
-    if (socket && currentUser?.id) {
-      socket.emit('view_once_opened', { messageId: message.id, userId: currentUser.id, chatId });
+    const nextCount = currentViewCount + 1;
+    try {
+      localStorage.setItem(`pulse_view_count_${message.id}`, String(nextCount));
+    } catch {}
+    setViewCountsState(prev => ({ ...prev, [myUserId]: nextCount }));
+    if (nextCount >= viewLimit) {
+      setViewedByState(prev => [...prev, myUserId]);
+    }
+    if (socket && myUserId) {
+      socket.emit('view_once_opened', { messageId: message.id, userId: myUserId, chatId });
     }
   };
 
@@ -1472,13 +1492,23 @@ export default function MessageItem({
           );
         })())}
 
-        {/* View Once Media Message */}
+        {/* View Once / Twice View Media Message */}
         {(message.type === 'image' || message.type === 'video') && message.isViewOnce && !message.isFogSnap && (
           <div style={{ padding: '2px 0' }}>
             {isAlreadyViewed ? (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 14px', borderRadius: '20px', background: 'rgba(0,0,0,0.25)', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                <span style={{ fontWeight: 700 }}>1️⃣</span>
-                <span>Opened</span>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 14px',
+                borderRadius: '20px',
+                background: 'rgba(0,0,0,0.25)',
+                color: 'var(--text-muted)',
+                fontSize: '0.85rem'
+              }}>
+                <span style={{ fontWeight: 800 }}>{viewLimit === 2 ? '2️⃣' : '1️⃣'}</span>
+                <Check size={14} color="var(--text-muted)" />
+                <span style={{ fontWeight: 600 }}>Opened</span>
               </div>
             ) : (
               <button
@@ -1489,25 +1519,32 @@ export default function MessageItem({
                   gap: '8px',
                   padding: '8px 16px',
                   borderRadius: '20px',
-                  background: 'rgba(255, 255, 255, 0.15)',
+                  background: viewLimit === 2
+                    ? 'linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(37, 99, 235, 0.25))'
+                    : 'rgba(255, 255, 255, 0.15)',
                   color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.3)',
+                  border: viewLimit === 2 ? '1px solid rgba(14, 165, 233, 0.45)' : '1px solid rgba(255,255,255,0.3)',
                   cursor: 'pointer',
                   fontWeight: 600,
                   fontSize: '0.85rem',
                   transition: 'transform 0.15s ease'
                 }}
               >
-                <span style={{ fontWeight: 700 }}>1️⃣</span>
+                <span style={{ fontWeight: 800 }}>{viewLimit === 2 ? '2️⃣' : '1️⃣'}</span>
                 <Eye size={16} />
-                <span>{message.type === 'video' ? 'View Once Video' : 'View Once Photo'}</span>
+                <span>
+                  {isMine
+                    ? `${viewLimit === 2 ? 'Twice View' : 'View Once'} ${message.type === 'video' ? 'Video' : 'Photo'}`
+                    : (viewLimit === 2 && currentViewCount === 1
+                        ? `1 View Left • ${message.type === 'video' ? 'Video' : 'Photo'}`
+                        : `${viewLimit === 2 ? 'Twice View' : 'View Once'} ${message.type === 'video' ? 'Video' : 'Photo'}`)}
+                </span>
               </button>
             )}
           </div>
         )}
 
-        {/* Fog Snap (Scratch-to-Reveal) Media Message */}
-        {/* Fog Snap (Scratch-to-Reveal) Media Message */}
+        {/* Fog Snap / Dust Image (Scratch-to-Reveal) Media Message */}
         {(message.type === 'image' || message.type === 'video') && message.isFogSnap && (
           <div style={{ padding: '4px 0' }}>
             {isFogBurned ? (
@@ -1524,7 +1561,9 @@ export default function MessageItem({
               }}>
                 <span style={{ fontSize: '1.25rem' }}>🌫️</span>
                 <div>
-                  <div style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)' }}>Fog Snap Evaporated</div>
+                  <div style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)' }}>
+                    {message.isDustImage ? 'Dust Image Evaporated' : 'Fog Snap Evaporated'}
+                  </div>
                   <div style={{ fontSize: '0.72rem', opacity: 0.8 }}>Burned into smoke forever</div>
                 </div>
               </div>
@@ -1536,9 +1575,9 @@ export default function MessageItem({
                   gap: '12px',
                   padding: '10px 16px',
                   borderRadius: '16px',
-                  background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(236, 72, 153, 0.2) 50%, rgba(56, 189, 248, 0.15) 100%)',
-                  border: '1px solid rgba(255, 255, 255, 0.25)',
-                  boxShadow: '0 4px 15px rgba(168, 85, 247, 0.15)',
+                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(234, 88, 12, 0.2) 50%, rgba(168, 85, 247, 0.15) 100%)',
+                  border: '1px solid rgba(245, 158, 11, 0.35)',
+                  boxShadow: '0 4px 15px rgba(245, 158, 11, 0.15)',
                   backdropFilter: 'blur(10px)',
                   color: '#fff',
                   textAlign: 'left'
@@ -1548,21 +1587,21 @@ export default function MessageItem({
                   width: '38px',
                   height: '38px',
                   borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #a855f7, #ec4899)',
+                  background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: '1.3rem',
-                  boxShadow: '0 2px 8px rgba(236,72,153,0.3)',
+                  boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)',
                   flexShrink: 0
                 }}>
                   🌫️
                 </div>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>Secret Fog Snap</span>
+                    <span>{message.isDustImage ? '✨ Scratch Dust Image' : 'Secret Fog Snap'}</span>
                     <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      {message.fogSnapDuration || 7}s
+                      {message.fogSnapDuration || 10}s
                     </span>
                   </div>
                   <div style={{ fontSize: '0.74rem', opacity: 0.82, marginTop: '2px' }}>
@@ -1579,9 +1618,9 @@ export default function MessageItem({
                   gap: '12px',
                   padding: '10px 16px',
                   borderRadius: '16px',
-                  background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.25) 0%, rgba(236, 72, 153, 0.25) 50%, rgba(56, 189, 248, 0.2) 100%)',
-                  border: '1px solid rgba(255, 255, 255, 0.35)',
-                  boxShadow: '0 4px 15px rgba(236, 72, 153, 0.25)',
+                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(234, 88, 12, 0.25) 50%, rgba(168, 85, 247, 0.2) 100%)',
+                  border: '1px solid rgba(245, 158, 11, 0.45)',
+                  boxShadow: '0 4px 15px rgba(245, 158, 11, 0.25)',
                   backdropFilter: 'blur(10px)',
                   color: '#fff',
                   cursor: 'pointer',
@@ -1593,25 +1632,25 @@ export default function MessageItem({
                   width: '38px',
                   height: '38px',
                   borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #a855f7, #ec4899)',
+                  background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: '1.3rem',
-                  boxShadow: '0 2px 8px rgba(236,72,153,0.4)',
+                  boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)',
                   flexShrink: 0
                 }}>
                   🌫️
                 </div>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>Secret Fog Snap</span>
+                    <span>{message.isDustImage ? '✨ Scratch Dust Image' : 'Secret Fog Snap'}</span>
                     <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      {message.fogSnapDuration || 7}s
+                      {message.fogSnapDuration || 10}s
                     </span>
                   </div>
-                  <div style={{ fontSize: '0.74rem', opacity: 0.82, marginTop: '2px' }}>
-                    👆 Scratch mist to reveal • Self-destructs
+                  <div style={{ fontSize: '0.74rem', opacity: 0.85, marginTop: '2px' }}>
+                    👆 Tap to scratch frosted mist & reveal
                   </div>
                 </div>
               </button>
@@ -2617,6 +2656,7 @@ export default function MessageItem({
       {showViewOnceModal && (
         <ViewOnceModal
           message={message}
+          viewCount={currentViewCount + 1}
           onMarkViewed={handleMarkViewed}
           onClose={() => setShowViewOnceModal(false)}
         />

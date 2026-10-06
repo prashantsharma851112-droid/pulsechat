@@ -836,9 +836,13 @@ io.on('connection', (socket) => {
         pollData: pollData || null,
         giftData: giftData || null,
         callData: callData || null,
-        isViewOnce: !!isViewOnce,
-        isFogSnap: Boolean(messageData.isFogSnap),
-        fogSnapDuration: messageData.fogSnapDuration || 7,
+        isViewOnce: Boolean(isViewOnce || messageData.isViewTwice),
+        isViewTwice: Boolean(messageData.isViewTwice),
+        viewLimit: messageData.isViewTwice ? 2 : (messageData.viewLimit || (isViewOnce ? 1 : 1)),
+        viewCounts: {},
+        isFogSnap: Boolean(messageData.isFogSnap || messageData.isDustImage),
+        isDustImage: Boolean(messageData.isDustImage),
+        fogSnapDuration: messageData.fogSnapDuration || 10,
         fogSnapStatus: 'unrevealed',
         viewedBy: [],
         status: initialStatus,
@@ -971,7 +975,11 @@ io.on('connection', (socket) => {
   socket.on('view_once_opened', async ({ messageId, userId, chatId }) => {
     const updatedMsg = await db.markViewOnceOpened(messageId, userId);
     if (updatedMsg) {
-      io.to(chatId).emit('view_once_updated', { messageId, viewedBy: updatedMsg.viewedBy });
+      io.to(chatId).emit('view_once_updated', {
+        messageId,
+        viewedBy: updatedMsg.viewedBy,
+        viewCounts: updatedMsg.viewCounts
+      });
     }
   });
 

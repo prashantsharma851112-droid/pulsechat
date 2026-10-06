@@ -259,11 +259,17 @@ module.exports = {
 
     // Only count as viewed if opened by recipient (not sender)
     if (msg.senderId !== userId) {
-      if (!msg.viewedBy.includes(userId)) {
+      if (!msg.viewCounts) msg.viewCounts = {};
+      const currentViews = (msg.viewCounts[userId] || 0) + 1;
+      msg.viewCounts[userId] = currentViews;
+      msg.markModified('viewCounts');
+
+      const maxLimit = msg.viewLimit || (msg.isViewTwice ? 2 : 1);
+      if (currentViews >= maxLimit && !msg.viewedBy.includes(userId)) {
         msg.viewedBy.push(userId);
         msg.markModified('viewedBy');
-        await msg.save();
       }
+      await msg.save();
     }
     return msg;
   },

@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Lock, ShieldAlert, Eye, Fingerprint, AlertOctagon } from 'lucide-react';
 
-export default function ViewOnceModal({ message, onMarkViewed, onClose }) {
-  const [isHolding, setIsHolding] = useState(false);
+export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, onClose }) {
   const [hasMarkedViewed, setHasMarkedViewed] = useState(false);
   const [screenshotBlocked, setScreenshotBlocked] = useState(false);
   const [securityWarning, setSecurityWarning] = useState(null);
@@ -14,9 +13,9 @@ export default function ViewOnceModal({ message, onMarkViewed, onClose }) {
   const warningTimerRef = useRef(null);
 
   const isVideo = message?.type === 'video';
+  const viewLimit = message?.viewLimit || (message?.isViewTwice ? 2 : 1);
 
   const triggerSecurityAlert = useCallback((warningText) => {
-    setIsHolding(false);
     setScreenshotBlocked(true);
     setSecurityWarning(warningText);
 
@@ -58,7 +57,7 @@ export default function ViewOnceModal({ message, onMarkViewed, onClose }) {
     };
   }, [message, isVideo]);
 
-  // Mark viewed once user holds to reveal or closes
+  // Mark viewed once user opens or closes
   const markViewedOnce = useCallback(() => {
     if (!hasMarkedViewed) {
       setHasMarkedViewed(true);
@@ -76,8 +75,8 @@ export default function ViewOnceModal({ message, onMarkViewed, onClose }) {
     if (!ctx) return;
 
     // Calculate max dimensions fitting screen
-    const maxW = Math.min(window.innerWidth * 0.9, 800);
-    const maxH = Math.min(window.innerHeight * 0.8, 700);
+    const maxW = Math.min(window.innerWidth * 0.95, 900);
+    const maxH = Math.min(window.innerHeight * 0.85, 800);
 
     let width = img.naturalWidth || 600;
     let height = img.naturalHeight || 400;
@@ -99,8 +98,8 @@ export default function ViewOnceModal({ message, onMarkViewed, onClose }) {
     ctx.textAlign = 'center';
     ctx.translate(renderW / 2, renderH / 2);
     ctx.rotate(-Math.PI / 6);
-    ctx.fillText('🔒 PULSECHAT • PROTECTED VIEW ONCE • DO NOT CAPTURE', 0, 0);
-    ctx.fillText('CONFIDENTIAL & VIEW-ONCE RESTRICTED', 0, 30);
+    ctx.fillText('🔒 PULSECHAT • PROTECTED VIEW • DO NOT CAPTURE', 0, 0);
+    ctx.fillText('CONFIDENTIAL & VIEW-RESTRICTED', 0, 30);
     ctx.restore();
   }, []);
 
@@ -114,27 +113,25 @@ export default function ViewOnceModal({ message, onMarkViewed, onClose }) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }, []);
 
-  // Update canvas rendering when isHolding changes
+  // Draw image or play video immediately when ready
   useEffect(() => {
+    if (screenshotBlocked) {
+      clearCanvas();
+      if (videoRef.current) videoRef.current.pause();
+      return;
+    }
+
     if (isVideo) {
       if (videoRef.current) {
-        if (isHolding && !screenshotBlocked) {
-          videoRef.current.play().catch(() => {});
-          markViewedOnce();
-        } else {
-          videoRef.current.pause();
-        }
+        videoRef.current.play().catch(() => {});
       }
       return;
     }
 
-    if (isHolding && !screenshotBlocked) {
+    if (imageLoaded) {
       drawImageToCanvas();
-      markViewedOnce();
-    } else {
-      clearCanvas();
     }
-  }, [isHolding, screenshotBlocked, isVideo, drawImageToCanvas, clearCanvas, markViewedOnce]);
+  }, [imageLoaded, screenshotBlocked, isVideo, drawImageToCanvas, clearCanvas]);
 
   // Comprehensive Anti-Screenshot, Snipping Tool & Visibility Loss Interceptors
   useEffect(() => {

@@ -78,20 +78,22 @@ export default function FogSnapModal({
       ctx.fillRect(Math.random() * w, Math.random() * h, Math.random() * 4 + 1, Math.random() * 4 + 1);
     }
 
-    // Glowing Secret Fog Title & Instruction
+    // Glowing Secret Dust Image Title & Instruction
     ctx.fillStyle = '#f59e0b';
-    ctx.font = 'bold 20px "Plus Jakarta Sans", sans-serif';
+    ctx.font = 'bold 22px "Plus Jakarta Sans", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('🌫️ SECRET FOG SNAP', w / 2, h / 2 - 25);
+    ctx.fillText('✨ SCRATCH DUST IMAGE', w / 2, h / 2 - 25);
 
     ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 13px "Plus Jakarta Sans", sans-serif';
-    ctx.fillText('Scratch with your finger to reveal!', w / 2, h / 2 + 10);
+    ctx.font = '600 14px "Plus Jakarta Sans", sans-serif';
+    ctx.fillText('Scratch smoothly with your finger to reveal!', w / 2, h / 2 + 10);
 
-    ctx.fillStyle = '#ef4444';
-    ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
-    ctx.fillText('⚠️ Will evaporate after reveal. Screenshot guard active.', w / 2, h / 2 + 35);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+    ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
+    ctx.fillText('🔒 Protected Media • Auto-destructs after reveal', w / 2, h / 2 + 35);
   }, []);
+
+  const lastPosRef = useRef({ x: null, y: null });
 
   // Calculate Cleared Percentage
   const checkScratchPercentage = useCallback(() => {
@@ -111,8 +113,8 @@ export default function FogSnapModal({
       }
 
       const ratio = transparentPixels / (totalPixels / 4);
-      if (ratio > 0.45) {
-        // More than 45% scratched: Fully Reveal & Start Countdown!
+      if (ratio > 0.42) {
+        // More than 42% scratched: Fully Reveal & Start Countdown!
         setIsRevealed(true);
         // Wipe remaining canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -128,7 +130,7 @@ export default function FogSnapModal({
     } catch (e) {}
   }, [isRevealed, message, chatId, onRevealed, token]);
 
-  // Scratch Action Handler
+  // Scratch Action Handler (Buttery Smooth continuous stroke)
   const handleScratch = useCallback((clientX, clientY) => {
     const canvas = canvasRef.current;
     if (!canvas || isRevealed) return;
@@ -139,10 +141,24 @@ export default function FogSnapModal({
     const x = clientX - rect.left;
     const y = clientY - rect.top;
 
+    ctx.save();
     ctx.globalCompositeOperation = 'destination-out';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 64;
+
     ctx.beginPath();
-    ctx.arc(x, y, 38, 0, Math.PI * 2);
-    ctx.fill();
+    if (lastPosRef.current.x !== null && lastPosRef.current.y !== null) {
+      ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    } else {
+      ctx.arc(x, y, 32, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    lastPosRef.current = { x, y };
 
     playSizzle();
     checkScratchPercentage();
@@ -151,6 +167,7 @@ export default function FogSnapModal({
   // Mouse & Touch events
   const onMouseDown = (e) => {
     isScratchingRef.current = true;
+    lastPosRef.current = { x: null, y: null };
     handleScratch(e.clientX, e.clientY);
   };
   const onMouseMove = (e) => {
@@ -158,11 +175,13 @@ export default function FogSnapModal({
   };
   const onMouseUp = () => {
     isScratchingRef.current = false;
+    lastPosRef.current = { x: null, y: null };
   };
 
   const onTouchStart = (e) => {
     if (e.touches && e.touches.length > 0) {
       isScratchingRef.current = true;
+      lastPosRef.current = { x: null, y: null };
       handleScratch(e.touches[0].clientX, e.touches[0].clientY);
     }
   };
@@ -173,6 +192,7 @@ export default function FogSnapModal({
   };
   const onTouchEnd = () => {
     isScratchingRef.current = false;
+    lastPosRef.current = { x: null, y: null };
   };
 
   // Countdown Fuse once revealed
