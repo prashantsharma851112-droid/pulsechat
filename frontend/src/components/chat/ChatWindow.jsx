@@ -3590,6 +3590,68 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                       ? 'Online'
                       : 'Offline'}
               </p>
+
+              {/* Conversation Mood Timeline */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  fontSize: '0.7rem',
+                  color: 'var(--text-muted)',
+                  marginTop: '2px',
+                  overflowX: 'auto',
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                  maxWidth: '100%'
+                }}
+              >
+                <span style={{ flexShrink: 0, fontWeight: 500, fontSize: '0.68rem', opacity: 0.8 }}>Mood:</span>
+                {moodSteps.length > 0 ? (
+                  <>
+                    {moodSteps.map((step, idx) => (
+                      <React.Fragment key={step.id || idx}>
+                        <span
+                          style={{
+                            color: step.color,
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '2px',
+                            background: step.bg,
+                            padding: '1px 6px',
+                            borderRadius: '8px',
+                            border: `1px solid ${step.border}`,
+                            whiteSpace: 'nowrap',
+                            fontSize: '0.68rem',
+                            opacity: step.isPending ? 0.6 : 1
+                          }}
+                          title={step.preview}
+                        >
+                          {step.emoji} {step.mood}
+                        </span>
+                        {idx < moodSteps.length - 1 && (
+                          <span style={{ color: 'var(--text-muted)', opacity: 0.4, fontSize: '0.6rem' }}>→</span>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </>
+                ) : (
+                  <span
+                    style={{
+                      color: moodInfo?.color || '#a855f7',
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      fontSize: '0.68rem'
+                    }}
+                  >
+                    {moodInfo?.emoji || '💬'} {moodInfo?.mood || 'Neutral'}
+                  </span>
+                )}
+                <div style={{ flex: 1, minWidth: '16px', height: '2px', borderRadius: '2px', background: moodInfo?.color || 'var(--border)', opacity: 0.4 }} />
+              </div>
             </div>
           </div>
 

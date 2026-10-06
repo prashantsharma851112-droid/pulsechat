@@ -3,7 +3,8 @@ import { AuthContext } from '../../context/AuthContext';
 import { 
   X, Camera, SwitchCamera, Image as ImageIcon, Music, Palette, Sparkles, 
   Send, Loader2, Type, Trash2, Smile, Disc, Check, FlipHorizontal,
-  RotateCcw, Volume2, VolumeX, Clock, Play, Pause, ChevronRight, Layers, AlertCircle
+  RotateCcw, Volume2, VolumeX, Clock, Play, Pause, ChevronRight, Layers, AlertCircle,
+  SlidersHorizontal
 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { registerGlobalMusicAudio, stopGlobalMusicAudio, playSound } from '../../utils/audio';
@@ -12,6 +13,13 @@ import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 import MusicPickerModal from './MusicPickerModal';
 import { EMOJI_CATEGORIES, ALL_EMOJIS } from '../chat/EmojiPicker';
 import { useBackHandler } from '../../utils/backNavigation';
+
+const formatTimeStr = (secs) => {
+  const s = Math.max(0, Math.floor(secs || 0));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return `${m}:${rem < 10 ? '0' : ''}${rem}`;
+};
 
 const GRADIENTS = [
   { id: 'g0', name: 'Dark Void', value: '#000000' },
@@ -91,6 +99,9 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [songStartTime, setSongStartTime] = useState(0);
   const [storyDuration, setStoryDuration] = useState(15);
   const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const [showMusicAdjuster, setShowMusicAdjuster] = useState(false);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [songTotalDuration, setSongTotalDuration] = useState(180);
   const [musicScale, setMusicScale] = useState(1.0);
   const [musicStyle, setMusicStyle] = useState('pill');
 
@@ -139,11 +150,124 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     setShowUnmuteHint(false);
   }, []);
 
+  // Music Adjuster Preview Audio Engine
+  useEffect(() => {
+    if (!showMusicAdjuster || !selectedSong) {
+      if (previewAudioRef.current) {
+        try {
+          previewAudioRef.current.pause();
+          previewAudioRef.current.src = '';
+          previewAudioRef.current = null;
+        } catch (e) {}
+      }
+      setIsPlayingPreview(false);
+      stopGlobalMusicAudio();
+      return;
+    }
+
+    if (selectedSong.duration && Number(selectedSong.duration) > 0) {
+      setSongTotalDuration(Number(selectedSong.duration));
+    }
+
+    if (selectedSong.audioUrl && !selectedSong.audioUrl.includes('youtube')) {
+      const audio = new Audio(selectedSong.audioUrl);
+      previewAudioRef.current = audio;
+      registerGlobalMusicAudio(audio);
+
+      audio.onloadedmetadata = () => {
+        if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+          setSongTotalDuration(Math.floor(audio.duration));
+        }
+        try {
+          const maxAllowed = Math.max(0, (audio.duration || 180) - storyDuration);
+          const seekTo = Math.min(songStartTime, maxAllowed);
+          audio.currentTime = seekTo;
+          audio.play().then(() => setIsPlayingPreview(true)).catch(() => setIsPlayingPreview(false));
+        } catch (e) {}
+      };
+
+      audio.ontimeupdate = () => {
+        const maxTime = songStartTime + storyDuration;
+        if (audio.currentTime >= maxTime || audio.currentTime < songStartTime) {
+          try {
+            audio.currentTime = songStartTime;
+          } catch (e) {}
+        }
+      };
+
+      audio.onended = () => {
+        try {
+          audio.currentTime = songStartTime;
+          audio.play().catch(() => {});
+        } catch (e) {}
+      };
+
+      audio.onerror = () => {
+        setIsPlayingPreview(false);
+      };
+
+      return () => {
+        try {
+          audio.pause();
+          audio.src = '';
+        } catch (e) {}
+        previewAudioRef.current = null;
+        stopGlobalMusicAudio();
+      };
+    } else {
+      setIsPlayingPreview(true);
+    }
+  }, [showMusicAdjuster, selectedSong, songStartTime, storyDuration]);
+
+  // Clean up audio on unmount
+  useEffect(() => {
+    return () => {
+      if (previewAudioRef.current) {
+        try {
+          previewAudioRef.current.pause();
+          previewAudioRef.current.src = '';
+          previewAudioRef.current = null;
+        } catch (e) {}
+      }
+      stopGlobalMusicAudio();
+    };
+  }, []);
+
+  const handleSeekMusic = (newStartTime) => {
+    const val = Number(newStartTime);
+    setSongStartTime(val);
+    if (previewAudioRef.current) {
+      try {
+        previewAudioRef.current.currentTime = val;
+        if (previewAudioRef.current.paused) {
+          previewAudioRef.current.play().then(() => setIsPlayingPreview(true)).catch(() => {});
+        }
+      } catch (e) {}
+    }
+  };
+
+  const togglePreviewAudio = () => {
+    if (previewAudioRef.current) {
+      if (previewAudioRef.current.paused) {
+        try {
+          previewAudioRef.current.currentTime = songStartTime;
+          previewAudioRef.current.play().then(() => setIsPlayingPreview(true)).catch(() => {});
+        } catch (e) {}
+      } else {
+        previewAudioRef.current.pause();
+        setIsPlayingPreview(false);
+      }
+    } else {
+      setIsPlayingPreview(prev => !prev);
+    }
+  };
+
   // Hardware Back Handler
   useBackHandler(() => setShowMusicPicker(false), showMusicPicker);
-  useBackHandler(() => setActivePanel(null), !showMusicPicker && Boolean(activePanel));
-  useBackHandler(() => setIsEditingText(false), !showMusicPicker && !activePanel && isEditingText);
-  useBackHandler(onClose, !showMusicPicker && !activePanel && !isEditingText);
+  useBackHandler(() => setShowMusicAdjuster(false), !showMusicPicker && showMusicAdjuster);
+  useBackHandler(() => setActivePanel(null), !showMusicPicker && !showMusicAdjuster && Boolean(activePanel));
+  useBackHandler(() => setIsEditingText(false), !showMusicPicker && !showMusicAdjuster && !activePanel && isEditingText);
+  useBackHandler(onClose, !showMusicPicker && !showMusicAdjuster && !activePanel && !isEditingText);
 
   // Camera Teardown
   const stopCameraStream = useCallback(() => {
@@ -912,7 +1036,13 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           {/* 🎵 (Music) */}
           <button
             type="button"
-            onClick={() => setShowMusicPicker(true)}
+            onClick={() => {
+              if (selectedSong) {
+                setShowMusicAdjuster(true);
+              } else {
+                setShowMusicPicker(true);
+              }
+            }}
             style={{
               width: '38px',
               height: '38px',
@@ -926,7 +1056,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               justifyContent: 'center',
               cursor: 'pointer'
             }}
-            title="Add Music"
+            title={selectedSong ? "Adjust / Trim Music" : "Add Music"}
           >
             <Music size={18} />
           </button>
@@ -1194,6 +1324,31 @@ export default function CreateVibeModal({ onClose, onCreated }) {
               <div style={{ fontSize: '0.66rem', color: '#cbd5e1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {selectedSong.artistName || 'Pulse Music'}
               </div>
+            </div>
+            {/* Quick Trim / Adjust Button */}
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMusicAdjuster(true);
+              }}
+              style={{
+                marginLeft: '4px',
+                padding: '4px 8px',
+                borderRadius: '12px',
+                background: 'rgba(16, 185, 129, 0.25)',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                fontSize: '0.66rem',
+                fontWeight: 700,
+                color: '#34d399',
+                cursor: 'pointer'
+              }}
+              title="Trim / Adjust Audio Segment"
+            >
+              <SlidersHorizontal size={11} />
+              <span>Trim</span>
             </div>
           </div>
         </div>
@@ -1898,10 +2053,364 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         onSelectSong={(song) => {
           setSelectedSong(song);
           setShowMusicPicker(false);
+          setSongStartTime(0);
+          setShowMusicAdjuster(true);
           playSound('pop');
         }}
         selectedSong={selectedSong}
       />
+
+      {/* =========================================================================
+          INSTAGRAM-STYLE MUSIC ADJUSTER & TRIMMER BOTTOM SHEET
+      ========================================================================= */}
+      {showMusicAdjuster && selectedSong && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.78)',
+            backdropFilter: 'blur(14px)',
+            zIndex: 1100,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
+            animation: 'pulseFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}
+          onClick={() => setShowMusicAdjuster(false)}
+        >
+          {/* YouTube Audio Preview Fallback (when no direct audioUrl) */}
+          {!selectedSong.audioUrl && selectedSong.youtubeId && (
+            <iframe
+              key={`adj_yt_${selectedSong.youtubeId}_${songStartTime}_${isPlayingPreview}`}
+              src={`https://www.youtube-nocookie.com/embed/${selectedSong.youtubeId}?autoplay=${isPlayingPreview ? 1 : 0}&enablejsapi=1&start=${Math.floor(songStartTime)}`}
+              allow="autoplay; encrypted-media; fullscreen"
+              style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }}
+            />
+          )}
+
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '520px',
+              margin: '0 auto',
+              background: 'linear-gradient(180deg, rgba(28, 28, 35, 0.98) 0%, rgba(15, 15, 20, 1) 100%)',
+              borderTop: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: '26px 26px 0 0',
+              padding: '16px 20px max(24px, env(safe-area-inset-bottom, 24px)) 20px',
+              boxShadow: '0 -10px 40px rgba(0, 0, 0, 0.8)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              animation: 'pulseSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top Sheet Handle */}
+            <div style={{ width: '38px', height: '4px', background: 'rgba(255, 255, 255, 0.3)', borderRadius: '2px', alignSelf: 'center' }} />
+
+            {/* Header: Remove / Title / Done */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedSong(null);
+                  setSongStartTime(0);
+                  setShowMusicAdjuster(false);
+                  playSound('pop');
+                }}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: '#ef4444',
+                  borderRadius: '16px',
+                  padding: '6px 12px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                <Trash2 size={14} /> Remove
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ffffff', fontWeight: 800, fontSize: '0.95rem' }}>
+                <Music size={16} color="#10b981" />
+                <span>Adjust Music</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMusicAdjuster(false);
+                  playSound('pop');
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  border: 'none',
+                  color: '#ffffff',
+                  borderRadius: '16px',
+                  padding: '6px 16px',
+                  fontSize: '0.85rem',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 10px rgba(16, 185, 129, 0.4)'
+                }}
+              >
+                <Check size={15} /> Done
+              </button>
+            </div>
+
+            {/* Song Meta Card */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                padding: '10px 14px',
+                borderRadius: '16px',
+                border: '1px solid rgba(255, 255, 255, 0.08)'
+              }}
+            >
+              <img
+                src={selectedSong.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(selectedSong.songTitle)}`}
+                alt=""
+                style={{ width: '44px', height: '44px', borderRadius: '10px', objectFit: 'cover' }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, color: '#fff', fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {selectedSong.songTitle}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {selectedSong.artistName || 'Artist'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMusicAdjuster(false);
+                  setShowMusicPicker(true);
+                }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#ffffff',
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  padding: '5px 10px',
+                  borderRadius: '10px',
+                  cursor: 'pointer'
+                }}
+              >
+                Change
+              </button>
+            </div>
+
+            {/* Duration Selector (Instagram Clip Length Pills) */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'rgba(255, 255, 255, 0.7)' }}>
+                  Clip Duration
+                </span>
+                <span style={{ fontSize: '0.76rem', fontWeight: 800, color: '#10b981' }}>
+                  {storyDuration} seconds
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[15, 30, 45, 60].map((dur) => {
+                  const isActive = Number(storyDuration) === dur;
+                  return (
+                    <button
+                      key={dur}
+                      type="button"
+                      onClick={() => {
+                        setStoryDuration(dur);
+                        const maxAllowed = Math.max(0, songTotalDuration - dur);
+                        if (songStartTime > maxAllowed) {
+                          handleSeekMusic(maxAllowed);
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '7px 0',
+                        borderRadius: '12px',
+                        background: isActive ? 'linear-gradient(135deg, #10b981, #06b6d4)' : 'rgba(255, 255, 255, 0.08)',
+                        border: isActive ? '1.5px solid #34d399' : '1px solid rgba(255, 255, 255, 0.1)',
+                        color: '#ffffff',
+                        fontWeight: 800,
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {dur}s
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Instagram Waveform & Scrubber Slider */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'rgba(255, 255, 255, 0.7)' }}>
+                  Selected Segment
+                </span>
+                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#f59e0b', fontFamily: 'monospace' }}>
+                  {formatTimeStr(songStartTime)} - {formatTimeStr(songStartTime + storyDuration)} <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>/ {formatTimeStr(songTotalDuration)}</span>
+                </span>
+              </div>
+
+              {/* Waveform Visualizer simulation */}
+              <div
+                style={{
+                  height: '48px',
+                  background: 'rgba(0, 0, 0, 0.4)',
+                  borderRadius: '14px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0 8px',
+                  gap: '3px'
+                }}
+              >
+                {/* Visual Audio Wave Bars */}
+                {Array.from({ length: 48 }).map((_, i) => {
+                  const pct = i / 48;
+                  const startPct = songStartTime / songTotalDuration;
+                  const endPct = (songStartTime + storyDuration) / songTotalDuration;
+                  const isInRange = pct >= startPct && pct <= endPct;
+                  const barHeight = 12 + Math.abs(Math.sin(i * 1.3) * 26 + Math.cos(i * 0.7) * 8);
+
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        flex: 1,
+                        height: `${barHeight}px`,
+                        borderRadius: '3px',
+                        background: isInRange ? 'linear-gradient(180deg, #10b981, #06b6d4)' : 'rgba(255, 255, 255, 0.18)',
+                        transition: 'background 0.12s ease'
+                      }}
+                    />
+                  );
+                })}
+
+                {/* Range Overlay Box */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    bottom: 0,
+                    left: `${Math.min(100, Math.max(0, (songStartTime / songTotalDuration) * 100))}%`,
+                    width: `${Math.min(100, Math.max(4, (storyDuration / songTotalDuration) * 100))}%`,
+                    border: '2px solid #10b981',
+                    borderRadius: '8px',
+                    background: 'rgba(16, 185, 129, 0.18)',
+                    pointerEvents: 'none',
+                    boxShadow: '0 0 12px rgba(16, 185, 129, 0.4)'
+                  }}
+                />
+              </div>
+
+              {/* Range Input Slider for Seeking */}
+              <div style={{ marginTop: '10px' }}>
+                <input
+                  type="range"
+                  min="0"
+                  max={Math.max(0, songTotalDuration - storyDuration)}
+                  step="1"
+                  value={songStartTime}
+                  onChange={(e) => handleSeekMusic(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    accentColor: '#10b981',
+                    cursor: 'pointer'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Playback Controls & Precision Step Buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '18px', paddingTop: '4px' }}>
+              {/* -5s step */}
+              <button
+                type="button"
+                onClick={() => handleSeekMusic(Math.max(0, songStartTime - 5))}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#ffffff',
+                  borderRadius: '50%',
+                  width: '38px',
+                  height: '38px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  fontSize: '0.72rem',
+                  fontWeight: 800
+                }}
+                title="-5 seconds"
+              >
+                -5s
+              </button>
+
+              {/* Main Play / Pause preview */}
+              <button
+                type="button"
+                onClick={togglePreviewAudio}
+                style={{
+                  width: '54px',
+                  height: '54px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #10b981, #06b6d4)',
+                  border: 'none',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 18px rgba(16, 185, 129, 0.5)'
+                }}
+                title={isPlayingPreview ? "Pause Preview" : "Play Preview"}
+              >
+                {isPlayingPreview ? <Pause size={24} /> : <Play size={24} style={{ marginLeft: '3px' }} />}
+              </button>
+
+              {/* +5s step */}
+              <button
+                type="button"
+                onClick={() => handleSeekMusic(Math.min(Math.max(0, songTotalDuration - storyDuration), songStartTime + 5))}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#ffffff',
+                  borderRadius: '50%',
+                  width: '38px',
+                  height: '38px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  fontSize: '0.72rem',
+                  fontWeight: 800
+                }}
+                title="+5 seconds"
+              >
+                +5s
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
