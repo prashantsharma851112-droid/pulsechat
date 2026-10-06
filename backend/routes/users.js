@@ -437,8 +437,98 @@ router.post('/delete-account', authMiddleware, async (req, res) => {
     res.json({ success: true, message: 'Your account and all associated data have been permanently deleted.' });
   } catch (err) {
     console.error('Account deletion error:', err);
-    res.status(500).json({ error: 'Failed to delete account. Please try again.' });
+// Public Profile Card for Viral Social Sharing (pulsechat.me/@username)
+router.get('/public/card/:username', async (req, res) => {
+  try {
+    const rawUsername = (req.params.username || '').trim().replace(/^@/, '');
+    if (!rawUsername) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+
+    const User = require('../models/User');
+    const mongoose = require('mongoose');
+    const isObjectId = mongoose.Types.ObjectId.isValid(rawUsername);
+
+    const user = await User.findOne({
+      $or: [
+        { username: { $regex: new RegExp(`^${rawUsername}$`, 'i') } },
+        { id: rawUsername },
+        ...(isObjectId ? [{ _id: rawUsername }] : [])
+      ]
+    }).select('id username displayName avatar status isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown vibeAura createdAt').lean();
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Fetch streak data if available
+    let streakCount = 0;
+    let streakShields = 0;
+    try {
+      const Streak = mongoose.models.Streak || mongoose.model('Streak', new mongoose.Schema({
+        chatId: String,
+        streakCount: Number,
+        shields: Number,
+        lastStreakDate: String
+      }, { strict: false }));
+      const streakRecord = await Streak.findOne({
+        chatId: { $regex: user.id }
+      }).sort({ streakCount: -1 }).lean();
+      if (streakRecord) {
+        streakCount = streakRecord.streakCount || 0;
+        streakShields = streakRecord.shields || 0;
+      }
+    } catch (e) {}
+
+    // Fetch active Vibe story if exists
+    let topVibe = null;
+    try {
+      const Vibe = mongoose.models.Vibe;
+      if (Vibe) {
+        const activeVibe = await Vibe.findOne({
+          userId: user.id,
+          expiresAt: { $gt: new Date() }
+        }).sort({ createdAt: -1 }).lean();
+        if (activeVibe) {
+          topVibe = {
+            id: activeVibe.id || activeVibe._id,
+            caption: activeVibe.caption,
+            mediaUrl: activeVibe.mediaUrl,
+            mediaType: activeVibe.mediaType || (activeVibe.mediaUrl ? 'image' : 'text'),
+            bgGradient: activeVibe.bgGradient,
+            songTitle: activeVibe.songTitle
+          };
+        }
+      }
+    } catch (e) {}
+
+    res.json({
+      success: true,
+      card: {
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName || user.username,
+        avatar: user.avatar,
+        status: user.status || 'Chilling on PulseChat ⚡',
+        isPro: Boolean(user.isPro),
+        proTier: user.proTier || 'free',
+        customBadge: user.customBadge || null,
+        pulseSparks: user.pulseSparks || 100,
+        hasKingCrown: Boolean(user.hasKingCrown),
+        hasSilverCrown: Boolean(user.hasSilverCrown),
+        hasStreakCrown: Boolean(user.hasStreakCrown),
+        vibeAura: user.vibeAura || 'neon',
+        createdAt: user.createdAt,
+        streakCount,
+        streakShields,
+        topVibe
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching public card:', err);
+    res.status(500).json({ error: 'Failed to fetch public card' });
   }
 });
 
 module.exports = router;
+

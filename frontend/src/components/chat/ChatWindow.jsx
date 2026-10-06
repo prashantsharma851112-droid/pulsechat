@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3, Ghost, Search, ChevronUp, ChevronDown, ArrowDown } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3, Ghost, Search, Globe, ChevronUp, ChevronDown, ArrowDown } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -53,6 +53,25 @@ import {
   updateGroupInStorage,
   clearUnreadCount
 } from '../../utils/offlineStorage';
+
+export const GLOBAL_LANGUAGES = [
+  { code: 'hi', name: 'Hindi', flag: '🇮🇳' },
+  { code: 'en', name: 'English', flag: '🇬🇧' },
+  { code: 'es', name: 'Spanish', flag: '🇪🇸' },
+  { code: 'fr', name: 'French', flag: '🇫🇷' },
+  { code: 'de', name: 'German', flag: '🇩🇪' },
+  { code: 'ar', name: 'Arabic', flag: '🇸🇦' },
+  { code: 'ru', name: 'Russian', flag: '🇷🇺' },
+  { code: 'ja', name: 'Japanese', flag: '🇯🇵' },
+  { code: 'ko', name: 'Korean', flag: '🇰🇷' },
+  { code: 'pt', name: 'Portuguese', flag: '🇧🇷' },
+  { code: 'zh', name: 'Chinese', flag: '🇨🇳' },
+  { code: 'ur', name: 'Urdu', flag: '🇵🇰' },
+  { code: 'bn', name: 'Bengali', flag: '🇧🇩' },
+  { code: 'id', name: 'Indonesian', flag: '🇮🇩' },
+  { code: 'tr', name: 'Turkish', flag: '🇹🇷' },
+  { code: 'it', name: 'Italian', flag: '🇮🇹' }
+];
 
 const sanitizeFogSnapMessage = (m) => {
   if (!m || !m.isFogSnap) return m;
@@ -1059,6 +1078,150 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const dustImageInputRef = useRef(null);
+
+  // Live Chat Translation State
+  const [targetLang, setTargetLang] = useState(() => {
+    try {
+      return localStorage.getItem('pulsechat_target_lang') || 'hi';
+    } catch {
+      return 'hi';
+    }
+  });
+  const [isAutoTranslateActive, setIsAutoTranslateActive] = useState(() => {
+    try {
+      return localStorage.getItem(`pulsechat_auto_translate_${chatId}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [showTranslateBar, setShowTranslateBar] = useState(false);
+  const [translationsByMsgId, setTranslationsByMsgId] = useState({});
+  const [isTranslatingDraft, setIsTranslatingDraft] = useState(false);
+
+  useEffect(() => {
+    try {
+      setIsAutoTranslateActive(localStorage.getItem(`pulsechat_auto_translate_${chatId}`) === 'true');
+    } catch {
+      setIsAutoTranslateActive(false);
+    }
+  }, [chatId]);
+
+  const handleTranslateMessage = useCallback(async (msg, customTargetLang) => {
+    if (!msg || !msg.content || typeof msg.content !== 'string') return;
+    const tLang = customTargetLang || targetLang;
+
+    setTranslationsByMsgId(prev => ({
+      ...prev,
+      [msg.id]: {
+        ...(prev[msg.id] || {}),
+        isLoading: true,
+        isVisible: true,
+        targetLang: tLang
+      }
+    }));
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/messages/translate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          text: msg.content,
+          targetLang: tLang
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.translatedText) {
+        setTranslationsByMsgId(prev => ({
+          ...prev,
+          [msg.id]: {
+            translatedText: data.translatedText,
+            sourceLang: data.sourceLang || 'auto',
+            targetLang: tLang,
+            isVisible: true,
+            isLoading: false
+          }
+        }));
+      } else {
+        setTranslationsByMsgId(prev => ({
+          ...prev,
+          [msg.id]: {
+            ...(prev[msg.id] || {}),
+            isLoading: false
+          }
+        }));
+      }
+    } catch (err) {
+      console.error('Translation error:', err);
+      setTranslationsByMsgId(prev => ({
+        ...prev,
+        [msg.id]: {
+          ...(prev[msg.id] || {}),
+          isLoading: false
+        }
+      }));
+    }
+  }, [targetLang, token]);
+
+  const handleToggleTranslation = useCallback((msgId) => {
+    setTranslationsByMsgId(prev => {
+      if (!prev[msgId]) return prev;
+      return {
+        ...prev,
+        [msgId]: {
+          ...prev[msgId],
+          isVisible: !prev[msgId].isVisible
+        }
+      };
+    });
+  }, []);
+
+  const handleTranslateDraft = useCallback(async () => {
+    if (!text || !text.trim() || isTranslatingDraft) return;
+    setIsTranslatingDraft(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/messages/translate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          text: text.trim(),
+          targetLang
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.translatedText) {
+        setText(data.translatedText);
+        setActionToast(`Draft translated to ${targetLang.toUpperCase()} ✨`);
+        setTimeout(() => setActionToast(''), 2500);
+      }
+    } catch (err) {
+      console.error('Draft translation error:', err);
+    } finally {
+      setIsTranslatingDraft(false);
+    }
+  }, [text, isTranslatingDraft, targetLang, token]);
+
+  useEffect(() => {
+    if (!isAutoTranslateActive || !messages || messages.length === 0) return;
+    const latestIncoming = messages.slice(-5).filter(m => 
+      m && 
+      m.id && 
+      m.senderId !== user?.id && 
+      m.content && 
+      typeof m.content === 'string' &&
+      m.type !== 'deleted' &&
+      !translationsByMsgId[m.id]?.translatedText &&
+      !translationsByMsgId[m.id]?.isLoading
+    );
+    latestIncoming.forEach(msg => {
+      handleTranslateMessage(msg);
+    });
+  }, [messages, isAutoTranslateActive, user?.id, handleTranslateMessage, translationsByMsgId]);
 
   const deduplicatedMessages = useMemo(() => {
     const seen = new Set();
@@ -3594,6 +3757,41 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
 
           <div className="chat-header-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+            {/* Position 4: Live In-Line Translation Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setShowTranslateBar(prev => !prev)}
+              className="icon-btn-ghost"
+              title="Live Chat Translation (Auto-Translate & Languages)"
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                color: (isAutoTranslateActive || showTranslateBar) ? '#06b6d4' : 'var(--text-main)',
+                background: (isAutoTranslateActive || showTranslateBar) ? 'rgba(6, 182, 212, 0.16)' : 'transparent',
+                border: isAutoTranslateActive ? '1px solid rgba(6, 182, 212, 0.4)' : 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                position: 'relative'
+              }}
+            >
+              <Globe size={19} />
+              {isAutoTranslateActive && (
+                <span style={{
+                  position: 'absolute',
+                  top: '6px',
+                  right: '6px',
+                  width: '7px',
+                  height: '7px',
+                  borderRadius: '50%',
+                  background: '#06b6d4',
+                  boxShadow: '0 0 6px #06b6d4'
+                }} />
+              )}
+            </button>
+
             {/* Position 3: In-Chat Search Toggle Button */}
             <button
               type="button"
@@ -3734,6 +3932,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     <CheckSquare size={16} color="var(--accent)" />
                     <span>Select Messages</span>
                   </button>
+                  {!isGroup && (
+                    <button onClick={() => {
+                      setShowMoreMenu(false);
+                      window.dispatchEvent(new CustomEvent('pulsechat_open_handle_card', { detail: { user: activeChat } }));
+                    }}>
+                      <Sparkles size={16} color="var(--accent)" />
+                      <span>View Pulse Card ✨</span>
+                    </button>
+                  )}
                   <button onClick={() => {
                     setShowMoreMenu(false);
                     if (isGroup) {
@@ -4360,6 +4567,123 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
         )}
 
+        {/* Live In-Line Translation Control Bar */}
+        {showTranslateBar && (
+          <div
+            style={{
+              padding: '7px 14px',
+              background: (chatWallpaper && chatWallpaper !== 'none')
+                ? 'color-mix(in srgb, var(--bg-card) 94%, transparent)'
+                : 'var(--bg-card)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              borderBottom: '1px solid rgba(6, 182, 212, 0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '10px',
+              zIndex: 28,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+              animation: 'pulseFadeIn 0.2s ease',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Globe size={15} color="#06b6d4" />
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#06b6d4' }}>
+                  Live Translation:
+                </span>
+              </div>
+
+              {/* Target Language Dropdown */}
+              <select
+                value={targetLang}
+                onChange={(e) => {
+                  const newLang = e.target.value;
+                  setTargetLang(newLang);
+                  try {
+                    localStorage.setItem('pulsechat_target_lang', newLang);
+                  } catch (_) {}
+                  if (isAutoTranslateActive) {
+                    messages.slice(-15).forEach(m => {
+                      if (m.content && m.senderId !== user?.id && m.type !== 'deleted') {
+                        handleTranslateMessage(m, newLang);
+                      }
+                    });
+                  }
+                }}
+                style={{
+                  background: 'var(--hover-bg)',
+                  color: 'var(--text-main)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  padding: '3px 8px',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                {GLOBAL_LANGUAGES.map(l => (
+                  <option key={l.code} value={l.code}>
+                    {l.flag} {l.name} ({l.code.toUpperCase()})
+                  </option>
+                ))}
+              </select>
+
+              {/* Auto Translate Toggle Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = !isAutoTranslateActive;
+                  setIsAutoTranslateActive(nextVal);
+                  try {
+                    localStorage.setItem(`pulsechat_auto_translate_${chatId}`, String(nextVal));
+                  } catch (_) {}
+                  if (nextVal) {
+                    setActionToast(`Auto-translate to ${targetLang.toUpperCase()} turned ON 🌐`);
+                    messages.slice(-15).forEach(m => {
+                      if (m.content && m.senderId !== user?.id && m.type !== 'deleted') {
+                        handleTranslateMessage(m);
+                      }
+                    });
+                  } else {
+                    setActionToast('Auto-translate turned OFF');
+                  }
+                  setTimeout(() => setActionToast(''), 2500);
+                }}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  background: isAutoTranslateActive ? 'linear-gradient(135deg, #06b6d4, #3b82f6)' : 'var(--hover-bg)',
+                  color: isAutoTranslateActive ? '#fff' : 'var(--text-muted)',
+                  border: isAutoTranslateActive ? 'none' : '1px solid var(--border)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px'
+                }}
+              >
+                {isAutoTranslateActive ? '⚡ Auto-Translate ON' : 'Auto-Translate OFF'}
+              </button>
+            </div>
+
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => setShowTranslateBar(false)}
+              className="icon-btn-ghost"
+              style={{ width: '26px', height: '26px', borderRadius: '50%', padding: 0, color: 'var(--text-muted)' }}
+              title="Close translation bar"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        )}
+
       {/* Top Mood Timeline: Ultra-Slim Pencil Line with Micro Typography */}
       {!blockStatus.isBlockedByMe && !blockStatus.isBlockedByThem && (
         <div style={{
@@ -4621,6 +4945,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 onOpenSparksWallet={() => setShowSparksWallet(true)}
                 onEditDrawing={handleOpenWhiteboardForEdit}
                 highlightSearchTerm={showInChatSearch ? inChatSearchQuery : ''}
+                translationData={translationsByMsgId[msg.id]}
+                onTranslateMessage={() => handleTranslateMessage(msg)}
+                onToggleTranslation={() => handleToggleTranslation(msg.id)}
+                targetLang={targetLang}
               />
             </React.Fragment>
           );
@@ -5628,7 +5956,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           {showRecorder ? (
             <VoiceRecorder onSendVoice={handleSendVoice} onCancel={() => setShowRecorder(false)} />
           ) : (
-            <form onSubmit={handleSendText} style={{ flex: 1, display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <form onSubmit={handleSendText} style={{ flex: 1, display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
               <input
                 type="text"
                 value={text}
@@ -5638,6 +5966,32 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 ref={replyInputRef}
                 style={{ flex: 1, minWidth: 0, borderRadius: '24px', padding: '10px 16px', fontSize: '0.94rem' }}
               />
+              {text.trim().length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleTranslateDraft}
+                  disabled={isTranslatingDraft}
+                  title={`Translate draft to ${targetLang.toUpperCase()} before sending`}
+                  style={{
+                    background: 'rgba(6, 182, 212, 0.16)',
+                    border: '1px solid rgba(6, 182, 212, 0.45)',
+                    color: '#06b6d4',
+                    borderRadius: '20px',
+                    padding: '6px 10px',
+                    fontSize: '0.74rem',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    cursor: isTranslatingDraft ? 'wait' : 'pointer',
+                    flexShrink: 0,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Globe size={13} />
+                  <span>{isTranslatingDraft ? 'Translating...' : `➔ ${targetLang.toUpperCase()}`}</span>
+                </button>
+              )}
               <button
                 type="submit"
                 className="btn-primary-round"

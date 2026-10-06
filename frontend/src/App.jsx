@@ -20,6 +20,7 @@ import EmojiParticleBurst from './components/common/EmojiParticleBurst';
 import AppOnboardingModal from './components/common/AppOnboardingModal';
 import LegalView from './components/common/LegalView';
 import LegalModal from './components/common/LegalModal';
+import PulseHandleCardModal from './components/profile/PulseHandleCardModal';
 import { BACKEND_URL } from './utils/config';
 import { updateUserProfileInStorage, clearUnreadCount, getCachedAllUsers } from './utils/offlineStorage';
 import { initBackListeners, useBackHandler } from './utils/backNavigation';
@@ -123,6 +124,27 @@ export default function App() {
     return null;
   });
   const [legalModalTab, setLegalModalTab] = useState(null);
+
+  // Pulse Handle Card Direct Route (/u/:username, /@:username, /card/:username)
+  const [standaloneHandleUser, setStandaloneHandleUser] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const p = window.location.pathname;
+      const match = p.match(/^\/(?:u\/|@|card\/)([^/?#]+)/i);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]).replace(/^@/, '');
+      }
+    }
+    return null;
+  });
+  const [modalHandleUser, setModalHandleUser] = useState(null);
+
+  useEffect(() => {
+    const handleOpenCard = (e) => {
+      setModalHandleUser(e.detail?.user || null);
+    };
+    window.addEventListener('pulsechat_open_handle_card', handleOpenCard);
+    return () => window.removeEventListener('pulsechat_open_handle_card', handleOpenCard);
+  }, []);
 
   useEffect(() => {
     const handleOpenLegal = (e) => {
@@ -593,6 +615,25 @@ export default function App() {
     );
   }
 
+  if (standaloneHandleUser) {
+    return (
+      <PulseHandleCardModal
+        targetUser={standaloneHandleUser}
+        currentUser={user}
+        standalone={true}
+        onClose={() => {
+          window.history.pushState(null, '', '/');
+          setStandaloneHandleUser(null);
+        }}
+        onOpenChat={(chatUser) => {
+          window.history.pushState(null, '', '/');
+          setStandaloneHandleUser(null);
+          setActiveChat(chatUser);
+        }}
+      />
+    );
+  }
+
   if (loading) {
     return (
       <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-main)', color: 'var(--text-main)' }}>
@@ -811,6 +852,19 @@ export default function App() {
         <LegalModal
           initialTab={legalModalTab}
           onClose={() => setLegalModalTab(null)}
+        />
+      )}
+
+      {/* Pulse Handle Card Modal */}
+      {modalHandleUser && (
+        <PulseHandleCardModal
+          targetUser={modalHandleUser}
+          currentUser={user}
+          onClose={() => setModalHandleUser(null)}
+          onOpenChat={(chatUser) => {
+            setModalHandleUser(null);
+            setActiveChat(chatUser);
+          }}
         />
       )}
       </div>

@@ -675,13 +675,36 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
           )}
 
           {/* Action Quick Buttons */}
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
             <button
               className="btn-secondary"
               onClick={() => onOpenFullDp(validAvatar, userToDisplay.displayName, userToDisplay.username)}
-              style={{ flex: 1, padding: '8px 12px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              style={{ flex: 1, minWidth: '90px', padding: '8px 10px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
             >
-              <Eye size={16} /> View DP
+              <Eye size={15} /> View DP
+            </button>
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                onClose();
+                window.dispatchEvent(new CustomEvent('pulsechat_open_handle_card', { detail: { user: userToDisplay } }));
+              }}
+              style={{
+                flex: 1,
+                minWidth: '100px',
+                padding: '8px 10px',
+                fontSize: '0.82rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '5px',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(236, 72, 153, 0.15))',
+                border: '1px solid rgba(168, 85, 247, 0.4)',
+                color: '#c084fc'
+              }}
+              title="View & Share Aesthetic Pulse Profile Card"
+            >
+              <Sparkles size={15} /> Pulse Card ✨
             </button>
             {onStartCall && (
               <>

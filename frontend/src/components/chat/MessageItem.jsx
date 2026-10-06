@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
 import { BACKEND_URL } from '../../utils/config';
-import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward, Edit3, ExternalLink } from 'lucide-react';
+import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward, Edit3, ExternalLink, Globe } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 import FogSnapModal from './FogSnapModal';
@@ -730,7 +730,11 @@ export default function MessageItem({
   onOpenStory,
   onOpenSparksWallet,
   onEditDrawing,
-  highlightSearchTerm = ''
+  highlightSearchTerm = '',
+  translationData,
+  onTranslateMessage,
+  onToggleTranslation,
+  targetLang
 }) {
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
@@ -1533,6 +1537,65 @@ export default function MessageItem({
               </p>
               {urlMatch && urlMatch[0] && (
                 <RichLinkPreview url={urlMatch[0]} isMine={isMine} />
+              )}
+              {/* Live In-Line Translation */}
+              {translationData ? (
+                <div style={{
+                  marginTop: '6px',
+                  paddingTop: '6px',
+                  borderTop: isMine ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.1)',
+                  fontSize: '0.86rem',
+                  lineHeight: 1.4
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '3px' }}>
+                    <span style={{ fontSize: '0.66rem', fontWeight: 800, color: isMine ? '#fde047' : '#38bdf8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Globe size={11} /> Translated ({translationData.sourceLang?.toUpperCase() || 'AUTO'} ➔ {translationData.targetLang?.toUpperCase()}):
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleTranslation && onToggleTranslation(message.id);
+                      }}
+                      style={{ background: 'none', border: 'none', color: isMine ? '#e0e7ff' : '#94a3b8', fontSize: '0.66rem', cursor: 'pointer', padding: 0, fontWeight: 700 }}
+                    >
+                      {translationData.showTranslated ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  {translationData.showTranslated && (
+                    <div style={{ color: isMine ? '#fff' : '#f1f5f9', fontWeight: 500 }}>
+                      {translationData.translatedText}
+                    </div>
+                  )}
+                </div>
+              ) : !isMine && onTranslateMessage && (
+                <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTranslateMessage(message.id, message.content);
+                    }}
+                    title="Translate message to your language"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: '2px 0',
+                      color: 'var(--text-muted)',
+                      fontSize: '0.68rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      cursor: 'pointer',
+                      opacity: 0.85
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.85'}
+                  >
+                    <Globe size={11} color="#38bdf8" />
+                    <span style={{ color: '#38bdf8', fontWeight: 600 }}>Translate</span>
+                  </button>
+                </div>
               )}
             </div>
           );
@@ -2534,6 +2597,37 @@ export default function MessageItem({
           >
             <SlidersHorizontal size={14} />
           </button>
+
+          {/* Quick Translate Message Button */}
+          {message.content && message.type === 'text' && onTranslateMessage && (
+            <button
+              type="button"
+              className="reaction-action-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onTranslateMessage(message.id, message.content);
+                if (onDismissAction) onDismissAction();
+              }}
+              title="Translate message (Live Translation)"
+              style={{
+                width: '30px',
+                height: '30px',
+                borderRadius: '50%',
+                background: 'rgba(56, 189, 248, 0.15)',
+                border: '1px solid rgba(56, 189, 248, 0.4)',
+                color: '#38bdf8',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                pointerEvents: 'auto',
+                flexShrink: 0
+              }}
+            >
+              <Globe size={14} />
+            </button>
+          )}
         </div>
       )}
 
