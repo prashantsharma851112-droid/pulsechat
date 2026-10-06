@@ -6,16 +6,16 @@ export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
     const isManual = localStorage.getItem('pulsechat_theme_manual') === 'true';
     const saved = localStorage.getItem('pulsechat_theme');
-    // If user previously defaulted to 'light', upgrade to 'midnight_amoled'
-    if (isManual && saved && saved !== 'light') {
+    if (isManual && saved) {
       return saved;
     }
-    return 'midnight_amoled';
+    return saved || 'midnight_amoled';
   });
   const [wallpaper, setWallpaper] = useState(localStorage.getItem('pulsechat_wallpaper') || 'default');
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    document.body.setAttribute('data-theme', theme);
     localStorage.setItem('pulsechat_theme', theme);
 
     // Sync window / browser status bar color with active theme

@@ -3090,9 +3090,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         <div style={{
         padding: 'calc(24px + env(safe-area-inset-top, 0px)) 1rem 0.75rem 1rem',
         borderBottom: '1px solid var(--border)',
-        background: (chatWallpaper && chatWallpaper !== 'none') ? 'rgba(11, 15, 25, 0.78)' : 'var(--bg-sidebar)',
-        backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
-        WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
+        background: (chatWallpaper && chatWallpaper !== 'none') ? 'color-mix(in srgb, var(--bg-sidebar) 85%, transparent)' : 'var(--bg-sidebar)',
+        backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
+        WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
         display: 'flex',
         flexDirection: 'column',
         gap: '4px',
@@ -3590,10 +3590,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       </div>
       ) : (
         <div style={{
-          padding: '0.75rem 1rem',
-          borderBottom: '1px solid var(--accent)',
-          background: 'rgba(15, 23, 42, 0.98)',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+          padding: 'calc(24px + env(safe-area-inset-top, 0px)) 1rem 0.75rem 1rem',
+          borderBottom: '2px solid var(--accent)',
+          background: (chatWallpaper && chatWallpaper !== 'none')
+            ? 'color-mix(in srgb, var(--bg-card) 92%, transparent)'
+            : 'var(--bg-card)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -3606,7 +3610,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               type="button"
               onClick={handleDismissActionMessage}
               className="icon-btn-ghost"
-              style={{ width: '38px', height: '38px', borderRadius: '50%', color: '#fff' }}
+              style={{ width: '38px', height: '38px', borderRadius: '50%', color: 'var(--text-main)' }}
               title="Unselect message"
             >
               <ArrowLeft size={20} />
@@ -3786,7 +3790,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '7px 14px',
-            background: 'rgba(15, 23, 42, 0.94)',
+            background: (chatWallpaper && chatWallpaper !== 'none')
+              ? 'color-mix(in srgb, var(--bg-card) 92%, transparent)'
+              : 'var(--bg-card)',
             borderBottom: '1px solid rgba(245, 158, 11, 0.35)',
             backdropFilter: 'blur(10px)',
             WebkitBackdropFilter: 'blur(10px)',
@@ -3894,9 +3900,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           <div
             style={{
               padding: '8px 14px',
-              background: 'rgba(15, 23, 42, 0.96)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
+              background: (chatWallpaper && chatWallpaper !== 'none')
+                ? 'color-mix(in srgb, var(--bg-card) 92%, transparent)'
+                : 'var(--bg-card)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
               borderBottom: '1px solid var(--accent)',
               display: 'flex',
               alignItems: 'center',
@@ -4392,9 +4400,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {replyTo && (
         <div style={{
           padding: '8px 16px',
-          background: (chatWallpaper && chatWallpaper !== 'none') ? 'rgba(11, 15, 25, 0.78)' : 'var(--bg-sidebar)',
-          backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
-          WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
+          background: (chatWallpaper && chatWallpaper !== 'none') ? 'color-mix(in srgb, var(--bg-sidebar) 85%, transparent)' : 'var(--bg-sidebar)',
+          backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
+          WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
           borderTop: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
@@ -4443,9 +4451,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {blockStatus.isBlockedByMe ? (
         <div style={{
           padding: '1.1rem',
-          background: (chatWallpaper && chatWallpaper !== 'none') ? 'rgba(11, 15, 25, 0.78)' : 'var(--bg-sidebar)',
-          backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
-          WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
+          background: (chatWallpaper && chatWallpaper !== 'none') ? 'color-mix(in srgb, var(--bg-sidebar) 85%, transparent)' : 'var(--bg-sidebar)',
+          backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
+          WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
           borderTop: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
@@ -4472,9 +4480,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       ) : blockStatus.isBlockedByThem ? (
         <div style={{
           padding: '1.1rem',
-          background: (chatWallpaper && chatWallpaper !== 'none') ? 'rgba(11, 15, 25, 0.78)' : 'var(--bg-sidebar)',
-          backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
-          WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
+          background: (chatWallpaper && chatWallpaper !== 'none') ? 'color-mix(in srgb, var(--bg-sidebar) 85%, transparent)' : 'var(--bg-sidebar)',
+          backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
+          WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
           borderTop: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
@@ -4492,9 +4500,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         <div style={{
           padding: '0.75rem 1rem',
           paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))',
-          background: (chatWallpaper && chatWallpaper !== 'none') ? 'rgba(11, 15, 25, 0.78)' : 'var(--bg-sidebar)',
-          backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
-          WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(12px)' : 'none',
+          background: (chatWallpaper && chatWallpaper !== 'none') ? 'color-mix(in srgb, var(--bg-sidebar) 85%, transparent)' : 'var(--bg-sidebar)',
+          backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
+          WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
           borderTop: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',

@@ -247,15 +247,15 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
-  background-color: #000000 !important;
-  background: #000000 !important;
+  background-color: var(--bg-main, #000000);
+  background: var(--bg-main, #000000);
   height: 100% !important;
   min-height: 100vh !important;
 }
 
 body {
-  background-color: #000000 !important;
-  background: #000000 !important;
+  background-color: var(--bg-main, #000000);
+  background: var(--bg-main, #000000);
   color: var(--text-main);
   height: 100% !important;
   min-height: 100vh !important;
@@ -268,7 +268,7 @@ body {
 }
 
 #root {
-  background-color: #000000 !important;
+  background-color: var(--bg-main, #000000);
   background: var(--bg-main, #000000);
   color: var(--text-main);
   height: 100% !important;
