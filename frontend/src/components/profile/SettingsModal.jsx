@@ -6,9 +6,10 @@ import {
   Sparkles, Bell, BellOff, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2, 
   Crown, Lock, Shield, FileText, HelpCircle, RefreshCw, AlertTriangle, Loader2,
   ChevronRight, ArrowLeft, HardDrive, Palette, Info, Mail, Compass, Send, CheckCircle2, MessageSquare,
-  Ghost, Search
+  Ghost, Search, Volume2, VolumeX
 } from 'lucide-react';
 import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
+import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { getCachedRecentChats, getCachedFriends, getCachedAllUsers } from '../../utils/offlineStorage';
 import PulseProModal from '../chat/PulseProModal';
@@ -69,6 +70,21 @@ export default function SettingsModal({
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
     return localStorage.getItem('pulsechat_notifications_enabled') !== 'false';
   });
+
+  // Chat Sounds & Haptics State
+  const [chatSoundsEnabled, setChatSoundsEnabled] = useState(() => {
+    return localStorage.getItem('pulsechat_chat_sounds') !== 'false';
+  });
+
+  const handleToggleChatSounds = () => {
+    const nextState = !chatSoundsEnabled;
+    setChatSoundsEnabled(nextState);
+    localStorage.setItem('pulsechat_chat_sounds', String(nextState));
+    if (nextState) {
+      playSound('sent');
+      setTimeout(() => playSound('received'), 260);
+    }
+  };
 
   // Account Permanent Deletion States (Google Play & GDPR Policy compliant)
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -995,6 +1011,70 @@ export default function SettingsModal({
                     position: 'absolute',
                     top: '2px',
                     left: notificationsEnabled ? '18px' : '2px',
+                    transition: 'all 0.2s ease'
+                  }} />
+                </div>
+              </div>
+
+              {/* In-App Chat Sounds & Haptics Toggle Card */}
+              <div
+                onClick={handleToggleChatSounds}
+                style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '16px',
+                  padding: '14px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  userSelect: 'none'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '12px',
+                    background: chatSoundsEnabled ? 'rgba(56, 189, 248, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    {chatSoundsEnabled ? <Volume2 size={18} color="#38bdf8" /> : <VolumeX size={18} color="#ef4444" />}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      In-App Chat Sounds & Haptics
+                      <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '1px 6px', borderRadius: '6px', background: chatSoundsEnabled ? 'rgba(56, 189, 248, 0.2)' : 'rgba(239, 68, 68, 0.2)', color: chatSoundsEnabled ? '#38bdf8' : '#ef4444' }}>
+                        {chatSoundsEnabled ? 'ENABLED' : 'MUTED'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      {chatSoundsEnabled
+                        ? 'Crisp pop sound on send, sweet chime on incoming, and subtle micro-haptics'
+                        : 'In-app chat sounds and send pops are muted'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{
+                  width: '38px',
+                  height: '22px',
+                  borderRadius: '11px',
+                  background: chatSoundsEnabled ? '#38bdf8' : 'var(--border)',
+                  position: 'relative',
+                  transition: 'all 0.2s ease',
+                  flexShrink: 0
+                }}>
+                  <div style={{
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '50%',
+                    background: '#fff',
+                    position: 'absolute',
+                    top: '2px',
+                    left: chatSoundsEnabled ? '18px' : '2px',
                     transition: 'all 0.2s ease'
                   }} />
                 </div>

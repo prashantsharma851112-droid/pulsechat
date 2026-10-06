@@ -1,37 +1,62 @@
 export function playSound(type = 'received') {
-  if (typeof window !== 'undefined' && localStorage.getItem('pulsechat_notifications_enabled') === 'false') {
-    return;
+  if (typeof window !== 'undefined') {
+    if (localStorage.getItem('pulsechat_notifications_enabled') === 'false') return;
+    if (localStorage.getItem('pulsechat_chat_sounds') === 'false') return;
   }
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
 
-    osc.connect(gain);
-    gain.connect(ctx.destination);
+    if (type === 'sent' || type === 'pop') {
+      // Crisp satisfying iOS/Telegram pop
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1150, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(320, ctx.currentTime + 0.045);
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.045);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.048);
 
-    if (type === 'sent') {
-      osc.frequency.setValueAtTime(600, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.08);
-      gain.gain.setValueAtTime(0.1, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.08);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.08);
-    } else if (type === 'received') {
-      osc.frequency.setValueAtTime(400, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.12);
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.12);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.12);
-    } else if (type === 'pop') {
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(900, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.08);
-      gain.gain.setValueAtTime(0.2, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.08);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.08);
+      // Subtle micro-click transient for high-end snap
+      const snapOsc = ctx.createOscillator();
+      const snapGain = ctx.createGain();
+      snapOsc.type = 'triangle';
+      snapOsc.frequency.setValueAtTime(2400, ctx.currentTime);
+      snapGain.gain.setValueAtTime(0.08, ctx.currentTime);
+      snapGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.012);
+      snapOsc.connect(snapGain);
+      snapGain.connect(ctx.destination);
+      snapOsc.start(ctx.currentTime);
+      snapOsc.stop(ctx.currentTime + 0.015);
+
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(10); } catch (e) {}
+      }
+    } else if (type === 'received' || type === 'chime' || type === 'notification') {
+      // Sweet two-tone crystal chime (E6 + A6)
+      const notes = [
+        { freq: 1318.51, delay: 0, duration: 0.16, vol: 0.14 },
+        { freq: 1760.00, delay: 0.065, duration: 0.22, vol: 0.16 }
+      ];
+      notes.forEach(({ freq, delay, duration, vol }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+        gain.gain.setValueAtTime(vol, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + duration);
+      });
+
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate([12, 35, 14]); } catch (e) {}
+      }
     } else if (type === 'sparkle') {
       // 3 ascending magical notes
       [784, 1046.5, 1318.5].forEach((freq, idx) => {

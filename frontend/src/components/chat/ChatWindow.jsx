@@ -28,6 +28,7 @@ import MessageInfoModal from './MessageInfoModal';
 import SetDefaultReactionsModal from './SetDefaultReactionsModal';
 import VibeViewerModal from '../vibes/VibeViewerModal';
 import SparksWalletModal from './SparksWalletModal';
+import ScheduleMessageModal from './ScheduleMessageModal';
 import { recordRecentReaction } from '../../utils/quickReactions';
 import { uploadMediaDirect } from '../../utils/mediaUpload';
 import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
@@ -92,6 +93,62 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   }, [vibeAuras, user]);
   const [showVibeSelector, setShowVibeSelector] = useState(false);
   const [showTicTacToeModal, setShowTicTacToeModal] = useState(false);
+
+  // Scheduled Messages (Send Later) State
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduledList, setScheduledList] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('pulsechat_scheduled_messages') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
+  const sendBtnHoldTimerRef = useRef(null);
+
+  const chatScheduledMessages = useMemo(() => {
+    return scheduledList.filter(s => s.chatId === chatId);
+  }, [scheduledList, chatId]);
+
+  const handleScheduleMessage = ({ text: schedText, scheduledTimestamp }) => {
+    const newEntry = {
+      id: 'sched_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+      chatId,
+      text: schedText,
+      scheduledTimestamp,
+      isGroup,
+      senderId: user?.id,
+      receiverId: isGroup ? '' : activeChat?.id,
+      createdAt: Date.now()
+    };
+    const nextList = [...scheduledList, newEntry];
+    setScheduledList(nextList);
+    localStorage.setItem('pulsechat_scheduled_messages', JSON.stringify(nextList));
+    setShowScheduleModal(false);
+    setText('');
+    setActionToast(`Message scheduled for ${new Date(scheduledTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ⏰`);
+    setTimeout(() => setActionToast(''), 3000);
+  };
+
+  const handleCancelScheduledMessage = (id) => {
+    const nextList = scheduledList.filter(s => s.id !== id);
+    setScheduledList(nextList);
+    localStorage.setItem('pulsechat_scheduled_messages', JSON.stringify(nextList));
+    setActionToast('Scheduled message cancelled ❌');
+    setTimeout(() => setActionToast(''), 2500);
+  };
+
+  const handleSendBtnMouseDown = () => {
+    sendBtnHoldTimerRef.current = setTimeout(() => {
+      setShowScheduleModal(true);
+    }, 520);
+  };
+
+  const handleSendBtnMouseUp = () => {
+    if (sendBtnHoldTimerRef.current) {
+      clearTimeout(sendBtnHoldTimerRef.current);
+      sendBtnHoldTimerRef.current = null;
+    }
+  };
   const checkGhostModeActive = () => {
     try {
       if (user?.hideReadReceipts || localStorage.getItem('pulsechat_ghost_global') === 'true') {
@@ -1414,6 +1471,72 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   }, [socket, syncOutbox]);
 
+  // Background Runner for Scheduled Messages (checks every 5s)
+  useEffect(() => {
+    const checkScheduled = () => {
+      try {
+        const raw = localStorage.getItem('pulsechat_scheduled_messages');
+        if (!raw) return;
+        const list = JSON.parse(raw);
+        if (!Array.isArray(list) || list.length === 0) return;
+
+        const now = Date.now();
+        const due = list.filter(item => item.scheduledTimestamp <= now);
+        if (due.length === 0) return;
+
+        const remaining = list.filter(item => item.scheduledTimestamp > now);
+        localStorage.setItem('pulsechat_scheduled_messages', JSON.stringify(remaining));
+        setScheduledList(remaining);
+
+        due.forEach(item => {
+          const clientTempId = 'sched_sent_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+          const newMsg = {
+            id: clientTempId,
+            clientTempId,
+            chatId: item.chatId,
+            senderId: item.senderId,
+            receiverId: item.receiverId,
+            isGroup: item.isGroup,
+            content: item.text,
+            type: 'text',
+            status: 'sent',
+            timestamp: new Date().toISOString(),
+            reactions: {}
+          };
+
+          if (item.chatId === chatId) {
+            setMessages(prev => [...prev, newMsg]);
+            appendCachedMessage(chatId, newMsg);
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          }
+
+          if (socket) {
+            socket.emit('send_message', {
+              ...getSenderPayload(),
+              clientTempId,
+              chatId: item.chatId,
+              senderId: item.senderId,
+              receiverId: item.receiverId,
+              isGroup: item.isGroup,
+              content: item.text,
+              type: 'text'
+            });
+          }
+
+          playSound('sent');
+          setActionToast(`⏰ Scheduled message sent: "${item.text.slice(0, 22)}..."`);
+          setTimeout(() => setActionToast(''), 3500);
+        });
+      } catch (e) {
+        console.warn('Scheduled messages runner error:', e);
+      }
+    };
+
+    const interval = setInterval(checkScheduled, 5000);
+    checkScheduled();
+    return () => clearInterval(interval);
+  }, [chatId, socket]);
+
   // Close 3-dots more menu on outside click
   useEffect(() => {
     const handleOutsideClick = (e) => {
@@ -2515,33 +2638,36 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const isDoc = !file.type.startsWith('image/') && !file.type.startsWith('video/');
-      setPendingMedia({
-        type: isDoc ? 'document' : file.type,
-        dataUrl: event.target.result,
-        fileName: file.name,
-        rawSizeBytes: file.size,
-        fileSize: (file.size / 1024 < 1024)
-          ? `${(file.size / 1024).toFixed(1)} KB`
-          : `${(file.size / (1024 * 1024)).toFixed(2)} MB`
-      });
-    };
-    reader.readAsDataURL(file);
+    // Telegram-Style 0ms Instant Optimistic Upload
+    const localBlobUrl = URL.createObjectURL(file);
+    const isDoc = !file.type.startsWith('image/') && !file.type.startsWith('video/');
+    const formattedSize = (file.size / 1024 < 1024)
+      ? `${(file.size / 1024).toFixed(1)} KB`
+      : `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+
+    handleSendMedia({
+      mediaUrl: localBlobUrl,
+      rawFile: file,
+      type: isDoc ? 'document' : file.type,
+      fileName: file.name,
+      fileSize: formattedSize,
+      rawSizeBytes: file.size
+    });
+
     e.target.value = '';
   };
 
-  const handleSendMedia = async ({ mediaUrl, type, isViewOnce, isFogSnap, fogSnapDuration, fileName, fileSize }) => {
+  const handleSendMedia = async ({ mediaUrl, rawFile, type, isViewOnce, isFogSnap, fogSnapDuration, fileName, fileSize, rawSizeBytes }) => {
     const msgType = type === 'document'
       ? 'document'
       : (type?.startsWith('video/') ? 'video' : 'image');
 
-    if (pendingMedia?.rawSizeBytes) {
+    const bytesUsed = rawSizeBytes || rawFile?.size || pendingMedia?.rawSizeBytes || 0;
+    if (bytesUsed) {
       const todayStr = new Date().toISOString().split('T')[0];
       const storageKey = `pulsechat_daily_file_bytes_${user?.id || 'guest'}_${todayStr}`;
       const todayUsed = parseInt(localStorage.getItem(storageKey) || '0', 10);
-      localStorage.setItem(storageKey, String(todayUsed + pendingMedia.rawSizeBytes));
+      localStorage.setItem(storageKey, String(todayUsed + bytesUsed));
     }
 
     const currentReplyTo = replyTo;
@@ -2583,12 +2709,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     // Direct background upload to Cloudinary Edge CDN (bypasses Render Node.js bandwidth!)
     (async () => {
       let finalMediaUrl = mediaUrl;
-      if (mediaUrl && (mediaUrl.startsWith('data:') || mediaUrl.startsWith('blob:'))) {
-        try {
-          finalMediaUrl = await uploadMediaDirect(mediaUrl, 'pulsechat_media', token);
-        } catch (e) {
-          console.warn('Direct media upload error:', e);
-        }
+      try {
+        const payloadToUpload = rawFile || mediaUrl;
+        finalMediaUrl = await uploadMediaDirect(payloadToUpload, 'pulsechat_media', token, msgType === 'video');
+      } catch (e) {
+        console.warn('Direct media upload error:', e);
       }
 
       // Update local optimistic message with finalized CDN URL
@@ -4497,6 +4622,51 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           <span>You cannot reply to this conversation.</span>
         </div>
       ) : (!isGroup && friendshipStatus !== 'friends') ? null : (
+        <>
+        {/* Scheduled Messages Banner for active chat */}
+        {chatScheduledMessages.length > 0 && (
+          <div style={{
+            background: 'rgba(245, 158, 11, 0.12)',
+            borderTop: '1px solid rgba(245, 158, 11, 0.3)',
+            padding: '7px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '0.78rem',
+            color: 'var(--text-main)',
+            position: 'relative',
+            zIndex: 5
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0, overflow: 'hidden' }}>
+              <Clock size={14} color="#f59e0b" style={{ flexShrink: 0 }} />
+              <span style={{ fontWeight: 700, color: '#f59e0b' }}>
+                {chatScheduledMessages.length} Scheduled
+              </span>
+              <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                • Next at {new Date(chatScheduledMessages[0].scheduledTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: "{chatScheduledMessages[0].text.slice(0, 24)}"
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleCancelScheduledMessage(chatScheduledMessages[0].id)}
+              style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#ef4444',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                padding: '2px 8px',
+                borderRadius: '8px',
+                flexShrink: 0
+              }}
+              title="Cancel this scheduled message"
+            >
+              Cancel ✕
+            </button>
+          </div>
+        )}
+
         <div style={{
           padding: '0.75rem 1rem',
           paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))',
@@ -4817,6 +4987,43 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 </div>
                 <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Tic-Tac-Toe</span>
               </button>
+
+              {/* 8. Schedule Message (Send Later / Birthday Wish) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  setShowScheduleModal(true);
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
+                }}>
+                  <Clock size={20} />
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#f59e0b' }}>Schedule ⏰</span>
+              </button>
             </div>
           )}
 
@@ -5072,7 +5279,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               <button
                 type="submit"
                 className="btn-primary-round"
-                title="Send Message"
+                title="Send Message (Hold to Schedule ⏰)"
+                onMouseDown={handleSendBtnMouseDown}
+                onMouseUp={handleSendBtnMouseUp}
+                onTouchStart={handleSendBtnMouseDown}
+                onTouchEnd={handleSendBtnMouseUp}
                 style={{ flexShrink: 0 }}
               >
                 <Send size={18} />
@@ -5080,6 +5291,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </form>
           )}
         </div>
+        </>
       )}
 
       {pendingMedia && (
@@ -5802,6 +6014,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         <VibeAuraSelectorModal
           onClose={() => setShowVibeSelector(false)}
           currentAura={myAura}
+        />
+      )}
+
+      {/* Schedule Message Modal (Send Later / Birthday Wish) */}
+      {showScheduleModal && (
+        <ScheduleMessageModal
+          initialText={text}
+          onSchedule={handleScheduleMessage}
+          onClose={() => setShowScheduleModal(false)}
         />
       )}
     </div>

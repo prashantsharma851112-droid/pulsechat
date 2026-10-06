@@ -1682,8 +1682,8 @@ export default function MessageItem({
                     borderRadius: '10px',
                     display: 'block',
                     cursor: 'pointer',
-                    opacity: imgLoaded ? 1 : 0.15,
-                    filter: imgLoaded ? 'none' : 'blur(8px)',
+                    opacity: (message.isUploading || message.status === 'uploading') ? 0.9 : (imgLoaded ? 1 : 0.15),
+                    filter: (message.isUploading || message.status === 'uploading') ? 'blur(5px) brightness(0.88)' : (imgLoaded ? 'none' : 'blur(8px)'),
                     transition: 'opacity 0.35s ease, filter 0.35s ease'
                   }}
                 />
@@ -1692,8 +1692,8 @@ export default function MessageItem({
                   <div style={{
                     position: 'absolute',
                     inset: 0,
-                    background: 'rgba(0, 0, 0, 0.55)',
-                    backdropFilter: 'blur(3px)',
+                    background: 'rgba(0, 0, 0, 0.45)',
+                    backdropFilter: 'blur(2px)',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -1702,17 +1702,17 @@ export default function MessageItem({
                     zIndex: 20
                   }}>
                     <div style={{
-                      width: '44px',
-                      height: '44px',
+                      width: '46px',
+                      height: '46px',
                       borderRadius: '50%',
                       background: 'rgba(15, 23, 42, 0.85)',
-                      border: '2.5px solid rgba(255,255,255,0.2)',
-                      borderTopColor: 'var(--accent)',
+                      border: '3px solid rgba(255,255,255,0.2)',
+                      borderTopColor: '#38bdf8',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-                      animation: 'spin 0.9s linear infinite'
+                      boxShadow: '0 0 16px rgba(56, 189, 248, 0.5)',
+                      animation: 'spin 0.85s linear infinite'
                     }} />
                     <span style={{ fontSize: '0.74rem', color: '#fff', fontWeight: 700, letterSpacing: '0.3px', textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
                       Uploading...
@@ -1883,10 +1883,19 @@ export default function MessageItem({
                 cursor: 'pointer',
                 flexShrink: 0
               }}
-              title="Download Document"
+              title={message.isUploading ? "Uploading document..." : "Download Document"}
             >
-              <Download size={14} />
-              <span>{downloadState || 'Save'}</span>
+              {message.isUploading ? (
+                <>
+                  <Loader2 size={14} className="spin" />
+                  <span>Uploading...</span>
+                </>
+              ) : (
+                <>
+                  <Download size={14} />
+                  <span>{downloadState || 'Save'}</span>
+                </>
+              )}
             </button>
           </div>
         )}
