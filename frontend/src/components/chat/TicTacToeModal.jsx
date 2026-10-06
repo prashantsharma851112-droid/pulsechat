@@ -51,7 +51,6 @@ export default function TicTacToeModal({ chatId, partnerName, onClose, onOpenSpa
   const { socket } = useContext(SocketContext);
   const { user } = useContext(AuthContext);
 
-  const [gameMode, setGameMode] = useState('ai'); // 'ai' | 'friend'
   const [board, setBoard] = useState(Array(9).fill(null));
   const [isXNext, setIsXNext] = useState(true);
   const [winnerInfo, setWinnerInfo] = useState(null); // { winner: 'X' | 'O' | 'draw', line: [] }
@@ -74,7 +73,7 @@ export default function TicTacToeModal({ chatId, partnerName, onClose, onOpenSpa
 
   // Socket sync for friend multiplayer
   useEffect(() => {
-    if (!socket || gameMode !== 'friend') return;
+    if (!socket) return;
 
     const handleRemoteMove = ({ chatId: incomingChatId, nextBoard, turn, result }) => {
       if (incomingChatId === chatId) {
@@ -104,47 +103,7 @@ export default function TicTacToeModal({ chatId, partnerName, onClose, onOpenSpa
       socket.off('tictactoe_move', handleRemoteMove);
       socket.off('tictactoe_reset', handleRemoteReset);
     };
-  }, [socket, chatId, gameMode]);
-
-  // AI Move logic (Smart + Fun)
-  const triggerAiMove = (currentBoard) => {
-    setTimeout(() => {
-      if (winnerInfo) return;
-
-      // 1. Try to win
-      for (const [a, b, c] of WINNING_COMBINATIONS) {
-        const line = [currentBoard[a], currentBoard[b], currentBoard[c]];
-        if (line.filter(x => x === 'O').length === 2 && line.includes(null)) {
-          const emptyIdx = [a, b, c][line.indexOf(null)];
-          makeMove(emptyIdx, 'O', currentBoard);
-          return;
-        }
-      }
-
-      // 2. Block X from winning
-      for (const [a, b, c] of WINNING_COMBINATIONS) {
-        const line = [currentBoard[a], currentBoard[b], currentBoard[c]];
-        if (line.filter(x => x === 'X').length === 2 && line.includes(null)) {
-          const emptyIdx = [a, b, c][line.indexOf(null)];
-          makeMove(emptyIdx, 'O', currentBoard);
-          return;
-        }
-      }
-
-      // 3. Take Center if available
-      if (currentBoard[4] === null) {
-        makeMove(4, 'O', currentBoard);
-        return;
-      }
-
-      // 4. Random available cell
-      const available = currentBoard.map((v, i) => (v === null ? i : null)).filter(v => v !== null);
-      if (available.length > 0) {
-        const randomChoice = available[Math.floor(Math.random() * available.length)];
-        makeMove(randomChoice, 'O', currentBoard);
-      }
-    }, 450);
-  };
+  }, [socket, chatId]);
 
   const makeMove = (index, mark, baseBoard = board) => {
     if (baseBoard[index] || winnerInfo) return;
@@ -172,7 +131,7 @@ export default function TicTacToeModal({ chatId, partnerName, onClose, onOpenSpa
         setScores(s => ({ ...s, draws: s.draws + 1 }));
       }
 
-      if (gameMode === 'friend' && socket) {
+      if (socket) {
         socket.emit('tictactoe_move', {
           chatId,
           nextBoard,
@@ -186,22 +145,18 @@ export default function TicTacToeModal({ chatId, partnerName, onClose, onOpenSpa
     const nextTurn = mark === 'X' ? 'O' : 'X';
     setIsXNext(nextTurn === 'X');
 
-    if (gameMode === 'friend' && socket) {
+    if (socket) {
       socket.emit('tictactoe_move', {
         chatId,
         nextBoard,
         turn: nextTurn,
         result: null
       });
-    } else if (gameMode === 'ai' && mark === 'X') {
-      triggerAiMove(nextBoard);
     }
   };
 
   const handleCellClick = (index) => {
     if (board[index] || winnerInfo) return;
-    if (gameMode === 'ai' && !isXNext) return; // Prevent clicking during AI turn
-
     const currentMark = isXNext ? 'X' : 'O';
     makeMove(index, currentMark);
   };
@@ -210,7 +165,7 @@ export default function TicTacToeModal({ chatId, partnerName, onClose, onOpenSpa
     setBoard(Array(9).fill(null));
     setIsXNext(true);
     setWinnerInfo(null);
-    if (gameMode === 'friend' && socket) {
+    if (socket) {
       socket.emit('tictactoe_reset', { chatId });
     }
   };
@@ -256,7 +211,7 @@ export default function TicTacToeModal({ chatId, partnerName, onClose, onOpenSpa
                 Tic-Tac-Toe Arena
               </h3>
               <p style={{ margin: 0, fontSize: '0.72rem', color: '#94a3b8' }}>
-                {gameMode === 'ai' ? 'Playing against Pulse AI' : `Playing with ${partnerName || 'Friend'}`}
+                Playing live with {partnerName || 'Friend'}
               </p>
             </div>
           </div>
@@ -266,54 +221,6 @@ export default function TicTacToeModal({ chatId, partnerName, onClose, onOpenSpa
             style={{ width: '32px', height: '32px', borderRadius: '50%', color: '#94a3b8' }}
           >
             <X size={18} />
-          </button>
-        </div>
-
-        {/* Mode Switcher */}
-        <div style={{ display: 'flex', background: 'rgba(15, 23, 42, 0.6)', padding: '3px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.1)', width: '100%', marginBottom: '14px' }}>
-          <button
-            type="button"
-            onClick={() => { setGameMode('ai'); handleReset(); }}
-            style={{
-              flex: 1,
-              padding: '6px 10px',
-              borderRadius: '11px',
-              border: 'none',
-              background: gameMode === 'ai' ? 'linear-gradient(135deg, #a855f7, #6366f1)' : 'transparent',
-              color: '#fff',
-              fontSize: '0.8rem',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <Bot size={14} /> vs Pulse AI
-          </button>
-          <button
-            type="button"
-            onClick={() => { setGameMode('friend'); handleReset(); }}
-            style={{
-              flex: 1,
-              padding: '6px 10px',
-              borderRadius: '11px',
-              border: 'none',
-              background: gameMode === 'friend' ? 'linear-gradient(135deg, #a855f7, #ec4899)' : 'transparent',
-              color: '#fff',
-              fontSize: '0.8rem',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <Users size={14} /> vs Friend (Live)
           </button>
         </div>
 
@@ -328,7 +235,7 @@ export default function TicTacToeModal({ chatId, partnerName, onClose, onOpenSpa
             <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#cbd5e1' }}>{scores.draws}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <span style={{ fontSize: '0.74rem', color: '#f43f5e', fontWeight: 800 }}>O ({gameMode === 'ai' ? 'AI' : partnerName || 'Friend'})</span>
+            <span style={{ fontSize: '0.74rem', color: '#f43f5e', fontWeight: 800 }}>O ({partnerName || 'Friend'})</span>
             <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f8fafc' }}>{scores.o}</div>
           </div>
         </div>
@@ -348,7 +255,7 @@ export default function TicTacToeModal({ chatId, partnerName, onClose, onOpenSpa
               fontWeight: 800,
               color: '#fff'
             }}>
-              {winnerInfo.winner === 'X' ? '🎉 You Won! (+10 Sparks)' : (winnerInfo.winner === 'O' ? `👑 ${gameMode === 'ai' ? 'Pulse AI' : partnerName} Won!` : '🤝 It\'s a Draw!')}
+              {winnerInfo.winner === 'X' ? '🎉 You Won! (+10 Sparks)' : (winnerInfo.winner === 'O' ? `👑 ${partnerName || 'Friend'} Won!` : '🤝 It\'s a Draw!')}
             </div>
           ) : (
             <div style={{
@@ -361,7 +268,7 @@ export default function TicTacToeModal({ chatId, partnerName, onClose, onOpenSpa
               gap: '6px'
             }}>
               <span>Turn:</span>
-              <span style={{ fontSize: '1rem', fontWeight: 900 }}>{isXNext ? 'X (Your Turn)' : `O (${gameMode === 'ai' ? 'Pulse AI thinking...' : `${partnerName}'s Turn`})`}</span>
+              <span style={{ fontSize: '1rem', fontWeight: 900 }}>{isXNext ? 'X (Your Turn)' : `O (${partnerName || 'Friend'}'s Turn)`}</span>
             </div>
           )}
         </div>

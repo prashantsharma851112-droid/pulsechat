@@ -3,10 +3,16 @@ import { X, Search, Check, Send, Users, Shield } from 'lucide-react';
 import { getCachedRecentChats, getCachedGroups, getCachedAllUsers } from '../../utils/offlineStorage';
 import PulseVipBadge from '../common/PulseVipBadge';
 
-export default function ForwardModal({ message, onClose, onForward, currentUserId }) {
+export default function ForwardModal({ message, messages: incomingMessages, onClose, onForward, currentUserId }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTargets, setSelectedTargets] = useState([]);
   const [isSending, setIsSending] = useState(false);
+
+  const msgsToForward = useMemo(() => {
+    if (Array.isArray(incomingMessages) && incomingMessages.length > 0) return incomingMessages;
+    if (message) return [message];
+    return [];
+  }, [incomingMessages, message]);
 
   // Load available forward targets
   const candidateTargets = useMemo(() => {
@@ -91,7 +97,9 @@ export default function ForwardModal({ message, onClose, onForward, currentUserI
     if (selectedTargets.length === 0 || isSending) return;
     setIsSending(true);
     try {
-      await onForward(selectedTargets, message);
+      for (const msg of msgsToForward) {
+        await onForward(selectedTargets, msg);
+      }
       onClose();
     } catch (err) {
       console.error('Error forwarding message:', err);
@@ -122,7 +130,7 @@ export default function ForwardModal({ message, onClose, onForward, currentUserI
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
           <div>
             <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>
-              Forward Message
+              {msgsToForward.length > 1 ? `Forward ${msgsToForward.length} Messages` : 'Forward Message'}
             </h3>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
               Select chats or contacts to share with

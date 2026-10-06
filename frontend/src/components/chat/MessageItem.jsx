@@ -720,6 +720,9 @@ export default function MessageItem({
   senderIsPro,
   isSelectedForAction,
   onSelectForAction,
+  isInActionSelectionMode = false,
+  actionSelectedCount = 0,
+  onToggleActionSelect,
   isStarred,
   onOpenUnlimitedEmoji,
   onOpenCustomizeReactions,
@@ -1004,7 +1007,7 @@ export default function MessageItem({
 
   // Touch Long-Press Selection & Swipe-to-Reply Detection
   const handleTouchStart = (e) => {
-    if (isMultiSelectMode) return;
+    if (isMultiSelectMode || isInActionSelectionMode) return;
     const touch = e.touches[0];
     touchStartXRef.current = touch.clientX;
     touchStartYRef.current = touch.clientY;
@@ -1199,6 +1202,12 @@ export default function MessageItem({
     <div
       id={`msg-${message.id || message._id || message.clientTempId}`}
       onClick={(e) => {
+        if (isInActionSelectionMode) {
+          e.stopPropagation();
+          if (onToggleActionSelect) onToggleActionSelect(message);
+          else if (onSelectForAction) onSelectForAction(message);
+          return;
+        }
         if (isMultiSelectMode) {
           if (onToggleSelect) onToggleSelect(message.id);
         } else if (!isSelectedForAction && onDismissAction) {
@@ -1217,11 +1226,34 @@ export default function MessageItem({
         maxWidth: '78%',
         minWidth: '160px',
         position: 'relative',
-        cursor: isMultiSelectMode ? 'pointer' : 'default',
-        touchAction: 'pan-y',
-        zIndex: isSelectedForAction ? 999 : (isMultiSelectMode ? 10 : 1)
+        cursor: (isMultiSelectMode || isInActionSelectionMode) ? 'pointer' : 'default',
+        touchAction: isInActionSelectionMode ? 'auto' : 'pan-y',
+        zIndex: isSelectedForAction ? 55 : (isInActionSelectionMode ? 45 : (isMultiSelectMode ? 10 : 1))
       }}
     >
+      {/* Action Multi-Select Checkmark badge */}
+      {isSelectedForAction && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '-6px',
+            [isMine ? 'left' : 'right']: '-6px',
+            width: '20px',
+            height: '20px',
+            borderRadius: '50%',
+            background: 'var(--accent)',
+            boxShadow: '0 2px 8px rgba(99, 102, 241, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 60,
+            pointerEvents: 'none'
+          }}
+        >
+          <Check size={12} color="#fff" strokeWidth={3} />
+        </div>
+      )}
+
       {/* Swipe to Reply Indicator */}
       {dragX > 6 && (
         <div
@@ -1269,15 +1301,23 @@ export default function MessageItem({
 
       <div
         onClick={(e) => {
+          if (isInActionSelectionMode) {
+            e.stopPropagation();
+            if (onToggleActionSelect) onToggleActionSelect(message);
+            else if (onSelectForAction) onSelectForAction(message);
+            return;
+          }
           if (isSelectedForAction) {
             e.stopPropagation();
           }
         }}
-        onDoubleClick={!isMultiSelectMode ? handleDoubleTap : undefined}
+        onDoubleClick={(!isMultiSelectMode && !isInActionSelectionMode) ? handleDoubleTap : undefined}
         onContextMenu={(e) => {
           if (!isMultiSelectMode) {
             e.preventDefault();
-            if (onSelectForAction) {
+            if (isInActionSelectionMode && onToggleActionSelect) {
+              onToggleActionSelect(message);
+            } else if (onSelectForAction) {
               onSelectForAction(message);
             }
           }
@@ -2295,7 +2335,7 @@ export default function MessageItem({
       </div>
 
       {/* WhatsApp-Style Floating Quick Reaction Bar above message */}
-      {isSelectedForAction && (
+      {isSelectedForAction && actionSelectedCount <= 1 && (
         <div
           className="floating-reaction-bar"
           style={{
