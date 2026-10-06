@@ -4360,79 +4360,96 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
         )}
 
-      {/* Top Mood Timeline Bar (Separate below header, styled like bottom streak pill) */}
+      {/* Top Mood Timeline: Ultra-Slim Pencil Line with Micro Typography */}
       {!blockStatus.isBlockedByMe && !blockStatus.isBlockedByThem && (
         <div style={{
-          padding: '0.35rem 1rem 0.2rem 1rem',
+          padding: '2px 16px',
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
+          gap: '6px',
           background: 'transparent',
           position: 'relative',
           zIndex: 2,
           overflowX: 'auto',
           scrollbarWidth: 'none',
-          msOverflowStyle: 'none'
+          msOverflowStyle: 'none',
+          lineHeight: 1
         }}>
+          {/* Left Pencil Line */}
+          <div style={{
+            width: '20px',
+            flexShrink: 0,
+            height: '1px',
+            background: 'linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.45))'
+          }} />
+
+          {/* Micro Mood Pill */}
           <div
-            className="chat-neon-mood-pill"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
-              background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(99, 102, 241, 0.15))',
-              border: '1.5px solid rgba(168, 85, 247, 0.65)',
-              borderRadius: '16px',
-              padding: '4px 12px',
-              fontSize: '0.82rem',
-              fontWeight: 800,
-              color: '#c084fc',
-              backdropFilter: 'blur(8px)',
-              WebkitBackdropFilter: 'blur(8px)',
-              boxShadow: '0 0 12px rgba(168, 85, 247, 0.25)',
-              whiteSpace: 'nowrap'
+              gap: '4px',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              border: '1px solid rgba(168, 85, 247, 0.35)',
+              background: 'rgba(168, 85, 247, 0.08)',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
             }}
             title="Conversation Mood Sentiment"
           >
-            <span style={{ fontSize: '1rem' }}>{moodInfo?.emoji || '💬'}</span>
+            <span style={{ fontSize: '0.74rem', lineHeight: 1 }}>{moodInfo?.emoji || '💬'}</span>
             <span style={{
-              background: 'linear-gradient(135deg, #c084fc, #818cf8)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              fontWeight: 800,
-              fontSize: '0.88rem'
+              color: '#c084fc',
+              fontWeight: 700,
+              fontSize: '0.67rem',
+              letterSpacing: '0.01em'
             }}>
-              Mood: {moodInfo?.mood || 'Neutral'}
+              Mood: {moodInfo?.mood || 'Casual'}
             </span>
 
             {moodSteps.length > 0 && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginLeft: '6px' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginLeft: '3px' }}>
+                <span style={{ color: 'var(--text-muted)', opacity: 0.35, fontSize: '0.55rem' }}>|</span>
                 {moodSteps.map((step, idx) => (
                   <React.Fragment key={step.id || idx}>
                     <span
                       style={{
                         color: step.color,
-                        fontWeight: 700,
-                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        fontSize: '0.62rem',
                         background: step.bg,
-                        padding: '1.5px 7px',
-                        borderRadius: '8px',
-                        border: `1px solid ${step.border}`,
+                        padding: '1px 5px',
+                        borderRadius: '6px',
+                        border: `0.5px solid ${step.border}`,
                         whiteSpace: 'nowrap',
-                        opacity: step.isPending ? 0.6 : 1
+                        opacity: step.isPending ? 0.6 : 1,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '2px'
                       }}
                       title={step.preview}
                     >
-                      {step.emoji} {step.mood}
+                      <span>{step.emoji}</span>
+                      <span>{step.mood}</span>
                     </span>
                     {idx < moodSteps.length - 1 && (
-                      <span style={{ color: 'var(--text-muted)', opacity: 0.45, fontSize: '0.65rem' }}>→</span>
+                      <span style={{ color: 'var(--text-muted)', opacity: 0.35, fontSize: '0.55rem' }}>→</span>
                     )}
                   </React.Fragment>
                 ))}
               </div>
             )}
           </div>
+
+          {/* Right Pencil Line stretching across */}
+          <div style={{
+            flex: 1,
+            height: '1px',
+            background: 'linear-gradient(90deg, rgba(168, 85, 247, 0.45), transparent)'
+          }} />
         </div>
       )}
 
