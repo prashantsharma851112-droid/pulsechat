@@ -828,7 +828,9 @@ export default function MessageItem({
   const isMouseDownRef = useRef(false);
   const mouseStartXRef = useRef(0);
   const longPressTimerRef = useRef(null);
+  const mouseLongPressTimerRef = useRef(null);
   const isLongPressRef = useRef(false);
+  const justLongPressedRef = useRef(false);
 
   useEffect(() => {
     if (!socket) return;
@@ -1037,6 +1039,10 @@ export default function MessageItem({
     if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
     longPressTimerRef.current = setTimeout(() => {
       isLongPressRef.current = true;
+      justLongPressedRef.current = true;
+      setTimeout(() => {
+        justLongPressedRef.current = false;
+      }, 500);
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
         navigator.vibrate(40);
       }
@@ -1078,6 +1084,10 @@ export default function MessageItem({
     }
     if (isLongPressRef.current) {
       isLongPressRef.current = false;
+      justLongPressedRef.current = true;
+      setTimeout(() => {
+        justLongPressedRef.current = false;
+      }, 500);
       return;
     }
     if (isMultiSelectMode) return;
@@ -1104,16 +1114,36 @@ export default function MessageItem({
     setDragX(0);
   };
 
-  // Desktop Mouse Drag to Swipe
+  // Desktop Mouse Drag to Swipe & Long-Press Select
   const handleMouseDown = (e) => {
-    if (isMultiSelectMode || e.button !== 0) return;
+    if (isMultiSelectMode || isInActionSelectionMode || e.button !== 0) return;
     isMouseDownRef.current = true;
     mouseStartXRef.current = e.clientX;
+    isLongPressRef.current = false;
+
+    if (mouseLongPressTimerRef.current) clearTimeout(mouseLongPressTimerRef.current);
+    mouseLongPressTimerRef.current = setTimeout(() => {
+      isLongPressRef.current = true;
+      justLongPressedRef.current = true;
+      setTimeout(() => {
+        justLongPressedRef.current = false;
+      }, 500);
+      if (onSelectForAction) {
+        onSelectForAction(message);
+      }
+    }, 450);
   };
 
   const handleMouseMove = (e) => {
     if (!isMouseDownRef.current || isMultiSelectMode) return;
     const deltaX = e.clientX - mouseStartXRef.current;
+    if (Math.abs(deltaX) > 8) {
+      if (mouseLongPressTimerRef.current) {
+        clearTimeout(mouseLongPressTimerRef.current);
+        mouseLongPressTimerRef.current = null;
+      }
+    }
+    if (isLongPressRef.current) return;
     if (deltaX > 6) {
       setIsDragging(true);
       const swipeDistance = Math.min(deltaX * 0.55, 65);
@@ -1122,8 +1152,19 @@ export default function MessageItem({
   };
 
   const handleMouseUp = () => {
+    if (mouseLongPressTimerRef.current) {
+      clearTimeout(mouseLongPressTimerRef.current);
+      mouseLongPressTimerRef.current = null;
+    }
+    if (isLongPressRef.current) {
+      isLongPressRef.current = false;
+      justLongPressedRef.current = true;
+      setTimeout(() => {
+        justLongPressedRef.current = false;
+      }, 500);
+    }
     if (isMouseDownRef.current) {
-      if (dragX >= 35 && onReply) {
+      if (dragX >= 35 && onReply && !justLongPressedRef.current) {
         onReply(message);
       }
       isMouseDownRef.current = false;
@@ -1321,6 +1362,11 @@ export default function MessageItem({
 
       <div
         onClick={(e) => {
+          if (justLongPressedRef.current) {
+            e.stopPropagation();
+            e.preventDefault();
+            return;
+          }
           if (isInActionSelectionMode) {
             e.stopPropagation();
             if (onToggleActionSelect) onToggleActionSelect(message);

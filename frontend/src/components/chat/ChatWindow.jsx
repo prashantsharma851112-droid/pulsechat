@@ -78,7 +78,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const currentUserId = user?.id || user?._id || '';
   const activeChatId = activeChat?.id || activeChat?._id || '';
   const chatId = isGroup ? activeChatId : [currentUserId, activeChatId].filter(Boolean).sort().join('_');
-  const isOnline = !isGroup && onlineUsers.includes(activeChat.id);
+  const partnerId = activeChat?.id || activeChat?._id || activeChat?.userId || '';
+  const isOnline = !isGroup && (
+    (partnerId && onlineUsers.some(uId => String(uId) === String(partnerId))) ||
+    (activeChat?.username && onlineUsers.some(uId => String(uId) === String(activeChat.username)))
+  );
   const typingUser = typingMap[chatId];
   const isTyping = Boolean(typingUser && typingUser !== user?.username && typingUser !== user?.id && typingUser !== user?.displayName);
   const typingTimeoutRef = useRef(null);
@@ -1703,28 +1707,66 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
   }, [socket, chatId]);
 
-  // Auto-Open Real-Time Features (Arrow Game & Live Drawboard) Socket Listener
+  // Auto-Open Real-Time Features (Arrow Game, Tic-Tac-Toe, Live Drawboard, Music) Socket Listener
   useEffect(() => {
     if (!socket) return;
+    const isMatchingChat = (data) => {
+      if (!data || !data.chatId) return false;
+      const c1 = String(chatId).replace(/_/g, '');
+      const c2 = String(data.chatId).replace(/_/g, '');
+      return (
+        data.chatId === chatId ||
+        c1 === c2 ||
+        (data.chatId && data.chatId.includes(chatId)) ||
+        (chatId && chatId.includes(data.chatId))
+      );
+    };
+
     const handleAutoOpenGame = (data) => {
-      if (data && (data.chatId === chatId || data.chatId?.includes(chatId) || chatId?.includes(data.chatId))) {
+      if (isMatchingChat(data) && data.senderId !== user?.id) {
         setShowArrowGameModal(true);
+        const inviter = data.senderName || activeChat?.displayName || 'Friend';
+        setActionToast(`🏹 ${inviter} ne Arrow Battle Game shuru kiya!`);
+        setTimeout(() => setActionToast(''), 4000);
       }
     };
     const handleAutoOpenWhiteboard = (data) => {
-      if (data && (data.chatId === chatId || data.chatId?.includes(chatId) || chatId?.includes(data.chatId))) {
+      if (isMatchingChat(data) && data.senderId !== user?.id) {
         setShowWhiteboard(true);
+        const inviter = data.senderName || activeChat?.displayName || 'Friend';
+        setActionToast(`🎨 ${inviter} ne Live Drawboard shuru kiya!`);
+        setTimeout(() => setActionToast(''), 4000);
+      }
+    };
+    const handleAutoOpenTicTacToe = (data) => {
+      if (isMatchingChat(data) && data.senderId !== user?.id) {
+        setShowTicTacToeModal(true);
+        const inviter = data.senderName || activeChat?.displayName || 'Friend';
+        setActionToast(`🎮 ${inviter} ne Tic-Tac-Toe Game shuru kiya!`);
+        setTimeout(() => setActionToast(''), 4000);
+      }
+    };
+    const handleAutoOpenMusic = (data) => {
+      if (isMatchingChat(data) && data.senderId !== user?.id) {
+        setShowChatMusicPicker(true);
+        const inviter = data.senderName || activeChat?.displayName || 'Friend';
+        setActionToast(`🎵 ${inviter} ne Music Jam shuru kiya!`);
+        setTimeout(() => setActionToast(''), 4000);
       }
     };
 
     socket.on('auto_open_arrow_game', handleAutoOpenGame);
     socket.on('auto_open_whiteboard', handleAutoOpenWhiteboard);
+    socket.on('auto_open_tictactoe', handleAutoOpenTicTacToe);
+    socket.on('auto_open_music', handleAutoOpenMusic);
 
     return () => {
       socket.off('auto_open_arrow_game', handleAutoOpenGame);
       socket.off('auto_open_whiteboard', handleAutoOpenWhiteboard);
+      socket.off('auto_open_tictactoe', handleAutoOpenTicTacToe);
+      socket.off('auto_open_music', handleAutoOpenMusic);
     };
-  }, [socket, chatId]);
+  }, [socket, chatId, user?.id, activeChat?.displayName]);
 
   // File Transfer Limit Error Socket Listener
   useEffect(() => {
@@ -2566,20 +2608,80 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     playSound('sent');
   };
 
+  const checkCanOpenActivity = (activityName) => {
+    if (isGroup) return true;
+    if (!isOnline) {
+      const name = activeChat?.displayName || activeChat?.username || 'User';
+      const msg = `⚠️ ${name} abhi offline hai! Dono online honge tabhi ${activityName} open hoga.`;
+      setActionToast(msg);
+      alert(msg);
+      setTimeout(() => setActionToast(''), 4500);
+      return false;
+    }
+    return true;
+  };
+
   const handleOpenArrowGame = () => {
+    if (!checkCanOpenActivity('Game (Arrow Battle)')) return;
+    setShowAppsFolderModal(false);
     setShowArrowGameModal(true);
     if (socket && chatId) {
-      socket.emit('request_open_arrow_game', { chatId, senderId: user?.id, receiverId: isGroup ? '' : activeChat?.id });
+      socket.emit('request_open_arrow_game', {
+        chatId,
+        senderId: user?.id,
+        senderName: user?.displayName || user?.username,
+        receiverId: isGroup ? '' : (activeChat?.id || activeChat?._id)
+      });
+    }
+  };
+
+  const handleOpenTicTacToe = () => {
+    if (!checkCanOpenActivity('Game (Tic-Tac-Toe)')) return;
+    setShowAppsFolderModal(false);
+    setShowTicTacToeModal(true);
+    if (socket && chatId) {
+      socket.emit('request_open_tictactoe', {
+        chatId,
+        senderId: user?.id,
+        senderName: user?.displayName || user?.username,
+        receiverId: isGroup ? '' : (activeChat?.id || activeChat?._id)
+      });
     }
   };
 
   const handleOpenWhiteboard = () => {
+    if (!checkCanOpenActivity('Live Drawboard')) return;
+    setShowAppsFolderModal(false);
     setShowMoreMenu(false);
     setWhiteboardInitialImage(null);
     setWhiteboardInitialData(null);
     setShowWhiteboard(true);
     if (socket && chatId) {
-      socket.emit('request_open_whiteboard', { chatId, senderId: user?.id, receiverId: isGroup ? '' : activeChat?.id });
+      socket.emit('request_open_whiteboard', {
+        chatId,
+        senderId: user?.id,
+        senderName: user?.displayName || user?.username,
+        receiverId: isGroup ? '' : (activeChat?.id || activeChat?._id)
+      });
+    }
+  };
+
+  const handleOpenMusic = () => {
+    if (!checkCanOpenActivity('Music')) return;
+    setShowAppsFolderModal(false);
+    if (!user?.isPro) {
+      setProModalTab('pro');
+      setShowProModal(true);
+      return;
+    }
+    setShowChatMusicPicker(true);
+    if (socket && chatId) {
+      socket.emit('request_open_music', {
+        chatId,
+        senderId: user?.id,
+        senderName: user?.displayName || user?.username,
+        receiverId: isGroup ? '' : (activeChat?.id || activeChat?._id)
+      });
     }
   };
 
@@ -2811,24 +2913,27 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setMessages(prev => prev.filter(m => m.id !== msgId));
   };
 
+  const lastActionSelectTimeRef = useRef(0);
+
   const handleSelectForAction = useCallback((msg) => {
     if (!msg?.id) return;
+    lastActionSelectTimeRef.current = Date.now();
     setSelectedActionMessages(prev => {
       const exists = prev.some(m => m.id === msg.id);
       if (exists) {
-        return prev.filter(m => m.id !== msg.id);
+        return prev;
       } else {
         return [...prev, msg];
       }
     });
     setShowActionMoreMenu(false);
-    try {
-      window.history.pushState({ messageActionOpen: true }, '');
-    } catch (e) {}
   }, []);
 
   const handleToggleActionSelect = useCallback((msg) => {
     if (!msg?.id) return;
+    if (Date.now() - lastActionSelectTimeRef.current < 450) {
+      return;
+    }
     setSelectedActionMessages(prev => {
       const exists = prev.some(m => m.id === msg.id);
       if (exists) {
@@ -2840,6 +2945,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   }, []);
 
   const handleDismissActionMessage = useCallback(() => {
+    if (Date.now() - lastActionSelectTimeRef.current < 450) {
+      return;
+    }
     setSelectedActionMessages([]);
     setShowActionMoreMenu(false);
     setDeleteModalMessages(null);
@@ -3670,14 +3778,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   {/* Search Music Button (VIP Exclusive) */}
                   <button
                     onClick={() => {
-                      if (!user?.isPro) {
-                        setShowAuraMenu(false);
-                        setProModalTab('pro');
-                        setShowProModal(true);
-                        return;
-                      }
-                      setShowChatMusicPicker(true);
                       setShowAuraMenu(false);
+                      handleOpenMusic();
                     }}
                     style={{
                       display: 'flex',
@@ -5804,15 +5906,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               {/* App 3: Background Music */}
               <button
                 type="button"
-                onClick={() => {
-                  setShowAppsFolderModal(false);
-                  if (!user?.isPro) {
-                    setProModalTab('pro');
-                    setShowProModal(true);
-                    return;
-                  }
-                  setShowChatMusicPicker(true);
-                }}
+                onClick={handleOpenMusic}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -5853,10 +5947,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               {/* App 4: Tic-Tac-Toe Arena */}
               <button
                 type="button"
-                onClick={() => {
-                  setShowAppsFolderModal(false);
-                  setShowTicTacToeModal(true);
-                }}
+                onClick={handleOpenTicTacToe}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',

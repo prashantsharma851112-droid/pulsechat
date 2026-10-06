@@ -1563,12 +1563,20 @@ io.on('connection', (socket) => {
   socket.on('tictactoe_move', (data) => {
     if (data && data.chatId) {
       socket.to(data.chatId).emit('tictactoe_move', data);
+      if (data.chatId.includes('_')) {
+        const canonical = data.chatId.split('_').sort().join('_');
+        if (canonical !== data.chatId) socket.to(canonical).emit('tictactoe_move', data);
+      }
     }
   });
 
   socket.on('tictactoe_reset', (data) => {
     if (data && data.chatId) {
       socket.to(data.chatId).emit('tictactoe_reset', data);
+      if (data.chatId.includes('_')) {
+        const canonical = data.chatId.split('_').sort().join('_');
+        if (canonical !== data.chatId) socket.to(canonical).emit('tictactoe_reset', data);
+      }
     }
   });
 
@@ -1802,22 +1810,24 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Real-time Auto-Open Modal Requests (Live Arrow Game & Live Drawboard)
-  socket.on('request_open_arrow_game', (data) => {
+  // Real-time Auto-Open Modal Requests (Live Arrow Game, Tic-Tac-Toe, Live Drawboard, Music)
+  const broadcastActivityOpen = (event, data) => {
     if (!data || !data.chatId) return;
-    io.to(data.chatId).emit('auto_open_arrow_game', data);
-    if (data.receiverId) {
-      io.to(`user_${data.receiverId}`).emit('auto_open_arrow_game', data);
+    io.to(data.chatId).emit(event, data);
+    if (data.chatId.includes('_')) {
+      const canonical = data.chatId.split('_').sort().join('_');
+      if (canonical !== data.chatId) io.to(canonical).emit(event, data);
     }
-  });
+    if (data.receiverId) {
+      io.to(`user_${data.receiverId}`).emit(event, data);
+      io.to(data.receiverId).emit(event, data);
+    }
+  };
 
-  socket.on('request_open_whiteboard', (data) => {
-    if (!data || !data.chatId) return;
-    io.to(data.chatId).emit('auto_open_whiteboard', data);
-    if (data.receiverId) {
-      io.to(`user_${data.receiverId}`).emit('auto_open_whiteboard', data);
-    }
-  });
+  socket.on('request_open_arrow_game', (data) => broadcastActivityOpen('auto_open_arrow_game', data));
+  socket.on('request_open_whiteboard', (data) => broadcastActivityOpen('auto_open_whiteboard', data));
+  socket.on('request_open_tictactoe', (data) => broadcastActivityOpen('auto_open_tictactoe', data));
+  socket.on('request_open_music', (data) => broadcastActivityOpen('auto_open_music', data));
 
   // Disconnect
   socket.on('disconnect', () => {
