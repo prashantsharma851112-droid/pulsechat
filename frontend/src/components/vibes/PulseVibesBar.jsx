@@ -224,8 +224,12 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
         {/* User's own Story Item */}
         <div
           onClick={() => {
+            const allGroupsList = [
+              ...(myVibesGroup && myVibesGroup.vibes?.length ? [myVibesGroup] : []),
+              ...otherVibesGroups
+            ];
             if (myVibesGroup && Array.isArray(myVibesGroup.vibes) && myVibesGroup.vibes.length > 0) {
-              onOpenVibeViewer(myVibesGroup);
+              onOpenVibeViewer(myVibesGroup, allGroupsList);
             } else {
               onOpenCreateVibe();
             }
@@ -305,7 +309,13 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
           return (
             <div
               key={group.userId}
-              onClick={() => onOpenVibeViewer(group)}
+              onClick={() => {
+                const allGroupsList = [
+                  ...(myVibesGroup && myVibesGroup.vibes?.length ? [myVibesGroup] : []),
+                  ...otherVibesGroups
+                ];
+                onOpenVibeViewer(group, allGroupsList);
+              }}
               style={{
                 display: 'flex',
                 flexDirection: 'column',

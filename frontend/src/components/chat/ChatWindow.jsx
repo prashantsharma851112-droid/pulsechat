@@ -5567,7 +5567,34 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </button>
           )}
 
-          {/* Emoji Button Beside 4-Dot Button */}
+          {/* Voice Note Button Beside 4-Dot Button */}
+          {!showRecorder && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowActionGrid(false);
+                setShowEmoji(false);
+                setShowRecorder(true);
+              }}
+              className="icon-btn-ghost"
+              title="Record Voice Note"
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                color: 'var(--accent)',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Mic size={20} />
+            </button>
+          )}
+
+          {/* Emoji Button in place of Voice Note */}
           {!showRecorder && (
             <button
               type="button"
@@ -5594,32 +5621,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               }}
             >
               <Smile size={20} />
-            </button>
-          )}
-
-          {/* Voice Note Button Beside 4-Dot Button */}
-          {!showRecorder && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowActionGrid(false);
-                setShowRecorder(true);
-              }}
-              className="icon-btn-ghost"
-              title="Record Voice Note"
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                color: 'var(--accent)',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <Mic size={20} />
             </button>
           )}
 

@@ -12,7 +12,7 @@ import SparksWalletModal from '../chat/SparksWalletModal';
 import PulseProModal from '../chat/PulseProModal';
 import { EMOJI_CATEGORIES } from '../chat/EmojiPicker';
 
-export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initialVibeId }) {
+export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGroup, onClose, onRefresh, initialVibeId }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
   
@@ -40,6 +40,74 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     }
     return 0;
   });
+
+  // Next story info (within same user or next user group)
+  const nextStoryInfo = React.useMemo(() => {
+    if (currentIndex < vibes.length - 1) {
+      return {
+        vibe: vibes[currentIndex + 1],
+        group: vibeGroup,
+        isNewGroup: false,
+        vibesList: vibes,
+        index: currentIndex + 1
+      };
+    }
+    if (allGroups && Array.isArray(allGroups) && allGroups.length > 0) {
+      const currentGroupIdx = allGroups.findIndex(g => g?.userId === vibeGroup?.userId || g?.username === vibeGroup?.username);
+      if (currentGroupIdx !== -1 && currentGroupIdx < allGroups.length - 1) {
+        const nextGroup = allGroups[currentGroupIdx + 1];
+        if (nextGroup && Array.isArray(nextGroup.vibes) && nextGroup.vibes.length > 0) {
+          return {
+            vibe: nextGroup.vibes[0],
+            group: nextGroup,
+            isNewGroup: true,
+            vibesList: nextGroup.vibes,
+            index: 0
+          };
+        }
+      }
+    }
+    return null;
+  }, [currentIndex, vibes, vibeGroup, allGroups]);
+
+  // Prev story info (within same user or prev user group)
+  const prevStoryInfo = React.useMemo(() => {
+    if (currentIndex > 0) {
+      return {
+        vibe: vibes[currentIndex - 1],
+        group: vibeGroup,
+        isNewGroup: false,
+        vibesList: vibes,
+        index: currentIndex - 1
+      };
+    }
+    if (allGroups && Array.isArray(allGroups) && allGroups.length > 0) {
+      const currentGroupIdx = allGroups.findIndex(g => g?.userId === vibeGroup?.userId || g?.username === vibeGroup?.username);
+      if (currentGroupIdx > 0) {
+        const prevGroup = allGroups[currentGroupIdx - 1];
+        if (prevGroup && Array.isArray(prevGroup.vibes) && prevGroup.vibes.length > 0) {
+          return {
+            vibe: prevGroup.vibes[prevGroup.vibes.length - 1],
+            group: prevGroup,
+            isNewGroup: true,
+            vibesList: prevGroup.vibes,
+            index: prevGroup.vibes.length - 1
+          };
+        }
+      }
+    }
+    return null;
+  }, [currentIndex, vibes, vibeGroup, allGroups]);
+
+  // 3D Cube Transition State
+  const [cubeOffset, setCubeOffset] = useState(0); // px dragged horizontally
+  const [isCubeDragging, setIsCubeDragging] = useState(false);
+  const [cubeAnimating, setCubeAnimating] = useState(null); // 'next' | 'prev' | 'reset' | null
+  const [cubeAnimOffset, setCubeAnimOffset] = useState(0);
+
+  const cubeStageRef = useRef(null);
+  const isCubeSwipingRef = useRef(false);
+  const cubeDragOffsetRef = useRef(0);
 
   const hasInitializedIndexRef = useRef(false);
   useEffect(() => {
@@ -654,7 +722,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
   // Story Auto-Advance Progress Bar Timer (for photo/text stories; videos manage progress via onTimeUpdate)
   useEffect(() => {
     if (isCurrentStoryVideo) return;
-    if (isPaused || isHolding || isAnySubmodalOpen) {
+    if (isPaused || isHolding || isAnySubmodalOpen || cubeAnimating || isCubeDragging) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
@@ -668,19 +736,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     timerRef.current = setInterval(() => {
       setProgress(prev => {
         if (prev >= 100) {
-          if (currentIndex < vibes.length - 1) {
-            setCurrentIndex(c => c + 1);
-            return 0;
-          } else {
-            clearInterval(timerRef.current);
-            if (!user?.isPro && !showingSponsoredAd) {
-              setShowingSponsoredAd(true);
-              return 100;
-            } else {
-              handleCloseModal();
-              return 100;
-            }
-          }
+          handleNext();
+          return 0;
         }
         return prev + step;
       });
@@ -689,7 +746,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [currentIndex, vibes.length, onClose, isPaused, isHolding, showViewersSheet, currentVibe?.id, currentVibe?.storyDuration, user?.isPro, showingSponsoredAd, isCurrentStoryVideo]);
+  }, [currentIndex, vibes.length, onClose, isPaused, isHolding, showViewersSheet, currentVibe?.id, currentVibe?.storyDuration, user?.isPro, showingSponsoredAd, isCurrentStoryVideo, cubeAnimating, isCubeDragging]);
 
   // Clean up timers on unmount
   useEffect(() => {
@@ -699,11 +756,64 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     };
   }, []);
 
-  // Instagram-style Hold to Pause, Swipe Up to View Activity & Tap / Double-Tap Navigation
+  // Instagram 3D Cube Transition Controller
+  const triggerCubeTransition = (direction) => {
+    if (cubeAnimating) return;
+    const stageW = cubeStageRef.current ? cubeStageRef.current.offsetWidth : (typeof window !== 'undefined' ? Math.min(440, window.innerWidth) : 380);
+
+    if (direction === 'next') {
+      if (!nextStoryInfo) {
+        if (!user?.isPro && !showingSponsoredAd) {
+          setShowingSponsoredAd(true);
+        } else {
+          handleCloseModal();
+        }
+        return;
+      }
+      setCubeOffset(-1);
+      setCubeAnimating('next');
+      setCubeAnimOffset(-stageW);
+      setTimeout(() => {
+        if (nextStoryInfo.isNewGroup && onSwitchVibeGroup) {
+          onSwitchVibeGroup(nextStoryInfo.group);
+        }
+        setCurrentIndex(nextStoryInfo.index);
+        setProgress(0);
+        setCubeOffset(0);
+        setCubeAnimOffset(0);
+        setCubeAnimating(null);
+      }, 280);
+    } else if (direction === 'prev') {
+      if (!prevStoryInfo) return;
+      setCubeOffset(1);
+      setCubeAnimating('prev');
+      setCubeAnimOffset(stageW);
+      setTimeout(() => {
+        if (prevStoryInfo.isNewGroup && onSwitchVibeGroup) {
+          onSwitchVibeGroup(prevStoryInfo.group);
+        }
+        setCurrentIndex(prevStoryInfo.index);
+        setProgress(0);
+        setCubeOffset(0);
+        setCubeAnimOffset(0);
+        setCubeAnimating(null);
+      }, 280);
+    }
+  };
+
+  const handleNext = () => {
+    triggerCubeTransition('next');
+  };
+
+  const handlePrev = () => {
+    triggerCubeTransition('prev');
+  };
+
+  // Instagram-style Hold to Pause, 3D Cube Swipe & Tap / Double-Tap Navigation
   const handleStagePointerDown = (e) => {
+    if (isAnySubmodalOpen || cubeAnimating) return;
     if (e.target.closest('button') || e.target.closest('input') || e.target.closest('.interactive-action') || e.target.closest('form')) return;
 
-    // Ignore synthetic mouse events fired after touch on mobile/WebView
     const isTouch = Boolean(e.type && e.type.startsWith('touch'));
     if (isTouch) {
       isTouchDeviceRef.current = true;
@@ -717,6 +827,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     const clientX = e.clientX ?? (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
     touchStartYRef.current = clientY;
     touchStartXRef.current = clientX;
+    isCubeSwipingRef.current = false;
+    cubeDragOffsetRef.current = 0;
 
     if (holdTimerRef.current) {
       clearTimeout(holdTimerRef.current);
@@ -724,29 +836,40 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
 
     // Instagram Hold to Pause: only pause after 320ms stationary hold
     holdTimerRef.current = setTimeout(() => {
-      setIsHolding(true);
-      setIsPaused(true);
-      if (videoPlayerRef.current) {
-        try { videoPlayerRef.current.pause(); } catch (err) {}
-      }
-      if (audioRef.current) {
-        try { audioRef.current.pause(); } catch (err) {}
+      if (!isCubeSwipingRef.current) {
+        setIsHolding(true);
+        setIsPaused(true);
+        if (videoPlayerRef.current) {
+          try { videoPlayerRef.current.pause(); } catch (err) {}
+        }
+        if (audioRef.current) {
+          try { audioRef.current.pause(); } catch (err) {}
+        }
       }
     }, 320);
   };
 
   const handleStagePointerMove = (e) => {
+    if (isAnySubmodalOpen || cubeAnimating) return;
     const clientY = e.clientY ?? (e.touches && e.touches[0] ? e.touches[0].clientY : touchStartYRef.current);
     const clientX = e.clientX ?? (e.touches && e.touches[0] ? e.touches[0].clientX : touchStartXRef.current);
-    const deltaY = Math.abs(clientY - touchStartYRef.current);
-    const deltaX = Math.abs(clientX - touchStartXRef.current);
+    const deltaY = clientY - touchStartYRef.current;
+    const deltaX = clientX - touchStartXRef.current;
 
-    // If moved more than 10px, it's a swipe/drag, NOT a stationary hold!
-    if (deltaY > 10 || deltaX > 10) {
+    // If moved more than 8px, cancel stationary hold
+    if (Math.abs(deltaY) > 8 || Math.abs(deltaX) > 8) {
       if (holdTimerRef.current) {
         clearTimeout(holdTimerRef.current);
         holdTimerRef.current = null;
       }
+    }
+
+    // Instagram Horizontal 3D Cube Drag Tracking
+    if (Math.abs(deltaX) > 8 && Math.abs(deltaY) < 55) {
+      isCubeSwipingRef.current = true;
+      setIsCubeDragging(true);
+      cubeDragOffsetRef.current = deltaX;
+      setCubeOffset(deltaX);
     }
   };
 
@@ -776,29 +899,62 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     const clientY = e.clientY ?? (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : touchStartYRef.current);
     const clientX = e.clientX ?? (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : touchStartXRef.current);
     const deltaY = clientY - touchStartYRef.current;
-    const deltaX = Math.abs(clientX - touchStartXRef.current);
+    const deltaX = clientX - touchStartXRef.current;
     const pressDuration = Date.now() - touchStartTimeRef.current;
 
-    // 1. Instagram Horizontal Swipe Gesture (Swipe Left -> Next Story, Swipe Right -> Prev Story)
-    const rawDeltaX = clientX - touchStartXRef.current;
-    if (Math.abs(rawDeltaX) > 36 && Math.abs(deltaY) < 65) {
-      if (singleTapTimerRef.current) {
-        clearTimeout(singleTapTimerRef.current);
-        singleTapTimerRef.current = null;
-      }
-      if (rawDeltaX < -36) {
-        // Swiped Left -> Next story
-        handleNext();
+    const stageW = cubeStageRef.current ? cubeStageRef.current.offsetWidth : (typeof window !== 'undefined' ? Math.min(440, window.innerWidth) : 380);
+
+    // 1. Instagram Horizontal 3D Cube Swipe Release
+    if (isCubeSwipingRef.current) {
+      isCubeSwipingRef.current = false;
+      setIsCubeDragging(false);
+      const finalDrag = cubeDragOffsetRef.current || deltaX;
+
+      if (finalDrag < -40 && nextStoryInfo) {
+        // Swiped Left -> Complete 3D turn to Next Story
+        setCubeAnimating('next');
+        setCubeAnimOffset(-stageW);
+        setTimeout(() => {
+          if (nextStoryInfo.isNewGroup && onSwitchVibeGroup) {
+            onSwitchVibeGroup(nextStoryInfo.group);
+          }
+          setCurrentIndex(nextStoryInfo.index);
+          setProgress(0);
+          setCubeOffset(0);
+          setCubeAnimOffset(0);
+          setCubeAnimating(null);
+        }, 280);
         return;
-      } else if (rawDeltaX > 36) {
-        // Swiped Right -> Previous story
-        handlePrev();
+      } else if (finalDrag > 40 && prevStoryInfo) {
+        // Swiped Right -> Complete 3D turn to Previous Story
+        setCubeAnimating('prev');
+        setCubeAnimOffset(stageW);
+        setTimeout(() => {
+          if (prevStoryInfo.isNewGroup && onSwitchVibeGroup) {
+            onSwitchVibeGroup(prevStoryInfo.group);
+          }
+          setCurrentIndex(prevStoryInfo.index);
+          setProgress(0);
+          setCubeOffset(0);
+          setCubeAnimOffset(0);
+          setCubeAnimating(null);
+        }, 280);
+        return;
+      } else {
+        // Did not reach swipe threshold -> Snap back to 0
+        setCubeAnimating('reset');
+        setCubeAnimOffset(0);
+        setTimeout(() => {
+          setCubeOffset(0);
+          setCubeAnimOffset(0);
+          setCubeAnimating(null);
+        }, 220);
         return;
       }
     }
 
     // 2. Instagram Swipe Up Gesture: opens activity/viewers sheet
-    if (deltaY < -32 && deltaX < 120) {
+    if (deltaY < -32 && Math.abs(deltaX) < 80) {
       if (singleTapTimerRef.current) {
         clearTimeout(singleTapTimerRef.current);
         singleTapTimerRef.current = null;
@@ -814,7 +970,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     }
 
     // 3. Instagram Swipe Down Gesture: closes sheet if open, or closes story
-    if (deltaY > 50 && deltaX < 120) {
+    if (deltaY > 50 && Math.abs(deltaX) < 80) {
       if (singleTapTimerRef.current) {
         clearTimeout(singleTapTimerRef.current);
         singleTapTimerRef.current = null;
@@ -836,7 +992,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
       return;
     }
 
-    // 3. Instagram Tap & Double-Tap Navigation
+    // 4. Instagram Tap & Double-Tap Navigation
     if (!e.target.closest('button') && !e.target.closest('input') && !e.target.closest('.interactive-action') && !e.target.closest('form')) {
       const now = Date.now();
 
@@ -858,7 +1014,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
 
       // First Tap: Queue single-tap navigation with 280ms window for double tap
       lastTapTimeRef.current = now;
-      const rect = e.currentTarget.getBoundingClientRect();
+      const stageElement = cubeStageRef.current || e.currentTarget;
+      const rect = stageElement.getBoundingClientRect();
       const relativeX = clientX - rect.left;
 
       singleTapTimerRef.current = setTimeout(() => {
@@ -869,24 +1026,6 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
           handleNext();
         }
       }, 280);
-    }
-  };
-
-  const handleNext = () => {
-    if (currentIndex < vibes.length - 1) {
-      setCurrentIndex(prev => prev + 1);
-    } else {
-      if (!user?.isPro && !showingSponsoredAd) {
-        setShowingSponsoredAd(true);
-      } else {
-        handleCloseModal();
-      }
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(prev => prev - 1);
     }
   };
 
@@ -1029,6 +1168,76 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
 
   const handleDeleteVibe = handleDelete;
 
+  const effectiveOffset = cubeAnimating ? cubeAnimOffset : cubeOffset;
+  const isTransitioning = effectiveOffset !== 0 || cubeAnimating !== null;
+  const stageW = typeof window !== 'undefined' ? Math.min(440, window.innerWidth) : 380;
+
+  // Rubber-band resistance at boundaries
+  let clampedOffset = effectiveOffset;
+  if (effectiveOffset < 0 && !nextStoryInfo) {
+    clampedOffset = effectiveOffset * 0.22;
+  } else if (effectiveOffset > 0 && !prevStoryInfo) {
+    clampedOffset = effectiveOffset * 0.22;
+  }
+
+  const progressRatio = Math.min(1, Math.abs(clampedOffset) / stageW);
+  const angle = progressRatio * 90;
+  const isSlidingNext = clampedOffset < 0;
+  const adjacentInfo = isSlidingNext ? nextStoryInfo : prevStoryInfo;
+
+  const face1Style = {
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    borderRadius: typeof window !== 'undefined' && window.innerWidth <= 768 ? '0px' : '24px',
+    overflow: 'hidden',
+    background: currentVibe?.bgGradient || 'linear-gradient(135deg, #6366f1, #a855f7)',
+    display: 'flex',
+    flexDirection: 'column',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
+    border: typeof window !== 'undefined' && window.innerWidth <= 768 ? 'none' : '1px solid rgba(255,255,255,0.15)',
+    backfaceVisibility: 'hidden',
+    WebkitBackfaceVisibility: 'hidden',
+    transformStyle: 'preserve-3d',
+    zIndex: 2,
+    transformOrigin: isSlidingNext ? '100% 50%' : '0% 50%',
+    transform: isTransitioning
+      ? `perspective(1200px) rotateY(${isSlidingNext ? -angle : angle}deg)`
+      : 'none',
+    filter: isTransitioning
+      ? `brightness(${Math.max(0.45, 1 - progressRatio * 0.45)})`
+      : 'none',
+    transition: isCubeDragging ? 'none' : 'transform 0.28s cubic-bezier(0.25, 1, 0.5, 1), filter 0.28s ease',
+    cursor: 'pointer',
+    userSelect: 'none',
+    WebkitUserSelect: 'none',
+    touchAction: 'none'
+  };
+
+  const face2Style = {
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    borderRadius: typeof window !== 'undefined' && window.innerWidth <= 768 ? '0px' : '24px',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    background: adjacentInfo?.vibe?.bgGradient || 'linear-gradient(135deg, #6366f1, #a855f7)',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
+    border: typeof window !== 'undefined' && window.innerWidth <= 768 ? 'none' : '1px solid rgba(255,255,255,0.15)',
+    backfaceVisibility: 'hidden',
+    WebkitBackfaceVisibility: 'hidden',
+    transformStyle: 'preserve-3d',
+    zIndex: 1,
+    pointerEvents: 'none',
+    transformOrigin: isSlidingNext ? '0% 50%' : '100% 50%',
+    transform: `perspective(1200px) translateX(${isSlidingNext ? stageW * (1 - progressRatio) : -stageW * (1 - progressRatio)}px) rotateY(${isSlidingNext ? (90 - angle) : (-90 + angle)}deg)`,
+    filter: `brightness(${Math.min(1, 0.55 + progressRatio * 0.45)})`,
+    transition: isCubeDragging ? 'none' : 'transform 0.28s cubic-bezier(0.25, 1, 0.5, 1), filter 0.28s ease'
+  };
+
   if (!currentVibe) return null;
 
   return (
@@ -1046,21 +1255,32 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
         overflow: 'hidden'
       }}
     >
+      {/* 3D Cube Perspective Viewport */}
       <div
+        ref={cubeStageRef}
         style={{
           position: 'relative',
           width: '100%',
           maxWidth: typeof window !== 'undefined' && window.innerWidth <= 768 ? '100vw' : '440px',
           height: typeof window !== 'undefined' && window.innerWidth <= 768 ? '100dvh' : 'min(880px, 98dvh)',
           borderRadius: typeof window !== 'undefined' && window.innerWidth <= 768 ? '0px' : '24px',
-          overflow: 'hidden',
-          background: currentVibe.bgGradient || 'linear-gradient(135deg, #6366f1, #a855f7)',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
-          border: typeof window !== 'undefined' && window.innerWidth <= 768 ? 'none' : '1px solid rgba(255,255,255,0.15)'
+          perspective: '1200px',
+          perspectiveOrigin: '50% 50%',
+          transformStyle: 'preserve-3d',
+          overflow: 'hidden'
         }}
       >
+        {/* Face 1: Current Active Story Card */}
+        <div
+          onMouseDown={handleStagePointerDown}
+          onMouseMove={handleStagePointerMove}
+          onMouseUp={handleStagePointerUp}
+          onTouchStart={handleStagePointerDown}
+          onTouchMove={handleStagePointerMove}
+          onTouchEnd={handleStagePointerUp}
+          onContextMenu={(e) => e.preventDefault()}
+          style={face1Style}
+        >
         {/* CSS Keyframe for Instagram Floating Heart Burst */}
         <style>{`
           @keyframes instaHeartBurst {
@@ -1290,15 +1510,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
           <ChatLiveWallpaper wallpaperId={currentVibe.animatedBg} />
         )}
 
-        {/* Media or Text Content Body with Instagram Hold-to-Pause and Tap navigation */}
+        {/* Media or Text Content Body */}
         <div
-          onMouseDown={handleStagePointerDown}
-          onMouseMove={handleStagePointerMove}
-          onMouseUp={handleStagePointerUp}
-          onTouchStart={handleStagePointerDown}
-          onTouchMove={handleStagePointerMove}
-          onTouchEnd={handleStagePointerUp}
-          onContextMenu={(e) => e.preventDefault()}
           style={{
             flex: 1,
             position: 'relative',
@@ -1306,10 +1519,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
             alignItems: 'center',
             justifyContent: 'center',
             padding: currentVibe.imageFit === 'padded' ? '50px 30px' : '0px',
-            cursor: 'pointer',
             userSelect: 'none',
-            WebkitUserSelect: 'none',
-            touchAction: 'none'
+            WebkitUserSelect: 'none'
           }}
         >
           {/* Full Song YouTube Background Audio Engine (Fallback ONLY when no direct audioUrl) */}
@@ -1919,6 +2130,196 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
             </div>
           )}
         </div>
+        </div>
+
+        {/* Face 2: Adjacent Story Cube Face */}
+        {isTransitioning && adjacentInfo && (
+          <div style={face2Style}>
+            {/* Live Canvas Background if selected */}
+            {adjacentInfo.vibe?.animatedBg && adjacentInfo.vibe?.animatedBg !== 'none' && (
+              <ChatLiveWallpaper wallpaperId={adjacentInfo.vibe.animatedBg} />
+            )}
+
+            {/* Top Progress Bars */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 12,
+                left: 12,
+                right: 12,
+                display: 'flex',
+                gap: '4px',
+                zIndex: 10
+              }}
+            >
+              {(adjacentInfo.vibesList || []).map((v, i) => (
+                <div
+                  key={v.id || i}
+                  style={{
+                    flex: 1,
+                    height: '3px',
+                    borderRadius: '2px',
+                    background: 'rgba(255,255,255,0.3)',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      background: '#fff',
+                      width: i < adjacentInfo.index ? '100%' : '0%'
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Top Header */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 24,
+                left: 14,
+                right: 14,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                zIndex: 10,
+                color: '#fff'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <img
+                  src={adjacentInfo.group?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${adjacentInfo.group?.username || 'user'}`}
+                  alt=""
+                  style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid #fff' }}
+                />
+                <div>
+                  <div style={{ fontSize: '0.86rem', fontWeight: 800, textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
+                    {adjacentInfo.group?.displayName || 'User'}
+                  </div>
+                  <div style={{ fontSize: '0.68rem', opacity: 0.95, display: 'flex', alignItems: 'center', gap: '4px', color: '#f59e0b', fontWeight: 600 }}>
+                    <Music size={11} /> {adjacentInfo.vibe?.songTitle ? `🎵 ${adjacentInfo.vibe.songTitle}` : 'Vibe Story'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Media / Content Preview */}
+            <div
+              style={{
+                flex: 1,
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden'
+              }}
+            >
+              {adjacentInfo.vibe?.mediaUrl ? (
+                adjacentInfo.vibe?.mediaType === 'video' || adjacentInfo.vibe?.mediaUrl.match(/\.(mp4|webm|mov)$/i) ? (
+                  <video
+                    src={adjacentInfo.vibe.mediaUrl}
+                    muted
+                    playsInline
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: adjacentInfo.vibe.imageFit || 'cover'
+                    }}
+                  />
+                ) : (
+                  <img
+                    src={adjacentInfo.vibe.mediaUrl}
+                    alt=""
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: adjacentInfo.vibe.imageFit || 'cover'
+                    }}
+                  />
+                )
+              ) : null}
+
+              {/* Text Caption Preview */}
+              {adjacentInfo.vibe?.caption && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: `${adjacentInfo.vibe.textPos?.x ?? 50}%`,
+                    top: `${adjacentInfo.vibe.textPos?.y ?? 50}%`,
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: 5,
+                    width: '88%',
+                    display: 'flex',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <div
+                    style={{
+                      color: adjacentInfo.vibe.textColor || '#ffffff',
+                      fontSize: `${(adjacentInfo.vibe.textSize || 1.3) * 1.15}rem`,
+                      fontWeight: 800,
+                      textAlign: adjacentInfo.vibe.textAlign || 'center',
+                      lineHeight: 1.4,
+                      textShadow: '0 2px 10px rgba(0,0,0,0.85)'
+                    }}
+                  >
+                    {adjacentInfo.vibe.caption}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Bar Preview */}
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 'max(20px, env(safe-area-inset-bottom, 20px))',
+                left: '16px',
+                right: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: '10px',
+                zIndex: 10
+              }}
+            >
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
+                  background: 'rgba(0, 0, 0, 0.45)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#ffffff'
+                }}
+              >
+                <MessageSquare size={18} />
+              </div>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
+                  background: 'rgba(0, 0, 0, 0.45)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#ffffff'
+                }}
+              >
+                <Heart size={19} color="#ffffff" />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Reply Sliding Sheet (Clean & Non-intrusive) */}
         {showReplySheet && (

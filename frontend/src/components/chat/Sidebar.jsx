@@ -176,6 +176,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [showFeatureTourModal, setShowFeatureTourModal] = useState(false);
   const [showCreateVibe, setShowCreateVibe] = useState(false);
   const [selectedVibeGroup, setSelectedVibeGroup] = useState(null);
+  const [allVibeGroups, setAllVibeGroups] = useState([]);
   const [showPulseZone, setShowPulseZone] = useState(false);
   const [showSparksWallet, setShowSparksWallet] = useState(false);
   const [showVibeSelector, setShowVibeSelector] = useState(false);
@@ -2051,7 +2052,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       {/* Pulse Vibes ⚡ 24-Hour Stories Bar */}
       <PulseVibesBar
         onOpenCreateVibe={() => setShowCreateVibe(true)}
-        onOpenVibeViewer={(group) => setSelectedVibeGroup(group)}
+        onOpenVibeViewer={(group, allGroups) => {
+          setSelectedVibeGroup(group);
+          if (allGroups) setAllVibeGroups(allGroups);
+        }}
         onOpenVibeSelector={() => setShowVibeSelector(true)}
         myAura={myAura}
       />
@@ -2889,6 +2893,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         <ModalErrorBoundary key="viewer_vibe_boundary" onReset={() => setSelectedVibeGroup(null)}>
           <VibeViewerModal
             vibeGroup={selectedVibeGroup}
+            allGroups={allVibeGroups}
+            onSwitchVibeGroup={(newGroup) => setSelectedVibeGroup(newGroup)}
             onClose={() => setSelectedVibeGroup(null)}
           />
         </ModalErrorBoundary>
