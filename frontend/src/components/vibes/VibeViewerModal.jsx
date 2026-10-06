@@ -779,7 +779,25 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     const deltaX = Math.abs(clientX - touchStartXRef.current);
     const pressDuration = Date.now() - touchStartTimeRef.current;
 
-    // 1. Instagram Swipe Up Gesture: opens activity/viewers sheet
+    // 1. Instagram Horizontal Swipe Gesture (Swipe Left -> Next Story, Swipe Right -> Prev Story)
+    const rawDeltaX = clientX - touchStartXRef.current;
+    if (Math.abs(rawDeltaX) > 36 && Math.abs(deltaY) < 65) {
+      if (singleTapTimerRef.current) {
+        clearTimeout(singleTapTimerRef.current);
+        singleTapTimerRef.current = null;
+      }
+      if (rawDeltaX < -36) {
+        // Swiped Left -> Next story
+        handleNext();
+        return;
+      } else if (rawDeltaX > 36) {
+        // Swiped Right -> Previous story
+        handlePrev();
+        return;
+      }
+    }
+
+    // 2. Instagram Swipe Up Gesture: opens activity/viewers sheet
     if (deltaY < -32 && deltaX < 120) {
       if (singleTapTimerRef.current) {
         clearTimeout(singleTapTimerRef.current);
@@ -795,7 +813,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
       }
     }
 
-    // 2. Instagram Swipe Down Gesture: closes sheet if open
+    // 3. Instagram Swipe Down Gesture: closes sheet if open, or closes story
     if (deltaY > 50 && deltaX < 120) {
       if (singleTapTimerRef.current) {
         clearTimeout(singleTapTimerRef.current);
@@ -803,6 +821,12 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
       }
       if (showViewersSheet) {
         setShowViewersSheet(false);
+        return;
+      } else if (showReplySheet) {
+        setShowReplySheet(false);
+        return;
+      } else {
+        handleCloseModal();
         return;
       }
     }
@@ -1138,17 +1162,12 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                 {vibeGroup?.displayName || 'User'}
               </div>
               <div style={{ fontSize: '0.68rem', opacity: 0.95, display: 'flex', alignItems: 'center', gap: '4px', color: '#f59e0b', fontWeight: 600 }}>
-                <Music size={11} /> {currentVibe.songTitle ? `🎵 ${currentVibe.songTitle} · ${currentVibe.artistName}` : currentVibe.soundtrack !== 'none' ? currentVibe.soundtrack : 'Vibe Story'}
+                <Music size={11} /> {currentVibe.songTitle ? `🎵 ${currentVibe.songTitle}` : currentVibe.soundtrack !== 'none' ? currentVibe.soundtrack : 'Vibe Story'}
               </div>
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {user?.isPro && (
-              <span style={{ fontSize: '0.66rem', color: '#fbbf24', background: 'rgba(245, 158, 11, 0.25)', border: '1px solid rgba(245, 158, 11, 0.45)', padding: '2px 8px', borderRadius: '12px', fontWeight: 800 }}>
-                👑 VIP Ad-Free
-              </span>
-            )}
             {Boolean(currentVibe?.audioUrl || isCurrentStoryVideo) && (
               <button
                 type="button"
@@ -1175,23 +1194,6 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                 {isAudioMuted ? <VolumeX size={17} color="#ef4444" /> : <Volume2 size={17} color="#38bdf8" />}
               </button>
             )}
-            {isMine && (
-              <button
-                onClick={handleDelete}
-                className="icon-btn-ghost"
-                title="Delete Story"
-                style={{ color: '#ef4444', background: 'rgba(0,0,0,0.4)', borderRadius: '50%' }}
-              >
-                <Trash2 size={16} />
-              </button>
-            )}
-            <button
-              onClick={handleCloseModal}
-              className="icon-btn-ghost"
-              style={{ color: '#fff', background: 'rgba(0,0,0,0.4)', borderRadius: '50%' }}
-            >
-              <X size={18} />
-            </button>
           </div>
         </div>
 
@@ -1623,11 +1625,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                 textAlign: currentVibe.musicStyle === 'card' ? 'center' : 'left',
                 width: '100%'
               }}>
-                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   🎵 {currentVibe.songTitle}
-                </span>
-                <span style={{ fontSize: '0.66rem', color: '#f59e0b', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {currentVibe.artistName || 'Original Audio'}
                 </span>
               </div>
               {!isAudioMuted && currentVibe.musicStyle !== 'card' && (
@@ -1722,24 +1721,49 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                 </button>
               </div>
 
-              {currentVibe.sparksEarned > 0 && (
-                <div style={{
-                  background: 'rgba(0, 0, 0, 0.45)',
-                  backdropFilter: 'blur(12px)',
-                  border: '1px solid rgba(245, 158, 11, 0.4)',
-                  borderRadius: '20px',
-                  padding: '6px 12px',
-                  color: '#f59e0b',
-                  fontSize: '0.78rem',
-                  fontWeight: 800,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}>
-                  <Zap size={14} fill="#f59e0b" />
-                  <span>{currentVibe.sparksEarned}</span>
-                </div>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {currentVibe.sparksEarned > 0 && (
+                  <div style={{
+                    background: 'rgba(0, 0, 0, 0.45)',
+                    backdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    borderRadius: '20px',
+                    padding: '6px 12px',
+                    color: '#f59e0b',
+                    fontSize: '0.78rem',
+                    fontWeight: 800,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    <Zap size={14} fill="#f59e0b" />
+                    <span>{currentVibe.sparksEarned}</span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  title="Delete Story"
+                  className="interactive-action"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ef4444',
+                    background: 'rgba(0, 0, 0, 0.55)',
+                    backdropFilter: 'blur(16px)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    borderRadius: '50%',
+                    width: '38px',
+                    height: '38px',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 18px rgba(0, 0, 0, 0.45)',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </div>
           ) : !isMine && authorFriendStatus !== 'friends' ? (
             <div style={{
@@ -2198,101 +2222,99 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
               </div>
             </div>
 
-            {/* Instagram-Style Navigation Tabs Bar */}
+            {/* Instagram-Style Navigation Tabs Bar (Clean Icons Only) */}
             <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: '8px',
               paddingBottom: '10px',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-              overflowX: 'auto'
+              borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
             }}>
               <button
                 type="button"
                 onClick={() => setActiveViewersTab('viewers')}
+                title={`Viewers (${viewCount})`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
+                  justifyContent: 'center',
                   gap: '6px',
-                  background: activeViewersTab === 'viewers' ? 'rgba(56, 189, 248, 0.18)' : 'rgba(255, 255, 255, 0.06)',
-                  border: activeViewersTab === 'viewers' ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
+                  background: activeViewersTab === 'viewers' ? 'rgba(56, 189, 248, 0.22)' : 'rgba(255, 255, 255, 0.06)',
+                  border: activeViewersTab === 'viewers' ? '1.5px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
                   color: activeViewersTab === 'viewers' ? '#38bdf8' : 'rgba(255, 255, 255, 0.75)',
-                  padding: '6px 12px',
-                  borderRadius: '20px',
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
+                  padding: '9px 8px',
+                  borderRadius: '16px',
                   cursor: 'pointer',
-                  flexShrink: 0
+                  transition: 'all 0.15s ease'
                 }}
               >
-                <Eye size={14} />
-                <span>Viewers ({viewCount})</span>
+                <Eye size={18} />
+                {viewCount > 0 && <span style={{ fontSize: '0.8rem', fontWeight: 800 }}>{viewCount}</span>}
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveViewersTab('likes')}
+                title={`Likes (${currentStoryLikes.length})`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
+                  justifyContent: 'center',
                   gap: '6px',
-                  background: activeViewersTab === 'likes' ? 'rgba(244, 63, 94, 0.18)' : 'rgba(255, 255, 255, 0.06)',
-                  border: activeViewersTab === 'likes' ? '1px solid #f43f5e' : '1px solid rgba(255, 255, 255, 0.1)',
+                  background: activeViewersTab === 'likes' ? 'rgba(244, 63, 94, 0.22)' : 'rgba(255, 255, 255, 0.06)',
+                  border: activeViewersTab === 'likes' ? '1.5px solid #f43f5e' : '1px solid rgba(255, 255, 255, 0.1)',
                   color: activeViewersTab === 'likes' ? '#f43f5e' : 'rgba(255, 255, 255, 0.75)',
-                  padding: '6px 12px',
-                  borderRadius: '20px',
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
+                  padding: '9px 8px',
+                  borderRadius: '16px',
                   cursor: 'pointer',
-                  flexShrink: 0
+                  transition: 'all 0.15s ease'
                 }}
               >
-                <Heart size={14} fill={activeViewersTab === 'likes' ? '#f43f5e' : 'none'} />
-                <span>Likes ({currentStoryLikes.length})</span>
+                <Heart size={18} fill={activeViewersTab === 'likes' ? '#f43f5e' : 'none'} />
+                {currentStoryLikes.length > 0 && <span style={{ fontSize: '0.8rem', fontWeight: 800 }}>{currentStoryLikes.length}</span>}
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveViewersTab('replies')}
+                title={`Replies (${currentStoryReplies.length})`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
+                  justifyContent: 'center',
                   gap: '6px',
-                  background: activeViewersTab === 'replies' ? 'rgba(168, 85, 247, 0.18)' : 'rgba(255, 255, 255, 0.06)',
-                  border: activeViewersTab === 'replies' ? '1px solid #a855f7' : '1px solid rgba(255, 255, 255, 0.1)',
+                  background: activeViewersTab === 'replies' ? 'rgba(168, 85, 247, 0.22)' : 'rgba(255, 255, 255, 0.06)',
+                  border: activeViewersTab === 'replies' ? '1.5px solid #a855f7' : '1px solid rgba(255, 255, 255, 0.1)',
                   color: activeViewersTab === 'replies' ? '#a855f7' : 'rgba(255, 255, 255, 0.75)',
-                  padding: '6px 12px',
-                  borderRadius: '20px',
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
+                  padding: '9px 8px',
+                  borderRadius: '16px',
                   cursor: 'pointer',
-                  flexShrink: 0
+                  transition: 'all 0.15s ease'
                 }}
               >
-                <MessageSquare size={14} />
-                <span>Replies ({currentStoryReplies.length})</span>
+                <MessageSquare size={18} />
+                {currentStoryReplies.length > 0 && <span style={{ fontSize: '0.8rem', fontWeight: 800 }}>{currentStoryReplies.length}</span>}
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveViewersTab('insights')}
+                title="Insights"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
+                  justifyContent: 'center',
                   gap: '6px',
-                  background: activeViewersTab === 'insights' ? 'rgba(245, 158, 11, 0.18)' : 'rgba(255, 255, 255, 0.06)',
-                  border: activeViewersTab === 'insights' ? '1px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.1)',
+                  background: activeViewersTab === 'insights' ? 'rgba(245, 158, 11, 0.22)' : 'rgba(255, 255, 255, 0.06)',
+                  border: activeViewersTab === 'insights' ? '1.5px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.1)',
                   color: activeViewersTab === 'insights' ? '#f59e0b' : 'rgba(255, 255, 255, 0.75)',
-                  padding: '6px 12px',
-                  borderRadius: '20px',
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
+                  padding: '9px 8px',
+                  borderRadius: '16px',
                   cursor: 'pointer',
-                  flexShrink: 0
+                  transition: 'all 0.15s ease'
                 }}
               >
-                <BarChart3 size={14} />
-                <span>Insights</span>
+                <BarChart3 size={18} />
               </button>
             </div>
 
