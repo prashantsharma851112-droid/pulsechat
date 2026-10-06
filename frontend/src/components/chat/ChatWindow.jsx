@@ -1056,6 +1056,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [pendingMedia, setPendingMedia] = useState(null);
   const [groupMembersMap, setGroupMembersMap] = useState({});
   const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const dustImageInputRef = useRef(null);
   const viewOnceInputRef = useRef(null);
