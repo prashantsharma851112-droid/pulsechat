@@ -2548,3 +2548,25 @@ input, textarea {
   100% { background-position: -200% 0; }
 }
 
+@keyframes instaHeartBurst {
+  0% {
+    transform: translate(-50%, -50%) scale(0) rotate(-15deg);
+    opacity: 0;
+  }
+  25% {
+    transform: translate(-50%, -50%) scale(1.35) rotate(0deg);
+    opacity: 1;
+  }
+  45% {
+    transform: translate(-50%, -50%) scale(0.98) rotate(6deg);
+    opacity: 1;
+  }
+  70% {
+    transform: translate(-50%, -50%) scale(1.15) rotate(0deg);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(-50%, -75%) scale(1.4) rotate(-6deg);
+    opacity: 0;
+  }
+}

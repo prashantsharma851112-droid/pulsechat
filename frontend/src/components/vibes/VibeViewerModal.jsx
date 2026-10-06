@@ -129,6 +129,9 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
   const touchStartYRef = useRef(0);
   const touchStartXRef = useRef(0);
   const lastTapTimeRef = useRef(0);
+  const singleTapTimerRef = useRef(null);
+  const isTouchDeviceRef = useRef(false);
+  const lastTouchTimeRef = useRef(0);
 
   // Current story's specific viewers, likes & replies list & counts
   const currentStoryViews = viewsByVibeId[currentVibe?.id] ?? (Array.isArray(currentVibe?.views) ? currentVibe.views : []);
@@ -688,15 +691,38 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     };
   }, [currentIndex, vibes.length, onClose, isPaused, isHolding, showViewersSheet, currentVibe?.id, currentVibe?.storyDuration, user?.isPro, showingSponsoredAd, isCurrentStoryVideo]);
 
+  // Clean up timers on unmount
+  useEffect(() => {
+    return () => {
+      if (singleTapTimerRef.current) clearTimeout(singleTapTimerRef.current);
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    };
+  }, []);
+
   // Instagram-style Hold to Pause, Swipe Up to View Activity & Tap / Double-Tap Navigation
   const handleStagePointerDown = (e) => {
     if (e.target.closest('button') || e.target.closest('input') || e.target.closest('.interactive-action') || e.target.closest('form')) return;
+
+    // Ignore synthetic mouse events fired after touch on mobile/WebView
+    const isTouch = Boolean(e.type && e.type.startsWith('touch'));
+    if (isTouch) {
+      isTouchDeviceRef.current = true;
+      lastTouchTimeRef.current = Date.now();
+    } else if (isTouchDeviceRef.current && Date.now() - lastTouchTimeRef.current < 500) {
+      return;
+    }
+
     touchStartTimeRef.current = Date.now();
     const clientY = e.clientY ?? (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
     const clientX = e.clientX ?? (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
     touchStartYRef.current = clientY;
     touchStartXRef.current = clientX;
 
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+    }
+
+    // Instagram Hold to Pause: only pause after 320ms stationary hold
     holdTimerRef.current = setTimeout(() => {
       setIsHolding(true);
       setIsPaused(true);
@@ -706,15 +732,36 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
       if (audioRef.current) {
         try { audioRef.current.pause(); } catch (err) {}
       }
-    }, 175);
+    }, 320);
+  };
+
+  const handleStagePointerMove = (e) => {
+    const clientY = e.clientY ?? (e.touches && e.touches[0] ? e.touches[0].clientY : touchStartYRef.current);
+    const clientX = e.clientX ?? (e.touches && e.touches[0] ? e.touches[0].clientX : touchStartXRef.current);
+    const deltaY = Math.abs(clientY - touchStartYRef.current);
+    const deltaX = Math.abs(clientX - touchStartXRef.current);
+
+    // If moved more than 10px, it's a swipe/drag, NOT a stationary hold!
+    if (deltaY > 10 || deltaX > 10) {
+      if (holdTimerRef.current) {
+        clearTimeout(holdTimerRef.current);
+        holdTimerRef.current = null;
+      }
+    }
   };
 
   const handleStagePointerUp = (e) => {
+    const isTouch = Boolean(e.type && e.type.startsWith('touch'));
+    if (!isTouch && isTouchDeviceRef.current && Date.now() - lastTouchTimeRef.current < 500) {
+      return;
+    }
+
     if (holdTimerRef.current) {
       clearTimeout(holdTimerRef.current);
       holdTimerRef.current = null;
     }
-    const pressDuration = Date.now() - touchStartTimeRef.current;
+
+    const wasHolding = isHolding;
     if (isHolding) {
       setIsHolding(false);
       setIsPaused(false);
@@ -724,45 +771,80 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
       if (audioRef.current && !isAudioMuted) {
         try { audioRef.current.play().catch(() => {}); } catch (err) {}
       }
-      return;
     }
 
     const clientY = e.clientY ?? (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : touchStartYRef.current);
     const clientX = e.clientX ?? (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : touchStartXRef.current);
     const deltaY = clientY - touchStartYRef.current;
     const deltaX = Math.abs(clientX - touchStartXRef.current);
+    const pressDuration = Date.now() - touchStartTimeRef.current;
 
-    // Instagram Swipe Up Gesture: opens activity/viewers sheet for story owner
-    if (deltaY < -42 && deltaX < 65) {
+    // 1. Instagram Swipe Up Gesture: opens activity/viewers sheet
+    if (deltaY < -32 && deltaX < 120) {
+      if (singleTapTimerRef.current) {
+        clearTimeout(singleTapTimerRef.current);
+        singleTapTimerRef.current = null;
+      }
       if (isMine) {
         fetchLiveViews();
         setShowViewersSheet(true);
         return;
+      } else {
+        setShowReplySheet(true);
+        return;
       }
     }
 
-    if (pressDuration < 240 && !e.target.closest('button') && !e.target.closest('input') && !e.target.closest('.interactive-action') && !e.target.closest('form')) {
-      const now = Date.now();
-      if (now - lastTapTimeRef.current < 280) {
-        // Double Tap Like detected!
-        lastTapTimeRef.current = 0;
-        if (!isMine) {
-          handleToggleLike(true);
-        } else {
-          setShowHeartBurst(true);
-          setTimeout(() => setShowHeartBurst(false), 850);
-        }
+    // 2. Instagram Swipe Down Gesture: closes sheet if open
+    if (deltaY > 50 && deltaX < 120) {
+      if (singleTapTimerRef.current) {
+        clearTimeout(singleTapTimerRef.current);
+        singleTapTimerRef.current = null;
+      }
+      if (showViewersSheet) {
+        setShowViewersSheet(false);
         return;
       }
-      lastTapTimeRef.current = now;
+    }
 
+    // If it was a genuine stationary hold (> 320ms), do not trigger tap navigation or like
+    if (wasHolding || pressDuration >= 320) {
+      return;
+    }
+
+    // 3. Instagram Tap & Double-Tap Navigation
+    if (!e.target.closest('button') && !e.target.closest('input') && !e.target.closest('.interactive-action') && !e.target.closest('form')) {
+      const now = Date.now();
+
+      // Check if a single-tap timer is already pending (meaning this is the SECOND tap!)
+      if (singleTapTimerRef.current || (now - lastTapTimeRef.current < 300)) {
+        // DOUBLE TAP DETECTED!
+        if (singleTapTimerRef.current) {
+          clearTimeout(singleTapTimerRef.current);
+          singleTapTimerRef.current = null;
+        }
+        lastTapTimeRef.current = 0;
+
+        // Trigger Like (forces like state on) & Heart Burst
+        handleToggleLike(true);
+        setShowHeartBurst(true);
+        setTimeout(() => setShowHeartBurst(false), 900);
+        return;
+      }
+
+      // First Tap: Queue single-tap navigation with 280ms window for double tap
+      lastTapTimeRef.current = now;
       const rect = e.currentTarget.getBoundingClientRect();
       const relativeX = clientX - rect.left;
-      if (relativeX < rect.width * 0.35) {
-        handlePrev();
-      } else {
-        handleNext();
-      }
+
+      singleTapTimerRef.current = setTimeout(() => {
+        singleTapTimerRef.current = null;
+        if (relativeX < rect.width * 0.35) {
+          handlePrev();
+        } else {
+          handleNext();
+        }
+      }, 280);
     }
   };
 
@@ -920,6 +1002,8 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     if (onRefresh) onRefresh();
     handleCloseModal();
   };
+
+  const handleDeleteVibe = handleDelete;
 
   if (!currentVibe) return null;
 
@@ -1207,8 +1291,10 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
         {/* Media or Text Content Body with Instagram Hold-to-Pause and Tap navigation */}
         <div
           onMouseDown={handleStagePointerDown}
+          onMouseMove={handleStagePointerMove}
           onMouseUp={handleStagePointerUp}
           onTouchStart={handleStagePointerDown}
+          onTouchMove={handleStagePointerMove}
           onTouchEnd={handleStagePointerUp}
           onContextMenu={(e) => e.preventDefault()}
           style={{
@@ -2094,7 +2180,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <button
                   type="button"
-                  onClick={handleDeleteVibe}
+                  onClick={handleDelete}
                   title="Delete Story"
                   className="icon-btn-ghost"
                   style={{ color: '#ef4444', background: 'rgba(239, 68, 68, 0.12)', borderRadius: '50%', padding: '7px', border: 'none', cursor: 'pointer' }}
