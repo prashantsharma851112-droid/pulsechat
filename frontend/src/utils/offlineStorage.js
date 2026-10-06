@@ -334,16 +334,54 @@ export function getOutbox(userId) {
 export function addToOutbox(userId, pendingMessage) {
   if (!userId || !pendingMessage) return;
   const current = getOutbox(userId);
-  if (!current.some(m => m.tempId === pendingMessage.tempId)) {
-    localStorage.setItem(`${STORAGE_KEYS.OUTBOX_PREFIX}${userId}`, JSON.stringify([...current, pendingMessage]));
+  const key = pendingMessage.id || pendingMessage.clientTempId || pendingMessage.tempId;
+  if (!key) return;
+
+  const itemToSave = {
+    ...pendingMessage,
+    id: pendingMessage.id || key,
+    clientTempId: pendingMessage.clientTempId || key,
+    tempId: pendingMessage.tempId || key
+  };
+
+  const exists = current.some(m =>
+    (m.id && (m.id === key || m.id === itemToSave.id || m.id === itemToSave.clientTempId)) ||
+    (m.clientTempId && (m.clientTempId === key || m.clientTempId === itemToSave.clientTempId || m.clientTempId === itemToSave.id)) ||
+    (m.tempId && (m.tempId === key || m.tempId === itemToSave.tempId))
+  );
+
+  if (!exists) {
+    try {
+      localStorage.setItem(`${STORAGE_KEYS.OUTBOX_PREFIX}${userId}`, JSON.stringify([...current, itemToSave]));
+    } catch (e) {
+      console.warn('LocalStorage error adding to outbox', e);
+    }
   }
 }
 
 export function removeFromOutbox(userId, tempId) {
   if (!userId || !tempId) return;
   const current = getOutbox(userId);
-  const updated = current.filter(m => m.tempId !== tempId);
-  localStorage.setItem(`${STORAGE_KEYS.OUTBOX_PREFIX}${userId}`, JSON.stringify(updated));
+  const target = String(tempId);
+  const updated = current.filter(m =>
+    String(m.tempId || '') !== target &&
+    String(m.id || '') !== target &&
+    String(m.clientTempId || '') !== target
+  );
+  try {
+    localStorage.setItem(`${STORAGE_KEYS.OUTBOX_PREFIX}${userId}`, JSON.stringify(updated));
+  } catch (e) {
+    console.warn('LocalStorage error removing from outbox', e);
+  }
+}
+
+export function clearOutbox(userId) {
+  if (!userId) return;
+  try {
+    localStorage.removeItem(`${STORAGE_KEYS.OUTBOX_PREFIX}${userId}`);
+  } catch (e) {
+    console.warn('LocalStorage error clearing outbox', e);
+  }
 }
 
 // online network helpers

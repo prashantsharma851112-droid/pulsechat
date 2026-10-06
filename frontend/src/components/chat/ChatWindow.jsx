@@ -1423,35 +1423,56 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   }, [showActionGrid]);
 
   // Automatic Outbox Sync when network or socket reconnects
+  const isSyncingOutboxRef = useRef(false);
+
   const syncOutbox = useCallback(() => {
+    if (isSyncingOutboxRef.current) return;
     if (!user?.id || !socket || !socket.connected) return;
     const outbox = getOutbox(user.id);
     if (!outbox || outbox.length === 0) return;
 
-    outbox.forEach((pendingMsg) => {
-      socket.emit('send_message', {
-        ...getSenderPayload(),
-        chatId: pendingMsg.chatId,
-        senderId: pendingMsg.senderId,
-        receiverId: pendingMsg.receiverId,
-        isGroup: pendingMsg.isGroup,
-        content: pendingMsg.content,
-        type: pendingMsg.type || 'text',
-        audioUrl: pendingMsg.audioUrl,
-        mediaUrl: pendingMsg.mediaUrl,
-        pollData: pendingMsg.pollData,
-        replyTo: pendingMsg.replyTo,
-        clientTempId: pendingMsg.clientTempId || pendingMsg.id
-      });
+    isSyncingOutboxRef.current = true;
+    try {
+      outbox.forEach((pendingMsg) => {
+        const msgKey = pendingMsg.id || pendingMsg.clientTempId || pendingMsg.tempId;
+        // Immediately dequeue from outbox so concurrent triggers can never resend
+        if (msgKey) removeFromOutbox(user.id, msgKey);
+        if (pendingMsg.id) removeFromOutbox(user.id, pendingMsg.id);
+        if (pendingMsg.clientTempId) removeFromOutbox(user.id, pendingMsg.clientTempId);
+        if (pendingMsg.tempId) removeFromOutbox(user.id, pendingMsg.tempId);
 
-      // Optimistically update message status to 'sent'
-      updateCachedMessageStatus(pendingMsg.chatId, pendingMsg.id, 'sent');
-      setMessages(prev => prev.map(m => (m.id === pendingMsg.id || m.clientTempId === pendingMsg.id) ? { ...m, status: 'sent' } : m));
-      removeFromOutbox(user.id, pendingMsg.id);
-      if (pendingMsg.clientTempId) {
-        removeFromOutbox(user.id, pendingMsg.clientTempId);
-      }
-    });
+        socket.emit('send_message', {
+          ...getSenderPayload(),
+          chatId: pendingMsg.chatId,
+          senderId: pendingMsg.senderId || user.id,
+          receiverId: pendingMsg.receiverId,
+          isGroup: pendingMsg.isGroup,
+          isForwarded: pendingMsg.isForwarded || false,
+          content: pendingMsg.content,
+          type: pendingMsg.type || 'text',
+          textStyle: pendingMsg.textStyle,
+          audioUrl: pendingMsg.audioUrl,
+          mediaUrl: pendingMsg.mediaUrl,
+          fileName: pendingMsg.fileName,
+          fileSize: pendingMsg.fileSize,
+          pollData: pendingMsg.pollData,
+          replyTo: pendingMsg.replyTo,
+          clientTempId: pendingMsg.clientTempId || pendingMsg.tempId || pendingMsg.id
+        });
+
+        // Optimistically update message status to 'sent'
+        if (pendingMsg.chatId && msgKey) {
+          updateCachedMessageStatus(pendingMsg.chatId, msgKey, 'sent');
+        }
+        setMessages(prev => prev.map(m =>
+          (m.id === msgKey || m.clientTempId === msgKey || m.tempId === msgKey || (pendingMsg.id && m.id === pendingMsg.id))
+            ? { ...m, status: 'sent' }
+            : m
+        ));
+      });
+    } finally {
+      isSyncingOutboxRef.current = false;
+    }
   }, [user?.id, socket]);
 
   useEffect(() => {
@@ -2376,6 +2397,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     const pendingMsg = {
       id: tempId,
+      tempId,
       clientTempId: tempId,
       chatId,
       senderId: user.id,
@@ -2451,6 +2473,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     const pendingMsg = {
       id: tempId,
+      tempId,
       clientTempId: tempId,
       chatId,
       senderId: user.id,
@@ -3060,10 +3083,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleForwardMessage = useCallback(async (selectedTargets, msg) => {
     if (!selectedTargets || !msg) return;
+    const isOnlineNow = isDeviceOnline() && socket?.connected;
+
     for (const target of selectedTargets) {
       const targetIsGroup = !!target.isGroup;
       const targetChatId = targetIsGroup ? target.id : [user.id, target.id].sort().join('_');
       const receiverId = targetIsGroup ? '' : target.id;
+      const fwdTempId = 'fwd_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
 
       const fwdPayload = {
         ...getSenderPayload(),
@@ -3079,17 +3105,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         audioUrl: msg.audioUrl || null,
         fileName: msg.fileName || null,
         fileSize: msg.fileSize || null,
+        clientTempId: fwdTempId,
         timestamp: new Date().toISOString()
       };
 
-      if (socket) {
-        socket.emit('send_message', fwdPayload);
-      }
-
       const tempFwdMsg = {
         ...fwdPayload,
-        id: 'fwd_' + Date.now() + Math.random().toString(36).substr(2, 5),
-        status: 'sent'
+        id: fwdTempId,
+        tempId: fwdTempId,
+        clientTempId: fwdTempId,
+        status: isOnlineNow ? 'sent' : 'pending',
+        reactions: {},
+        viewedBy: []
       };
 
       appendCachedMessage(targetChatId, tempFwdMsg);
@@ -3098,10 +3125,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         setMessages(prev => [...prev, tempFwdMsg]);
       }
 
-      updateRecentChatSnippet(targetChatId, {
-        lastMessage: fwdPayload.content || (fwdPayload.mediaUrl ? '🖼️ Photo' : '➡️ Forwarded message'),
-        timestamp: fwdPayload.timestamp
-      });
+      updateRecentChatSnippet(user.id, targetChatId, tempFwdMsg, target);
+      window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+
+      if (!isOnlineNow) {
+        addToOutbox(user.id, tempFwdMsg);
+      } else if (socket) {
+        socket.emit('send_message', fwdPayload);
+      }
     }
 
     try { playSound('sent'); } catch {}
