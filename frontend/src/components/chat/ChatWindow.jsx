@@ -1059,8 +1059,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const dustImageInputRef = useRef(null);
-  const viewOnceInputRef = useRef(null);
-  const twiceViewInputRef = useRef(null);
 
   const deduplicatedMessages = useMemo(() => {
     const seen = new Set();
@@ -4918,22 +4916,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           <input
             type="file"
             ref={dustImageInputRef}
-            accept="image/*"
+            accept="image/*,video/*"
             onChange={(e) => handleSpecificMediaSelect(e, 'dust')}
-            style={{ display: 'none' }}
-          />
-          <input
-            type="file"
-            ref={viewOnceInputRef}
-            accept="image/*,video/*"
-            onChange={(e) => handleSpecificMediaSelect(e, 'once')}
-            style={{ display: 'none' }}
-          />
-          <input
-            type="file"
-            ref={twiceViewInputRef}
-            accept="image/*,video/*"
-            onChange={(e) => handleSpecificMediaSelect(e, 'twice')}
             style={{ display: 'none' }}
           />
 
@@ -5156,87 +5140,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 </span>
               </button>
 
-              {/* 6. WhatsApp-Style 1x View Once */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  viewOnceInputRef.current?.click();
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #a855f7, #6366f1)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(168, 85, 247, 0.4)',
-                  fontSize: '1.15rem',
-                  fontWeight: 900
-                }}>
-                  1️⃣
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#a855f7' }}>
-                  View Once
-                </span>
-              </button>
-
-              {/* 7. WhatsApp-Style 2x Twice View */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  twiceViewInputRef.current?.click();
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #0ea5e9, #2563eb)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(14, 165, 233, 0.4)',
-                  fontSize: '1.15rem',
-                  fontWeight: 900
-                }}>
-                  2️⃣
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#0ea5e9' }}>
-                  Twice View
-                </span>
-              </button>
 
               {/* 5. Emoji Particle Burst */}
               <button
