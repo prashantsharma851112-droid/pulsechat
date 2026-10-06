@@ -3757,41 +3757,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
 
           <div className="chat-header-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
-            {/* Position 4: Live In-Line Translation Toggle Button */}
-            <button
-              type="button"
-              onClick={() => setShowTranslateBar(prev => !prev)}
-              className="icon-btn-ghost"
-              title="Live Chat Translation (Auto-Translate & Languages)"
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '50%',
-                color: (isAutoTranslateActive || showTranslateBar) ? '#06b6d4' : 'var(--text-main)',
-                background: (isAutoTranslateActive || showTranslateBar) ? 'rgba(6, 182, 212, 0.16)' : 'transparent',
-                border: isAutoTranslateActive ? '1px solid rgba(6, 182, 212, 0.4)' : 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                position: 'relative'
-              }}
-            >
-              <Globe size={19} />
-              {isAutoTranslateActive && (
-                <span style={{
-                  position: 'absolute',
-                  top: '6px',
-                  right: '6px',
-                  width: '7px',
-                  height: '7px',
-                  borderRadius: '50%',
-                  background: '#06b6d4',
-                  boxShadow: '0 0 6px #06b6d4'
-                }} />
-              )}
-            </button>
-
             {/* Position 3: In-Chat Search Toggle Button */}
             <button
               type="button"
@@ -5712,6 +5677,60 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   <Clock size={20} />
                 </div>
                 <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#f59e0b' }}>Schedule ⏰</span>
+              </button>
+
+              {/* 9. Live Translation 🌐 */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActionGrid(false);
+                  setShowTranslateBar(prev => !prev);
+                }}
+                className="action-grid-item"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: isAutoTranslateActive
+                    ? 'linear-gradient(135deg, #06b6d4, #3b82f6)'
+                    : 'linear-gradient(135deg, #0ea5e9, #0284c7)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(14, 165, 233, 0.4)',
+                  position: 'relative'
+                }}>
+                  <Globe size={20} />
+                  {isAutoTranslateActive && (
+                    <span style={{
+                      position: 'absolute',
+                      top: '4px',
+                      right: '4px',
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: '#22c55e',
+                      boxShadow: '0 0 6px #22c55e'
+                    }} />
+                  )}
+                </div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#0ea5e9' }}>
+                  Translate 🌐
+                </span>
               </button>
             </div>
           )}
