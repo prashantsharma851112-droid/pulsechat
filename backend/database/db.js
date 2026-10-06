@@ -108,8 +108,16 @@ module.exports = {
       const mongoose = require('mongoose');
       let targetIdToSearch = chatOrContactId;
       if (typeof chatOrContactId === 'string' && chatOrContactId.includes('_')) {
-        const parts = chatOrContactId.split('_');
-        targetIdToSearch = parts.find(id => !myVariants.includes(id)) || parts[0];
+        for (const m of myVariants) {
+          if (!m) continue;
+          if (chatOrContactId.startsWith(m + '_')) {
+            targetIdToSearch = chatOrContactId.slice(m.length + 1);
+            break;
+          } else if (chatOrContactId.endsWith('_' + m)) {
+            targetIdToSearch = chatOrContactId.slice(0, -(m.length + 1));
+            break;
+          }
+        }
       }
       if (targetIdToSearch) {
         const other = await User.findOne({
@@ -151,9 +159,17 @@ module.exports = {
 
     if (!isGhostMode) {
       updateDoc.$set = { status: 'read' };
+      await Message.updateMany(filter, updateDoc);
+    } else {
+      // In Ghost Mode: upgrade any 'sent' (single tick) to 'delivered' (double grey tick)!
+      // But NEVER set status to 'read' (blue tick)!
+      await Message.updateMany(
+        { ...filter, status: 'sent' },
+        { $set: { status: 'delivered' }, $addToSet: { readBy: { $each: myVariants } } }
+      );
+      // Ensure readBy contains reader so unread badge clears
+      await Message.updateMany(filter, updateDoc);
     }
-
-    await Message.updateMany(filter, updateDoc);
 
     // Invalidate Redis RAM caches so unread count updates immediately across rest endpoints
     try {

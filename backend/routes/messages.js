@@ -7,6 +7,51 @@ const mongoose = require('mongoose');
 
 const User = require('../models/User');
 
+const getOtherParticipantId = async (chatId, myUserId) => {
+  if (!chatId || !myUserId) return null;
+  try {
+    const mongoose = require('mongoose');
+    const me = await User.findOne({
+      $or: [
+        { id: myUserId },
+        { username: myUserId },
+        ...(mongoose.Types.ObjectId.isValid(myUserId) ? [{ _id: myUserId }] : [])
+      ]
+    }).select('id username _id').lean();
+    const myKeys = [myUserId, me?.id, me?.username, me?._id?.toString()].filter(Boolean);
+
+    let otherKey = null;
+    for (const m of myKeys) {
+      if (chatId.startsWith(m + '_')) {
+        otherKey = chatId.slice(m.length + 1);
+        break;
+      } else if (chatId.endsWith('_' + m)) {
+        otherKey = chatId.slice(0, -(m.length + 1));
+        break;
+      }
+    }
+
+    if (!otherKey && chatId.includes('_')) {
+      const parts = chatId.split('_');
+      otherKey = parts.find(p => !myKeys.includes(p));
+    }
+
+    if (otherKey) {
+      const other = await User.findOne({
+        $or: [
+          { id: otherKey },
+          { username: otherKey },
+          ...(mongoose.Types.ObjectId.isValid(otherKey) ? [{ _id: otherKey }] : [])
+        ]
+      }).select('id username _id').lean();
+      return other?.id || otherKey;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 const resolveGhostMode = async (userId, chatId, req) => {
   if (req) {
     if (req.headers && req.headers['x-ghost-mode'] === 'true') return true;
@@ -21,15 +66,52 @@ const resolveGhostMode = async (userId, chatId, req) => {
         ...(mongoose.Types.ObjectId.isValid(userId) ? [{ _id: userId }] : []),
         { username: userId }
       ]
-    }).select('hideReadReceipts ghostChats').lean();
+    }).select('id username _id hideReadReceipts ghostChats').lean();
     if (!u) return false;
     if (u.hideReadReceipts) return true;
 
-    if (chatId && Array.isArray(u.ghostChats)) {
+    if (chatId && Array.isArray(u.ghostChats) && u.ghostChats.length > 0) {
       if (u.ghostChats.includes(chatId)) return true;
-      if (chatId.includes('_')) {
-        const parts = chatId.split('_');
-        if (parts.some(p => u.ghostChats.includes(p))) return true;
+
+      const myKeys = [userId, u.id, u.username, u._id?.toString()].filter(Boolean);
+      let otherTarget = null;
+      for (const mKey of myKeys) {
+        if (chatId.startsWith(mKey + '_')) {
+          otherTarget = chatId.slice(mKey.length + 1);
+          break;
+        } else if (chatId.endsWith('_' + mKey)) {
+          otherTarget = chatId.slice(0, -(mKey.length + 1));
+          break;
+        }
+      }
+
+      if (otherTarget && u.ghostChats.includes(otherTarget)) {
+        return true;
+      }
+
+      for (const gId of u.ghostChats) {
+        if (!gId) continue;
+        const gStr = String(gId);
+        if (chatId === gStr) return true;
+        if (chatId.startsWith(gStr + '_') || chatId.endsWith('_' + gStr) || chatId.includes('_' + gStr + '_')) {
+          return true;
+        }
+      }
+
+      if (otherTarget) {
+        const otherUser = await User.findOne({
+          $or: [
+            { id: otherTarget },
+            { username: otherTarget },
+            ...(mongoose.Types.ObjectId.isValid(otherTarget) ? [{ _id: otherTarget }] : [])
+          ]
+        }).select('id username _id').lean();
+        if (otherUser) {
+          const otherKeys = [otherUser.id, otherUser.username, otherUser._id?.toString()].filter(Boolean);
+          if (otherKeys.some(k => u.ghostChats.includes(k))) {
+            return true;
+          }
+        }
       }
     }
     return false;
@@ -344,22 +426,25 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
             try {
               const isGhostMode = await resolveGhostMode(req.user.id, req.params.chatId, req);
 
-              if (isGhostMode) {
-                const io = req.app.get('io');
-                if (io) {
-                  io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-                }
-                return;
-              }
-
-              await db.markChatAsRead(req.params.chatId, req.user.id, false);
+              await db.markChatAsRead(req.params.chatId, req.user.id, isGhostMode);
               const io = req.app.get('io');
               if (io) {
                 io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+                const otherId = await getOtherParticipantId(req.params.chatId, req.user.id);
+
+                if (isGhostMode) {
+                  io.to(req.params.chatId).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
+                  if (otherId) {
+                    io.to(`user_${otherId}`).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
+                    io.to(otherId).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
+                  }
+                  return;
+                }
+
                 io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-                if (req.params.chatId.includes('_')) {
-                  const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
-                  if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+                if (otherId) {
+                  io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+                  io.to(otherId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
                 }
               }
             } catch (bgErr) {}
@@ -382,23 +467,26 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
       try {
         const isGhostMode = await resolveGhostMode(req.user.id, req.params.chatId, req);
 
-        if (isGhostMode) {
-          const io = req.app.get('io');
-          if (io) {
-            io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-          }
-          return;
-        }
-
-        await db.markChatAsRead(req.params.chatId, req.user.id, false);
+        await db.markChatAsRead(req.params.chatId, req.user.id, isGhostMode);
         const io = req.app.get('io');
         if (io) {
           // ALWAYS emit to reader so their sidebar/tab unread badge immediately clears!
           io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+          const otherId = await getOtherParticipantId(req.params.chatId, req.user.id);
+
+          if (isGhostMode) {
+            io.to(req.params.chatId).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
+            if (otherId) {
+              io.to(`user_${otherId}`).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
+              io.to(otherId).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
+            }
+            return;
+          }
+
           io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-          if (req.params.chatId.includes('_')) {
-            const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
-            if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+          if (otherId) {
+            io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+            io.to(otherId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
           }
         }
       } catch (bgErr) {
@@ -416,23 +504,26 @@ router.put('/:chatId/read', authMiddleware, async (req, res) => {
   try {
     const isGhostMode = await resolveGhostMode(req.user.id, req.params.chatId, req);
 
-    if (isGhostMode) {
-      const io = req.app.get('io');
-      if (io) {
-        io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-      }
-      return res.json({ success: true, ghostMode: true });
-    }
-
-    await db.markChatAsRead(req.params.chatId, req.user.id, false);
+    await db.markChatAsRead(req.params.chatId, req.user.id, isGhostMode);
     const io = req.app.get('io');
     if (io) {
       // ALWAYS emit to reader so their sidebar/tab unread badge immediately clears!
       io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+      const otherId = await getOtherParticipantId(req.params.chatId, req.user.id);
+
+      if (isGhostMode) {
+        io.to(req.params.chatId).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
+        if (otherId) {
+          io.to(`user_${otherId}`).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
+          io.to(otherId).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
+        }
+        return res.json({ success: true, ghostMode: true });
+      }
+
       io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-      if (req.params.chatId.includes('_')) {
-        const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
-        if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+      if (otherId) {
+        io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+        io.to(otherId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
       }
     }
     res.json({ success: true, ghostMode: false });

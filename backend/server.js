@@ -138,6 +138,52 @@ const io = new Server(server, {
 
 app.set('io', io);
 
+const getOtherParticipantId = async (chatId, myUserId) => {
+  if (!chatId || !myUserId) return null;
+  try {
+    const isObjectId = mongoose.Types.ObjectId.isValid(myUserId);
+    const me = await User.findOne({
+      $or: [
+        { id: myUserId },
+        { username: myUserId },
+        ...(isObjectId ? [{ _id: myUserId }] : [])
+      ]
+    }).select('id username _id').lean();
+    const myKeys = [myUserId, me?.id, me?.username, me?._id?.toString()].filter(Boolean);
+
+    let otherKey = null;
+    for (const m of myKeys) {
+      if (chatId.startsWith(m + '_')) {
+        otherKey = chatId.slice(m.length + 1);
+        break;
+      } else if (chatId.endsWith('_' + m)) {
+        otherKey = chatId.slice(0, -(m.length + 1));
+        break;
+      }
+    }
+
+    if (!otherKey && chatId.includes('_')) {
+      const parts = chatId.split('_');
+      otherKey = parts.find(p => !myKeys.includes(p));
+    }
+
+    if (otherKey) {
+      const isOtherObjectId = mongoose.Types.ObjectId.isValid(otherKey);
+      const other = await User.findOne({
+        $or: [
+          { id: otherKey },
+          { username: otherKey },
+          ...(isOtherObjectId ? [{ _id: otherKey }] : [])
+        ]
+      }).select('id username _id').lean();
+      return other?.id || otherKey;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 const resolveGhostMode = async (userId, chatId) => {
   if (!userId) return false;
   try {
@@ -148,15 +194,53 @@ const resolveGhostMode = async (userId, chatId) => {
         ...(isObjectId ? [{ _id: userId }] : []),
         { username: userId }
       ]
-    }).select('hideReadReceipts ghostChats').lean();
+    }).select('id username _id hideReadReceipts ghostChats').lean();
     if (!u) return false;
     if (u.hideReadReceipts) return true;
 
-    if (chatId && Array.isArray(u.ghostChats)) {
+    if (chatId && Array.isArray(u.ghostChats) && u.ghostChats.length > 0) {
       if (u.ghostChats.includes(chatId)) return true;
-      if (chatId.includes('_')) {
-        const parts = chatId.split('_');
-        if (parts.some(p => u.ghostChats.includes(p))) return true;
+
+      const myKeys = [userId, u.id, u.username, u._id?.toString()].filter(Boolean);
+      let otherTarget = null;
+      for (const mKey of myKeys) {
+        if (chatId.startsWith(mKey + '_')) {
+          otherTarget = chatId.slice(mKey.length + 1);
+          break;
+        } else if (chatId.endsWith('_' + mKey)) {
+          otherTarget = chatId.slice(0, -(mKey.length + 1));
+          break;
+        }
+      }
+
+      if (otherTarget && u.ghostChats.includes(otherTarget)) {
+        return true;
+      }
+
+      for (const gId of u.ghostChats) {
+        if (!gId) continue;
+        const gStr = String(gId);
+        if (chatId === gStr) return true;
+        if (chatId.startsWith(gStr + '_') || chatId.endsWith('_' + gStr) || chatId.includes('_' + gStr + '_')) {
+          return true;
+        }
+      }
+
+      if (otherTarget) {
+        const isOtherObjectId = mongoose.Types.ObjectId.isValid(otherTarget);
+        const otherUser = await User.findOne({
+          $or: [
+            { id: otherTarget },
+            { username: otherTarget },
+            ...(isOtherObjectId ? [{ _id: otherTarget }] : [])
+          ]
+        }).select('id username _id').lean();
+        if (otherUser) {
+          const otherKeys = [otherUser.id, otherUser.username, otherUser._id?.toString()].filter(Boolean);
+          if (otherKeys.some(k => u.ghostChats.includes(k))) {
+            return true;
+          }
+        }
       }
     }
     return false;
@@ -957,6 +1041,18 @@ io.on('connection', (socket) => {
     const isGhostMode = Boolean(isGhost) || await resolveGhostMode(readerId, chatId);
     if (isGhostMode) {
       if (readerId) {
+        const updated = await Message.findOneAndUpdate(
+          { id: messageId },
+          { $addToSet: { readBy: readerId }, $set: { status: 'delivered' } },
+          { new: true }
+        ).lean();
+        if (updated && updated.senderId) {
+          io.to(`user_${updated.senderId}`).emit('message_delivered_update', { messageId, chatId, status: 'delivered' });
+          io.to(`user_${updated.senderId}`).emit('messages_delivered', { chatId, messageIds: [messageId], status: 'delivered' });
+        }
+        if (chatId) {
+          io.to(chatId).emit('message_delivered_update', { messageId, chatId, status: 'delivered' });
+        }
         io.to(`user_${readerId}`).emit('chat_read_update', { chatId, userId: readerId });
         io.to(readerId).emit('chat_read_update', { chatId, userId: readerId });
       }
@@ -1317,35 +1413,33 @@ io.on('connection', (socket) => {
     const readerId = userId || socket.userId;
     const isGhostMode = Boolean(isGhost) || await resolveGhostMode(readerId, chatId);
 
-    if (isGhostMode) {
-      if (readerId) {
-        io.to(`user_${readerId}`).emit('chat_read_update', { chatId, userId: readerId });
-        io.to(readerId).emit('chat_read_update', { chatId, userId: readerId });
-      }
-      socket.emit('chat_read_update', { chatId, userId: readerId });
-      return;
-    }
-
-    await db.markChatAsRead(chatId, readerId, false);
+    await db.markChatAsRead(chatId, readerId, isGhostMode);
 
     // ALWAYS emit to reader so their sidebar/tab unread badge immediately clears!
     if (readerId) {
       io.to(`user_${readerId}`).emit('chat_read_update', { chatId, userId: readerId });
       io.to(readerId).emit('chat_read_update', { chatId, userId: readerId });
+      redis.invalidateRecent(readerId).catch(() => {});
     }
     socket.emit('chat_read_update', { chatId, userId: readerId });
 
-    io.to(chatId).emit('chat_read_update', { chatId, userId: readerId });
-    if (chatId && chatId.includes('_')) {
-      const parts = chatId.split('_');
-      const otherId = parts.find(id => id !== readerId);
+    const otherId = await getOtherParticipantId(chatId, readerId);
+
+    if (isGhostMode) {
+      // In Ghost Mode: emit DELIVERED (double grey tick) to sender, NEVER blue tick!
+      io.to(chatId).emit('messages_delivered', { chatId, status: 'delivered' });
       if (otherId) {
-        io.to(`user_${otherId}`).emit('chat_read_update', { chatId, userId: readerId });
-        io.to(otherId).emit('chat_read_update', { chatId, userId: readerId });
+        io.to(`user_${otherId}`).emit('messages_delivered', { chatId, status: 'delivered' });
+        io.to(otherId).emit('messages_delivered', { chatId, status: 'delivered' });
       }
+      return;
     }
-    if (readerId) {
-      redis.invalidateRecent(readerId).catch(() => {});
+
+    // Normal Mode: emit READ (double blue tick)
+    io.to(chatId).emit('chat_read_update', { chatId, userId: readerId });
+    if (otherId) {
+      io.to(`user_${otherId}`).emit('chat_read_update', { chatId, userId: readerId });
+      io.to(otherId).emit('chat_read_update', { chatId, userId: readerId });
     }
   });
 

@@ -143,6 +143,20 @@ export default function SettingsModal({
           }
         });
       }
+      const allUsers = getCachedAllUsers(user.id) || [];
+      if (Array.isArray(allUsers)) {
+        allUsers.forEach(u => {
+          const id = u.id || u._id;
+          if (id && id !== user.id && !map.has(id)) {
+            map.set(id, {
+              id,
+              name: u.displayName || u.username || 'User',
+              username: u.username || '',
+              avatar: u.avatar || ''
+            });
+          }
+        });
+      }
     }
     return Array.from(map.values());
   }, [user?.id]);
@@ -218,6 +232,12 @@ export default function SettingsModal({
         if (contact.id) allTargetKeys.push(contact.id);
         if (contact.username) allTargetKeys.push(contact.username);
         if (contact.chatId) allTargetKeys.push(contact.chatId);
+        if (user?.id && contact.id) {
+          allTargetKeys.push([user.id, contact.id].sort().join('_'));
+        }
+        if (user?.username && contact.username) {
+          allTargetKeys.push([user.username, contact.username].sort().join('_'));
+        }
       }
 
       let next;

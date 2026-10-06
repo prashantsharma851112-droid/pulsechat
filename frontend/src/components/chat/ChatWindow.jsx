@@ -106,7 +106,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           if (Array.isArray(list)) localGhostChats = list;
         } catch (_) {}
       }
-      const allGhostList = [...userGhostChats, ...localGhostChats];
+      const allGhostList = Array.from(new Set([...userGhostChats, ...localGhostChats])).filter(Boolean).map(String);
 
       const targetIds = [
         chatId,
@@ -120,16 +120,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         return true;
       }
 
-      if (chatId && chatId.includes('_')) {
-        const parts = chatId.split('_');
-        if (parts.some(p => allGhostList.map(String).includes(String(p)))) {
+      for (const tId of targetIds) {
+        if (localStorage.getItem(`pulsechat_ghost_${tId}`) === 'true') {
           return true;
         }
       }
 
-      for (const tId of targetIds) {
-        if (localStorage.getItem(`pulsechat_ghost_${tId}`) === 'true') {
-          return true;
+      if (chatId) {
+        for (const gId of allGhostList) {
+          if (!gId) continue;
+          const gStr = String(gId);
+          if (chatId === gStr || chatId.startsWith(gStr + '_') || chatId.endsWith('_' + gStr) || chatId.includes('_' + gStr + '_')) {
+            return true;
+          }
         }
       }
 
@@ -1539,22 +1542,24 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
       }
 
-      // Explicitly mark read via REST endpoint to guarantee DB update (bypassed in Ghost Mode)
-      if (token && chatId && !isGhostMode) {
-        fetch(`${BACKEND_URL}/api/messages/${chatId}/read`, {
+      // Explicitly mark read / delivered via REST endpoint
+      const isCurGhost = checkGhostModeActive();
+      if (token && chatId) {
+        fetch(`${BACKEND_URL}/api/messages/${chatId}/read${isCurGhost ? '?ghost=true' : ''}`, {
           method: 'PUT',
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...(isCurGhost ? { 'x-ghost-mode': 'true' } : {})
+          }
         }).catch(() => {});
       }
 
       if (socket) {
         socket.emit('join_chat', chatId);
-        if (!isGhostMode) {
-          socket.emit('mark_chat_read', { chatId, userId: user.id });
-        }
+        socket.emit('mark_chat_read', { chatId, userId: user.id, isGhost: isCurGhost });
       }
     }
-  }, [activeChat, chatId, isGroup, token, socket, user.id]);
+  }, [activeChat, chatId, isGroup, token, socket, user.id, isGhostMode]);
 
   // Re-join chat room immediately when socket reconnects
   useEffect(() => {
@@ -1623,6 +1628,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         playSound('received');
         if (!isGhostModeRef.current) {
           socket?.emit('mark_read', { messageId: lastNotification.id, chatId });
+        } else {
+          socket?.emit('message_delivered', { messageId: lastNotification.id, chatId, senderId: lastNotification.senderId });
         }
       }
     }
@@ -1810,6 +1817,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           }
           if (!isGhostModeRef.current) {
             socket.emit('mark_read', { messageId: msg.id, chatId });
+          } else {
+            socket.emit('message_delivered', { messageId: msg.id, chatId, senderId: msg.senderId });
           }
         }
       }
@@ -1898,6 +1907,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         const idSet = new Set(messageIds);
         setMessages(prev => {
           const next = prev.map(m => idSet.has(m.id) ? { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) } : m);
+          setCachedMessages(chatId, next);
+          return next;
+        });
+      } else {
+        setMessages(prev => {
+          const next = prev.map(m => m.status === 'sent' ? { ...m, status: status || 'delivered' } : m);
           setCachedMessages(chatId, next);
           return next;
         });
