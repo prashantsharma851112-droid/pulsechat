@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
 import { BACKEND_URL } from '../../utils/config';
-import { getCachedRecentChats, getCachedFriends } from '../../utils/offlineStorage';
+import { getCachedRecentChats, getCachedFriends, getCachedAllUsers } from '../../utils/offlineStorage';
 import PulseProModal from '../chat/PulseProModal';
 import PulseVipBadge from '../common/PulseVipBadge';
 import AppFeatureTourModal from '../common/AppFeatureTourModal';
