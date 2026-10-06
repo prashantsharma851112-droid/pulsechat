@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Lock, ShieldAlert, Eye, Fingerprint, AlertOctagon } from 'lucide-react';
+import { X, Lock, ShieldAlert, Eye, AlertOctagon } from 'lucide-react';
 
 export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, onClose }) {
   const [hasMarkedViewed, setHasMarkedViewed] = useState(false);
   const [screenshotBlocked, setScreenshotBlocked] = useState(false);
   const [securityWarning, setSecurityWarning] = useState(null);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [isHolding, setIsHolding] = useState(false);
 
   const canvasRef = useRef(null);
   const imageObjRef = useRef(null);
@@ -44,6 +45,18 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
     }, 3500);
   }, []);
 
+  // Mark viewed once user opens or closes
+  const markViewedOnce = useCallback(() => {
+    if (!hasMarkedViewed) {
+      setHasMarkedViewed(true);
+      if (onMarkViewed) onMarkViewed();
+    }
+  }, [hasMarkedViewed, onMarkViewed]);
+
+  useEffect(() => {
+    markViewedOnce();
+  }, [markViewedOnce]);
+
   // Preload Image into offscreen buffer
   useEffect(() => {
     if (!message || !message.mediaUrl || isVideo) return;
@@ -55,15 +68,26 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
       imageObjRef.current = img;
       setImageLoaded(true);
     };
+    img.onerror = () => {
+      // Fallback without crossOrigin in case CDN restricts CORS
+      const fallbackImg = new Image();
+      fallbackImg.src = message.mediaUrl;
+      fallbackImg.onload = () => {
+        imageObjRef.current = fallbackImg;
+        setImageLoaded(true);
+      };
+    };
   }, [message, isVideo]);
 
-  // Mark viewed once user opens or closes
-  const markViewedOnce = useCallback(() => {
-    if (!hasMarkedViewed) {
-      setHasMarkedViewed(true);
-      if (onMarkViewed) onMarkViewed();
-    }
-  }, [hasMarkedViewed, onMarkViewed]);
+  // Clear canvas immediately
+  const clearCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }, []);
 
   // Render photo onto HTML5 Canvas with security watermark
   const drawImageToCanvas = useCallback(() => {
@@ -75,8 +99,8 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
     if (!ctx) return;
 
     // Calculate max dimensions fitting screen
-    const maxW = Math.min(window.innerWidth * 0.95, 900);
-    const maxH = Math.min(window.innerHeight * 0.85, 800);
+    const maxW = Math.min(window.innerWidth * 0.95, 960);
+    const maxH = Math.min(window.innerHeight * 0.82, 850);
 
     let width = img.naturalWidth || 600;
     let height = img.naturalHeight || 400;
@@ -103,16 +127,6 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
     ctx.restore();
   }, []);
 
-  // Clear canvas immediately
-  const clearCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }, []);
-
   // Draw image or play video immediately when ready
   useEffect(() => {
     if (screenshotBlocked) {
@@ -129,13 +143,16 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
     }
 
     if (imageLoaded) {
-      drawImageToCanvas();
+      const raf = requestAnimationFrame(() => {
+        drawImageToCanvas();
+      });
+      return () => cancelAnimationFrame(raf);
     }
   }, [imageLoaded, screenshotBlocked, isVideo, drawImageToCanvas, clearCanvas]);
 
   // Comprehensive Anti-Screenshot, Snipping Tool & Visibility Loss Interceptors
   useEffect(() => {
-    // 1. Intercept PrintScreen and OS screenshot shortcuts (Win+Shift+S, PrtScn, Cmd+Shift+3/4/5)
+    // 1. Intercept PrintScreen and OS screenshot shortcuts
     const handleKeyIntercept = (e) => {
       const isPrintScreen =
         e.key === 'PrintScreen' ||
@@ -180,7 +197,6 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
       if (e.clipboardData) e.clipboardData.clearData();
     };
 
-    // Listen in Capture phase on both window and document for absolute priority
     window.addEventListener('keydown', handleKeyIntercept, { capture: true });
     window.addEventListener('keyup', handleKeyIntercept, { capture: true });
     document.addEventListener('keydown', handleKeyIntercept, { capture: true });
@@ -206,34 +222,6 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
       if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
     };
   }, [triggerSecurityAlert, clearCanvas]);
-
-  // Touch & Pointer Handlers (Hold-to-Reveal)
-  const handlePointerDown = (e) => {
-    if (screenshotBlocked) return;
-
-    // Reject multi-touch on mobile (used by phone hardware screenshot combos or gestures)
-    if (e.touches && e.touches.length > 1) {
-      triggerSecurityAlert("⚠️ Multi-touch screenshot gesture detected! Media hidden.");
-      return;
-    }
-
-    setIsHolding(true);
-  };
-
-  const handlePointerUp = () => {
-    setIsHolding(false);
-    clearCanvas();
-  };
-
-  const handleTouchStart = (e) => {
-    if (e.touches && e.touches.length > 1) {
-      triggerSecurityAlert("⚠️ Multi-touch screenshot gesture detected! Media hidden.");
-      return;
-    }
-    if (!screenshotBlocked) {
-      setIsHolding(true);
-    }
-  };
 
   const handleClose = () => {
     markViewedOnce();
@@ -298,7 +286,11 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
           border: '1px solid rgba(255, 255, 255, 0.15)'
         }}>
           <Lock size={15} color="#10b981" />
-          <span>View Once Protected {isVideo ? 'Video' : 'Photo'}</span>
+          <span>
+            {message?.isViewTwice
+              ? `Twice View (2x) Protected ${isVideo ? 'Video' : 'Photo'}`
+              : `View Once (1x) Protected ${isVideo ? 'Video' : 'Photo'}`}
+          </span>
         </div>
 
         <button
@@ -308,9 +300,14 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
             background: 'rgba(255, 255, 255, 0.15)',
             color: '#ffffff',
             padding: '10px',
-            borderRadius: '50%'
+            borderRadius: '50%',
+            cursor: 'pointer',
+            border: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}
-          title="Close"
+          title="Close & Discard"
         >
           <X size={22} />
         </button>
@@ -343,10 +340,10 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
         </div>
       )}
 
-      {/* Media Viewing Core Container */}
+      {/* Media Viewing Core Container (WhatsApp-Style Direct View) */}
       <div style={{
-        maxWidth: '92vw',
-        maxHeight: '76vh',
+        maxWidth: '94vw',
+        maxHeight: '78vh',
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
@@ -375,8 +372,8 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
               Screenshots and screen recording are strictly prohibited for privacy. Media is permanently protected.
             </div>
           </div>
-        ) : isHolding ? (
-          /* ACTIVE HOLDING STATE: Media is revealed */
+        ) : (
+          /* WhatsApp-Style Visible Protected Media */
           <div style={{ position: 'relative', display: 'inline-block' }}>
             {isVideo ? (
               <video
@@ -384,23 +381,42 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
                 src={message.mediaUrl}
                 playsInline
                 autoPlay
-                controls={false}
+                controls
                 draggable={false}
                 style={{
-                  maxWidth: '90vw',
-                  maxHeight: '75vh',
-                  borderRadius: '14px',
-                  pointerEvents: 'none',
-                  display: 'block'
+                  maxWidth: '94vw',
+                  maxHeight: '76vh',
+                  borderRadius: '16px',
+                  display: 'block',
+                  boxShadow: '0 12px 40px rgba(0,0,0,0.8)'
                 }}
               />
+            ) : !imageLoaded ? (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '12px',
+                color: '#9ca3af',
+                padding: '40px'
+              }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  border: '3px solid rgba(255,255,255,0.15)',
+                  borderTopColor: '#6366f1',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+                <span style={{ fontSize: '0.85rem' }}>Loading protected media...</span>
+              </div>
             ) : (
               <canvas
                 ref={canvasRef}
                 style={{
-                  maxWidth: '90vw',
-                  maxHeight: '75vh',
-                  borderRadius: '14px',
+                  maxWidth: '94vw',
+                  maxHeight: '76vh',
+                  borderRadius: '16px',
                   pointerEvents: 'none',
                   display: 'block',
                   boxShadow: '0 12px 40px rgba(0,0,0,0.8)'
@@ -408,112 +424,43 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
               />
             )}
           </div>
-        ) : (
-          /* IDLE / SECURED STATE: Locked privacy shield */
-          <div style={{
-            width: '320px',
-            padding: '2.5rem 1.5rem',
-            background: 'rgba(255, 255, 255, 0.04)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            borderRadius: '24px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '16px',
-            textAlign: 'center'
-          }}>
-            <div style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '50%',
-              background: 'rgba(16, 185, 129, 0.15)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <Lock size={32} color="#10b981" />
-            </div>
-
-            <div>
-              <h3 style={{ color: '#fff', fontSize: '1.05rem', fontWeight: 700, margin: '0 0 6px 0' }}>
-                Protected View-Once Media
-              </h3>
-              <p style={{ color: '#9ca3af', fontSize: '0.8rem', margin: 0, lineHeight: 1.5 }}>
-                Screenshots, screen recording, and saving are blocked. Media disappears when you release.
-              </p>
-            </div>
-          </div>
         )}
       </div>
 
-      {/* Interactive Press-and-Hold Touchpad / Button at Bottom */}
+      {/* WhatsApp-Style Bottom Security Banner */}
       <div style={{
         position: 'absolute',
-        bottom: '36px',
+        bottom: '24px',
         left: '20px',
         right: '20px',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '10px',
+        gap: '8px',
         zIndex: 40
       }}>
-        <button
-          onPointerDown={handlePointerDown}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handlePointerUp}
-          onTouchCancel={handlePointerUp}
-          onMouseDown={handlePointerDown}
-          onMouseUp={handlePointerUp}
-          onMouseLeave={handlePointerUp}
-          style={{
-            width: '100%',
-            maxWidth: '360px',
-            padding: '16px 24px',
-            borderRadius: '16px',
-            background: isHolding
-              ? 'linear-gradient(135deg, #059669 0%, #10b981 100%)'
-              : 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
-            color: '#ffffff',
-            border: 'none',
-            fontSize: '1rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            boxShadow: isHolding
-              ? '0 0 25px rgba(16, 185, 129, 0.6)'
-              : '0 8px 25px rgba(99, 102, 241, 0.4)',
-            transform: isHolding ? 'scale(0.98)' : 'scale(1)',
-            transition: 'all 0.15s ease',
-            touchAction: 'none'
-          }}
-        >
-          {isHolding ? (
-            <>
-              <Eye size={22} />
-              <span>Viewing... (Keep Holding)</span>
-            </>
-          ) : (
-            <>
-              <Fingerprint size={24} />
-              <span>👆 Press & Hold to View</span>
-            </>
-          )}
-        </button>
-
-        <span style={{ fontSize: '0.74rem', color: '#6b7280', textAlign: 'center' }}>
-          {isHolding
-            ? 'Release finger / mouse to hide immediately'
-            : 'Hold button with single finger to reveal photo • Screenshots blocked'}
-        </span>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: 'rgba(17, 24, 39, 0.85)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          padding: '10px 20px',
+          borderRadius: '30px',
+          color: '#ffffff',
+          fontSize: '0.82rem',
+          fontWeight: 600,
+          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)'
+        }}>
+          <Lock size={15} color="#10b981" />
+          <span>
+            {message?.isViewTwice
+              ? 'Twice View • Closes and permanently expires after 2 views'
+              : 'View Once • Closes and permanently expires once dismissed'}
+          </span>
+        </div>
       </div>
     </div>
   );

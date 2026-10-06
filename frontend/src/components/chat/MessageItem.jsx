@@ -1058,8 +1058,8 @@ export default function MessageItem({
     const deltaX = touch.clientX - touchStartXRef.current;
     const deltaY = Math.abs(touch.clientY - touchStartYRef.current);
 
-    // Cancel long press if finger moved
-    if (Math.abs(deltaX) > 8 || deltaY > 8) {
+    // Cancel long press if finger moved significantly
+    if (Math.abs(deltaX) > 18 || deltaY > 18) {
       if (longPressTimerRef.current) {
         clearTimeout(longPressTimerRef.current);
         longPressTimerRef.current = null;
