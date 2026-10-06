@@ -7,7 +7,11 @@ const mongoose = require('mongoose');
 
 const User = require('../models/User');
 
-const resolveGhostMode = async (userId) => {
+const resolveGhostMode = async (userId, chatId, req) => {
+  if (req) {
+    if (req.headers && req.headers['x-ghost-mode'] === 'true') return true;
+    if (req.query && (req.query.ghost === 'true' || req.query.ghost === '1')) return true;
+  }
   if (!userId) return false;
   try {
     const mongoose = require('mongoose');
@@ -17,8 +21,18 @@ const resolveGhostMode = async (userId) => {
         ...(mongoose.Types.ObjectId.isValid(userId) ? [{ _id: userId }] : []),
         { username: userId }
       ]
-    }).select('hideReadReceipts').lean();
-    return Boolean(u && u.hideReadReceipts);
+    }).select('hideReadReceipts ghostChats').lean();
+    if (!u) return false;
+    if (u.hideReadReceipts) return true;
+
+    if (chatId && Array.isArray(u.ghostChats)) {
+      if (u.ghostChats.includes(chatId)) return true;
+      if (chatId.includes('_')) {
+        const parts = chatId.split('_');
+        if (parts.some(p => u.ghostChats.includes(p))) return true;
+      }
+    }
+    return false;
   } catch {
     return false;
   }
@@ -328,18 +342,24 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
           // Non-blocking background read mark and socket emission
           setImmediate(async () => {
             try {
-              const isGhostMode = await resolveGhostMode(req.user.id);
+              const isGhostMode = await resolveGhostMode(req.user.id, req.params.chatId, req);
 
-              await db.markChatAsRead(req.params.chatId, req.user.id, isGhostMode);
+              if (isGhostMode) {
+                const io = req.app.get('io');
+                if (io) {
+                  io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+                }
+                return;
+              }
+
+              await db.markChatAsRead(req.params.chatId, req.user.id, false);
               const io = req.app.get('io');
               if (io) {
                 io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-                if (!isGhostMode) {
-                  io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-                  if (req.params.chatId.includes('_')) {
-                    const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
-                    if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-                  }
+                io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+                if (req.params.chatId.includes('_')) {
+                  const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
+                  if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
                 }
               }
             } catch (bgErr) {}
@@ -360,20 +380,25 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
     // Non-blocking background read mark and socket emission
     setImmediate(async () => {
       try {
-        const isGhostMode = await resolveGhostMode(req.user.id);
+        const isGhostMode = await resolveGhostMode(req.user.id, req.params.chatId, req);
 
-        await db.markChatAsRead(req.params.chatId, req.user.id, isGhostMode);
+        if (isGhostMode) {
+          const io = req.app.get('io');
+          if (io) {
+            io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+          }
+          return;
+        }
+
+        await db.markChatAsRead(req.params.chatId, req.user.id, false);
         const io = req.app.get('io');
         if (io) {
           // ALWAYS emit to reader so their sidebar/tab unread badge immediately clears!
           io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-
-          if (!isGhostMode) {
-            io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-            if (req.params.chatId.includes('_')) {
-              const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
-              if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-            }
+          io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+          if (req.params.chatId.includes('_')) {
+            const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
+            if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
           }
         }
       } catch (bgErr) {
@@ -389,23 +414,28 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
 // Mark Chat Messages as Read
 router.put('/:chatId/read', authMiddleware, async (req, res) => {
   try {
-    const isGhostMode = await resolveGhostMode(req.user.id);
+    const isGhostMode = await resolveGhostMode(req.user.id, req.params.chatId, req);
 
-    await db.markChatAsRead(req.params.chatId, req.user.id, isGhostMode);
+    if (isGhostMode) {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+      }
+      return res.json({ success: true, ghostMode: true });
+    }
+
+    await db.markChatAsRead(req.params.chatId, req.user.id, false);
     const io = req.app.get('io');
     if (io) {
       // ALWAYS emit to reader so their sidebar/tab unread badge immediately clears!
       io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-
-      if (!isGhostMode) {
-        io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-        if (req.params.chatId.includes('_')) {
-          const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
-          if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-        }
+      io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+      if (req.params.chatId.includes('_')) {
+        const otherId = req.params.chatId.split('_').find(id => id !== req.user.id);
+        if (otherId) io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
       }
     }
-    res.json({ success: true, ghostMode: isGhostMode });
+    res.json({ success: true, ghostMode: false });
   } catch (err) {
     console.error('PUT /:chatId/read error:', err);
     res.status(500).json({ error: 'Failed to mark read' });

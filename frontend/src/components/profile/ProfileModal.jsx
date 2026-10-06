@@ -445,32 +445,6 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
                 </div>
               </VibeAuraRing>
 
-              {/* Active Vibe Aura Pill Badge */}
-              {myAura && (
-                <div style={{ marginTop: '0.65rem' }}>
-                  <div style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '5px 14px',
-                    borderRadius: '20px',
-                    background: `${myAura.auraColor || '#10b981'}18`,
-                    border: `1.5px solid ${myAura.auraColor || '#10b981'}55`,
-                    color: 'var(--text-main)',
-                    fontSize: '0.84rem',
-                    fontWeight: 700,
-                    boxShadow: `0 2px 10px ${myAura.auraColor || '#10b981'}25`,
-                    letterSpacing: '0.2px'
-                  }}>
-                    <span style={{ fontSize: '1rem' }}>{myAura.emoji || '⚡'}</span>
-                    <span>
-                      {myAura.isLowBattery
-                        ? `Low Battery (${myAura.batteryLevel || '<20'}%)`
-                        : (myAura.inGame ? `Playing ${myAura.inGame}` : myAura.mood)}
-                    </span>
-                  </div>
-                </div>
-              )}
 
               <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.6rem' }}>
                 {compressing ? (

@@ -162,15 +162,45 @@ export default function SettingsModal({
     if (type === 'all') {
       localStorage.setItem('pulsechat_ghost_global', 'true');
       toggleHideReadReceipts(true);
+      if (token) {
+        fetch(`${BACKEND_URL}/api/users/privacy`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ hideReadReceipts: true, ghostChats: [] })
+        }).catch(() => {});
+      }
     } else if (type === 'specific') {
       localStorage.removeItem('pulsechat_ghost_global');
       toggleHideReadReceipts(false);
       setShowGhostChatPicker(true);
+      if (token) {
+        fetch(`${BACKEND_URL}/api/users/privacy`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ hideReadReceipts: false, ghostChats: ghostChatIds })
+        }).catch(() => {});
+      }
     } else {
       localStorage.removeItem('pulsechat_ghost_global');
       toggleHideReadReceipts(false);
       localStorage.removeItem('pulsechat_ghost_chats');
       setGhostChatIds([]);
+      if (token) {
+        fetch(`${BACKEND_URL}/api/users/privacy`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ hideReadReceipts: false, ghostChats: [] })
+        }).catch(() => {});
+      }
     }
 
     if (typeof window !== 'undefined') {
@@ -182,15 +212,35 @@ export default function SettingsModal({
 
   const toggleChatInGhostMode = (targetId) => {
     setGhostChatIds(prev => {
+      const contact = availableGhostContacts.find(c => c.id === targetId || c.username === targetId || c.chatId === targetId);
+      const allTargetKeys = [targetId];
+      if (contact) {
+        if (contact.id) allTargetKeys.push(contact.id);
+        if (contact.username) allTargetKeys.push(contact.username);
+        if (contact.chatId) allTargetKeys.push(contact.chatId);
+      }
+
       let next;
-      if (prev.includes(targetId)) {
-        next = prev.filter(id => id !== targetId);
-        localStorage.removeItem(`pulsechat_ghost_${targetId}`);
+      const isAlreadyIn = prev.some(id => allTargetKeys.includes(id));
+      if (isAlreadyIn) {
+        next = prev.filter(id => !allTargetKeys.includes(id));
+        allTargetKeys.forEach(k => localStorage.removeItem(`pulsechat_ghost_${k}`));
       } else {
-        next = [...prev, targetId];
-        localStorage.setItem(`pulsechat_ghost_${targetId}`, 'true');
+        next = Array.from(new Set([...prev, ...allTargetKeys]));
+        allTargetKeys.forEach(k => localStorage.setItem(`pulsechat_ghost_${k}`, 'true'));
       }
       localStorage.setItem('pulsechat_ghost_chats', JSON.stringify(next));
+
+      if (token) {
+        fetch(`${BACKEND_URL}/api/users/privacy`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ ghostChats: next })
+        }).catch(() => {});
+      }
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('pulsechat_ghost_mode_updated', {
@@ -1154,7 +1204,7 @@ export default function SettingsModal({
                     <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       {filteredGhostContacts.length > 0 ? (
                         filteredGhostContacts.map(c => {
-                          const isSelected = ghostChatIds.includes(c.id);
+                          const isSelected = ghostChatIds.some(id => id === c.id || (c.username && id === c.username) || (c.chatId && id === c.chatId));
                           return (
                             <div
                               key={c.id}

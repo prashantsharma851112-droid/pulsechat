@@ -26,6 +26,7 @@ const userSchema = new mongoose.Schema({
   blockedUsers: [{ type: String }],
   friends: [{ type: String }],
   hideReadReceipts: { type: Boolean, default: false },
+  ghostChats: [{ type: String }],
   hideOnlineStatus: { type: Boolean, default: false },
   autoCleanupEnabled: { type: Boolean, default: true },
   autoCleanupDays: { type: Number, default: 7 },

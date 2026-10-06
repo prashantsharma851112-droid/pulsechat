@@ -187,11 +187,12 @@ router.put('/profile', authMiddleware, async (req, res) => {
 // Update Privacy (Hide Read Receipts / Unseen Mode & Hide Online Status)
 router.put('/privacy', authMiddleware, async (req, res) => {
   try {
-    const { hideReadReceipts, hideOnlineStatus, autoCleanupEnabled } = req.body;
+    const { hideReadReceipts, hideOnlineStatus, autoCleanupEnabled, ghostChats } = req.body;
     const updates = {};
     if (hideReadReceipts !== undefined) updates.hideReadReceipts = Boolean(hideReadReceipts);
     if (hideOnlineStatus !== undefined) updates.hideOnlineStatus = Boolean(hideOnlineStatus);
     if (autoCleanupEnabled !== undefined) updates.autoCleanupEnabled = Boolean(autoCleanupEnabled);
+    if (ghostChats !== undefined && Array.isArray(ghostChats)) updates.ghostChats = ghostChats;
 
     const updatedUser = await db.updateUser(req.user.id, updates);
     if (!updatedUser) return res.status(404).json({ error: 'User not found' });
@@ -204,6 +205,7 @@ router.put('/privacy', authMiddleware, async (req, res) => {
         userId: userWithoutPass.id,
         userMongoId: userWithoutPass._id?.toString(),
         hideReadReceipts: userWithoutPass.hideReadReceipts,
+        ghostChats: userWithoutPass.ghostChats,
         hideOnlineStatus: userWithoutPass.hideOnlineStatus,
         autoCleanupEnabled: userWithoutPass.autoCleanupEnabled
       });

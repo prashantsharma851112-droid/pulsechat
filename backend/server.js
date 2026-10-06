@@ -138,7 +138,7 @@ const io = new Server(server, {
 
 app.set('io', io);
 
-const resolveGhostMode = async (userId) => {
+const resolveGhostMode = async (userId, chatId) => {
   if (!userId) return false;
   try {
     const isObjectId = mongoose.Types.ObjectId.isValid(userId);
@@ -148,8 +148,18 @@ const resolveGhostMode = async (userId) => {
         ...(isObjectId ? [{ _id: userId }] : []),
         { username: userId }
       ]
-    }).select('hideReadReceipts').lean();
-    return Boolean(u && u.hideReadReceipts);
+    }).select('hideReadReceipts ghostChats').lean();
+    if (!u) return false;
+    if (u.hideReadReceipts) return true;
+
+    if (chatId && Array.isArray(u.ghostChats)) {
+      if (u.ghostChats.includes(chatId)) return true;
+      if (chatId.includes('_')) {
+        const parts = chatId.split('_');
+        if (parts.some(p => u.ghostChats.includes(p))) return true;
+      }
+    }
+    return false;
   } catch {
     return false;
   }
@@ -942,19 +952,25 @@ io.on('connection', (socket) => {
   });
 
   // Read Receipt (Blue Double Tick)
-  socket.on('mark_read', async ({ messageId, chatId, userId }) => {
+  socket.on('mark_read', async ({ messageId, chatId, userId, isGhost }) => {
     const readerId = userId || socket.userId;
-    const isGhostMode = await resolveGhostMode(readerId);
-    const updateDoc = { $addToSet: { readBy: readerId } };
-    if (!isGhostMode) updateDoc.status = 'read';
+    const isGhostMode = Boolean(isGhost) || await resolveGhostMode(readerId, chatId);
+    if (isGhostMode) {
+      if (readerId) {
+        io.to(`user_${readerId}`).emit('chat_read_update', { chatId, userId: readerId });
+        io.to(readerId).emit('chat_read_update', { chatId, userId: readerId });
+      }
+      socket.emit('chat_read_update', { chatId, userId: readerId });
+      return;
+    }
+
+    const updateDoc = { $addToSet: { readBy: readerId }, $set: { status: 'read' } };
     const updatedMsg = await Message.findOneAndUpdate({ id: messageId }, updateDoc, { new: true }).lean();
 
-    if (!isGhostMode) {
-      io.to(chatId).emit('message_read_update', { messageId, status: 'read' });
-      if (updatedMsg && updatedMsg.senderId) {
-        io.to(`user_${updatedMsg.senderId}`).emit('message_read_update', { messageId, status: 'read' });
-        io.to(updatedMsg.senderId).emit('message_read_update', { messageId, status: 'read' });
-      }
+    io.to(chatId).emit('message_read_update', { messageId, status: 'read' });
+    if (updatedMsg && updatedMsg.senderId) {
+      io.to(`user_${updatedMsg.senderId}`).emit('message_read_update', { messageId, status: 'read' });
+      io.to(updatedMsg.senderId).emit('message_read_update', { messageId, status: 'read' });
     }
     if (readerId) {
       io.to(`user_${readerId}`).emit('chat_read_update', { chatId, userId: readerId });
@@ -1297,10 +1313,20 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('mark_chat_read', async ({ chatId, userId }) => {
+  socket.on('mark_chat_read', async ({ chatId, userId, isGhost }) => {
     const readerId = userId || socket.userId;
-    const isGhostMode = await resolveGhostMode(readerId);
-    await db.markChatAsRead(chatId, readerId, isGhostMode);
+    const isGhostMode = Boolean(isGhost) || await resolveGhostMode(readerId, chatId);
+
+    if (isGhostMode) {
+      if (readerId) {
+        io.to(`user_${readerId}`).emit('chat_read_update', { chatId, userId: readerId });
+        io.to(readerId).emit('chat_read_update', { chatId, userId: readerId });
+      }
+      socket.emit('chat_read_update', { chatId, userId: readerId });
+      return;
+    }
+
+    await db.markChatAsRead(chatId, readerId, false);
 
     // ALWAYS emit to reader so their sidebar/tab unread badge immediately clears!
     if (readerId) {
@@ -1309,15 +1335,13 @@ io.on('connection', (socket) => {
     }
     socket.emit('chat_read_update', { chatId, userId: readerId });
 
-    if (!isGhostMode) {
-      io.to(chatId).emit('chat_read_update', { chatId, userId: readerId });
-      if (chatId && chatId.includes('_')) {
-        const parts = chatId.split('_');
-        const otherId = parts.find(id => id !== readerId);
-        if (otherId) {
-          io.to(`user_${otherId}`).emit('chat_read_update', { chatId, userId: readerId });
-          io.to(otherId).emit('chat_read_update', { chatId, userId: readerId });
-        }
+    io.to(chatId).emit('chat_read_update', { chatId, userId: readerId });
+    if (chatId && chatId.includes('_')) {
+      const parts = chatId.split('_');
+      const otherId = parts.find(id => id !== readerId);
+      if (otherId) {
+        io.to(`user_${otherId}`).emit('chat_read_update', { chatId, userId: readerId });
+        io.to(otherId).emit('chat_read_update', { chatId, userId: readerId });
       }
     }
     if (readerId) {

@@ -163,6 +163,8 @@ export function AuthProvider({ children }) {
           ...(data.customBadge !== undefined && { customBadge: data.customBadge }),
           ...(data.pulseSparks !== undefined && { pulseSparks: data.pulseSparks }),
           ...(data.hideOnlineStatus !== undefined && { hideOnlineStatus: Boolean(data.hideOnlineStatus) }),
+          ...(data.hideReadReceipts !== undefined && { hideReadReceipts: Boolean(data.hideReadReceipts) }),
+          ...(data.ghostChats !== undefined && { ghostChats: data.ghostChats }),
           ...(data.autoCleanupEnabled !== undefined && { autoCleanupEnabled: Boolean(data.autoCleanupEnabled) })
         };
         setCachedUser(merged);

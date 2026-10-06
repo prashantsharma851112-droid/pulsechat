@@ -97,34 +97,66 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       if (user?.hideReadReceipts || localStorage.getItem('pulsechat_ghost_global') === 'true') {
         return true;
       }
+      const userGhostChats = Array.isArray(user?.ghostChats) ? user.ghostChats : [];
+      let localGhostChats = [];
       const ghostChatsJson = localStorage.getItem('pulsechat_ghost_chats');
       if (ghostChatsJson) {
-        const list = JSON.parse(ghostChatsJson);
-        if (Array.isArray(list)) {
-          if (list.includes(chatId) || (activeChat?.id && list.includes(activeChat.id))) {
-            return true;
-          }
+        try {
+          const list = JSON.parse(ghostChatsJson);
+          if (Array.isArray(list)) localGhostChats = list;
+        } catch (_) {}
+      }
+      const allGhostList = [...userGhostChats, ...localGhostChats];
+
+      const targetIds = [
+        chatId,
+        activeChat?.id,
+        activeChat?._id,
+        activeChat?.username,
+        activeChat?.userId
+      ].filter(Boolean).map(String);
+
+      if (allGhostList.some(gId => targetIds.includes(String(gId)))) {
+        return true;
+      }
+
+      if (chatId && chatId.includes('_')) {
+        const parts = chatId.split('_');
+        if (parts.some(p => allGhostList.map(String).includes(String(p)))) {
+          return true;
         }
       }
-      return localStorage.getItem(`pulsechat_ghost_${chatId}`) === 'true';
+
+      for (const tId of targetIds) {
+        if (localStorage.getItem(`pulsechat_ghost_${tId}`) === 'true') {
+          return true;
+        }
+      }
+
+      return false;
     } catch (e) {
       return false;
     }
   };
 
   const [isGhostMode, setIsGhostMode] = useState(() => checkGhostModeActive());
+  const isGhostModeRef = useRef(isGhostMode);
 
   useEffect(() => {
-    setIsGhostMode(checkGhostModeActive());
-  }, [chatId, user?.hideReadReceipts, activeChat?.id]);
+    const active = checkGhostModeActive();
+    setIsGhostMode(active);
+    isGhostModeRef.current = active;
+  }, [chatId, user?.hideReadReceipts, user?.ghostChats, activeChat?.id, activeChat?.username]);
 
   useEffect(() => {
     const handleGhostUpdated = () => {
-      setIsGhostMode(checkGhostModeActive());
+      const active = checkGhostModeActive();
+      setIsGhostMode(active);
+      isGhostModeRef.current = active;
     };
     window.addEventListener('pulsechat_ghost_mode_updated', handleGhostUpdated);
     return () => window.removeEventListener('pulsechat_ghost_mode_updated', handleGhostUpdated);
-  }, [chatId, user?.hideReadReceipts, activeChat?.id]);
+  }, [chatId, user?.hideReadReceipts, user?.ghostChats, activeChat?.id, activeChat?.username]);
 
   const getSenderPayload = () => ({
     senderName: user?.displayName || user?.username || 'User',
@@ -1415,8 +1447,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
 
       // 2. Fetch fresh messages if online (fast 50 latest limit)
-      fetch(`${BACKEND_URL}/api/messages/${chatId}?limit=50`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const isCurrentGhost = checkGhostModeActive();
+      fetch(`${BACKEND_URL}/api/messages/${chatId}?limit=50${isCurrentGhost ? '&ghost=true' : ''}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(isCurrentGhost ? { 'x-ghost-mode': 'true' } : {})
+        }
       })
         .then(res => res.json())
         .then(data => {
@@ -1513,7 +1549,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       if (socket) {
         socket.emit('join_chat', chatId);
-        socket.emit('mark_chat_read', { chatId, userId: user.id });
+        if (!isGhostMode) {
+          socket.emit('mark_chat_read', { chatId, userId: user.id });
+        }
       }
     }
   }, [activeChat, chatId, isGroup, token, socket, user.id]);
@@ -1583,7 +1621,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       });
       if (lastNotification.senderId !== user.id) {
         playSound('received');
-        if (!isGhostMode) {
+        if (!isGhostModeRef.current) {
           socket?.emit('mark_read', { messageId: lastNotification.id, chatId });
         }
       }
@@ -1770,7 +1808,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           if (showScrollBottomRef.current) {
             setNewScrolledMessagesCount(prev => prev + 1);
           }
-          if (!isGhostMode) {
+          if (!isGhostModeRef.current) {
             socket.emit('mark_read', { messageId: msg.id, chatId });
           }
         }
@@ -1823,8 +1861,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     const handleMultipleRestored = ({ messageIds: targetIds, chatId: targetChatId }) => {
       if (targetChatId === chatId) {
-        fetch(`${BACKEND_URL}/api/messages/${chatId}`, {
-          headers: { Authorization: `Bearer ${token}` }
+        const isCurGhost = isGhostModeRef.current;
+        fetch(`${BACKEND_URL}/api/messages/${chatId}${isCurGhost ? '?ghost=true' : ''}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...(isCurGhost ? { 'x-ghost-mode': 'true' } : {})
+          }
         })
           .then(res => res.json())
           .then(data => {
@@ -2087,8 +2129,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     setIsLoadingOlder(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/messages/${chatId}?limit=50&before=${encodeURIComponent(oldestMsg.timestamp)}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const isCurGhost = isGhostModeRef.current;
+      const res = await fetch(`${BACKEND_URL}/api/messages/${chatId}?limit=50&before=${encodeURIComponent(oldestMsg.timestamp)}${isCurGhost ? '&ghost=true' : ''}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(isCurGhost ? { 'x-ghost-mode': 'true' } : {})
+        }
       });
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -3166,7 +3212,35 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
 
           <div className="chat-header-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
-            {/* Mobile App Folder Button (Animated Cyber-Neon Glassmorphic Folder) */}
+            {/* Position 3: In-Chat Search Toggle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowInChatSearch(prev => !prev);
+                if (!showInChatSearch) {
+                  setTimeout(() => inChatSearchInputRef.current?.focus(), 120);
+                } else {
+                  setInChatSearchQuery('');
+                }
+              }}
+              className="icon-btn-ghost"
+              title="Search in chat (Message Finder)"
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                color: showInChatSearch ? 'var(--accent)' : 'var(--text-main)',
+                background: showInChatSearch ? 'var(--hover-bg)' : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <Search size={19} />
+            </button>
+
+            {/* Position 2: Mobile App Folder Button (Animated Cyber-Neon Glassmorphic Folder) */}
             <button
               onClick={() => setShowAppsFolderModal(true)}
               className="chat-apps-folder-btn chat-neon-app-folder"
@@ -3240,34 +3314,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               }}>
                 <Sparkles size={8} color="#fff" />
               </div>
-            </button>
-
-            {/* In-Chat Search Toggle Button */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowInChatSearch(prev => !prev);
-                if (!showInChatSearch) {
-                  setTimeout(() => inChatSearchInputRef.current?.focus(), 120);
-                } else {
-                  setInChatSearchQuery('');
-                }
-              }}
-              className="icon-btn-ghost"
-              title="Search in chat (Message Finder)"
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '50%',
-                color: showInChatSearch ? 'var(--accent)' : 'var(--text-main)',
-                background: showInChatSearch ? 'var(--hover-bg)' : 'transparent',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <Search size={19} />
             </button>
 
             {/* 3-Dots More Options Menu */}
