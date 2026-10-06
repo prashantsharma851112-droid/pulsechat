@@ -290,15 +290,123 @@ router.post('/view/:vibeId', authMiddleware, async (req, res) => {
   }
 });
 
-// Fetch detailed view list for a Vibe Story (Author only or viewers)
+// Fetch detailed view list and engagement for a Vibe Story (Author only or viewers)
 router.get('/views/:vibeId', authMiddleware, async (req, res) => {
   try {
     const { vibeId } = req.params;
     const vibe = await Vibe.findOne({ id: vibeId }).lean();
     if (!vibe) return res.status(404).json({ error: 'Story not found' });
-    res.json({ success: true, views: vibe.views || [], viewsCount: (vibe.views || []).length });
+    res.json({
+      success: true,
+      views: vibe.views || [],
+      viewsCount: (vibe.views || []).length,
+      likes: vibe.likes || [],
+      likesCount: (vibe.likes || []).length,
+      reactions: vibe.reactions || [],
+      replies: vibe.replies || [],
+      sparksEarned: vibe.sparksEarned || 0,
+      createdAt: vibe.createdAt
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch views' });
+  }
+});
+
+// Instagram-Style Story Like & Unlike Toggle
+router.post('/like/:vibeId', authMiddleware, async (req, res) => {
+  try {
+    const { vibeId } = req.params;
+    const targetUserId = req.userId || req.user?.id || req.user?.userId;
+    const isObjectId = mongoose.Types.ObjectId.isValid(targetUserId);
+
+    const sender = await User.findOne({
+      $or: [
+        { id: targetUserId },
+        ...(isObjectId ? [{ _id: targetUserId }] : []),
+        { username: targetUserId }
+      ]
+    }).lean();
+
+    if (!sender) return res.status(404).json({ error: 'User not found' });
+
+    const vibe = await Vibe.findOne({ id: vibeId });
+    if (!vibe) return res.status(404).json({ error: 'Story not found' });
+
+    const resolvedSenderId = sender.id || (sender._id ? sender._id.toString() : targetUserId);
+
+    if (!Array.isArray(vibe.likes)) {
+      vibe.likes = [];
+    }
+
+    const existingIndex = vibe.likes.findIndex(l => l.userId === resolvedSenderId);
+    let isLiked = false;
+
+    if (existingIndex > -1) {
+      // Unlike
+      vibe.likes.splice(existingIndex, 1);
+      isLiked = false;
+    } else {
+      // Like
+      vibe.likes.push({
+        userId: resolvedSenderId,
+        displayName: sender.displayName || sender.username || 'Pulse User',
+        username: sender.username || '',
+        avatar: sender.avatar || '',
+        likedAt: new Date()
+      });
+      isLiked = true;
+
+      // Ensure user is recorded in views if not already
+      if (!Array.isArray(vibe.views)) vibe.views = [];
+      if (!vibe.views.some(v => v.userId === resolvedSenderId)) {
+        vibe.views.push({
+          userId: resolvedSenderId,
+          displayName: sender.displayName || sender.username || 'Pulse User',
+          username: sender.username || '',
+          avatar: sender.avatar || '',
+          viewedAt: new Date()
+        });
+      }
+    }
+
+    await vibe.save();
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('vibe_like_updated', {
+        vibeId: vibe.id,
+        authorId: vibe.userId,
+        likesCount: vibe.likes.length,
+        likes: vibe.likes,
+        userId: resolvedSenderId,
+        isLiked
+      });
+
+      // Real-time toast notification to author if someone liked their story
+      if (isLiked && vibe.userId !== resolvedSenderId) {
+        io.to(`user_${vibe.userId}`).emit('vibe_activity_notification', {
+          type: 'like',
+          vibeId: vibe.id,
+          user: {
+            userId: resolvedSenderId,
+            displayName: sender.displayName || sender.username || 'Pulse User',
+            username: sender.username || '',
+            avatar: sender.avatar || ''
+          },
+          text: 'liked your story ❤️'
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      isLiked,
+      likesCount: vibe.likes.length,
+      likes: vibe.likes
+    });
+  } catch (err) {
+    console.error('Error toggling like on vibe:', err);
+    res.status(500).json({ error: 'Failed to toggle like' });
   }
 });
 
@@ -350,10 +458,26 @@ router.post('/react/:vibeId', authMiddleware, async (req, res) => {
     }
 
     if (emoji) {
+      if (!Array.isArray(vibe.reactions)) vibe.reactions = [];
       vibe.reactions.push({
         userId: resolvedSenderId,
         emoji,
         timestamp: new Date()
+      });
+    }
+
+    if (!Array.isArray(vibe.replies)) vibe.replies = [];
+    if (replyText || emoji || (tipSparks && Number(tipSparks) > 0)) {
+      vibe.replies.push({
+        id: 'reply_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        userId: resolvedSenderId,
+        displayName: sender.displayName || sender.username || 'Pulse User',
+        username: sender.username || '',
+        avatar: sender.avatar || '',
+        text: replyText ? replyText.trim() : '',
+        emoji: emoji || '',
+        tipSparks: (tipSparks && Number(tipSparks) > 0) ? Number(tipSparks) : 0,
+        createdAt: new Date()
       });
     }
 

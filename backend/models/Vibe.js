@@ -51,6 +51,7 @@ const VibeSchema = new mongoose.Schema({
   views: [{
     userId: String,
     displayName: String,
+    username: String,
     avatar: String,
     viewedAt: { type: Date, default: Date.now }
   }],
@@ -58,6 +59,24 @@ const VibeSchema = new mongoose.Schema({
     userId: String,
     emoji: String,
     timestamp: { type: Date, default: Date.now }
+  }],
+  likes: [{
+    userId: { type: String, required: true },
+    displayName: { type: String, default: '' },
+    username: { type: String, default: '' },
+    avatar: { type: String, default: '' },
+    likedAt: { type: Date, default: Date.now }
+  }],
+  replies: [{
+    id: { type: String },
+    userId: { type: String, required: true },
+    displayName: { type: String, default: '' },
+    username: { type: String, default: '' },
+    avatar: { type: String, default: '' },
+    text: { type: String, default: '' },
+    emoji: { type: String, default: '' },
+    tipSparks: { type: Number, default: 0 },
+    createdAt: { type: Date, default: Date.now }
   }],
   sparksEarned: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now, index: true },

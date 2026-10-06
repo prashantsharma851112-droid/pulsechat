@@ -429,6 +429,14 @@ export default function App() {
 
     const handleCustomEvent = (event) => {
       if (event.detail) {
+        if (event.detail.user) {
+          handleSelectActiveChat(event.detail.user);
+          return;
+        }
+        if (event.detail.id && (event.detail.displayName || event.detail.username)) {
+          handleSelectActiveChat(event.detail);
+          return;
+        }
         const { chatId, senderId, isGroup } = event.detail;
         openChatById(chatId, senderId, isGroup);
       }

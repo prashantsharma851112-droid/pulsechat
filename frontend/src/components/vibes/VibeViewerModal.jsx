@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc, Lock, MessageSquare, Smile } from 'lucide-react';
+import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc, Lock, MessageSquare, Smile, Heart, Search, Clock, BarChart3, ChevronUp, MessageCircle, Sparkles } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import { updateRecentChatSnippet, getCachedAllUsers } from '../../utils/offlineStorage';
@@ -93,16 +93,54 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     return initial;
   });
 
+  // Per-story live likes dictionary keyed by vibe ID (Instagram Style)
+  const [likesByVibeId, setLikesByVibeId] = useState(() => {
+    const initial = {};
+    (vibeGroup?.vibes || []).forEach(v => {
+      if (v && v.id) {
+        initial[v.id] = Array.isArray(v.likes) ? v.likes : [];
+      }
+    });
+    return initial;
+  });
+
+  // Per-story live replies dictionary keyed by vibe ID
+  const [repliesByVibeId, setRepliesByVibeId] = useState(() => {
+    const initial = {};
+    (vibeGroup?.vibes || []).forEach(v => {
+      if (v && v.id) {
+        initial[v.id] = Array.isArray(v.replies) ? v.replies : [];
+      }
+    });
+    return initial;
+  });
+
+  // Instagram Story Viewers & Insights Sheet Tab & Search State
+  const [activeViewersTab, setActiveViewersTab] = useState('viewers'); // 'viewers' | 'likes' | 'replies' | 'insights'
+  const [viewersSearchQuery, setViewersSearchQuery] = useState('');
+  const [showHeartBurst, setShowHeartBurst] = useState(false);
+
   const currentVibe = vibes[currentIndex] || vibes[0];
   const timerRef = useRef(null);
   const audioRef = useRef(null);
   const videoPlayerRef = useRef(null);
   const holdTimerRef = useRef(null);
   const touchStartTimeRef = useRef(0);
+  const touchStartYRef = useRef(0);
+  const touchStartXRef = useRef(0);
+  const lastTapTimeRef = useRef(0);
 
-  // Current story's specific viewers list & count
+  // Current story's specific viewers, likes & replies list & counts
   const currentStoryViews = viewsByVibeId[currentVibe?.id] ?? (Array.isArray(currentVibe?.views) ? currentVibe.views : []);
   const viewCount = currentStoryViews.length;
+  const currentStoryLikes = likesByVibeId[currentVibe?.id] ?? (Array.isArray(currentVibe?.likes) ? currentVibe.likes : []);
+  const currentStoryReplies = repliesByVibeId[currentVibe?.id] ?? (Array.isArray(currentVibe?.replies) ? currentVibe.replies : []);
+
+  const myUserId = user?.id || user?._id;
+  const isCurrentStoryLiked = currentStoryLikes.some(
+    l => (l.userId && (l.userId === myUserId || l.userId === user?.id || l.userId === user?._id)) ||
+         (user?.username && l.username && String(l.username).toLowerCase() === String(user.username).toLowerCase())
+  );
 
   // Sponsored Story Ad State (for non-VIP users between stories)
   const [showingSponsoredAd, setShowingSponsoredAd] = useState(false);
@@ -278,7 +316,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     } catch (e) {}
   }
 
-  // Real-time socket listener for live view updates for all vibes
+  // Real-time socket listener for live view & like updates for all vibes
   useEffect(() => {
     if (!socket) return;
     const handleViewUpdate = (data) => {
@@ -289,9 +327,19 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
         }));
       }
     };
+    const handleLikeUpdate = (data) => {
+      if (data && data.vibeId) {
+        setLikesByVibeId(prev => ({
+          ...prev,
+          [data.vibeId]: Array.isArray(data.likes) ? data.likes : []
+        }));
+      }
+    };
     socket.on('vibe_view_updated', handleViewUpdate);
+    socket.on('vibe_like_updated', handleLikeUpdate);
     return () => {
       socket.off('vibe_view_updated', handleViewUpdate);
+      socket.off('vibe_like_updated', handleLikeUpdate);
     };
   }, [socket]);
 
@@ -300,18 +348,23 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     if (currentVibe && currentVibe.id) {
       const vId = currentVibe.id;
 
-      // Always fetch fresh live views specifically for THIS vibe ID
+      // Always fetch fresh live views, likes and replies specifically for THIS vibe ID
       if (token) {
         fetch(`${BACKEND_URL}/api/vibes/views/${vId}?t=${Date.now()}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
           .then(res => res.json())
           .then(data => {
-            if (data && data.success && Array.isArray(data.views)) {
-              setViewsByVibeId(prev => ({
-                ...prev,
-                [vId]: data.views
-              }));
+            if (data && data.success) {
+              if (Array.isArray(data.views)) {
+                setViewsByVibeId(prev => ({ ...prev, [vId]: data.views }));
+              }
+              if (Array.isArray(data.likes)) {
+                setLikesByVibeId(prev => ({ ...prev, [vId]: data.likes }));
+              }
+              if (Array.isArray(data.replies)) {
+                setRepliesByVibeId(prev => ({ ...prev, [vId]: data.replies }));
+              }
             }
           })
           .catch(() => {});
@@ -415,7 +468,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     }
   }, [currentVibe?.id, currentVibe?.songTitle, currentVibe?.audioUrl]);
 
-  // Fetch live views for owner when modal opens or viewers button tapped
+  // Fetch live views, likes and replies for owner when modal opens or viewers button tapped
   const fetchLiveViews = async () => {
     if (token && currentVibe?.id) {
       try {
@@ -423,14 +476,117 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
-        if (data.success && Array.isArray(data.views)) {
-          setViewsByVibeId(prev => ({
-            ...prev,
-            [currentVibe.id]: data.views
-          }));
+        if (data.success) {
+          if (Array.isArray(data.views)) {
+            setViewsByVibeId(prev => ({ ...prev, [currentVibe.id]: data.views }));
+          }
+          if (Array.isArray(data.likes)) {
+            setLikesByVibeId(prev => ({ ...prev, [currentVibe.id]: data.likes }));
+          }
+          if (Array.isArray(data.replies)) {
+            setRepliesByVibeId(prev => ({ ...prev, [currentVibe.id]: data.replies }));
+          }
         }
       } catch (e) {}
     }
+  };
+
+  // Format relative time (e.g., "Just now", "2m ago", "1h ago")
+  const formatTimeAgo = (dateStr) => {
+    if (!dateStr) return 'Recently';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffSec = Math.floor((now - date) / 1000);
+    if (diffSec < 45) return 'Just now';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour}h ago`;
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Instagram-style Story Like / Unlike Toggle
+  const handleToggleLike = async (forceLike = false) => {
+    if (!currentVibe || !token) return;
+    const vId = currentVibe.id;
+    const currentLikes = likesByVibeId[vId] ?? (Array.isArray(currentVibe.likes) ? currentVibe.likes : []);
+    const myId = user?.id || user?._id;
+    const isCurrentlyLiked = currentLikes.some(
+      l => (l.userId && (l.userId === myId || l.userId === user?.id || l.userId === user?._id)) ||
+           (user?.username && l.username && String(l.username).toLowerCase() === String(user.username).toLowerCase())
+    );
+
+    if (forceLike && isCurrentlyLiked) {
+      setShowHeartBurst(true);
+      setTimeout(() => setShowHeartBurst(false), 850);
+      return;
+    }
+
+    const nextLiked = !isCurrentlyLiked;
+    // Optimistic UI update
+    setLikesByVibeId(prev => {
+      const list = prev[vId] ? [...prev[vId]] : [...(currentVibe.likes || [])];
+      if (nextLiked) {
+        list.push({
+          userId: myId,
+          displayName: user?.displayName || user?.name || user?.username || 'You',
+          username: user?.username || '',
+          avatar: user?.avatar || '',
+          likedAt: new Date().toISOString()
+        });
+      } else {
+        const idx = list.findIndex(
+          l => (l.userId && (l.userId === myId || l.userId === user?.id || l.userId === user?._id)) ||
+               (user?.username && l.username && String(l.username).toLowerCase() === String(user.username).toLowerCase())
+        );
+        if (idx > -1) list.splice(idx, 1);
+      }
+      return { ...prev, [vId]: list };
+    });
+
+    if (nextLiked) {
+      setShowHeartBurst(true);
+      setTimeout(() => setShowHeartBurst(false), 850);
+      try { playSound('pop'); } catch (e) {}
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([25, 35, 25]);
+      }
+    }
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/vibes/like/${vId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.likes)) {
+        setLikesByVibeId(prev => ({
+          ...prev,
+          [vId]: data.likes
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to toggle like on vibe:', err);
+    }
+  };
+
+  // Direct Chat Navigation from Viewers Sheet
+  const handleOpenViewerChat = (targetViewer) => {
+    if (!targetViewer) return;
+    const targetUserId = targetViewer.userId || targetViewer.id;
+    if (!targetUserId) return;
+    const chatUser = {
+      id: targetUserId,
+      displayName: targetViewer.displayName || targetViewer.username || 'User',
+      username: targetViewer.username || '',
+      avatar: targetViewer.avatar || '',
+      isGroup: false
+    };
+    window.dispatchEvent(new CustomEvent('pulsechat_open_chat', { detail: { user: chatUser } }));
+    handleCloseModal();
   };
 
   const handleCloseModal = () => {
@@ -532,10 +688,15 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
     };
   }, [currentIndex, vibes.length, onClose, isPaused, isHolding, showViewersSheet, currentVibe?.id, currentVibe?.storyDuration, user?.isPro, showingSponsoredAd, isCurrentStoryVideo]);
 
-  // Instagram-style Hold to Pause & Tap Navigation Gestures
+  // Instagram-style Hold to Pause, Swipe Up to View Activity & Tap / Double-Tap Navigation
   const handleStagePointerDown = (e) => {
     if (e.target.closest('button') || e.target.closest('input') || e.target.closest('.interactive-action') || e.target.closest('form')) return;
     touchStartTimeRef.current = Date.now();
+    const clientY = e.clientY ?? (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    const clientX = e.clientX ?? (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+    touchStartYRef.current = clientY;
+    touchStartXRef.current = clientX;
+
     holdTimerRef.current = setTimeout(() => {
       setIsHolding(true);
       setIsPaused(true);
@@ -545,7 +706,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
       if (audioRef.current) {
         try { audioRef.current.pause(); } catch (err) {}
       }
-    }, 160);
+    }, 175);
   };
 
   const handleStagePointerUp = (e) => {
@@ -566,9 +727,36 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
       return;
     }
 
-    if (pressDuration < 200 && !e.target.closest('button') && !e.target.closest('input') && !e.target.closest('.interactive-action') && !e.target.closest('form')) {
+    const clientY = e.clientY ?? (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : touchStartYRef.current);
+    const clientX = e.clientX ?? (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : touchStartXRef.current);
+    const deltaY = clientY - touchStartYRef.current;
+    const deltaX = Math.abs(clientX - touchStartXRef.current);
+
+    // Instagram Swipe Up Gesture: opens activity/viewers sheet for story owner
+    if (deltaY < -42 && deltaX < 65) {
+      if (isMine) {
+        fetchLiveViews();
+        setShowViewersSheet(true);
+        return;
+      }
+    }
+
+    if (pressDuration < 240 && !e.target.closest('button') && !e.target.closest('input') && !e.target.closest('.interactive-action') && !e.target.closest('form')) {
+      const now = Date.now();
+      if (now - lastTapTimeRef.current < 280) {
+        // Double Tap Like detected!
+        lastTapTimeRef.current = 0;
+        if (!isMine) {
+          handleToggleLike(true);
+        } else {
+          setShowHeartBurst(true);
+          setTimeout(() => setShowHeartBurst(false), 850);
+        }
+        return;
+      }
+      lastTapTimeRef.current = now;
+
       const rect = e.currentTarget.getBoundingClientRect();
-      const clientX = e.clientX ?? (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : rect.width / 2);
       const relativeX = clientX - rect.left;
       if (relativeX < rect.width * 0.35) {
         handlePrev();
@@ -765,6 +953,36 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
           border: typeof window !== 'undefined' && window.innerWidth <= 768 ? 'none' : '1px solid rgba(255,255,255,0.15)'
         }}
       >
+        {/* CSS Keyframe for Instagram Floating Heart Burst */}
+        <style>{`
+          @keyframes instaHeartBurst {
+            0% { transform: translate(-50%, -50%) scale(0) rotate(-15deg); opacity: 0; }
+            35% { transform: translate(-50%, -50%) scale(1.3) rotate(0deg); opacity: 1; }
+            65% { transform: translate(-50%, -50%) scale(1.1) rotate(5deg); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(0.85) translateY(-45px); opacity: 0; }
+          }
+        `}</style>
+
+        {/* Instagram Double-Tap Floating Heart Burst Overlay */}
+        {showHeartBurst && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 90,
+              pointerEvents: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              animation: 'instaHeartBurst 0.82s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards'
+            }}
+          >
+            <Heart size={105} fill="#f43f5e" color="#ffffff" style={{ filter: 'drop-shadow(0 10px 30px rgba(244, 63, 94, 0.9))' }} />
+          </div>
+        )}
+
         {/* Top Progress Bars */}
         <div style={{
           position: 'absolute',
@@ -1371,31 +1589,52 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
         }}>
           {isMine ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  fetchLiveViews();
-                  setShowViewersSheet(prev => !prev);
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  color: '#ffffff',
-                  background: 'rgba(0, 0, 0, 0.45)',
-                  backdropFilter: 'blur(12px)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '24px',
-                  padding: '7px 14px',
-                  fontSize: '0.84rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)'
-                }}
-              >
-                <Eye size={16} color="#38bdf8" />
-                <span>{viewCount}</span>
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
+                <span style={{ fontSize: '0.68rem', color: 'rgba(255, 255, 255, 0.72)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '2px', paddingLeft: '4px' }}>
+                  <ChevronUp size={12} /> Swipe up for activity
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    fetchLiveViews();
+                    setShowViewersSheet(true);
+                  }}
+                  className="interactive-action"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    color: '#ffffff',
+                    background: 'rgba(0, 0, 0, 0.55)',
+                    backdropFilter: 'blur(16px)',
+                    border: '1px solid rgba(255, 255, 255, 0.22)',
+                    borderRadius: '24px',
+                    padding: '7px 16px',
+                    fontSize: '0.84rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 18px rgba(0, 0, 0, 0.45)',
+                    transition: 'transform 0.15s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <Eye size={16} color="#38bdf8" />
+                    <span>{viewCount}</span>
+                  </div>
+                  {currentStoryLikes.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '8px', color: '#f43f5e' }}>
+                      <Heart size={14} fill="#f43f5e" color="#f43f5e" />
+                      <span>{currentStoryLikes.length}</span>
+                    </div>
+                  )}
+                  {currentStoryReplies.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '8px', color: '#a855f7' }}>
+                      <MessageCircle size={14} />
+                      <span>{currentStoryReplies.length}</span>
+                    </div>
+                  )}
+                </button>
+              </div>
 
               {currentVibe.sparksEarned > 0 && (
                 <div style={{
@@ -1457,12 +1696,13 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', width: '100%', justifyContent: 'flex-end' }}>
-              {/* 💬 Reply Circular Button (Transparent, matching mute button style) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%', justifyContent: 'flex-end' }}>
+              {/* 💬 Reply Circular Button */}
               <button
                 type="button"
                 onClick={() => setShowReplySheet(true)}
                 title="Reply"
+                className="interactive-action"
                 style={{
                   width: '42px',
                   height: '42px',
@@ -1482,7 +1722,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                 <MessageSquare size={18} />
               </button>
 
-              {/* ⚡ Tip Sparks Circular Button (Matching top buttons style with warm glow) */}
+              {/* ⚡ Tip Sparks Circular Button */}
               <button
                 type="button"
                 onClick={() => {
@@ -1494,6 +1734,7 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                   setShowSparksTipModal(true);
                 }}
                 title="Tip Sparks"
+                className="interactive-action"
                 style={{
                   width: '42px',
                   height: '42px',
@@ -1513,11 +1754,12 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                 <Zap size={18} fill="#fff" />
               </button>
 
-              {/* 😊 React Circular Button (Transparent, matching mute button style) */}
+              {/* 😊 React Circular Button */}
               <button
                 type="button"
                 onClick={() => setShowUnlimitedEmojiModal(true)}
                 title="React with Emoji"
+                className="interactive-action"
                 style={{
                   width: '42px',
                   height: '42px',
@@ -1535,6 +1777,34 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
                 }}
               >
                 <Smile size={19} />
+              </button>
+
+              {/* ❤️ Instagram Story Like Button */}
+              <button
+                type="button"
+                onClick={() => handleToggleLike()}
+                title={isCurrentStoryLiked ? 'Unlike' : 'Like'}
+                className="interactive-action"
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
+                  background: isCurrentStoryLiked
+                    ? 'linear-gradient(135deg, #f43f5e, #e11d48)'
+                    : 'rgba(0, 0, 0, 0.45)',
+                  backdropFilter: 'blur(12px)',
+                  border: isCurrentStoryLiked ? '1px solid rgba(244, 63, 94, 0.6)' : '1px solid rgba(255, 255, 255, 0.2)',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: isCurrentStoryLiked ? '0 0 18px rgba(244, 63, 94, 0.65)' : '0 4px 16px rgba(0, 0, 0, 0.35)',
+                  transform: isCurrentStoryLiked ? 'scale(1.05)' : 'scale(1)',
+                  transition: 'all 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                }}
+              >
+                <Heart size={19} fill={isCurrentStoryLiked ? '#ffffff' : 'none'} color="#ffffff" />
               </button>
             </div>
           )}
@@ -1741,118 +2011,708 @@ export default function VibeViewerModal({ vibeGroup, onClose, onRefresh, initial
           </div>
         )}
 
-        {/* Viewers Sliding Sheet (Instagram / WhatsApp style) */}
+        {/* Instagram Story Viewers & Insights Bottom Sheet */}
         {showViewersSheet && isMine && (
           <div
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowViewersSheet(false);
+            }}
             style={{
               position: 'absolute',
               inset: 0,
               top: 'auto',
-              maxHeight: '65%',
-              background: 'rgba(15, 23, 42, 0.96)',
-              backdropFilter: 'blur(16px)',
-              borderTopLeftRadius: '24px',
-              borderTopRightRadius: '24px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+              maxHeight: '78%',
+              background: 'rgba(15, 23, 42, 0.98)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              borderTopLeftRadius: '28px',
+              borderTopRightRadius: '28px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.22)',
               zIndex: 100,
-              padding: '16px',
+              padding: '12px 16px 20px 16px',
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '0 -10px 30px rgba(0,0,0,0.8)',
-              animation: 'modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+              boxShadow: '0 -15px 45px rgba(0,0,0,0.85)',
+              animation: 'modalFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1)'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fff', fontWeight: 800, fontSize: '0.98rem' }}>
-                <Eye size={18} color="#818cf8" />
-                <span>Story Viewers ({viewCount})</span>
+            {/* Top Drag Handle Pill */}
+            <div
+              style={{
+                width: '42px',
+                height: '4px',
+                borderRadius: '3px',
+                background: 'rgba(255, 255, 255, 0.35)',
+                margin: '0 auto 10px auto',
+                cursor: 'pointer'
+              }}
+              onClick={() => setShowViewersSheet(false)}
+            />
+
+            {/* Header: Story Thumbnail Preview + Title + Actions */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingBottom: '10px',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+              marginBottom: '10px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  background: currentVibe.bgGradient || '#312e81',
+                  border: '1px solid rgba(255, 255, 255, 0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  {currentVibe.mediaUrl ? (
+                    currentVibe.mediaType === 'video' ? (
+                      <video src={currentVibe.mediaUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted />
+                    ) : (
+                      <img src={currentVibe.mediaUrl} alt="Story" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    )
+                  ) : (
+                    <span style={{ fontSize: '1rem' }}>✨</span>
+                  )}
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.94rem', fontWeight: 800, color: '#ffffff' }}>
+                    Story Activity
+                  </h4>
+                  <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                    {formatTimeAgo(currentVibe.createdAt)} • {viewCount} views
+                  </span>
+                </div>
               </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button
+                  type="button"
+                  onClick={handleDeleteVibe}
+                  title="Delete Story"
+                  className="icon-btn-ghost"
+                  style={{ color: '#ef4444', background: 'rgba(239, 68, 68, 0.12)', borderRadius: '50%', padding: '7px', border: 'none', cursor: 'pointer' }}
+                >
+                  <Trash2 size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowViewersSheet(false)}
+                  className="icon-btn-ghost"
+                  style={{ color: '#ffffff', background: 'rgba(255, 255, 255, 0.12)', borderRadius: '50%', padding: '7px', border: 'none', cursor: 'pointer' }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Instagram-Style Navigation Tabs Bar */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              paddingBottom: '10px',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+              overflowX: 'auto'
+            }}>
               <button
-                onClick={() => setShowViewersSheet(false)}
-                className="icon-btn-ghost"
-                style={{ color: '#fff', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', padding: '4px' }}
+                type="button"
+                onClick={() => setActiveViewersTab('viewers')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: activeViewersTab === 'viewers' ? 'rgba(56, 189, 248, 0.18)' : 'rgba(255, 255, 255, 0.06)',
+                  border: activeViewersTab === 'viewers' ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
+                  color: activeViewersTab === 'viewers' ? '#38bdf8' : 'rgba(255, 255, 255, 0.75)',
+                  padding: '6px 12px',
+                  borderRadius: '20px',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  flexShrink: 0
+                }}
               >
-                <X size={16} />
+                <Eye size={14} />
+                <span>Viewers ({viewCount})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveViewersTab('likes')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: activeViewersTab === 'likes' ? 'rgba(244, 63, 94, 0.18)' : 'rgba(255, 255, 255, 0.06)',
+                  border: activeViewersTab === 'likes' ? '1px solid #f43f5e' : '1px solid rgba(255, 255, 255, 0.1)',
+                  color: activeViewersTab === 'likes' ? '#f43f5e' : 'rgba(255, 255, 255, 0.75)',
+                  padding: '6px 12px',
+                  borderRadius: '20px',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  flexShrink: 0
+                }}
+              >
+                <Heart size={14} fill={activeViewersTab === 'likes' ? '#f43f5e' : 'none'} />
+                <span>Likes ({currentStoryLikes.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveViewersTab('replies')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: activeViewersTab === 'replies' ? 'rgba(168, 85, 247, 0.18)' : 'rgba(255, 255, 255, 0.06)',
+                  border: activeViewersTab === 'replies' ? '1px solid #a855f7' : '1px solid rgba(255, 255, 255, 0.1)',
+                  color: activeViewersTab === 'replies' ? '#a855f7' : 'rgba(255, 255, 255, 0.75)',
+                  padding: '6px 12px',
+                  borderRadius: '20px',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  flexShrink: 0
+                }}
+              >
+                <MessageSquare size={14} />
+                <span>Replies ({currentStoryReplies.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveViewersTab('insights')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: activeViewersTab === 'insights' ? 'rgba(245, 158, 11, 0.18)' : 'rgba(255, 255, 255, 0.06)',
+                  border: activeViewersTab === 'insights' ? '1px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.1)',
+                  color: activeViewersTab === 'insights' ? '#f59e0b' : 'rgba(255, 255, 255, 0.75)',
+                  padding: '6px 12px',
+                  borderRadius: '20px',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  flexShrink: 0
+                }}
+              >
+                <BarChart3 size={14} />
+                <span>Insights</span>
               </button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {currentStoryViews.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.6)', padding: '2rem 1rem', fontSize: '0.88rem' }}>
-                  <Users size={32} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
-                  <p style={{ margin: 0 }}>No views yet for this story.</p>
-                  <p style={{ fontSize: '0.78rem', opacity: 0.8, marginTop: '4px' }}>Share your story with friends!</p>
-                </div>
-              ) : (
-                currentStoryViews.map((viewer, idx) => {
-                  let vKing = Boolean(viewer.hasKingCrown);
-                  let vSilver = Boolean(viewer.hasSilverCrown);
-                  let vStreak = Boolean(viewer.hasStreakCrown);
+            {/* TAB CONTENT */}
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '10px' }}>
+              {activeViewersTab === 'viewers' && (
+                <>
+                  {/* Search Bar for Viewers */}
+                  {currentStoryViews.length > 3 && (
+                    <div style={{
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      borderRadius: '16px',
+                      padding: '8px 12px',
+                      gap: '8px',
+                      marginBottom: '6px'
+                    }}>
+                      <Search size={15} color="#94a3b8" />
+                      <input
+                        type="text"
+                        value={viewersSearchQuery}
+                        onChange={(e) => setViewersSearchQuery(e.target.value)}
+                        placeholder="Search viewers..."
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          outline: 'none',
+                          color: '#fff',
+                          fontSize: '0.82rem',
+                          width: '100%'
+                        }}
+                      />
+                      {viewersSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setViewersSearchQuery('')}
+                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  )}
 
-                  if (!vKing && !vSilver && !vStreak && user?.id) {
-                    try {
-                      const cached = getCachedAllUsers(user.id || user._id);
-                      if (Array.isArray(cached)) {
-                        const m = cached.find(u =>
-                          (viewer.userId && (u.id === viewer.userId || u._id === viewer.userId)) ||
-                          (u.username && viewer.username && String(u.username).toLowerCase() === String(viewer.username).toLowerCase())
+                  {currentStoryViews.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.6)', padding: '2.5rem 1rem', fontSize: '0.88rem' }}>
+                      <Users size={36} style={{ marginBottom: '0.5rem', opacity: 0.4 }} />
+                      <p style={{ margin: '0 0 4px 0', fontWeight: 700, color: '#f8fafc' }}>No views yet</p>
+                      <p style={{ fontSize: '0.78rem', opacity: 0.7, margin: 0 }}>Friends who view your story will appear here with exact time and likes!</p>
+                    </div>
+                  ) : (
+                    (() => {
+                      // Filter by search query
+                      const filtered = currentStoryViews.filter(v => {
+                        if (!viewersSearchQuery.trim()) return true;
+                        const q = viewersSearchQuery.toLowerCase();
+                        return (
+                          (v.displayName && v.displayName.toLowerCase().includes(q)) ||
+                          (v.username && v.username.toLowerCase().includes(q))
                         );
-                        if (m) {
-                          vKing = Boolean(m.hasKingCrown);
-                          vSilver = Boolean(m.hasSilverCrown);
-                          vStreak = Boolean(m.hasStreakCrown);
-                        }
-                      }
-                    } catch (e) {}
-                  }
+                      });
 
-                  return (
-                    <div
-                      key={viewer.userId || idx}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '8px 10px',
-                        borderRadius: '12px',
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid rgba(255,255,255,0.08)'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ position: 'relative', width: '38px', height: '38px', flexShrink: 0 }}>
-                          {vKing ? (
-                            <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.85rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
-                          ) : vSilver ? (
-                            <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.85rem', filter: 'drop-shadow(0 2px 4px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
-                          ) : vStreak ? (
-                            <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.85rem', filter: 'drop-shadow(0 2px 4px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
-                          ) : null}
-                          <img
-                            src={viewer.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${viewer.username || viewer.displayName || 'user'}`}
-                            alt={viewer.displayName}
-                            style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '1px solid #818cf8' }}
-                          />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#fff' }}>
-                            {viewer.displayName || viewer.username || 'User'}
+                      // Sort: Users who liked the story come first, then sorted by viewedAt newest
+                      const sorted = [...filtered].sort((a, b) => {
+                        const aLiked = currentStoryLikes.some(l => l.userId === a.userId || (l.username && l.username === a.username));
+                        const bLiked = currentStoryLikes.some(l => l.userId === b.userId || (l.username && l.username === b.username));
+                        if (aLiked && !bLiked) return -1;
+                        if (!aLiked && bLiked) return 1;
+                        return new Date(b.viewedAt || 0) - new Date(a.viewedAt || 0);
+                      });
+
+                      if (sorted.length === 0) {
+                        return (
+                          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)', padding: '2rem 1rem', fontSize: '0.84rem' }}>
+                            No viewers matching "{viewersSearchQuery}"
                           </div>
-                          {viewer.username && (
-                            <div style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.6)' }}>
-                              @{viewer.username}
+                        );
+                      }
+
+                      return sorted.map((viewer, idx) => {
+                        let vKing = Boolean(viewer.hasKingCrown);
+                        let vSilver = Boolean(viewer.hasSilverCrown);
+                        let vStreak = Boolean(viewer.hasStreakCrown);
+
+                        if (!vKing && !vSilver && !vStreak && user?.id) {
+                          try {
+                            const cached = getCachedAllUsers(user.id || user._id);
+                            if (Array.isArray(cached)) {
+                              const m = cached.find(u =>
+                                (viewer.userId && (u.id === viewer.userId || u._id === viewer.userId)) ||
+                                (u.username && viewer.username && String(u.username).toLowerCase() === String(viewer.username).toLowerCase())
+                              );
+                              if (m) {
+                                vKing = Boolean(m.hasKingCrown);
+                                vSilver = Boolean(m.hasSilverCrown);
+                                vStreak = Boolean(m.hasStreakCrown);
+                              }
+                            }
+                          } catch (e) {}
+                        }
+
+                        const hasLikedStory = currentStoryLikes.some(
+                          l => (l.userId && l.userId === viewer.userId) ||
+                               (viewer.username && l.username && String(l.username).toLowerCase() === String(viewer.username).toLowerCase())
+                        );
+
+                        const userReaction = (currentVibe.reactions || []).find(r => r.userId === viewer.userId);
+
+                        return (
+                          <div
+                            key={viewer.userId || idx}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '8px 12px',
+                              borderRadius: '14px',
+                              background: hasLikedStory ? 'rgba(244, 63, 94, 0.08)' : 'rgba(255, 255, 255, 0.05)',
+                              border: hasLikedStory ? '1px solid rgba(244, 63, 94, 0.25)' : '1px solid rgba(255, 255, 255, 0.08)',
+                              transition: 'transform 0.15s ease'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                              <div style={{ position: 'relative', width: '40px', height: '40px', flexShrink: 0 }}>
+                                {vKing ? (
+                                  <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.85rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+                                ) : vSilver ? (
+                                  <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.85rem', filter: 'drop-shadow(0 2px 4px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+                                ) : vStreak ? (
+                                  <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.85rem', filter: 'drop-shadow(0 2px 4px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+                                ) : null}
+                                <img
+                                  src={viewer.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${viewer.username || viewer.displayName || 'user'}`}
+                                  alt={viewer.displayName}
+                                  style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    borderRadius: '50%',
+                                    objectFit: 'cover',
+                                    border: hasLikedStory ? '2px solid #f43f5e' : '1px solid rgba(255, 255, 255, 0.2)'
+                                  }}
+                                />
+                                {hasLikedStory && (
+                                  <div style={{
+                                    position: 'absolute',
+                                    bottom: '-2px',
+                                    right: '-2px',
+                                    background: '#f43f5e',
+                                    width: '16px',
+                                    height: '16px',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    border: '1.5px solid #0f172a'
+                                  }}>
+                                    <Heart size={9} fill="#fff" color="#fff" />
+                                  </div>
+                                )}
+                              </div>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {viewer.displayName || viewer.username || 'User'}
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: '#94a3b8' }}>
+                                  {viewer.username && <span>@{viewer.username}</span>}
+                                  <span>•</span>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                    <Clock size={11} />
+                                    {formatTimeAgo(viewer.viewedAt)}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
+
+                            {/* Right side indicators & action button */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                              {userReaction?.emoji && (
+                                <span style={{ fontSize: '1.15rem' }} title={`Reacted with ${userReaction.emoji}`}>
+                                  {userReaction.emoji}
+                                </span>
+                              )}
+
+                              {hasLikedStory && (
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  background: 'rgba(244, 63, 94, 0.15)',
+                                  border: '1px solid rgba(244, 63, 94, 0.35)',
+                                  borderRadius: '14px',
+                                  padding: '3px 8px',
+                                  color: '#f43f5e',
+                                  fontSize: '0.74rem',
+                                  fontWeight: 800
+                                }}>
+                                  <Heart size={12} fill="#f43f5e" />
+                                  <span>Liked</span>
+                                </div>
+                              )}
+
+                              {viewer.userId && viewer.userId !== user?.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenViewerChat(viewer)}
+                                  title={`Message ${viewer.displayName || 'user'}`}
+                                  className="interactive-action"
+                                  style={{
+                                    background: 'rgba(255, 255, 255, 0.1)',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    width: '32px',
+                                    height: '32px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#ffffff',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  <Send size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()
+                  )}
+                </>
+              )}
+
+              {/* LIKES TAB */}
+              {activeViewersTab === 'likes' && (
+                <>
+                  {currentStoryLikes.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.6)', padding: '2.5rem 1rem', fontSize: '0.88rem' }}>
+                      <Heart size={36} color="#f43f5e" style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
+                      <p style={{ margin: '0 0 4px 0', fontWeight: 700, color: '#f8fafc' }}>No likes yet</p>
+                      <p style={{ fontSize: '0.78rem', opacity: 0.7, margin: 0 }}>Friends who press the heart ❤️ on your story will appear here!</p>
+                    </div>
+                  ) : (
+                    currentStoryLikes.map((likeUser, idx) => (
+                      <div
+                        key={likeUser.userId || idx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 12px',
+                          borderRadius: '14px',
+                          background: 'rgba(244, 63, 94, 0.08)',
+                          border: '1px solid rgba(244, 63, 94, 0.25)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <img
+                            src={likeUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${likeUser.username || likeUser.displayName || 'user'}`}
+                            alt={likeUser.displayName}
+                            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #f43f5e' }}
+                          />
+                          <div>
+                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#fff' }}>
+                              {likeUser.displayName || likeUser.username || 'User'}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.72rem', color: '#f43f5e' }}>
+                              <Heart size={11} fill="#f43f5e" />
+                              <span>Liked {formatTimeAgo(likeUser.likedAt)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {likeUser.userId && likeUser.userId !== user?.id && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenViewerChat(likeUser)}
+                            title="Reply in chat"
+                            className="interactive-action"
+                            style={{
+                              background: 'rgba(255, 255, 255, 0.1)',
+                              border: 'none',
+                              borderRadius: '50%',
+                              width: '32px',
+                              height: '32px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#ffffff',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Send size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </>
+              )}
+
+              {/* REPLIES & COMMENTS TAB */}
+              {activeViewersTab === 'replies' && (
+                <>
+                  {currentStoryReplies.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.6)', padding: '2.5rem 1rem', fontSize: '0.88rem' }}>
+                      <MessageSquare size={36} color="#a855f7" style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
+                      <p style={{ margin: '0 0 4px 0', fontWeight: 700, color: '#f8fafc' }}>No replies yet</p>
+                      <p style={{ fontSize: '0.78rem', opacity: 0.7, margin: 0 }}>When friends reply to your story, their comments will appear here and in your direct chat!</p>
+                    </div>
+                  ) : (
+                    currentStoryReplies.map((reply, idx) => (
+                      <div
+                        key={reply.id || idx}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px',
+                          padding: '10px 12px',
+                          borderRadius: '14px',
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <img
+                              src={reply.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${reply.username || reply.displayName || 'user'}`}
+                              alt={reply.displayName}
+                              style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
+                            />
+                            <div>
+                              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>
+                                {reply.displayName || reply.username || 'User'}
+                              </span>
+                              <span style={{ fontSize: '0.7rem', color: '#94a3b8', marginLeft: '6px' }}>
+                                {formatTimeAgo(reply.createdAt)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {reply.userId && reply.userId !== user?.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenViewerChat(reply)}
+                              style={{
+                                background: 'rgba(168, 85, 247, 0.18)',
+                                border: '1px solid rgba(168, 85, 247, 0.4)',
+                                borderRadius: '12px',
+                                padding: '3px 8px',
+                                color: '#c084fc',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <Send size={11} /> Reply back
+                            </button>
+                          )}
+                        </div>
+
+                        {reply.text && (
+                          <div style={{
+                            background: 'rgba(255, 255, 255, 0.07)',
+                            padding: '6px 10px',
+                            borderRadius: '10px',
+                            color: '#f8fafc',
+                            fontSize: '0.82rem',
+                            borderLeft: '3px solid #a855f7'
+                          }}>
+                            "{reply.text}"
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {reply.emoji && (
+                            <span style={{ fontSize: '1.1rem' }}>Reacted: {reply.emoji}</span>
+                          )}
+                          {reply.tipSparks > 0 && (
+                            <span style={{
+                              background: 'rgba(245, 158, 11, 0.15)',
+                              color: '#f59e0b',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: '10px'
+                            }}>
+                              ⚡ Tipped {reply.tipSparks} Sparks
+                            </span>
                           )}
                         </div>
                       </div>
+                    ))
+                  )}
+                </>
+              )}
 
-                    <span style={{ fontSize: '0.72rem', color: '#a5b4fc', background: 'rgba(99, 102, 241, 0.2)', padding: '2px 8px', borderRadius: '10px' }}>
-                      Viewed
-                    </span>
+              {/* INSIGHTS TAB */}
+              {activeViewersTab === 'insights' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gap: '10px'
+                  }}>
+                    <div style={{
+                      background: 'rgba(56, 189, 248, 0.1)',
+                      border: '1px solid rgba(56, 189, 248, 0.25)',
+                      borderRadius: '16px',
+                      padding: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#38bdf8', fontSize: '0.78rem', fontWeight: 700 }}>
+                        <Eye size={15} /> Total Views
+                      </div>
+                      <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#ffffff' }}>
+                        {viewCount}
+                      </span>
+                    </div>
+
+                    <div style={{
+                      background: 'rgba(244, 63, 94, 0.1)',
+                      border: '1px solid rgba(244, 63, 94, 0.25)',
+                      borderRadius: '16px',
+                      padding: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f43f5e', fontSize: '0.78rem', fontWeight: 700 }}>
+                        <Heart size={15} fill="#f43f5e" /> Likes Received
+                      </div>
+                      <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#ffffff' }}>
+                        {currentStoryLikes.length}
+                      </span>
+                    </div>
+
+                    <div style={{
+                      background: 'rgba(168, 85, 247, 0.1)',
+                      border: '1px solid rgba(168, 85, 247, 0.25)',
+                      borderRadius: '16px',
+                      padding: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#a855f7', fontSize: '0.78rem', fontWeight: 700 }}>
+                        <MessageSquare size={15} /> Story Replies
+                      </div>
+                      <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#ffffff' }}>
+                        {currentStoryReplies.length}
+                      </span>
+                    </div>
+
+                    <div style={{
+                      background: 'rgba(245, 158, 11, 0.1)',
+                      border: '1px solid rgba(245, 158, 11, 0.25)',
+                      borderRadius: '16px',
+                      padding: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f59e0b', fontSize: '0.78rem', fontWeight: 700 }}>
+                        <Zap size={15} fill="#f59e0b" /> Sparks Earned
+                      </div>
+                      <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#ffffff' }}>
+                        {currentVibe.sparksEarned || 0}
+                      </span>
+                    </div>
                   </div>
-                );
-              })
-            )}
+
+                  {/* Story Details Card */}
+                  <div style={{
+                    background: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    borderRadius: '16px',
+                    padding: '12px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px'
+                  }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#94a3b8' }}>Story Information</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#e2e8f0' }}>
+                      <span style={{ color: '#94a3b8' }}>Posted</span>
+                      <span>{new Date(currentVibe.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(currentVibe.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#e2e8f0' }}>
+                      <span style={{ color: '#94a3b8' }}>Expires In</span>
+                      <span>{Math.max(0, 24 - Math.floor((Date.now() - new Date(currentVibe.createdAt).getTime()) / (1000 * 60 * 60)))} hours</span>
+                    </div>
+                    {currentVibe.songTitle && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#e2e8f0' }}>
+                        <span style={{ color: '#94a3b8' }}>Audio</span>
+                        <span>🎵 {currentVibe.songTitle}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
