@@ -3862,10 +3862,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     <Palette size={16} color="var(--accent)" />
                     <span>Change Solid Theme</span>
                   </button>
-                  <button onClick={() => { setShowMoreMenu(false); setIsMultiSelectMode(true); setSelectedMsgIds([]); }}>
-                    <CheckSquare size={16} color="var(--accent)" />
-                    <span>Select Messages</span>
-                  </button>
                   {!isGroup && (
                     <button onClick={() => {
                       setShowMoreMenu(false);
@@ -4148,23 +4144,34 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               </button>
             )}
 
-            {/* Star / Bookmark */}
+            {/* Select All Button (Replaces Star button as requested) */}
             <button
               type="button"
-              onClick={() => handleToggleStarMessages(selectedActionMessages)}
+              onClick={() => {
+                const selectableMessages = messages.filter(m => m.type !== 'deleted' && m.type !== 'system');
+                const isAllSelected = selectableMessages.length > 0 && selectableMessages.every(m => selectedActionMessages.some(sm => sm.id === m.id));
+                if (isAllSelected) {
+                  handleDismissActionMessage();
+                } else {
+                  setSelectedActionMessages(selectableMessages.length > 0 ? selectableMessages : [...messages]);
+                }
+              }}
               className="icon-btn-ghost"
-              title="Star / Unstar"
+              title={
+                messages.filter(m => m.type !== 'deleted' && m.type !== 'system').every(m => selectedActionMessages.some(sm => sm.id === m.id))
+                  ? "Deselect all"
+                  : "Select all"
+              }
               style={{
                 width: '38px',
                 height: '38px',
                 borderRadius: '50%',
-                color: (selectedActionMessages.length > 0 && selectedActionMessages.every(m => starredMsgIds.includes(m.id))) ? '#f59e0b' : 'var(--text-main)'
+                color: (messages.filter(m => m.type !== 'deleted' && m.type !== 'system').length > 0 && messages.filter(m => m.type !== 'deleted' && m.type !== 'system').every(m => selectedActionMessages.some(sm => sm.id === m.id)))
+                  ? 'var(--accent)'
+                  : 'var(--text-main)'
               }}
             >
-              <Star
-                size={19}
-                fill={(selectedActionMessages.length > 0 && selectedActionMessages.every(m => starredMsgIds.includes(m.id))) ? "#f59e0b" : "none"}
-              />
+              <CheckSquare size={19} />
             </button>
 
             {/* Copy */}
@@ -4200,8 +4207,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               <Trash2 size={19} />
             </button>
 
-            {/* 3-Dots More Options Menu (when exactly 1 message selected) */}
-            {selectedActionMessages.length === 1 && (
+            {/* 3-Dots More Options Menu */}
+            {selectedActionMessages.length >= 1 && (
               <div style={{ position: 'relative' }}>
                 <button
                   type="button"
@@ -4215,30 +4222,49 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
                 {showActionMoreMenu && (
                   <div className="chat-header-dropdown-menu" style={{ right: 0, minWidth: '190px', zIndex: 2000 }}>
+                    {/* Star / Unstar in 3-dots */}
                     <button
                       onClick={() => {
                         setShowActionMoreMenu(false);
-                        const targetMsg = selectedActionMessages[0];
-                        if (pinnedMessage?.id === targetMsg?.id) {
-                          handleUnpinMessage();
-                        } else {
-                          handlePinMessage(targetMsg);
-                        }
+                        handleToggleStarMessages(selectedActionMessages);
                       }}
                     >
-                      <Pin size={16} color="var(--accent)" />
-                      <span>{pinnedMessage?.id === selectedActionMessages[0]?.id ? 'Unpin message' : 'Pin message'}</span>
+                      <Star
+                        size={16}
+                        color="#f59e0b"
+                        fill={(selectedActionMessages.length > 0 && selectedActionMessages.every(m => starredMsgIds.includes(m.id))) ? "#f59e0b" : "none"}
+                      />
+                      <span>{(selectedActionMessages.length > 0 && selectedActionMessages.every(m => starredMsgIds.includes(m.id))) ? 'Unstar message' : 'Star message'}</span>
                     </button>
 
-                    <button
-                      onClick={() => {
-                        setShowActionMoreMenu(false);
-                        setShowMessageInfoModal(true);
-                      }}
-                    >
-                      <Info size={16} color="var(--accent)" />
-                      <span>Message info</span>
-                    </button>
+                    {selectedActionMessages.length === 1 && (
+                      <button
+                        onClick={() => {
+                          setShowActionMoreMenu(false);
+                          const targetMsg = selectedActionMessages[0];
+                          if (pinnedMessage?.id === targetMsg?.id) {
+                            handleUnpinMessage();
+                          } else {
+                            handlePinMessage(targetMsg);
+                          }
+                        }}
+                      >
+                        <Pin size={16} color="var(--accent)" />
+                        <span>{pinnedMessage?.id === selectedActionMessages[0]?.id ? 'Unpin message' : 'Pin message'}</span>
+                      </button>
+                    )}
+
+                    {selectedActionMessages.length === 1 && (
+                      <button
+                        onClick={() => {
+                          setShowActionMoreMenu(false);
+                          setShowMessageInfoModal(true);
+                        }}
+                      >
+                        <Info size={16} color="var(--accent)" />
+                        <span>Message info</span>
+                      </button>
+                    )}
 
                     {selectedActionMessages[0]?.senderId !== user.id && !isGroup && (
                       <button
@@ -4369,18 +4395,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {/* WhatsApp-Style Offline Indicator */}
       {!isNetConnected && (
         <div style={{
-          background: 'rgba(234, 179, 8, 0.16)',
-          borderBottom: '1px solid rgba(234, 179, 8, 0.35)',
-          color: '#eab308',
-          padding: '5px 14px',
-          fontSize: '0.78rem',
-          fontWeight: 600,
+          background: '#18181b',
+          borderBottom: '1px solid rgba(234, 179, 8, 0.45)',
+          color: '#facc15',
+          padding: '8px 16px',
+          fontSize: '0.8rem',
+          fontWeight: 700,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '8px'
+          gap: '8px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+          zIndex: 120,
+          position: 'relative'
         }}>
-          <WifiOff size={13} style={{ flexShrink: 0 }} />
+          <WifiOff size={15} color="#facc15" style={{ flexShrink: 0 }} />
           <span>Waiting for network · Messages will send automatically when online</span>
         </div>
       )}
@@ -4951,21 +4980,36 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {/* Clear Chat Undo Banner */}
       {clearedUndoSecs > 0 && (
-        <div className="cooldown-banner" style={{ background: 'rgba(239, 68, 68, 0.92)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', borderRadius: '12px', margin: '0 1rem 0.5rem 1rem', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
-          <span style={{ fontSize: '0.88rem', fontWeight: 500 }}>
-            🧹 Chat cleared for {activeChat.displayName} ({clearedUndoSecs}s)
+        <div style={{
+          position: 'relative',
+          zIndex: 80,
+          background: '#18181b',
+          border: '1.5px solid rgba(239, 68, 68, 0.7)',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 16px',
+          borderRadius: '14px',
+          margin: '0 1rem 0.6rem 1rem',
+          boxShadow: '0 8px 25px rgba(0,0,0,0.85)'
+        }}>
+          <span style={{ fontSize: '0.88rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>🧹</span> Chat cleared for {activeChat.displayName} ({clearedUndoSecs}s)
           </span>
           <button
+            type="button"
             onClick={handleUndoClearChat}
             style={{
-              background: '#fff',
-              color: '#ef4444',
+              background: '#ef4444',
+              color: '#fff',
               border: 'none',
               borderRadius: '8px',
-              padding: '4px 14px',
+              padding: '6px 16px',
               fontSize: '0.82rem',
-              fontWeight: 700,
-              cursor: 'pointer'
+              fontWeight: 800,
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(239, 68, 68, 0.5)'
             }}
           >
             ↩ Undo
@@ -4975,21 +5019,36 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {/* Multi-Select Delete Undo Banner */}
       {multiDeleteUndoSecs > 0 && (
-        <div className="cooldown-banner" style={{ background: 'rgba(239, 68, 68, 0.92)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', borderRadius: '12px', margin: '0 1rem 0.5rem 1rem', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
-          <span style={{ fontSize: '0.88rem', fontWeight: 500 }}>
-            🗑️ {multiDeleteBackupIds.length} messages deleted ({multiDeleteUndoSecs}s)
+        <div style={{
+          position: 'relative',
+          zIndex: 80,
+          background: '#18181b',
+          border: '1.5px solid rgba(239, 68, 68, 0.7)',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 16px',
+          borderRadius: '14px',
+          margin: '0 1rem 0.6rem 1rem',
+          boxShadow: '0 8px 25px rgba(0,0,0,0.85)'
+        }}>
+          <span style={{ fontSize: '0.88rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>🗑️</span> {multiDeleteBackupIds.length} messages deleted ({multiDeleteUndoSecs}s)
           </span>
           <button
+            type="button"
             onClick={handleUndoMultiDelete}
             style={{
-              background: '#fff',
-              color: '#ef4444',
+              background: '#ef4444',
+              color: '#fff',
               border: 'none',
               borderRadius: '8px',
-              padding: '4px 14px',
+              padding: '6px 16px',
               fontSize: '0.82rem',
-              fontWeight: 700,
-              cursor: 'pointer'
+              fontWeight: 800,
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(239, 68, 68, 0.5)'
             }}
           >
             ↩ Undo
@@ -4999,21 +5058,36 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {/* Single Delete Undo Banner */}
       {undoMessageId && (
-        <div className="cooldown-banner" style={{ background: 'rgba(99, 102, 241, 0.95)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', borderRadius: '12px', margin: '0 1rem 0.5rem 1rem', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
-          <span style={{ fontSize: '0.88rem', fontWeight: 500 }}>
-            🗑️ Message deleted
+        <div style={{
+          position: 'relative',
+          zIndex: 80,
+          background: '#18181b',
+          border: '1.5px solid rgba(139, 92, 246, 0.7)',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 16px',
+          borderRadius: '14px',
+          margin: '0 1rem 0.6rem 1rem',
+          boxShadow: '0 8px 25px rgba(0,0,0,0.85)'
+        }}>
+          <span style={{ fontSize: '0.88rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>🗑️</span> Message deleted
           </span>
           <button
+            type="button"
             onClick={handleUndoDelete}
             style={{
-              background: '#fff',
-              color: 'var(--accent)',
+              background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
+              color: '#fff',
               border: 'none',
               borderRadius: '8px',
-              padding: '4px 14px',
+              padding: '6px 16px',
               fontSize: '0.82rem',
-              fontWeight: 700,
-              cursor: 'pointer'
+              fontWeight: 800,
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(139, 92, 246, 0.5)'
             }}
           >
             ↩ Undo

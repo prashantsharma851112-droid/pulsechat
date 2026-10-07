@@ -2192,17 +2192,21 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       {/* Offline Indicator Banner — only shows "Offline mode · Waiting for network" */}
       {!isOnline && (
         <div style={{
-          background: 'rgba(234, 179, 8, 0.16)',
-          borderBottom: '1px solid rgba(234, 179, 8, 0.35)',
-          color: '#eab308',
-          padding: '6px 14px',
-          fontSize: '0.78rem',
-          fontWeight: 600,
+          background: '#18181b',
+          borderBottom: '1px solid rgba(234, 179, 8, 0.4)',
+          color: '#facc15',
+          padding: '7px 16px',
+          fontSize: '0.8rem',
+          fontWeight: 700,
           display: 'flex',
           alignItems: 'center',
-          gap: '8px'
+          justifyContent: 'center',
+          gap: '8px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+          zIndex: 50,
+          position: 'relative'
         }}>
-          <WifiOff size={14} style={{ flexShrink: 0 }} />
+          <WifiOff size={14} color="#facc15" style={{ flexShrink: 0 }} />
           <span>Offline mode · Waiting for network</span>
         </div>
       )}

@@ -1233,8 +1233,25 @@ export default function MessageItem({
 
   if (message.type === 'deleted') {
     return (
-      <div style={{ alignSelf: isMine ? 'flex-end' : 'flex-start', maxWidth: '78%', opacity: 0.65, fontStyle: 'italic', fontSize: '0.82rem', padding: '6px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', color: 'var(--text-muted)' }}>
-        🚫 This message was deleted
+      <div style={{
+        alignSelf: isMine ? 'flex-end' : 'flex-start',
+        maxWidth: '78%',
+        fontStyle: 'italic',
+        fontSize: '0.82rem',
+        padding: '6px 14px',
+        background: 'rgba(24, 24, 27, 0.88)',
+        border: '1px solid rgba(255, 255, 255, 0.12)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
+        borderRadius: '14px',
+        color: '#9ca3af',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.35)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px'
+      }}>
+        <span style={{ opacity: 0.8 }}>🚫</span>
+        <span>This message was deleted</span>
       </div>
     );
   }

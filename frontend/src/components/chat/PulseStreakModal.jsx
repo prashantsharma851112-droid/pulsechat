@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Flame, Shield, Sparkles, Check, AlertCircle } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
+import { useBackHandler } from '../../utils/backNavigation';
 
 export default function PulseStreakModal({
   chatId,
@@ -13,6 +14,9 @@ export default function PulseStreakModal({
   onFreezeBought,
   onClose
 }) {
+  // Support Android back button & swipe back to close modal
+  useBackHandler(onClose);
+
   const activeShields = streakShields !== undefined ? streakShields : shieldsCount;
   const [buyingFreeze, setBuyingFreeze] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -57,45 +61,60 @@ export default function PulseStreakModal({
   const isCosmic = streakCount >= 30;
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      zIndex: 9999,
-      background: 'rgba(0, 0, 0, 0.82)',
-      backdropFilter: 'blur(10px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '16px'
-    }}>
-      <div style={{
-        width: '100%',
-        maxWidth: '440px',
-        background: 'linear-gradient(180deg, #18181b 0%, #09090b 100%)',
-        border: '1.5px solid rgba(245, 158, 11, 0.4)',
-        borderRadius: '24px',
-        padding: '24px',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.9), 0 0 35px rgba(245, 158, 11, 0.25)',
-        color: '#fff',
-        position: 'relative'
-      }}>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        background: 'rgba(0, 0, 0, 0.85)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px'
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: '440px',
+          background: 'linear-gradient(180deg, #18181b 0%, #09090b 100%)',
+          border: '1.5px solid rgba(245, 158, 11, 0.4)',
+          borderRadius: '24px',
+          padding: '24px',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.9), 0 0 35px rgba(245, 158, 11, 0.25)',
+          color: '#fff',
+          position: 'relative'
+        }}
+      >
         {/* Close Button */}
         <button
-          onClick={onClose}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (typeof onClose === 'function') onClose();
+          }}
+          aria-label="Close Streak Modal"
           style={{
             position: 'absolute',
             top: '16px',
             right: '16px',
-            background: 'rgba(255,255,255,0.08)',
+            zIndex: 100,
+            background: 'rgba(255,255,255,0.12)',
             border: 'none',
-            color: '#9ca3af',
-            width: '34px',
-            height: '34px',
+            color: '#fff',
+            width: '38px',
+            height: '38px',
             borderRadius: '50%',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            pointerEvents: 'auto',
+            touchAction: 'manipulation'
           }}
         >
           <X size={18} />
