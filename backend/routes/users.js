@@ -437,6 +437,10 @@ router.post('/delete-account', authMiddleware, async (req, res) => {
     res.json({ success: true, message: 'Your account and all associated data have been permanently deleted.' });
   } catch (err) {
     console.error('Account deletion error:', err);
+    res.status(500).json({ error: 'Failed to delete account. Please try again.' });
+  }
+});
+
 // Public Profile Card for Viral Social Sharing (pulsechat.me/@username)
 router.get('/public/card/:username', async (req, res) => {
   try {
