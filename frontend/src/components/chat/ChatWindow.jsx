@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useContext, useCallback, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3, Ghost, Search, Globe, ChevronUp, ChevronDown, ArrowDown } from 'lucide-react';
@@ -1231,6 +1231,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   // Track if this is the initial load (to use instant scroll vs smooth scroll)
   const isInitialLoad = useRef(true);
+  const lastRenderedLastMsgIdRef = useRef(null);
+  const scrollPositionRef = useRef({ prevScrollHeight: 0, prevScrollTop: 0, isPrepending: false });
 
   // Multi-Select & Clear Chat states
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
@@ -1732,6 +1734,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   useEffect(() => {
     // Chat badle toh reply aur initial scroll flag reset karo
     isInitialLoad.current = true;
+    lastRenderedLastMsgIdRef.current = null;
+    scrollPositionRef.current = { prevScrollHeight: 0, prevScrollTop: 0, isPrepending: false };
     setReplyTo(null);
     setChatSetting({ disappearingEnabled: false });
     setBlockStatus({ isBlockedByMe: false, isBlockedByThem: false });
@@ -2386,19 +2390,66 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }, 6000);
   };
 
+  // Seamless scroll anchoring when older messages are loaded at top
+  useLayoutEffect(() => {
+    if (scrollPositionRef.current.isPrepending && chatContainerRef.current) {
+      const { prevScrollHeight, prevScrollTop } = scrollPositionRef.current;
+      const currentScrollHeight = chatContainerRef.current.scrollHeight;
+      const diff = currentScrollHeight - prevScrollHeight;
+      if (diff > 0) {
+        chatContainerRef.current.scrollTop = prevScrollTop + diff;
+      }
+      scrollPositionRef.current.isPrepending = false;
+    }
+  }, [messages]);
+
+  // Scroll to bottom handler — only for initial load OR brand new message added at bottom
   useEffect(() => {
     if (messages.length === 0) return;
+
+    // Older messages were prepended at top -> do NOT scroll to bottom!
+    if (scrollPositionRef.current.isPrepending) return;
+
+    const lastMsg = messages[messages.length - 1];
+    const lastMsgId = lastMsg?.id || lastMsg?._id || lastMsg?.clientTempId;
+    const prevLastId = lastRenderedLastMsgIdRef.current;
+
+    // Initial load: instant jump to bottom once
     if (isInitialLoad.current) {
-      // Pehli baar load ho toh instantly last message pe jaao
       messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
       isInitialLoad.current = false;
+      lastRenderedLastMsgIdRef.current = lastMsgId;
+      return;
+    }
+
+    // Check if the last message actually changed (a brand new message arrived at bottom)
+    const isNewMessageAtBottom = lastMsgId && lastMsgId !== prevLastId;
+    lastRenderedLastMsgIdRef.current = lastMsgId;
+
+    if (!isNewMessageAtBottom) {
+      // Existing messages updated (reaction, edit, status, avatar, older messages) -> DO NOT SCROLL!
+      return;
+    }
+
+    // A brand new message arrived at the bottom
+    const isSentByMe = lastMsg.senderId === user?.id || (typeof lastMsg.id === 'string' && lastMsg.id.startsWith('temp_'));
+
+    if (isSentByMe) {
+      // User sent a message -> always scroll to bottom smoothly
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setShowScrollBottom(false);
+      showScrollBottomRef.current = false;
     } else {
-      // Naya message aaye toh agar user bottom ke paas hai toh smoothly scroll karo
-      if (!showScrollBottomRef.current) {
+      // Someone else sent a message -> only auto-scroll if user is already near bottom
+      const isNearBottom = chatContainerRef.current
+        ? (chatContainerRef.current.scrollHeight - chatContainerRef.current.scrollTop - chatContainerRef.current.clientHeight < 100)
+        : !showScrollBottomRef.current;
+
+      if (isNearBottom) {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }
     }
-  }, [messages]);
+  }, [messages, user?.id]);
 
   // Clear Chat Undo Timer
   useEffect(() => {
@@ -2481,6 +2532,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const oldestMsg = messages.find(m => m.timestamp && !m.id?.startsWith('temp_'));
     if (!oldestMsg || !oldestMsg.timestamp) return;
 
+    if (chatContainerRef.current) {
+      scrollPositionRef.current = {
+        prevScrollHeight: chatContainerRef.current.scrollHeight,
+        prevScrollTop: chatContainerRef.current.scrollTop,
+        isPrepending: true
+      };
+    }
+
     setIsLoadingOlder(true);
     try {
       const isCurGhost = isGhostModeRef.current;
@@ -2501,14 +2560,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           setMessages(prev => {
             const currentIds = new Set(prev.map(m => m.id));
             const newOldMsgs = data.filter(m => !currentIds.has(m.id));
+            if (newOldMsgs.length === 0) {
+              scrollPositionRef.current.isPrepending = false;
+              return prev;
+            }
             const merged = [...newOldMsgs, ...prev];
             setCachedMessages(chatId, merged);
             return merged;
           });
+        } else {
+          scrollPositionRef.current.isPrepending = false;
         }
+      } else {
+        scrollPositionRef.current.isPrepending = false;
       }
     } catch (err) {
       console.warn('Failed to load older messages:', err);
+      scrollPositionRef.current.isPrepending = false;
     } finally {
       setIsLoadingOlder(false);
     }
@@ -2517,21 +2585,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const handleChatContainerScroll = (e) => {
     const target = e.currentTarget;
     if (target.scrollTop <= 75 && hasMoreOlderMessages && !isLoadingOlder) {
-      const prevScrollHeight = target.scrollHeight;
-      const prevScrollTop = target.scrollTop;
-      handleLoadOlderMessages().then(() => {
-        requestAnimationFrame(() => {
-          if (chatContainerRef.current) {
-            const diff = chatContainerRef.current.scrollHeight - prevScrollHeight;
-            chatContainerRef.current.scrollTop = prevScrollTop + diff;
-          }
-        });
-      });
+      handleLoadOlderMessages();
     }
 
-    // Track if user has scrolled away from the latest messages (> 220px)
+    // Track if user has scrolled away from the latest messages (> 100px)
     const distFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
-    const isScrolledUp = distFromBottom > 220;
+    const isScrolledUp = distFromBottom > 100;
     setShowScrollBottom(isScrolledUp);
     showScrollBottomRef.current = isScrolledUp;
     if (!isScrolledUp) {
@@ -4750,6 +4809,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         style={{
           flex: 1,
           overflowY: 'auto',
+          overflowAnchor: 'auto',
           padding: '1rem',
           display: 'flex',
           flexDirection: 'column',
@@ -4916,7 +4976,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </React.Fragment>
           );
         })}
-        <div ref={messagesEndRef} />
+        <div ref={messagesEndRef} style={{ overflowAnchor: 'none', height: '1px' }} />
       </div>
 
       {/* Floating "Scroll to Bottom" Button with New Messages Counter */}
