@@ -3614,7 +3614,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         flexDirection: 'column',
         gap: '4px',
         position: 'relative',
-        zIndex: 2,
+        zIndex: 150,
         overflow: 'visible'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
@@ -3744,34 +3744,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
 
           <div className="chat-header-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
-            {/* Position 3: In-Chat Search Toggle Button */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowInChatSearch(prev => !prev);
-                if (!showInChatSearch) {
-                  setTimeout(() => inChatSearchInputRef.current?.focus(), 120);
-                } else {
-                  setInChatSearchQuery('');
-                }
-              }}
-              className="icon-btn-ghost"
-              title="Search in chat (Message Finder)"
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '50%',
-                color: showInChatSearch ? 'var(--accent)' : 'var(--text-main)',
-                background: showInChatSearch ? 'var(--hover-bg)' : 'transparent',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <Search size={19} />
-            </button>
-
             {/* Position 2: Mobile App Folder Button (Animated Cyber-Neon Glassmorphic Folder) */}
             <button
               onClick={() => setShowAppsFolderModal(true)}
@@ -3849,7 +3821,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </button>
 
             {/* 3-Dots More Options Menu */}
-            <div className="chat-header-more-container" style={{ position: 'relative' }}>
+            <div className="chat-header-more-container" style={{ position: 'relative', zIndex: 500 }}>
               <button
                 onClick={() => setShowMoreMenu(prev => !prev)}
                 className="icon-btn-ghost"
@@ -3869,6 +3841,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, true)) : onStartCall(true); }}>
                     <Video size={16} color="var(--accent)" />
                     <span>{isGroup ? 'Group Video Call' : 'Video Call'}</span>
+                  </button>
+
+                  {/* Search in chat */}
+                  <button onClick={() => {
+                    setShowMoreMenu(false);
+                    setShowInChatSearch(true);
+                    setTimeout(() => inChatSearchInputRef.current?.focus(), 120);
+                  }}>
+                    <Search size={16} color="var(--accent)" />
+                    <span>Search in chat</span>
                   </button>
 
                   <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
@@ -4232,7 +4214,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 </button>
 
                 {showActionMoreMenu && (
-                  <div className="chat-header-dropdown-menu" style={{ right: 0, minWidth: '190px', zIndex: 100 }}>
+                  <div className="chat-header-dropdown-menu" style={{ right: 0, minWidth: '190px', zIndex: 2000 }}>
                     <button
                       onClick={() => {
                         setShowActionMoreMenu(false);
@@ -4645,7 +4627,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           gap: '6px',
           background: 'transparent',
           position: 'relative',
-          zIndex: 2,
+          zIndex: 1,
           overflowX: 'auto',
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
