@@ -23,6 +23,7 @@ const VibeViewerModal = lazyWithRetry(() => import('../vibes/VibeViewerModal'));
 const PulseZoneModal = lazyWithRetry(() => import('../zone/PulseZoneModal'));
 const SparksWalletModal = lazyWithRetry(() => import('./SparksWalletModal'));
 const VibeAuraSelectorModal = lazyWithRetry(() => import('./VibeAuraSelectorModal'));
+const MusicPickerModal = lazyWithRetry(() => import('../vibes/MusicPickerModal'));
 import { BACKEND_URL } from '../../utils/config';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
 import {
@@ -102,7 +103,7 @@ class ModalErrorBoundary extends React.Component {
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
   const { user, logout, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
   const { socket, onlineUsers, typingMap, lastNotification, vibeAuras } = useContext(SocketContext);
-  const { currentTrack: appMusicTrack, isPlaying: isAppMusicPlaying, togglePlayPause: toggleAppMusic } = useAppMusic();
+  const { currentTrack: appMusicTrack, isPlaying: isAppMusicPlaying, togglePlayPause: toggleAppMusic, playTrack: playAppMusicTrack } = useAppMusic();
   const currentUid = user?.id || getCachedUser()?.id;
 
   const myAura = useMemo(() => {
@@ -202,6 +203,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [showVibeSelector, setShowVibeSelector] = useState(false);
   const [showTopMenu, setShowTopMenu] = useState(false);
   const [showSwitchAccountMenu, setShowSwitchAccountMenu] = useState(false);
+  const [showHubMenu, setShowHubMenu] = useState(false);
+  const [showMusicPickerModal, setShowMusicPickerModal] = useState(false);
 
   useEffect(() => {
     const handleOpenWallet = () => setShowSparksWallet(true);
@@ -212,9 +215,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   // Hardware/Swipe Back button closes popup menus or clears search bar safely
   useBackHandler(() => setShowTopMenu(false), showTopMenu);
   useBackHandler(() => setShowSwitchAccountMenu(false), showSwitchAccountMenu);
+  useBackHandler(() => setShowHubMenu(false), showHubMenu);
   useBackHandler(() => setSearchQuery(''), Boolean(searchQuery));
   const topMenuRef = useRef(null);
   const switchAccountMenuRef = useRef(null);
+  const hubMenuRef = useRef(null);
   const activeChatRef = React.useRef(activeChat);
   useEffect(() => {
     activeChatRef.current = activeChat;
@@ -1638,77 +1643,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           </div>
         </div>
 
-        {/* Topbar Actions: App Background Music + Pulse Zone + Switch Account + 3-Dot More Menu */}
+        {/* Topbar Actions: Switch Account + Hub (Music & Games) + 3-Dot More Menu */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          {/* App-Wide Background Music Button */}
-          <button
-            onClick={() => {
-              if (appMusicTrack) {
-                toggleAppMusic();
-              } else {
-                setShowVibeSelector(true);
-              }
-            }}
-            title={appMusicTrack ? (isAppMusicPlaying ? "Pause Background Music" : "Resume Background Music") : "Choose & Play Background Music"}
-            className="icon-btn-ghost"
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              background: isAppMusicPlaying
-                ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.35), rgba(99, 102, 241, 0.35))'
-                : 'rgba(255, 255, 255, 0.05)',
-              color: isAppMusicPlaying ? '#c084fc' : 'var(--text-muted)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: isAppMusicPlaying ? '1.5px solid #a855f7' : '1px solid var(--border)',
-              transition: 'all 0.2s ease',
-              cursor: 'pointer',
-              boxShadow: isAppMusicPlaying ? '0 0 14px rgba(168, 85, 247, 0.5)' : 'none',
-              position: 'relative'
-            }}
-          >
-            {isAppMusicPlaying ? (
-              <Disc size={18} style={{ animation: 'spin 3s linear infinite' }} />
-            ) : (
-              <Music size={18} />
-            )}
-            {appMusicTrack && !isAppMusicPlaying && (
-              <span style={{
-                position: 'absolute',
-                top: '6px',
-                right: '6px',
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                background: '#a855f7'
-              }} />
-            )}
-          </button>
-
-          <button
-            onClick={() => setShowPulseZone(true)}
-            title="Pulse Zone (Mini-Games, Trivia & Leaderboards)"
-            className="icon-btn-ghost"
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(239, 68, 68, 0.2))',
-              color: '#f59e0b',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '1px solid rgba(245, 158, 11, 0.4)',
-              transition: 'all 0.2s ease',
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)'
-            }}
-          >
-            <Gamepad2 size={18} />
-          </button>
-
           {/* Quick Switch Account Button */}
           <div style={{ position: 'relative' }} ref={switchAccountMenuRef}>
             <button
@@ -1914,6 +1850,229 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 >
                   <Plus size={15} />
                   <span>+ Add Another Account</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Entertainment Hub (Music & Games) Button right next to Switch Account */}
+          <div style={{ position: 'relative' }} ref={hubMenuRef}>
+            <button
+              onClick={() => {
+                setShowHubMenu(prev => !prev);
+                setShowSwitchAccountMenu(false);
+                setShowTopMenu(false);
+              }}
+              title="Pulse Hub: Music & Games"
+              className="icon-btn-ghost"
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                background: showHubMenu
+                  ? 'var(--accent)'
+                  : (isAppMusicPlaying
+                      ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.35), rgba(99, 102, 241, 0.35))'
+                      : 'rgba(255, 255, 255, 0.05)'),
+                color: showHubMenu ? '#fff' : (isAppMusicPlaying ? '#c084fc' : 'var(--text-muted)'),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: isAppMusicPlaying ? '1.5px solid #a855f7' : '1px solid var(--border)',
+                transition: 'all 0.2s ease',
+                cursor: 'pointer',
+                position: 'relative',
+                boxShadow: isAppMusicPlaying ? '0 0 14px rgba(168, 85, 247, 0.45)' : 'none'
+              }}
+            >
+              {isAppMusicPlaying ? (
+                <Disc size={18} style={{ animation: 'spin 3s linear infinite' }} />
+              ) : (
+                <Sparkles size={17} color="#a855f7" />
+              )}
+              {appMusicTrack && !isAppMusicPlaying && (
+                <span style={{
+                  position: 'absolute',
+                  top: '6px',
+                  right: '6px',
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: '#a855f7'
+                }} />
+              )}
+            </button>
+
+            {/* Hub Dropdown Menu (Music & Game) */}
+            {showHubMenu && (
+              <div
+                className="topbar-dropdown-menu"
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: '-10px',
+                  width: '280px',
+                  background: 'var(--bg-sidebar)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '16px',
+                  boxShadow: '0 12px 36px rgba(0,0,0,0.55)',
+                  zIndex: 1100,
+                  padding: '10px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  animation: 'pulseModalPop 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
+                }}
+              >
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px 8px 6px', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Sparkles size={15} color="#a855f7" />
+                    <span style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-main)' }}>Pulse Hub</span>
+                  </div>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Music & Games</span>
+                </div>
+
+                {/* 1. Spotify-Style App Background Music Option */}
+                <div
+                  style={{
+                    background: isAppMusicPlaying ? 'rgba(168, 85, 247, 0.12)' : 'var(--bg-card)',
+                    border: isAppMusicPlaying ? '1px solid rgba(168, 85, 247, 0.35)' : '1px solid var(--border)',
+                    borderRadius: '12px',
+                    padding: '10px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                      <div style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '10px',
+                        background: 'linear-gradient(135deg, #a855f7, #6366f1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#fff',
+                        flexShrink: 0
+                      }}>
+                        {isAppMusicPlaying ? (
+                          <Disc size={17} style={{ animation: 'spin 3s linear infinite' }} />
+                        ) : (
+                          <Music size={16} />
+                        )}
+                      </div>
+                      <div style={{ overflow: 'hidden' }}>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {appMusicTrack ? appMusicTrack.songTitle : 'Background Music'}
+                        </div>
+                        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {appMusicTrack ? (appMusicTrack.artistName || 'Spotify-Style Playing') : 'Listen while using app'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {appMusicTrack && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleAppMusic();
+                        }}
+                        style={{
+                          background: 'rgba(168, 85, 247, 0.2)',
+                          border: '1px solid #a855f7',
+                          borderRadius: '50%',
+                          width: '28px',
+                          height: '28px',
+                          color: '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          flexShrink: 0
+                        }}
+                        title={isAppMusicPlaying ? "Pause" : "Play"}
+                      >
+                        {isAppMusicPlaying ? <Pause size={13} fill="#fff" /> : <Play size={13} fill="#fff" />}
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowHubMenu(false);
+                      setShowMusicPickerModal(true);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '7px 10px',
+                      borderRadius: '8px',
+                      background: 'linear-gradient(135deg, #a855f7 0%, #6366f1 100%)',
+                      border: 'none',
+                      color: '#fff',
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '5px'
+                    }}
+                  >
+                    <Music size={12} />
+                    <span>{appMusicTrack ? 'Change / Search Song' : 'Choose Song to Play'}</span>
+                  </button>
+                </div>
+
+                {/* 2. Pulse Zone (Mini-Games & Leaderboard) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowHubMenu(false);
+                    setShowPulseZone(true);
+                  }}
+                  style={{
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '12px',
+                    padding: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '10px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '10px',
+                      background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      flexShrink: 0
+                    }}>
+                      <Gamepad2 size={17} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                        Pulse Zone
+                      </div>
+                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                        Mini-Games & Leaderboards
+                      </div>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700 }}>Play 🎮</span>
                 </button>
               </div>
             )}
@@ -2999,6 +3158,18 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         <VibeAuraSelectorModal
           onClose={() => setShowVibeSelector(false)}
           currentAura={myAura}
+        />
+      )}
+
+      {showMusicPickerModal && (
+        <MusicPickerModal
+          isOpen={showMusicPickerModal}
+          onClose={() => setShowMusicPickerModal(false)}
+          selectedSong={appMusicTrack}
+          onSelectSong={(song) => {
+            playAppMusicTrack(song);
+            setShowMusicPickerModal(false);
+          }}
         />
       )}
       </React.Suspense>

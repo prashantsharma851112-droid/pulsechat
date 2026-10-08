@@ -354,16 +354,16 @@ export default function VibeAuraSelectorModal({
           </div>
         </div>
 
-        {/* App Background Music Selection */}
+        {/* Instagram Music Note Attachment */}
         <div style={{ marginBottom: '18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
             <label style={{ fontSize: '0.75rem', color: '#9ca3af', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '5px' }}>
               <Music size={13} color="#a855f7" />
-              <span>APP BACKGROUND MUSIC</span>
+              <span>MUSIC NOTE (TAP TO PLAY)</span>
             </label>
             {attachedSong && (
-              <span style={{ fontSize: '0.68rem', color: '#10b981', fontWeight: 700 }}>
-                ● Plays across app
+              <span style={{ fontSize: '0.68rem', color: '#a855f7', fontWeight: 700 }}>
+                ● Plays on tap (Instagram style)
               </span>
             )}
           </div>
@@ -390,7 +390,7 @@ export default function VibeAuraSelectorModal({
               }}
             >
               <Music size={16} />
-              <span>+ Attach Music (Plays in Background)</span>
+              <span>+ Attach Music to Note</span>
             </button>
           ) : (
             <div

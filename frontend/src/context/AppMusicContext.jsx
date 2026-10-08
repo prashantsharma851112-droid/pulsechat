@@ -41,19 +41,13 @@ export function AppMusicProvider({ children }) {
   const audioRef = useRef(null);
   const wasPlayingBeforeInterruptionRef = useRef(false);
 
-  // Initialize or update user's music note from profile
+  // Sync user's Instagram-style music note text when profile updates
   useEffect(() => {
-    if (user?.musicNote) {
-      if (!currentTrack || currentTrack.audioUrl !== user.musicNote.audioUrl) {
-        setCurrentTrack(user.musicNote);
-        localStorage.setItem('pulsechat_app_music', JSON.stringify(user.musicNote));
-      }
-      if (user.musicNote.noteText !== undefined) {
-        setMusicNoteText(user.musicNote.noteText);
-        localStorage.setItem('pulsechat_app_music_note_text', user.musicNote.noteText);
-      }
+    if (user?.musicNote?.noteText !== undefined) {
+      setMusicNoteText(user.musicNote.noteText);
+      localStorage.setItem('pulsechat_app_music_note_text', user.musicNote.noteText);
     }
-  }, [user?.musicNote]);
+  }, [user?.musicNote?.noteText]);
 
   // Audio element setup and tracking
   useEffect(() => {
@@ -209,9 +203,10 @@ export function AppMusicProvider({ children }) {
     localStorage.removeItem('pulsechat_app_music_note_text');
   }, []);
 
-  // Save as User's Instagram-style Music Note (Sync to backend profile)
+  // Save as User's Instagram-style Music Note (Sync to backend profile, NO background autoplay)
   const saveMusicNote = useCallback(async (song, noteText = '') => {
-    playTrack(song, noteText);
+    setMusicNoteText(noteText);
+    localStorage.setItem('pulsechat_app_music_note_text', noteText);
 
     if (token) {
       try {
@@ -233,10 +228,12 @@ export function AppMusicProvider({ children }) {
         console.warn('Failed to sync music note to server:', e);
       }
     }
-  }, [playTrack, token, updateUserProfile, user]);
+  }, [token, updateUserProfile, user]);
 
   const deleteMusicNote = useCallback(async () => {
-    clearTrack();
+    setMusicNoteText('');
+    localStorage.removeItem('pulsechat_app_music_note_text');
+
     if (token) {
       try {
         await fetch(`${BACKEND_URL}/api/users/music-note`, {
@@ -252,7 +249,7 @@ export function AppMusicProvider({ children }) {
         }
       } catch (e) {}
     }
-  }, [clearTrack, token, updateUserProfile, user]);
+  }, [token, updateUserProfile, user]);
 
   // Audio Priority & Coordination:
   // Auto-pause App music when chat music plays, and auto-resume right when chat music stops!
@@ -294,11 +291,11 @@ export function AppMusicProvider({ children }) {
     if (!socket) return;
     const handleSocketNote = (data) => {
       if (data?.userId === user?.id) {
-        if (data.musicNote) {
-          setCurrentTrack(data.musicNote);
-          if (data.musicNote.noteText !== undefined) setMusicNoteText(data.musicNote.noteText);
-        } else {
-          clearTrack();
+        if (updateUserProfile && user) {
+          updateUserProfile({ ...user, musicNote: data.musicNote || null });
+        }
+        if (data.musicNote?.noteText !== undefined) {
+          setMusicNoteText(data.musicNote.noteText);
         }
       }
     };
@@ -306,7 +303,7 @@ export function AppMusicProvider({ children }) {
     return () => {
       socket.off('user_music_note_updated', handleSocketNote);
     };
-  }, [socket, user?.id, clearTrack]);
+  }, [socket, user?.id, updateUserProfile, user]);
 
   const value = {
     currentTrack,

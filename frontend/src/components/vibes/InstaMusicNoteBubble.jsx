@@ -1,114 +1,109 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
+import { AuthContext } from '../../context/AuthContext';
 import { useAppMusic } from '../../context/AppMusicContext';
-import { Music, Play, Pause, Plus, Disc, Edit3, Trash2, X } from 'lucide-react';
+import { Music, Play, Pause, Disc, Edit3, Trash2, X } from 'lucide-react';
 
 export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true }) {
-  const {
-    currentTrack: myCurrentTrack,
-    musicNoteText: myNoteText,
-    isPlaying: globalIsPlaying,
-    isDucked,
-    togglePlayPause,
-    deleteMusicNote,
-    playTrack
-  } = useAppMusic();
+  const { user } = useContext(AuthContext);
+  const { deleteMusicNote } = useAppMusic();
 
+  const activeNote = isMine ? (note || user?.musicNote) : note;
   const [showOptions, setShowOptions] = useState(false);
+  const [isPlayingNote, setIsPlayingNote] = useState(false);
+  const noteAudioRef = useRef(null);
 
-  // If viewing a friend's note
-  if (!isMine) {
-    if (!note || !note.songTitle) return null;
+  const stopNoteAudio = () => {
+    if (noteAudioRef.current) {
+      try {
+        noteAudioRef.current.pause();
+        noteAudioRef.current.currentTime = 0;
+        noteAudioRef.current = null;
+      } catch (e) {}
+    }
+    setIsPlayingNote(false);
+  };
 
-    const isThisTrackPlaying = globalIsPlaying && !isDucked && myCurrentTrack?.audioUrl === note.audioUrl;
+  // Close audio on unmount
+  useEffect(() => {
+    return () => {
+      stopNoteAudio();
+    };
+  }, []);
+
+  // Close audio when user taps anywhere outside (Instagram Note style!)
+  useEffect(() => {
+    if (!isPlayingNote) return;
+    const handleOutsideClick = () => {
+      stopNoteAudio();
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => {
+      window.removeEventListener('click', handleOutsideClick);
+    };
+  }, [isPlayingNote]);
+
+  // Listen to cross-note coordinator so only 1 note audio plays at a time
+  useEffect(() => {
+    const handleStopOtherNotes = (e) => {
+      if (e.detail?.source !== noteAudioRef.current) {
+        stopNoteAudio();
+      }
+    };
+    window.addEventListener('pulsechat_stop_all_note_audios', handleStopOtherNotes);
+    return () => {
+      window.removeEventListener('pulsechat_stop_all_note_audios', handleStopOtherNotes);
+    };
+  }, []);
+
+  const handleTogglePlayNote = (e) => {
+    e.stopPropagation();
+
+    if (isPlayingNote) {
+      stopNoteAudio();
+      return;
+    }
+
+    if (!activeNote?.audioUrl) return;
+
+    // Stop any other active note snippet
+    window.dispatchEvent(new CustomEvent('pulsechat_stop_all_note_audios'));
+
+    try {
+      const audio = new Audio(activeNote.audioUrl);
+      audio.volume = 0.85;
+
+      audio.onended = () => {
+        setIsPlayingNote(false);
+        noteAudioRef.current = null;
+      };
+
+      audio.onerror = () => {
+        setIsPlayingNote(false);
+        noteAudioRef.current = null;
+      };
+
+      audio.play().then(() => {
+        setIsPlayingNote(true);
+      }).catch((err) => {
+        console.warn('Note audio play prevented:', err);
+        setIsPlayingNote(false);
+      });
+
+      noteAudioRef.current = audio;
+    } catch (err) {
+      console.warn('Failed to start note audio:', err);
+    }
+  };
+
+  // If viewing own avatar and no note is set yet -> "+ Note" Instagram prompt
+  if (!activeNote || !activeNote.songTitle) {
+    if (!isMine) return null;
 
     return (
       <div
-        style={{
-          position: 'absolute',
-          top: '-24px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 15,
-          cursor: 'pointer',
-          animation: 'fadeIn 0.2s ease-out'
-        }}
         onClick={(e) => {
           e.stopPropagation();
-          if (isThisTrackPlaying) {
-            togglePlayPause();
-          } else {
-            playTrack(note, note.noteText || '');
-          }
-        }}
-        title={`${note.songTitle} - ${note.artistName || ''} (Tap to listen across app)`}
-      >
-        <div style={{
-          background: isThisTrackPlaying
-            ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.95))'
-            : 'rgba(20, 20, 28, 0.92)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: isThisTrackPlaying ? '1px solid #c084fc' : '1px solid rgba(255, 255, 255, 0.2)',
-          borderRadius: '16px',
-          padding: '3px 8px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '5px',
-          boxShadow: isThisTrackPlaying
-            ? '0 4px 14px rgba(168, 85, 247, 0.45)'
-            : '0 4px 10px rgba(0,0,0,0.4)',
-          maxWidth: '115px',
-          whiteSpace: 'nowrap'
-        }}>
-          <div style={{
-            width: '14px',
-            height: '14px',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0
-          }}>
-            {isThisTrackPlaying ? (
-              <Disc size={13} color="#ffffff" style={{ animation: 'spin 3s linear infinite' }} />
-            ) : (
-              <Music size={11} color="#a855f7" />
-            )}
-          </div>
-          <div style={{
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            fontSize: '0.64rem',
-            fontWeight: 700,
-            color: '#ffffff',
-            lineHeight: 1.1
-          }}>
-            {note.noteText ? `${note.noteText} · ` : ''}{note.songTitle}
-          </div>
-        </div>
-        <div style={{
-          width: 0,
-          height: 0,
-          borderLeft: '4px solid transparent',
-          borderRight: '4px solid transparent',
-          borderTop: isThisTrackPlaying ? '5px solid rgba(168, 85, 247, 0.95)' : '5px solid rgba(20, 20, 28, 0.92)',
-          margin: '-1px auto 0 auto'
-        }} />
-      </div>
-    );
-  }
-
-  const currentTrack = myCurrentTrack;
-  const musicNoteText = myNoteText;
-  const isPlaying = globalIsPlaying;
-
-  // If no track is attached yet, show the Instagram "+ Note" prompt
-  if (!currentTrack) {
-    return (
-      <div
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpenPicker();
+          onOpenPicker && onOpenPicker();
         }}
         style={{
           position: 'absolute',
@@ -152,7 +147,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
     );
   }
 
-  // Active Music Note Bubble
+  // Active Music Note Bubble (Instagram-style: Tap to hear snippet, tap again / outside to stop!)
   return (
     <div
       style={{
@@ -164,36 +159,35 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
         cursor: 'pointer',
         animation: 'fadeIn 0.2s ease-out'
       }}
-      onClick={(e) => {
-        e.stopPropagation();
-        togglePlayPause();
-      }}
+      onClick={handleTogglePlayNote}
       onContextMenu={(e) => {
+        if (!isMine) return;
         e.preventDefault();
         e.stopPropagation();
         setShowOptions(true);
       }}
-      title={`${currentTrack.songTitle} - ${currentTrack.artistName} (Tap to Play/Pause, hold for options)`}
+      title={`${activeNote.songTitle} - ${activeNote.artistName || ''} (Tap to listen, tap again to stop)`}
     >
       <div style={{
-        background: isPlaying && !isDucked
+        background: isPlayingNote
           ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.95))'
           : 'rgba(20, 20, 28, 0.92)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
-        border: isPlaying && !isDucked ? '1px solid #c084fc' : '1px solid rgba(255, 255, 255, 0.2)',
+        border: isPlayingNote ? '1.5px solid #c084fc' : '1px solid rgba(255, 255, 255, 0.2)',
         borderRadius: '16px',
         padding: '3px 8px',
         display: 'flex',
         alignItems: 'center',
         gap: '5px',
-        boxShadow: isPlaying && !isDucked
-          ? '0 4px 14px rgba(168, 85, 247, 0.45)'
+        boxShadow: isPlayingNote
+          ? '0 4px 14px rgba(168, 85, 247, 0.5), 0 0 10px rgba(168, 85, 247, 0.4)'
           : '0 4px 10px rgba(0,0,0,0.4)',
-        maxWidth: '115px',
-        whiteSpace: 'nowrap'
+        maxWidth: '120px',
+        whiteSpace: 'nowrap',
+        transition: 'all 0.2s ease'
       }}>
-        {/* Spinning Disc or Play icon */}
+        {/* Animated Disc / Music Note Icon */}
         <div style={{
           width: '14px',
           height: '14px',
@@ -203,14 +197,14 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
           justifyContent: 'center',
           flexShrink: 0
         }}>
-          {isPlaying && !isDucked ? (
-            <Disc size={13} color="#ffffff" style={{ animation: 'spin 3s linear infinite' }} />
+          {isPlayingNote ? (
+            <Disc size={13} color="#ffffff" style={{ animation: 'spin 2.5s linear infinite' }} />
           ) : (
-            <Music size={11} color={isPlaying ? '#ffffff' : '#a855f7'} />
+            <Music size={11} color="#c084fc" />
           )}
         </div>
 
-        {/* Note title / Song Title */}
+        {/* Note Thought + Song Title */}
         <div style={{
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -219,29 +213,32 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
           color: '#ffffff',
           lineHeight: 1.1
         }}>
-          {musicNoteText ? `${musicNoteText} · ` : ''}{currentTrack.songTitle}
+          {activeNote.noteText ? `${activeNote.noteText} · ` : ''}{activeNote.songTitle}
         </div>
 
-        {/* Mini Edit / Delete Options button */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowOptions(true);
-          }}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            padding: 0,
-            color: 'rgba(255, 255, 255, 0.7)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center'
-          }}
-          title="Note Options"
-        >
-          <Edit3 size={9} />
-        </button>
+        {/* Mini Edit / Delete Options button for Owner */}
+        {isMine && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowOptions(prev => !prev);
+            }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: 0,
+              color: 'rgba(255, 255, 255, 0.75)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              flexShrink: 0
+            }}
+            title="Note Options"
+          >
+            <Edit3 size={9} />
+          </button>
+        )}
       </div>
 
       {/* Bubble Tail */}
@@ -250,12 +247,12 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
         height: 0,
         borderLeft: '4px solid transparent',
         borderRight: '4px solid transparent',
-        borderTop: isPlaying && !isDucked ? '5px solid rgba(168, 85, 247, 0.95)' : '5px solid rgba(20, 20, 28, 0.92)',
+        borderTop: isPlayingNote ? '5px solid rgba(168, 85, 247, 0.95)' : '5px solid rgba(20, 20, 28, 0.92)',
         margin: '-1px auto 0 auto'
       }} />
 
-      {/* Options Dropdown Menu */}
-      {showOptions && (
+      {/* Options Dropdown Menu for Owner */}
+      {isMine && showOptions && (
         <div
           onClick={(e) => e.stopPropagation()}
           style={{
@@ -279,7 +276,8 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
             type="button"
             onClick={() => {
               setShowOptions(false);
-              onOpenPicker();
+              stopNoteAudio();
+              onOpenPicker && onOpenPicker();
             }}
             style={{
               padding: '6px 8px',
@@ -302,6 +300,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
             type="button"
             onClick={() => {
               setShowOptions(false);
+              stopNoteAudio();
               deleteMusicNote();
             }}
             style={{
