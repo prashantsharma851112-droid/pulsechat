@@ -1349,14 +1349,40 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       });
     };
 
-    socket.on('group_updated', handleGroupUpdated);
+    // Instant In-Chat Nicknames Sync
+    const handleNicknameUpdated = (data) => {
+      if (!data) return;
+      const targetChat = data.chatId;
+      const targetUserId = data.targetUserId;
+      const nickname = data.nickname;
+      const nicks = data.nicknames || {};
 
-    const handleWindowGroupEvent = (e) => {
+      setRecentChats(prev => {
+        const next = prev.map(c => {
+          const canonical = (c.id && user?.id) ? [user.id, c.id].sort().join('_') : '';
+          if (targetChat === canonical || targetChat === c.id || data.originalChatId === canonical || data.originalChatId === c.id) {
+            const nextNick = nicks[c.id] || (c.id === targetUserId ? nickname : c.nickname);
+            return {
+              ...c,
+              nickname: nextNick || null,
+              nicknames: nicks
+            };
+          }
+          return c;
+        });
+        if (user?.id) setCachedRecentChats(user.id, next);
+        return next;
+      });
+    };
+
+    socket.on('chat_nickname_updated', handleNicknameUpdated);
+
+    const handleWindowNicknameEvent = (e) => {
       if (e.detail) {
-        handleGroupUpdated(e.detail);
+        handleNicknameUpdated(e.detail);
       }
     };
-    window.addEventListener('pulsechat_group_updated', handleWindowGroupEvent);
+    window.addEventListener('pulsechat_nickname_updated', handleWindowNicknameEvent);
 
     return () => {
       socket.off('new_message', handleSidebarNewMessage);
@@ -1368,8 +1394,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       socket.off('new_user_registered', handleNewUser);
       socket.off('user_profile_updated', handleProfileUpdate);
       socket.off('group_updated', handleGroupUpdated);
+      socket.off('chat_nickname_updated', handleNicknameUpdated);
       window.removeEventListener('pulsechat_user_profile_updated', handleWindowEvent);
       window.removeEventListener('pulsechat_group_updated', handleWindowGroupEvent);
+      window.removeEventListener('pulsechat_nickname_updated', handleWindowNicknameEvent);
     };
   }, [socket, user?.id, user?.username]);
 
@@ -2580,7 +2608,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <h4 style={{ fontSize: '1.02rem', fontWeight: u.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <span>{u.displayName}</span>
+                          <span>{u.nickname || u.displayName}</span>
+                          {u.nickname && (
+                            <span style={{ fontSize: '0.68rem', color: '#c084fc', opacity: 0.9 }} title={`In-chat nickname (Real: ${u.displayName})`}>
+                              ✏️
+                            </span>
+                          )}
                           {isPinned && (
                             <span title="Pinned Chat" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center' }}>
                               📌

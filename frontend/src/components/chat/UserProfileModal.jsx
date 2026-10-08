@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
-import { X, CheckCircle2, Phone, Video, Eye, Info, User, ShieldCheck, Clock, Ban, Unlock, UserPlus, UserCheck, Loader2, Sparkles, Zap, Image as ImageIcon, FileText, Link2, Film, Download, ExternalLink } from 'lucide-react';
+import { X, CheckCircle2, Phone, Video, Eye, Info, User, ShieldCheck, Clock, Ban, Unlock, UserPlus, UserCheck, Loader2, Sparkles, Zap, Image as ImageIcon, FileText, Link2, Film, Download, ExternalLink, Edit3 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
@@ -723,6 +723,28 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                   <Video size={16} /> Video
                 </button>
               </>
+            )}
+            {user?.id !== userToDisplay?.id && (
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  onClose();
+                  window.dispatchEvent(new CustomEvent('pulsechat_open_nickname_modal'));
+                }}
+                style={{
+                  flex: 1,
+                  minWidth: '95px',
+                  padding: '8px 10px',
+                  fontSize: '0.82rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '5px'
+                }}
+                title="Edit in-chat mutual nicknames"
+              >
+                <Edit3 size={15} /> Nicknames ✏️
+              </button>
             )}
           </div>
 

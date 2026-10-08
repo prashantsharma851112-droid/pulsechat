@@ -14,6 +14,7 @@ const chatSettingSchema = new mongoose.Schema({
   streakShields: { type: Map, of: Number, default: {} }, // { [userId]: number of freeze shields }
   streakFrozenUntil: { type: Date, default: null },
   streakMilestonesClaimed: { type: [Number], default: [] }, // [3, 7, 30]
+  nicknames: { type: mongoose.Schema.Types.Mixed, default: {} }, // { [userId]: 'Custom Nickname' }
   updatedAt: { type: Date, default: Date.now },
   updatedBy: { type: String, default: '' }
 });

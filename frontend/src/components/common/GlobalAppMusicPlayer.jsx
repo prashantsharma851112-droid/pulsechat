@@ -71,6 +71,7 @@ export default function GlobalAppMusicPlayer() {
   const miniRef = useRef(null);
   const dragStartRef = useRef(null);
   const resizeStartRef = useRef(null);
+  const hasMovedRef = useRef(false);
 
   // Sync minimize state
   const handleToggleMinimize = (e) => {
@@ -148,6 +149,7 @@ export default function GlobalAppMusicPlayer() {
     const currentX = position ? position.x : (window.innerWidth - cardWidth) / 2;
     const currentY = position ? position.y : window.innerHeight - 80;
 
+    hasMovedRef.current = false;
     dragStartRef.current = {
       startX: clientX,
       startY: clientY,
@@ -166,6 +168,7 @@ export default function GlobalAppMusicPlayer() {
 
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
         dragStartRef.current.hasMoved = true;
+        hasMovedRef.current = true;
       }
 
       const curWidth = isMinimized ? 52 : cardWidth;
@@ -179,7 +182,8 @@ export default function GlobalAppMusicPlayer() {
     };
 
     const handlePointerEnd = () => {
-      if (dragStartRef.current?.hasMoved) {
+      const didMove = dragStartRef.current?.hasMoved;
+      if (didMove) {
         setPosition(prev => {
           if (prev) {
             try {
@@ -188,6 +192,11 @@ export default function GlobalAppMusicPlayer() {
           }
           return prev;
         });
+        setTimeout(() => {
+          hasMovedRef.current = false;
+        }, 120);
+      } else {
+        hasMovedRef.current = false;
       }
       dragStartRef.current = null;
       window.removeEventListener('mousemove', handlePointerMove);
@@ -394,6 +403,18 @@ export default function GlobalAppMusicPlayer() {
       ref={cardRef}
       onMouseDown={handleStartDrag}
       onTouchStart={handleStartDrag}
+      onClick={(e) => {
+        // If clicking on controls, inputs, seekbar, or resize handle, do nothing
+        if (e.target.closest('button, input, [data-no-drag="true"], .progress-bar-seek, [data-resize-handle="true"]')) {
+          return;
+        }
+        // If user was actively dragging/moving the card, don't minimize
+        if (hasMovedRef.current) {
+          return;
+        }
+        handleToggleMinimize(e);
+      }}
+      title="Pulse Music · Tap card to minimize to floating vinyl disc · Drag anywhere to move"
       style={{
         position: 'fixed',
         left: `${posX}px`,
@@ -401,6 +422,7 @@ export default function GlobalAppMusicPlayer() {
         zIndex: 1150,
         width: `${cardWidth}px`,
         maxWidth: 'calc(100vw - 20px)',
+        cursor: 'pointer',
         background: 'rgba(15, 15, 22, 0.94)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
@@ -429,7 +451,7 @@ export default function GlobalAppMusicPlayer() {
           opacity: 0.6,
           background: 'rgba(255, 255, 255, 0.03)'
         }}
-        title="Drag anywhere to move"
+        title="Tap to minimize · Drag to move"
       >
         <div style={{
           width: '32px',
@@ -544,10 +566,11 @@ export default function GlobalAppMusicPlayer() {
           style={{
             flex: 1,
             minWidth: 0,
-            cursor: 'grab',
+            cursor: 'pointer',
             display: 'flex',
             flexDirection: 'column'
           }}
+          title="Tap to minimize into floating vinyl disc"
         >
           {isDucked ? (
             <div style={{
@@ -738,6 +761,7 @@ export default function GlobalAppMusicPlayer() {
 
       {/* Hand Resize Handle Corner (Bottom-Right grabber) */}
       <div
+        data-resize-handle="true"
         onMouseDown={handleStartResize}
         onTouchStart={handleStartResize}
         style={{

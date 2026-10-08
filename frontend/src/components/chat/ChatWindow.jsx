@@ -33,6 +33,7 @@ const SetDefaultReactionsModal = lazyWithRetry(() => import('./SetDefaultReactio
 const VibeViewerModal = lazyWithRetry(() => import('../vibes/VibeViewerModal'));
 const SparksWalletModal = lazyWithRetry(() => import('./SparksWalletModal'));
 const ScheduleMessageModal = lazyWithRetry(() => import('./ScheduleMessageModal'));
+const ChatNicknameModal = lazyWithRetry(() => import('./ChatNicknameModal'));
 import { recordRecentReaction } from '../../utils/quickReactions';
 import { uploadMediaDirect } from '../../utils/mediaUpload';
 import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
@@ -1323,8 +1324,24 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [cooldownMsg, setCooldownMsg] = useState(null);
 
   // Chat settings & block status
-  const [chatSetting, setChatSetting] = useState({ disappearingEnabled: false });
+  const [chatSetting, setChatSetting] = useState({ disappearingEnabled: false, nicknames: {} });
   const [blockStatus, setBlockStatus] = useState({ isBlockedByMe: false, isBlockedByThem: false });
+
+  // In-Chat Mutual Nicknames
+  const [showNicknameModal, setShowNicknameModal] = useState(false);
+  const partnerNickname = useMemo(() => {
+    if (!isGroup && partnerId && chatSetting?.nicknames) {
+      return chatSetting.nicknames[partnerId] || null;
+    }
+    return null;
+  }, [isGroup, partnerId, chatSetting?.nicknames]);
+
+  const myNicknameInChat = useMemo(() => {
+    if (!isGroup && user?.id && chatSetting?.nicknames) {
+      return chatSetting.nicknames[user.id] || null;
+    }
+    return null;
+  }, [isGroup, user?.id, chatSetting?.nicknames]);
 
   // Pulse Streaks, Sparks Reward & Freeze Shield
   const [streakData, setStreakData] = useState({ streakCount: 0, streakShields: 0, lastStreakDate: null });
@@ -1354,6 +1371,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     fetchStreak();
     return () => { isMounted = false; };
   }, [chatId, isGroup, token]);
+
+  useEffect(() => {
+    const handleOpenNicknameModal = () => {
+      if (!isGroup) {
+        setShowNicknameModal(true);
+      }
+    };
+    window.addEventListener('pulsechat_open_nickname_modal', handleOpenNicknameModal);
+    return () => window.removeEventListener('pulsechat_open_nickname_modal', handleOpenNicknameModal);
+  }, [isGroup]);
 
   useEffect(() => {
     if (!socket) return;
@@ -2284,8 +2311,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     const handleChatSettingUpdated = (setting) => {
-      if (setting && setting.chatId === chatId) {
-        setChatSetting(setting);
+      if (setting && (setting.chatId === chatId || (chatId && setting.chatId === chatId.split('_').sort().join('_')))) {
+        setChatSetting(prev => ({ ...prev, ...setting }));
+      }
+    };
+
+    const handleChatNicknameUpdated = (payload) => {
+      if (!payload) return;
+      const targetChat = payload.chatId;
+      const currentCanonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+      if (targetChat === chatId || targetChat === currentCanonical || payload.originalChatId === chatId) {
+        setChatSetting(prev => ({
+          ...prev,
+          nicknames: payload.nicknames || {
+            ...(prev?.nicknames || {}),
+            ...(payload.targetUserId && payload.nickname ? { [payload.targetUserId]: payload.nickname } : {})
+          }
+        }));
       }
     };
 
@@ -2322,6 +2364,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     socket.on('multiple_messages_deleted', handleMultipleDeleted);
     socket.on('multiple_messages_restored', handleMultipleRestored);
     socket.on('chat_setting_updated', handleChatSettingUpdated);
+    socket.on('chat_nickname_updated', handleChatNicknameUpdated);
     socket.on('message_blocked', handleMessageBlocked);
     socket.on('group_updated', handleGroupUpdated);
 
@@ -2387,6 +2430,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.off('multiple_messages_deleted', handleMultipleDeleted);
       socket.off('multiple_messages_restored', handleMultipleRestored);
       socket.off('chat_setting_updated', handleChatSettingUpdated);
+      socket.off('chat_nickname_updated', handleChatNicknameUpdated);
       socket.off('message_blocked', handleMessageBlocked);
       socket.off('group_updated', handleGroupUpdated);
       socket.off('fog_snap_burned', handleFogBurned);
@@ -3764,12 +3808,37 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               className="chat-header-title-box"
               onClick={() => isGroup ? setShowGroupProfileModal(true) : setShowUserProfileModal(true)}
               style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
-              title={isGroup ? 'Click to view group bio, members & edit info' : 'Click to view profile & bio'}
+              title={isGroup ? 'Click to view group bio, members & edit info' : (partnerNickname ? `Nickname: ${partnerNickname} (Real: ${chatDisplayName || activeChat.displayName}) · Click for profile` : 'Click to view profile & bio')}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap' }}>
                 <h3 style={{ fontSize: '1.06rem', fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-                  {chatDisplayName || activeChat.displayName}
+                  {partnerNickname || chatDisplayName || activeChat.displayName}
                 </h3>
+                {!isGroup && partnerNickname && (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowNicknameModal(true);
+                    }}
+                    style={{
+                      fontSize: '0.66rem',
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      background: 'rgba(168, 85, 247, 0.2)',
+                      color: '#c084fc',
+                      border: '1px solid rgba(168, 85, 247, 0.4)',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      flexShrink: 0
+                    }}
+                    title={`Real name: ${chatDisplayName || activeChat.displayName} (@${activeChat.username}) · Tap to edit nicknames`}
+                  >
+                    ✏️ Nickname
+                  </span>
+                )}
                 {!isGroup && chatIsPro && (
                   <PulseVipBadge size={16} showLabel={false} />
                 )}
@@ -3945,6 +4014,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     <Palette size={16} color="var(--accent)" />
                     <span>Change Solid Theme</span>
                   </button>
+                  {!isGroup && (
+                    <button onClick={() => { setShowMoreMenu(false); setShowNicknameModal(true); }}>
+                      <Edit3 size={16} color="var(--accent)" />
+                      <span>Edit Nicknames ✏️</span>
+                    </button>
+                  )}
                   {!isGroup && (
                     <button onClick={() => {
                       setShowMoreMenu(false);
@@ -4961,7 +5036,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 message={msg}
                 isMine={msg.senderId === user.id}
                 chatId={chatId}
-                senderName={senderObj?.displayName || senderObj?.username}
+                senderName={
+                  msg.senderId === user.id
+                    ? (myNicknameInChat || user?.displayName || user?.username)
+                    : (isGroup ? (senderObj?.displayName || senderObj?.username) : (partnerNickname || senderObj?.displayName || activeChat?.displayName || senderObj?.username))
+                }
                 senderIsPro={msg.senderId === user.id ? user?.isPro : (isGroup ? senderObj?.isPro : chatIsPro)}
                 onDeleteLocal={handleDeleteLocalMessage}
                 onDeleteTrigger={handleTriggerUndoToast}
@@ -4982,13 +5061,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 onOpenCustomizeReactions={() => setShowCustomizeReactionsModal(true)}
                 onDismissAction={handleDismissActionMessage}
                 onReply={(msg) => {
-                  // Sender ka naam determine karo
                   const senderInfo = groupMembersMap[msg.senderId];
                   setReplyTo({
                     ...msg,
                     senderName: msg.senderId === user.id
-                      ? 'You'
-                      : (senderInfo?.displayName || senderInfo?.username || activeChat.displayName)
+                      ? (myNicknameInChat || 'You')
+                      : (isGroup ? (senderInfo?.displayName || senderInfo?.username || activeChat.displayName) : (partnerNickname || senderInfo?.displayName || activeChat.displayName))
                   });
                   replyInputRef.current?.focus();
                 }}
@@ -6893,6 +6971,27 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           initialText={text}
           onSchedule={handleScheduleMessage}
           onClose={() => setShowScheduleModal(false)}
+        />
+      )}
+
+      {/* Mutual In-Chat Nicknames Modal */}
+      {showNicknameModal && (
+        <ChatNicknameModal
+          isOpen={showNicknameModal}
+          onClose={() => setShowNicknameModal(false)}
+          chatId={chatId}
+          partner={activeChat}
+          currentUser={user}
+          nicknames={chatSetting?.nicknames || {}}
+          onNicknameUpdated={(targetUserId, newNick, newNicknames) => {
+            setChatSetting(prev => ({
+              ...prev,
+              nicknames: newNicknames
+            }));
+            window.dispatchEvent(new CustomEvent('pulsechat_nickname_updated', {
+              detail: { chatId, targetUserId, nickname: newNick, nicknames: newNicknames }
+            }));
+          }}
         />
       )}
       </React.Suspense>

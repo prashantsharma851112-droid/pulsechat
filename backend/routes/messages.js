@@ -243,6 +243,109 @@ router.put('/settings/:chatId/theme', authMiddleware, async (req, res) => {
   }
 });
 
+// Set / Update Nickname for a participant in 1-on-1 chat - MUST BE BEFORE /:chatId
+router.put('/settings/:chatId/nickname', authMiddleware, async (req, res) => {
+  try {
+    const { targetUserId, nickname } = req.body;
+    if (!targetUserId) {
+      return res.status(400).json({ error: 'targetUserId is required' });
+    }
+
+    const trimmed = typeof nickname === 'string' ? nickname.trim() : '';
+    const setting = await db.setChatNickname(req.params.chatId, targetUserId, trimmed, req.user?.id);
+
+    // Invalidate Redis recent chats cache for participants so fresh nicknames appear
+    try {
+      const redis = require('../utils/redis');
+      if (req.params.chatId.includes('_')) {
+        const parts = req.params.chatId.split('_');
+        parts.forEach(uId => redis.invalidateRecent(uId).catch(() => {}));
+      }
+    } catch (e) {}
+
+    // Create a system message announcing the change in this chat
+    let targetName = 'them';
+    try {
+      const targetUser = await db.getUserById(targetUserId);
+      if (targetUser) targetName = targetUser.displayName || targetUser.username || 'User';
+    } catch (e) {}
+
+    const isTargetSelf = String(targetUserId) === String(req.user?.id);
+    const actorName = req.user?.displayName || req.user?.username || 'Someone';
+    const sysContent = trimmed
+      ? (isTargetSelf
+          ? `✏️ ${actorName} set their nickname to "${trimmed}"`
+          : `✏️ ${actorName} set the nickname for ${targetName} to "${trimmed}"`)
+      : (isTargetSelf
+          ? `✏️ ${actorName} removed their nickname`
+          : `✏️ ${actorName} removed the nickname for ${targetName}`);
+
+    const sysMsg = {
+      id: 'msg_sys_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+      chatId: req.params.chatId,
+      senderId: 'system',
+      receiverId: '',
+      isGroup: !req.params.chatId.includes('_'),
+      type: 'system',
+      content: sysContent,
+      status: 'sent',
+      timestamp: new Date().toISOString()
+    };
+    await db.saveMessage(sysMsg);
+
+    const payload = {
+      chatId: setting?.chatId || req.params.chatId,
+      originalChatId: req.params.chatId,
+      targetUserId,
+      nickname: trimmed || null,
+      nicknames: setting?.nicknames || {},
+      updatedBy: req.user?.id,
+      systemMessage: sysMsg
+    };
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(req.params.chatId).emit('chat_nickname_updated', payload);
+      io.to(req.params.chatId).emit('chat_setting_updated', setting);
+      io.to(req.params.chatId).emit('new_message', sysMsg);
+
+      if (setting?.chatId && setting.chatId !== req.params.chatId) {
+        io.to(setting.chatId).emit('chat_nickname_updated', payload);
+        io.to(setting.chatId).emit('chat_setting_updated', setting);
+        io.to(setting.chatId).emit('new_message', sysMsg);
+      }
+
+      if (req.params.chatId.includes('_')) {
+        const parts = req.params.chatId.split('_');
+        io.to(`${parts[1]}_${parts[0]}`).emit('chat_nickname_updated', payload);
+        io.to(`${parts[1]}_${parts[0]}`).emit('chat_setting_updated', setting);
+        io.to(`${parts[1]}_${parts[0]}`).emit('new_message', sysMsg);
+
+        parts.forEach(uId => {
+          io.to(`user_${uId}`).emit('chat_nickname_updated', payload);
+          io.to(`user_${uId}`).emit('chat_setting_updated', setting);
+          io.to(`user_${uId}`).emit('new_message', sysMsg);
+          io.to(uId).emit('chat_nickname_updated', payload);
+          io.to(uId).emit('chat_setting_updated', setting);
+          io.to(uId).emit('new_message', sysMsg);
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      nickname: trimmed || null,
+      nicknames: setting?.nicknames || {},
+      setting,
+      payload,
+      systemMessage: sysMsg
+    });
+  } catch (err) {
+    console.error('Failed to update chat nickname:', err);
+    res.status(500).json({ error: 'Failed to update chat nickname' });
+  }
+});
+
 // =========================================================================
 // OPTION 1: PULSE STREAKS & FREEZE SHIELDS
 // =========================================================================

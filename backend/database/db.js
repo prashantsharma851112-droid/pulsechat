@@ -405,6 +405,24 @@ module.exports = {
       }
       const unreadMap = new Map(unreadAgg.map(u => [u._id, u.count]));
 
+      // Pre-fetch ChatSettings for 1-on-1 chats to resolve private mutual nicknames
+      const candidateChatIds = [];
+      for (const { otherId } of ordered) {
+        const uObj = userMap.get(otherId);
+        if (uObj?.id) {
+          candidateChatIds.push([myId, uObj.id].sort().join('_'));
+        }
+      }
+      const chatSettingsMap = new Map();
+      if (candidateChatIds.length > 0) {
+        try {
+          const matchedSettings = await ChatSetting.find({ chatId: { $in: candidateChatIds } }).lean();
+          matchedSettings.forEach(s => {
+            if (s.chatId) chatSettingsMap.set(s.chatId, s);
+          });
+        } catch (e) {}
+      }
+
       const results = [];
       const addedUserIds = new Set();
       for (const { otherId, lastMessage } of ordered) {
@@ -412,6 +430,10 @@ module.exports = {
         if (!otherUser) continue;
         if (addedUserIds.has(otherUser.id)) continue;
         addedUserIds.add(otherUser.id);
+
+        const canonicalChatId = [myId, otherUser.id].sort().join('_');
+        const chatSetting = chatSettingsMap.get(canonicalChatId);
+        const partnerNickname = (chatSetting?.nicknames && chatSetting.nicknames[otherUser.id]) ? chatSetting.nicknames[otherUser.id] : null;
 
         const unreadCount = unreadMap.get(otherUser.id) ||
                             (otherUser.username && unreadMap.get(otherUser.username)) ||
@@ -470,6 +492,8 @@ module.exports = {
 
         results.push({
           ...otherUser,
+          nickname: partnerNickname,
+          nicknames: chatSetting?.nicknames || {},
           isPro: Boolean(otherUser.isPro),
           proTier: otherUser.proTier || 'none',
           customBadge: otherUser.customBadge || '',
@@ -549,7 +573,7 @@ module.exports = {
   },
 
   getChatSetting: async (rawChatId) => {
-    if (!rawChatId) return { disappearingEnabled: false, disappearingDuration: 86400, wallpaperId: 'none', customWallpaperUrl: null, chatTheme: 'midnight_amoled' };
+    if (!rawChatId) return { disappearingEnabled: false, disappearingDuration: 86400, wallpaperId: 'none', customWallpaperUrl: null, chatTheme: 'midnight_amoled', nicknames: {} };
     const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
     let query = { chatId: canonicalChatId };
     if (rawChatId.includes('_')) {
@@ -564,8 +588,11 @@ module.exports = {
         disappearingDuration: 86400,
         wallpaperId: 'none',
         customWallpaperUrl: null,
-        chatTheme: 'midnight_amoled'
+        chatTheme: 'midnight_amoled',
+        nicknames: {}
       };
+    } else if (!setting.nicknames) {
+      setting.nicknames = {};
     }
     return setting;
   },
@@ -680,6 +707,57 @@ module.exports = {
       await setting.save();
     }
     return setting ? (setting.toObject ? setting.toObject() : setting) : { chatId: canonicalChatId, chatTheme: themeId || 'midnight_amoled' };
+  },
+
+  setChatNickname: async (rawChatId, targetUserId, nickname, userId) => {
+    if (!rawChatId || !targetUserId) return null;
+    const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
+    let query = { chatId: canonicalChatId };
+    if (rawChatId.includes('_')) {
+      const parts = rawChatId.split('_');
+      query = { $or: [{ chatId: canonicalChatId }, { chatId: rawChatId }, { chatId: `${parts[1]}_${parts[0]}` }] };
+    }
+    let setting = await ChatSetting.findOne(query);
+    if (!setting) {
+      try {
+        setting = await ChatSetting.create({
+          chatId: canonicalChatId,
+          nicknames: {},
+          updatedAt: new Date(),
+          updatedBy: userId || ''
+        });
+      } catch (err) {
+        setting = await ChatSetting.findOne({ chatId: canonicalChatId });
+      }
+    }
+    if (!setting) {
+      setting = new ChatSetting({ chatId: canonicalChatId, nicknames: {} });
+    }
+
+    let nicks = {};
+    if (setting.nicknames) {
+      if (typeof setting.nicknames.toObject === 'function') {
+        nicks = setting.nicknames.toObject();
+      } else {
+        nicks = { ...setting.nicknames };
+      }
+    }
+
+    const trimmed = (nickname || '').trim();
+    if (trimmed) {
+      nicks[targetUserId] = trimmed;
+    } else {
+      delete nicks[targetUserId];
+    }
+
+    setting.chatId = canonicalChatId;
+    setting.nicknames = nicks;
+    setting.markModified('nicknames');
+    setting.updatedAt = new Date();
+    setting.updatedBy = userId || '';
+    await setting.save();
+
+    return setting.toObject ? setting.toObject() : setting;
   },
 
   blockUser: async (userId, targetUserId) => {
