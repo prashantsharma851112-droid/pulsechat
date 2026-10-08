@@ -358,7 +358,7 @@ export function stopGlobalMusicAudio() {
   }
   if (typeof document !== 'undefined') {
     try {
-      const allAudio = document.querySelectorAll('audio');
+      const allAudio = document.querySelectorAll('audio:not([data-app-music])');
       allAudio.forEach(el => {
         try {
           el.pause();

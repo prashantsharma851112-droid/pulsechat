@@ -4,12 +4,15 @@ import { SocketContext } from '../../context/SocketContext';
 import { Plus } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { getCachedAllUsers } from '../../utils/offlineStorage';
+import InstaMusicNoteBubble from './InstaMusicNoteBubble';
+import CreateMusicNoteModal from './CreateMusicNoteModal';
 
 export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOpenVibeSelector, myAura }) {
   const { user, token } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
   const [groupedVibes, setGroupedVibes] = useState([]);
   const [viewedSet, setViewedSet] = useState(new Set());
+  const [showMusicNoteModal, setShowMusicNoteModal] = useState(false);
 
   const syncViewedSet = () => {
     try {
@@ -204,12 +207,12 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
 
   return (
     <div style={{
-      padding: '10px 14px 8px 14px',
+      padding: '4px 14px 8px 14px',
       background: 'rgba(0,0,0,0.2)',
       borderBottom: '1px solid var(--border)',
       display: 'flex',
       flexDirection: 'column',
-      overflow: 'hidden'
+      overflow: 'visible'
     }}>
       {/* Story Bubbles Horizontal Scroll Tray */}
       <div style={{
@@ -217,6 +220,8 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
         alignItems: 'center',
         gap: '12px',
         overflowX: 'auto',
+        overflowY: 'visible',
+        paddingTop: '26px',
         paddingBottom: '4px',
         WebkitOverflowScrolling: 'touch',
         scrollbarWidth: 'none'
@@ -256,6 +261,9 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
               ? '0 0 14px rgba(220, 39, 67, 0.45)'
               : 'none'
           }}>
+            {/* Instagram-style Floating Music Note Bubble */}
+            <InstaMusicNoteBubble onOpenPicker={() => setShowMusicNoteModal(true)} />
+
             {myHasKing ? (
               <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
             ) : myHasSilver ? (
@@ -340,6 +348,11 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
                   : '0 0 14px rgba(220, 39, 67, 0.45)',
                 animation: viewed ? 'none' : 'pulseGlow 2.5s infinite alternate'
               }}>
+                {/* Friend's Instagram-style Floating Music Note Bubble */}
+                {group.musicNote && (
+                  <InstaMusicNoteBubble note={group.musicNote} isMine={false} />
+                )}
+
                 {crowns.king ? (
                   <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
                 ) : crowns.silver ? (
@@ -368,6 +381,12 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
           );
         })}
       </div>
+
+      {/* Instagram Music Note Creator Modal */}
+      <CreateMusicNoteModal
+        isOpen={showMusicNoteModal}
+        onClose={() => setShowMusicNoteModal(false)}
+      />
     </div>
   );
 }

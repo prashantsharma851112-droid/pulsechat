@@ -531,10 +531,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const handleTogglePlayPause = () => {
     if (!chatAudioRef.current) return;
     if (chatAudioRef.current.paused) {
-      chatAudioRef.current.play().then(() => setIsSongPlaying(true)).catch(() => {});
+      chatAudioRef.current.play().then(() => {
+        setIsSongPlaying(true);
+        window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: true } }));
+      }).catch(() => {});
     } else {
       chatAudioRef.current.pause();
       setIsSongPlaying(false);
+      window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: false } }));
     }
   };
 
@@ -570,11 +574,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         }
       });
 
-      audio.addEventListener('play', () => setIsSongPlaying(true));
-      audio.addEventListener('pause', () => setIsSongPlaying(false));
+      audio.addEventListener('play', () => {
+        setIsSongPlaying(true);
+        window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: true } }));
+      });
+      audio.addEventListener('pause', () => {
+        setIsSongPlaying(false);
+        window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: false } }));
+      });
 
       audio.addEventListener('ended', () => {
         setIsSongPlaying(false);
+        window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: false } }));
         // Automatic next song when song finishes!
         handlePlayNextSong();
       });
@@ -582,9 +593,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       registerGlobalMusicAudio(audio);
       audio.play().then(() => {
         setIsSongPlaying(true);
+        window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: true } }));
       }).catch(e => {
         console.warn('Chat music playback prevented:', e);
         setIsSongPlaying(false);
+        window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: false } }));
       });
       chatAudioRef.current = audio;
 
@@ -593,6 +606,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
 
     return () => {
+      window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: false } }));
       if (chatAudioRef.current) {
         try {
           chatAudioRef.current.pause();

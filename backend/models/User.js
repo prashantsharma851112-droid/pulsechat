@@ -51,6 +51,8 @@ const userSchema = new mongoose.Schema({
   dailyFileBytesResetDate: { type: String, default: '' },
   // Pulse Vibe Radar & Battery/Mood Aura (Option 3)
   vibeAura: { type: Object, default: null }, // { mood: String, emoji: String, auraColor: String, auraType: String, batteryLevel: Number, isLowBattery: Boolean, inGame: String, updatedAt: String }
+  // Instagram-style Profile/App Music Note
+  musicNote: { type: Object, default: null }, // { songTitle: String, artistName: String, audioUrl: String, artworkUrl: String, duration: Number, noteText: String, updatedAt: String }
   createdAt: { type: Date, default: Date.now }
 });
 

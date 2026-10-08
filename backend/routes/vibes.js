@@ -137,7 +137,7 @@ router.get('/active', authMiddleware, async (req, res) => {
           { id: { $in: uKeys } },
           { username: { $in: uNames } }
         ]
-      }).select('id _id username displayName avatar hasKingCrown hasSilverCrown hasStreakCrown').lean();
+      }).select('id _id username displayName avatar hasKingCrown hasSilverCrown hasStreakCrown musicNote').lean();
 
       users.forEach(u => {
         if (u.id) usersMap.set(u.id, u);
@@ -161,6 +161,7 @@ router.get('/active', authMiddleware, async (req, res) => {
           hasKingCrown: Boolean(matchedUser?.hasKingCrown),
           hasSilverCrown: Boolean(matchedUser?.hasSilverCrown),
           hasStreakCrown: Boolean(matchedUser?.hasStreakCrown),
+          musicNote: matchedUser?.musicNote || null,
           vibes: []
         });
       }

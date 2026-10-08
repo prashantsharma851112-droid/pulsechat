@@ -499,12 +499,24 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
         });
       }
       audio.volume = isAudioMuted ? 0 : 0.85;
+
+      audio.addEventListener('play', () => {
+        window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: true } }));
+      });
+      audio.addEventListener('pause', () => {
+        window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: false } }));
+      });
+      audio.addEventListener('ended', () => {
+        window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: false } }));
+      });
+
       registerGlobalMusicAudio(audio);
       audio.play().catch(e => console.warn('Autoplay prevented:', e));
       audioRef.current = audio;
     }
 
     return () => {
+      window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: false } }));
       if (audioRef.current) {
         try {
           audioRef.current.pause();

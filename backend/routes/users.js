@@ -83,7 +83,7 @@ router.get('/search', authMiddleware, async (req, res) => {
       ]
     })
     .sort({ createdAt: -1, _id: -1 })
-    .select('id username displayName avatar isEmailVerified status email createdAt isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown streakCrownExpiresAt kingCrownExpiresAt vibeAura')
+    .select('id username displayName avatar isEmailVerified status email createdAt isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown streakCrownExpiresAt kingCrownExpiresAt vibeAura musicNote')
     .limit(50)
     .lean();
 
@@ -522,6 +522,7 @@ router.get('/public/card/:username', async (req, res) => {
         hasSilverCrown: Boolean(user.hasSilverCrown),
         hasStreakCrown: Boolean(user.hasStreakCrown),
         vibeAura: user.vibeAura || 'neon',
+        musicNote: user.musicNote || null,
         createdAt: user.createdAt,
         streakCount,
         streakShields,
@@ -531,6 +532,40 @@ router.get('/public/card/:username', async (req, res) => {
   } catch (err) {
     console.error('Error fetching public card:', err);
     res.status(500).json({ error: 'Failed to fetch public card' });
+  }
+});
+
+// Update or Clear User's Instagram-style Music Note (App-wide tune)
+router.put('/music-note', authMiddleware, async (req, res) => {
+  try {
+    const { song, noteText } = req.body;
+    const targetUserId = req.user.id;
+    const musicNote = song ? {
+      songTitle: song.songTitle,
+      artistName: song.artistName,
+      audioUrl: song.audioUrl,
+      artworkUrl: song.artworkUrl,
+      duration: song.duration,
+      noteText: (noteText || '').trim(),
+      updatedAt: new Date().toISOString()
+    } : null;
+
+    const updatedUser = await db.updateUser(targetUserId, { musicNote });
+    if (!updatedUser) return res.status(404).json({ error: 'User not found' });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('user_music_note_updated', {
+        userId: req.user.id,
+        username: req.user.username,
+        musicNote
+      });
+    }
+
+    res.json({ success: true, musicNote });
+  } catch (err) {
+    console.error('Error updating music note:', err);
+    res.status(500).json({ error: 'Failed to update music note' });
   }
 });
 

@@ -5,6 +5,7 @@ import './index.css';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { SocketProvider } from './context/SocketContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
+import { AppMusicProvider } from './context/AppMusicContext.jsx';
 import { initSecurityShield } from './utils/securityShield.js';
 
 // Initialize anti-inspect and code protection shield
@@ -26,7 +27,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <ThemeProvider>
       <AuthProvider>
         <SocketProvider>
-          <App />
+          <AppMusicProvider>
+            <App />
+          </AppMusicProvider>
         </SocketProvider>
       </AuthProvider>
     </ThemeProvider>

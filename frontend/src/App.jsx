@@ -10,6 +10,7 @@ import PandaHero from './components/common/PandaHero';
 import FullDpModal from './components/common/FullDpModal';
 import Toast from './components/common/Toast';
 import EmojiParticleBurst from './components/common/EmojiParticleBurst';
+import GlobalAppMusicPlayer from './components/common/GlobalAppMusicPlayer';
 
 import { lazyWithRetry } from './utils/lazyRetry';
 
@@ -852,6 +853,9 @@ export default function App() {
 
         {/* Global 3D Floating Emoji Particle Burst Engine */}
         <EmojiParticleBurst />
+
+        {/* Global App-Wide Music Player Pill (Auto-pauses when chat music plays) */}
+        <GlobalAppMusicPlayer />
 
         {/* Compliance & Legal Modal */}
         {legalModalTab && (

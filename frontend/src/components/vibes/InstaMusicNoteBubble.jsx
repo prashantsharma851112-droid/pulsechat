@@ -1,0 +1,343 @@
+import React, { useState } from 'react';
+import { useAppMusic } from '../../context/AppMusicContext';
+import { Music, Play, Pause, Plus, Disc, Edit3, Trash2, X } from 'lucide-react';
+
+export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true }) {
+  const {
+    currentTrack: myCurrentTrack,
+    musicNoteText: myNoteText,
+    isPlaying: globalIsPlaying,
+    isDucked,
+    togglePlayPause,
+    deleteMusicNote,
+    playTrack
+  } = useAppMusic();
+
+  const [showOptions, setShowOptions] = useState(false);
+
+  // If viewing a friend's note
+  if (!isMine) {
+    if (!note || !note.songTitle) return null;
+
+    const isThisTrackPlaying = globalIsPlaying && !isDucked && myCurrentTrack?.audioUrl === note.audioUrl;
+
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          top: '-24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 15,
+          cursor: 'pointer',
+          animation: 'fadeIn 0.2s ease-out'
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (isThisTrackPlaying) {
+            togglePlayPause();
+          } else {
+            playTrack(note, note.noteText || '');
+          }
+        }}
+        title={`${note.songTitle} - ${note.artistName || ''} (Tap to listen across app)`}
+      >
+        <div style={{
+          background: isThisTrackPlaying
+            ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.95))'
+            : 'rgba(20, 20, 28, 0.92)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: isThisTrackPlaying ? '1px solid #c084fc' : '1px solid rgba(255, 255, 255, 0.2)',
+          borderRadius: '16px',
+          padding: '3px 8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '5px',
+          boxShadow: isThisTrackPlaying
+            ? '0 4px 14px rgba(168, 85, 247, 0.45)'
+            : '0 4px 10px rgba(0,0,0,0.4)',
+          maxWidth: '115px',
+          whiteSpace: 'nowrap'
+        }}>
+          <div style={{
+            width: '14px',
+            height: '14px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            {isThisTrackPlaying ? (
+              <Disc size={13} color="#ffffff" style={{ animation: 'spin 3s linear infinite' }} />
+            ) : (
+              <Music size={11} color="#a855f7" />
+            )}
+          </div>
+          <div style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            fontSize: '0.64rem',
+            fontWeight: 700,
+            color: '#ffffff',
+            lineHeight: 1.1
+          }}>
+            {note.noteText ? `${note.noteText} · ` : ''}{note.songTitle}
+          </div>
+        </div>
+        <div style={{
+          width: 0,
+          height: 0,
+          borderLeft: '4px solid transparent',
+          borderRight: '4px solid transparent',
+          borderTop: isThisTrackPlaying ? '5px solid rgba(168, 85, 247, 0.95)' : '5px solid rgba(20, 20, 28, 0.92)',
+          margin: '-1px auto 0 auto'
+        }} />
+      </div>
+    );
+  }
+
+  const currentTrack = myCurrentTrack;
+  const musicNoteText = myNoteText;
+  const isPlaying = globalIsPlaying;
+
+  // If no track is attached yet, show the Instagram "+ Note" prompt
+  if (!currentTrack) {
+    return (
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenPicker();
+        }}
+        style={{
+          position: 'absolute',
+          top: '-18px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 15,
+          cursor: 'pointer',
+          animation: 'fadeIn 0.2s ease-out'
+        }}
+        title="Add Music Note"
+      >
+        <div style={{
+          background: 'rgba(24, 24, 32, 0.94)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255, 255, 255, 0.18)',
+          borderRadius: '14px',
+          padding: '2px 8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+          whiteSpace: 'nowrap'
+        }}>
+          <Music size={11} color="#a855f7" />
+          <span style={{ fontSize: '0.64rem', fontWeight: 700, color: '#e2e8f0' }}>
+            + Note
+          </span>
+        </div>
+        {/* Cute Speech Bubble Tail */}
+        <div style={{
+          width: 0,
+          height: 0,
+          borderLeft: '4px solid transparent',
+          borderRight: '4px solid transparent',
+          borderTop: '5px solid rgba(24, 24, 32, 0.94)',
+          margin: '-1px auto 0 auto'
+        }} />
+      </div>
+    );
+  }
+
+  // Active Music Note Bubble
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: '-24px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 15,
+        cursor: 'pointer',
+        animation: 'fadeIn 0.2s ease-out'
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        togglePlayPause();
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowOptions(true);
+      }}
+      title={`${currentTrack.songTitle} - ${currentTrack.artistName} (Tap to Play/Pause, hold for options)`}
+    >
+      <div style={{
+        background: isPlaying && !isDucked
+          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.95))'
+          : 'rgba(20, 20, 28, 0.92)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        border: isPlaying && !isDucked ? '1px solid #c084fc' : '1px solid rgba(255, 255, 255, 0.2)',
+        borderRadius: '16px',
+        padding: '3px 8px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '5px',
+        boxShadow: isPlaying && !isDucked
+          ? '0 4px 14px rgba(168, 85, 247, 0.45)'
+          : '0 4px 10px rgba(0,0,0,0.4)',
+        maxWidth: '115px',
+        whiteSpace: 'nowrap'
+      }}>
+        {/* Spinning Disc or Play icon */}
+        <div style={{
+          width: '14px',
+          height: '14px',
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0
+        }}>
+          {isPlaying && !isDucked ? (
+            <Disc size={13} color="#ffffff" style={{ animation: 'spin 3s linear infinite' }} />
+          ) : (
+            <Music size={11} color={isPlaying ? '#ffffff' : '#a855f7'} />
+          )}
+        </div>
+
+        {/* Note title / Song Title */}
+        <div style={{
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          fontSize: '0.64rem',
+          fontWeight: 700,
+          color: '#ffffff',
+          lineHeight: 1.1
+        }}>
+          {musicNoteText ? `${musicNoteText} · ` : ''}{currentTrack.songTitle}
+        </div>
+
+        {/* Mini Edit / Delete Options button */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowOptions(true);
+          }}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            color: 'rgba(255, 255, 255, 0.7)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center'
+          }}
+          title="Note Options"
+        >
+          <Edit3 size={9} />
+        </button>
+      </div>
+
+      {/* Bubble Tail */}
+      <div style={{
+        width: 0,
+        height: 0,
+        borderLeft: '4px solid transparent',
+        borderRight: '4px solid transparent',
+        borderTop: isPlaying && !isDucked ? '5px solid rgba(168, 85, 247, 0.95)' : '5px solid rgba(20, 20, 28, 0.92)',
+        margin: '-1px auto 0 auto'
+      }} />
+
+      {/* Options Dropdown Menu */}
+      {showOptions && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            top: '28px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(15, 15, 22, 0.96)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            padding: '4px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.7)',
+            zIndex: 100,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2px',
+            minWidth: '120px'
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setShowOptions(false);
+              onOpenPicker();
+            }}
+            style={{
+              padding: '6px 8px',
+              borderRadius: '8px',
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--text-main)',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              textAlign: 'left'
+            }}
+          >
+            <Edit3 size={12} color="var(--accent)" /> Change Music
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowOptions(false);
+              deleteMusicNote();
+            }}
+            style={{
+              padding: '6px 8px',
+              borderRadius: '8px',
+              border: 'none',
+              background: 'transparent',
+              color: '#ef4444',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              textAlign: 'left'
+            }}
+          >
+            <Trash2 size={12} /> Remove Note
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowOptions(false)}
+            style={{
+              padding: '4px 8px',
+              borderRadius: '8px',
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--text-muted)',
+              fontSize: '0.68rem',
+              cursor: 'pointer'
+            }}
+          >
+            Close
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
