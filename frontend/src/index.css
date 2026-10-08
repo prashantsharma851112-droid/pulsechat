@@ -2572,3 +2572,49 @@ input, textarea {
     opacity: 0;
   }
 }
+
+/* =========================================================
+   NATIVE-SPEED HARDWARE ACCELERATION & TOUCH OPTIMIZATIONS
+   ========================================================= */
+
+/* 1. Eliminate 300ms mobile touch delay across all interactive elements */
+button, 
+input, 
+select, 
+textarea, 
+a, 
+[role="button"], 
+.icon-btn-ghost, 
+.btn-primary, 
+.btn-secondary, 
+.chat-tab-btn, 
+.emoji-btn, 
+.action-btn, 
+.chat-neon-streak-pill, 
+.bottom-round-vibe-btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 2. Hardware-accelerated GPU compositing for 120fps smooth scrolling */
+.chat-window-container,
+.chat-window-active,
+.pinned-message-banner {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* 3. Native touch-momentum physics */
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 4. Snappy native tactile response on mobile taps */
+button:active:not(:disabled),
+.icon-btn-ghost:active:not(:disabled) {
+  transform: scale(0.96);
+  transition: transform 0.08s cubic-bezier(0.2, 0, 0, 1) !important;
+}
+

@@ -13,6 +13,7 @@ import Sticker3D from '../common/Sticker3D';
 import Animated3DText from '../common/Animated3DText';
 import GiftUnboxModal from './GiftUnboxModal';
 import { getSavedQuickReactions, recordRecentReaction } from '../../utils/quickReactions';
+import { getCachedMediaUrl } from '../../utils/mediaCache';
 
 function StealthDustCard({ message, chatId, isMine, socket }) {
   const [isRevealing, setIsRevealing] = useState(false);
@@ -740,6 +741,17 @@ export default function MessageItem({
   const { user: currentUser } = useContext(AuthContext);
   const [isPlaying, setIsPlaying] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [cachedMediaUrl, setCachedMediaUrl] = useState(message.mediaUrl);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (message.mediaUrl && (message.type === 'image' || message.mediaType === 'image')) {
+      getCachedMediaUrl(message.mediaUrl).then(url => {
+        if (isMounted && url) setCachedMediaUrl(url);
+      });
+    }
+    return () => { isMounted = false; };
+  }, [message.mediaUrl, message.type, message.mediaType]);
   const [audioObj, setAudioObj] = useState(null);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [showThread, setShowThread] = useState(false);
@@ -1882,8 +1894,10 @@ export default function MessageItem({
                   </div>
                 )}
                 <img
-                  src={message.mediaUrl}
+                  src={cachedMediaUrl || message.mediaUrl}
                   alt={message.fileName || "Attached Media"}
+                  loading="lazy"
+                  decoding="async"
                   onClick={() => setShowImagePreview(true)}
                   onLoad={() => setImgLoaded(true)}
                   style={{

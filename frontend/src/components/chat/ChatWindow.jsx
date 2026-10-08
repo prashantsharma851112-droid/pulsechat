@@ -5,30 +5,32 @@ import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
-import CreatePollModal from './CreatePollModal';
-import WhiteboardModal from './WhiteboardModal';
-import UserProfileModal from './UserProfileModal';
-import GroupProfileModal from './GroupProfileModal';
-import MediaUploadModal from './MediaUploadModal';
-import ChatThemeModal from './ChatThemeModal';
-import SolidThemeModal from './SolidThemeModal';
 import ChatLiveWallpaper from './ChatLiveWallpaper';
-import PulseProModal from './PulseProModal';
-import GiftPickerModal from './GiftPickerModal';
-import Animated3DTextModal from './Animated3DTextModal';
-import LiveArrowGameModal from './LiveArrowGameModal';
-import TicTacToeModal from './TicTacToeModal';
-import PulseStreakModal from './PulseStreakModal';
 import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
-import VibeAuraSelectorModal from './VibeAuraSelectorModal';
 import PulseVipBadge from '../common/PulseVipBadge';
-import MusicPickerModal from '../vibes/MusicPickerModal';
-import ForwardModal from './ForwardModal';
-import MessageInfoModal from './MessageInfoModal';
-import SetDefaultReactionsModal from './SetDefaultReactionsModal';
-import VibeViewerModal from '../vibes/VibeViewerModal';
-import SparksWalletModal from './SparksWalletModal';
-import ScheduleMessageModal from './ScheduleMessageModal';
+
+// Code-Splitting: Lazy load heavy modals to drastically reduce initial chat bundle size
+const CreatePollModal = React.lazy(() => import('./CreatePollModal'));
+const WhiteboardModal = React.lazy(() => import('./WhiteboardModal'));
+const UserProfileModal = React.lazy(() => import('./UserProfileModal'));
+const GroupProfileModal = React.lazy(() => import('./GroupProfileModal'));
+const MediaUploadModal = React.lazy(() => import('./MediaUploadModal'));
+const ChatThemeModal = React.lazy(() => import('./ChatThemeModal'));
+const SolidThemeModal = React.lazy(() => import('./SolidThemeModal'));
+const PulseProModal = React.lazy(() => import('./PulseProModal'));
+const GiftPickerModal = React.lazy(() => import('./GiftPickerModal'));
+const Animated3DTextModal = React.lazy(() => import('./Animated3DTextModal'));
+const LiveArrowGameModal = React.lazy(() => import('./LiveArrowGameModal'));
+const TicTacToeModal = React.lazy(() => import('./TicTacToeModal'));
+const PulseStreakModal = React.lazy(() => import('./PulseStreakModal'));
+const VibeAuraSelectorModal = React.lazy(() => import('./VibeAuraSelectorModal'));
+const MusicPickerModal = React.lazy(() => import('../vibes/MusicPickerModal'));
+const ForwardModal = React.lazy(() => import('./ForwardModal'));
+const MessageInfoModal = React.lazy(() => import('./MessageInfoModal'));
+const SetDefaultReactionsModal = React.lazy(() => import('./SetDefaultReactionsModal'));
+const VibeViewerModal = React.lazy(() => import('../vibes/VibeViewerModal'));
+const SparksWalletModal = React.lazy(() => import('./SparksWalletModal'));
+const ScheduleMessageModal = React.lazy(() => import('./ScheduleMessageModal'));
 import { recordRecentReaction } from '../../utils/quickReactions';
 import { uploadMediaDirect } from '../../utils/mediaUpload';
 import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
@@ -6132,6 +6134,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         </>
       )}
 
+      <React.Suspense fallback={null}>
       {pendingMedia && (
         <MediaUploadModal
           mediaFile={pendingMedia}
@@ -6866,6 +6869,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           onClose={() => setShowScheduleModal(false)}
         />
       )}
+      </React.Suspense>
     </div>
   );
 }

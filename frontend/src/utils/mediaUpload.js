@@ -30,7 +30,12 @@ export async function compressImageOnDevice(fileOrDataUrl, maxWidth = 1280, qual
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
 
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        // Try modern high-efficiency WebP first (40% smaller than JPEG with superior clarity)
+        let compressedDataUrl = canvas.toDataURL('image/webp', quality);
+        if (!compressedDataUrl || !compressedDataUrl.startsWith('data:image/webp')) {
+          // Fallback to JPEG if browser doesn't support canvas WebP export
+          compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
         resolve(compressedDataUrl);
       };
 

@@ -5,22 +5,24 @@ import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Sidebar from './components/chat/Sidebar';
 import ChatWindow from './components/chat/ChatWindow';
-import ProfileModal from './components/profile/ProfileModal';
-import SettingsModal from './components/profile/SettingsModal';
-import AdminDashboardModal from './components/admin/AdminDashboardModal';
-import CallModal from './components/chat/CallModal';
-import IncomingCallModal from './components/chat/IncomingCallModal';
-import GroupCallModal from './components/chat/GroupCallModal';
-import IncomingGroupCallModal from './components/chat/IncomingGroupCallModal';
 import EntranceAnimation from './components/common/EntranceAnimation';
 import PandaHero from './components/common/PandaHero';
 import FullDpModal from './components/common/FullDpModal';
 import Toast from './components/common/Toast';
 import EmojiParticleBurst from './components/common/EmojiParticleBurst';
-import AppOnboardingModal from './components/common/AppOnboardingModal';
-import LegalView from './components/common/LegalView';
-import LegalModal from './components/common/LegalModal';
-import PulseHandleCardModal from './components/profile/PulseHandleCardModal';
+
+// Code-Splitting: Lazy load heavy modals to maximize initial app boot speed
+const ProfileModal = React.lazy(() => import('./components/profile/ProfileModal'));
+const SettingsModal = React.lazy(() => import('./components/profile/SettingsModal'));
+const AdminDashboardModal = React.lazy(() => import('./components/admin/AdminDashboardModal'));
+const CallModal = React.lazy(() => import('./components/chat/CallModal'));
+const IncomingCallModal = React.lazy(() => import('./components/chat/IncomingCallModal'));
+const GroupCallModal = React.lazy(() => import('./components/chat/GroupCallModal'));
+const IncomingGroupCallModal = React.lazy(() => import('./components/chat/IncomingGroupCallModal'));
+const AppOnboardingModal = React.lazy(() => import('./components/common/AppOnboardingModal'));
+const LegalView = React.lazy(() => import('./components/common/LegalView'));
+const LegalModal = React.lazy(() => import('./components/common/LegalModal'));
+const PulseHandleCardModal = React.lazy(() => import('./components/profile/PulseHandleCardModal'));
 import { BACKEND_URL } from './utils/config';
 import { updateUserProfileInStorage, clearUnreadCount, getCachedAllUsers } from './utils/offlineStorage';
 import { initBackListeners, useBackHandler } from './utils/backNavigation';
@@ -740,133 +742,136 @@ export default function App() {
         </>
       )}
 
-      {showProfile && (
-        <ProfileModal
-          onClose={() => setShowProfile(false)}
-          onOpenFullDp={handleOpenFullDp}
-        />
-      )}
-      {showSettings && (
-        <SettingsModal
-          onClose={() => setShowSettings(false)}
-          openProfileModal={() => { setShowSettings(false); setShowProfile(true); }}
-          onOpenFullDp={handleOpenFullDp}
-          openAdminModal={() => setShowAdminModal(true)}
-        />
-      )}
-
-      {showAdminModal && (
-        <AdminDashboardModal onClose={() => setShowAdminModal(false)} />
-      )}
-
-      {/* Full Screen DP Lightbox Modal */}
-      {fullDpData && (
-        <FullDpModal
-          imageUrl={fullDpData.imageUrl}
-          name={fullDpData.name}
-          username={fullDpData.username}
-          onClose={() => setFullDpData(null)}
-        />
-      )}
-
-      {/* Incoming Call Popup */}
-      {incomingCallData && (
-        <IncomingCallModal
-          callData={incomingCallData}
-          onAccept={handleAcceptIncomingCall}
-          onDecline={handleDeclineIncomingCall}
-        />
-      )}
-
-      {/* WebRTC Video/Audio Call Window */}
-      {activeCall && (
-        <CallModal
-          targetUser={activeCall.targetUser}
-          isVideo={activeCall.isVideo}
-          isCaller={activeCall.isCaller}
-          incomingSignal={activeCall.incomingSignal}
-          initialCandidates={activeCall.initialCandidates}
-          onClose={() => setActiveCall(null)}
-        />
-      )}
-
-      {/* Real-Time Multi-Party Group Call Window */}
-      {activeGroupCall && (
-        <GroupCallModal
-          group={activeGroupCall.group}
-          isVideo={activeGroupCall.isVideo}
-          isCaller={activeGroupCall.isCaller}
-          onClose={() => setActiveGroupCall(null)}
-        />
-      )}
-
-      {/* Incoming Group Call Popup */}
-      {incomingGroupCallData && (
-        <IncomingGroupCallModal
-          callData={incomingGroupCallData}
-          onAccept={handleAcceptIncomingGroupCall}
-          onDecline={handleDeclineIncomingGroupCall}
-        />
-      )}
-
-      {/* Toast Notifications */}
-      <div style={{ position: 'fixed', top: '20px', right: '20px', display: 'flex', flexDirection: 'column', gap: '10px', zIndex: 1000 }}>
-        {toasts.map(t => (
-          <Toast
-            key={t.id}
-            title={t.title || "New message"}
-            body={t.body}
-            avatar={t.avatar}
-            onClick={() => {
-              if (t.isFriendRequest || t.isFriendAccepted) {
-                window.dispatchEvent(new CustomEvent('pulsechat_open_tab', { detail: { tab: 'friends', subTab: t.isFriendRequest ? 'requests' : 'friends' } }));
-              } else {
-                openChatById(t.chatId, t.senderId, t.isGroup);
-              }
-              dismissToast(t.id);
-            }}
-            onDismiss={() => dismissToast(t.id)}
+      <React.Suspense fallback={null}>
+        {showProfile && (
+          <ProfileModal
+            onClose={() => setShowProfile(false)}
+            onOpenFullDp={handleOpenFullDp}
           />
-        ))}
-      </div>
-      {/* Interactive App Features Walkthrough Onboarding Modal (First time only) */}
-      {showOnboardingModal && (
-        <AppOnboardingModal
-          userId={user?.id}
-          onClose={() => {
-            if (user?.id) {
-              localStorage.setItem(`pulsechat_onboarding_${user.id}`, 'true');
-              localStorage.setItem(`pulsechat_feature_tour_completed_${user.id}`, 'true');
-            }
-            localStorage.setItem('pulsechat_onboarding_completed', 'true');
-            setShowOnboardingModal(false);
-          }}
-        />
-      )}
+        )}
+        {showSettings && (
+          <SettingsModal
+            onClose={() => setShowSettings(false)}
+            openProfileModal={() => { setShowSettings(false); setShowProfile(true); }}
+            onOpenFullDp={handleOpenFullDp}
+            openAdminModal={() => setShowAdminModal(true)}
+          />
+        )}
 
-      {/* Global 3D Floating Emoji Particle Burst Engine */}
-      <EmojiParticleBurst />
+        {showAdminModal && (
+          <AdminDashboardModal onClose={() => setShowAdminModal(false)} />
+        )}
 
-      {/* Compliance & Legal Modal */}
-      {legalModalTab && (
-        <LegalModal
-          initialTab={legalModalTab}
-          onClose={() => setLegalModalTab(null)}
-        />
-      )}
+        {/* Full Screen DP Lightbox Modal */}
+        {fullDpData && (
+          <FullDpModal
+            imageUrl={fullDpData.imageUrl}
+            name={fullDpData.name}
+            username={fullDpData.username}
+            onClose={() => setFullDpData(null)}
+          />
+        )}
 
-      {/* Pulse Handle Card Modal */}
-      {modalHandleUser && (
-        <PulseHandleCardModal
-          targetUser={modalHandleUser}
-          currentUser={user}
-          onClose={() => setModalHandleUser(null)}
-          onOpenChat={(chatUser) => {
-            setModalHandleUser(null);
-            setActiveChat(chatUser);
-          }}
-        />
-      )}
+        {/* Incoming Call Popup */}
+        {incomingCallData && (
+          <IncomingCallModal
+            callData={incomingCallData}
+            onAccept={handleAcceptIncomingCall}
+            onDecline={handleDeclineIncomingCall}
+          />
+        )}
+
+        {/* WebRTC Video/Audio Call Window */}
+        {activeCall && (
+          <CallModal
+            targetUser={activeCall.targetUser}
+            isVideo={activeCall.isVideo}
+            isCaller={activeCall.isCaller}
+            incomingSignal={activeCall.incomingSignal}
+            initialCandidates={activeCall.initialCandidates}
+            onClose={() => setActiveCall(null)}
+          />
+        )}
+
+        {/* Real-Time Multi-Party Group Call Window */}
+        {activeGroupCall && (
+          <GroupCallModal
+            group={activeGroupCall.group}
+            isVideo={activeGroupCall.isVideo}
+            isCaller={activeGroupCall.isCaller}
+            onClose={() => setActiveGroupCall(null)}
+          />
+        )}
+
+        {/* Incoming Group Call Popup */}
+        {incomingGroupCallData && (
+          <IncomingGroupCallModal
+            callData={incomingGroupCallData}
+            onAccept={handleAcceptIncomingGroupCall}
+            onDecline={handleDeclineIncomingGroupCall}
+          />
+        )}
+
+        {/* Toast Notifications */}
+        <div style={{ position: 'fixed', top: '20px', right: '20px', display: 'flex', flexDirection: 'column', gap: '10px', zIndex: 1000 }}>
+          {toasts.map(t => (
+            <Toast
+              key={t.id}
+              title={t.title || "New message"}
+              body={t.body}
+              avatar={t.avatar}
+              onClick={() => {
+                if (t.isFriendRequest || t.isFriendAccepted) {
+                  window.dispatchEvent(new CustomEvent('pulsechat_open_tab', { detail: { tab: 'friends', subTab: t.isFriendRequest ? 'requests' : 'friends' } }));
+                } else {
+                  openChatById(t.chatId, t.senderId, t.isGroup);
+                }
+                dismissToast(t.id);
+              }}
+              onDismiss={() => dismissToast(t.id)}
+            />
+          ))}
+        </div>
+
+        {/* Interactive App Features Walkthrough Onboarding Modal (First time only) */}
+        {showOnboardingModal && (
+          <AppOnboardingModal
+            userId={user?.id}
+            onClose={() => {
+              if (user?.id) {
+                localStorage.setItem(`pulsechat_onboarding_${user.id}`, 'true');
+                localStorage.setItem(`pulsechat_feature_tour_completed_${user.id}`, 'true');
+              }
+              localStorage.setItem('pulsechat_onboarding_completed', 'true');
+              setShowOnboardingModal(false);
+            }}
+          />
+        )}
+
+        {/* Global 3D Floating Emoji Particle Burst Engine */}
+        <EmojiParticleBurst />
+
+        {/* Compliance & Legal Modal */}
+        {legalModalTab && (
+          <LegalModal
+            initialTab={legalModalTab}
+            onClose={() => setLegalModalTab(null)}
+          />
+        )}
+
+        {/* Pulse Handle Card Modal */}
+        {modalHandleUser && (
+          <PulseHandleCardModal
+            targetUser={modalHandleUser}
+            currentUser={user}
+            onClose={() => setModalHandleUser(null)}
+            onOpenChat={(chatUser) => {
+              setModalHandleUser(null);
+              setActiveChat(chatUser);
+            }}
+          />
+        )}
+      </React.Suspense>
       </div>
     </ErrorBoundary>
   );

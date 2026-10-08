@@ -2,22 +2,24 @@ import React, { useState, useContext, useEffect, useCallback, useMemo, useRef } 
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass, Edit3, Pin } from 'lucide-react';
-import CreateGroupModal from './CreateGroupModal';
-import SettingsModal from '../profile/SettingsModal';
-import AdminDashboardModal from '../admin/AdminDashboardModal';
 import FriendsTab from './FriendsTab';
-import PulseProModal from './PulseProModal';
-import AppFeatureTourModal from '../common/AppFeatureTourModal';
 import { useBackHandler } from '../../utils/backNavigation';
 import PulseVipBadge from '../common/PulseVipBadge';
 import PulseVibesBar from '../vibes/PulseVibesBar';
-import CreateVibeModal from '../vibes/CreateVibeModal';
-import VibeViewerModal from '../vibes/VibeViewerModal';
-import PulseZoneModal from '../zone/PulseZoneModal';
-import SparksWalletModal from './SparksWalletModal';
 import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
-import VibeAuraSelectorModal from './VibeAuraSelectorModal';
 import { Gamepad2 } from 'lucide-react';
+
+// Code-Splitting: Lazy load heavy modals to keep initial sidebar light and instant
+const CreateGroupModal = React.lazy(() => import('./CreateGroupModal'));
+const SettingsModal = React.lazy(() => import('../profile/SettingsModal'));
+const AdminDashboardModal = React.lazy(() => import('../admin/AdminDashboardModal'));
+const PulseProModal = React.lazy(() => import('./PulseProModal'));
+const AppFeatureTourModal = React.lazy(() => import('../common/AppFeatureTourModal'));
+const CreateVibeModal = React.lazy(() => import('../vibes/CreateVibeModal'));
+const VibeViewerModal = React.lazy(() => import('../vibes/VibeViewerModal'));
+const PulseZoneModal = React.lazy(() => import('../zone/PulseZoneModal'));
+const SparksWalletModal = React.lazy(() => import('./SparksWalletModal'));
+const VibeAuraSelectorModal = React.lazy(() => import('./VibeAuraSelectorModal'));
 import { BACKEND_URL } from '../../utils/config';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
 import {
@@ -2849,6 +2851,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         </button>
       </div>
 
+      <React.Suspense fallback={null}>
       {showCreateGroupModal && (
         <CreateGroupModal
           onClose={() => setShowCreateGroupModal(false)}
@@ -2961,6 +2964,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           currentAura={myAura}
         />
       )}
+      </React.Suspense>
     </div>
   );
 }
