@@ -119,24 +119,71 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
         {/* Note Thought Bubble Input */}
         <div>
           <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '6px' }}>
-            💭 Share a thought (optional)
+            💭 Share a thought / vibe
           </label>
           <input
             type="text"
             className="form-input"
-            placeholder="e.g. Chai Break ☕, Late Night Coding 🎧"
+            placeholder="e.g. Chai Break ☕, Always happy ⚡, Late Night 🎧"
             value={noteText}
             onChange={(e) => setNoteText(e.target.value)}
             maxLength={60}
             style={{ fontSize: '0.85rem' }}
           />
+
+          {/* Quick Vibe Chips */}
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '6px',
+            marginTop: '8px'
+          }}>
+            {['☕ Chai Break', '🎧 Vibing', '⚡ Energy', '🌙 Night Owl', '🔥 On Fire', '💪 Gym Beast', '💖 In Love'].map(chip => (
+              <button
+                key={chip}
+                type="button"
+                onClick={() => setNoteText(chip)}
+                style={{
+                  background: noteText === chip ? 'rgba(168, 85, 247, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                  border: noteText === chip ? '1px solid #a855f7' : '1px solid var(--border)',
+                  borderRadius: '12px',
+                  padding: '3px 8px',
+                  fontSize: '0.70rem',
+                  fontWeight: 600,
+                  color: noteText === chip ? '#c084fc' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Selected Song Box / Attach Button */}
         <div>
-          <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '6px' }}>
-            🎵 Selected Track
-          </label>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <label className="form-label" style={{ fontSize: '0.78rem', margin: 0 }}>
+              🎵 Attach Music (Optional)
+            </label>
+            {selectedSong && (
+              <button
+                type="button"
+                onClick={() => setSelectedSong(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  fontSize: '0.70rem',
+                  cursor: 'pointer',
+                  textDecoration: 'underline'
+                }}
+              >
+                Remove Song
+              </button>
+            )}
+          </div>
           {selectedSong ? (
             <div style={{
               background: 'rgba(255, 255, 255, 0.04)',
@@ -261,7 +308,7 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
-          {currentTrack && (
+          {(currentTrack || musicNoteText) && (
             <button
               type="button"
               onClick={handleDelete}
@@ -284,7 +331,7 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
           <button
             type="button"
             onClick={handleSave}
-            disabled={!selectedSong}
+            disabled={!selectedSong && !noteText.trim()}
             className="btn-primary"
             style={{
               flex: 1,
@@ -298,7 +345,7 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
               gap: '6px'
             }}
           >
-            <Sparkles size={16} /> Share Note & Play Music
+            <Sparkles size={16} /> Share Note on DP
           </button>
         </div>
       </div>

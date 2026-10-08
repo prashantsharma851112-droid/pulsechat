@@ -203,7 +203,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [showVibeSelector, setShowVibeSelector] = useState(false);
   const [showTopMenu, setShowTopMenu] = useState(false);
   const [showSwitchAccountMenu, setShowSwitchAccountMenu] = useState(false);
-  const [showHubMenu, setShowHubMenu] = useState(false);
   const [showMusicPickerModal, setShowMusicPickerModal] = useState(false);
 
   useEffect(() => {
@@ -215,11 +214,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   // Hardware/Swipe Back button closes popup menus or clears search bar safely
   useBackHandler(() => setShowTopMenu(false), showTopMenu);
   useBackHandler(() => setShowSwitchAccountMenu(false), showSwitchAccountMenu);
-  useBackHandler(() => setShowHubMenu(false), showHubMenu);
   useBackHandler(() => setSearchQuery(''), Boolean(searchQuery));
   const topMenuRef = useRef(null);
   const switchAccountMenuRef = useRef(null);
-  const hubMenuRef = useRef(null);
   const activeChatRef = React.useRef(activeChat);
   useEffect(() => {
     activeChatRef.current = activeChat;
@@ -263,11 +260,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       if (switchAccountMenuRef.current && !switchAccountMenuRef.current.contains(e.target)) {
         setShowSwitchAccountMenu(false);
       }
-      if (hubMenuRef.current && !hubMenuRef.current.contains(e.target)) {
-        setShowHubMenu(false);
-      }
     };
-    if (showTopMenu || showSwitchAccountMenu || showHubMenu) {
+    if (showTopMenu || showSwitchAccountMenu) {
       document.addEventListener('mousedown', handleOutsideClick);
       document.addEventListener('touchstart', handleOutsideClick);
     }
@@ -275,7 +269,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       document.removeEventListener('mousedown', handleOutsideClick);
       document.removeEventListener('touchstart', handleOutsideClick);
     };
-  }, [showTopMenu, showSwitchAccountMenu, showHubMenu]);
+  }, [showTopMenu, showSwitchAccountMenu]);
 
   // Load friendship status and pending friend requests count
   const loadFriendshipInfo = useCallback(async (externalSignal) => {
@@ -1858,196 +1852,30 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             )}
           </div>
 
-          {/* Entertainment Hub (Music & Games) Button right next to Switch Account */}
-          <div style={{ position: 'relative' }} ref={hubMenuRef}>
-            <button
-              onClick={() => {
-                setShowHubMenu(prev => !prev);
-                setShowSwitchAccountMenu(false);
-                setShowTopMenu(false);
-              }}
-              title="Pulse Hub: Music & Games"
-              className="icon-btn-ghost"
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '50%',
-                background: showHubMenu
-                  ? 'var(--accent)'
-                  : (isAppMusicPlaying
-                      ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.35), rgba(99, 102, 241, 0.35))'
-                      : 'rgba(255, 255, 255, 0.05)'),
-                color: showHubMenu ? '#fff' : (isAppMusicPlaying ? '#c084fc' : 'var(--text-muted)'),
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: isAppMusicPlaying ? '1.5px solid #a855f7' : '1px solid var(--border)',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer',
-                position: 'relative',
-                boxShadow: isAppMusicPlaying ? '0 0 14px rgba(168, 85, 247, 0.45)' : 'none'
-              }}
-            >
-              {isAppMusicPlaying ? (
-                <Disc size={18} style={{ animation: 'spin 3s linear infinite' }} />
-              ) : (
-                <Sparkles size={17} color="#a855f7" />
-              )}
-              {appMusicTrack && !isAppMusicPlaying && (
-                <span style={{
-                  position: 'absolute',
-                  top: '6px',
-                  right: '6px',
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: '#a855f7'
-                }} />
-              )}
-            </button>
-
-            {/* Hub Dropdown Menu (Music & Game - Clean Icon Action Buttons) */}
-            {showHubMenu && (
-              <div
-                className="topbar-dropdown-menu"
-                style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 8px)',
-                  right: '-8px',
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '18px',
-                  boxShadow: '0 16px 40px rgba(0,0,0,0.5), 0 0 25px rgba(168, 85, 247, 0.2)',
-                  zIndex: 1100,
-                  padding: '10px 14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '14px',
-                  animation: 'pulseModalPop 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
-                }}
-              >
-                {/* 1. Music Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowHubMenu(false);
-                    setShowMusicPickerModal(true);
-                  }}
-                  className="action-grid-item"
-                  title="Music"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: '4px 6px',
-                    borderRadius: '12px',
-                    transition: 'transform 0.15s ease'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-                >
-                  <div style={{
-                    width: '46px',
-                    height: '46px',
-                    borderRadius: '14px',
-                    background: isAppMusicPlaying
-                      ? 'linear-gradient(135deg, #a855f7, #6366f1)'
-                      : 'linear-gradient(135deg, #9333ea, #4f46e5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#fff',
-                    boxShadow: isAppMusicPlaying
-                      ? '0 4px 16px rgba(168, 85, 247, 0.6)'
-                      : '0 4px 12px rgba(147, 51, 234, 0.35)',
-                    position: 'relative'
-                  }}>
-                    {isAppMusicPlaying ? (
-                      <Disc size={22} style={{ animation: 'spin 3s linear infinite' }} />
-                    ) : (
-                      <Music size={22} />
-                    )}
-                    {appMusicTrack && (
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleAppMusic();
-                        }}
-                        title={isAppMusicPlaying ? "Pause music" : "Play music"}
-                        style={{
-                          position: 'absolute',
-                          bottom: '-2px',
-                          right: '-2px',
-                          width: '18px',
-                          height: '18px',
-                          borderRadius: '50%',
-                          background: '#a855f7',
-                          border: '1.5px solid var(--bg-card)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          boxShadow: '0 2px 6px rgba(0,0,0,0.4)'
-                        }}
-                      >
-                        {isAppMusicPlaying ? <Pause size={9} fill="#fff" color="#fff" /> : <Play size={9} fill="#fff" color="#fff" />}
-                      </span>
-                    )}
-                  </div>
-                  <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                    Music
-                  </span>
-                </button>
-
-                {/* 2. Games Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowHubMenu(false);
-                    setShowPulseZone(true);
-                  }}
-                  className="action-grid-item"
-                  title="Games"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: '4px 6px',
-                    borderRadius: '12px',
-                    transition: 'transform 0.15s ease'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-                >
-                  <div style={{
-                    width: '46px',
-                    height: '46px',
-                    borderRadius: '14px',
-                    background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#fff',
-                    boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
-                  }}>
-                    <Gamepad2 size={22} />
-                  </div>
-                  <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                    Games
-                  </span>
-                </button>
-              </div>
-            )}
-          </div>
+          {/* Topbar Mini-Games (Pulse Zone) Button right next to Switch Account */}
+          <button
+            onClick={() => setShowPulseZone(true)}
+            title="Pulse Zone (Mini-Games & Leaderboard)"
+            className="icon-btn-ghost"
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(239, 68, 68, 0.18))',
+              border: '1px solid rgba(245, 158, 11, 0.4)',
+              color: '#f59e0b',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease',
+              cursor: 'pointer',
+              flexShrink: 0
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            <Gamepad2 size={18} />
+          </button>
 
           {/* Topbar Single 3-Dot More Menu */}
           <div style={{ position: 'relative' }} ref={topMenuRef}>
@@ -2712,7 +2540,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
                     style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
                   >
-                    <VibeAuraRing aura={friendAura} size={48} isGroup={u.isGroup} hasCrown={Boolean(u.hasKingCrown || u.hasSilverCrown || u.hasStreakCrown)}>
+                    <VibeAuraRing aura={friendAura} size={48} isGroup={u.isGroup} hasCrown={Boolean(u.hasKingCrown || u.hasSilverCrown || u.hasStreakCrown)} showNoteBubble={false}>
                       <div
                         className={u.isPro ? 'pro-neon-avatar' : ''}
                         style={{ position: 'relative', flexShrink: 0 }}
@@ -2977,44 +2805,57 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
         <button
           className="bottom-round-vibe-btn"
-          onClick={() => setShowVibeSelector(true)}
-          title={myAura?.mood ? `Vibe: ${myAura.mood} (Tap to change)` : 'Set Your Vibe & Aura'}
+          onClick={() => setShowMusicPickerModal(true)}
+          title={appMusicTrack ? `Background Music: ${appMusicTrack.songTitle} (${isAppMusicPlaying ? 'Playing' : 'Paused'})` : 'Background Music (Spotify-style)'}
           style={{
             width: '56px',
             height: '56px',
             borderRadius: '50%',
-            background: myAura?.auraColor
-              ? `radial-gradient(circle at 35% 35%, ${myAura.auraColor}ee, #09090b)`
+            background: isAppMusicPlaying
+              ? 'radial-gradient(circle at 35% 35%, #a855f7ee, #09090b)'
               : 'radial-gradient(circle at 35% 35%, #8b5cf6, #09090b)',
-            border: `2px solid ${myAura?.auraColor || 'rgba(168, 85, 247, 0.75)'}`,
+            border: `2px solid ${isAppMusicPlaying ? '#a855f7' : 'rgba(168, 85, 247, 0.75)'}`,
             color: '#ffffff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
             position: 'relative',
-            padding: 0
+            padding: 0,
+            boxShadow: isAppMusicPlaying ? '0 0 20px rgba(168, 85, 247, 0.65)' : '0 6px 18px rgba(0,0,0,0.5)'
           }}
         >
-          <span style={{ fontSize: '1.5rem', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.65))' }}>
-            {myAura?.emoji || '⚡'}
-          </span>
-          <div style={{
-            position: 'absolute',
-            bottom: '-1px',
-            right: '-1px',
-            background: '#09090b',
-            border: '1.5px solid rgba(255, 255, 255, 0.4)',
-            borderRadius: '50%',
-            width: '20px',
-            height: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.6)'
-          }}>
-            <Edit3 size={11} color="#e2e8f0" />
-          </div>
+          {isAppMusicPlaying ? (
+            <Disc size={26} style={{ animation: 'spin 3s linear infinite', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.65))' }} />
+          ) : (
+            <Music size={26} style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.65))' }} />
+          )}
+          {appMusicTrack && (
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleAppMusic();
+              }}
+              title={isAppMusicPlaying ? "Pause music" : "Play music"}
+              style={{
+                position: 'absolute',
+                bottom: '-1px',
+                right: '-1px',
+                background: '#09090b',
+                border: '1.5px solid rgba(255, 255, 255, 0.4)',
+                borderRadius: '50%',
+                width: '20px',
+                height: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
+                cursor: 'pointer'
+              }}
+            >
+              {isAppMusicPlaying ? <Pause size={10} fill="#fff" color="#fff" /> : <Play size={10} fill="#fff" color="#fff" />}
+            </div>
+          )}
         </button>
       </div>
 

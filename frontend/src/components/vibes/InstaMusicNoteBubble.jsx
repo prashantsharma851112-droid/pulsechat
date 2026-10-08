@@ -107,7 +107,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
         }}
         style={{
           position: 'absolute',
-          top: '-18px',
+          bottom: 'calc(100% + 4px)',
           left: '50%',
           transform: 'translateX(-50%)',
           zIndex: 15,
@@ -147,17 +147,24 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
     );
   }
 
+  const hasText = Boolean(activeNote.noteText && activeNote.noteText.trim());
+  const hasSong = Boolean(activeNote.songTitle && activeNote.songTitle.trim());
+
   // Active Music Note Bubble (Instagram-style: Tap to hear snippet, tap again / outside to stop!)
   return (
     <div
       style={{
         position: 'absolute',
-        top: '-24px',
+        bottom: 'calc(100% + 4px)',
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 15,
         cursor: 'pointer',
-        animation: 'fadeIn 0.2s ease-out'
+        animation: 'fadeIn 0.2s ease-out',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        pointerEvents: 'auto'
       }}
       onClick={handleTogglePlayNote}
       onContextMenu={(e) => {
@@ -166,78 +173,106 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
         e.stopPropagation();
         setShowOptions(true);
       }}
-      title={`${activeNote.songTitle} - ${activeNote.artistName || ''} (Tap to listen, tap again to stop)`}
+      title={`${hasText ? activeNote.noteText + ' · ' : ''}${activeNote.songTitle || ''} (Tap to listen/stop)`}
     >
       <div style={{
         background: isPlayingNote
-          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.95))'
-          : 'rgba(20, 20, 28, 0.92)',
+          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.96), rgba(168, 85, 247, 0.96))'
+          : 'rgba(20, 20, 28, 0.94)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
         border: isPlayingNote ? '1.5px solid #c084fc' : '1px solid rgba(255, 255, 255, 0.2)',
         borderRadius: '16px',
-        padding: '3px 8px',
+        padding: hasText && hasSong ? '4px 8px' : '3px 8px',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
-        gap: '5px',
+        gap: '2px',
         boxShadow: isPlayingNote
           ? '0 4px 14px rgba(168, 85, 247, 0.5), 0 0 10px rgba(168, 85, 247, 0.4)'
-          : '0 4px 10px rgba(0,0,0,0.4)',
-        maxWidth: '120px',
-        whiteSpace: 'nowrap',
+          : '0 4px 10px rgba(0,0,0,0.5)',
+        maxWidth: '145px',
         transition: 'all 0.2s ease'
       }}>
-        {/* Animated Disc / Music Note Icon */}
-        <div style={{
-          width: '14px',
-          height: '14px',
-          borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0
-        }}>
-          {isPlayingNote ? (
-            <Disc size={13} color="#ffffff" style={{ animation: 'spin 2.5s linear infinite' }} />
-          ) : (
-            <Music size={11} color="#c084fc" />
-          )}
-        </div>
+        {/* Top: Thought / Vibe text (if any) */}
+        {hasText && (
+          <div style={{
+            fontSize: '0.64rem',
+            fontWeight: 700,
+            color: '#ffffff',
+            lineHeight: 1.15,
+            textAlign: 'center',
+            maxWidth: '135px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}>
+            {activeNote.noteText}
+          </div>
+        )}
 
-        {/* Note Thought + Song Title */}
-        <div style={{
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          fontSize: '0.64rem',
-          fontWeight: 700,
-          color: '#ffffff',
-          lineHeight: 1.1
-        }}>
-          {activeNote.noteText ? `${activeNote.noteText} · ` : ''}{activeNote.songTitle}
-        </div>
-
-        {/* Mini Edit / Delete Options button for Owner */}
-        {isMine && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowOptions(prev => !prev);
-            }}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              padding: 0,
-              color: 'rgba(255, 255, 255, 0.75)',
-              cursor: 'pointer',
+        {/* Bottom / Main: Song Title Pill */}
+        {hasSong && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            maxWidth: '135px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              width: '12px',
+              height: '12px',
+              borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'center',
               flexShrink: 0
-            }}
-            title="Note Options"
-          >
-            <Edit3 size={9} />
-          </button>
+            }}>
+              {isPlayingNote ? (
+                <Disc size={12} color="#ffffff" style={{ animation: 'spin 2.5s linear infinite' }} />
+              ) : (
+                <Music size={10} color="#c084fc" />
+              )}
+            </div>
+
+            <span style={{
+              fontSize: '0.60rem',
+              fontWeight: 600,
+              color: isPlayingNote ? '#ffffff' : '#cbd5e1',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              lineHeight: 1.1
+            }}>
+              {activeNote.songTitle}
+            </span>
+
+            {/* Mini Edit / Delete Options button for Owner */}
+            {isMine && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowOptions(prev => !prev);
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  color: 'rgba(255, 255, 255, 0.75)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexShrink: 0,
+                  marginLeft: '2px'
+                }}
+                title="Note Options"
+              >
+                <Edit3 size={9} />
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -247,7 +282,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
         height: 0,
         borderLeft: '4px solid transparent',
         borderRight: '4px solid transparent',
-        borderTop: isPlayingNote ? '5px solid rgba(168, 85, 247, 0.95)' : '5px solid rgba(20, 20, 28, 0.92)',
+        borderTop: isPlayingNote ? '5px solid rgba(168, 85, 247, 0.95)' : '5px solid rgba(20, 20, 28, 0.94)',
         margin: '-1px auto 0 auto'
       }} />
 

@@ -540,12 +540,13 @@ router.put('/music-note', authMiddleware, async (req, res) => {
   try {
     const { song, noteText } = req.body;
     const targetUserId = req.user.id;
-    const musicNote = song ? {
-      songTitle: song.songTitle,
-      artistName: song.artistName,
-      audioUrl: song.audioUrl,
-      artworkUrl: song.artworkUrl,
-      duration: song.duration,
+    const hasContent = Boolean(song || (noteText && noteText.trim()));
+    const musicNote = hasContent ? {
+      songTitle: song?.songTitle || '',
+      artistName: song?.artistName || '',
+      audioUrl: song?.audioUrl || '',
+      artworkUrl: song?.artworkUrl || '',
+      duration: song?.duration || 0,
       noteText: (noteText || '').trim(),
       updatedAt: new Date().toISOString()
     } : null;
