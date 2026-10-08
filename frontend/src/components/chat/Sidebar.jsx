@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass, Edit3, Pin, Music, Disc } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass, Edit3, Pin, Music, Disc, Play, Pause } from 'lucide-react';
 import FriendsTab from './FriendsTab';
 import { useBackHandler } from '../../utils/backNavigation';
 import PulseVipBadge from '../common/PulseVipBadge';
@@ -263,8 +263,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       if (switchAccountMenuRef.current && !switchAccountMenuRef.current.contains(e.target)) {
         setShowSwitchAccountMenu(false);
       }
+      if (hubMenuRef.current && !hubMenuRef.current.contains(e.target)) {
+        setShowHubMenu(false);
+      }
     };
-    if (showTopMenu || showSwitchAccountMenu) {
+    if (showTopMenu || showSwitchAccountMenu || showHubMenu) {
       document.addEventListener('mousedown', handleOutsideClick);
       document.addEventListener('touchstart', handleOutsideClick);
     }
@@ -272,7 +275,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       document.removeEventListener('mousedown', handleOutsideClick);
       document.removeEventListener('touchstart', handleOutsideClick);
     };
-  }, [showTopMenu, showSwitchAccountMenu]);
+  }, [showTopMenu, showSwitchAccountMenu, showHubMenu]);
 
   // Load friendship status and pending friend requests count
   const loadFriendshipInfo = useCallback(async (externalSignal) => {
@@ -1903,176 +1906,144 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               )}
             </button>
 
-            {/* Hub Dropdown Menu (Music & Game) */}
+            {/* Hub Dropdown Menu (Music & Game - Clean Icon Action Buttons) */}
             {showHubMenu && (
               <div
                 className="topbar-dropdown-menu"
                 style={{
                   position: 'absolute',
                   top: 'calc(100% + 8px)',
-                  right: '-10px',
-                  width: '280px',
-                  background: 'var(--bg-sidebar)',
+                  right: '-8px',
+                  background: 'var(--bg-card)',
                   border: '1px solid var(--border)',
-                  borderRadius: '16px',
-                  boxShadow: '0 12px 36px rgba(0,0,0,0.55)',
+                  borderRadius: '18px',
+                  boxShadow: '0 16px 40px rgba(0,0,0,0.5), 0 0 25px rgba(168, 85, 247, 0.2)',
                   zIndex: 1100,
-                  padding: '10px',
+                  padding: '10px 14px',
                   display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '14px',
                   animation: 'pulseModalPop 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
                 }}
               >
-                {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px 8px 6px', borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Sparkles size={15} color="#a855f7" />
-                    <span style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-main)' }}>Pulse Hub</span>
-                  </div>
-                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Music & Games</span>
-                </div>
-
-                {/* 1. Spotify-Style App Background Music Option */}
-                <div
+                {/* 1. Music Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowHubMenu(false);
+                    setShowMusicPickerModal(true);
+                  }}
+                  className="action-grid-item"
+                  title="Music"
                   style={{
-                    background: isAppMusicPlaying ? 'rgba(168, 85, 247, 0.12)' : 'var(--bg-card)',
-                    border: isAppMusicPlaying ? '1px solid rgba(168, 85, 247, 0.35)' : '1px solid var(--border)',
-                    borderRadius: '12px',
-                    padding: '10px',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '8px'
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px 6px',
+                    borderRadius: '12px',
+                    transition: 'transform 0.15s ease'
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                      <div style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '10px',
-                        background: 'linear-gradient(135deg, #a855f7, #6366f1)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#fff',
-                        flexShrink: 0
-                      }}>
-                        {isAppMusicPlaying ? (
-                          <Disc size={17} style={{ animation: 'spin 3s linear infinite' }} />
-                        ) : (
-                          <Music size={16} />
-                        )}
-                      </div>
-                      <div style={{ overflow: 'hidden' }}>
-                        <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {appMusicTrack ? appMusicTrack.songTitle : 'Background Music'}
-                        </div>
-                        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {appMusicTrack ? (appMusicTrack.artistName || 'Spotify-Style Playing') : 'Listen while using app'}
-                        </div>
-                      </div>
-                    </div>
-
+                  <div style={{
+                    width: '46px',
+                    height: '46px',
+                    borderRadius: '14px',
+                    background: isAppMusicPlaying
+                      ? 'linear-gradient(135deg, #a855f7, #6366f1)'
+                      : 'linear-gradient(135deg, #9333ea, #4f46e5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    boxShadow: isAppMusicPlaying
+                      ? '0 4px 16px rgba(168, 85, 247, 0.6)'
+                      : '0 4px 12px rgba(147, 51, 234, 0.35)',
+                    position: 'relative'
+                  }}>
+                    {isAppMusicPlaying ? (
+                      <Disc size={22} style={{ animation: 'spin 3s linear infinite' }} />
+                    ) : (
+                      <Music size={22} />
+                    )}
                     {appMusicTrack && (
-                      <button
-                        type="button"
+                      <span
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleAppMusic();
                         }}
+                        title={isAppMusicPlaying ? "Pause music" : "Play music"}
                         style={{
-                          background: 'rgba(168, 85, 247, 0.2)',
-                          border: '1px solid #a855f7',
+                          position: 'absolute',
+                          bottom: '-2px',
+                          right: '-2px',
+                          width: '18px',
+                          height: '18px',
                           borderRadius: '50%',
-                          width: '28px',
-                          height: '28px',
-                          color: '#fff',
+                          background: '#a855f7',
+                          border: '1.5px solid var(--bg-card)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           cursor: 'pointer',
-                          flexShrink: 0
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.4)'
                         }}
-                        title={isAppMusicPlaying ? "Pause" : "Play"}
                       >
-                        {isAppMusicPlaying ? <Pause size={13} fill="#fff" /> : <Play size={13} fill="#fff" />}
-                      </button>
+                        {isAppMusicPlaying ? <Pause size={9} fill="#fff" color="#fff" /> : <Play size={9} fill="#fff" color="#fff" />}
+                      </span>
                     )}
                   </div>
+                  <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Music
+                  </span>
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowHubMenu(false);
-                      setShowMusicPickerModal(true);
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '7px 10px',
-                      borderRadius: '8px',
-                      background: 'linear-gradient(135deg, #a855f7 0%, #6366f1 100%)',
-                      border: 'none',
-                      color: '#fff',
-                      fontSize: '0.74rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '5px'
-                    }}
-                  >
-                    <Music size={12} />
-                    <span>{appMusicTrack ? 'Change / Search Song' : 'Choose Song to Play'}</span>
-                  </button>
-                </div>
-
-                {/* 2. Pulse Zone (Mini-Games & Leaderboard) */}
+                {/* 2. Games Button */}
                 <button
                   type="button"
                   onClick={() => {
                     setShowHubMenu(false);
                     setShowPulseZone(true);
                   }}
+                  className="action-grid-item"
+                  title="Games"
                   style={{
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px 6px',
                     borderRadius: '12px',
-                    padding: '10px',
+                    transition: 'transform 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <div style={{
+                    width: '46px',
+                    height: '46px',
+                    borderRadius: '14px',
+                    background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '10px',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '10px',
-                      background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#fff',
-                      flexShrink: 0
-                    }}>
-                      <Gamepad2 size={17} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-main)' }}>
-                        Pulse Zone
-                      </div>
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-                        Mini-Games & Leaderboards
-                      </div>
-                    </div>
+                    justifyContent: 'center',
+                    color: '#fff',
+                    boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
+                  }}>
+                    <Gamepad2 size={22} />
                   </div>
-                  <span style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700 }}>Play 🎮</span>
+                  <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Games
+                  </span>
                 </button>
               </div>
             )}
