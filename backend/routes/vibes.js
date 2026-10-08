@@ -176,12 +176,44 @@ router.get('/active', authMiddleware, async (req, res) => {
       }
     });
 
+    // Also include any user who has set a musicNote (whether or not they have a story slide)
+    const usersWithNote = await User.find({
+      'musicNote': { $ne: null }
+    }).select('id _id username displayName avatar hasKingCrown hasSilverCrown hasStreakCrown musicNote').lean();
+
+    usersWithNote.forEach(u => {
+      const uKey = u.id || (u._id ? u._id.toString() : u.username);
+      if (!uKey) return;
+      if (!groupedMap.has(uKey)) {
+        if (u.musicNote && (u.musicNote.noteText || u.musicNote.songTitle)) {
+          groupedMap.set(uKey, {
+            userId: uKey,
+            displayName: u.displayName || u.username || 'Pulse User',
+            username: u.username || '',
+            avatar: u.avatar || '',
+            hasKingCrown: Boolean(u.hasKingCrown),
+            hasSilverCrown: Boolean(u.hasSilverCrown),
+            hasStreakCrown: Boolean(u.hasStreakCrown),
+            musicNote: u.musicNote,
+            vibes: []
+          });
+        }
+      } else {
+        if (u.musicNote) {
+          groupedMap.get(uKey).musicNote = u.musicNote;
+        }
+      }
+    });
+
     // Ensure vibes for every user are sorted: newest first (jo new lagaya vo aage), oldest last (jo pehle lagaya tha vo last)
     groupedMap.forEach(grp => {
       grp.vibes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     });
 
-    const result = Array.from(groupedMap.values()).filter(g => g.vibes && g.vibes.length > 0);
+    const result = Array.from(groupedMap.values()).filter(g => 
+      (g.vibes && g.vibes.length > 0) || 
+      (g.musicNote && (g.musicNote.noteText || g.musicNote.songTitle))
+    );
     res.json(result);
   } catch (err) {
     console.error('Error fetching active vibes:', err);

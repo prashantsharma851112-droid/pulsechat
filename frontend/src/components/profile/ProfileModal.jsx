@@ -213,7 +213,7 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
 
             {/* Current DP Avatar Preview with Upload Trigger */}
             <div style={{ textAlign: 'center', marginBottom: '1.5rem', position: 'relative' }}>
-              <VibeAuraRing aura={myAura} size={96} showNoteBubble={true} hasCrown={Boolean(user?.hasKingCrown || user?.hasSilverCrown || user?.hasStreakCrown)}>
+              <VibeAuraRing aura={myAura} size={96} hasCrown={Boolean(user?.hasKingCrown || user?.hasSilverCrown || user?.hasStreakCrown)}>
                 <div
                   className={user?.isPro ? 'pro-neon-avatar pro-neon-avatar-lg' : ''}
                   style={{ position: 'relative', display: 'inline-block' }}

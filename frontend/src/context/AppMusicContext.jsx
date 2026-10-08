@@ -223,6 +223,7 @@ export function AppMusicProvider({ children }) {
           if (updateUserProfile && user) {
             updateUserProfile({ ...user, musicNote: data.musicNote });
           }
+          window.dispatchEvent(new CustomEvent('pulsechat_music_note_updated', { detail: { musicNote: data.musicNote } }));
         }
       } catch (e) {
         console.warn('Failed to sync music note to server:', e);
@@ -247,6 +248,7 @@ export function AppMusicProvider({ children }) {
         if (updateUserProfile && user) {
           updateUserProfile({ ...user, musicNote: null });
         }
+        window.dispatchEvent(new CustomEvent('pulsechat_music_note_updated', { detail: { musicNote: null } }));
       } catch (e) {}
     }
   }, [token, updateUserProfile, user]);

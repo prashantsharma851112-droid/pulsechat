@@ -2539,7 +2539,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
                     style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
                   >
-                    <VibeAuraRing aura={friendAura} size={48} isGroup={u.isGroup} hasCrown={Boolean(u.hasKingCrown || u.hasSilverCrown || u.hasStreakCrown)} showNoteBubble={false}>
+                    <VibeAuraRing aura={friendAura} size={48} isGroup={u.isGroup} hasCrown={Boolean(u.hasKingCrown || u.hasSilverCrown || u.hasStreakCrown)}>
                       <div
                         className={u.isPro ? 'pro-neon-avatar' : ''}
                         style={{ position: 'relative', flexShrink: 0 }}

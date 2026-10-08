@@ -101,69 +101,6 @@ export default function VibeAuraRing({
         cursor: onClick ? 'pointer' : 'default'
       }}
     >
-      {/* Instagram-Style Floating Note / Thought Bubble Above DP */}
-      {showNoteBubble && !isGroup && (mood || inGame) && (
-        <div
-          title={inGame ? `Playing ${inGame}` : mood}
-          style={{
-            position: 'absolute',
-            top: noteTop,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'rgba(15, 23, 42, 0.94)',
-            border: `1.5px solid ${ringColor}`,
-            boxShadow: `0 4px 12px rgba(0,0,0,0.65), 0 0 8px ${ringColor}45`,
-            borderRadius: '13px',
-            padding: '2px 7px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '3.5px',
-            whiteSpace: 'nowrap',
-            maxWidth: size >= 80 ? '135px' : '110px',
-            zIndex: 40,
-            pointerEvents: 'none',
-            animation: 'instaThoughtFloat 3s infinite ease-in-out'
-          }}
-        >
-          <span style={{ fontSize: '0.74rem', lineHeight: 1 }}>{emoji || '⚡'}</span>
-          <span style={{
-            fontSize: '0.64rem',
-            fontWeight: 700,
-            color: '#f8fafc',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            lineHeight: 1.2,
-            letterSpacing: '-0.01em'
-          }}>
-            {inGame ? `Playing ${inGame}` : mood}
-          </span>
-
-          {/* Instagram Thought Bubble Trail Dots */}
-          <div style={{
-            position: 'absolute',
-            bottom: '-3px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: '4px',
-            height: '4px',
-            borderRadius: '50%',
-            background: 'rgba(15, 23, 42, 0.94)',
-            border: `1px solid ${ringColor}`
-          }} />
-          <div style={{
-            position: 'absolute',
-            bottom: '-5px',
-            left: '52%',
-            transform: 'translateX(-50%)',
-            width: '2.5px',
-            height: '2.5px',
-            borderRadius: '50%',
-            background: ringColor
-          }} />
-        </div>
-      )}
-
       {/* Animated Aura Glow Ring */}
       <div
         style={{

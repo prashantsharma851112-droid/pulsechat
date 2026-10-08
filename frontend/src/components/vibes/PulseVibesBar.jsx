@@ -126,8 +126,8 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
       }
     });
 
-    // Remove empty groups and ensure my group is at the top
-    combinedGroups = combinedGroups.filter(g => g.vibes && g.vibes.length > 0);
+    // Keep groups that have either active vibes or an active music note
+    combinedGroups = combinedGroups.filter(g => (g.vibes && g.vibes.length > 0) || (g.musicNote && (g.musicNote.noteText || g.musicNote.songTitle)));
     setGroupedVibes(combinedGroups);
   };
 
@@ -145,6 +145,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
       syncViewedSet();
     };
     window.addEventListener('pulsechat_vibes_updated', handleUpdate);
+    window.addEventListener('pulsechat_music_note_updated', handleUpdate);
     window.addEventListener('storage', handleUpdate);
 
     let bc;
@@ -158,15 +159,18 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
 
     if (socket) {
       socket.on('new_vibe_posted', handleUpdate);
+      socket.on('user_music_note_updated', handleUpdate);
     }
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('pulsechat_vibes_updated', handleUpdate);
+      window.removeEventListener('pulsechat_music_note_updated', handleUpdate);
       window.removeEventListener('storage', handleUpdate);
       if (bc) bc.close();
       if (socket) {
         socket.off('new_vibe_posted', handleUpdate);
+        socket.off('user_music_note_updated', handleUpdate);
       }
     };
   }, [token, user, socket]);
@@ -310,19 +314,23 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
 
         {/* Other Users' / Friends' Stories */}
         {otherVibesGroups.map(group => {
-          if (!group || !Array.isArray(group.vibes) || group.vibes.length === 0) return null;
-          const viewed = isGroupViewed(group);
+          const hasVibes = Boolean(group && Array.isArray(group.vibes) && group.vibes.length > 0);
+          const hasNote = Boolean(group?.musicNote && (group.musicNote.noteText || group.musicNote.songTitle));
+          if (!hasVibes && !hasNote) return null;
+          const viewed = hasVibes ? isGroupViewed(group) : true;
           const crowns = getGroupCrowns(group);
 
           return (
             <div
               key={group.userId}
               onClick={() => {
-                const allGroupsList = [
-                  ...(myVibesGroup && myVibesGroup.vibes?.length ? [myVibesGroup] : []),
-                  ...otherVibesGroups
-                ];
-                onOpenVibeViewer(group, allGroupsList);
+                if (hasVibes) {
+                  const allGroupsList = [
+                    ...(myVibesGroup && myVibesGroup.vibes?.length ? [myVibesGroup] : []),
+                    ...otherVibesGroups.filter(g => g.vibes && g.vibes.length > 0)
+                  ];
+                  onOpenVibeViewer(group, allGroupsList);
+                }
               }}
               style={{
                 display: 'flex',
