@@ -286,7 +286,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
         ...(isObjectId ? [{ _id: targetId }] : []),
         { username: targetId }
       ]
-    }).select('id username displayName avatar isEmailVerified status createdAt isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown streakCrownExpiresAt kingCrownExpiresAt vibeAura').lean();
+    }).select('id username displayName avatar isEmailVerified status createdAt isPro proTier customBadge pulseSparks hasKingCrown hasSilverCrown hasStreakCrown streakCrownExpiresAt kingCrownExpiresAt vibeAura musicNote').lean();
 
     if (!targetUser) {
       return res.status(404).json({ error: 'User not found' });

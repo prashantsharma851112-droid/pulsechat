@@ -95,8 +95,11 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
     }
   };
 
+  const hasText = Boolean(activeNote?.noteText && activeNote.noteText.trim());
+  const hasSong = Boolean(activeNote?.songTitle && activeNote.songTitle.trim());
+
   // If viewing own avatar and no note is set yet -> "+ Note" Instagram prompt
-  if (!activeNote || !activeNote.songTitle) {
+  if (!activeNote || (!hasText && !hasSong)) {
     if (!isMine) return null;
 
     return (
@@ -147,9 +150,6 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
     );
   }
 
-  const hasText = Boolean(activeNote.noteText && activeNote.noteText.trim());
-  const hasSong = Boolean(activeNote.songTitle && activeNote.songTitle.trim());
-
   // Active Music Note Bubble (Instagram-style: Tap to hear snippet, tap again / outside to stop!)
   return (
     <div
@@ -166,12 +166,12 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
         alignItems: 'center',
         pointerEvents: 'auto'
       }}
-      onClick={handleTogglePlayNote}
+      onClick={hasSong ? handleTogglePlayNote : () => { if (isMine) onOpenPicker && onOpenPicker(); }}
       onContextMenu={(e) => {
         if (!isMine) return;
         e.preventDefault();
         e.stopPropagation();
-        setShowOptions(true);
+        onOpenPicker && onOpenPicker();
       }}
       title={`${hasText ? activeNote.noteText + ' · ' : ''}${activeNote.songTitle || ''} (Tap to listen/stop)`}
     >
@@ -191,23 +191,53 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
         boxShadow: isPlayingNote
           ? '0 4px 14px rgba(168, 85, 247, 0.5), 0 0 10px rgba(168, 85, 247, 0.4)'
           : '0 4px 10px rgba(0,0,0,0.5)',
-        maxWidth: '145px',
+        maxWidth: '170px',
         transition: 'all 0.2s ease'
       }}>
         {/* Top: Thought / Vibe text (if any) */}
         {hasText && (
           <div style={{
-            fontSize: '0.64rem',
-            fontWeight: 700,
-            color: '#ffffff',
-            lineHeight: 1.15,
-            textAlign: 'center',
-            maxWidth: '135px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap'
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '3px',
+            maxWidth: '160px',
+            width: '100%'
           }}>
-            {activeNote.noteText}
+            <span style={{
+              fontSize: '0.70rem',
+              fontWeight: 800,
+              color: '#ffffff',
+              lineHeight: 1.2,
+              textAlign: 'center',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}>
+              {activeNote.noteText}
+            </span>
+            {isMine && !hasSong && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenPicker && onOpenPicker();
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  color: 'rgba(255, 255, 255, 0.75)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexShrink: 0
+                }}
+                title="Edit Note"
+              >
+                <Edit3 size={9} />
+              </button>
+            )}
           </div>
         )}
 
@@ -217,8 +247,12 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
-            maxWidth: '135px',
-            overflow: 'hidden'
+            maxWidth: '160px',
+            overflow: 'hidden',
+            background: hasText ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+            borderRadius: '10px',
+            padding: hasText ? '1.5px 5px' : '0px 2px',
+            marginTop: hasText ? '1px' : '0px'
           }}>
             <div style={{
               width: '12px',
@@ -232,14 +266,14 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
               {isPlayingNote ? (
                 <Disc size={12} color="#ffffff" style={{ animation: 'spin 2.5s linear infinite' }} />
               ) : (
-                <Music size={10} color="#c084fc" />
+                <Music size={10} color={isPlayingNote ? '#ffffff' : '#c084fc'} />
               )}
             </div>
 
             <span style={{
-              fontSize: '0.60rem',
+              fontSize: '0.62rem',
               fontWeight: 600,
-              color: isPlayingNote ? '#ffffff' : '#cbd5e1',
+              color: isPlayingNote ? '#ffffff' : '#e2e8f0',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -254,7 +288,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setShowOptions(prev => !prev);
+                  onOpenPicker && onOpenPicker();
                 }}
                 style={{
                   background: 'transparent',
@@ -267,7 +301,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
                   flexShrink: 0,
                   marginLeft: '2px'
                 }}
-                title="Note Options"
+                title="Edit Note"
               >
                 <Edit3 size={9} />
               </button>

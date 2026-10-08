@@ -1,16 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import { AuthContext } from '../../context/AuthContext';
 import { useAppMusic } from '../../context/AppMusicContext';
 import { X, Music, Disc, Sparkles, Check, Play, Pause, Trash2 } from 'lucide-react';
 import MusicPickerModal from './MusicPickerModal';
 
 export default function CreateMusicNoteModal({ isOpen, onClose }) {
+  const { user } = useContext(AuthContext);
   const { currentTrack, musicNoteText, saveMusicNote, deleteMusicNote } = useAppMusic();
 
-  const [noteText, setNoteText] = useState(musicNoteText || '');
-  const [selectedSong, setSelectedSong] = useState(currentTrack || null);
+  const [noteText, setNoteText] = useState('');
+  const [selectedSong, setSelectedSong] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
   const [previewAudio, setPreviewAudio] = useState(null);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+
+  // Synchronize existing music note and text whenever modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const existingText = user?.musicNote?.noteText ?? musicNoteText ?? '';
+      setNoteText(existingText);
+
+      if (user?.musicNote?.songTitle) {
+        setSelectedSong({
+          songTitle: user.musicNote.songTitle,
+          artistName: user.musicNote.artistName,
+          audioUrl: user.musicNote.audioUrl,
+          artworkUrl: user.musicNote.artworkUrl || user.musicNote.albumArt || '',
+          duration: user.musicNote.duration || 0
+        });
+      } else if (currentTrack) {
+        setSelectedSong(currentTrack);
+      } else {
+        setSelectedSong(null);
+      }
+    }
+  }, [isOpen, user?.musicNote, musicNoteText, currentTrack]);
 
   if (!isOpen) return null;
 
@@ -50,9 +74,14 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
         previewAudio.currentTime = 0;
       } catch (e) {}
     }
-    if (selectedSong) {
-      saveMusicNote(selectedSong, noteText);
-    }
+    const cleanSong = selectedSong ? {
+      songTitle: selectedSong.songTitle,
+      artistName: selectedSong.artistName || 'PulseChat Audio',
+      audioUrl: selectedSong.audioUrl,
+      artworkUrl: selectedSong.artworkUrl || selectedSong.albumArt || '',
+      duration: selectedSong.duration || 0
+    } : null;
+    saveMusicNote(cleanSong, noteText);
     handleCleanClose();
   };
 
@@ -357,7 +386,13 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
           onClose={() => setShowPicker(false)}
           selectedSong={selectedSong}
           onSelectSong={(song) => {
-            setSelectedSong(song);
+            setSelectedSong({
+              songTitle: song.songTitle,
+              artistName: song.artistName,
+              audioUrl: song.audioUrl,
+              artworkUrl: song.artworkUrl || song.albumArt || '',
+              duration: song.duration || 0
+            });
             setShowPicker(false);
           }}
         />

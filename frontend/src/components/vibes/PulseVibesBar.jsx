@@ -221,8 +221,8 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
         gap: '12px',
         overflowX: 'auto',
         overflowY: 'visible',
-        paddingTop: '26px',
-        paddingBottom: '4px',
+        paddingTop: '62px',
+        paddingBottom: '6px',
         WebkitOverflowScrolling: 'touch',
         scrollbarWidth: 'none'
       }}>
@@ -262,7 +262,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
               : 'none'
           }}>
             {/* Instagram-style Floating Music Note Bubble */}
-            <InstaMusicNoteBubble onOpenPicker={() => setShowMusicNoteModal(true)} />
+            <InstaMusicNoteBubble note={user?.musicNote} onOpenPicker={() => setShowMusicNoteModal(true)} />
 
             {myHasKing ? (
               <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
