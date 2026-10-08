@@ -1349,6 +1349,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       });
     };
 
+    socket.on('group_updated', handleGroupUpdated);
+
+    const handleWindowGroupEvent = (e) => {
+      if (e.detail) {
+        handleGroupUpdated(e.detail);
+      }
+    };
+    window.addEventListener('pulsechat_group_updated', handleWindowGroupEvent);
+
     // Instant In-Chat Nicknames Sync
     const handleNicknameUpdated = (data) => {
       if (!data) return;
@@ -2608,9 +2617,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <h4 style={{ fontSize: '1.02rem', fontWeight: u.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <span>{u.nickname || u.displayName}</span>
-                          {u.nickname && (
-                            <span style={{ fontSize: '0.68rem', color: '#c084fc', opacity: 0.9 }} title={`In-chat nickname (Real: ${u.displayName})`}>
+                          <span>{(typeof u.nickname === 'string' && u.nickname.trim()) ? u.nickname : (u.displayName || u.username || 'User')}</span>
+                          {typeof u.nickname === 'string' && u.nickname.trim() && (
+                            <span style={{ fontSize: '0.68rem', color: '#c084fc', opacity: 0.9 }} title={`In-chat nickname (Real: ${u.displayName || u.username})`}>
                               ✏️
                             </span>
                           )}

@@ -8,6 +8,12 @@ import EmojiPicker from './EmojiPicker';
 import ChatLiveWallpaper from './ChatLiveWallpaper';
 import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
 import PulseVipBadge from '../common/PulseVipBadge';
+import { recordRecentReaction } from '../../utils/quickReactions';
+import { uploadMediaDirect } from '../../utils/mediaUpload';
+import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
+import { BACKEND_URL } from '../../utils/config';
+import { executeTranslation } from '../../utils/translator';
+import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
 
 import { lazyWithRetry } from '../../utils/lazyRetry';
 
@@ -34,12 +40,6 @@ const VibeViewerModal = lazyWithRetry(() => import('../vibes/VibeViewerModal'));
 const SparksWalletModal = lazyWithRetry(() => import('./SparksWalletModal'));
 const ScheduleMessageModal = lazyWithRetry(() => import('./ScheduleMessageModal'));
 const ChatNicknameModal = lazyWithRetry(() => import('./ChatNicknameModal'));
-import { recordRecentReaction } from '../../utils/quickReactions';
-import { uploadMediaDirect } from '../../utils/mediaUpload';
-import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
-import { BACKEND_URL } from '../../utils/config';
-import { executeTranslation } from '../../utils/translator';
-import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
 import {
   getCachedMessages,
   setCachedMessages,
@@ -1330,15 +1330,17 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   // In-Chat Mutual Nicknames
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const partnerNickname = useMemo(() => {
-    if (!isGroup && partnerId && chatSetting?.nicknames) {
-      return chatSetting.nicknames[partnerId] || null;
+    if (!isGroup && partnerId && chatSetting?.nicknames && typeof chatSetting.nicknames === 'object') {
+      const val = chatSetting.nicknames[partnerId];
+      return typeof val === 'string' && val.trim() ? val.trim() : null;
     }
     return null;
   }, [isGroup, partnerId, chatSetting?.nicknames]);
 
   const myNicknameInChat = useMemo(() => {
-    if (!isGroup && user?.id && chatSetting?.nicknames) {
-      return chatSetting.nicknames[user.id] || null;
+    if (!isGroup && user?.id && chatSetting?.nicknames && typeof chatSetting.nicknames === 'object') {
+      const val = chatSetting.nicknames[user.id];
+      return typeof val === 'string' && val.trim() ? val.trim() : null;
     }
     return null;
   }, [isGroup, user?.id, chatSetting?.nicknames]);
