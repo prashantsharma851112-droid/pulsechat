@@ -4,8 +4,8 @@ import { BACKEND_URL } from '../../utils/config';
 import { useBackHandler } from '../../utils/backNavigation';
 import VibeAuraRing from '../common/VibeAuraRing';
 
-export default function PulseHandleCardModal({ targetUser, currentUser, onClose, onOpenChat, standalone = false }) {
-  useBackHandler(onClose, !standalone);
+export default function PulseHandleCardModal({ targetUser, currentUser, onClose, onOpenChat, standalone = false, embedded = false }) {
+  useBackHandler(onClose, !standalone && !embedded && typeof onClose === 'function');
 
   const [userData, setUserData] = useState(() => {
     if (typeof targetUser === 'object' && targetUser !== null) {
@@ -78,7 +78,14 @@ export default function PulseHandleCardModal({ targetUser, currentUser, onClose,
 
   return (
     <div
-      style={{
+      style={embedded ? {
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        padding: '6px 0',
+        minHeight: 'auto'
+      } : {
         position: standalone ? 'relative' : 'fixed',
         inset: 0,
         zIndex: 1300,
@@ -94,7 +101,7 @@ export default function PulseHandleCardModal({ targetUser, currentUser, onClose,
         overflowY: 'auto'
       }}
       onClick={(e) => {
-        if (!standalone && e.target === e.currentTarget) onClose();
+        if (!standalone && !embedded && e.target === e.currentTarget && onClose) onClose();
       }}
     >
       <div
@@ -159,7 +166,7 @@ export default function PulseHandleCardModal({ targetUser, currentUser, onClose,
               </button>
             </div>
 
-            {!standalone && (
+            {!standalone && !embedded && onClose && (
               <button
                 type="button"
                 onClick={onClose}

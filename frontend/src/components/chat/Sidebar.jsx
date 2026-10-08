@@ -2018,34 +2018,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
               <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
 
-              {/* My Pulse Card */}
-              <button
-                onClick={() => {
-                  setShowTopMenu(false);
-                  window.dispatchEvent(new CustomEvent('pulsechat_open_handle_card', { detail: { user } }));
-                }}
-                className="dropdown-menu-item"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15))',
-                  color: '#a5b4fc',
-                  fontSize: '0.88rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  width: '100%',
-                  transition: 'background 0.15s ease'
-                }}
-              >
-                <Sparkles size={17} color="#a855f7" />
-                <span>My Pulse Card ✨</span>
-              </button>
-
               {/* Settings & Profile */}
               <button
                 onClick={() => {

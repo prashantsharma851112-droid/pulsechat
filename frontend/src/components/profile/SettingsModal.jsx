@@ -16,6 +16,7 @@ import PulseProModal from '../chat/PulseProModal';
 import PulseVipBadge from '../common/PulseVipBadge';
 import AppFeatureTourModal from '../common/AppFeatureTourModal';
 import LegalModal from '../common/LegalModal';
+import ChangePasswordForm from './ChangePasswordForm';
 import { useBackHandler } from '../../utils/backNavigation';
 
 const THEMES = [
@@ -620,16 +621,11 @@ export default function SettingsModal({
                     <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: notificationsEnabled ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {notificationsEnabled ? <Bell size={18} color="#10b981" /> : <BellOff size={18} color="#ef4444" />}
                     </div>
-                    <div>
-                      <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        Notifications
-                        <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '1px 6px', borderRadius: '6px', background: notificationsEnabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', color: notificationsEnabled ? '#10b981' : '#ef4444' }}>
-                          {notificationsEnabled ? 'ON' : 'OFF'}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        Message alerts, push notifications & sounds
-                      </div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Notifications
+                      <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '1px 6px', borderRadius: '6px', background: notificationsEnabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', color: notificationsEnabled ? '#10b981' : '#ef4444' }}>
+                        {notificationsEnabled ? 'ON' : 'OFF'}
+                      </span>
                     </div>
                   </div>
                   <ChevronRight size={18} color="var(--text-muted)" />
@@ -655,19 +651,14 @@ export default function SettingsModal({
                     <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Shield size={18} color="var(--accent)" />
                     </div>
-                    <div>
-                      <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                        Privacy & Security
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        Ghost Mode (all or specific chats), online status & blocked users
-                      </div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                      Privacy & Security
                     </div>
                   </div>
                   <ChevronRight size={18} color="var(--text-muted)" />
                 </div>
 
-                {/* 3. Storage & Data Cleanup Category */}
+                {/* 3. Storage & Data Category */}
                 <div
                   onClick={() => setActiveSection('storage')}
                   className="user-select-card"
@@ -687,13 +678,8 @@ export default function SettingsModal({
                     <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <HardDrive size={18} color="#10b981" />
                     </div>
-                    <div>
-                      <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                        Storage & Data Cleanup
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        Auto-cleanup (keeps last 7 days) & cache cleaner
-                      </div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                      Storage & Data
                     </div>
                   </div>
                   <ChevronRight size={18} color="var(--text-muted)" />
@@ -719,16 +705,11 @@ export default function SettingsModal({
                     <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(236, 72, 153, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Palette size={18} color="#ec4899" />
                     </div>
-                    <div>
-                      <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        Appearance & Themes
-                        <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.08)', color: 'var(--text-muted)' }}>
-                          {currentThemeObj.name.split(' ')[0]}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        AMOLED, Dark, Light & VIP Pro glowing themes
-                      </div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Appearance & Themes
+                      <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.08)', color: 'var(--text-muted)' }}>
+                        {currentThemeObj.name.split(' ')[0]}
+                      </span>
                     </div>
                   </div>
                   <ChevronRight size={18} color="var(--text-muted)" />
@@ -754,13 +735,8 @@ export default function SettingsModal({
                     <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(56, 189, 248, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Info size={18} color="#38bdf8" />
                     </div>
-                    <div>
-                      <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                        App Info, Contact & Legal
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        Version, contact support, privacy policies & terms
-                      </div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                      App Info & Legal
                     </div>
                   </div>
                   <ChevronRight size={18} color="var(--text-muted)" />
@@ -785,13 +761,8 @@ export default function SettingsModal({
                     <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
                       <Compass size={18} />
                     </div>
-                    <div>
-                      <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                        Feature Tour Guide
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        Visual guide showing all features & button locations
-                      </div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                      Feature Tour Guide
                     </div>
                   </div>
                   <ChevronRight size={18} color="var(--accent)" />
@@ -1428,6 +1399,33 @@ export default function SettingsModal({
                     transition: 'all 0.2s ease'
                   }} />
                 </div>
+              </div>
+
+              {/* Change Password Section */}
+              <div style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: '16px',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Lock size={20} color="var(--accent)" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                      Change Password
+                    </div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                      Update account password or reset securely via Email OTP
+                    </div>
+                  </div>
+                </div>
+
+                <ChangePasswordForm isCardView={true} />
               </div>
 
               {/* Blocked Contacts Manager Button */}
