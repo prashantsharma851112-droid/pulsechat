@@ -120,80 +120,74 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
           <button className="icon-btn-ghost" onClick={onClose}><X size={20} /></button>
         </div>
 
-        {/* Tab Navigation */}
+        {/* Tab Navigation (Icon-Only Minimal Bar) */}
         <div style={{
           display: 'flex',
           borderBottom: '1px solid var(--border)',
           background: 'var(--bg-card)',
-          padding: '4px 8px 0 8px',
-          gap: '6px',
+          padding: '0 8px',
+          gap: '8px',
           flexShrink: 0
         }}>
           <button
             onClick={() => setActiveTab('profile')}
+            title="Edit Profile"
+            aria-label="Edit Profile"
             style={{
               flex: 1,
-              padding: '10px 14px',
+              padding: '11px 0',
               border: 'none',
               background: 'transparent',
               borderBottom: activeTab === 'profile' ? '2.5px solid var(--accent)' : '2.5px solid transparent',
               color: activeTab === 'profile' ? 'var(--accent)' : 'var(--text-muted)',
-              fontWeight: activeTab === 'profile' ? 600 : 500,
-              fontSize: '0.9rem',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '6px',
               transition: 'all 0.15s ease'
             }}
           >
-            <UserIcon size={16} />
-            <span>Edit Profile</span>
+            <UserIcon size={20} />
           </button>
           <button
             onClick={() => setActiveTab('password')}
+            title="Change Password"
+            aria-label="Change Password"
             style={{
               flex: 1,
-              padding: '10px 14px',
+              padding: '11px 0',
               border: 'none',
               background: 'transparent',
               borderBottom: activeTab === 'password' ? '2.5px solid var(--accent)' : '2.5px solid transparent',
               color: activeTab === 'password' ? 'var(--accent)' : 'var(--text-muted)',
-              fontWeight: activeTab === 'password' ? 600 : 500,
-              fontSize: '0.9rem',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '6px',
               transition: 'all 0.15s ease'
             }}
           >
-            <Lock size={16} />
-            <span>Change Password</span>
+            <Lock size={20} />
           </button>
           <button
             onClick={() => setActiveTab('card')}
+            title="My Pulse Card"
+            aria-label="My Pulse Card"
             style={{
               flex: 1,
-              padding: '10px 14px',
+              padding: '11px 0',
               border: 'none',
               background: 'transparent',
               borderBottom: activeTab === 'card' ? '2.5px solid var(--accent)' : '2.5px solid transparent',
               color: activeTab === 'card' ? 'var(--accent)' : 'var(--text-muted)',
-              fontWeight: activeTab === 'card' ? 600 : 500,
-              fontSize: '0.9rem',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '6px',
               transition: 'all 0.15s ease'
             }}
           >
-            <Sparkles size={16} color={activeTab === 'card' ? 'var(--accent)' : '#a855f7'} />
-            <span>My Pulse Card</span>
+            <Sparkles size={20} color={activeTab === 'card' ? 'var(--accent)' : '#a855f7'} />
           </button>
         </div>
 
