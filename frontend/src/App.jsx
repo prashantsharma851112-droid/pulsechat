@@ -11,18 +11,20 @@ import FullDpModal from './components/common/FullDpModal';
 import Toast from './components/common/Toast';
 import EmojiParticleBurst from './components/common/EmojiParticleBurst';
 
-// Code-Splitting: Lazy load heavy modals to maximize initial app boot speed
-const ProfileModal = React.lazy(() => import('./components/profile/ProfileModal'));
-const SettingsModal = React.lazy(() => import('./components/profile/SettingsModal'));
-const AdminDashboardModal = React.lazy(() => import('./components/admin/AdminDashboardModal'));
-const CallModal = React.lazy(() => import('./components/chat/CallModal'));
-const IncomingCallModal = React.lazy(() => import('./components/chat/IncomingCallModal'));
-const GroupCallModal = React.lazy(() => import('./components/chat/GroupCallModal'));
-const IncomingGroupCallModal = React.lazy(() => import('./components/chat/IncomingGroupCallModal'));
-const AppOnboardingModal = React.lazy(() => import('./components/common/AppOnboardingModal'));
-const LegalView = React.lazy(() => import('./components/common/LegalView'));
-const LegalModal = React.lazy(() => import('./components/common/LegalModal'));
-const PulseHandleCardModal = React.lazy(() => import('./components/profile/PulseHandleCardModal'));
+import { lazyWithRetry } from './utils/lazyRetry';
+
+// Code-Splitting: Lazy load heavy modals with automatic retry & reload resilience
+const ProfileModal = lazyWithRetry(() => import('./components/profile/ProfileModal'));
+const SettingsModal = lazyWithRetry(() => import('./components/profile/SettingsModal'));
+const AdminDashboardModal = lazyWithRetry(() => import('./components/admin/AdminDashboardModal'));
+const CallModal = lazyWithRetry(() => import('./components/chat/CallModal'));
+const IncomingCallModal = lazyWithRetry(() => import('./components/chat/IncomingCallModal'));
+const GroupCallModal = lazyWithRetry(() => import('./components/chat/GroupCallModal'));
+const IncomingGroupCallModal = lazyWithRetry(() => import('./components/chat/IncomingGroupCallModal'));
+const AppOnboardingModal = lazyWithRetry(() => import('./components/common/AppOnboardingModal'));
+const LegalView = lazyWithRetry(() => import('./components/common/LegalView'));
+const LegalModal = lazyWithRetry(() => import('./components/common/LegalModal'));
+const PulseHandleCardModal = lazyWithRetry(() => import('./components/profile/PulseHandleCardModal'));
 import { BACKEND_URL } from './utils/config';
 import { updateUserProfileInStorage, clearUnreadCount, getCachedAllUsers } from './utils/offlineStorage';
 import { initBackListeners, useBackHandler } from './utils/backNavigation';

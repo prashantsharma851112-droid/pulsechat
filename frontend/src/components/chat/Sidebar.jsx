@@ -9,17 +9,19 @@ import PulseVibesBar from '../vibes/PulseVibesBar';
 import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
 import { Gamepad2 } from 'lucide-react';
 
-// Code-Splitting: Lazy load heavy modals to keep initial sidebar light and instant
-const CreateGroupModal = React.lazy(() => import('./CreateGroupModal'));
-const SettingsModal = React.lazy(() => import('../profile/SettingsModal'));
-const AdminDashboardModal = React.lazy(() => import('../admin/AdminDashboardModal'));
-const PulseProModal = React.lazy(() => import('./PulseProModal'));
-const AppFeatureTourModal = React.lazy(() => import('../common/AppFeatureTourModal'));
-const CreateVibeModal = React.lazy(() => import('../vibes/CreateVibeModal'));
-const VibeViewerModal = React.lazy(() => import('../vibes/VibeViewerModal'));
-const PulseZoneModal = React.lazy(() => import('../zone/PulseZoneModal'));
-const SparksWalletModal = React.lazy(() => import('./SparksWalletModal'));
-const VibeAuraSelectorModal = React.lazy(() => import('./VibeAuraSelectorModal'));
+import { lazyWithRetry } from '../../utils/lazyRetry';
+
+// Code-Splitting: Lazy load heavy modals with automatic retry & reload resilience
+const CreateGroupModal = lazyWithRetry(() => import('./CreateGroupModal'));
+const SettingsModal = lazyWithRetry(() => import('../profile/SettingsModal'));
+const AdminDashboardModal = lazyWithRetry(() => import('../admin/AdminDashboardModal'));
+const PulseProModal = lazyWithRetry(() => import('./PulseProModal'));
+const AppFeatureTourModal = lazyWithRetry(() => import('../common/AppFeatureTourModal'));
+const CreateVibeModal = lazyWithRetry(() => import('../vibes/CreateVibeModal'));
+const VibeViewerModal = lazyWithRetry(() => import('../vibes/VibeViewerModal'));
+const PulseZoneModal = lazyWithRetry(() => import('../zone/PulseZoneModal'));
+const SparksWalletModal = lazyWithRetry(() => import('./SparksWalletModal'));
+const VibeAuraSelectorModal = lazyWithRetry(() => import('./VibeAuraSelectorModal'));
 import { BACKEND_URL } from '../../utils/config';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
 import {
@@ -54,25 +56,39 @@ class ModalErrorBoundary extends React.Component {
   }
   render() {
     if (this.state.hasError) {
+      const isChunkError =
+        this.state.error?.name === 'ChunkLoadError' ||
+        /Failed to fetch dynamically imported module/i.test(this.state.error?.message || '') ||
+        /error loading dynamically imported module/i.test(this.state.error?.message || '') ||
+        /Importing a module script failed/i.test(this.state.error?.message || '');
+
       return (
         <div className="modal-overlay" style={{ zIndex: 1400 }} onClick={this.props.onReset}>
           <div className="modal-card modal-responsive" style={{ maxWidth: '400px', padding: '20px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>
-              <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: isChunkError ? 'rgba(99, 102, 241, 0.15)' : 'rgba(239, 68, 68, 0.15)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>
+              <span style={{ fontSize: '1.4rem' }}>{isChunkError ? '🔄' : '⚠️'}</span>
             </div>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>Vibe Feature Error</h3>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>
+              {isChunkError ? 'App Update Available' : 'Vibe Feature Error'}
+            </h3>
             <p style={{ margin: '0 0 16px 0', color: 'var(--text-muted)', fontSize: '0.84rem', lineHeight: 1.4 }}>
-              {this.state.error?.message || 'Unable to display story modal.'}
+              {isChunkError
+                ? 'A new PulseChat update was deployed. Tap below to reload and access all fresh features!'
+                : (this.state.error?.message || 'Unable to display story modal.')}
             </p>
             <button
               className="btn-primary"
               onClick={() => {
-                this.setState({ hasError: false, error: null });
-                if (typeof this.props.onReset === 'function') this.props.onReset();
+                if (isChunkError) {
+                  window.location.reload();
+                } else {
+                  this.setState({ hasError: false, error: null });
+                  if (typeof this.props.onReset === 'function') this.props.onReset();
+                }
               }}
               style={{ padding: '8px 20px', borderRadius: '12px', fontSize: '0.88rem' }}
             >
-              Close & Retry
+              {isChunkError ? 'Reload & Update 🔄' : 'Close & Retry'}
             </button>
           </div>
         </div>

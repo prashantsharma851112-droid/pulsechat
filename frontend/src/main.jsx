@@ -10,6 +10,17 @@ import { initSecurityShield } from './utils/securityShield.js';
 // Initialize anti-inspect and code protection shield
 initSecurityShield();
 
+// Global handler for Vite dynamic chunk updates (reloads fresh bundle if old hash 404s after deploy)
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+  const lastReload = sessionStorage.getItem('pulsechat_chunk_reload_ts');
+  const now = Date.now();
+  if (!lastReload || now - parseInt(lastReload, 10) > 12000) {
+    sessionStorage.setItem('pulsechat_chunk_reload_ts', now.toString());
+    window.location.reload();
+  }
+});
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ThemeProvider>
