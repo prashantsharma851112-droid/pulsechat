@@ -2529,7 +2529,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             {/* Recent Conversations */}
             {sortedRecentChats.length > 0 && (
               <>
-                <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', padding: '0.5rem 0.75rem', letterSpacing: '0.03em' }}>CHATS</p>
                 {sortedRecentChats.map(u => {
                   const friendAura = resolveUserAura(u, vibeAuras);
                   const isPinned = pinnedChatIds.includes(u.id || u._id);
