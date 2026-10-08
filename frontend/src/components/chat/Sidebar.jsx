@@ -1,13 +1,14 @@
 import React, { useState, useContext, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass, Edit3, Pin } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass, Edit3, Pin, Music, Disc } from 'lucide-react';
 import FriendsTab from './FriendsTab';
 import { useBackHandler } from '../../utils/backNavigation';
 import PulseVipBadge from '../common/PulseVipBadge';
 import PulseVibesBar from '../vibes/PulseVibesBar';
 import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
 import { Gamepad2 } from 'lucide-react';
+import { useAppMusic } from '../../context/AppMusicContext';
 
 import { lazyWithRetry } from '../../utils/lazyRetry';
 
@@ -101,6 +102,7 @@ class ModalErrorBoundary extends React.Component {
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
   const { user, logout, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
   const { socket, onlineUsers, typingMap, lastNotification, vibeAuras } = useContext(SocketContext);
+  const { currentTrack: appMusicTrack, isPlaying: isAppMusicPlaying, togglePlayPause: toggleAppMusic } = useAppMusic();
   const currentUid = user?.id || getCachedUser()?.id;
 
   const myAura = useMemo(() => {
@@ -1636,8 +1638,55 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           </div>
         </div>
 
-        {/* Topbar Actions: Direct Refresh + Pulse Zone + 3-Dot More Menu */}
+        {/* Topbar Actions: App Background Music + Pulse Zone + Switch Account + 3-Dot More Menu */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* App-Wide Background Music Button */}
+          <button
+            onClick={() => {
+              if (appMusicTrack) {
+                toggleAppMusic();
+              } else {
+                setShowVibeSelector(true);
+              }
+            }}
+            title={appMusicTrack ? (isAppMusicPlaying ? "Pause Background Music" : "Resume Background Music") : "Choose & Play Background Music"}
+            className="icon-btn-ghost"
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: isAppMusicPlaying
+                ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.35), rgba(99, 102, 241, 0.35))'
+                : 'rgba(255, 255, 255, 0.05)',
+              color: isAppMusicPlaying ? '#c084fc' : 'var(--text-muted)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: isAppMusicPlaying ? '1.5px solid #a855f7' : '1px solid var(--border)',
+              transition: 'all 0.2s ease',
+              cursor: 'pointer',
+              boxShadow: isAppMusicPlaying ? '0 0 14px rgba(168, 85, 247, 0.5)' : 'none',
+              position: 'relative'
+            }}
+          >
+            {isAppMusicPlaying ? (
+              <Disc size={18} style={{ animation: 'spin 3s linear infinite' }} />
+            ) : (
+              <Music size={18} />
+            )}
+            {appMusicTrack && !isAppMusicPlaying && (
+              <span style={{
+                position: 'absolute',
+                top: '6px',
+                right: '6px',
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                background: '#a855f7'
+              }} />
+            )}
+          </button>
+
           <button
             onClick={() => setShowPulseZone(true)}
             title="Pulse Zone (Mini-Games, Trivia & Leaderboards)"

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { X, Zap, Battery, Sparkles, Check, Trash2 } from 'lucide-react';
+import { X, Zap, Battery, Sparkles, Check, Trash2, Music, Play, Pause, Disc } from 'lucide-react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
+import { useAppMusic } from '../../context/AppMusicContext';
+import MusicPickerModal from '../vibes/MusicPickerModal';
 import { updateUserProfileInStorage } from '../../utils/offlineStorage';
 
 const PRESET_AURAS = [
@@ -22,12 +24,55 @@ export default function VibeAuraSelectorModal({
 }) {
   const { socket } = useContext(SocketContext);
   const { user, updateUserProfile } = useContext(AuthContext);
+  const { currentTrack, saveMusicNote, deleteMusicNote } = useAppMusic();
+
   const effectiveUserId = currentUserId || user?.id || user?._id;
   const [selectedMood, setSelectedMood] = useState(currentAura?.mood || '');
   const [selectedEmoji, setSelectedEmoji] = useState(currentAura?.emoji || '⚡');
   const [selectedColor, setSelectedColor] = useState(currentAura?.auraColor || '#a855f7');
   const [isLowBattery, setIsLowBattery] = useState(Boolean(currentAura?.isLowBattery));
   const [detectedBattery, setDetectedBattery] = useState(null);
+
+  // App Background Music State
+  const [attachedSong, setAttachedSong] = useState(currentTrack || null);
+  const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const [previewAudio, setPreviewAudio] = useState(null);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+
+  const stopPreview = () => {
+    if (previewAudio) {
+      try {
+        previewAudio.pause();
+        previewAudio.currentTime = 0;
+      } catch (e) {}
+    }
+    setIsPlayingPreview(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      stopPreview();
+    };
+  }, [previewAudio]);
+
+  const handleTogglePreview = (e) => {
+    if (e) e.stopPropagation();
+    if (!attachedSong?.audioUrl) return;
+
+    if (isPlayingPreview && previewAudio) {
+      previewAudio.pause();
+      setIsPlayingPreview(false);
+    } else {
+      if (previewAudio) {
+        previewAudio.play().then(() => setIsPlayingPreview(true)).catch(() => {});
+      } else {
+        const a = new Audio(attachedSong.audioUrl);
+        a.onended = () => setIsPlayingPreview(false);
+        a.play().then(() => setIsPlayingPreview(true)).catch(() => {});
+        setPreviewAudio(a);
+      }
+    }
+  };
 
   // Auto-detect Battery Level if API is available (only for display, do not force enable)
   useEffect(() => {
@@ -47,12 +92,14 @@ export default function VibeAuraSelectorModal({
 
   const handleSave = () => {
     if (!effectiveUserId) return;
+    stopPreview();
+
     const hasBattery = Boolean(isLowBattery);
     const trimmedMood = (selectedMood || '').trim();
     const hasMood = Boolean(trimmedMood);
 
-    // If both mood and battery are off, treat as clear!
-    if (!hasBattery && !hasMood) {
+    // If both mood, battery, and attached song are off, treat as clear!
+    if (!hasBattery && !hasMood && !attachedSong) {
       handleClear();
       return;
     }
@@ -66,7 +113,8 @@ export default function VibeAuraSelectorModal({
       auraType: isActuallyLow ? 'low_battery' : 'neon_pulse',
       isLowBattery: hasBattery,
       batteryLevel: hasBattery ? (detectedBattery !== null ? detectedBattery : 20) : null,
-      inGame: trimmedMood.includes('Temple Run') ? 'Temple Run 3D' : ''
+      inGame: trimmedMood.includes('Temple Run') ? 'Temple Run 3D' : '',
+      music: attachedSong || null
     };
 
     if (socket) {
@@ -83,12 +131,22 @@ export default function VibeAuraSelectorModal({
         detail: { targetUserId: effectiveUserId, updates: { vibeAura: auraData } }
       }));
     }
+
+    // Save and Play App-Wide Background Music!
+    if (attachedSong) {
+      saveMusicNote(attachedSong, trimmedMood);
+    } else if (currentTrack) {
+      deleteMusicNote();
+    }
+
     if (onAuraUpdated) onAuraUpdated(auraData);
     onClose();
   };
 
   const handleClear = () => {
     if (!effectiveUserId) return;
+    stopPreview();
+
     const clearData = {
       userId: effectiveUserId,
       mood: '',
@@ -98,7 +156,8 @@ export default function VibeAuraSelectorModal({
       isLowBattery: false,
       batteryLevel: null,
       inGame: '',
-      cleared: true
+      cleared: true,
+      music: null
     };
     if (socket) {
       socket.emit('update_vibe_aura', clearData);
@@ -114,6 +173,8 @@ export default function VibeAuraSelectorModal({
         detail: { targetUserId: effectiveUserId, updates: { vibeAura: null } }
       }));
     }
+
+    deleteMusicNote();
     if (onAuraUpdated) onAuraUpdated(null);
     onClose();
   };
@@ -293,6 +354,138 @@ export default function VibeAuraSelectorModal({
           </div>
         </div>
 
+        {/* App Background Music Selection */}
+        <div style={{ marginBottom: '18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <label style={{ fontSize: '0.75rem', color: '#9ca3af', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <Music size={13} color="#a855f7" />
+              <span>APP BACKGROUND MUSIC</span>
+            </label>
+            {attachedSong && (
+              <span style={{ fontSize: '0.68rem', color: '#10b981', fontWeight: 700 }}>
+                ● Plays across app
+              </span>
+            )}
+          </div>
+
+          {!attachedSong ? (
+            <button
+              type="button"
+              onClick={() => setShowMusicPicker(true)}
+              style={{
+                width: '100%',
+                background: 'rgba(168, 85, 247, 0.08)',
+                border: '1.5px dashed rgba(168, 85, 247, 0.4)',
+                borderRadius: '14px',
+                padding: '12px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                color: '#c084fc',
+                fontSize: '0.84rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Music size={16} />
+              <span>+ Attach Music (Plays in Background)</span>
+            </button>
+          ) : (
+            <div
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(168, 85, 247, 0.35)',
+                borderRadius: '14px',
+                padding: '8px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '10px',
+                boxShadow: '0 4px 14px rgba(168, 85, 247, 0.15)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden', flex: 1 }}>
+                <div style={{ position: 'relative', width: '38px', height: '38px', borderRadius: '10px', overflow: 'hidden', flexShrink: 0 }}>
+                  <img
+                    src={attachedSong.albumArt || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100'}
+                    alt="Album"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTogglePreview}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(0,0,0,0.45)',
+                      border: 'none',
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer'
+                    }}
+                    title={isPlayingPreview ? "Pause Preview" : "Preview Track"}
+                  >
+                    {isPlayingPreview ? <Pause size={14} fill="#fff" /> : <Play size={14} fill="#fff" />}
+                  </button>
+                </div>
+
+                <div style={{ overflow: 'hidden', flex: 1 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {attachedSong.songTitle}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {attachedSong.artistName || 'Pulse Music'}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowMusicPicker(true)}
+                  style={{
+                    background: 'rgba(168, 85, 247, 0.18)',
+                    border: '1px solid rgba(168, 85, 247, 0.4)',
+                    borderRadius: '8px',
+                    padding: '4px 8px',
+                    color: '#c084fc',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Change
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopPreview();
+                    setAttachedSong(null);
+                  }}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '8px',
+                    padding: '4px',
+                    color: '#ef4444',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  title="Remove Music"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
@@ -308,7 +501,7 @@ export default function VibeAuraSelectorModal({
               alignItems: 'center',
               justifyContent: 'center'
             }}
-            title="Clear Aura"
+            title="Clear Aura & Music"
           >
             <Trash2 size={16} />
           </button>
@@ -337,6 +530,19 @@ export default function VibeAuraSelectorModal({
           </button>
         </div>
       </div>
+
+      {showMusicPicker && (
+        <MusicPickerModal
+          isOpen={showMusicPicker}
+          onClose={() => setShowMusicPicker(false)}
+          selectedSong={attachedSong}
+          onSelectSong={(song) => {
+            stopPreview();
+            setAttachedSong(song);
+            setShowMusicPicker(false);
+          }}
+        />
+      )}
     </div>
   );
 }
