@@ -14,6 +14,21 @@ import { EMOJI_CATEGORIES } from '../chat/EmojiPicker';
 import InstagramMusicSticker from './InstagramMusicSticker';
 
 
+function formatStoryTimeAgo(dateInput) {
+  if (!dateInput) return '';
+  const now = Date.now();
+  const past = new Date(dateInput).getTime();
+  const diffSec = Math.max(0, Math.floor((now - past) / 1000));
+
+  if (diffSec < 60) return 'Just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+}
+
 export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGroup, onClose, onRefresh, initialVibeId }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
@@ -1394,9 +1409,17 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                 style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid #fff' }}
               />
             </div>
+
             <div>
-              <div style={{ fontSize: '0.86rem', fontWeight: 800, textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
-                {vibeGroup?.displayName || 'User'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '0.86rem', fontWeight: 800, textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
+                  {vibeGroup?.displayName || 'User'}
+                </span>
+                {currentVibe?.createdAt && (
+                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.8)', textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
+                    · {formatStoryTimeAgo(currentVibe.createdAt)}
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: '0.68rem', opacity: 0.95, display: 'flex', alignItems: 'center', gap: '4px', color: '#f59e0b', fontWeight: 600 }}>
                 <Music size={11} /> {currentVibe.songTitle ? `🎵 ${currentVibe.songTitle}` : currentVibe.soundtrack !== 'none' ? currentVibe.soundtrack : 'Vibe Story'}
@@ -2171,8 +2194,15 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                   style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid #fff' }}
                 />
                 <div>
-                  <div style={{ fontSize: '0.86rem', fontWeight: 800, textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
-                    {adjacentInfo.group?.displayName || 'User'}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '0.86rem', fontWeight: 800, textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
+                      {adjacentInfo.group?.displayName || 'User'}
+                    </span>
+                    {adjacentInfo.vibe?.createdAt && (
+                      <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.8)', textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
+                        · {formatStoryTimeAgo(adjacentInfo.vibe.createdAt)}
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: '0.68rem', opacity: 0.95, display: 'flex', alignItems: 'center', gap: '4px', color: '#f59e0b', fontWeight: 600 }}>
                     <Music size={11} /> {adjacentInfo.vibe?.songTitle ? `🎵 ${adjacentInfo.vibe.songTitle}` : 'Vibe Story'}

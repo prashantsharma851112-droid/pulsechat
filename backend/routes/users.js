@@ -547,6 +547,8 @@ router.put('/music-note', authMiddleware, async (req, res) => {
       audioUrl: song?.audioUrl || '',
       artworkUrl: song?.artworkUrl || '',
       duration: song?.duration || 0,
+      startTime: Number(song?.startTime) || 0,
+      snippetDuration: Number(song?.snippetDuration) || 30,
       noteText: (noteText || '').trim(),
       updatedAt: new Date().toISOString()
     } : null;

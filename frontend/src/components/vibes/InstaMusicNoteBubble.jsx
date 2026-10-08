@@ -72,6 +72,19 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
       const audio = new Audio(activeNote.audioUrl);
       audio.volume = 0.85;
 
+      const startTime = Number(activeNote.startTime) || 0;
+      const snippetDuration = Number(activeNote.snippetDuration) || 30;
+
+      if (startTime > 0) {
+        audio.currentTime = startTime;
+      }
+
+      audio.ontimeupdate = () => {
+        if (audio.currentTime >= startTime + snippetDuration) {
+          stopNoteAudio();
+        }
+      };
+
       audio.onended = () => {
         setIsPlayingNote(false);
         noteAudioRef.current = null;
