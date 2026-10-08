@@ -13,7 +13,11 @@ import Sticker3D from '../common/Sticker3D';
 import Animated3DText from '../common/Animated3DText';
 import GiftUnboxModal from './GiftUnboxModal';
 import { getSavedQuickReactions, recordRecentReaction } from '../../utils/quickReactions';
-import { getCachedMediaUrl } from '../../utils/mediaCache';
+import { getCachedMediaUrl, getSyncCachedMediaUrl } from '../../utils/mediaCache';
+
+// In-memory set of loaded media URLs so images never flash or reload when scrolling
+const loadedMediaUrlsGlobal = new Set();
+
 
 function StealthDustCard({ message, chatId, isMine, socket }) {
   const [isRevealing, setIsRevealing] = useState(false);
@@ -706,7 +710,7 @@ function VoiceNotePlayer({ audioUrl, isMine }) {
   );
 }
 
-export default function MessageItem({
+function MessageItem({
   message,
   isMine,
   chatId,
@@ -740,18 +744,30 @@ export default function MessageItem({
   const { socket } = useContext(SocketContext);
   const { user: currentUser } = useContext(AuthContext);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [imgLoaded, setImgLoaded] = useState(false);
-  const [cachedMediaUrl, setCachedMediaUrl] = useState(message.mediaUrl);
+
+  // Synchronous cache resolution to eliminate visual flickering / image re-decoding on scroll
+  const isMediaImage = Boolean(message.mediaUrl && (message.type === 'image' || message.mediaType === 'image'));
+  const syncCachedUrl = isMediaImage ? getSyncCachedMediaUrl(message.mediaUrl) : '';
+  const initialMediaUrl = syncCachedUrl || message.mediaUrl;
+  const isAlreadyLoaded = isMediaImage ? (loadedMediaUrlsGlobal.has(message.mediaUrl) || Boolean(syncCachedUrl)) : false;
+
+  const [imgLoaded, setImgLoaded] = useState(isAlreadyLoaded);
+  const [cachedMediaUrl, setCachedMediaUrl] = useState(initialMediaUrl);
 
   useEffect(() => {
     let isMounted = true;
-    if (message.mediaUrl && (message.type === 'image' || message.mediaType === 'image')) {
+    if (isMediaImage && message.mediaUrl && !getSyncCachedMediaUrl(message.mediaUrl)) {
       getCachedMediaUrl(message.mediaUrl).then(url => {
-        if (isMounted && url) setCachedMediaUrl(url);
+        if (isMounted && url) {
+          setCachedMediaUrl(url);
+          loadedMediaUrlsGlobal.add(url);
+          loadedMediaUrlsGlobal.add(message.mediaUrl);
+        }
       });
     }
     return () => { isMounted = false; };
-  }, [message.mediaUrl, message.type, message.mediaType]);
+  }, [message.mediaUrl, isMediaImage]);
+
   const [audioObj, setAudioObj] = useState(null);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [showThread, setShowThread] = useState(false);
@@ -1877,7 +1893,7 @@ export default function MessageItem({
               </div>
             ) : (
               <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%', minWidth: '160px', minHeight: '120px', borderRadius: '10px', overflow: 'hidden', background: 'rgba(255,255,255,0.06)' }}>
-                {!imgLoaded && (
+                {!imgLoaded && !isAlreadyLoaded && (
                   <div style={{
                     position: 'absolute',
                     inset: 0,
@@ -1899,7 +1915,11 @@ export default function MessageItem({
                   loading="lazy"
                   decoding="async"
                   onClick={() => setShowImagePreview(true)}
-                  onLoad={() => setImgLoaded(true)}
+                  onLoad={() => {
+                    loadedMediaUrlsGlobal.add(message.mediaUrl);
+                    if (cachedMediaUrl) loadedMediaUrlsGlobal.add(cachedMediaUrl);
+                    setImgLoaded(true);
+                  }}
                   style={{
                     maxWidth: '100%',
                     maxHeight: '280px',
@@ -1907,9 +1927,9 @@ export default function MessageItem({
                     borderRadius: '10px',
                     display: 'block',
                     cursor: 'pointer',
-                    opacity: (message.isUploading || message.status === 'uploading') ? 0.9 : (imgLoaded ? 1 : 0.15),
-                    filter: (message.isUploading || message.status === 'uploading') ? 'blur(5px) brightness(0.88)' : (imgLoaded ? 'none' : 'blur(8px)'),
-                    transition: 'opacity 0.35s ease, filter 0.35s ease'
+                    opacity: (message.isUploading || message.status === 'uploading') ? 0.9 : ((imgLoaded || isAlreadyLoaded) ? 1 : 0.85),
+                    filter: (message.isUploading || message.status === 'uploading') ? 'blur(5px) brightness(0.88)' : 'none',
+                    transition: 'opacity 0.2s ease'
                   }}
                 />
                 {/* Telegram-style 0ms Optimistic Upload Spinner */}
@@ -2864,3 +2884,46 @@ export default function MessageItem({
     </div>
   );
 }
+
+function areMessagePropsEqual(prevProps, nextProps) {
+  if (prevProps.message !== nextProps.message) {
+    const p = prevProps.message;
+    const n = nextProps.message;
+    if (
+      p.id !== n.id ||
+      p._id !== n._id ||
+      p.clientTempId !== n.clientTempId ||
+      p.status !== n.status ||
+      p.content !== n.content ||
+      p.type !== n.type ||
+      p.mediaUrl !== n.mediaUrl ||
+      p.mediaType !== n.mediaType ||
+      p.fogSnapStatus !== n.fogSnapStatus ||
+      p.isFogSnap !== n.isFogSnap ||
+      p.isUploading !== n.isUploading ||
+      p.reactions !== n.reactions ||
+      p.pollData !== n.pollData ||
+      p.viewedBy !== n.viewedBy
+    ) {
+      return false;
+    }
+  }
+
+  if (prevProps.isSelected !== nextProps.isSelected) return false;
+  if (prevProps.isSelectedForAction !== nextProps.isSelectedForAction) return false;
+  if (prevProps.isStarred !== nextProps.isStarred) return false;
+  if (prevProps.isMultiSelectMode !== nextProps.isMultiSelectMode) return false;
+  if (prevProps.isInActionSelectionMode !== nextProps.isInActionSelectionMode) return false;
+  if (prevProps.actionSelectedCount !== nextProps.actionSelectedCount) return false;
+  if (prevProps.highlightSearchTerm !== nextProps.highlightSearchTerm) return false;
+  if (prevProps.translationData !== nextProps.translationData) return false;
+  if (prevProps.senderName !== nextProps.senderName) return false;
+  if (prevProps.senderIsPro !== nextProps.senderIsPro) return false;
+  if (prevProps.isMine !== nextProps.isMine) return false;
+  if (prevProps.chatId !== nextProps.chatId) return false;
+
+  return true;
+}
+
+export default React.memo(MessageItem, areMessagePropsEqual);
+

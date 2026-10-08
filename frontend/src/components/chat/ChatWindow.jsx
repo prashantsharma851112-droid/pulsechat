@@ -263,6 +263,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const showScrollBottomRef = useRef(false);
   const [newScrolledMessagesCount, setNewScrolledMessagesCount] = useState(0);
+  const newScrolledMessagesCountRef = useRef(0);
+
 
   // Instagram-style Story preview modal state
   const [selectedStoryVibeGroup, setSelectedStoryVibeGroup] = useState(null);
@@ -2158,7 +2160,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         if (msg.senderId !== user.id) {
           playSound('received');
           if (showScrollBottomRef.current) {
-            setNewScrolledMessagesCount(prev => prev + 1);
+            newScrolledMessagesCountRef.current += 1;
+            setNewScrolledMessagesCount(newScrolledMessagesCountRef.current);
           }
           if (!isGhostModeRef.current) {
             socket.emit('mark_read', { messageId: msg.id, chatId });
@@ -2593,9 +2596,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     // Track if user has scrolled away from the latest messages (> 100px)
     const distFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
     const isScrolledUp = distFromBottom > 100;
-    setShowScrollBottom(isScrolledUp);
-    showScrollBottomRef.current = isScrolledUp;
-    if (!isScrolledUp) {
+    if (showScrollBottomRef.current !== isScrolledUp) {
+      setShowScrollBottom(isScrolledUp);
+      showScrollBottomRef.current = isScrolledUp;
+    }
+    if (!isScrolledUp && newScrolledMessagesCountRef.current > 0) {
+      newScrolledMessagesCountRef.current = 0;
       setNewScrolledMessagesCount(0);
     }
   };
@@ -4804,6 +4810,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {/* Message Stream with Live Wallpaper Overlay & WhatsApp-Style Date Dividers */}
       <div
         ref={chatContainerRef}
+        className="chat-messages-scroll-area chat-scroll-stream"
         onScroll={handleChatContainerScroll}
         onClick={() => {
           if (selectedActionMessages.length > 0) handleDismissActionMessage();
@@ -4817,7 +4824,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           flexDirection: 'column',
           gap: '0.75rem',
           position: 'relative',
-          zIndex: selectedActionMessages.length > 0 ? 45 : 1
+          zIndex: selectedActionMessages.length > 0 ? 45 : 1,
+          WebkitOverflowScrolling: 'touch',
+          overscrollBehaviorY: 'contain',
+          willChange: 'scroll-position'
         }}
       >
         {/* Load Earlier Messages Button (Pagination) */}

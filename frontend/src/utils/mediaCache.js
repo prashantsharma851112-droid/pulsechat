@@ -12,7 +12,20 @@ const CACHE_NAME = 'pulsechat-media-v1';
 const inMemoryBlobUrlCache = new Map();
 
 /**
+ * Synchronously checks if a blob URL is already available in memory.
+ * Returns the blob URL if available, or the original URL if local/data, or empty string.
+ */
+export function getSyncCachedMediaUrl(remoteUrl) {
+  if (!remoteUrl || typeof remoteUrl !== 'string') return '';
+  if (remoteUrl.startsWith('data:') || remoteUrl.startsWith('blob:') || remoteUrl.startsWith('/')) {
+    return remoteUrl;
+  }
+  return inMemoryBlobUrlCache.get(remoteUrl) || '';
+}
+
+/**
  * Retrieves a cached Blob URL for a given remote image/media URL.
+
  * If not cached, fetches in background, caches to device storage, and returns.
  *
  * @param {string} remoteUrl

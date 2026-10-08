@@ -11,6 +11,7 @@ import { registerGlobalMusicAudio, stopGlobalMusicAudio, playSound } from '../..
 import { uploadMediaDirect } from '../../utils/mediaUpload';
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 import MusicPickerModal from './MusicPickerModal';
+import InstagramMusicSticker from './InstagramMusicSticker';
 import { EMOJI_CATEGORIES, ALL_EMOJIS } from '../chat/EmojiPicker';
 import { useBackHandler } from '../../utils/backNavigation';
 
@@ -103,7 +104,9 @@ export default function CreateVibeModal({ onClose, onCreated }) {
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [songTotalDuration, setSongTotalDuration] = useState(180);
   const [musicScale, setMusicScale] = useState(1.0);
-  const [musicStyle, setMusicStyle] = useState('pill');
+  const [musicStyle, setMusicStyle] = useState('card');
+  const [musicStyleToast, setMusicStyleToast] = useState(null);
+  const [isStickerTapPopped, setIsStickerTapPopped] = useState(false);
 
   // Interactive Hand Gestures & Draggable Elements
   const [stickersList, setStickersList] = useState([]); // [{ id, emoji, x, y, scale }]
@@ -1269,88 +1272,76 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         </div>
       )}
 
-      {/* 2. Draggable Music Badge */}
+      {/* 2. Draggable Instagram Interactive Music Sticker */}
       {selectedSong && !isEditingText && (
         <div
           onMouseDown={(e) => handleElementTouchStart('music', e)}
           onTouchStart={(e) => handleElementTouchStart('music', e)}
           onClick={(e) => {
             e.stopPropagation();
-            const styles = ['pill', 'card', 'minimal'];
+            const styles = ['card', 'pill', 'vinyl', 'square', 'banner'];
             const nextIdx = (styles.indexOf(musicStyle) + 1) % styles.length;
-            setMusicStyle(styles[nextIdx]);
+            const next = styles[nextIdx];
+            setMusicStyle(next);
+            setIsStickerTapPopped(true);
+            setTimeout(() => setIsStickerTapPopped(false), 220);
+            try { playSound('pop'); } catch (_) {}
+            const labels = {
+              card: '🎵 Classic Glass Card',
+              pill: '💊 Compact Pill',
+              vinyl: '💿 Spinning Vinyl Record',
+              square: '🖼️ Album Cover Poster',
+              banner: '⚡ Neon Gradient Banner'
+            };
+            setMusicStyleToast(labels[next] || next);
+            setTimeout(() => setMusicStyleToast(null), 1400);
           }}
           style={{
             position: 'absolute',
             left: `${musicPos.x}%`,
             top: `${musicPos.y}%`,
-            transform: `translate(-50%, -50%) scale(${musicScale})`,
+            transform: `translate(-50%, -50%) scale(${musicScale}) ${isStickerTapPopped ? 'scale(0.92)' : 'scale(1)'}`,
+            transition: 'transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
             zIndex: 45,
             cursor: 'grab',
             touchAction: 'none'
           }}
         >
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '6px 14px',
-              background: 'rgba(0, 0, 0, 0.65)',
-              backdropFilter: 'blur(16px)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: '24px',
-              boxShadow: '0 6px 20px rgba(0, 0, 0, 0.5)',
-              color: '#ffffff'
-            }}
-          >
+          {/* Micro-hint tooltip shown when tapped to cycle style */}
+          {musicStyleToast && (
             <div
               style={{
-                width: '24px',
-                height: '24px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #10b981, #06b6d4)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              <Music size={13} color="#fff" />
-            </div>
-            <div style={{ textAlign: 'left', maxWidth: '180px' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {selectedSong.songTitle}
-              </div>
-              <div style={{ fontSize: '0.66rem', color: '#cbd5e1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {selectedSong.artistName || 'Pulse Music'}
-              </div>
-            </div>
-            {/* Quick Trim / Adjust Button */}
-            <div
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowMusicAdjuster(true);
-              }}
-              style={{
-                marginLeft: '4px',
-                padding: '4px 8px',
+                position: 'absolute',
+                top: '-32px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'rgba(0, 0, 0, 0.88)',
+                backdropFilter: 'blur(10px)',
+                color: '#ffffff',
+                padding: '3px 10px',
                 borderRadius: '12px',
-                background: 'rgba(16, 185, 129, 0.25)',
-                border: '1px solid rgba(16, 185, 129, 0.4)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '3px',
-                fontSize: '0.66rem',
-                fontWeight: 700,
-                color: '#34d399',
-                cursor: 'pointer'
+                fontSize: '0.68rem',
+                fontWeight: 800,
+                whiteSpace: 'nowrap',
+                pointerEvents: 'none',
+                boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
+                border: '1px solid rgba(255,255,255,0.25)',
+                animation: 'pulseFadeIn 0.15s ease'
               }}
-              title="Trim / Adjust Audio Segment"
             >
-              <SlidersHorizontal size={11} />
-              <span>Trim</span>
+              {musicStyleToast}
             </div>
-          </div>
+          )}
+
+          <InstagramMusicSticker
+            songTitle={selectedSong.songTitle}
+            artistName={selectedSong.artistName}
+            albumArt={selectedSong.albumArt || selectedSong.image}
+            styleType={musicStyle}
+            isPlaying={true}
+            isEditable={true}
+            onTrimClick={() => setShowMusicAdjuster(true)}
+          />
         </div>
       )}
 

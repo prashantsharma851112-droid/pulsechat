@@ -2606,9 +2606,20 @@ a,
   -webkit-backface-visibility: hidden;
 }
 
-/* 3. Native touch-momentum physics */
-* {
+/* 3. Native touch-momentum physics strictly for scrollable containers */
+.chat-messages-scroll-area,
+.chat-scroll-stream,
+.chat-window-container,
+[style*="overflow-y: auto"],
+[style*="overflowY: auto"] {
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+.message-item-contain {
+  contain: layout style;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 /* 4. Snappy native tactile response on mobile taps */
@@ -2617,4 +2628,35 @@ button:active:not(:disabled),
   transform: scale(0.96);
   transition: transform 0.08s cubic-bezier(0.2, 0, 0, 1) !important;
 }
+
+/* Instagram Story Music Equalizer Visualizer Waves */
+@keyframes musicWaveBar1 {
+  0%, 100% { height: 4px; }
+  50% { height: 14px; }
+}
+@keyframes musicWaveBar2 {
+  0%, 100% { height: 14px; }
+  50% { height: 5px; }
+}
+@keyframes musicWaveBar3 {
+  0%, 100% { height: 7px; }
+  50% { height: 16px; }
+}
+@keyframes musicWaveBar4 {
+  0%, 100% { height: 13px; }
+  50% { height: 4px; }
+}
+
+@keyframes instaStickerTapPop {
+  0% { transform: translate(-50%, -50%) scale(0.92); }
+  60% { transform: translate(-50%, -50%) scale(1.05); }
+  100% { transform: translate(-50%, -50%) scale(1.0); }
+}
+
+@keyframes spinVinyl {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+
 

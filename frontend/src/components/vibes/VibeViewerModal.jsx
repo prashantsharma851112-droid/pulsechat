@@ -11,6 +11,8 @@ import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 import SparksWalletModal from '../chat/SparksWalletModal';
 import PulseProModal from '../chat/PulseProModal';
 import { EMOJI_CATEGORIES } from '../chat/EmojiPicker';
+import InstagramMusicSticker from './InstagramMusicSticker';
+
 
 export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGroup, onClose, onRefresh, initialVibeId }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
@@ -40,6 +42,9 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     }
     return 0;
   });
+
+  const [viewerMusicStyle, setViewerMusicStyle] = useState(null);
+
 
   // Next story info (within same user or next user group)
   const nextStoryInfo = React.useMemo(() => {
@@ -1778,75 +1783,34 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
           {/* Instagram Music Sticker with customized scale, position and style */}
           {currentVibe?.songTitle && (
             <div
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setViewerMusicStyle(prev => {
+                  const styles = ['card', 'pill', 'vinyl', 'square', 'banner'];
+                  const cur = prev || currentVibe.musicStyle || 'card';
+                  const nextIdx = (styles.indexOf(cur) + 1) % styles.length;
+                  return styles[nextIdx];
+                });
+                try { playSound('pop'); } catch (_) {}
+              }}
               style={{
                 position: 'absolute',
                 left: `${currentVibe.musicPos?.x ?? 50}%`,
                 top: `${currentVibe.musicPos?.y ?? 20}%`,
                 transform: `translate(-50%, -50%) scale(${currentVibe.musicScale || 1.0})`,
                 transformOrigin: 'center center',
-                background: currentVibe.musicStyle === 'card' 
-                  ? 'rgba(15, 15, 24, 0.95)'
-                  : currentVibe.musicStyle === 'glass'
-                  ? 'rgba(99, 102, 241, 0.25)'
-                  : 'rgba(0, 0, 0, 0.84)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                padding: currentVibe.musicStyle === 'card' ? '12px' : '6px 14px 6px 8px',
-                borderRadius: currentVibe.musicStyle === 'card' ? '18px' : '26px',
-                border: currentVibe.musicStyle === 'glass' 
-                  ? '1.5px solid rgba(168, 85, 247, 0.7)' 
-                  : '1px solid rgba(245, 158, 11, 0.65)',
-                display: 'flex',
-                flexDirection: currentVibe.musicStyle === 'card' ? 'column' : 'row',
-                alignItems: 'center',
-                gap: currentVibe.musicStyle === 'card' ? '8px' : '8px',
                 zIndex: 6,
-                boxShadow: currentVibe.musicStyle === 'glass'
-                  ? '0 8px 30px rgba(168, 85, 247, 0.45)'
-                  : '0 8px 24px rgba(0,0,0,0.65)',
-                maxWidth: currentVibe.musicStyle === 'card' ? '160px' : '260px',
-                animation: 'pulseFadeIn 0.22s ease'
+                cursor: 'pointer'
               }}
             >
-              <div style={{
-                position: 'relative',
-                width: currentVibe.musicStyle === 'card' ? '100px' : '30px',
-                height: currentVibe.musicStyle === 'card' ? '100px' : '30px',
-                flexShrink: 0
-              }}>
-                <img
-                  src={currentVibe.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(currentVibe.songTitle)}`}
-                  alt="Track"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    borderRadius: currentVibe.musicStyle === 'card' ? '12px' : '50%',
-                    objectFit: 'cover',
-                    animation: isAudioMuted || currentVibe.musicStyle === 'card' ? 'none' : 'spin 3.5s linear infinite',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.4)'
-                  }}
-                />
-              </div>
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                minWidth: 0,
-                flex: 1,
-                textAlign: currentVibe.musicStyle === 'card' ? 'center' : 'left',
-                width: '100%'
-              }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  🎵 {currentVibe.songTitle}
-                </span>
-              </div>
-              {!isAudioMuted && currentVibe.musicStyle !== 'card' && (
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '12px', flexShrink: 0 }}>
-                  <span style={{ width: '2px', height: '100%', background: '#ec4899', borderRadius: '1px', animation: 'pulseGlow 0.4s infinite alternate' }} />
-                  <span style={{ width: '2px', height: '60%', background: '#f59e0b', borderRadius: '1px', animation: 'pulseGlow 0.7s infinite alternate' }} />
-                  <span style={{ width: '2px', height: '80%', background: '#6366f1', borderRadius: '1px', animation: 'pulseGlow 0.5s infinite alternate' }} />
-                </div>
-              )}
+              <InstagramMusicSticker
+                songTitle={currentVibe.songTitle}
+                artistName={currentVibe.artistName}
+                albumArt={currentVibe.albumArt}
+                styleType={viewerMusicStyle || currentVibe.musicStyle || 'card'}
+                isPlaying={!isAudioMuted}
+                isEditable={false}
+              />
             </div>
           )}
 
