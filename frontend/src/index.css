@@ -2545,7 +2545,53 @@ input, textarea {
 }
 .bottom-round-vibe-btn:active {
   transform: scale(0.94);
-}@keyframes pulseShimmer {
+}
+
+/* Headphone Transparent Outline & Liquid Color Fill/Unfill Animation */
+.pulse-headphone-icon-box {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+@keyframes headphoneLiquidFillUnfill {
+  0% {
+    clip-path: inset(100% 0 0 0);
+    -webkit-clip-path: inset(100% 0 0 0);
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  12% {
+    opacity: 0.85;
+  }
+  42%, 58% {
+    clip-path: inset(0% 0 0 0);
+    -webkit-clip-path: inset(0% 0 0 0);
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  88% {
+    opacity: 0.85;
+  }
+  100% {
+    clip-path: inset(100% 0 0 0);
+    -webkit-clip-path: inset(100% 0 0 0);
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+.pulse-headphone-liquid-fill {
+  animation: headphoneLiquidFillUnfill 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  transform-origin: center center;
+  will-change: clip-path, opacity, transform;
+}
+
+@keyframes pulseShimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }

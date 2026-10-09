@@ -2886,11 +2886,56 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             boxShadow: isAppMusicPlaying ? '0 0 20px rgba(168, 85, 247, 0.65)' : '0 6px 18px rgba(0,0,0,0.5)'
           }}
         >
-          {isAppMusicPlaying ? (
-            <Disc size={26} style={{ animation: 'spin 3s linear infinite', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.65))' }} />
-          ) : (
-            <Music size={26} style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.65))' }} />
-          )}
+          <div className="pulse-headphone-icon-box">
+            {/* Translucent glass outline layer */}
+            <svg
+              viewBox="0 0 24 24"
+              width="28"
+              height="28"
+              fill="none"
+              stroke="rgba(255, 255, 255, 0.45)"
+              strokeWidth="2.1"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5))'
+              }}
+            >
+              <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" />
+              <rect x="2.5" y="14" width="4.5" height="6.5" rx="2" fill="rgba(255, 255, 255, 0.14)" stroke="none" />
+              <rect x="17" y="14" width="4.5" height="6.5" rx="2" fill="rgba(255, 255, 255, 0.14)" stroke="none" />
+            </svg>
+
+            {/* Glowing color fill layer with continuous liquid fill & drain animation */}
+            <svg
+              viewBox="0 0 24 24"
+              width="28"
+              height="28"
+              className="pulse-headphone-liquid-fill"
+              stroke="#ffffff"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                filter: 'drop-shadow(0 0 6px #ffffff) drop-shadow(0 0 14px #c084fc)'
+              }}
+            >
+              <defs>
+                <linearGradient id="hpLiquidGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#ffffff" />
+                  <stop offset="55%" stopColor="#f3e8ff" />
+                  <stop offset="100%" stopColor="#c084fc" />
+                </linearGradient>
+              </defs>
+              <rect x="2.5" y="14" width="4.5" height="6.5" rx="2" fill="url(#hpLiquidGrad)" stroke="#ffffff" strokeWidth="1" />
+              <rect x="17" y="14" width="4.5" height="6.5" rx="2" fill="url(#hpLiquidGrad)" stroke="#ffffff" strokeWidth="1" />
+              <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" fill="none" stroke="url(#hpLiquidGrad)" strokeWidth="2.3" />
+            </svg>
+          </div>
           {appMusicTrack && (
             <div
               onClick={(e) => {
