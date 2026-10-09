@@ -1136,23 +1136,18 @@ export default function SettingsModal({
                     <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(192, 132, 252, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <Ghost size={20} color="#c084fc" />
                     </div>
-                    <div>
-                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        Ghost Mode (Stealth Read)
-                        <span style={{
-                          fontSize: '0.66rem',
-                          fontWeight: 800,
-                          padding: '2px 7px',
-                          borderRadius: '6px',
-                          background: ghostModeType === 'all' ? 'rgba(192, 132, 252, 0.25)' : (ghostModeType === 'specific' ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.08)'),
-                          color: ghostModeType === 'all' ? '#c084fc' : (ghostModeType === 'specific' ? '#818cf8' : 'var(--text-muted)')
-                        }}>
-                          {ghostModeType === 'all' ? 'EVERYONE (ON)' : (ghostModeType === 'specific' ? `${ghostChatIds.length} SPECIFIC CHATS` : 'OFF')}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Read messages without sending blue double ticks or seen status
-                      </div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Ghost Mode (Stealth Read)
+                      <span style={{
+                        fontSize: '0.66rem',
+                        fontWeight: 800,
+                        padding: '2px 7px',
+                        borderRadius: '6px',
+                        background: ghostModeType === 'all' ? 'rgba(192, 132, 252, 0.25)' : (ghostModeType === 'specific' ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.08)'),
+                        color: ghostModeType === 'all' ? '#c084fc' : (ghostModeType === 'specific' ? '#818cf8' : 'var(--text-muted)')
+                      }}>
+                        {ghostModeType === 'all' ? 'EVERYONE (ON)' : (ghostModeType === 'specific' ? `${ghostChatIds.length} SPECIFIC CHATS` : 'OFF')}
+                      </span>
                     </div>
                   </div>
                   <ChevronRight
@@ -1399,18 +1394,11 @@ export default function SettingsModal({
                   <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: user?.hideOnlineStatus ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <EyeOff size={18} color={user?.hideOnlineStatus ? '#f59e0b' : 'var(--text-muted)'} />
                   </div>
-                  <div>
-                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      Hide Online Status
-                      <span style={{ fontSize: '0.64rem', fontWeight: 800, padding: '1px 5px', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
-                        <Crown size={10} /> PRO
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                      {user?.hideOnlineStatus
-                        ? 'Your green online dot indicator is hidden from everyone'
-                        : 'Hide your active online presence across all chats'}
-                    </div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    Hide Online Status
+                    <span style={{ fontSize: '0.64rem', fontWeight: 800, padding: '1px 5px', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                      <Crown size={10} /> PRO
+                    </span>
                   </div>
                 </div>
                 <div style={{
@@ -1461,16 +1449,11 @@ export default function SettingsModal({
                     <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(234, 88, 12, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <span style={{ fontSize: '1.2rem' }}>🎭</span>
                     </div>
-                    <div>
-                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        App Camouflage (Fake App Icon)
-                        <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '6px', background: 'rgba(234, 88, 12, 0.2)', color: '#fb923c', fontWeight: 700 }}>
-                          {DISGUISE_PRESETS.find(p => p.id === currentDisguise)?.name || 'Default'}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Disguise PulseChat icon & tab title as Calculator, Notes or Weather so phone inspectors don't detect it
-                      </div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      App Camouflage (Fake App Icon)
+                      <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '6px', background: 'rgba(234, 88, 12, 0.2)', color: '#fb923c', fontWeight: 700 }}>
+                        {DISGUISE_PRESETS.find(p => p.id === currentDisguise)?.name || 'Default'}
+                      </span>
                     </div>
                   </div>
                   <ChevronRight
@@ -1588,16 +1571,11 @@ export default function SettingsModal({
                     <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <Lock size={20} color="var(--accent)" />
                     </div>
-                    <div>
-                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        Change Password
-                        <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '6px', background: 'rgba(99, 102, 241, 0.15)', color: 'var(--accent)', fontWeight: 700 }}>
-                          Security
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Update account password or reset securely via Email OTP
-                      </div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Change Password
+                      <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '6px', background: 'rgba(99, 102, 241, 0.15)', color: 'var(--accent)', fontWeight: 700 }}>
+                        Security
+                      </span>
                     </div>
                   </div>
                   <ChevronRight
@@ -1641,10 +1619,7 @@ export default function SettingsModal({
                   <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Ban size={18} color="#ef4444" />
                   </div>
-                  <div>
-                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>Blocked Contacts</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Manage blocked users and unblock contacts</div>
-                  </div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>Blocked Contacts</div>
                 </div>
                 <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', background: 'var(--hover-bg)', padding: '2px 8px', borderRadius: '12px' }}>
                   {user?.blockedUsers?.length || 0}

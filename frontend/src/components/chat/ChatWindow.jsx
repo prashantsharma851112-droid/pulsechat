@@ -2950,11 +2950,25 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       setCooldownMsg(text);
       setCooldownSecs(3);
       setText('');
+      if (replyInputRef.current) {
+        replyInputRef.current.focus({ preventScroll: true });
+      }
       return;
     }
 
     dispatchMessage(text);
     setText('');
+
+    // Keep mobile virtual keyboard open continuously until user presses back
+    if (replyInputRef.current) {
+      replyInputRef.current.focus({ preventScroll: true });
+      setTimeout(() => {
+        replyInputRef.current?.focus({ preventScroll: true });
+      }, 10);
+      setTimeout(() => {
+        replyInputRef.current?.focus({ preventScroll: true });
+      }, 50);
+    }
   };
 
   // Emotional Message Countdown Timer (3s -> auto send)
@@ -6383,12 +6397,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               )}
               <button
                 type="submit"
+                tabIndex={-1}
                 className="btn-primary-round"
                 title="Send Message (Hold to Schedule ⏰)"
-                onMouseDown={handleSendBtnMouseDown}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSendBtnMouseDown(e);
+                }}
                 onMouseUp={handleSendBtnMouseUp}
                 onTouchStart={handleSendBtnMouseDown}
-                onTouchEnd={handleSendBtnMouseUp}
+                onTouchEnd={() => {
+                  handleSendBtnMouseUp();
+                  replyInputRef.current?.focus({ preventScroll: true });
+                }}
                 style={{ flexShrink: 0 }}
               >
                 <Send size={18} />
