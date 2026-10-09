@@ -131,6 +131,11 @@ export default function SettingsModal({
   const [showGhostChatPicker, setShowGhostChatPicker] = useState(false);
   const [currentDisguise, setCurrentDisguise] = useState(getAppDisguise);
 
+  // Privacy accordion expanded states (collapsed by default to prevent clutter)
+  const [isGhostModeExpanded, setIsGhostModeExpanded] = useState(false);
+  const [isCamouflageExpanded, setIsCamouflageExpanded] = useState(false);
+  const [isChangePasswordExpanded, setIsChangePasswordExpanded] = useState(false);
+
   const handleSelectDisguise = (presetId) => {
     setCurrentDisguise(presetId);
     applyAppDisguise(presetId);
@@ -1105,20 +1110,30 @@ export default function SettingsModal({
               ============================================================== */}
           {activeSection === 'privacy' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {/* WhatsApp-Style Ghost Mode (Stealth Read Receipts) */}
+              {/* WhatsApp-Style Ghost Mode / Stealth Read Settings */}
               <div style={{
                 background: 'var(--bg-card)',
-                border: '1px solid var(--border)',
+                border: isGhostModeExpanded ? '1px solid rgba(192, 132, 252, 0.4)' : '1px solid var(--border)',
                 borderRadius: '16px',
-                padding: '16px',
+                padding: '14px 16px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '12px'
+                gap: isGhostModeExpanded ? '12px' : '0px',
+                transition: 'all 0.2s ease'
               }}>
-                {/* Card Header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                {/* Clickable Card Header */}
+                <div
+                  onClick={() => setIsGhostModeExpanded(prev => !prev)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(192, 132, 252, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(192, 132, 252, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <Ghost size={20} color="#c084fc" />
                     </div>
                     <div>
@@ -1140,210 +1155,222 @@ export default function SettingsModal({
                       </div>
                     </div>
                   </div>
+                  <ChevronRight
+                    size={18}
+                    color="var(--text-muted)"
+                    style={{
+                      transform: isGhostModeExpanded ? 'rotate(90deg)' : 'none',
+                      transition: 'transform 0.2s ease',
+                      flexShrink: 0,
+                      marginLeft: '8px'
+                    }}
+                  />
                 </div>
 
-                {/* WhatsApp-Style 3 Options */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
-                  {/* Option 1: All Chats */}
-                  <div
-                    onClick={() => handleSelectGhostModeType('all')}
-                    style={{
-                      padding: '10px 12px',
-                      borderRadius: '12px',
-                      background: ghostModeType === 'all' ? 'rgba(192, 132, 252, 0.15)' : 'var(--hover-bg)',
-                      border: ghostModeType === 'all' ? '1px solid #c084fc' : '1px solid var(--border)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: ghostModeType === 'all' ? '5px solid #c084fc' : '2px solid var(--text-muted)', boxSizing: 'border-box' }} />
-                      <div>
-                        <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                          All Chats (Everyone)
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                          Disable blue ticks across all contacts and chats at once
-                        </div>
-                      </div>
-                    </div>
-                    {ghostModeType === 'all' && <Check size={16} color="#c084fc" />}
-                  </div>
-
-                  {/* Option 2: Specific Chats Only */}
-                  <div
-                    onClick={() => handleSelectGhostModeType('specific')}
-                    style={{
-                      padding: '10px 12px',
-                      borderRadius: '12px',
-                      background: ghostModeType === 'specific' ? 'rgba(99, 102, 241, 0.15)' : 'var(--hover-bg)',
-                      border: ghostModeType === 'specific' ? '1px solid var(--accent)' : '1px solid var(--border)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: ghostModeType === 'specific' ? '5px solid var(--accent)' : '2px solid var(--text-muted)', boxSizing: 'border-box' }} />
-                      <div>
-                        <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                          Specific Chats Only ({ghostChatIds.length} Selected)
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                          Choose custom contacts to read incognito
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); handleSelectGhostModeType('specific'); setShowGhostChatPicker(prev => !prev); }}
+                {/* Collapsible Options Container */}
+                {isGhostModeExpanded && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px', borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
+                    {/* Option 1: All Chats */}
+                    <div
+                      onClick={() => handleSelectGhostModeType('all')}
                       style={{
-                        background: 'var(--accent)',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '8px',
-                        padding: '4px 10px',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
+                        padding: '10px 12px',
+                        borderRadius: '12px',
+                        background: ghostModeType === 'all' ? 'rgba(192, 132, 252, 0.15)' : 'var(--hover-bg)',
+                        border: ghostModeType === 'all' ? '1px solid #c084fc' : '1px solid var(--border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
                         cursor: 'pointer'
                       }}
                     >
-                      {showGhostChatPicker ? 'Hide Contacts' : 'Select Contacts'}
-                    </button>
-                  </div>
-
-                  {/* Option 3: OFF (Normal Blue Ticks) */}
-                  <div
-                    onClick={() => handleSelectGhostModeType('none')}
-                    style={{
-                      padding: '10px 12px',
-                      borderRadius: '12px',
-                      background: ghostModeType === 'none' ? 'rgba(255, 255, 255, 0.06)' : 'var(--hover-bg)',
-                      border: ghostModeType === 'none' ? '1px solid var(--text-muted)' : '1px solid var(--border)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: ghostModeType === 'none' ? '5px solid var(--text-muted)' : '2px solid var(--text-muted)', boxSizing: 'border-box' }} />
-                      <div>
-                        <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                          Disabled (Normal Blue Ticks)
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                          Everyone can see double blue ticks when you read
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: ghostModeType === 'all' ? '5px solid #c084fc' : '2px solid var(--text-muted)', boxSizing: 'border-box' }} />
+                        <div>
+                          <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                            All Chats (Everyone)
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            Disable blue ticks across all contacts and chats at once
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    {ghostModeType === 'none' && <Check size={16} color="var(--text-muted)" />}
-                  </div>
-                </div>
-
-                {/* Specific Chat Selector & Search Bar */}
-                {ghostModeType === 'specific' && showGhostChatPicker && (
-                  <div style={{
-                    marginTop: '8px',
-                    padding: '12px',
-                    background: 'rgba(0,0,0,0.25)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '10px'
-                  }}>
-                    {/* Search Input */}
-                    <div style={{ position: 'relative' }}>
-                      <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-                      <input
-                        type="text"
-                        value={ghostSearchQuery}
-                        onChange={(e) => setGhostSearchQuery(e.target.value)}
-                        placeholder="Search friend or chat username..."
-                        style={{
-                          width: '100%',
-                          padding: '7px 10px 7px 32px',
-                          borderRadius: '8px',
-                          border: '1px solid var(--border)',
-                          background: 'var(--bg-main)',
-                          color: 'var(--text-main)',
-                          fontSize: '0.8rem',
-                          outline: 'none',
-                          boxSizing: 'border-box'
-                        }}
-                      />
+                      {ghostModeType === 'all' && <Check size={16} color="#c084fc" />}
                     </div>
 
-                    {/* Contacts List */}
-                    <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {filteredGhostContacts.length > 0 ? (
-                        filteredGhostContacts.map(c => {
-                          const isSelected = ghostChatIds.some(id => id === c.id || (c.username && id === c.username) || (c.chatId && id === c.chatId));
-                          return (
-                            <div
-                              key={c.id}
-                              onClick={() => toggleChatInGhostMode(c.id)}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                padding: '6px 10px',
-                                borderRadius: '8px',
-                                background: isSelected ? 'rgba(192, 132, 252, 0.12)' : 'var(--hover-bg)',
-                                cursor: 'pointer',
-                                border: isSelected ? '1px solid rgba(192, 132, 252, 0.4)' : '1px solid transparent'
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                                <img
-                                  src={c.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.username || c.name}`}
-                                  alt=""
-                                  style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
-                                />
-                                <div style={{ minWidth: 0 }}>
-                                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {c.name}
-                                  </div>
-                                  {c.username && (
-                                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-                                      @{c.username}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <div style={{
-                                padding: '3px 8px',
-                                borderRadius: '6px',
-                                fontSize: '0.7rem',
-                                fontWeight: 700,
-                                background: isSelected ? '#c084fc' : 'rgba(255,255,255,0.08)',
-                                color: isSelected ? '#000' : 'var(--text-muted)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}>
-                                {isSelected ? (
-                                  <>
-                                    <Ghost size={12} />
-                                    <span>GHOST ON</span>
-                                  </>
-                                ) : (
-                                  <span>OFF</span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div style={{ textAlign: 'center', padding: '12px', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                          No chats or contacts found
+                    {/* Option 2: Specific Chats Only */}
+                    <div
+                      onClick={() => handleSelectGhostModeType('specific')}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: '12px',
+                        background: ghostModeType === 'specific' ? 'rgba(99, 102, 241, 0.15)' : 'var(--hover-bg)',
+                        border: ghostModeType === 'specific' ? '1px solid var(--accent)' : '1px solid var(--border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: ghostModeType === 'specific' ? '5px solid var(--accent)' : '2px solid var(--text-muted)', boxSizing: 'border-box' }} />
+                        <div>
+                          <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                            Specific Chats Only ({ghostChatIds.length} Selected)
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            Choose custom contacts to read incognito
+                          </div>
                         </div>
-                      )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleSelectGhostModeType('specific'); setShowGhostChatPicker(prev => !prev); }}
+                        style={{
+                          background: 'var(--accent)',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '4px 10px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {showGhostChatPicker ? 'Hide Contacts' : 'Select Contacts'}
+                      </button>
                     </div>
+
+                    {/* Option 3: OFF (Normal Blue Ticks) */}
+                    <div
+                      onClick={() => handleSelectGhostModeType('none')}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: '12px',
+                        background: ghostModeType === 'none' ? 'rgba(255, 255, 255, 0.06)' : 'var(--hover-bg)',
+                        border: ghostModeType === 'none' ? '1px solid var(--text-muted)' : '1px solid var(--border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: ghostModeType === 'none' ? '5px solid var(--text-muted)' : '2px solid var(--text-muted)', boxSizing: 'border-box' }} />
+                        <div>
+                          <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                            Disabled (Normal Blue Ticks)
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            Everyone can see double blue ticks when you read
+                          </div>
+                        </div>
+                      </div>
+                      {ghostModeType === 'none' && <Check size={16} color="var(--text-muted)" />}
+                    </div>
+
+                    {/* Specific Chat Selector & Search Bar */}
+                    {ghostModeType === 'specific' && showGhostChatPicker && (
+                      <div style={{
+                        marginTop: '8px',
+                        padding: '12px',
+                        background: 'rgba(0,0,0,0.25)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px'
+                      }}>
+                        {/* Search Input */}
+                        <div style={{ position: 'relative' }}>
+                          <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                          <input
+                            type="text"
+                            value={ghostSearchQuery}
+                            onChange={(e) => setGhostSearchQuery(e.target.value)}
+                            placeholder="Search friend or chat username..."
+                            style={{
+                              width: '100%',
+                              padding: '7px 10px 7px 32px',
+                              borderRadius: '8px',
+                              border: '1px solid var(--border)',
+                              background: 'var(--bg-main)',
+                              color: 'var(--text-main)',
+                              fontSize: '0.8rem',
+                              outline: 'none',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                        </div>
+
+                        {/* Contacts List */}
+                        <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {filteredGhostContacts.length > 0 ? (
+                            filteredGhostContacts.map(c => {
+                              const isSelected = ghostChatIds.some(id => id === c.id || (c.username && id === c.username) || (c.chatId && id === c.chatId));
+                              return (
+                                <div
+                                  key={c.id}
+                                  onClick={() => toggleChatInGhostMode(c.id)}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: '6px 10px',
+                                    borderRadius: '8px',
+                                    background: isSelected ? 'rgba(192, 132, 252, 0.12)' : 'var(--hover-bg)',
+                                    cursor: 'pointer',
+                                    border: isSelected ? '1px solid rgba(192, 132, 252, 0.4)' : '1px solid transparent'
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                    <img
+                                      src={c.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.username || c.name}`}
+                                      alt=""
+                                      style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
+                                    />
+                                    <div style={{ minWidth: 0 }}>
+                                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {c.name}
+                                      </div>
+                                      {c.username && (
+                                        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                                          @{c.username}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div style={{
+                                    padding: '3px 8px',
+                                    borderRadius: '6px',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 700,
+                                    background: isSelected ? '#c084fc' : 'rgba(255,255,255,0.08)',
+                                    color: isSelected ? '#000' : 'var(--text-muted)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}>
+                                    {isSelected ? (
+                                      <>
+                                        <Ghost size={12} />
+                                        <span>GHOST ON</span>
+                                      </>
+                                    ) : (
+                                      <span>OFF</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div style={{ textAlign: 'center', padding: '12px', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                              No chats or contacts found
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1411,14 +1438,25 @@ export default function SettingsModal({
               {/* App Camouflage / Fake App Icon Section */}
               <div style={{
                 background: 'var(--bg-card)',
-                border: '1px solid var(--border)',
+                border: isCamouflageExpanded ? '1px solid rgba(234, 88, 12, 0.4)' : '1px solid var(--border)',
                 borderRadius: '16px',
-                padding: '16px',
+                padding: '14px 16px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '12px'
+                gap: isCamouflageExpanded ? '12px' : '0px',
+                transition: 'all 0.2s ease'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                {/* Clickable Card Header */}
+                <div
+                  onClick={() => setIsCamouflageExpanded(prev => !prev)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(234, 88, 12, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <span style={{ fontSize: '1.2rem' }}>🎭</span>
@@ -1426,112 +1464,160 @@ export default function SettingsModal({
                     <div>
                       <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         App Camouflage (Fake App Icon)
-                        <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '6px', background: 'rgba(234, 88, 12, 0.2)', color: '#fb923c', fontWeight: 700 }}>Privacy Shield</span>
+                        <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '6px', background: 'rgba(234, 88, 12, 0.2)', color: '#fb923c', fontWeight: 700 }}>
+                          {DISGUISE_PRESETS.find(p => p.id === currentDisguise)?.name || 'Default'}
+                        </span>
                       </div>
-                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                         Disguise PulseChat icon & tab title as Calculator, Notes or Weather so phone inspectors don't detect it
                       </div>
                     </div>
                   </div>
+                  <ChevronRight
+                    size={18}
+                    color="var(--text-muted)"
+                    style={{
+                      transform: isCamouflageExpanded ? 'rotate(90deg)' : 'none',
+                      transition: 'transform 0.2s ease',
+                      flexShrink: 0,
+                      marginLeft: '8px'
+                    }}
+                  />
                 </div>
 
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
-                  gap: '8px',
-                  marginTop: '4px'
-                }}>
-                  {DISGUISE_PRESETS.map((preset) => {
-                    const isSelected = currentDisguise === preset.id;
-                    const iconDataUri = `data:image/svg+xml;utf8,${encodeURIComponent(preset.iconSvg)}`;
-                    return (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        onClick={() => handleSelectDisguise(preset.id)}
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '10px 8px',
-                          borderRadius: '12px',
-                          border: isSelected ? `2px solid ${preset.accentColor || 'var(--accent)'}` : '1px solid var(--border)',
-                          background: isSelected ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-                          cursor: 'pointer',
-                          position: 'relative',
-                          textAlign: 'center',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        <div style={{ position: 'relative', width: '38px', height: '38px' }}>
-                          <img
-                            src={iconDataUri}
-                            alt={preset.name}
-                            style={{
-                              width: '38px',
-                              height: '38px',
-                              borderRadius: '10px',
-                              boxShadow: isSelected ? `0 0 10px ${preset.accentColor}44` : 'none',
-                              display: 'block'
-                            }}
-                          />
-                          {isSelected && (
-                            <div style={{
-                              position: 'absolute',
-                              bottom: '-4px',
-                              right: '-4px',
-                              width: '16px',
-                              height: '16px',
-                              borderRadius: '50%',
-                              background: preset.accentColor || 'var(--accent)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: '#fff',
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.4)'
-                            }}>
-                              <Check size={10} strokeWidth={3} />
-                            </div>
-                          )}
-                        </div>
-                        <div style={{ fontSize: '0.8rem', fontWeight: isSelected ? 700 : 500, color: isSelected ? 'var(--text-main)' : 'var(--text-muted)' }}>
-                          {preset.name}
-                        </div>
-                        <div style={{ fontSize: '0.65rem', color: isSelected ? preset.accentColor : 'var(--text-muted)', opacity: 0.8, lineHeight: 1.1 }}>
-                          {preset.badge}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                {/* Collapsible Presets Container */}
+                {isCamouflageExpanded && (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+                    gap: '8px',
+                    marginTop: '6px',
+                    borderTop: '1px solid var(--border)',
+                    paddingTop: '12px'
+                  }}>
+                    {DISGUISE_PRESETS.map((preset) => {
+                      const isSelected = currentDisguise === preset.id;
+                      const iconDataUri = `data:image/svg+xml;utf8,${encodeURIComponent(preset.iconSvg)}`;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => handleSelectDisguise(preset.id)}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '10px 8px',
+                            borderRadius: '12px',
+                            border: isSelected ? `2px solid ${preset.accentColor || 'var(--accent)'}` : '1px solid var(--border)',
+                            background: isSelected ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                            cursor: 'pointer',
+                            position: 'relative',
+                            textAlign: 'center',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <div style={{ position: 'relative', width: '38px', height: '38px' }}>
+                            <img
+                              src={iconDataUri}
+                              alt={preset.name}
+                              style={{
+                                width: '38px',
+                                height: '38px',
+                                borderRadius: '10px',
+                                boxShadow: isSelected ? `0 0 10px ${preset.accentColor}44` : 'none',
+                                display: 'block'
+                              }}
+                            />
+                            {isSelected && (
+                              <div style={{
+                                position: 'absolute',
+                                bottom: '-4px',
+                                right: '-4px',
+                                width: '16px',
+                                height: '16px',
+                                borderRadius: '50%',
+                                background: preset.accentColor || 'var(--accent)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#fff',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.4)'
+                              }}>
+                                <Check size={10} strokeWidth={3} />
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', fontWeight: isSelected ? 700 : 500, color: isSelected ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                            {preset.name}
+                          </div>
+                          <div style={{ fontSize: '0.65rem', color: isSelected ? preset.accentColor : 'var(--text-muted)', opacity: 0.8, lineHeight: 1.1 }}>
+                            {preset.badge}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Change Password Section */}
               <div style={{
                 background: 'var(--bg-card)',
-                border: '1px solid var(--border)',
+                border: isChangePasswordExpanded ? '1px solid rgba(99, 102, 241, 0.4)' : '1px solid var(--border)',
                 borderRadius: '16px',
-                padding: '16px',
+                padding: '14px 16px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '12px'
+                gap: isChangePasswordExpanded ? '12px' : '0px',
+                transition: 'all 0.2s ease'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Lock size={20} color="var(--accent)" />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                      Change Password
+                {/* Clickable Card Header */}
+                <div
+                  onClick={() => setIsChangePasswordExpanded(prev => !prev)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Lock size={20} color="var(--accent)" />
                     </div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                      Update account password or reset securely via Email OTP
+                    <div>
+                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        Change Password
+                        <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '6px', background: 'rgba(99, 102, 241, 0.15)', color: 'var(--accent)', fontWeight: 700 }}>
+                          Security
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Update account password or reset securely via Email OTP
+                      </div>
                     </div>
                   </div>
+                  <ChevronRight
+                    size={18}
+                    color="var(--text-muted)"
+                    style={{
+                      transform: isChangePasswordExpanded ? 'rotate(90deg)' : 'none',
+                      transition: 'transform 0.2s ease',
+                      flexShrink: 0,
+                      marginLeft: '8px'
+                    }}
+                  />
                 </div>
 
-                <ChangePasswordForm isCardView={true} />
+                {/* Collapsible Form Container */}
+                {isChangePasswordExpanded && (
+                  <div style={{ marginTop: '6px', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
+                    <ChangePasswordForm isCardView={true} />
+                  </div>
+                )}
               </div>
 
               {/* Blocked Contacts Manager Button */}
