@@ -1077,6 +1077,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const cachedIds = new Set(cached.map(m => m.id));
     return [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))];
   });
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
   const [isNetConnected, setIsNetConnected] = useState(() => isDeviceOnline());
 
   const [text, setText] = useState('');
@@ -1365,8 +1368,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   };
 
+  const socketRef = useRef(socket);
+  socketRef.current = socket;
+  const activeChatIdRef = useRef(chatId);
+  activeChatIdRef.current = chatId;
+
   const triggerEvaporateVanishMessages = useCallback((targetChatId) => {
-    const cid = targetChatId || chatId;
+    const cid = targetChatId || activeChatIdRef.current;
     if (!cid) return;
     try {
       const curToken = localStorage.getItem('pulsechat_token');
@@ -1377,33 +1385,37 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           keepalive: true
         }).catch(() => {});
       }
-      if (socket) {
-        socket.emit('evaporate_vanish_messages', { chatId: cid });
+      if (socketRef.current) {
+        socketRef.current.emit('evaporate_vanish_messages', { chatId: cid });
       }
     } catch (e) {}
-  }, [chatId, socket]);
+  }, []);
 
-  // Permanent Auto-evaporate vanish messages on chat exit / close / switch
+  // Permanent Auto-evaporate vanish messages ONLY on chat exit / close / switch
   useEffect(() => {
-    const handleExit = () => {
-      const hasVanishMessages = messages.some(m => m.isVanish);
+    const activeChatOnMount = chatId;
+
+    const handleWindowExit = () => {
+      const hasVanishMessages = (messagesRef.current || []).some(m => m?.isVanish);
       if (isVanishModeRef.current || hasVanishMessages) {
-        triggerEvaporateVanishMessages(chatId);
+        triggerEvaporateVanishMessages(activeChatOnMount);
       }
     };
 
-    window.addEventListener('beforeunload', handleExit);
-    window.addEventListener('pagehide', handleExit);
+    window.addEventListener('beforeunload', handleWindowExit);
+    window.addEventListener('pagehide', handleWindowExit);
 
     return () => {
-      window.removeEventListener('beforeunload', handleExit);
-      window.removeEventListener('pagehide', handleExit);
-      const hasVanishMessages = messages.some(m => m.isVanish);
+      window.removeEventListener('beforeunload', handleWindowExit);
+      window.removeEventListener('pagehide', handleWindowExit);
+
+      // This cleanup runs ONLY when this ChatWindow unmounts or activeChatOnMount changes (chat switch/exit)
+      const hasVanishMessages = (messagesRef.current || []).some(m => m?.isVanish);
       if (isVanishModeRef.current || hasVanishMessages) {
-        triggerEvaporateVanishMessages(chatId);
+        triggerEvaporateVanishMessages(activeChatOnMount);
       }
     };
-  }, [chatId, messages, triggerEvaporateVanishMessages]);
+  }, [chatId, triggerEvaporateVanishMessages]);
 
   // In-Chat Mutual Nicknames
   const [showNicknameModal, setShowNicknameModal] = useState(false);
@@ -2793,6 +2805,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const isOnlineNow = isDeviceOnline() && socket?.connected;
 
     const pendingMsg = {
+      ...getSenderPayload(),
       id: tempId,
       tempId,
       clientTempId: tempId,
@@ -2869,6 +2882,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
 
     const pendingMsg = {
+      ...getSenderPayload(),
       id: tempId,
       tempId,
       clientTempId: tempId,
@@ -3260,6 +3274,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     // Instantly renders in chat with circular progress ring while uploading in background!
     const tempMediaId = 'temp_media_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     const optimisticMediaMsg = {
+      ...getSenderPayload(),
       id: tempMediaId,
       clientTempId: tempMediaId,
       chatId,
@@ -3874,6 +3889,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     clearUnreadCount(user.id, activeChat.id);
                     if (chatId) clearUnreadCount(user.id, chatId);
                     window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+                  }
+                  if (isVanishModeRef.current || (messagesRef.current || []).some(m => m?.isVanish)) {
+                    triggerEvaporateVanishMessages(chatId);
                   }
                   if (onBack) onBack();
                 }}
