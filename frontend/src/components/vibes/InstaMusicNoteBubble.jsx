@@ -3,7 +3,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { useAppMusic } from '../../context/AppMusicContext';
 import { Music, Play, Pause, Disc, Edit3, Trash2, X } from 'lucide-react';
 
-export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true }) {
+export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true, isPopped = false, onPop }) {
   const { user } = useContext(AuthContext);
   const { deleteMusicNote } = useAppMusic();
 
@@ -117,32 +117,35 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
 
     return (
       <div
+        className="insta-music-note-bubble-wrap"
         onClick={(e) => {
           e.stopPropagation();
+          onPop && onPop();
           onOpenPicker && onOpenPicker();
         }}
         style={{
           position: 'absolute',
           bottom: 'calc(100% + 4px)',
           left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 15,
+          transform: `translateX(-50%) ${isPopped ? 'scale(1.08)' : 'scale(1)'}`,
+          zIndex: isPopped ? 100 : 15,
           cursor: 'pointer',
-          animation: 'fadeIn 0.2s ease-out'
+          animation: 'fadeIn 0.2s ease-out',
+          transition: 'transform 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
         }}
         title="Add Music Note"
       >
         <div style={{
-          background: 'rgba(24, 24, 32, 0.94)',
+          background: isPopped ? 'rgba(30, 30, 44, 0.98)' : 'rgba(24, 24, 32, 0.94)',
           backdropFilter: 'blur(10px)',
           WebkitBackdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.18)',
+          border: isPopped ? '1.5px solid #c084fc' : '1px solid rgba(255, 255, 255, 0.18)',
           borderRadius: '14px',
           padding: '2px 8px',
           display: 'flex',
           alignItems: 'center',
           gap: '4px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+          boxShadow: isPopped ? '0 6px 20px rgba(0,0,0,0.8), 0 0 14px rgba(168, 85, 247, 0.5)' : '0 4px 12px rgba(0,0,0,0.4)',
           whiteSpace: 'nowrap'
         }}>
           <Music size={11} color="#a855f7" />
@@ -156,7 +159,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
           height: 0,
           borderLeft: '4px solid transparent',
           borderRight: '4px solid transparent',
-          borderTop: '5px solid rgba(24, 24, 32, 0.94)',
+          borderTop: isPopped ? '5px solid rgba(30, 30, 44, 0.98)' : '5px solid rgba(24, 24, 32, 0.94)',
           margin: '-1px auto 0 auto'
         }} />
       </div>
@@ -166,20 +169,29 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
   // Active Music Note Bubble (Instagram-style: Tap to hear snippet, tap again / outside to stop!)
   return (
     <div
+      className="insta-music-note-bubble-wrap"
       style={{
         position: 'absolute',
         bottom: 'calc(100% + 4px)',
         left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 15,
+        transform: `translateX(-50%) ${isPopped ? 'scale(1.08)' : 'scale(1)'}`,
+        zIndex: isPopped ? 100 : 15,
         cursor: 'pointer',
         animation: 'fadeIn 0.2s ease-out',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        pointerEvents: 'auto'
+        pointerEvents: 'auto',
+        transition: 'transform 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
       }}
-      onClick={hasSong ? handleTogglePlayNote : () => { if (isMine) onOpenPicker && onOpenPicker(); }}
+      onClick={(e) => {
+        onPop && onPop();
+        if (hasSong) {
+          handleTogglePlayNote(e);
+        } else if (isMine) {
+          onOpenPicker && onOpenPicker();
+        }
+      }}
       onContextMenu={(e) => {
         if (!isMine) return;
         e.preventDefault();
@@ -190,22 +202,26 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
     >
       <div style={{
         background: isPlayingNote
-          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.96), rgba(168, 85, 247, 0.96))'
-          : 'rgba(20, 20, 28, 0.94)',
+          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.98), rgba(168, 85, 247, 0.98))'
+          : (isPopped ? 'rgba(28, 26, 42, 0.98)' : 'rgba(20, 20, 28, 0.94)'),
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
-        border: isPlayingNote ? '1.5px solid #c084fc' : '1px solid rgba(255, 255, 255, 0.2)',
+        border: isPopped
+          ? '1.8px solid #c084fc'
+          : (isPlayingNote ? '1.5px solid #c084fc' : '1px solid rgba(255, 255, 255, 0.2)'),
         borderRadius: '16px',
-        padding: hasText && hasSong ? '4px 8px' : '3px 8px',
+        padding: hasText && hasSong ? (isPopped ? '5px 11px' : '4px 8px') : (isPopped ? '4px 11px' : '3px 8px'),
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         gap: '2px',
-        boxShadow: isPlayingNote
-          ? '0 4px 14px rgba(168, 85, 247, 0.5), 0 0 10px rgba(168, 85, 247, 0.4)'
-          : '0 4px 10px rgba(0,0,0,0.5)',
-        maxWidth: '170px',
-        transition: 'all 0.2s ease'
+        boxShadow: isPopped
+          ? '0 8px 26px rgba(0,0,0,0.85), 0 0 18px rgba(168, 85, 247, 0.7)'
+          : (isPlayingNote
+              ? '0 4px 14px rgba(168, 85, 247, 0.5), 0 0 10px rgba(168, 85, 247, 0.4)'
+              : '0 4px 10px rgba(0,0,0,0.5)'),
+        maxWidth: isPopped ? '260px' : '170px',
+        transition: 'all 0.22s ease'
       }}>
         {/* Top: Thought / Vibe text (if any) */}
         {hasText && (
@@ -214,7 +230,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
             alignItems: 'center',
             justifyContent: 'center',
             gap: '3px',
-            maxWidth: '160px',
+            maxWidth: isPopped ? '240px' : '160px',
             width: '100%'
           }}>
             <span style={{
@@ -260,7 +276,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
-            maxWidth: '160px',
+            maxWidth: isPopped ? '240px' : '160px',
             overflow: 'hidden',
             background: hasText ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
             borderRadius: '10px',
@@ -329,7 +345,9 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, isMine = true
         height: 0,
         borderLeft: '4px solid transparent',
         borderRight: '4px solid transparent',
-        borderTop: isPlayingNote ? '5px solid rgba(168, 85, 247, 0.95)' : '5px solid rgba(20, 20, 28, 0.94)',
+        borderTop: isPlayingNote
+          ? '5px solid rgba(168, 85, 247, 0.95)'
+          : (isPopped ? '5px solid #c084fc' : '5px solid rgba(20, 20, 28, 0.94)'),
         margin: '-1px auto 0 auto'
       }} />
 

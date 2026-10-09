@@ -13,6 +13,23 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
   const [groupedVibes, setGroupedVibes] = useState([]);
   const [viewedSet, setViewedSet] = useState(new Set());
   const [showMusicNoteModal, setShowMusicNoteModal] = useState(false);
+  const [activePoppedNoteId, setActivePoppedNoteId] = useState(null);
+
+  useEffect(() => {
+    if (!activePoppedNoteId) return;
+    const handleDismissPopped = (e) => {
+      if (e.target && e.target.closest && e.target.closest('.insta-music-note-bubble-wrap')) {
+        return;
+      }
+      setActivePoppedNoteId(null);
+    };
+    window.addEventListener('click', handleDismissPopped);
+    window.addEventListener('touchstart', handleDismissPopped);
+    return () => {
+      window.removeEventListener('click', handleDismissPopped);
+      window.removeEventListener('touchstart', handleDismissPopped);
+    };
+  }, [activePoppedNoteId]);
 
   const resolveNickname = (grp) => {
     if (!grp) return null;
@@ -262,7 +279,8 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
             alignItems: 'center',
             gap: '4px',
             cursor: 'pointer',
-            flexShrink: 0
+            flexShrink: 0,
+            zIndex: activePoppedNoteId === 'mine' ? 60 : 2
           }}
         >
           <div style={{
@@ -279,7 +297,12 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
               : 'none'
           }}>
             {/* Instagram-style Floating Music Note Bubble */}
-            <InstaMusicNoteBubble note={user?.musicNote} onOpenPicker={() => setShowMusicNoteModal(true)} />
+            <InstaMusicNoteBubble
+              note={user?.musicNote}
+              onOpenPicker={() => setShowMusicNoteModal(true)}
+              isPopped={activePoppedNoteId === 'mine'}
+              onPop={() => setActivePoppedNoteId(prev => prev === 'mine' ? null : 'mine')}
+            />
 
             {myHasKing ? (
               <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
@@ -332,6 +355,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
           if (!hasVibes && !hasNote) return null;
           const viewed = hasVibes ? isGroupViewed(group) : true;
           const crowns = getGroupCrowns(group);
+          const isPopped = activePoppedNoteId === group.userId;
 
           return (
             <div
@@ -359,7 +383,8 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
                 gap: '4px',
                 cursor: 'pointer',
                 flexShrink: 0,
-                opacity: viewed ? 0.65 : 1
+                opacity: viewed ? 0.65 : 1,
+                zIndex: isPopped ? 60 : 1
               }}
             >
               <div style={{
@@ -378,7 +403,12 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
               }}>
                 {/* Friend's Instagram-style Floating Music Note Bubble */}
                 {group.musicNote && (
-                  <InstaMusicNoteBubble note={group.musicNote} isMine={false} />
+                  <InstaMusicNoteBubble
+                    note={group.musicNote}
+                    isMine={false}
+                    isPopped={isPopped}
+                    onPop={() => setActivePoppedNoteId(prev => prev === group.userId ? null : group.userId)}
+                  />
                 )}
 
                 {crowns.king ? (
