@@ -7,12 +7,25 @@ import { getCachedAllUsers } from '../../utils/offlineStorage';
 import InstaMusicNoteBubble from './InstaMusicNoteBubble';
 import CreateMusicNoteModal from './CreateMusicNoteModal';
 
-export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOpenVibeSelector, myAura }) {
+export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOpenVibeSelector, myAura, recentChats = [] }) {
   const { user, token } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
   const [groupedVibes, setGroupedVibes] = useState([]);
   const [viewedSet, setViewedSet] = useState(new Set());
   const [showMusicNoteModal, setShowMusicNoteModal] = useState(false);
+
+  const resolveNickname = (grp) => {
+    if (!grp) return null;
+    const match = recentChats.find(c => {
+      const cKeys = [c.id, c._id, c._id ? String(c._id) : null, c.username].filter(Boolean);
+      return (grp.userId && cKeys.includes(grp.userId)) ||
+             (grp.username && cKeys.includes(grp.username));
+    });
+    if (match && typeof match.nickname === 'string' && match.nickname.trim()) {
+      return match.nickname.trim();
+    }
+    return null;
+  };
 
   const syncViewedSet = () => {
     try {
@@ -325,11 +338,18 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
               key={group.userId}
               onClick={() => {
                 if (hasVibes) {
+                  const enrichedGroup = {
+                    ...group,
+                    displayName: resolveNickname(group) || group.displayName
+                  };
                   const allGroupsList = [
                     ...(myVibesGroup && myVibesGroup.vibes?.length ? [myVibesGroup] : []),
-                    ...otherVibesGroups.filter(g => g.vibes && g.vibes.length > 0)
+                    ...otherVibesGroups.filter(g => g.vibes && g.vibes.length > 0).map(g => ({
+                      ...g,
+                      displayName: resolveNickname(g) || g.displayName
+                    }))
                   ];
-                  onOpenVibeViewer(group, allGroupsList);
+                  onOpenVibeViewer(enrichedGroup, allGroupsList);
                 }
               }}
               style={{
@@ -371,7 +391,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
                 <div style={{ width: '100%', height: '100%', borderRadius: '50%', padding: '2px', background: 'var(--bg-card, #0f172a)' }}>
                   <img
                     src={group.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${group.username || 'vibe'}`}
-                    alt={group.displayName}
+                    alt={resolveNickname(group) || group.displayName}
                     style={{
                       width: '100%',
                       height: '100%',
@@ -383,7 +403,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
                 </div>
               </div>
               <span style={{ fontSize: '0.68rem', fontWeight: 600, color: viewed ? 'var(--text-muted)' : 'var(--text-main)', maxWidth: '58px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {group.displayName ? group.displayName.split(' ')[0] : 'User'}
+                {resolveNickname(group) || (group.displayName ? group.displayName.split(' ')[0] : 'User')}
               </span>
             </div>
           );

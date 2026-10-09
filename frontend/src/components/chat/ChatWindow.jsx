@@ -3816,31 +3816,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 <h3 style={{ fontSize: '1.06rem', fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
                   {partnerNickname || chatDisplayName || activeChat.displayName}
                 </h3>
-                {!isGroup && partnerNickname && (
-                  <span
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowNicknameModal(true);
-                    }}
-                    style={{
-                      fontSize: '0.66rem',
-                      padding: '1px 6px',
-                      borderRadius: '8px',
-                      background: 'rgba(168, 85, 247, 0.2)',
-                      color: '#c084fc',
-                      border: '1px solid rgba(168, 85, 247, 0.4)',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '3px',
-                      flexShrink: 0
-                    }}
-                    title={`Real name: ${chatDisplayName || activeChat.displayName} (@${activeChat.username}) · Tap to edit nicknames`}
-                  >
-                    ✏️ Nickname
-                  </span>
-                )}
                 {!isGroup && chatIsPro && (
                   <PulseVipBadge size={16} showLabel={false} />
                 )}
@@ -4019,7 +3994,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   {!isGroup && (
                     <button onClick={() => { setShowMoreMenu(false); setShowNicknameModal(true); }}>
                       <Edit3 size={16} color="var(--accent)" />
-                      <span>Edit Nicknames ✏️</span>
+                      <span>Edit Nicknames</span>
                     </button>
                   )}
                   {!isGroup && (
@@ -4028,7 +4003,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                       window.dispatchEvent(new CustomEvent('pulsechat_open_handle_card', { detail: { user: activeChat } }));
                     }}>
                       <Sparkles size={16} color="var(--accent)" />
-                      <span>View Pulse Card ✨</span>
+                      <span>View Pulse Card</span>
                     </button>
                   )}
                   <button onClick={() => {

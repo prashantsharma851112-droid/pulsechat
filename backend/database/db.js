@@ -406,17 +406,25 @@ module.exports = {
       const unreadMap = new Map(unreadAgg.map(u => [u._id, u.count]));
 
       // Pre-fetch ChatSettings for 1-on-1 chats to resolve private mutual nicknames
-      const candidateChatIds = [];
+      const candidateChatIds = new Set();
       for (const { otherId } of ordered) {
         const uObj = userMap.get(otherId);
-        if (uObj?.id) {
-          candidateChatIds.push([myId, uObj.id].sort().join('_'));
+        if (!uObj) continue;
+        const otherVariants = [uObj.id, uObj.username, uObj._id ? uObj._id.toString() : null].filter(Boolean);
+        for (const myVar of myVariants) {
+          for (const othVar of otherVariants) {
+            candidateChatIds.add([myVar, othVar].sort().join('_'));
+            candidateChatIds.add(`${myVar}_${othVar}`);
+            candidateChatIds.add(`${othVar}_${myVar}`);
+            candidateChatIds.add(`${myVar}_${othVar}`.split('_').sort().join('_'));
+            candidateChatIds.add(`${othVar}_${myVar}`.split('_').sort().join('_'));
+          }
         }
       }
       const chatSettingsMap = new Map();
-      if (candidateChatIds.length > 0) {
+      if (candidateChatIds.size > 0) {
         try {
-          const matchedSettings = await ChatSetting.find({ chatId: { $in: candidateChatIds } }).lean();
+          const matchedSettings = await ChatSetting.find({ chatId: { $in: Array.from(candidateChatIds) } }).lean();
           matchedSettings.forEach(s => {
             if (s.chatId) chatSettingsMap.set(s.chatId, s);
           });
@@ -428,12 +436,40 @@ module.exports = {
       for (const { otherId, lastMessage } of ordered) {
         const otherUser = userMap.get(otherId);
         if (!otherUser) continue;
-        if (addedUserIds.has(otherUser.id)) continue;
-        addedUserIds.add(otherUser.id);
+        const otherUniqueKey = otherUser.id || (otherUser._id ? otherUser._id.toString() : null) || otherUser.username;
+        if (addedUserIds.has(otherUniqueKey)) continue;
+        addedUserIds.add(otherUniqueKey);
 
-        const canonicalChatId = [myId, otherUser.id].sort().join('_');
-        const chatSetting = chatSettingsMap.get(canonicalChatId);
-        const partnerNickname = (chatSetting?.nicknames && chatSetting.nicknames[otherUser.id]) ? chatSetting.nicknames[otherUser.id] : null;
+        const otherVariants = [otherUser.id, otherUser.username, otherUser._id ? otherUser._id.toString() : null].filter(Boolean);
+        let chatSetting = null;
+        for (const myVar of myVariants) {
+          for (const othVar of otherVariants) {
+            const keys = [
+              `${myVar}_${othVar}`.split('_').sort().join('_'),
+              [myVar, othVar].sort().join('_'),
+              `${myVar}_${othVar}`,
+              `${othVar}_${myVar}`
+            ];
+            for (const k of keys) {
+              if (chatSettingsMap.has(k)) {
+                chatSetting = chatSettingsMap.get(k);
+                break;
+              }
+            }
+            if (chatSetting) break;
+          }
+          if (chatSetting) break;
+        }
+
+        let partnerNickname = null;
+        if (chatSetting?.nicknames) {
+          for (const othVar of otherVariants) {
+            if (chatSetting.nicknames[othVar]) {
+              partnerNickname = chatSetting.nicknames[othVar];
+              break;
+            }
+          }
+        }
 
         const unreadCount = unreadMap.get(otherUser.id) ||
                             (otherUser.username && unreadMap.get(otherUser.username)) ||

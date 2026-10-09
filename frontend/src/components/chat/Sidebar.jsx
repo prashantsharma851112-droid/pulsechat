@@ -653,6 +653,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             } else if (user?.id) {
               const cachedList = getCachedRecentChats(user.id) || [];
               const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
+              if (cachedMatch) {
+                if (!res.nickname && cachedMatch.nickname) res.nickname = cachedMatch.nickname;
+                if (!res.nicknames && cachedMatch.nicknames) res.nicknames = cachedMatch.nicknames;
+              }
               res.unreadCount = Math.max(Number(res.unreadCount) || 0, Number(cachedMatch?.unreadCount) || 0);
             } else {
               res.unreadCount = Number(res.unreadCount) || 0;
@@ -716,6 +720,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
             const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
             if (cachedMatch) {
+              if (!res.nickname && cachedMatch.nickname) {
+                res.nickname = cachedMatch.nickname;
+              }
+              if (!res.nicknames && cachedMatch.nicknames) {
+                res.nicknames = cachedMatch.nicknames;
+              }
               const cachedTime = new Date(cachedMatch.lastMessageTimestamp || cachedMatch.lastMessageTime || 0).getTime();
               const serverTime = new Date(res.lastMessageTimestamp || res.lastMessageTime || 0).getTime();
               if (cachedTime > serverTime) {
@@ -1369,11 +1379,25 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       setRecentChats(prev => {
         const next = prev.map(c => {
           const canonical = (c.id && user?.id) ? [user.id, c.id].sort().join('_') : '';
-          if (targetChat === canonical || targetChat === c.id || data.originalChatId === canonical || data.originalChatId === c.id) {
-            const nextNick = nicks[c.id] || (c.id === targetUserId ? nickname : c.nickname);
+          const isThisUser = c.id === targetUserId ||
+            (c._id && String(c._id) === String(targetUserId)) ||
+            (c.username && c.username === targetUserId) ||
+            (targetChat && (
+              targetChat === canonical ||
+              targetChat === c.id ||
+              data.originalChatId === canonical ||
+              data.originalChatId === c.id ||
+              targetChat.includes(c.id) ||
+              (c.id && targetChat.includes(c.id.replace('user_', '')))
+            ));
+
+          if (isThisUser) {
+            const nextNick = (nicks[c.id] || (c._id && nicks[String(c._id)]) || (c.username && nicks[c.username])) ?? (
+              (c.id === targetUserId || (c._id && String(c._id) === String(targetUserId)) || c.username === targetUserId) ? nickname : c.nickname
+            );
             return {
               ...c,
-              nickname: nextNick || null,
+              nickname: (typeof nextNick === 'string' && nextNick.trim()) ? nextNick.trim() : null,
               nicknames: nicks
             };
           }
@@ -2120,6 +2144,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         }}
         onOpenVibeSelector={() => setShowVibeSelector(true)}
         myAura={myAura}
+        recentChats={recentChats}
       />
 
       {/* WhatsApp-Style Navigation Tabs: Chats vs Groups */}
@@ -2618,11 +2643,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <h4 style={{ fontSize: '1.02rem', fontWeight: u.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
                           <span>{(typeof u.nickname === 'string' && u.nickname.trim()) ? u.nickname : (u.displayName || u.username || 'User')}</span>
-                          {typeof u.nickname === 'string' && u.nickname.trim() && (
-                            <span style={{ fontSize: '0.68rem', color: '#c084fc', opacity: 0.9 }} title={`In-chat nickname (Real: ${u.displayName || u.username})`}>
-                              ✏️
-                            </span>
-                          )}
                           {isPinned && (
                             <span title="Pinned Chat" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center' }}>
                               📌
