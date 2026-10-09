@@ -247,13 +247,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     return () => window.removeEventListener('pulsechat_ghost_mode_updated', handleGhostUpdated);
   }, [chatId, user?.hideReadReceipts, user?.ghostChats, activeChat?.id, activeChat?.username]);
 
+  // Instagram-style Vanish Mode State
+  const [isVanishMode, setIsVanishMode] = useState(false);
+  const isVanishModeRef = useRef(false);
+
   const getSenderPayload = () => ({
     senderName: user?.displayName || user?.username || 'User',
     senderUsername: user?.username || '',
     senderAvatar: user?.avatar || null,
     senderIsPro: Boolean(user?.isPro),
     senderProTier: user?.proTier || 'none',
-    senderCustomBadge: user?.customBadge || ''
+    senderCustomBadge: user?.customBadge || '',
+    isVanish: Boolean(isVanishModeRef.current)
   });
 
   // In-Chat Search Feature States
@@ -1324,8 +1329,81 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [cooldownMsg, setCooldownMsg] = useState(null);
 
   // Chat settings & block status
-  const [chatSetting, setChatSetting] = useState({ disappearingEnabled: false, nicknames: {} });
+  const [chatSetting, setChatSetting] = useState({ disappearingEnabled: false, nicknames: {}, vanishMode: false });
   const [blockStatus, setBlockStatus] = useState({ isBlockedByMe: false, isBlockedByThem: false });
+
+  // Sync vanishMode state from chatSetting
+  useEffect(() => {
+    if (chatSetting?.vanishMode !== undefined) {
+      const mode = Boolean(chatSetting.vanishMode);
+      setIsVanishMode(mode);
+      isVanishModeRef.current = mode;
+    }
+  }, [chatSetting?.vanishMode]);
+
+  const handleToggleVanishMode = async () => {
+    const nextVal = !isVanishMode;
+    setIsVanishMode(nextVal);
+    isVanishModeRef.current = nextVal;
+    setChatSetting(prev => ({ ...prev, vanishMode: nextVal }));
+
+    try {
+      const curToken = localStorage.getItem('pulsechat_token');
+      await fetch(`${BACKEND_URL}/api/messages/settings/${encodeURIComponent(chatId)}/vanish`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${curToken}`
+        },
+        body: JSON.stringify({ enabled: nextVal })
+      });
+      if (socket) {
+        socket.emit('toggle_vanish_mode', { chatId, enabled: nextVal, userId: user?.id });
+      }
+    } catch (err) {
+      console.error('Failed to toggle vanish mode:', err);
+    }
+  };
+
+  const triggerEvaporateVanishMessages = useCallback((targetChatId) => {
+    const cid = targetChatId || chatId;
+    if (!cid) return;
+    try {
+      const curToken = localStorage.getItem('pulsechat_token');
+      if (curToken) {
+        fetch(`${BACKEND_URL}/api/messages/vanish/${encodeURIComponent(cid)}/evaporate`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${curToken}` },
+          keepalive: true
+        }).catch(() => {});
+      }
+      if (socket) {
+        socket.emit('evaporate_vanish_messages', { chatId: cid });
+      }
+    } catch (e) {}
+  }, [chatId, socket]);
+
+  // Permanent Auto-evaporate vanish messages on chat exit / close / switch
+  useEffect(() => {
+    const handleExit = () => {
+      const hasVanishMessages = messages.some(m => m.isVanish);
+      if (isVanishModeRef.current || hasVanishMessages) {
+        triggerEvaporateVanishMessages(chatId);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleExit);
+    window.addEventListener('pagehide', handleExit);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleExit);
+      window.removeEventListener('pagehide', handleExit);
+      const hasVanishMessages = messages.some(m => m.isVanish);
+      if (isVanishModeRef.current || hasVanishMessages) {
+        triggerEvaporateVanishMessages(chatId);
+      }
+    };
+  }, [chatId, messages, triggerEvaporateVanishMessages]);
 
   // In-Chat Mutual Nicknames
   const [showNicknameModal, setShowNicknameModal] = useState(false);
@@ -1841,7 +1919,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         .then(res => res.json())
         .then(data => {
           if (data) {
-            if (data.disappearingEnabled !== undefined) setChatSetting(data);
+            if (data.disappearingEnabled !== undefined || data.vanishMode !== undefined) {
+              setChatSetting(data);
+              if (data.vanishMode !== undefined) {
+                const mode = Boolean(data.vanishMode);
+                setIsVanishMode(mode);
+                isVanishModeRef.current = mode;
+              }
+            }
             const isRecentUpdate = (Date.now() - (lastWallpaperUpdateTimestamp.current || 0)) < 4000;
             if (data.wallpaperId !== undefined) {
               if (!isRecentUpdate || data.wallpaperId !== 'none') {
@@ -2336,6 +2421,32 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     };
 
+    const handleChatVanishModeUpdated = (payload) => {
+      if (!payload) return;
+      const targetChat = payload.chatId;
+      const currentCanonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+      if (targetChat === chatId || targetChat === currentCanonical || payload.originalChatId === chatId) {
+        const mode = Boolean(payload.vanishMode);
+        setIsVanishMode(mode);
+        isVanishModeRef.current = mode;
+        setChatSetting(prev => ({ ...prev, vanishMode: mode }));
+      }
+    };
+
+    const handleVanishMessagesEvaporated = (payload) => {
+      if (!payload) return;
+      const targetChat = payload.chatId;
+      const currentCanonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+      if (targetChat === chatId || targetChat === currentCanonical) {
+        const deletedIds = payload.deletedMessageIds || [];
+        setMessages(prev => {
+          const filtered = prev.filter(m => !deletedIds.includes(m.id) && !deletedIds.includes(m._id) && !m.isVanish);
+          setCachedMessages(chatId, filtered);
+          return filtered;
+        });
+      }
+    };
+
     const handleMessageBlocked = ({ reason }) => {
       alert(reason || 'Message blocked: Communication not allowed.');
     };
@@ -2370,6 +2481,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     socket.on('multiple_messages_restored', handleMultipleRestored);
     socket.on('chat_setting_updated', handleChatSettingUpdated);
     socket.on('chat_nickname_updated', handleChatNicknameUpdated);
+    socket.on('chat_vanish_mode_updated', handleChatVanishModeUpdated);
+    socket.on('vanish_messages_evaporated', handleVanishMessagesEvaporated);
     socket.on('message_blocked', handleMessageBlocked);
     socket.on('group_updated', handleGroupUpdated);
 
@@ -2436,6 +2549,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.off('multiple_messages_restored', handleMultipleRestored);
       socket.off('chat_setting_updated', handleChatSettingUpdated);
       socket.off('chat_nickname_updated', handleChatNicknameUpdated);
+      socket.off('chat_vanish_mode_updated', handleChatVanishModeUpdated);
+      socket.off('vanish_messages_evaporated', handleVanishMessagesEvaporated);
       socket.off('message_blocked', handleMessageBlocked);
       socket.off('group_updated', handleGroupUpdated);
       socket.off('fog_snap_burned', handleFogBurned);
@@ -4020,6 +4135,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     <Clock size={16} color="var(--accent)" />
                     <span>Disappearing Messages {chatSetting?.disappearingEnabled ? '(On)' : '(Off)'}</span>
                   </button>
+                  <button onClick={() => { setShowMoreMenu(false); handleToggleVanishMode(); }}>
+                    <Ghost size={16} color={isVanishMode ? '#c084fc' : 'var(--accent)'} />
+                    <span>Vanish Mode {isVanishMode ? '(On)' : '(Off)'}</span>
+                  </button>
                   {!isGroup && (
                     <button
                       onClick={async () => {
@@ -4875,6 +4994,50 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             height: '1px',
             background: 'linear-gradient(90deg, rgba(168, 85, 247, 0.45), transparent)'
           }} />
+        </div>
+      )}
+
+      {/* Instagram-style Vanish Mode Alert Banner - Directly Below Mood Timeline */}
+      {isVanishMode && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          padding: '7px 16px',
+          background: 'linear-gradient(90deg, rgba(88, 28, 135, 0.5) 0%, rgba(126, 34, 206, 0.6) 50%, rgba(88, 28, 135, 0.5) 100%)',
+          borderBottom: '1px solid rgba(192, 132, 252, 0.35)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          color: '#f3e8ff',
+          fontSize: '0.78rem',
+          fontWeight: 600,
+          boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
+          animation: 'fadeIn 0.2s ease-out',
+          position: 'relative',
+          zIndex: 8
+        }}>
+          <Ghost size={15} color="#c084fc" />
+          <span>
+            <strong>Vanish Mode Active</strong> · Messages will vanish permanently when the chat is closed
+          </span>
+          <button
+            type="button"
+            onClick={handleToggleVanishMode}
+            style={{
+              marginLeft: '8px',
+              background: 'rgba(255, 255, 255, 0.12)',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              borderRadius: '8px',
+              padding: '2px 8px',
+              color: '#ffffff',
+              fontSize: '0.72rem',
+              cursor: 'pointer',
+              fontWeight: 600
+            }}
+          >
+            Turn Off
+          </button>
         </div>
       )}
 

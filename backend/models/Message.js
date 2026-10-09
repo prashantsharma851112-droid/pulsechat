@@ -44,10 +44,13 @@ const messageSchema = new mongoose.Schema({
   // WhatsApp-style forwarded indicator
   isForwarded: { type: Boolean, default: false },
   // Instagram-style Story reply / reaction data
-  storyReply: { type: Object, default: null },
+  // Instagram-style Vanish Mode (Permanent Auto-evaporate on chat exit)
+  isVanish: { type: Boolean, default: false },
   // Auto-decay / disappearing message expiry (MongoDB TTL index - 30-day lifetime free storage rule)
   expiresAt: { type: Date, default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), index: { expires: 0 } }
 });
+
+messageSchema.index({ chatId: 1, isVanish: 1 });
 
 messageSchema.index({ senderId: 1, receiverId: 1 });
 messageSchema.index({ receiverId: 1, status: 1 });

@@ -15,6 +15,7 @@ const chatSettingSchema = new mongoose.Schema({
   streakFrozenUntil: { type: Date, default: null },
   streakMilestonesClaimed: { type: [Number], default: [] }, // [3, 7, 30]
   nicknames: { type: mongoose.Schema.Types.Mixed, default: {} }, // { [userId]: 'Custom Nickname' }
+  vanishMode: { type: Boolean, default: false }, // Instagram-style Vanish Mode
   updatedAt: { type: Date, default: Date.now },
   updatedBy: { type: String, default: '' }
 });

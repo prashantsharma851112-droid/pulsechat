@@ -849,6 +849,7 @@ io.on('connection', (socket) => {
         timestamp: new Date().toISOString(),
         reactions: {},
         replyTo: replyTo || null,
+        isVanish: Boolean(messageData.isVanish),
         expiresAt
       };
 
@@ -1035,6 +1036,51 @@ io.on('connection', (socket) => {
   socket.on('restore_multiple_messages', async ({ messageIds, chatId }) => {
     await db.restoreMultipleMessages(messageIds);
     io.to(chatId).emit('multiple_messages_restored', { messageIds, chatId });
+  });
+
+  // Vanish Mode Handlers
+  socket.on('toggle_vanish_mode', async ({ chatId, enabled, userId }) => {
+    if (!chatId) return;
+    const actorId = userId || socket.userId;
+    const setting = await db.setVanishMode(chatId, enabled, actorId);
+    const payload = {
+      chatId: setting?.chatId || chatId,
+      originalChatId: chatId,
+      vanishMode: Boolean(setting?.vanishMode ?? enabled),
+      setBy: actorId
+    };
+    io.to(chatId).emit('chat_vanish_mode_updated', payload);
+    if (chatId.includes('_')) {
+      const parts = chatId.split('_');
+      io.to(`${parts[1]}_${parts[0]}`).emit('chat_vanish_mode_updated', payload);
+      parts.forEach(uId => {
+        io.to(`user_${uId}`).emit('chat_vanish_mode_updated', payload);
+        io.to(uId).emit('chat_vanish_mode_updated', payload);
+      });
+    }
+  });
+
+  socket.on('evaporate_vanish_messages', async ({ chatId }) => {
+    if (!chatId) return;
+    const deletedIds = await db.evaporateVanishMessages(chatId);
+    if (deletedIds && deletedIds.length > 0) {
+      const payload = {
+        chatId,
+        deletedMessageIds: deletedIds,
+        count: deletedIds.length
+      };
+      io.to(chatId).emit('vanish_messages_evaporated', payload);
+      if (chatId.includes('_')) {
+        const parts = chatId.split('_');
+        const canonical = parts.sort().join('_');
+        io.to(canonical).emit('vanish_messages_evaporated', payload);
+        io.to(`${parts[1]}_${parts[0]}`).emit('vanish_messages_evaporated', payload);
+        parts.forEach(uId => {
+          io.to(`user_${uId}`).emit('vanish_messages_evaporated', payload);
+          io.to(uId).emit('vanish_messages_evaporated', payload);
+        });
+      }
+    }
   });
 
   // Panic Wipe Handler

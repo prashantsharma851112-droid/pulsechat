@@ -609,7 +609,7 @@ module.exports = {
   },
 
   getChatSetting: async (rawChatId) => {
-    if (!rawChatId) return { disappearingEnabled: false, disappearingDuration: 86400, wallpaperId: 'none', customWallpaperUrl: null, chatTheme: 'midnight_amoled', nicknames: {} };
+    if (!rawChatId) return { disappearingEnabled: false, disappearingDuration: 86400, wallpaperId: 'none', customWallpaperUrl: null, chatTheme: 'midnight_amoled', nicknames: {}, vanishMode: false };
     const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
     let query = { chatId: canonicalChatId };
     if (rawChatId.includes('_')) {
@@ -625,10 +625,12 @@ module.exports = {
         wallpaperId: 'none',
         customWallpaperUrl: null,
         chatTheme: 'midnight_amoled',
-        nicknames: {}
+        nicknames: {},
+        vanishMode: false
       };
-    } else if (!setting.nicknames) {
-      setting.nicknames = {};
+    } else {
+      if (!setting.nicknames) setting.nicknames = {};
+      setting.vanishMode = Boolean(setting.vanishMode);
     }
     return setting;
   },
@@ -668,6 +670,72 @@ module.exports = {
       await setting.save();
     }
     return setting ? (setting.toObject ? setting.toObject() : setting) : { chatId: canonicalChatId, disappearingEnabled: !!enabled };
+  },
+
+  setVanishMode: async (rawChatId, enabled, userId) => {
+    if (!rawChatId) return null;
+    const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
+    let query = { chatId: canonicalChatId };
+    if (rawChatId.includes('_')) {
+      const parts = rawChatId.split('_');
+      query = { $or: [{ chatId: canonicalChatId }, { chatId: rawChatId }, { chatId: `${parts[1]}_${parts[0]}` }] };
+    }
+    let setting = await ChatSetting.findOne(query);
+    if (!setting) {
+      try {
+        setting = await ChatSetting.create({
+          chatId: canonicalChatId,
+          vanishMode: !!enabled,
+          updatedAt: new Date(),
+          updatedBy: userId || ''
+        });
+      } catch (err) {
+        setting = await ChatSetting.findOne({ chatId: canonicalChatId });
+        if (setting) {
+          setting.vanishMode = !!enabled;
+          setting.updatedAt = new Date();
+          setting.updatedBy = userId || '';
+          await setting.save();
+        }
+      }
+    } else {
+      setting.chatId = canonicalChatId;
+      setting.vanishMode = !!enabled;
+      setting.updatedAt = new Date();
+      setting.updatedBy = userId || '';
+      await setting.save();
+    }
+    try {
+      await ChatSetting.updateMany(query, {
+        $set: { vanishMode: !!enabled, updatedAt: new Date(), updatedBy: userId || '' }
+      });
+    } catch (e) {}
+
+    return setting ? (setting.toObject ? setting.toObject() : setting) : { chatId: canonicalChatId, vanishMode: !!enabled };
+  },
+
+  evaporateVanishMessages: async (rawChatId) => {
+    if (!rawChatId) return [];
+    const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
+    let chatConditions = [{ chatId: canonicalChatId }, { chatId: rawChatId }];
+    if (rawChatId.includes('_')) {
+      const parts = rawChatId.split('_');
+      chatConditions.push({ chatId: `${parts[1]}_${parts[0]}` });
+    }
+    const filter = {
+      $or: chatConditions,
+      isVanish: true
+    };
+    const vanishMsgs = await Message.find(filter, { id: 1 }).lean();
+    const deletedIds = vanishMsgs.map(m => m.id);
+    if (deletedIds.length > 0) {
+      await Message.deleteMany(filter);
+      try {
+        const redis = require('../utils/redis');
+        chatConditions.forEach(c => redis.invalidateChat(c.chatId).catch(() => {}));
+      } catch (e) {}
+    }
+    return deletedIds;
   },
 
   setChatWallpaper: async (rawChatId, wallpaperId, customWallpaperUrl, userId) => {

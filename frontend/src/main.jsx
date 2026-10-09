@@ -7,9 +7,15 @@ import { SocketProvider } from './context/SocketContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import { AppMusicProvider } from './context/AppMusicContext.jsx';
 import { initSecurityShield } from './utils/securityShield.js';
+import { applyAppDisguise, getAppDisguise } from './utils/appDisguise.js';
 
 // Initialize anti-inspect and code protection shield
 initSecurityShield();
+
+// Apply saved app disguise (e.g. Calculator, Notes, Weather) on startup
+try {
+  applyAppDisguise(getAppDisguise());
+} catch (e) {}
 
 // Global handler for Vite dynamic chunk updates (reloads fresh bundle if old hash 404s after deploy)
 window.addEventListener('vite:preloadError', (event) => {

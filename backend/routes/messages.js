@@ -243,6 +243,75 @@ router.put('/settings/:chatId/theme', authMiddleware, async (req, res) => {
   }
 });
 
+// Toggle Instagram-style Vanish Mode (Permanent Auto-evaporate on chat exit) - MUST BE BEFORE /:chatId
+router.put('/settings/:chatId/vanish', authMiddleware, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    const setting = await db.setVanishMode(req.params.chatId, enabled, req.user?.id);
+
+    const payload = {
+      chatId: setting?.chatId || req.params.chatId,
+      originalChatId: req.params.chatId,
+      vanishMode: Boolean(setting?.vanishMode ?? enabled),
+      setBy: req.user?.id
+    };
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(req.params.chatId).emit('chat_vanish_mode_updated', payload);
+      if (setting?.chatId && setting.chatId !== req.params.chatId) {
+        io.to(setting.chatId).emit('chat_vanish_mode_updated', payload);
+      }
+      if (req.params.chatId.includes('_')) {
+        const parts = req.params.chatId.split('_');
+        io.to(`${parts[1]}_${parts[0]}`).emit('chat_vanish_mode_updated', payload);
+        parts.forEach(uId => {
+          io.to(`user_${uId}`).emit('chat_vanish_mode_updated', payload);
+          io.to(uId).emit('chat_vanish_mode_updated', payload);
+        });
+      }
+    }
+
+    res.json({ success: true, setting, payload });
+  } catch (err) {
+    console.error('Failed to toggle vanish mode:', err);
+    res.status(500).json({ error: 'Failed to toggle vanish mode' });
+  }
+});
+
+// Evaporate all Vanish Mode messages permanently on exit - MUST BE BEFORE /:chatId
+router.all('/vanish/:chatId/evaporate', authMiddleware, async (req, res) => {
+  try {
+    const deletedIds = await db.evaporateVanishMessages(req.params.chatId);
+
+    const payload = {
+      chatId: req.params.chatId,
+      deletedMessageIds: deletedIds,
+      count: deletedIds.length
+    };
+
+    const io = req.app.get('io');
+    if (io && deletedIds.length > 0) {
+      io.to(req.params.chatId).emit('vanish_messages_evaporated', payload);
+      if (req.params.chatId.includes('_')) {
+        const parts = req.params.chatId.split('_');
+        const canonical = parts.sort().join('_');
+        io.to(canonical).emit('vanish_messages_evaporated', payload);
+        io.to(`${parts[1]}_${parts[0]}`).emit('vanish_messages_evaporated', payload);
+        parts.forEach(uId => {
+          io.to(`user_${uId}`).emit('vanish_messages_evaporated', payload);
+          io.to(uId).emit('vanish_messages_evaporated', payload);
+        });
+      }
+    }
+
+    res.json({ success: true, count: deletedIds.length, deletedMessageIds: deletedIds });
+  } catch (err) {
+    console.error('Failed to evaporate vanish messages:', err);
+    res.status(500).json({ error: 'Failed to evaporate vanish messages' });
+  }
+});
+
 // Set / Update Nickname for a participant in 1-on-1 chat - MUST BE BEFORE /:chatId
 router.put('/settings/:chatId/nickname', authMiddleware, async (req, res) => {
   try {

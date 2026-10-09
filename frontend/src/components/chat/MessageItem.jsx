@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
-import { BACKEND_URL } from '../../utils/config';
-import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward, Edit3, ExternalLink, Globe } from 'lucide-react';
+import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward, Edit3, ExternalLink, Globe, Ghost } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 import FogSnapModal from './FogSnapModal';
@@ -2518,6 +2517,9 @@ function MessageItem({
         {/* Timestamp & Ticks (hidden for gift stickers and 3D text as they display it natively) */}
         {message.type !== 'gift' && message.type !== '3d_text' && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem', marginTop: '0.35rem', fontSize: '0.68rem', opacity: 0.75 }}>
+            {message.isVanish && (
+              <Ghost size={11} color="#c084fc" style={{ marginRight: '1px', flexShrink: 0 }} title="Vanish Mode Message · Disappears when chat is closed" />
+            )}
             {isStarred && (
               <Star size={11} fill="#f59e0b" color="#f59e0b" style={{ marginRight: '1px', flexShrink: 0 }} title="Starred message" />
             )}
@@ -2900,6 +2902,7 @@ function areMessagePropsEqual(prevProps, nextProps) {
       p.mediaType !== n.mediaType ||
       p.fogSnapStatus !== n.fogSnapStatus ||
       p.isFogSnap !== n.isFogSnap ||
+      p.isVanish !== n.isVanish ||
       p.isUploading !== n.isUploading ||
       p.reactions !== n.reactions ||
       p.pollData !== n.pollData ||

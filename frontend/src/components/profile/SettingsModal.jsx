@@ -18,6 +18,7 @@ import AppFeatureTourModal from '../common/AppFeatureTourModal';
 import LegalModal from '../common/LegalModal';
 import ChangePasswordForm from './ChangePasswordForm';
 import { useBackHandler } from '../../utils/backNavigation';
+import { DISGUISE_PRESETS, getAppDisguise, applyAppDisguise } from '../../utils/appDisguise';
 
 const THEMES = [
   { id: 'midnight_amoled', name: '🖤 Midnight AMOLED (Default)', color: '#000000', isPro: false },
@@ -128,6 +129,12 @@ export default function SettingsModal({
 
   const [ghostSearchQuery, setGhostSearchQuery] = useState('');
   const [showGhostChatPicker, setShowGhostChatPicker] = useState(false);
+  const [currentDisguise, setCurrentDisguise] = useState(getAppDisguise);
+
+  const handleSelectDisguise = (presetId) => {
+    setCurrentDisguise(presetId);
+    applyAppDisguise(presetId);
+  };
 
   const availableGhostContacts = useMemo(() => {
     const map = new Map();
@@ -1398,6 +1405,105 @@ export default function SettingsModal({
                     left: user?.hideOnlineStatus ? '18px' : '2px',
                     transition: 'all 0.2s ease'
                   }} />
+                </div>
+              </div>
+
+              {/* App Camouflage / Fake App Icon Section */}
+              <div style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: '16px',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(234, 88, 12, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span style={{ fontSize: '1.2rem' }}>🎭</span>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        App Camouflage (Fake App Icon)
+                        <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '6px', background: 'rgba(234, 88, 12, 0.2)', color: '#fb923c', fontWeight: 700 }}>Privacy Shield</span>
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                        Disguise PulseChat icon & tab title as Calculator, Notes or Weather so phone inspectors don't detect it
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+                  gap: '8px',
+                  marginTop: '4px'
+                }}>
+                  {DISGUISE_PRESETS.map((preset) => {
+                    const isSelected = currentDisguise === preset.id;
+                    const iconDataUri = `data:image/svg+xml;utf8,${encodeURIComponent(preset.iconSvg)}`;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => handleSelectDisguise(preset.id)}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '10px 8px',
+                          borderRadius: '12px',
+                          border: isSelected ? `2px solid ${preset.accentColor || 'var(--accent)'}` : '1px solid var(--border)',
+                          background: isSelected ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                          cursor: 'pointer',
+                          position: 'relative',
+                          textAlign: 'center',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <div style={{ position: 'relative', width: '38px', height: '38px' }}>
+                          <img
+                            src={iconDataUri}
+                            alt={preset.name}
+                            style={{
+                              width: '38px',
+                              height: '38px',
+                              borderRadius: '10px',
+                              boxShadow: isSelected ? `0 0 10px ${preset.accentColor}44` : 'none',
+                              display: 'block'
+                            }}
+                          />
+                          {isSelected && (
+                            <div style={{
+                              position: 'absolute',
+                              bottom: '-4px',
+                              right: '-4px',
+                              width: '16px',
+                              height: '16px',
+                              borderRadius: '50%',
+                              background: preset.accentColor || 'var(--accent)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#fff',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.4)'
+                            }}>
+                              <Check size={10} strokeWidth={3} />
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '0.8rem', fontWeight: isSelected ? 700 : 500, color: isSelected ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                          {preset.name}
+                        </div>
+                        <div style={{ fontSize: '0.65rem', color: isSelected ? preset.accentColor : 'var(--text-muted)', opacity: 0.8, lineHeight: 1.1 }}>
+                          {preset.badge}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
