@@ -747,6 +747,7 @@ module.exports = {
 
   setChatNickname: async (rawChatId, targetUserId, nickname, userId) => {
     if (!rawChatId || !targetUserId) return null;
+    const mongoose = require('mongoose');
     const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
     let query = { chatId: canonicalChatId };
     if (rawChatId.includes('_')) {
@@ -779,11 +780,34 @@ module.exports = {
       }
     }
 
+    // Resolve all possible key variants of targetUserId (custom id, mongo _id, username)
+    const targetKeys = new Set([String(targetUserId)]);
+    try {
+      const targetUser = await User.findOne({
+        $or: [
+          { id: targetUserId },
+          { username: targetUserId },
+          ...(mongoose.Types.ObjectId.isValid(targetUserId) ? [{ _id: targetUserId }] : [])
+        ]
+      });
+      if (targetUser) {
+        if (targetUser.id) targetKeys.add(String(targetUser.id));
+        if (targetUser._id) targetKeys.add(String(targetUser._id));
+        if (targetUser.username) targetKeys.add(String(targetUser.username));
+      }
+    } catch (e) {}
+
+    // Remove all previous entries for this user
+    targetKeys.forEach(k => {
+      delete nicks[k];
+    });
+
     const trimmed = (nickname || '').trim();
     if (trimmed) {
-      nicks[targetUserId] = trimmed;
-    } else {
-      delete nicks[targetUserId];
+      // Set nickname under targetUserId and all its known identifier variants
+      targetKeys.forEach(k => {
+        nicks[k] = trimmed;
+      });
     }
 
     setting.chatId = canonicalChatId;
@@ -792,6 +816,13 @@ module.exports = {
     setting.updatedAt = new Date();
     setting.updatedBy = userId || '';
     await setting.save();
+
+    // Also sync all matching ChatSetting records for this chat query
+    try {
+      await ChatSetting.updateMany(query, {
+        $set: { nicknames: nicks, updatedAt: new Date(), updatedBy: userId || '' }
+      });
+    } catch (e) {}
 
     return setting.toObject ? setting.toObject() : setting;
   },

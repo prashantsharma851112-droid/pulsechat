@@ -268,14 +268,53 @@ export default function App() {
       }
     };
 
+    const handleNicknameUpdated = (data) => {
+      if (!data) return;
+      const targetUserId = data.targetUserId ? String(data.targetUserId) : '';
+      const nickname = (typeof data.nickname === 'string' && data.nickname.trim()) ? data.nickname.trim() : null;
+      const nicks = (data.nicknames && typeof data.nicknames === 'object') ? data.nicknames : {};
+
+      setActiveChat(prev => {
+        if (!prev) return null;
+        const prevKeys = [prev.id ? String(prev.id) : null, prev._id ? String(prev._id) : null, prev.username ? String(prev.username) : null].filter(Boolean);
+        const matchesTarget = prevKeys.includes(targetUserId) || (targetUserId && targetUserId.includes(prev.id));
+        if (matchesTarget) {
+          let resolvedNick = null;
+          for (const k of prevKeys) {
+            if (nicks[k] && typeof nicks[k] === 'string' && nicks[k].trim()) {
+              resolvedNick = nicks[k].trim();
+              break;
+            }
+          }
+          if (!resolvedNick && nickname) {
+            resolvedNick = nickname;
+          }
+          return {
+            ...prev,
+            nickname: resolvedNick,
+            nicknames: nicks
+          };
+        }
+        return prev;
+      });
+    };
+
     socket.on('user_profile_updated', handleProfileUpdate);
     socket.on('sparks_updated', handleSparksUpdated);
     socket.on('3d_trial_used', handleTrialUsed);
+    socket.on('chat_nickname_updated', handleNicknameUpdated);
+
+    const handleWindowNick = (e) => {
+      if (e.detail) handleNicknameUpdated(e.detail);
+    };
+    window.addEventListener('pulsechat_nickname_updated', handleWindowNick);
 
     return () => {
       socket.off('user_profile_updated', handleProfileUpdate);
       socket.off('sparks_updated', handleSparksUpdated);
       socket.off('3d_trial_used', handleTrialUsed);
+      socket.off('chat_nickname_updated', handleNicknameUpdated);
+      window.removeEventListener('pulsechat_nickname_updated', handleWindowNick);
     };
   }, [socket, user]);
 

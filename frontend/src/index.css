@@ -2547,48 +2547,49 @@ input, textarea {
   transform: scale(0.94);
 }
 
-/* Headphone Transparent Outline & Liquid Color Fill/Unfill Animation */
-.pulse-headphone-icon-box {
-  position: relative;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* Full-Circle Continuous Slow Liquid Color Fill & Unfill Animation */
+.pulse-circle-liquid-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
   pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
 }
 
-@keyframes headphoneLiquidFillUnfill {
+.pulse-circle-liquid-body {
+  position: absolute;
+  left: -25%;
+  right: -25%;
+  bottom: -6%;
+  height: 125%;
+  background: linear-gradient(180deg, #f3e8ff 0%, #c084fc 25%, #a855f7 55%, #7e22ce 100%);
+  border-radius: 42% 42% 0 0 / 14px 14px 0 0;
+  box-shadow: 0 -4px 16px rgba(216, 180, 254, 0.9), inset 0 2px 6px rgba(255, 255, 255, 0.7);
+  animation: liquidCircleSlowFill 5.8s cubic-bezier(0.42, 0, 0.58, 1) infinite;
+  transform-origin: center bottom;
+  will-change: transform, opacity;
+}
+
+@keyframes liquidCircleSlowFill {
   0% {
-    clip-path: inset(100% 0 0 0);
-    -webkit-clip-path: inset(100% 0 0 0);
-    opacity: 0;
-    transform: scale(0.94);
+    transform: translateY(105%);
+    opacity: 0.15;
   }
-  12% {
-    opacity: 0.85;
+  8% {
+    opacity: 0.95;
   }
   42%, 58% {
-    clip-path: inset(0% 0 0 0);
-    -webkit-clip-path: inset(0% 0 0 0);
+    transform: translateY(0%);
     opacity: 1;
-    transform: scale(1.05);
   }
-  88% {
-    opacity: 0.85;
+  92% {
+    opacity: 0.95;
   }
   100% {
-    clip-path: inset(100% 0 0 0);
-    -webkit-clip-path: inset(100% 0 0 0);
-    opacity: 0;
-    transform: scale(0.94);
+    transform: translateY(105%);
+    opacity: 0.15;
   }
-}
-
-.pulse-headphone-liquid-fill {
-  animation: headphoneLiquidFillUnfill 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  transform-origin: center center;
-  will-change: clip-path, opacity, transform;
 }
 
 @keyframes pulseShimmer {

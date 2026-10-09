@@ -1330,20 +1330,26 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   // In-Chat Mutual Nicknames
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const partnerNickname = useMemo(() => {
-    if (!isGroup && partnerId && chatSetting?.nicknames && typeof chatSetting.nicknames === 'object') {
-      const val = chatSetting.nicknames[partnerId];
-      return typeof val === 'string' && val.trim() ? val.trim() : null;
+    if (!isGroup && chatSetting?.nicknames && typeof chatSetting.nicknames === 'object') {
+      const keys = [activeChat?.id, activeChat?._id, activeChat?.userId, activeChat?.username, partnerId].filter(Boolean).map(String);
+      for (const k of keys) {
+        const val = chatSetting.nicknames[k];
+        if (typeof val === 'string' && val.trim()) return val.trim();
+      }
     }
     return null;
-  }, [isGroup, partnerId, chatSetting?.nicknames]);
+  }, [isGroup, partnerId, activeChat?.id, activeChat?._id, activeChat?.userId, activeChat?.username, chatSetting?.nicknames]);
 
   const myNicknameInChat = useMemo(() => {
-    if (!isGroup && user?.id && chatSetting?.nicknames && typeof chatSetting.nicknames === 'object') {
-      const val = chatSetting.nicknames[user.id];
-      return typeof val === 'string' && val.trim() ? val.trim() : null;
+    if (!isGroup && chatSetting?.nicknames && typeof chatSetting.nicknames === 'object') {
+      const keys = [user?.id, user?._id, user?.username].filter(Boolean).map(String);
+      for (const k of keys) {
+        const val = chatSetting.nicknames[k];
+        if (typeof val === 'string' && val.trim()) return val.trim();
+      }
     }
     return null;
-  }, [isGroup, user?.id, chatSetting?.nicknames]);
+  }, [isGroup, user?.id, user?._id, user?.username, chatSetting?.nicknames]);
 
   // Pulse Streaks, Sparks Reward & Freeze Shield
   const [streakData, setStreakData] = useState({ streakCount: 0, streakShields: 0, lastStreakDate: null });
@@ -2325,10 +2331,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       if (targetChat === chatId || targetChat === currentCanonical || payload.originalChatId === chatId) {
         setChatSetting(prev => ({
           ...prev,
-          nicknames: payload.nicknames || {
-            ...(prev?.nicknames || {}),
-            ...(payload.targetUserId && payload.nickname ? { [payload.targetUserId]: payload.nickname } : {})
-          }
+          nicknames: (payload.nicknames && typeof payload.nicknames === 'object') ? payload.nicknames : {}
         }));
       }
     };

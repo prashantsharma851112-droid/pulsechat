@@ -34,9 +34,9 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
   const resolveNickname = (grp) => {
     if (!grp) return null;
     const match = recentChats.find(c => {
-      const cKeys = [c.id, c._id, c._id ? String(c._id) : null, c.username].filter(Boolean);
-      return (grp.userId && cKeys.includes(grp.userId)) ||
-             (grp.username && cKeys.includes(grp.username));
+      const cKeys = [c.id ? String(c.id) : null, c._id ? String(c._id) : null, c.username ? String(c.username) : null].filter(Boolean);
+      return (grp.userId && cKeys.includes(String(grp.userId))) ||
+             (grp.username && cKeys.includes(String(grp.username)));
     });
     if (match && typeof match.nickname === 'string' && match.nickname.trim()) {
       return match.nickname.trim();

@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass, Edit3, Pin, Music, Disc, Play, Pause } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass, Edit3, Pin, Music, Disc, Play, Pause, Headphones } from 'lucide-react';
 import FriendsTab from './FriendsTab';
 import { useBackHandler } from '../../utils/backNavigation';
 import PulseVipBadge from '../common/PulseVipBadge';
@@ -654,8 +654,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               const cachedList = getCachedRecentChats(user.id) || [];
               const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
               if (cachedMatch) {
-                if (!res.nickname && cachedMatch.nickname) res.nickname = cachedMatch.nickname;
-                if (!res.nicknames && cachedMatch.nicknames) res.nicknames = cachedMatch.nicknames;
+                if (res.nickname === undefined && cachedMatch.nickname) res.nickname = cachedMatch.nickname;
+                if (res.nicknames === undefined && cachedMatch.nicknames) res.nicknames = cachedMatch.nicknames;
               }
               res.unreadCount = Math.max(Number(res.unreadCount) || 0, Number(cachedMatch?.unreadCount) || 0);
             } else {
@@ -720,10 +720,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
             const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
             if (cachedMatch) {
-              if (!res.nickname && cachedMatch.nickname) {
+              if (res.nickname === undefined && cachedMatch.nickname) {
                 res.nickname = cachedMatch.nickname;
               }
-              if (!res.nicknames && cachedMatch.nicknames) {
+              if (res.nicknames === undefined && cachedMatch.nicknames) {
                 res.nicknames = cachedMatch.nicknames;
               }
               const cachedTime = new Date(cachedMatch.lastMessageTimestamp || cachedMatch.lastMessageTime || 0).getTime();
@@ -1372,32 +1372,38 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     const handleNicknameUpdated = (data) => {
       if (!data) return;
       const targetChat = data.chatId;
-      const targetUserId = data.targetUserId;
-      const nickname = data.nickname;
-      const nicks = data.nicknames || {};
+      const targetUserId = data.targetUserId ? String(data.targetUserId) : '';
+      const nickname = (typeof data.nickname === 'string' && data.nickname.trim()) ? data.nickname.trim() : null;
+      const nicks = (data.nicknames && typeof data.nicknames === 'object') ? data.nicknames : {};
 
       setRecentChats(prev => {
         const next = prev.map(c => {
+          const cKeys = [c.id ? String(c.id) : null, c._id ? String(c._id) : null, c.username ? String(c.username) : null].filter(Boolean);
           const canonical = (c.id && user?.id) ? [user.id, c.id].sort().join('_') : '';
-          const isThisUser = c.id === targetUserId ||
-            (c._id && String(c._id) === String(targetUserId)) ||
-            (c.username && c.username === targetUserId) ||
-            (targetChat && (
-              targetChat === canonical ||
-              targetChat === c.id ||
-              data.originalChatId === canonical ||
-              data.originalChatId === c.id ||
-              targetChat.includes(c.id) ||
-              (c.id && targetChat.includes(c.id.replace('user_', '')))
-            ));
+          const isTargetUser = cKeys.includes(targetUserId) || (targetUserId && targetUserId.includes(c.id));
+          const isThisChat = targetChat && (
+            targetChat === canonical ||
+            targetChat === c.id ||
+            data.originalChatId === canonical ||
+            data.originalChatId === c.id ||
+            targetChat.includes(c.id) ||
+            (c.id && targetChat.includes(c.id.replace('user_', '')))
+          );
 
-          if (isThisUser) {
-            const nextNick = (nicks[c.id] || (c._id && nicks[String(c._id)]) || (c.username && nicks[c.username])) ?? (
-              (c.id === targetUserId || (c._id && String(c._id) === String(targetUserId)) || c.username === targetUserId) ? nickname : c.nickname
-            );
+          if (isTargetUser || isThisChat) {
+            let resolvedNick = null;
+            for (const k of cKeys) {
+              if (nicks[k] && typeof nicks[k] === 'string' && nicks[k].trim()) {
+                resolvedNick = nicks[k].trim();
+                break;
+              }
+            }
+            if (!resolvedNick && isTargetUser && nickname) {
+              resolvedNick = nickname;
+            }
             return {
               ...c,
-              nickname: (typeof nextNick === 'string' && nextNick.trim()) ? nextNick.trim() : null,
+              nickname: resolvedNick,
               nicknames: nicks
             };
           }
@@ -2872,10 +2878,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             width: '56px',
             height: '56px',
             borderRadius: '50%',
-            background: isAppMusicPlaying
-              ? 'radial-gradient(circle at 35% 35%, #a855f7ee, #09090b)'
-              : 'radial-gradient(circle at 35% 35%, #8b5cf6, #09090b)',
-            border: `2px solid ${isAppMusicPlaying ? '#a855f7' : 'rgba(168, 85, 247, 0.75)'}`,
+            overflow: 'hidden',
+            background: '#0d0b14',
+            border: `2px solid ${isAppMusicPlaying ? '#c084fc' : 'rgba(168, 85, 247, 0.75)'}`,
             color: '#ffffff',
             display: 'flex',
             alignItems: 'center',
@@ -2883,59 +2888,26 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             cursor: 'pointer',
             position: 'relative',
             padding: 0,
-            boxShadow: isAppMusicPlaying ? '0 0 20px rgba(168, 85, 247, 0.65)' : '0 6px 18px rgba(0,0,0,0.5)'
+            boxShadow: isAppMusicPlaying ? '0 0 22px rgba(168, 85, 247, 0.75)' : '0 6px 18px rgba(0,0,0,0.5)'
           }}
         >
-          <div className="pulse-headphone-icon-box">
-            {/* Translucent glass outline layer */}
-            <svg
-              viewBox="0 0 24 24"
-              width="28"
-              height="28"
-              fill="none"
-              stroke="rgba(255, 255, 255, 0.45)"
-              strokeWidth="2.1"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{
-                position: 'absolute',
-                inset: 0,
-                filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5))'
-              }}
-            >
-              <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" />
-              <rect x="2.5" y="14" width="4.5" height="6.5" rx="2" fill="rgba(255, 255, 255, 0.14)" stroke="none" />
-              <rect x="17" y="14" width="4.5" height="6.5" rx="2" fill="rgba(255, 255, 255, 0.14)" stroke="none" />
-            </svg>
-
-            {/* Glowing color fill layer with continuous liquid fill & drain animation */}
-            <svg
-              viewBox="0 0 24 24"
-              width="28"
-              height="28"
-              className="pulse-headphone-liquid-fill"
-              stroke="#ffffff"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{
-                position: 'absolute',
-                inset: 0,
-                filter: 'drop-shadow(0 0 6px #ffffff) drop-shadow(0 0 14px #c084fc)'
-              }}
-            >
-              <defs>
-                <linearGradient id="hpLiquidGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#ffffff" />
-                  <stop offset="55%" stopColor="#f3e8ff" />
-                  <stop offset="100%" stopColor="#c084fc" />
-                </linearGradient>
-              </defs>
-              <rect x="2.5" y="14" width="4.5" height="6.5" rx="2" fill="url(#hpLiquidGrad)" stroke="#ffffff" strokeWidth="1" />
-              <rect x="17" y="14" width="4.5" height="6.5" rx="2" fill="url(#hpLiquidGrad)" stroke="#ffffff" strokeWidth="1" />
-              <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" fill="none" stroke="url(#hpLiquidGrad)" strokeWidth="2.3" />
-            </svg>
+          {/* Entire circular button continuous liquid color fill & unfill animation */}
+          <div className="pulse-circle-liquid-layer">
+            <div className="pulse-circle-liquid-body" />
           </div>
+
+          {/* Centered Headphones icon with crisp contrast and shadow */}
+          <div style={{
+            position: 'relative',
+            zIndex: 3,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            filter: 'drop-shadow(0 2px 5px rgba(0, 0, 0, 0.85))'
+          }}>
+            <Headphones size={26} color="#ffffff" strokeWidth={2.4} />
+          </div>
+
           {appMusicTrack && (
             <div
               onClick={(e) => {
@@ -2947,15 +2919,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 position: 'absolute',
                 bottom: '-1px',
                 right: '-1px',
+                zIndex: 4,
                 background: '#09090b',
-                border: '1.5px solid rgba(255, 255, 255, 0.4)',
+                border: '1.5px solid rgba(255, 255, 255, 0.5)',
                 borderRadius: '50%',
                 width: '20px',
                 height: '20px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.7)',
                 cursor: 'pointer'
               }}
             >

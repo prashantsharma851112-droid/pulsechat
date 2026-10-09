@@ -257,13 +257,18 @@ router.put('/settings/:chatId/nickname', authMiddleware, async (req, res) => {
     // Invalidate Redis recent chats cache for participants so fresh nicknames appear
     try {
       const redis = require('../utils/redis');
-      if (req.user?.id) redis.invalidateRecent(req.user.id).catch(() => {});
-      if (req.user?.username) redis.invalidateRecent(req.user.username).catch(() => {});
-      if (targetUserId) redis.invalidateRecent(targetUserId).catch(() => {});
+      const uIds = new Set([
+        String(req.user?.id || ''),
+        String(req.user?.username || ''),
+        String(req.user?._id || ''),
+        String(targetUserId)
+      ]);
       if (req.params.chatId.includes('_')) {
-        const parts = req.params.chatId.split('_');
-        parts.forEach(uId => redis.invalidateRecent(uId).catch(() => {}));
+        req.params.chatId.split('_').forEach(p => uIds.add(String(p)));
       }
+      uIds.forEach(uId => {
+        if (uId) redis.invalidateRecent(uId).catch(() => {});
+      });
     } catch (e) {}
 
     // Create a system message announcing the change in this chat
