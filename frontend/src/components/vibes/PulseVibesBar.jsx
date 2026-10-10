@@ -176,6 +176,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
     };
     window.addEventListener('pulsechat_vibes_updated', handleUpdate);
     window.addEventListener('pulsechat_music_note_updated', handleUpdate);
+    window.addEventListener('pulsechat_music_note_liked', handleUpdate);
     window.addEventListener('storage', handleUpdate);
 
     let bc;
@@ -190,17 +191,20 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
     if (socket) {
       socket.on('new_vibe_posted', handleUpdate);
       socket.on('user_music_note_updated', handleUpdate);
+      socket.on('user_music_note_liked', handleUpdate);
     }
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('pulsechat_vibes_updated', handleUpdate);
       window.removeEventListener('pulsechat_music_note_updated', handleUpdate);
+      window.removeEventListener('pulsechat_music_note_liked', handleUpdate);
       window.removeEventListener('storage', handleUpdate);
       if (bc) bc.close();
       if (socket) {
         socket.off('new_vibe_posted', handleUpdate);
         socket.off('user_music_note_updated', handleUpdate);
+        socket.off('user_music_note_liked', handleUpdate);
       }
     };
   }, [token, user, socket]);
@@ -255,7 +259,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
         gap: '12px',
         overflowX: 'auto',
         overflowY: 'visible',
-        paddingTop: '62px',
+        paddingTop: '68px',
         paddingBottom: '6px',
         WebkitOverflowScrolling: 'touch',
         scrollbarWidth: 'none'
@@ -299,6 +303,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
             {/* Instagram-style Floating Music Note Bubble */}
             <InstaMusicNoteBubble
               note={user?.musicNote}
+              authorUser={user}
               onOpenPicker={() => setShowMusicNoteModal(true)}
               isPopped={activePoppedNoteId === 'mine'}
               onPop={() => setActivePoppedNoteId(prev => prev === 'mine' ? null : 'mine')}
@@ -405,6 +410,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
                 {group.musicNote && (
                   <InstaMusicNoteBubble
                     note={group.musicNote}
+                    authorUser={group}
                     isMine={false}
                     isPopped={isPopped}
                     onPop={() => setActivePoppedNoteId(prev => prev === group.userId ? null : group.userId)}

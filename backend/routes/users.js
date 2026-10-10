@@ -540,7 +540,8 @@ router.put('/music-note', authMiddleware, async (req, res) => {
   try {
     const { song, noteText } = req.body;
     const targetUserId = req.user.id;
-    const hasContent = Boolean(song || (noteText && noteText.trim()));
+    const existingUser = await User.findOne({ id: targetUserId });
+    const existingLikes = existingUser?.musicNote?.likes || [];
     const musicNote = hasContent ? {
       songTitle: song?.songTitle || '',
       artistName: song?.artistName || '',
@@ -550,6 +551,7 @@ router.put('/music-note', authMiddleware, async (req, res) => {
       startTime: Number(song?.startTime) || 0,
       snippetDuration: Number(song?.snippetDuration) || 30,
       noteText: (noteText || '').trim(),
+      likes: Array.isArray(existingLikes) ? existingLikes : [],
       updatedAt: new Date().toISOString()
     } : null;
 
@@ -569,6 +571,120 @@ router.put('/music-note', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Error updating music note:', err);
     res.status(500).json({ error: 'Failed to update music note' });
+  }
+});
+
+// Toggle Like on a User's Instagram-style Vibe Music Note
+router.put('/music-note/:targetUserId/like', authMiddleware, async (req, res) => {
+  try {
+    const { targetUserId } = req.params;
+    const mongoose = require('mongoose');
+    let query = {
+      $or: [
+        { id: targetUserId },
+        { username: targetUserId }
+      ]
+    };
+    if (mongoose.Types.ObjectId.isValid(targetUserId)) {
+      query.$or.push({ _id: targetUserId });
+    }
+
+    const targetUser = await User.findOne(query);
+    if (!targetUser || !targetUser.musicNote) {
+      return res.status(404).json({ error: 'Music note not found' });
+    }
+
+    if (!Array.isArray(targetUser.musicNote.likes)) {
+      targetUser.musicNote.likes = [];
+    }
+
+    const myId = req.user.id || (req.user._id ? req.user._id.toString() : '');
+    const myUsername = req.user.username;
+    const existingIdx = targetUser.musicNote.likes.findIndex(l => 
+      (myId && String(l.userId) === String(myId)) || (myUsername && l.username === myUsername)
+    );
+    let isLiked = false;
+
+    if (existingIdx !== -1) {
+      // Unlike
+      targetUser.musicNote.likes.splice(existingIdx, 1);
+      isLiked = false;
+    } else {
+      // Like
+      targetUser.musicNote.likes.push({
+        userId: myId,
+        username: myUsername,
+        displayName: req.user.displayName || myUsername || 'User',
+        avatar: req.user.avatar || '',
+        likedAt: new Date().toISOString()
+      });
+      isLiked = true;
+    }
+
+    targetUser.markModified('musicNote');
+    await targetUser.save();
+
+    // Invalidate Redis user cache if present
+    try {
+      const redis = require('../utils/redis');
+      if (targetUser.id) redis.invalidateUser(targetUser.id).catch(() => {});
+      if (targetUser.username) redis.invalidateUser(targetUser.username).catch(() => {});
+    } catch (e) {}
+
+    const io = req.app.get('io');
+    if (io) {
+      const socketPayload = {
+        targetUserId: targetUser.id || targetUser._id.toString(),
+        targetUsername: targetUser.username,
+        musicNote: targetUser.musicNote,
+        likes: targetUser.musicNote.likes,
+        likedBy: {
+          userId: myId,
+          username: myUsername,
+          displayName: req.user.displayName || myUsername,
+          avatar: req.user.avatar || ''
+        },
+        isLiked
+      };
+      io.emit('user_music_note_liked', socketPayload);
+      io.emit('user_music_note_updated', {
+        userId: targetUser.id || targetUser._id.toString(),
+        username: targetUser.username,
+        musicNote: targetUser.musicNote
+      });
+    }
+
+    res.json({ success: true, isLiked, likes: targetUser.musicNote.likes, musicNote: targetUser.musicNote });
+  } catch (err) {
+    console.error('Error toggling music note like:', err);
+    res.status(500).json({ error: 'Failed to toggle like' });
+  }
+});
+
+// Get likers of a user's music note
+router.get('/music-note/:targetUserId/likes', authMiddleware, async (req, res) => {
+  try {
+    const { targetUserId } = req.params;
+    const mongoose = require('mongoose');
+    let query = {
+      $or: [
+        { id: targetUserId },
+        { username: targetUserId }
+      ]
+    };
+    if (mongoose.Types.ObjectId.isValid(targetUserId)) {
+      query.$or.push({ _id: targetUserId });
+    }
+
+    const targetUser = await User.findOne(query).select('id username displayName musicNote').lean();
+    if (!targetUser || !targetUser.musicNote) {
+      return res.json({ success: true, likes: [] });
+    }
+
+    res.json({ success: true, likes: targetUser.musicNote.likes || [] });
+  } catch (err) {
+    console.error('Error fetching note likes:', err);
+    res.status(500).json({ error: 'Failed to fetch note likes' });
   }
 });
 
