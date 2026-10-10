@@ -6,7 +6,6 @@ import { BACKEND_URL } from '../../utils/config';
 import { compressImage, parseSafeJson } from '../../utils/imageCompressor';
 import { useBackHandler } from '../../utils/backNavigation';
 import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
-import ChangePasswordForm from './ChangePasswordForm';
 import PulseHandleCardModal from './PulseHandleCardModal';
 import ShareableStoryCardModal from './ShareableStoryCardModal';
 
@@ -30,7 +29,7 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const { vibeAuras } = useContext(SocketContext);
   const myAura = resolveUserAura(user, vibeAuras);
-  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'password' | 'card'
+  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'card'
 
   // Profile Edit States
   const [displayName, setDisplayName] = useState(user.displayName);
@@ -151,26 +150,6 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
             }}
           >
             <UserIcon size={20} />
-          </button>
-          <button
-            onClick={() => setActiveTab('password')}
-            title="Change Password"
-            aria-label="Change Password"
-            style={{
-              flex: 1,
-              padding: '11px 0',
-              border: 'none',
-              background: 'transparent',
-              borderBottom: activeTab === 'password' ? '2.5px solid var(--accent)' : '2.5px solid transparent',
-              color: activeTab === 'password' ? 'var(--accent)' : 'var(--text-muted)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <Lock size={20} />
           </button>
           <button
             onClick={() => setActiveTab('card')}
@@ -495,8 +474,6 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
               {loading ? 'Saving Profile...' : 'Save Profile'}
             </button>
           </div>
-        ) : activeTab === 'password' ? (
-          <ChangePasswordForm />
         ) : (
           <div style={{ padding: '0.75rem 1rem', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', display: 'flex', justifyContent: 'center' }}>
             <PulseHandleCardModal targetUser={user} currentUser={user} embedded={true} />
