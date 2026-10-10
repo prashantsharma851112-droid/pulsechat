@@ -636,7 +636,11 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
             <div
               onClick={(e) => {
                 e.stopPropagation();
-                setShowLikersModal(true);
+                if (isMine) {
+                  setShowLikersModal(true);
+                } else {
+                  handleToggleLike(e);
+                }
               }}
               style={{
                 position: 'absolute',
@@ -654,7 +658,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
                 zIndex: 25,
                 transition: 'transform 0.15s ease'
               }}
-              title={`${likes.length} like${likes.length > 1 ? 's' : ''} • Tap to see who liked`}
+              title={isMine ? `${likes.length} like${likes.length > 1 ? 's' : ''} • Tap to see who liked` : (isLikedByMe ? 'Liked by you • Tap to unlike' : 'Tap to like')}
             >
               <Heart
                 size={10}
@@ -704,6 +708,30 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
               minWidth: '115px'
             }}
           >
+            {likes.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLikersModal(true);
+                }}
+                style={{
+                  padding: '5px 8px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#ff2d55',
+                  fontSize: '0.70rem',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  textAlign: 'left'
+                }}
+              >
+                <Heart size={11} fill="#ff2d55" color="#ff2d55" /> Likes ({likes.length})
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -754,13 +782,15 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
         )}
       </div>
 
-      {/* Likers Modal (Instagram Story Viewers / Note Likes style) */}
-      <NoteLikersModal
-        isOpen={showLikersModal}
-        onClose={() => setShowLikersModal(false)}
-        targetUserId={targetUserId}
-        initialLikes={likes}
-      />
+      {/* Likers Modal (Instagram Story Viewers style - Only accessible to the note owner) */}
+      {isMine && (
+        <NoteLikersModal
+          isOpen={showLikersModal}
+          onClose={() => setShowLikersModal(false)}
+          targetUserId={targetUserId}
+          initialLikes={likes}
+        />
+      )}
     </>
   );
 }

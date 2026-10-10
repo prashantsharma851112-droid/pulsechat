@@ -661,10 +661,13 @@ router.put('/music-note/:targetUserId/like', authMiddleware, async (req, res) =>
   }
 });
 
-// Get likers of a user's music note
+// Get likers of a user's music note (Only the note owner can view who liked their note)
 router.get('/music-note/:targetUserId/likes', authMiddleware, async (req, res) => {
   try {
     const { targetUserId } = req.params;
+    const myId = req.user.id || (req.user._id ? req.user._id.toString() : '');
+    const myUsername = req.user.username;
+
     const mongoose = require('mongoose');
     let query = {
       $or: [
@@ -679,6 +682,14 @@ router.get('/music-note/:targetUserId/likes', authMiddleware, async (req, res) =
     const targetUser = await User.findOne(query).select('id username displayName musicNote').lean();
     if (!targetUser || !targetUser.musicNote) {
       return res.json({ success: true, likes: [] });
+    }
+
+    // Privacy protection: Only the note owner can view who liked their note (like Instagram story viewers)
+    const isOwner = (myId && (String(targetUser.id) === String(myId) || String(targetUser._id) === String(myId))) ||
+                    (myUsername && targetUser.username === myUsername);
+
+    if (!isOwner) {
+      return res.status(403).json({ error: 'Only the note owner can view who liked their note' });
     }
 
     res.json({ success: true, likes: targetUser.musicNote.likes || [] });
