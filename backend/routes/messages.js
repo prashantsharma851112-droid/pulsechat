@@ -764,6 +764,101 @@ router.post('/delivered-ack', async (req, res) => {
   }
 });
 
+// =========================================================================
+// ANONYMOUS PULSE (NGL-Style Secret Messages from Instagram Bio / Story)
+// =========================================================================
+router.post('/anonymous', async (req, res) => {
+  try {
+    const { targetUsername, content, prompt } = req.body;
+    if (!targetUsername || !content || !content.trim()) {
+      return res.status(400).json({ error: 'targetUsername and message content are required' });
+    }
+
+    const cleanUsername = String(targetUsername).trim().toLowerCase().replace(/^@/, '');
+    const mongoose = require('mongoose');
+    const isObjectId = mongoose.Types.ObjectId.isValid(cleanUsername);
+
+    const targetUser = await User.findOne({
+      $or: [
+        { username: cleanUsername },
+        { id: cleanUsername },
+        ...(isObjectId ? [{ _id: cleanUsername }] : [])
+      ]
+    }).select('id username displayName avatar pushSubscriptions').lean();
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Recipient user not found on PulseChat' });
+    }
+
+    const targetId = targetUser.id;
+    const botId = 'anonymous_pulse_bot';
+    const chatId = [targetId, botId].sort().join('_');
+    const messageId = 'anon_' + Date.now() + '_' + Math.random().toString(36).substr(2, 7);
+
+    const anonMsg = {
+      id: messageId,
+      chatId,
+      senderId: botId,
+      receiverId: targetId,
+      isGroup: false,
+      content: content.trim().slice(0, 500),
+      type: 'anonymous_pulse',
+      pollData: {
+        prompt: (prompt || 'Ask me anything anonymously 🤫').trim(),
+        sentAt: new Date().toISOString()
+      },
+      status: 'sent',
+      timestamp: new Date().toISOString()
+    };
+
+    await db.saveMessage(anonMsg);
+
+    // Invalidate recipient's recent conversations cache so "🤫 Anonymous Pulse" appears at the top
+    try {
+      const redis = require('../utils/redis');
+      redis.invalidateRecent(targetId).catch(() => {});
+      redis.invalidateChat(chatId).catch(() => {});
+    } catch (e) {}
+
+    const io = req.app.get('io');
+    if (io) {
+      const socketPayload = {
+        ...anonMsg,
+        senderName: '🤫 Anonymous Pulse',
+        senderUsername: 'anonymous_pulse',
+        senderAvatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=anonymous_pulse_bot&backgroundColor=09090b',
+        title: '🤫 New Secret Message',
+        isAnonymousPulse: true
+      };
+
+      io.to(`user_${targetId}`).emit('new_message', socketPayload);
+      io.to(targetId).emit('new_message', socketPayload);
+      io.to(chatId).emit('new_message', socketPayload);
+    }
+
+    // Web push notification
+    try {
+      const { sendWebPush } = require('../utils/pushNotification');
+      if (typeof sendWebPush === 'function') {
+        sendWebPush(targetUser, {
+          title: '🤫 New Secret Message!',
+          body: 'Someone sent you an anonymous pulse. Open to read & share!',
+          url: '/'
+        }).catch(() => {});
+      }
+    } catch (e) {}
+
+    res.json({
+      success: true,
+      message: 'Anonymous message sent successfully! 🚀',
+      messageId
+    });
+  } catch (err) {
+    console.error('Error in anonymous message endpoint:', err);
+    res.status(500).json({ error: 'Failed to send anonymous message' });
+  }
+});
+
 // Send message via HTTP (Offline Outbox sync fallback)
 router.post('/send', authMiddleware, async (req, res) => {
   try {

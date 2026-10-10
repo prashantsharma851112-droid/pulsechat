@@ -40,6 +40,7 @@ const VibeViewerModal = lazyWithRetry(() => import('../vibes/VibeViewerModal'));
 const SparksWalletModal = lazyWithRetry(() => import('./SparksWalletModal'));
 const ScheduleMessageModal = lazyWithRetry(() => import('./ScheduleMessageModal'));
 const ChatNicknameModal = lazyWithRetry(() => import('./ChatNicknameModal'));
+const ShareableStoryCardModal = lazyWithRetry(() => import('../profile/ShareableStoryCardModal'));
 import {
   getCachedMessages,
   setCachedMessages,
@@ -102,8 +103,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const isGroup = !!activeChat.isGroup;
   const currentUserId = user?.id || user?._id || '';
   const activeChatId = activeChat?.id || activeChat?._id || '';
+  const isAnonymousBot = activeChatId === 'anonymous_pulse_bot' || activeChat?.username === 'anonymous_pulse_bot' || !!activeChat?.isAnonymousBot;
   const chatId = isGroup ? activeChatId : [currentUserId, activeChatId].filter(Boolean).sort().join('_');
   const partnerId = activeChat?.id || activeChat?._id || activeChat?.userId || '';
+  const [showStoryCardModal, setShowStoryCardModal] = useState(false);
   const isOnline = !isGroup && (
     (partnerId && onlineUsers.some(uId => String(uId) === String(partnerId))) ||
     (activeChat?.username && onlineUsers.some(uId => String(uId) === String(activeChat.username)))
@@ -857,7 +860,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
   }, [socket, activeChat, isGroup]);
 
-  const isDirectFriend = isGroup || isCachedFriend(user?.id, activeChat?.id);
+  const isDirectFriend = isGroup || isAnonymousBot || isCachedFriend(user?.id, activeChat?.id);
 
   const [friendshipStatus, setFriendshipStatus] = useState(() => isDirectFriend ? 'friends' : 'checking');
   const [friendRequestId, setFriendRequestId] = useState(null);
@@ -2132,7 +2135,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   // Fetch Friendship status for 1-to-1 chats (strictly require friendship)
   useEffect(() => {
-    if (isGroup) {
+    if (isGroup || isAnonymousBot) {
       setFriendshipStatus('friends');
       return;
     }
@@ -3958,7 +3961,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
             <div
               className="chat-header-title-box"
-              onClick={() => isGroup ? setShowGroupProfileModal(true) : setShowUserProfileModal(true)}
+              onClick={() => isAnonymousBot ? setShowStoryCardModal(true) : (isGroup ? setShowGroupProfileModal(true) : setShowUserProfileModal(true))}
               style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
               title={isGroup ? 'Click to view group bio, members & edit info' : (partnerNickname ? `Nickname: ${partnerNickname} (Real: ${chatDisplayName || activeChat.displayName}) · Click for profile` : 'Click to view profile & bio')}
             >
@@ -4013,11 +4016,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               <p style={{ fontSize: '0.8rem', color: isTyping ? '#22c55e' : 'var(--text-muted)', fontWeight: isTyping ? 600 : 400, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {isGroup
                   ? (isTyping ? `✍️ ${typingUser} is typing...` : `${activeChat.members?.length || 0} members`)
-                  : isTyping
-                    ? '✍️ typing...'
-                    : isOnline
-                      ? 'Online'
-                      : 'Offline'}
+                  : isAnonymousBot
+                    ? '🤫 Public Q&A Link Active'
+                    : isTyping
+                      ? '✍️ typing...'
+                      : isOnline
+                        ? 'Online'
+                        : 'Offline'}
               </p>
             </div>
           </div>
@@ -5121,7 +5126,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </button>
           </div>
         )}
-        {!isGroup && friendshipStatus !== 'friends' && (
+        {!isGroup && !isAnonymousBot && friendshipStatus !== 'friends' && (
           <div className="pulse-sync-card" style={{ margin: 'auto' }}>
             <div className="pulse-orb-icon">
               <Sparkles size={28} />
@@ -5645,7 +5650,102 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           <ShieldAlert size={18} color="var(--text-muted)" />
           <span>You cannot reply to this conversation.</span>
         </div>
-      ) : (!isGroup && friendshipStatus !== 'friends') ? null : (
+      ) : (!isGroup && !isAnonymousBot && friendshipStatus !== 'friends') ? null : isAnonymousBot ? (
+        <div style={{
+          padding: '1rem 1.2rem',
+          paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
+          background: (chatWallpaper && chatWallpaper !== 'none') ? 'color-mix(in srgb, var(--bg-sidebar) 88%, transparent)' : 'var(--bg-sidebar)',
+          backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
+          WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
+          borderTop: '1px solid rgba(168, 85, 247, 0.28)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '10px',
+          position: 'relative',
+          zIndex: 2,
+          textAlign: 'center'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.15rem' }}>🤫</span>
+            <span style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
+              Anonymous Pulse Inbox
+            </span>
+            <span style={{
+              fontSize: '0.64rem',
+              padding: '2px 8px',
+              borderRadius: '999px',
+              background: 'rgba(168, 85, 247, 0.22)',
+              border: '1px solid rgba(168, 85, 247, 0.5)',
+              color: '#c084fc',
+              fontWeight: 800
+            }}>
+              NGL Q&A
+            </span>
+          </div>
+          <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)', maxWidth: '460px', lineHeight: 1.45 }}>
+            Secret questions & messages from your Instagram Bio link arrive here! Tap <strong style={{ color: 'var(--text-main)' }}>"📸 Share to Instagram Story"</strong> on any message card above to post your answer.
+          </p>
+          <div style={{ display: 'flex', gap: '10px', width: '100%', maxWidth: '420px', marginTop: '2px' }}>
+            <button
+              type="button"
+              onClick={() => {
+                const shareUrl = typeof window !== 'undefined'
+                  ? `${window.location.origin}/ask/@${user?.username || 'user'}`
+                  : `https://pulsechat.me/ask/@${user?.username || 'user'}`;
+                if (navigator.clipboard) {
+                  navigator.clipboard.writeText(shareUrl);
+                }
+                setActionToast('Bio link copied to clipboard! 🔗');
+                setTimeout(() => setActionToast(''), 2500);
+              }}
+              style={{
+                flex: 1,
+                padding: '9px 14px',
+                borderRadius: '14px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-main)',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Copy size={15} />
+              <span>Copy Bio Link</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowStoryCardModal(true)}
+              style={{
+                flex: 1,
+                padding: '9px 14px',
+                borderRadius: '14px',
+                background: 'linear-gradient(135deg, #a855f7, #ec4899)',
+                border: 'none',
+                color: '#fff',
+                fontSize: '0.82rem',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(168, 85, 247, 0.35)',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Sparkles size={15} />
+              <span>Story Card 📸</span>
+            </button>
+          </div>
+        </div>
+      ) : (
         <>
         {/* Scheduled Messages Banner for active chat */}
         {chatScheduledMessages.length > 0 && (
@@ -7174,6 +7274,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               detail: { chatId, targetUserId, nickname: newNick, nicknames: newNicknames }
             }));
           }}
+        />
+      )}
+
+      {/* One-Click Insta Story Card Modal */}
+      {showStoryCardModal && (
+        <ShareableStoryCardModal
+          user={user}
+          onClose={() => setShowStoryCardModal(false)}
         />
       )}
       </React.Suspense>

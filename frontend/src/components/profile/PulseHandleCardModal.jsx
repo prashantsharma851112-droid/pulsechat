@@ -3,6 +3,7 @@ import { X, Copy, Check, Share2, MessageSquare, Flame, Zap, Crown, Sparkles, QrC
 import { BACKEND_URL } from '../../utils/config';
 import { useBackHandler } from '../../utils/backNavigation';
 import VibeAuraRing from '../common/VibeAuraRing';
+import ShareableStoryCardModal from './ShareableStoryCardModal';
 
 export default function PulseHandleCardModal({ targetUser, currentUser, onClose, onOpenChat, standalone = false, embedded = false }) {
   useBackHandler(onClose, !standalone && !embedded && typeof onClose === 'function');
@@ -17,6 +18,7 @@ export default function PulseHandleCardModal({ targetUser, currentUser, onClose,
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState('card'); // 'card' | 'qr' | 'story'
   const [downloading, setDownloading] = useState(false);
+  const [showStoryModal, setShowStoryModal] = useState(false);
   const cardRef = useRef(null);
 
   const username = userData?.username || (typeof targetUser === 'string' ? targetUser.replace(/^@/, '') : '');
@@ -163,6 +165,26 @@ export default function PulseHandleCardModal({ targetUser, currentUser, onClose,
                 }}
               >
                 <QrCode size={12} /> QR
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('story')}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: '8px',
+                  background: activeTab === 'story' ? 'linear-gradient(135deg, #ec4899, #f43f5e)' : 'transparent',
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                📸 Story
               </button>
             </div>
 
@@ -405,6 +427,55 @@ export default function PulseHandleCardModal({ targetUser, currentUser, onClose,
               </div>
             </div>
           </div>
+        ) : activeTab === 'story' ? (
+          /* STORY TAB PREVIEW */
+          <div
+            style={{
+              width: '100%',
+              borderRadius: '20px',
+              background: 'linear-gradient(170deg, #09090e 0%, #150d1e 100%)',
+              border: '1.5px solid rgba(255, 255, 255, 0.22)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.85), 0 0 30px rgba(236, 72, 153, 0.25)',
+              padding: '16px 14px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              gap: '10px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ fontSize: '0.78rem', fontWeight: 900, background: 'linear-gradient(90deg, #a5b4fc, #f472b6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                📸 INSTA STORY SHAREABLE CARD
+              </span>
+            </div>
+            <p style={{ fontSize: '0.72rem', color: '#94a3b8', margin: '0' }}>
+              AMOLED Story card with QR code, aura badge & vibe music note
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setShowStoryModal(true)}
+              style={{
+                width: '100%',
+                background: 'linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%)',
+                border: 'none',
+                borderRadius: '14px',
+                padding: '11px',
+                color: '#fff',
+                fontSize: '0.84rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                boxShadow: '0 6px 20px rgba(253, 29, 29, 0.4)'
+              }}
+            >
+              <Share2 size={16} /> Open Full Story Card Exporter 📸
+            </button>
+          </div>
         ) : (
           /* QR CODE TAB */
           <div
@@ -553,8 +624,40 @@ export default function PulseHandleCardModal({ targetUser, currentUser, onClose,
               <span>Share to Bio / Status</span>
             </button>
           </div>
+
+          {/* One-Click Insta Story Button */}
+          <button
+            type="button"
+            onClick={() => setShowStoryModal(true)}
+            style={{
+              width: '100%',
+              padding: '9px 12px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%)',
+              border: 'none',
+              color: '#ffffff',
+              fontWeight: 900,
+              fontSize: '0.80rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              boxShadow: '0 4px 16px rgba(253, 29, 29, 0.4)'
+            }}
+          >
+            <Share2 size={15} />
+            <span>Generate Insta Story Card 📸</span>
+          </button>
         </div>
       </div>
+
+      {showStoryModal && (
+        <ShareableStoryCardModal
+          user={userData || targetUser || currentUser}
+          onClose={() => setShowStoryModal(false)}
+        />
+      )}
     </div>
   );
 }

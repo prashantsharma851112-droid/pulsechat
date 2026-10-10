@@ -26,6 +26,7 @@ const AppOnboardingModal = lazyWithRetry(() => import('./components/common/AppOn
 const LegalView = lazyWithRetry(() => import('./components/common/LegalView'));
 const LegalModal = lazyWithRetry(() => import('./components/common/LegalModal'));
 const PulseHandleCardModal = lazyWithRetry(() => import('./components/profile/PulseHandleCardModal'));
+const AnonymousAskView = lazyWithRetry(() => import('./components/profile/AnonymousAskView'));
 import { BACKEND_URL } from './utils/config';
 import { updateUserProfileInStorage, clearUnreadCount, getCachedAllUsers } from './utils/offlineStorage';
 import { initBackListeners, useBackHandler } from './utils/backNavigation';
@@ -137,6 +138,25 @@ export default function App() {
       const match = p.match(/^\/(?:u\/|@|card\/)([^/?#]+)/i);
       if (match && match[1]) {
         return decodeURIComponent(match[1]).replace(/^@/, '');
+      }
+    }
+    return null;
+  });
+
+  // Anonymous Pulse Direct Route (/ask/:username, /ngl/:username, /u/:username?ask=1)
+  const [standaloneAskUser, setStandaloneAskUser] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const p = window.location.pathname;
+      const match = p.match(/^\/(?:ask\/|ngl\/)([^/?#]+)/i);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]).replace(/^@/, '');
+      }
+      const searchParams = new URLSearchParams(window.location.search);
+      if (searchParams.get('ask') === '1' || searchParams.get('mode') === 'ask') {
+        const uMatch = p.match(/^\/(?:u\/|@|card\/)([^/?#]+)/i);
+        if (uMatch && uMatch[1]) {
+          return decodeURIComponent(uMatch[1]).replace(/^@/, '');
+        }
       }
     }
     return null;
@@ -675,6 +695,12 @@ export default function App() {
           setActiveChat(chatUser);
         }}
       />
+    );
+  }
+
+  if (standaloneAskUser) {
+    return (
+      <AnonymousAskView targetUsername={standaloneAskUser} />
     );
   }
 

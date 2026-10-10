@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
-import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward, Edit3, ExternalLink, Globe, Ghost } from 'lucide-react';
+import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward, Edit3, ExternalLink, Globe, Ghost, Share2 } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ViewOnceModal from './ViewOnceModal';
 import FogSnapModal from './FogSnapModal';
@@ -11,12 +11,121 @@ import PulseVipBadge from '../common/PulseVipBadge';
 import Sticker3D from '../common/Sticker3D';
 import Animated3DText from '../common/Animated3DText';
 import GiftUnboxModal from './GiftUnboxModal';
+import AnonymousStoryReplyModal from './AnonymousStoryReplyModal';
 import { getSavedQuickReactions, recordRecentReaction } from '../../utils/quickReactions';
 import { getCachedMediaUrl, getSyncCachedMediaUrl } from '../../utils/mediaCache';
 
 // In-memory set of loaded media URLs so images never flash or reload when scrolling
 const loadedMediaUrlsGlobal = new Set();
 
+function AnonymousPulseCard({ message, currentUser }) {
+  const [showReplyModal, setShowReplyModal] = useState(false);
+  const prompt = message?.pollData?.prompt || 'Ask me anything anonymously 🤫';
+  const text = message?.content || '';
+
+  return (
+    <>
+      <div style={{
+        background: 'linear-gradient(145deg, #181528, #110f1e)',
+        border: '1.5px solid rgba(244, 63, 94, 0.45)',
+        borderRadius: '16px',
+        padding: '12px 14px',
+        maxWidth: '310px',
+        color: '#ffffff',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.5), 0 0 16px rgba(244, 63, 94, 0.2)'
+      }}>
+        {/* Top Header */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '8px',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          paddingBottom: '6px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ fontSize: '1rem' }}>🤫</span>
+            <span style={{
+              fontSize: '0.72rem',
+              fontWeight: 800,
+              background: 'linear-gradient(90deg, #f43f5e, #ec4899)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              letterSpacing: '0.04em'
+            }}>
+              SECRET MESSAGE
+            </span>
+          </div>
+          <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 600 }}>
+            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+
+        {/* Prompt Question */}
+        {prompt && (
+          <div style={{
+            fontSize: '0.74rem',
+            fontWeight: 700,
+            color: '#cbd5e1',
+            background: 'rgba(255, 255, 255, 0.06)',
+            padding: '4px 8px',
+            borderRadius: '8px',
+            marginBottom: '8px'
+          }}>
+            💬 {prompt}
+          </div>
+        )}
+
+        {/* Secret Message Content */}
+        <div style={{
+          fontSize: '0.94rem',
+          fontWeight: 700,
+          color: '#ffffff',
+          lineHeight: 1.45,
+          wordBreak: 'break-word',
+          marginBottom: '10px'
+        }}>
+          "{text}"
+        </div>
+
+        {/* Share to Instagram Story Button */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowReplyModal(true);
+          }}
+          style={{
+            width: '100%',
+            background: 'linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%)',
+            border: 'none',
+            borderRadius: '10px',
+            padding: '7px 10px',
+            color: '#ffffff',
+            fontSize: '0.75rem',
+            fontWeight: 800,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            boxShadow: '0 4px 12px rgba(253, 29, 29, 0.35)'
+          }}
+        >
+          <Share2 size={13} /> Share to Instagram Story 📸
+        </button>
+      </div>
+
+      {showReplyModal && (
+        <AnonymousStoryReplyModal
+          message={message}
+          currentUser={currentUser}
+          onClose={() => setShowReplyModal(false)}
+        />
+      )}
+    </>
+  );
+}
 
 function StealthDustCard({ message, chatId, isMine, socket }) {
   const [isRevealing, setIsRevealing] = useState(false);
@@ -1508,6 +1617,11 @@ function MessageItem({
                       : `${message.replyTo.type || 'Message'}`}
             </div>
           </div>
+        )}
+
+        {/* Anonymous Pulse Secret Message */}
+        {message.type === 'anonymous_pulse' && (
+          <AnonymousPulseCard message={message} currentUser={currentUser} />
         )}
 
         {/* Stealth Dust Note Message */}

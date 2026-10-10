@@ -434,6 +434,24 @@ module.exports = {
       const results = [];
       const addedUserIds = new Set();
       for (const { otherId, lastMessage } of ordered) {
+        if (otherId === 'anonymous_pulse_bot') {
+          const unreadCount = unreadMap.get('anonymous_pulse_bot') || 0;
+          results.push({
+            id: 'anonymous_pulse_bot',
+            username: 'anonymous_pulse',
+            displayName: '🤫 Anonymous Pulse',
+            avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=anonymous_pulse_bot&backgroundColor=09090b',
+            status: 'Secret messages from your Instagram link 🤫',
+            isAnonymousBot: true,
+            lastMessage: {
+              ...lastMessage,
+              content: lastMessage.content || '🤫 Secret Message'
+            },
+            unreadCount
+          });
+          continue;
+        }
+
         const otherUser = userMap.get(otherId);
         if (!otherUser) continue;
         const otherUniqueKey = otherUser.id || (otherUser._id ? otherUser._id.toString() : null) || otherUser.username;

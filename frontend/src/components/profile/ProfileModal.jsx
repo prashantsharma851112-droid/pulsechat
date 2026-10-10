@@ -1,13 +1,14 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, Upload, Camera, Lock, User as UserIcon, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import { X, Upload, Camera, Lock, User as UserIcon, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, Sparkles, Share2 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { compressImage, parseSafeJson } from '../../utils/imageCompressor';
 import { useBackHandler } from '../../utils/backNavigation';
 import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
 import ChangePasswordForm from './ChangePasswordForm';
 import PulseHandleCardModal from './PulseHandleCardModal';
+import ShareableStoryCardModal from './ShareableStoryCardModal';
 
 const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/bottts/svg?seed=alex',
@@ -39,6 +40,8 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
   const [loading, setLoading] = useState(false);
   const [compressing, setCompressing] = useState(false);
   const [profileError, setProfileError] = useState('');
+  const [showStoryCardModal, setShowStoryCardModal] = useState(false);
+  const [copiedAskToast, setCopiedAskToast] = useState(false);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -393,6 +396,63 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
               </div>
             )}
 
+            {/* One-Click Viral Share Cards */}
+            <div style={{
+              display: 'flex',
+              gap: '8px',
+              marginBottom: '1.25rem',
+              width: '100%'
+            }}>
+              <button
+                type="button"
+                onClick={() => setShowStoryCardModal(true)}
+                style={{
+                  flex: 1,
+                  background: 'linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045)',
+                  border: 'none',
+                  borderRadius: '14px',
+                  padding: '10px 8px',
+                  color: '#fff',
+                  fontSize: '0.78rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  boxShadow: '0 4px 15px rgba(253, 29, 29, 0.35)'
+                }}
+              >
+                <Share2 size={14} /> Insta Story Card 📸
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const askUrl = `${window.location.origin}/ask/@${user?.username}`;
+                  navigator.clipboard?.writeText(askUrl);
+                  setCopiedAskToast(true);
+                  setTimeout(() => setCopiedAskToast(false), 2500);
+                }}
+                style={{
+                  flex: 1,
+                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.25))',
+                  border: '1.5px solid rgba(168, 85, 247, 0.5)',
+                  borderRadius: '14px',
+                  padding: '10px 8px',
+                  color: '#c084fc',
+                  fontSize: '0.78rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Lock size={14} /> {copiedAskToast ? 'Link Copied! 🤫' : 'Copy NGL Link 🤫'}
+              </button>
+            </div>
+
             {/* Username Handle */}
             <div style={{ marginBottom: '1rem' }}>
               <label className="form-label">Username (@handle)</label>
@@ -443,6 +503,13 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
           </div>
         )}
       </div>
+
+      {showStoryCardModal && (
+        <ShareableStoryCardModal
+          user={user}
+          onClose={() => setShowStoryCardModal(false)}
+        />
+      )}
     </div>
   );
 }
