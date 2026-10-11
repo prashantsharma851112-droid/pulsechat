@@ -5635,15 +5635,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           const dateLabel = formatMessageDateHeader(msg.timestamp);
 
           return (
-            <div
-              key={msg.id || msg.clientTempId || index}
-              className="message-item-contain"
-              style={{
-                contain: 'layout style',
-                contentVisibility: 'auto',
-                containIntrinsicSize: 'auto 64px'
-              }}
-            >
+            <React.Fragment key={msg.id || msg.clientTempId || index}>
               {showDateHeader && (
                 <div style={{ display: 'flex', justifyContent: 'center', margin: '0.5rem 0' }}>
                   <div
@@ -5711,7 +5703,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 onToggleTranslation={() => handleToggleTranslation(msg.id)}
                 targetLang={targetLang}
               />
-            </div>
+            </React.Fragment>
           );
         })}
         <div ref={messagesEndRef} style={{ overflowAnchor: 'none', height: '1px' }} />

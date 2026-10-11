@@ -2051,26 +2051,24 @@ function MessageItem({
               </div>
             ) : (
               <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%', minWidth: '160px', minHeight: '120px', borderRadius: '10px', overflow: 'hidden', background: 'rgba(255,255,255,0.06)' }}>
-                {!imgLoaded && !isAlreadyLoaded && (
+                {!imgLoaded && !isAlreadyLoaded && !cachedMediaUrl && (
                   <div style={{
                     position: 'absolute',
                     inset: 0,
-                    background: 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.04) 75%)',
-                    backgroundSize: '200% 100%',
-                    animation: 'pulseShimmer 1.5s infinite',
+                    background: 'rgba(255,255,255,0.06)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: 'var(--text-muted)',
                     fontSize: '0.75rem'
                   }}>
-                    <span>🖼️ Loading...</span>
+                    <span>🖼️</span>
                   </div>
                 )}
                 <img
                   src={cachedMediaUrl || message.mediaUrl}
                   alt={message.fileName || "Attached Media"}
-                  loading="lazy"
+                  loading="eager"
                   decoding="async"
                   onClick={() => setShowImagePreview(true)}
                   onLoad={() => {
@@ -2085,9 +2083,8 @@ function MessageItem({
                     borderRadius: '10px',
                     display: 'block',
                     cursor: 'pointer',
-                    opacity: message.status === 'pending' ? 0.78 : ((message.isUploading || message.status === 'uploading') ? 0.9 : ((imgLoaded || isAlreadyLoaded) ? 1 : 0.85)),
-                    filter: message.status === 'pending' ? 'grayscale(0.8) brightness(0.85)' : ((message.isUploading || message.status === 'uploading') ? 'blur(5px) brightness(0.88)' : 'none'),
-                    transition: 'all 0.2s ease'
+                    opacity: message.status === 'pending' ? 0.78 : ((message.isUploading || message.status === 'uploading') ? 0.9 : 1),
+                    filter: message.status === 'pending' ? 'grayscale(0.8) brightness(0.85)' : ((message.isUploading || message.status === 'uploading') ? 'blur(5px) brightness(0.88)' : 'none')
                   }}
                 />
                 {/* Telegram-style 0ms Optimistic Upload Spinner */}
