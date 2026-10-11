@@ -44,7 +44,7 @@ module.exports = {
     return updated;
   },
 
-  getMessages: async (chatId, limit = 50, before = null) => {
+  getMessages: async (chatId, limit = 50, before = null, userId = null) => {
     const query = {
       chatId,
       $or: [
@@ -52,6 +52,9 @@ module.exports = {
         { expiresAt: { $gt: new Date() } }
       ]
     };
+    if (userId) {
+      query.deletedFor = { $ne: String(userId) };
+    }
     if (before) {
       query.timestamp = { $lt: before };
     }
@@ -232,6 +235,36 @@ module.exports = {
     msg.pollData = null;
 
     await msg.save();
+
+    if (msg.chatId) {
+      try {
+        const redis = require('../utils/redis');
+        redis.invalidateChat(msg.chatId).catch(() => {});
+      } catch {}
+    }
+
+    return msg.toObject();
+  },
+
+  deleteMessageForMe: async (msgId, userId) => {
+    if (!msgId || !userId) return null;
+    const msg = await Message.findOne({ id: msgId });
+    if (!msg) return null;
+
+    if (!Array.isArray(msg.deletedFor)) msg.deletedFor = [];
+    if (!msg.deletedFor.includes(String(userId))) {
+      msg.deletedFor.push(String(userId));
+      msg.markModified('deletedFor');
+      await msg.save();
+    }
+
+    if (msg.chatId) {
+      try {
+        const redis = require('../utils/redis');
+        redis.invalidateChat(msg.chatId).catch(() => {});
+      } catch {}
+    }
+
     return msg.toObject();
   },
 
@@ -600,6 +633,7 @@ module.exports = {
 
   deleteMultipleMessages: async (messageIds) => {
     const msgs = await Message.find({ id: { $in: messageIds } });
+    const chatIds = new Set();
     for (const msg of msgs) {
       msg.originalContent = msg.content;
       msg.originalType = msg.type;
@@ -613,6 +647,35 @@ module.exports = {
       msg.mediaUrl = null;
       msg.pollData = null;
       await msg.save();
+      if (msg.chatId) chatIds.add(msg.chatId);
+    }
+    if (chatIds.size > 0) {
+      try {
+        const redis = require('../utils/redis');
+        chatIds.forEach(cid => redis.invalidateChat(cid).catch(() => {}));
+      } catch {}
+    }
+    return msgs;
+  },
+
+  deleteMultipleMessagesForMe: async (messageIds, userId) => {
+    if (!Array.isArray(messageIds) || messageIds.length === 0 || !userId) return [];
+    const msgs = await Message.find({ id: { $in: messageIds } });
+    const chatIds = new Set();
+    for (const msg of msgs) {
+      if (!Array.isArray(msg.deletedFor)) msg.deletedFor = [];
+      if (!msg.deletedFor.includes(String(userId))) {
+        msg.deletedFor.push(String(userId));
+        msg.markModified('deletedFor');
+        await msg.save();
+      }
+      if (msg.chatId) chatIds.add(msg.chatId);
+    }
+    if (chatIds.size > 0) {
+      try {
+        const redis = require('../utils/redis');
+        chatIds.forEach(cid => redis.invalidateChat(cid).catch(() => {}));
+      } catch {}
     }
     return msgs;
   },

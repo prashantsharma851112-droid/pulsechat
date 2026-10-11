@@ -1023,6 +1023,22 @@ io.on('connection', (socket) => {
     io.to(chatId).emit('message_deleted', { messageId });
   });
 
+  // Delete Message For Me Handler (Single user deletion)
+  socket.on('delete_message_for_me', async ({ messageId, chatId, userId }) => {
+    const targetUser = userId || socket.userId;
+    if (messageId && targetUser) {
+      await db.deleteMessageForMe(messageId, targetUser);
+    }
+  });
+
+  // Delete Multiple Messages For Me Handler
+  socket.on('delete_multiple_messages_for_me', async ({ messageIds, chatId, userId }) => {
+    const targetUser = userId || socket.userId;
+    if (Array.isArray(messageIds) && targetUser) {
+      await db.deleteMultipleMessagesForMe(messageIds, targetUser);
+    }
+  });
+
   // Restore Message Handler (Undo Delete)
   socket.on('restore_message', async ({ messageId, chatId }) => {
     const restoredMsg = await db.restoreMessage(messageId);

@@ -59,7 +59,9 @@ import {
   isDeviceOnline,
   subscribeToNetworkChanges,
   updateGroupInStorage,
-  clearUnreadCount
+  clearUnreadCount,
+  removeCachedMessages,
+  markCachedMessagesDeleted
 } from '../../utils/offlineStorage';
 
 export const GLOBAL_LANGUAGES = [
@@ -2145,6 +2147,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 });
                 if (isIdentical) return prev;
               }
+              // If user was near bottom before server sync, maintain bottom anchor
+              if (chatContainerRef.current) {
+                const isNearBtm = chatContainerRef.current.scrollHeight - chatContainerRef.current.scrollTop - chatContainerRef.current.clientHeight < 150;
+                if (isNearBtm) {
+                  requestAnimationFrame(() => {
+                    messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+                  });
+                }
+              }
               return merged;
             });
             setCachedMessages(chatId, merged);
@@ -2579,7 +2590,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     const handleMessageDeleted = ({ messageId }) => {
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, type: 'deleted', content: 'This message was deleted' } : m));
+      setMessages(prev => {
+        const next = prev.map(m => (m.id === messageId || m._id === messageId || m.clientTempId === messageId) ? { ...m, type: 'deleted', content: 'This message was deleted', mediaUrl: null, audioUrl: null, pollData: null } : m);
+        setCachedMessages(chatId, next);
+        return next;
+      });
+      markCachedMessagesDeleted(chatId, [messageId]);
     };
 
     const handleReadUpdate = ({ messageId, status }) => {
@@ -2624,8 +2640,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     const handleMultipleDeleted = ({ messageIds: targetIds, chatId: targetChatId }) => {
-      if (targetChatId === chatId) {
-        setMessages(prev => prev.map(m => targetIds.includes(m.id) ? { ...m, type: 'deleted', content: 'This message was deleted' } : m));
+      if (targetChatId === chatId && Array.isArray(targetIds)) {
+        const idSet = new Set(targetIds.map(String));
+        setMessages(prev => {
+          const next = prev.map(m => (idSet.has(String(m.id)) || idSet.has(String(m._id)) || idSet.has(String(m.clientTempId))) ? { ...m, type: 'deleted', content: 'This message was deleted', mediaUrl: null, audioUrl: null, pollData: null } : m);
+          setCachedMessages(chatId, next);
+          return next;
+        });
+        markCachedMessagesDeleted(chatId, targetIds);
       }
     };
 
@@ -2866,7 +2888,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   }, [messages]);
 
-  // Scroll to bottom handler — only for initial load OR brand new message added at bottom
+  // Scroll to bottom handler — opens chat at the latest message (WhatsApp style)
   useEffect(() => {
     if (messages.length === 0) return;
 
@@ -2877,9 +2899,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const lastMsgId = lastMsg?.id || lastMsg?._id || lastMsg?.clientTempId;
     const prevLastId = lastRenderedLastMsgIdRef.current;
 
-    // Initial load: instant jump to bottom once
+    // Initial load: instant jump to the last message at bottom
     if (isInitialLoad.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+      const scrollBottom = () => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+        messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+      };
+      scrollBottom();
+      // Double rAF / tick check to account for dynamic heights / image previews
+      requestAnimationFrame(scrollBottom);
+      setTimeout(scrollBottom, 60);
+
       isInitialLoad.current = false;
       lastRenderedLastMsgIdRef.current = lastMsgId;
       return;
@@ -2890,12 +2922,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     lastRenderedLastMsgIdRef.current = lastMsgId;
 
     if (!isNewMessageAtBottom) {
-      // Existing messages updated (reaction, edit, status, avatar, older messages) -> DO NOT SCROLL!
+      // Existing messages updated (reaction, edit, status, avatar) -> DO NOT SCROLL!
       return;
     }
 
     // A brand new message arrived at the bottom
-    const isSentByMe = lastMsg.senderId === user?.id || (typeof lastMsg.id === 'string' && lastMsg.id.startsWith('temp_'));
+    const isSentByMe = lastMsg.senderId === user?.id || (typeof lastMsg.id === 'string' && (lastMsg.id.startsWith('temp_') || lastMsg.id.startsWith('sched_')));
 
     if (isSentByMe) {
       // User sent a message -> always scroll to bottom smoothly
@@ -2905,7 +2937,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     } else {
       // Someone else sent a message -> only auto-scroll if user is already near bottom
       const isNearBottom = chatContainerRef.current
-        ? (chatContainerRef.current.scrollHeight - chatContainerRef.current.scrollTop - chatContainerRef.current.clientHeight < 100)
+        ? (chatContainerRef.current.scrollHeight - chatContainerRef.current.scrollTop - chatContainerRef.current.clientHeight < 120)
         : !showScrollBottomRef.current;
 
       if (isNearBottom) {
@@ -3738,7 +3770,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   const handleDeleteLocalMessage = (msgId) => {
-    setMessages(prev => prev.filter(m => m.id !== msgId));
+    if (!msgId) return;
+    setMessages(prev => {
+      const next = prev.filter(m => m.id !== msgId && m._id !== msgId && m.clientTempId !== msgId);
+      setCachedMessages(chatId, next);
+      return next;
+    });
+    removeCachedMessages(chatId, [msgId]);
+    if (socket && user?.id) {
+      socket.emit('delete_message_for_me', { messageId: msgId, chatId, userId: user.id });
+    }
   };
 
   const lastActionSelectTimeRef = useRef(0);
@@ -7551,6 +7592,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   <button
                     type="button"
                     onClick={() => {
+                      const ids = deleteModalMessages.map(m => m.id);
+                      setMessages(prev => {
+                        const idSet = new Set(ids.map(String));
+                        const next = prev.map(m => (idSet.has(String(m.id)) || idSet.has(String(m._id)) || idSet.has(String(m.clientTempId))) ? { ...m, type: 'deleted', content: 'This message was deleted', mediaUrl: null, audioUrl: null, pollData: null } : m);
+                        setCachedMessages(chatId, next);
+                        return next;
+                      });
+                      markCachedMessagesDeleted(chatId, ids);
                       deleteModalMessages.forEach(m => {
                         if (socket) socket.emit('delete_message', { messageId: m.id, chatId });
                         handleTriggerUndoToast(m.id);

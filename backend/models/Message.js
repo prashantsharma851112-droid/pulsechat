@@ -32,6 +32,7 @@ const messageSchema = new mongoose.Schema({
   screenshotAlert: { type: Object, default: null }, // { takenBy: String, timestamp: String }
   status: { type: String, default: 'sent' }, // 'sent' | 'delivered' | 'read'
   readBy: { type: [String], default: [] }, // User IDs who have read this message
+  deletedFor: { type: [String], default: [] }, // User IDs who deleted this message for themselves
   timestamp: { type: String, default: () => new Date().toISOString() },
   reactions: { type: Object, default: {} },
   originalContent: { type: String, default: null },

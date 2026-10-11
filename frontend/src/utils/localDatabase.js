@@ -126,6 +126,47 @@ export async function getMessagesFromLocalDb(chatId, limit = 100, beforeTimestam
 }
 
 /**
+ * Remove deleted messages from local IndexedDB so they never reappear
+ */
+export async function deleteMessagesFromLocalDb(messageIds) {
+  if (!Array.isArray(messageIds) || messageIds.length === 0) return;
+  const db = await getDb();
+  if (!db) return;
+
+  try {
+    const tx = db.transaction([STORE_MESSAGES], 'readwrite');
+    const store = tx.objectStore(STORE_MESSAGES);
+    for (const id of messageIds) {
+      if (id) store.delete(String(id));
+    }
+  } catch (err) {
+    console.warn('deleteMessagesFromLocalDb error:', err);
+  }
+}
+
+/**
+ * Update a message in local IndexedDB (e.g. status='deleted', content='This message was deleted')
+ */
+export async function updateMessageInLocalDb(msgId, updates) {
+  if (!msgId || !updates) return;
+  const db = await getDb();
+  if (!db) return;
+
+  try {
+    const tx = db.transaction([STORE_MESSAGES], 'readwrite');
+    const store = tx.objectStore(STORE_MESSAGES);
+    const getReq = store.get(String(msgId));
+    getReq.onsuccess = () => {
+      if (getReq.result) {
+        store.put({ ...getReq.result, ...updates });
+      }
+    };
+  } catch (err) {
+    console.warn('updateMessageInLocalDb error:', err);
+  }
+}
+
+/**
  * Store a downloaded media Blob locally in IndexedDB (permanent disk cache).
  */
 export async function saveMediaBlobToLocalDb(url, blob) {

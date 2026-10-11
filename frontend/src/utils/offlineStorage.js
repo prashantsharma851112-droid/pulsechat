@@ -1,5 +1,5 @@
 // local storage & local-first IndexedDB helper functions
-import { saveMessagesToLocalDb, getMessagesFromLocalDb } from './localDatabase';
+import { saveMessagesToLocalDb, getMessagesFromLocalDb, deleteMessagesFromLocalDb, updateMessageInLocalDb } from './localDatabase';
 
 const STORAGE_KEYS = {
   USER: 'pulsechat_user',
@@ -334,6 +334,33 @@ export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
     return m;
   });
   setCachedMessages(chatId, updated);
+}
+
+export function removeCachedMessages(chatId, messageIds) {
+  if (!chatId || !Array.isArray(messageIds) || messageIds.length === 0) return;
+  const idsSet = new Set(messageIds.map(String));
+  const msgs = getCachedMessages(chatId);
+  const filtered = msgs.filter(m => !idsSet.has(String(m.id)) && !idsSet.has(String(m._id)) && !idsSet.has(String(m.clientTempId)));
+  try {
+    localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`, JSON.stringify(filtered.slice(-250)));
+    deleteMessagesFromLocalDb(messageIds);
+  } catch (e) {}
+}
+
+export function markCachedMessagesDeleted(chatId, messageIds) {
+  if (!chatId || !Array.isArray(messageIds) || messageIds.length === 0) return;
+  const idsSet = new Set(messageIds.map(String));
+  const msgs = getCachedMessages(chatId);
+  const updated = msgs.map(m => {
+    if (idsSet.has(String(m.id)) || idsSet.has(String(m._id)) || idsSet.has(String(m.clientTempId))) {
+      return { ...m, type: 'deleted', content: 'This message was deleted', mediaUrl: null, audioUrl: null, pollData: null };
+    }
+    return m;
+  });
+  setCachedMessages(chatId, updated);
+  messageIds.forEach(id => {
+    updateMessageInLocalDb(id, { type: 'deleted', content: 'This message was deleted', mediaUrl: null, audioUrl: null, pollData: null });
+  });
 }
 
 // outbox queue

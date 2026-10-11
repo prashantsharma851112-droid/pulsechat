@@ -634,7 +634,7 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
       } catch {}
     }
 
-    const messages = await db.getMessages(req.params.chatId, limit, before);
+    const messages = await db.getMessages(req.params.chatId, limit, before, req.user?.id);
     res.json(messages);
 
     // Save to Redis RAM Cache for next instant open
