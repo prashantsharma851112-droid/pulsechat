@@ -1796,6 +1796,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   // Automatic Outbox Sync when network or socket reconnects
   const isSyncingOutboxRef = useRef(false);
+  const activeSyncIdsRef = useRef(new Set());
 
   const syncOutbox = useCallback(() => {
     if (isSyncingOutboxRef.current) return;
@@ -1807,41 +1808,45 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     try {
       outbox.forEach((pendingMsg) => {
         const msgKey = pendingMsg.id || pendingMsg.clientTempId || pendingMsg.tempId;
-        // Immediately dequeue from outbox so concurrent triggers can never resend
-        if (msgKey) removeFromOutbox(user.id, msgKey);
-        if (pendingMsg.id) removeFromOutbox(user.id, pendingMsg.id);
-        if (pendingMsg.clientTempId) removeFromOutbox(user.id, pendingMsg.clientTempId);
-        if (pendingMsg.tempId) removeFromOutbox(user.id, pendingMsg.tempId);
+        if (!msgKey || activeSyncIdsRef.current.has(msgKey)) return;
+        activeSyncIdsRef.current.add(msgKey);
 
         // Smart Offline Queue: If pending voice note needs upload
         if (pendingMsg.type === 'voice') {
           (async () => {
-            let finalAudio = pendingMsg.audioDataUrl || pendingMsg.audioUrl;
-            if (finalAudio && finalAudio.startsWith('data:')) {
-              try {
-                finalAudio = await uploadMediaDirect(finalAudio, 'pulsechat_voice', token);
-              } catch (e) {
-                console.warn('Voice outbox upload error:', e);
+            try {
+              let finalAudio = pendingMsg.audioDataUrl || pendingMsg.audioUrl;
+              if (finalAudio && finalAudio.startsWith('data:')) {
+                try {
+                  finalAudio = await uploadMediaDirect(finalAudio, 'pulsechat_voice', token);
+                } catch (e) {
+                  console.warn('Voice outbox upload error:', e);
+                }
               }
+              socket.emit('send_message', {
+                ...getSenderPayload(),
+                chatId: pendingMsg.chatId,
+                senderId: pendingMsg.senderId || user.id,
+                receiverId: pendingMsg.receiverId,
+                isGroup: pendingMsg.isGroup,
+                audioUrl: finalAudio,
+                type: 'voice',
+                voiceFilter: pendingMsg.voiceFilter || null,
+                clientTempId: msgKey,
+                replyTo: pendingMsg.replyTo
+              });
+              if (pendingMsg.chatId && msgKey) {
+                updateCachedMessageStatus(pendingMsg.chatId, msgKey, { status: 'sent', audioUrl: finalAudio });
+              }
+              removeFromOutbox(user.id, msgKey);
+              if (pendingMsg.id) removeFromOutbox(user.id, pendingMsg.id);
+              if (pendingMsg.clientTempId) removeFromOutbox(user.id, pendingMsg.clientTempId);
+              setMessages(prev => prev.map(m =>
+                (m.id === msgKey || m.clientTempId === msgKey) ? { ...m, status: 'sent', audioUrl: finalAudio } : m
+              ));
+            } finally {
+              activeSyncIdsRef.current.delete(msgKey);
             }
-            socket.emit('send_message', {
-              ...getSenderPayload(),
-              chatId: pendingMsg.chatId,
-              senderId: pendingMsg.senderId || user.id,
-              receiverId: pendingMsg.receiverId,
-              isGroup: pendingMsg.isGroup,
-              audioUrl: finalAudio,
-              type: 'voice',
-              voiceFilter: pendingMsg.voiceFilter || null,
-              clientTempId: msgKey,
-              replyTo: pendingMsg.replyTo
-            });
-            if (pendingMsg.chatId && msgKey) {
-              updateCachedMessageStatus(pendingMsg.chatId, msgKey, { status: 'sent', audioUrl: finalAudio });
-            }
-            setMessages(prev => prev.map(m =>
-              (m.id === msgKey || m.clientTempId === msgKey) ? { ...m, status: 'sent', audioUrl: finalAudio } : m
-            ));
           })();
           return;
         }
@@ -1849,36 +1854,50 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         // Smart Offline Queue: If pending photo / video / document needs upload
         if (pendingMsg.needsUpload && (pendingMsg.mediaDataUrl || pendingMsg.mediaUrl)) {
           (async () => {
-            let finalMedia = pendingMsg.mediaDataUrl || pendingMsg.mediaUrl;
-            if (finalMedia && finalMedia.startsWith('data:')) {
-              try {
-                finalMedia = await uploadMediaDirect(finalMedia, 'pulsechat_media', token, pendingMsg.type === 'video');
-              } catch (e) {
-                console.warn('Media outbox upload error:', e);
+            try {
+              let finalMedia = pendingMsg.mediaDataUrl || pendingMsg.mediaUrl;
+              if (finalMedia && finalMedia.startsWith('data:')) {
+                try {
+                  finalMedia = await uploadMediaDirect(finalMedia, 'pulsechat_media', token, pendingMsg.type === 'video');
+                } catch (e) {
+                  console.warn('Media outbox upload error:', e);
+                }
               }
+              socket.emit('send_message', {
+                ...getSenderPayload(),
+                chatId: pendingMsg.chatId,
+                senderId: pendingMsg.senderId || user.id,
+                receiverId: pendingMsg.receiverId,
+                isGroup: pendingMsg.isGroup,
+                mediaUrl: finalMedia,
+                type: pendingMsg.type || 'image',
+                fileName: pendingMsg.fileName,
+                fileSize: pendingMsg.fileSize,
+                clientTempId: msgKey,
+                replyTo: pendingMsg.replyTo
+              });
+              if (pendingMsg.chatId && msgKey) {
+                updateCachedMessageStatus(pendingMsg.chatId, msgKey, { status: 'sent', mediaUrl: finalMedia });
+              }
+              removeFromOutbox(user.id, msgKey);
+              if (pendingMsg.id) removeFromOutbox(user.id, pendingMsg.id);
+              if (pendingMsg.clientTempId) removeFromOutbox(user.id, pendingMsg.clientTempId);
+              setMessages(prev => prev.map(m =>
+                (m.id === msgKey || m.clientTempId === msgKey) ? { ...m, status: 'sent', mediaUrl: finalMedia } : m
+              ));
+            } finally {
+              activeSyncIdsRef.current.delete(msgKey);
             }
-            socket.emit('send_message', {
-              ...getSenderPayload(),
-              chatId: pendingMsg.chatId,
-              senderId: pendingMsg.senderId || user.id,
-              receiverId: pendingMsg.receiverId,
-              isGroup: pendingMsg.isGroup,
-              mediaUrl: finalMedia,
-              type: pendingMsg.type || 'image',
-              fileName: pendingMsg.fileName,
-              fileSize: pendingMsg.fileSize,
-              clientTempId: msgKey,
-              replyTo: pendingMsg.replyTo
-            });
-            if (pendingMsg.chatId && msgKey) {
-              updateCachedMessageStatus(pendingMsg.chatId, msgKey, { status: 'sent', mediaUrl: finalMedia });
-            }
-            setMessages(prev => prev.map(m =>
-              (m.id === msgKey || m.clientTempId === msgKey) ? { ...m, status: 'sent', mediaUrl: finalMedia } : m
-            ));
           })();
           return;
         }
+
+        // Standard text message queue
+        removeFromOutbox(user.id, msgKey);
+        if (pendingMsg.id) removeFromOutbox(user.id, pendingMsg.id);
+        if (pendingMsg.clientTempId) removeFromOutbox(user.id, pendingMsg.clientTempId);
+        if (pendingMsg.tempId) removeFromOutbox(user.id, pendingMsg.tempId);
+        activeSyncIdsRef.current.delete(msgKey);
 
         socket.emit('send_message', {
           ...getSenderPayload(),
@@ -1912,7 +1931,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     } finally {
       isSyncingOutboxRef.current = false;
     }
-  }, [user?.id, socket]);
+  }, [user?.id, socket, token, getSenderPayload]);
 
   useEffect(() => {
     const unsub = subscribeToNetworkChanges((online) => {
@@ -2056,8 +2075,30 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             const currentOutbox = getOutbox(user?.id);
             const pendingForChat = currentOutbox.filter(m => m.chatId === chatId);
             const serverIds = new Set(data.map(m => m.id));
-            const activePending = pendingForChat.filter(p => !serverIds.has(p.id) && !serverIds.has(p.clientTempId));
-            const merged = [...data, ...activePending].map(sanitizeFogSnapMessage);
+
+            // Retain any pending messages from outbox
+            const pendingMap = new Map();
+            pendingForChat.forEach(p => {
+              const k = p.clientTempId || p.id;
+              if (!serverIds.has(p.id) && !serverIds.has(p.clientTempId)) {
+                pendingMap.set(k, p);
+              }
+            });
+
+            // ALSO retain any pending messages from cached storage that haven't arrived from server yet
+            const cachedNow = getCachedMessages(chatId);
+            cachedNow.forEach(c => {
+              const k = c.clientTempId || c.id;
+              if (
+                (c.status === 'pending' || c.status === 'uploading' || c.id?.startsWith('temp_') || c.clientTempId?.startsWith('temp_')) &&
+                !serverIds.has(c.id) && !serverIds.has(c.clientTempId) &&
+                !pendingMap.has(k)
+              ) {
+                pendingMap.set(k, c);
+              }
+            });
+
+            const merged = [...data, ...Array.from(pendingMap.values())].map(sanitizeFogSnapMessage);
             setMessages(merged);
             setCachedMessages(chatId, merged);
           }
@@ -3503,37 +3544,39 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     // Smart Offline Queue: If offline, queue photo/media in grayed out state
     const isOnlineNow = isDeviceOnline() && Boolean(socket?.connected);
     if (!isOnlineNow) {
+      let persistentDataUrl = mediaUrl;
+      if (rawFile) {
+        try {
+          persistentDataUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = () => resolve(mediaUrl);
+            reader.readAsDataURL(rawFile);
+          });
+        } catch (e) {
+          persistentDataUrl = mediaUrl;
+        }
+      }
+
       const offlineMediaMsg = {
         ...optimisticMediaMsg,
+        mediaUrl: persistentDataUrl,
+        mediaDataUrl: persistentDataUrl,
         status: 'pending',
         isUploading: false
       };
       setMessages(prev => [...prev, offlineMediaMsg]);
       appendCachedMessage(chatId, offlineMediaMsg);
+      addToOutbox(user.id, {
+        ...offlineMediaMsg,
+        needsUpload: true,
+        mediaDataUrl: persistentDataUrl,
+        mediaUrl: persistentDataUrl
+      });
       updateRecentChatSnippet(user.id, chatId, offlineMediaMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
       window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       playSound('sent');
-
-      if (rawFile) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          addToOutbox(user.id, {
-            ...offlineMediaMsg,
-            needsUpload: true,
-            mediaDataUrl: reader.result,
-            mediaUrl: reader.result
-          });
-        };
-        reader.readAsDataURL(rawFile);
-      } else {
-        addToOutbox(user.id, {
-          ...offlineMediaMsg,
-          needsUpload: true,
-          mediaDataUrl: mediaUrl,
-          mediaUrl
-        });
-      }
       return;
     }
 

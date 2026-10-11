@@ -8,17 +8,24 @@ export const DISGUISE_PRESETS = [
     subtitle: 'Original cyber-pulse AMOLED branding',
     title: 'PulseChat - Feel The Beat of Chatting',
     badge: 'Default',
-    accentColor: '#a855f7',
-    iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+    accentColor: '#6366f1',
+    iconUrl: '/icon-192.png',
+    iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
       <defs>
-        <linearGradient id="pg" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#c084fc"/>
-          <stop offset="50%" stop-color="#a855f7"/>
-          <stop offset="100%" stop-color="#6366f1"/>
+        <linearGradient id="pcGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#2563eb"/>
+          <stop offset="50%" stop-color="#4f46e5"/>
+          <stop offset="100%" stop-color="#7c3aed"/>
         </linearGradient>
       </defs>
-      <rect width="64" height="64" rx="16" fill="#0d0b14"/>
-      <path d="M34 8L16 34h14l-4 22 22-28H34l4-20z" fill="url(#pg)" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>
+      <!-- Chat bubble container with tail -->
+      <path d="M40 24h112a28 28 0 0 1 28 28v68a28 28 0 0 1-28 28H132l-22 22a4 4 0 0 1-6.8-2.8V148H40a28 28 0 0 1-28-28V52a28 28 0 0 1 28-28z" fill="url(#pcGrad)"/>
+      <!-- Inner white rounded badge -->
+      <rect x="28" y="38" width="136" height="96" rx="22" fill="#ffffff"/>
+      <!-- Bold stylized P letter -->
+      <path d="M52 56h34c14 0 23 8 23 20s-9 20-23 20H68v24H52V56zm16 13v14h18c5 0 8.5-3 8.5-7s-3.5-7-8.5-7H68z" fill="url(#pcGrad)"/>
+      <!-- Heartbeat / ECG pulse waveform -->
+      <path d="M98 90l7-16 9 32 9-24 7 10h18" fill="none" stroke="#2563eb" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`
   },
   {
@@ -67,7 +74,7 @@ export const DISGUISE_PRESETS = [
     id: 'weather',
     name: 'Daily Weather',
     subtitle: 'Weather forecast & temperature widget',
-    title: 'Weather 28°C - Partly Sunny',
+    title: 'Daily Weather',
     badge: 'Disguise',
     accentColor: '#38bdf8',
     iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
@@ -88,7 +95,7 @@ export const DISGUISE_PRESETS = [
     id: 'clock',
     name: 'Clock & Timer',
     subtitle: 'Digital timer, clock & stopwatch style',
-    title: 'Timer & Clock',
+    title: 'Clock & Timer',
     badge: 'Disguise',
     accentColor: '#10b981',
     iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
@@ -115,41 +122,128 @@ export const applyAppDisguise = (disguiseId = 'default') => {
   const preset = DISGUISE_PRESETS.find(p => p.id === disguiseId) || DISGUISE_PRESETS[0];
 
   // 1. Update Document Title
-  document.title = preset.title;
+  if (typeof document !== 'undefined') {
+    document.title = preset.title;
+  }
 
-  // 2. Convert SVG into Data URI
+  // 2. Determine target icon URL
+  const isDefault = preset.id === 'default';
   const svgDataUri = `data:image/svg+xml;utf8,${encodeURIComponent(preset.iconSvg)}`;
+  const initialIconUrl = isDefault ? '/icon-192.png' : svgDataUri;
 
-  // 3. Dynamically replace or set Favicon and Apple Touch Icon
-  const iconSelectors = [
-    "link[rel*='icon']",
-    "link[rel='apple-touch-icon']",
-    "link[rel='shortcut icon']"
-  ];
+  // 3. Helper to update all head icon links
+  const setFavicons = (href, type = 'image/png') => {
+    if (typeof document === 'undefined') return;
+    try {
+      // Remove all existing icon links to force Chrome/Android to reload & not stick to cached icons
+      const existingIcons = document.querySelectorAll("link[rel*='icon'], link[rel='apple-touch-icon'], link[rel='shortcut icon']");
+      existingIcons.forEach(el => el.remove());
 
-  iconSelectors.forEach(sel => {
-    let link = document.querySelector(sel);
-    if (!link) {
-      link = document.createElement('link');
-      if (sel.includes('apple')) {
-        link.rel = 'apple-touch-icon';
-      } else {
-        link.rel = 'icon';
+      const addLink = (rel, mime) => {
+        const link = document.createElement('link');
+        link.rel = rel;
+        if (mime) link.type = mime;
+        link.href = `${href}${href.startsWith('data:') ? '' : (href.includes('?') ? '&' : '?') + 'v=' + Date.now()}`;
+        document.head.appendChild(link);
+      };
+
+      addLink('icon', type);
+      addLink('shortcut icon', type);
+      addLink('apple-touch-icon', type);
+    } catch (e) {}
+  };
+
+  // Immediately apply initial icon link
+  setFavicons(initialIconUrl, isDefault ? 'image/png' : 'image/svg+xml');
+
+  // 4. Update Web App Manifest dynamically so Android PWA / Home Screen uses disguise name & icon
+  const updateManifest = (iconHref, appName) => {
+    if (typeof document === 'undefined') return;
+    try {
+      let manifestLink = document.querySelector('link[rel="manifest"]');
+      const dynamicManifest = {
+        id: "com.pulsechat.app",
+        short_name: appName,
+        name: appName,
+        start_url: "/",
+        display: "standalone",
+        background_color: "#000000",
+        theme_color: "#000000",
+        icons: [
+          { src: iconHref, sizes: "192x192", type: "image/png", purpose: "any maskable" },
+          { src: iconHref, sizes: "512x512", type: "image/png", purpose: "any maskable" }
+        ]
+      };
+      const blob = new Blob([JSON.stringify(dynamicManifest)], { type: 'application/manifest+json' });
+      const blobUrl = URL.createObjectURL(blob);
+      if (!manifestLink) {
+        manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        document.head.appendChild(manifestLink);
       }
-      document.head.appendChild(link);
-    }
-    link.href = svgDataUri;
-  });
+      manifestLink.href = blobUrl;
+    } catch (e) {}
+  };
 
-  // 4. Save choice to localStorage
+  // 5. For non-default SVG icons, convert SVG to PNG Data URL via offscreen canvas
+  // Android Chrome, Samsung Internet, and mobile task switchers only render PNG icons!
+  if (!isDefault && typeof document !== 'undefined') {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 192;
+      canvas.height = 192;
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          ctx.clearRect(0, 0, 192, 192);
+          ctx.drawImage(img, 0, 0, 192, 192);
+          const pngUrl = canvas.toDataURL('image/png');
+          setFavicons(pngUrl, 'image/png');
+          updateManifest(pngUrl, preset.name);
+        } catch (e) {}
+      };
+      img.src = svgDataUri;
+    } catch (e) {}
+  } else {
+    updateManifest('/icon-192.png', preset.name);
+  }
+
+  // 6. Update Mobile Meta tags
+  if (typeof document !== 'undefined') {
+    try {
+      let appleTitleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+      if (appleTitleMeta) appleTitleMeta.content = preset.name;
+      let appNameMeta = document.querySelector('meta[name="application-name"]');
+      if (!appNameMeta) {
+        appNameMeta = document.createElement('meta');
+        appNameMeta.name = 'application-name';
+        document.head.appendChild(appNameMeta);
+      }
+      appNameMeta.content = preset.name;
+    } catch (e) {}
+  }
+
+  // 7. Save choice to localStorage
   try {
     localStorage.setItem('pulsechat_app_disguise', preset.id);
   } catch (e) {}
 
-  // 5. Broadcast custom event
+  // 8. Broadcast custom event
   try {
     window.dispatchEvent(new CustomEvent('pulsechat_app_disguise_changed', { detail: { disguise: preset } }));
   } catch (e) {}
 
   return preset;
 };
+
+// Cross-tab synchronization so opening/switching tabs keeps camouflage in sync
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'pulsechat_app_disguise' && e.newValue) {
+      applyAppDisguise(e.newValue);
+    }
+  });
+}
+

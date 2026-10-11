@@ -1480,7 +1480,7 @@ export default function SettingsModal({
                   }}>
                     {DISGUISE_PRESETS.map((preset) => {
                       const isSelected = currentDisguise === preset.id;
-                      const iconDataUri = `data:image/svg+xml;utf8,${encodeURIComponent(preset.iconSvg)}`;
+                      const iconSrc = preset.id === 'default' ? '/icon-192.png' : (preset.iconUrl || `data:image/svg+xml;utf8,${encodeURIComponent(preset.iconSvg)}`);
                       return (
                         <button
                           key={preset.id}
@@ -1503,7 +1503,7 @@ export default function SettingsModal({
                         >
                           <div style={{ position: 'relative', width: '38px', height: '38px' }}>
                             <img
-                              src={iconDataUri}
+                              src={iconSrc}
                               alt={preset.name}
                               style={{
                                 width: '38px',
