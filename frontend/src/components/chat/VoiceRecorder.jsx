@@ -1,18 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Square, Send, X, MicOff, Play, Pause } from 'lucide-react';
+import { Square, Send, X, MicOff, Play, Pause, Sparkles, RefreshCw } from 'lucide-react';
+import { applyVoiceFilter, VOICE_FILTERS } from '../../utils/voiceFilters';
 
 export default function VoiceRecorder({ onSendVoice, onCancel }) {
   const [recording, setRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState(null);
+  const [rawAudioBlob, setRawAudioBlob] = useState(null);
+  const [filteredAudioBlob, setFilteredAudioBlob] = useState(null);
+  const [selectedFilter, setSelectedFilter] = useState('normal');
+  const [isFiltering, setIsFiltering] = useState(false);
   const [timer, setTimer] = useState(0);
   const [errorMsg, setErrorMsg] = useState(null);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [liveFrequencies, setLiveFrequencies] = useState([0.3, 0.5, 0.4, 0.7, 0.6, 0.4, 0.8, 0.5, 0.3, 0.6]);
 
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
   const audioPreviewRef = useRef(null);
   const chunksRef = useRef([]);
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const animFrameRef = useRef(null);
 
   const getSupportedMimeType = () => {
     if (typeof MediaRecorder === 'undefined') return '';
@@ -29,6 +37,38 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
+      // Realtime AudioContext & AnalyserNode for dancing live microphone waves
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        try {
+          const audioCtx = new AudioCtx();
+          audioCtxRef.current = audioCtx;
+          const source = audioCtx.createMediaStreamSource(stream);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 64;
+          source.connect(analyser);
+          analyserRef.current = analyser;
+
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          const updateFrequencyBars = () => {
+            if (!analyserRef.current) return;
+            analyserRef.current.getByteFrequencyData(dataArray);
+            const bars = [];
+            const step = Math.max(1, Math.floor(dataArray.length / 12));
+            for (let i = 0; i < 12; i++) {
+              const val = dataArray[i * step] || 0;
+              const normalized = Math.max(0.18, Math.min(1.0, val / 255 * 1.5));
+              bars.push(normalized);
+            }
+            setLiveFrequencies(bars);
+            animFrameRef.current = requestAnimationFrame(updateFrequencyBars);
+          };
+          animFrameRef.current = requestAnimationFrame(updateFrequencyBars);
+        } catch (e) {
+          console.warn('AudioContext analyser error:', e);
+        }
+      }
+
       const mimeType = getSupportedMimeType();
       const options = mimeType ? { mimeType } : {};
       const mediaRecorder = new MediaRecorder(stream, options);
@@ -44,7 +84,8 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
       mediaRecorder.onstop = () => {
         const finalType = mimeType || 'audio/wav';
         const blob = new Blob(chunksRef.current, { type: finalType });
-        setAudioBlob(blob);
+        setRawAudioBlob(blob);
+        setFilteredAudioBlob(blob);
       };
 
       mediaRecorder.start(100);
@@ -59,11 +100,21 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
 
   const stopAndCleanupMedia = () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+      try { audioCtxRef.current.close(); } catch (e) {}
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
+    }
+    if (audioPreviewRef.current) {
+      try {
+        audioPreviewRef.current.pause();
+        audioPreviewRef.current.src = '';
+      } catch (e) {}
     }
   };
 
@@ -76,6 +127,10 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
 
   const stopRecording = () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+      try { audioCtxRef.current.close(); } catch (e) {}
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
@@ -85,13 +140,49 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
     setRecording(false);
   };
 
+  // Switch voice filter with instant audio rendering
+  const handleSelectFilter = async (filterId) => {
+    if (!rawAudioBlob || filterId === selectedFilter) return;
+    stopPreviewAudio();
+    setSelectedFilter(filterId);
+
+    if (filterId === 'normal') {
+      setFilteredAudioBlob(rawAudioBlob);
+      return;
+    }
+
+    setIsFiltering(true);
+    try {
+      const processed = await applyVoiceFilter(rawAudioBlob, filterId);
+      setFilteredAudioBlob(processed);
+    } catch (e) {
+      console.warn("Filter application error:", e);
+      setFilteredAudioBlob(rawAudioBlob);
+    } finally {
+      setIsFiltering(false);
+    }
+  };
+
+  const stopPreviewAudio = () => {
+    if (audioPreviewRef.current) {
+      try {
+        audioPreviewRef.current.pause();
+        audioPreviewRef.current.currentTime = 0;
+      } catch (e) {}
+    }
+    setIsPlayingPreview(false);
+  };
+
   const togglePreview = () => {
-    if (!audioBlob) return;
+    const targetBlob = filteredAudioBlob || rawAudioBlob;
+    if (!targetBlob) return;
+
     if (isPlayingPreview && audioPreviewRef.current) {
       audioPreviewRef.current.pause();
       setIsPlayingPreview(false);
     } else {
-      const url = URL.createObjectURL(audioBlob);
+      stopPreviewAudio();
+      const url = URL.createObjectURL(targetBlob);
       const audio = new Audio(url);
       audioPreviewRef.current = audio;
       audio.play().then(() => {
@@ -102,29 +193,38 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
     }
   };
 
-  const handleSend = () => {
-    if (!audioBlob && recording) {
-      // If user clicks send directly while recording, stop & send
+  const handleSend = async () => {
+    stopPreviewAudio();
+    if (!rawAudioBlob && recording) {
+      // Direct send while recording
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.onstop = () => {
+        mediaRecorderRef.current.onstop = async () => {
           const mimeType = getSupportedMimeType() || 'audio/wav';
           const blob = new Blob(chunksRef.current, { type: mimeType });
-          convertAndSend(blob);
+          let finalToSend = blob;
+          if (selectedFilter !== 'normal') {
+            try {
+              finalToSend = await applyVoiceFilter(blob, selectedFilter);
+            } catch (e) {}
+          }
+          convertAndSend(finalToSend, selectedFilter);
         };
         stopRecording();
         return;
       }
     }
-    if (audioBlob) {
-      convertAndSend(audioBlob);
+
+    const finalBlob = filteredAudioBlob || rawAudioBlob;
+    if (finalBlob) {
+      convertAndSend(finalBlob, selectedFilter);
     }
   };
 
-  const convertAndSend = (blob) => {
+  const convertAndSend = (blob, filter) => {
     const reader = new FileReader();
     reader.readAsDataURL(blob);
     reader.onloadend = () => {
-      onSendVoice(reader.result);
+      onSendVoice(reader.result, filter);
     };
   };
 
@@ -135,7 +235,7 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
           <MicOff size={16} />
           <span>{errorMsg}</span>
         </div>
-        <button onClick={onCancel} style={{ background: 'transparent', color: '#ef4444' }}><X size={18} /></button>
+        <button onClick={onCancel} style={{ background: 'transparent', color: '#ef4444', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
       </div>
     );
   }
@@ -146,58 +246,163 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
       maxWidth: '100%',
       boxSizing: 'border-box',
       display: 'flex',
-      alignItems: 'center',
-      gap: '0.5rem',
-      background: 'var(--bg-card)',
-      padding: '0.4rem 0.6rem',
-      borderRadius: '24px',
-      border: '1px solid var(--border)',
+      flexDirection: 'column',
+      gap: '0.4rem',
+      background: 'var(--bg-card, #121826)',
+      padding: '0.5rem 0.75rem',
+      borderRadius: '20px',
+      border: '1px solid var(--border, rgba(255,255,255,0.1))',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
       minWidth: 0
     }}>
-      <button
-        onClick={onCancel}
-        style={{ background: 'transparent', color: '#ef4444', display: 'flex', alignItems: 'center', flexShrink: 0, padding: '4px', cursor: 'pointer' }}
-        title="Cancel"
-      >
-        <X size={20} />
-      </button>
-
-      <span style={{ fontSize: '0.82rem', color: recording ? '#ef4444' : 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
-        {recording ? '🔴' : '🎵'} {Math.floor(timer / 60)}:{('0' + (timer % 60)).slice(-2)}
-      </span>
-
-      <div style={{ flex: 1, minWidth: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-        {recording ? 'Recording...' : 'Recorded! Ready to send'}
-      </div>
-
-      {!recording && audioBlob && (
-        <button
-          onClick={togglePreview}
-          style={{ background: 'var(--hover-bg)', color: 'var(--text-main)', padding: '6px', borderRadius: '50%', border: '1px solid var(--border)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          title={isPlayingPreview ? 'Pause Preview' : 'Play Preview'}
-        >
-          {isPlayingPreview ? <Pause size={15} /> : <Play size={15} />}
-        </button>
+      {/* Voice Pitch Filters Bar (Displayed after recording or during recording) */}
+      {!recording && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          overflowX: 'auto',
+          paddingBottom: '2px',
+          scrollbarWidth: 'none',
+          WebkitOverflowScrolling: 'touch'
+        }}>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted, #94a3b8)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
+            <Sparkles size={12} color="#a855f7" /> Filter:
+          </span>
+          {VOICE_FILTERS.map(f => {
+            const isSelected = selectedFilter === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => handleSelectFilter(f.id)}
+                disabled={isFiltering}
+                style={{
+                  background: isSelected ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'rgba(255,255,255,0.06)',
+                  color: isSelected ? '#ffffff' : 'var(--text-muted, #94a3b8)',
+                  border: isSelected ? '1px solid #818cf8' : '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '14px',
+                  padding: '3px 10px',
+                  fontSize: '0.72rem',
+                  fontWeight: isSelected ? 700 : 500,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                  transition: 'all 0.15s ease',
+                  boxShadow: isSelected ? '0 2px 8px rgba(99, 102, 241, 0.4)' : 'none'
+                }}
+                title={f.desc}
+              >
+                <span>{f.icon}</span>
+                <span>{f.name}</span>
+              </button>
+            );
+          })}
+        </div>
       )}
 
-      {recording ? (
+      {/* Main Recording Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', minWidth: 0 }}>
         <button
-          onClick={stopRecording}
-          style={{ background: '#ef4444', color: '#fff', width: '34px', height: '34px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: 'none' }}
-          title="Stop Recording"
+          type="button"
+          onClick={onCancel}
+          style={{ background: 'transparent', color: '#ef4444', display: 'flex', alignItems: 'center', flexShrink: 0, padding: '4px', cursor: 'pointer', border: 'none' }}
+          title="Cancel"
         >
-          <Square size={14} />
+          <X size={20} />
         </button>
-      ) : null}
 
-      <button
-        onClick={handleSend}
-        style={{ background: 'var(--accent)', color: '#fff', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: 'none', boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)' }}
-        title="Send Voice Note"
-      >
-        <Send size={16} />
-      </button>
+        <span style={{ fontSize: '0.82rem', color: recording ? '#ef4444' : 'var(--accent, #6366f1)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+          {recording ? (
+            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', animation: 'pulse 1s infinite' }} />
+          ) : '🎙️'}
+          {Math.floor(timer / 60)}:{('0' + (timer % 60)).slice(-2)}
+        </span>
+
+        {/* Live Dancing Waveform when Recording */}
+        {recording ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '3px', height: '24px', minWidth: 0, overflow: 'hidden', padding: '0 4px' }}>
+            {liveFrequencies.map((freq, idx) => (
+              <div
+                key={idx}
+                style={{
+                  flex: 1,
+                  height: `${Math.round(freq * 22)}px`,
+                  minHeight: '4px',
+                  background: 'linear-gradient(to top, #ef4444, #f97316)',
+                  borderRadius: '3px',
+                  transition: 'height 0.08s ease',
+                  boxShadow: '0 0 6px rgba(239, 68, 68, 0.5)'
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <div style={{ flex: 1, minWidth: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-muted, #94a3b8)' }}>
+            {isFiltering ? '✨ Applying voice filter...' : `Recorded! ${selectedFilter !== 'normal' ? `(${VOICE_FILTERS.find(f => f.id === selectedFilter)?.name})` : 'Ready to send'}`}
+          </div>
+        )}
+
+        {!recording && (rawAudioBlob || filteredAudioBlob) && (
+          <button
+            type="button"
+            onClick={togglePreview}
+            disabled={isFiltering}
+            style={{
+              background: 'var(--hover-bg, rgba(255,255,255,0.08))',
+              color: 'var(--text-main, #ffffff)',
+              padding: '6px',
+              borderRadius: '50%',
+              border: '1px solid var(--border, rgba(255,255,255,0.15))',
+              cursor: isFiltering ? 'wait' : 'pointer',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            title={isPlayingPreview ? 'Pause Preview' : 'Play Preview'}
+          >
+            {isFiltering ? <RefreshCw size={14} className="animate-spin" /> : (isPlayingPreview ? <Pause size={15} /> : <Play size={15} />)}
+          </button>
+        )}
+
+        {recording ? (
+          <button
+            type="button"
+            onClick={stopRecording}
+            style={{ background: '#ef4444', color: '#fff', width: '34px', height: '34px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: 'none', boxShadow: '0 2px 10px rgba(239, 68, 68, 0.4)' }}
+            title="Stop Recording"
+          >
+            <Square size={14} />
+          </button>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={handleSend}
+          disabled={isFiltering}
+          style={{
+            background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+            color: '#fff',
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            cursor: isFiltering ? 'wait' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            border: 'none',
+            boxShadow: '0 2px 10px rgba(99, 102, 241, 0.45)'
+          }}
+          title="Send Voice Note"
+        >
+          <Send size={16} />
+        </button>
+      </div>
     </div>
   );
 }
-

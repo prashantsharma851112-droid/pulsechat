@@ -7,6 +7,7 @@ import MusicPickerModal from '../vibes/MusicPickerModal';
 import { updateUserProfileInStorage } from '../../utils/offlineStorage';
 
 const PRESET_AURAS = [
+  { id: 'neon_flame', mood: 'Neon Flame Streak', emoji: '🔥', auraColor: '#ff0055', auraType: 'neon_flame', isExclusive: true, desc: '3-Day Streak Unlock' },
   { id: 'lofi', mood: 'Listening to Lofi', emoji: '🎧', auraColor: '#a855f7', auraType: 'violet_wave' },
   { id: 'gaming', mood: 'Temple Run 3D', emoji: '🎮', auraColor: '#06b6d4', auraType: 'cyan_neon', inGame: 'Temple Run 3D' },
   { id: 'chai', mood: 'Chai Break', emoji: '☕', auraColor: '#f59e0b', auraType: 'amber_glow' },
@@ -84,7 +85,13 @@ export default function VibeAuraSelectorModal({
     }
   }, []);
 
+  const isFlameUnlocked = Boolean(user?.hasNeonFlameAura || user?.streakCount >= 3 || user?.vibeStreakCount >= 3);
+
   const handleSelectPreset = (preset) => {
+    if (preset.isExclusive && !isFlameUnlocked) {
+      alert("🔥 'Neon Flame Aura' Locked Hai!\n\nLagaataar 3 din apne dost ke sath chat ya Vibe story update karein to unlock this exclusive legendary aura & Sparks drop reward!");
+      return;
+    }
     setSelectedMood(preset.mood);
     setSelectedEmoji(preset.emoji);
     setSelectedColor(preset.auraColor);
@@ -105,12 +112,13 @@ export default function VibeAuraSelectorModal({
     }
 
     const isActuallyLow = hasBattery && detectedBattery && detectedBattery <= 20;
+    const isFlame = selectedColor === '#ff0055' || selectedEmoji === '🔥';
     const auraData = {
       userId: effectiveUserId,
       mood: trimmedMood,
       emoji: selectedEmoji || '⚡',
       auraColor: isActuallyLow ? '#ef4444' : selectedColor,
-      auraType: isActuallyLow ? 'low_battery' : 'neon_pulse',
+      auraType: isActuallyLow ? 'low_battery' : (isFlame ? 'neon_flame' : 'neon_pulse'),
       isLowBattery: hasBattery,
       batteryLevel: hasBattery ? (detectedBattery !== null ? detectedBattery : 20) : null,
       inGame: trimmedMood.includes('Temple Run') ? 'Temple Run 3D' : '',
@@ -286,13 +294,18 @@ export default function VibeAuraSelectorModal({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '18px' }}>
           {PRESET_AURAS.map(preset => {
             const isSelected = selectedMood === preset.mood && !isLowBattery;
+            const isLocked = preset.isExclusive && !isFlameUnlocked;
             return (
               <button
                 key={preset.id}
                 onClick={() => handleSelectPreset(preset)}
                 style={{
-                  background: isSelected ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.03)',
-                  border: isSelected ? `2px solid ${preset.auraColor}` : '1px solid rgba(255, 255, 255, 0.06)',
+                  background: isSelected
+                    ? (preset.isExclusive ? 'linear-gradient(135deg, rgba(255, 0, 85, 0.25), rgba(255, 85, 0, 0.2))' : 'rgba(255, 255, 255, 0.12)')
+                    : (preset.isExclusive ? 'rgba(255, 0, 85, 0.08)' : 'rgba(255, 255, 255, 0.03)'),
+                  border: isSelected
+                    ? (preset.isExclusive ? '2px solid #ff0055' : `2px solid ${preset.auraColor}`)
+                    : (preset.isExclusive ? '1px dashed rgba(255, 0, 85, 0.4)' : '1px solid rgba(255, 255, 255, 0.06)'),
                   borderRadius: '14px',
                   padding: '10px',
                   display: 'flex',
@@ -300,15 +313,24 @@ export default function VibeAuraSelectorModal({
                   gap: '8px',
                   cursor: 'pointer',
                   textAlign: 'left',
-                  transition: 'all 0.15s ease'
+                  transition: 'all 0.15s ease',
+                  opacity: isLocked ? 0.75 : 1,
+                  position: 'relative'
                 }}
               >
                 <span style={{ fontSize: '1.25rem' }}>{preset.emoji}</span>
-                <div style={{ overflow: 'hidden' }}>
+                <div style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                     {preset.mood}
                   </div>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: preset.auraColor, marginTop: '3px' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: preset.auraColor }} />
+                    {preset.isExclusive && (
+                      <span style={{ fontSize: '0.62rem', fontWeight: 700, color: isLocked ? '#f59e0b' : '#ff0055' }}>
+                        {isLocked ? '🔒 3d Streak' : '🔥 Unlocked'}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </button>
             );

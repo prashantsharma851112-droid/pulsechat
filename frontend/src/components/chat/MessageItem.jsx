@@ -650,11 +650,12 @@ function RichLinkPreview({ url, isMine }) {
   );
 }
 
-function VoiceNotePlayer({ audioUrl, isMine }) {
+function VoiceNotePlayer({ audioUrl, isMine, voiceFilter }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [danceTick, setDanceTick] = useState(0);
   const audioRef = useRef(null);
 
   const bars = React.useMemo(() => {
@@ -662,12 +663,25 @@ function VoiceNotePlayer({ audioUrl, isMine }) {
     const s = audioUrl || 'pulse_voice_audio';
     for (let i = 0; i < s.length; i++) hash = (hash << 5) - hash + s.charCodeAt(i);
     const res = [];
-    for (let i = 0; i < 24; i++) {
-      const v = Math.abs(Math.sin((hash + i * 31) * 0.35));
-      res.push(Math.max(0.25, Math.min(1.0, v)));
+    for (let i = 0; i < 28; i++) {
+      const v = Math.abs(Math.sin((hash + i * 27) * 0.38));
+      res.push(Math.max(0.2, Math.min(1.0, v)));
     }
     return res;
   }, [audioUrl]);
+
+  // Waveform dancing animation while playing (WhatsApp / Telegram frequency dance)
+  useEffect(() => {
+    if (isPlaying) {
+      let frame;
+      const loop = () => {
+        setDanceTick(t => (t + 1) % 360);
+        frame = requestAnimationFrame(loop);
+      };
+      frame = requestAnimationFrame(loop);
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [isPlaying]);
 
   useEffect(() => {
     const audio = new Audio(audioUrl);
@@ -736,27 +750,36 @@ function VoiceNotePlayer({ audioUrl, isMine }) {
   };
 
   const progressPct = duration > 0 ? (currentTime / duration) : 0;
+  const filterBadgeMap = {
+    deep: { name: 'Deep Voice', icon: '🤖', color: '#60a5fa' },
+    helium: { name: 'Helium', icon: '🎈', color: '#f43f5e' },
+    lofi: { name: 'Lofi Echo', icon: '📻', color: '#fbbf24' }
+  };
+  const filterBadge = voiceFilter ? filterBadgeMap[voiceFilter] : null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', minWidth: '220px', maxWidth: '270px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '220px', maxWidth: '280px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         <button
           type="button"
           onClick={togglePlay}
           style={{
-            width: '38px',
-            height: '38px',
+            width: '40px',
+            height: '40px',
             borderRadius: '50%',
-            background: isMine ? '#fff' : 'var(--accent)',
-            color: isMine ? 'var(--accent)' : '#fff',
+            background: isMine ? '#ffffff' : 'linear-gradient(135deg, #6366f1, #a855f7)',
+            color: isMine ? '#4f46e5' : '#ffffff',
             border: 'none',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
             flexShrink: 0,
-            boxShadow: '0 3px 10px rgba(0,0,0,0.25)',
-            transition: 'transform 0.15s ease'
+            boxShadow: isPlaying
+              ? (isMine ? '0 0 16px rgba(255,255,255,0.7)' : '0 0 16px rgba(99, 102, 241, 0.7)')
+              : '0 3px 10px rgba(0,0,0,0.25)',
+            transition: 'all 0.2s ease',
+            transform: isPlaying ? 'scale(1.04)' : 'scale(1.0)'
           }}
           title={isPlaying ? 'Pause' : 'Play voice note'}
         >
@@ -764,24 +787,35 @@ function VoiceNotePlayer({ audioUrl, isMine }) {
         </button>
 
         {/* Waveform Bars */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2.5px', flex: 1, height: '32px', cursor: 'pointer' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flex: 1, height: '34px', cursor: 'pointer', position: 'relative' }}>
           {bars.map((barHeight, idx) => {
             const barProgress = idx / bars.length;
             const isPlayed = barProgress <= progressPct;
+
+            // Frequency oscillation wave formula for organic dancing bars
+            const waveOscillation = isPlaying
+              ? Math.sin((danceTick * 0.12) + (idx * 0.55)) * 0.28
+              : 0;
+            const currentHeightPct = Math.max(0.18, Math.min(1.0, barHeight + waveOscillation));
+            const barPixelHeight = Math.round(currentHeightPct * 30);
+
             return (
               <div
                 key={idx}
                 onClick={(e) => handleSeek(e, idx)}
                 style={{
                   flex: 1,
-                  height: `${Math.round(barHeight * 28)}px`,
+                  height: `${barPixelHeight}px`,
                   minHeight: '4px',
                   borderRadius: '3px',
                   background: isPlayed
-                    ? (isMine ? '#ffffff' : 'var(--accent)')
-                    : (isMine ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.2)'),
-                  transition: 'background 0.15s ease, transform 0.15s ease',
-                  transform: isPlaying && isPlayed ? 'scaleY(1.08)' : 'scaleY(1.0)'
+                    ? (isMine ? '#ffffff' : 'linear-gradient(to top, #38bdf8, #818cf8)')
+                    : (isMine ? 'rgba(255,255,255,0.32)' : 'rgba(255,255,255,0.18)'),
+                  boxShadow: (isPlaying && isPlayed)
+                    ? (isMine ? '0 0 6px rgba(255,255,255,0.8)' : '0 0 8px rgba(56, 189, 248, 0.8)')
+                    : 'none',
+                  transition: 'height 0.08s ease, background 0.15s ease',
+                  transform: isPlaying && isPlayed ? 'scaleY(1.06)' : 'scaleY(1.0)'
                 }}
               />
             );
@@ -810,9 +844,15 @@ function VoiceNotePlayer({ audioUrl, isMine }) {
         </button>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', opacity: 0.8, padding: '0 4px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem', opacity: 0.85, padding: '0 4px' }}>
         <span>{isPlaying ? formatTime(currentTime) : (duration > 0 ? formatTime(duration) : 'Voice note')}</span>
-        <span>{duration > 0 ? formatTime(duration) : ''}</span>
+        {filterBadge ? (
+          <span style={{ fontSize: '0.65rem', fontWeight: 700, color: filterBadge.color, background: 'rgba(0,0,0,0.25)', padding: '1px 6px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span>{filterBadge.icon}</span> {filterBadge.name}
+          </span>
+        ) : (
+          <span>{duration > 0 ? formatTime(duration) : ''}</span>
+        )}
       </div>
     </div>
   );
@@ -1548,7 +1588,9 @@ function MessageItem({
         style={{
           background: (message.type === 'gift' || message.type === '3d_text')
             ? ((isSelected || isSelectedForAction) ? 'rgba(99, 102, 241, 0.25)' : 'transparent')
-            : ((isSelected || isSelectedForAction) ? 'rgba(99, 102, 241, 0.28)' : (isMine ? 'var(--bubble-sent)' : 'var(--bubble-received)')),
+            : message.status === 'pending'
+              ? (isMine ? 'linear-gradient(135deg, rgba(75, 85, 99, 0.78), rgba(55, 65, 81, 0.78))' : 'rgba(55, 65, 81, 0.7)')
+              : ((isSelected || isSelectedForAction) ? 'rgba(99, 102, 241, 0.28)' : (isMine ? 'var(--bubble-sent)' : 'var(--bubble-received)')),
           color: isMine ? '#ffffff' : 'var(--text-main)',
           padding: (message.type === 'gift' || message.type === '3d_text') ? '2px 4px' : '0.75rem 1rem',
           borderRadius: isMine ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
@@ -1557,11 +1599,13 @@ function MessageItem({
             : ((message.type === 'gift' || message.type === '3d_text') ? 'none' : '0 2px 6px rgba(0,0,0,0.08)'),
           border: isSelectedForAction
             ? '1.5px solid var(--accent)'
-            : (isSelected ? '1.5px solid var(--accent)' : ((message.type === 'gift' || message.type === '3d_text') ? 'none' : '1px solid transparent')),
+            : (isSelected ? '1.5px solid var(--accent)' : (message.status === 'pending' ? '1px dashed rgba(156, 163, 175, 0.4)' : ((message.type === 'gift' || message.type === '3d_text') ? 'none' : '1px solid transparent'))),
           transform: `translateX(${dragX}px)`,
           transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1), background 0.15s ease',
           userSelect: isDragging ? 'none' : 'auto',
-          position: 'relative'
+          position: 'relative',
+          filter: message.status === 'pending' ? 'grayscale(0.55)' : 'none',
+          opacity: message.status === 'pending' ? 0.88 : 1
         }}
       >
         {/* Double-Tap Heart Burst Animation */}
@@ -1632,7 +1676,7 @@ function MessageItem({
         {/* Voice Note Message */}
         {message.type === 'voice' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <VoiceNotePlayer audioUrl={message.audioUrl} isMine={isMine} />
+            <VoiceNotePlayer audioUrl={message.audioUrl} isMine={isMine} voiceFilter={message.voiceFilter} />
 
             {/* AI Voice Emotion Tag */}
             {(() => {
@@ -2040,9 +2084,9 @@ function MessageItem({
                     borderRadius: '10px',
                     display: 'block',
                     cursor: 'pointer',
-                    opacity: (message.isUploading || message.status === 'uploading') ? 0.9 : ((imgLoaded || isAlreadyLoaded) ? 1 : 0.85),
-                    filter: (message.isUploading || message.status === 'uploading') ? 'blur(5px) brightness(0.88)' : 'none',
-                    transition: 'opacity 0.2s ease'
+                    opacity: message.status === 'pending' ? 0.78 : ((message.isUploading || message.status === 'uploading') ? 0.9 : ((imgLoaded || isAlreadyLoaded) ? 1 : 0.85)),
+                    filter: message.status === 'pending' ? 'grayscale(0.8) brightness(0.85)' : ((message.isUploading || message.status === 'uploading') ? 'blur(5px) brightness(0.88)' : 'none'),
+                    transition: 'all 0.2s ease'
                   }}
                 />
                 {/* Telegram-style 0ms Optimistic Upload Spinner */}

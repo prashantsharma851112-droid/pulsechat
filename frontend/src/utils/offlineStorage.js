@@ -435,6 +435,8 @@ export function updateUserProfileInStorage(targetUserId, updates, currentUserId)
       ...(updates.hasKingCrown !== undefined && { hasKingCrown: updates.hasKingCrown }),
       ...(updates.hasSilverCrown !== undefined && { hasSilverCrown: updates.hasSilverCrown }),
       ...(updates.hasStreakCrown !== undefined && { hasStreakCrown: updates.hasStreakCrown }),
+      ...(updates.hasNeonFlameAura !== undefined && { hasNeonFlameAura: updates.hasNeonFlameAura }),
+      ...(updates.vibeStreakCount !== undefined && { vibeStreakCount: updates.vibeStreakCount }),
       ...(updates.vibeAura !== undefined && { vibeAura: updates.vibeAura })
     };
   };

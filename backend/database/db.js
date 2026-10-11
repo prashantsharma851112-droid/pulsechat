@@ -1055,16 +1055,26 @@ module.exports = {
       streakUpdated = true;
 
       const current = setting.streakCount;
+      let auraUnlocked = null;
+      if (current >= 3) {
+        // Unlock exclusive Neon Flame Aura for both friends
+        await User.updateMany(
+          { $or: [{ id: { $in: [senderId, receiverId] } }, { username: { $in: [senderId, receiverId] } }] },
+          { $set: { hasNeonFlameAura: true } }
+        ).catch(() => {});
+      }
+
       if (current === 3 && (!setting.streakMilestonesClaimed || !setting.streakMilestonesClaimed.includes(3))) {
-        bonusSparks = 5;
+        bonusSparks = 15; // 3-Day Daily Vibe Streak Reward (Sparks Drop)
         milestoneHit = 3;
+        auraUnlocked = 'neon_flame';
         setting.streakMilestonesClaimed = [...(setting.streakMilestonesClaimed || []), 3];
       } else if (current === 7 && (!setting.streakMilestonesClaimed || !setting.streakMilestonesClaimed.includes(7))) {
-        bonusSparks = 15;
+        bonusSparks = 25;
         milestoneHit = 7;
         setting.streakMilestonesClaimed = [...(setting.streakMilestonesClaimed || []), 7];
       } else if (current === 30 && (!setting.streakMilestonesClaimed || !setting.streakMilestonesClaimed.includes(30))) {
-        bonusSparks = 50;
+        bonusSparks = 60;
         milestoneHit = 30;
         setting.streakMilestonesClaimed = [...(setting.streakMilestonesClaimed || []), 30];
       } else {
@@ -1118,6 +1128,7 @@ module.exports = {
       shields: shieldsObj,
       bonusSparks,
       milestoneHit,
+      auraUnlocked: (milestoneHit === 3 || setting.streakCount >= 3) ? 'neon_flame' : null,
       streakUpdated: true
     };
   },

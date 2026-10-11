@@ -1741,6 +1741,73 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         if (pendingMsg.clientTempId) removeFromOutbox(user.id, pendingMsg.clientTempId);
         if (pendingMsg.tempId) removeFromOutbox(user.id, pendingMsg.tempId);
 
+        // Smart Offline Queue: If pending voice note needs upload
+        if (pendingMsg.type === 'voice') {
+          (async () => {
+            let finalAudio = pendingMsg.audioDataUrl || pendingMsg.audioUrl;
+            if (finalAudio && finalAudio.startsWith('data:')) {
+              try {
+                finalAudio = await uploadMediaDirect(finalAudio, 'pulsechat_voice', token);
+              } catch (e) {
+                console.warn('Voice outbox upload error:', e);
+              }
+            }
+            socket.emit('send_message', {
+              ...getSenderPayload(),
+              chatId: pendingMsg.chatId,
+              senderId: pendingMsg.senderId || user.id,
+              receiverId: pendingMsg.receiverId,
+              isGroup: pendingMsg.isGroup,
+              audioUrl: finalAudio,
+              type: 'voice',
+              voiceFilter: pendingMsg.voiceFilter || null,
+              clientTempId: msgKey,
+              replyTo: pendingMsg.replyTo
+            });
+            if (pendingMsg.chatId && msgKey) {
+              updateCachedMessageStatus(pendingMsg.chatId, msgKey, { status: 'sent', audioUrl: finalAudio });
+            }
+            setMessages(prev => prev.map(m =>
+              (m.id === msgKey || m.clientTempId === msgKey) ? { ...m, status: 'sent', audioUrl: finalAudio } : m
+            ));
+          })();
+          return;
+        }
+
+        // Smart Offline Queue: If pending photo / video / document needs upload
+        if (pendingMsg.needsUpload && (pendingMsg.mediaDataUrl || pendingMsg.mediaUrl)) {
+          (async () => {
+            let finalMedia = pendingMsg.mediaDataUrl || pendingMsg.mediaUrl;
+            if (finalMedia && finalMedia.startsWith('data:')) {
+              try {
+                finalMedia = await uploadMediaDirect(finalMedia, 'pulsechat_media', token, pendingMsg.type === 'video');
+              } catch (e) {
+                console.warn('Media outbox upload error:', e);
+              }
+            }
+            socket.emit('send_message', {
+              ...getSenderPayload(),
+              chatId: pendingMsg.chatId,
+              senderId: pendingMsg.senderId || user.id,
+              receiverId: pendingMsg.receiverId,
+              isGroup: pendingMsg.isGroup,
+              mediaUrl: finalMedia,
+              type: pendingMsg.type || 'image',
+              fileName: pendingMsg.fileName,
+              fileSize: pendingMsg.fileSize,
+              clientTempId: msgKey,
+              replyTo: pendingMsg.replyTo
+            });
+            if (pendingMsg.chatId && msgKey) {
+              updateCachedMessageStatus(pendingMsg.chatId, msgKey, { status: 'sent', mediaUrl: finalMedia });
+            }
+            setMessages(prev => prev.map(m =>
+              (m.id === msgKey || m.clientTempId === msgKey) ? { ...m, status: 'sent', mediaUrl: finalMedia } : m
+            ));
+          })();
+          return;
+        }
+
         socket.emit('send_message', {
           ...getSenderPayload(),
           chatId: pendingMsg.chatId,
@@ -3010,8 +3077,47 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setCooldownMsg(null);
   };
 
-  const handleSendVoice = async (audioUrl) => {
+  const handleSendVoice = async (audioUrl, voiceFilter = 'normal') => {
     setShowRecorder(false);
+    const tempId = 'temp_voice_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    const isOnlineNow = isDeviceOnline() && Boolean(socket?.connected);
+
+    const pendingVoiceMsg = {
+      ...getSenderPayload(),
+      id: tempId,
+      tempId,
+      clientTempId: tempId,
+      chatId,
+      senderId: user.id,
+      receiverId: isGroup ? '' : activeChat.id,
+      isGroup,
+      audioUrl,
+      type: 'voice',
+      voiceFilter: voiceFilter !== 'normal' ? voiceFilter : null,
+      status: isOnlineNow ? 'sent' : 'pending',
+      timestamp: new Date().toISOString(),
+      reactions: {},
+      replyTo: replyTo ? {
+        id: replyTo.id,
+        content: replyTo.content,
+        type: replyTo.type,
+        senderId: replyTo.senderId,
+        senderName: replyTo.senderName || replyTo.senderId
+      } : null
+    };
+
+    setMessages(prev => [...prev, pendingVoiceMsg]);
+    appendCachedMessage(chatId, pendingVoiceMsg);
+    updateRecentChatSnippet(user.id, chatId, pendingVoiceMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
+    window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    playSound('sent');
+
+    if (!isOnlineNow) {
+      addToOutbox(user.id, { ...pendingVoiceMsg, needsUpload: true, audioDataUrl: audioUrl });
+      return;
+    }
+
     let finalAudioUrl = audioUrl;
     if (audioUrl && audioUrl.startsWith('data:')) {
       try {
@@ -3023,14 +3129,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     socket.emit('send_message', {
       ...getSenderPayload(),
+      clientTempId: tempId,
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
       isGroup,
       audioUrl: finalAudioUrl,
-      type: 'voice'
+      type: 'voice',
+      voiceFilter: voiceFilter !== 'normal' ? voiceFilter : null,
+      replyTo: pendingVoiceMsg.replyTo
     });
-    playSound('sent');
   };
 
   const handleCreatePoll = (pollData) => {
@@ -3316,6 +3424,43 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       reactions: {},
       replyTo: currentReplyTo
     };
+
+    // Smart Offline Queue: If offline, queue photo/media in grayed out state
+    const isOnlineNow = isDeviceOnline() && Boolean(socket?.connected);
+    if (!isOnlineNow) {
+      const offlineMediaMsg = {
+        ...optimisticMediaMsg,
+        status: 'pending',
+        isUploading: false
+      };
+      setMessages(prev => [...prev, offlineMediaMsg]);
+      appendCachedMessage(chatId, offlineMediaMsg);
+      updateRecentChatSnippet(user.id, chatId, offlineMediaMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
+      window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      playSound('sent');
+
+      if (rawFile) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          addToOutbox(user.id, {
+            ...offlineMediaMsg,
+            needsUpload: true,
+            mediaDataUrl: reader.result,
+            mediaUrl: reader.result
+          });
+        };
+        reader.readAsDataURL(rawFile);
+      } else {
+        addToOutbox(user.id, {
+          ...offlineMediaMsg,
+          needsUpload: true,
+          mediaDataUrl: mediaUrl,
+          mediaUrl
+        });
+      }
+      return;
+    }
 
     setMessages(prev => [...prev, optimisticMediaMsg]);
     appendCachedMessage(chatId, optimisticMediaMsg);

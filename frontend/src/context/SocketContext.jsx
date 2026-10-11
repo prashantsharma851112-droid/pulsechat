@@ -254,6 +254,26 @@ export function SocketProvider({ children }) {
         } catch (e) {}
       });
 
+      // Daily Vibe Streak Reward (Sparks Drop & Neon Flame Aura Unlock)
+      newSocket.on('streak_sparks_reward', (data) => {
+        try {
+          if (data && (data.streakCount >= 3 || data.auraUnlocked === 'neon_flame' || data.milestoneHit === 3)) {
+            window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
+              detail: { emoji: '🔥', mode: 'burst', duration: 5 }
+            }));
+            const streakMsg = `🔥 3-Day Streak Celebrated! +${data.bonusSparks || 15} Sparks Dropped & 'Neon Flame Aura' Unlocked! ✨`;
+            setLastNotification({
+              id: `streak_${Date.now()}`,
+              title: '🔥 3-Day Vibe Streak Unlocked!',
+              content: streakMsg,
+              type: 'streak_reward',
+              receivedAt: Date.now()
+            });
+            window.dispatchEvent(new CustomEvent('pulsechat_toast_notify', { detail: { message: streakMsg, type: 'streak' } }));
+          }
+        } catch (e) {}
+      });
+
       // Listen to real-time friend/sync request and acceptance alerts
       newSocket.on('friend_notification', (data) => {
         const notif = {

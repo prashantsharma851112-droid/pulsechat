@@ -263,7 +263,8 @@ export default function App() {
             ...(data.status !== undefined && { status: data.status }),
             ...(data.isPro !== undefined && { isPro: Boolean(data.isPro) }),
             ...(data.proTier !== undefined && { proTier: data.proTier }),
-            ...(data.customBadge !== undefined && { customBadge: data.customBadge })
+            ...(data.customBadge !== undefined && { customBadge: data.customBadge }),
+            ...(data.hasNeonFlameAura !== undefined && { hasNeonFlameAura: Boolean(data.hasNeonFlameAura) })
           };
         }
         return prev;

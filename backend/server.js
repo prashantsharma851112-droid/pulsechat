@@ -875,12 +875,29 @@ io.on('connection', (socket) => {
             io.to(`user_${resolvedReceiverId}`).emit('streak_updated', streakInfo);
             io.to(resolvedReceiverId).emit('streak_updated', streakInfo);
 
-            if (streakInfo.bonusSparks > 0) {
-              io.to(`user_${senderId}`).emit('streak_sparks_reward', { bonusSparks: streakInfo.bonusSparks, streakCount: streakInfo.streakCount });
-              io.to(`user_${resolvedReceiverId}`).emit('streak_sparks_reward', { bonusSparks: streakInfo.bonusSparks, streakCount: streakInfo.streakCount });
+            if (streakInfo.bonusSparks > 0 || streakInfo.milestoneHit === 3) {
+              const rewardPayload = {
+                bonusSparks: streakInfo.bonusSparks || 15,
+                streakCount: streakInfo.streakCount,
+                milestoneHit: streakInfo.milestoneHit,
+                auraUnlocked: streakInfo.auraUnlocked || (streakInfo.streakCount >= 3 ? 'neon_flame' : null)
+              };
+              io.to(`user_${senderId}`).emit('streak_sparks_reward', rewardPayload);
+              io.to(`user_${resolvedReceiverId}`).emit('streak_sparks_reward', rewardPayload);
+              io.to(senderId).emit('streak_sparks_reward', rewardPayload);
+              io.to(resolvedReceiverId).emit('streak_sparks_reward', rewardPayload);
               // Fetch latest sparks and notify
-              User.findOne({ $or: [{ id: senderId }, { username: senderId }] }).select('pulseSparks').lean().then(u => {
-                if (u) io.to(`user_${senderId}`).emit('sparks_updated', { pulseSparks: u.pulseSparks });
+              User.findOne({ $or: [{ id: senderId }, { username: senderId }] }).select('pulseSparks hasNeonFlameAura').lean().then(u => {
+                if (u) {
+                  io.to(`user_${senderId}`).emit('sparks_updated', { pulseSparks: u.pulseSparks });
+                  io.to(`user_${senderId}`).emit('user_profile_updated', { userId: senderId, hasNeonFlameAura: u.hasNeonFlameAura });
+                }
+              }).catch(() => {});
+              User.findOne({ $or: [{ id: resolvedReceiverId }, { username: resolvedReceiverId }] }).select('pulseSparks hasNeonFlameAura').lean().then(u => {
+                if (u) {
+                  io.to(`user_${resolvedReceiverId}`).emit('sparks_updated', { pulseSparks: u.pulseSparks });
+                  io.to(`user_${resolvedReceiverId}`).emit('user_profile_updated', { userId: resolvedReceiverId, hasNeonFlameAura: u.hasNeonFlameAura });
+                }
               }).catch(() => {});
             }
           }

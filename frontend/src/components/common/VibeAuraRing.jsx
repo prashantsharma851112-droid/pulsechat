@@ -107,9 +107,11 @@ export default function VibeAuraRing({
           position: 'absolute',
           inset: -3.5,
           borderRadius: isGroup ? '14px' : '50%',
-          border: `2px solid ${ringColor}`,
-          boxShadow: `0 0 10px ${ringColor}, inset 0 0 5px ${ringColor}`,
-          animation: 'vibeAuraPulse 2s infinite ease-in-out',
+          border: auraType === 'neon_flame' ? '2.5px solid #ff0055' : `2px solid ${ringColor}`,
+          boxShadow: auraType === 'neon_flame'
+            ? '0 0 14px #ff0055, 0 0 28px #ff5500, inset 0 0 6px #ffaa00'
+            : `0 0 10px ${ringColor}, inset 0 0 5px ${ringColor}`,
+          animation: auraType === 'neon_flame' ? 'neonFlameFlicker 1.4s infinite ease-in-out' : 'vibeAuraPulse 2s infinite ease-in-out',
           pointerEvents: 'none',
           zIndex: 1
         }}
@@ -178,6 +180,11 @@ export default function VibeAuraRing({
           0% { transform: scale(1.0); opacity: 0.75; }
           50% { transform: scale(1.05); opacity: 1.0; }
           100% { transform: scale(1.0); opacity: 0.75; }
+        }
+        @keyframes neonFlameFlicker {
+          0% { transform: scale(1.0); box-shadow: 0 0 12px #ff0055, 0 0 24px #ff5500; opacity: 0.85; }
+          50% { transform: scale(1.07); box-shadow: 0 0 18px #ff0055, 0 0 34px #ff5500, 0 0 44px #ffaa00; opacity: 1.0; }
+          100% { transform: scale(1.0); box-shadow: 0 0 12px #ff0055, 0 0 24px #ff5500; opacity: 0.85; }
         }
         @keyframes instaThoughtFloat {
           0% { transform: translateX(-50%) translateY(0px); }

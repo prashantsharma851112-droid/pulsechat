@@ -92,6 +92,36 @@ router.post('/create', authMiddleware, async (req, res) => {
       expiresAt
     });
 
+    // Track Daily Vibe Streak
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    let newVibeStreak = user.vibeStreakCount || 0;
+    let bonusVibeSparks = 0;
+    let unlockedFlame = false;
+
+    if (user.lastVibeDate === yesterdayStr) {
+      newVibeStreak += 1;
+    } else if (user.lastVibeDate !== todayStr) {
+      newVibeStreak = 1;
+    }
+
+    if (newVibeStreak >= 3 && !user.hasNeonFlameAura) {
+      unlockedFlame = true;
+      bonusVibeSparks = 15; // Daily Vibe Streak Reward (Sparks Drop)
+    }
+
+    await User.updateOne(
+      { $or: [{ id: resolvedUserId }, { username: user.username }] },
+      {
+        $set: {
+          lastVibeDate: todayStr,
+          vibeStreakCount: newVibeStreak,
+          ...(unlockedFlame ? { hasNeonFlameAura: true } : {})
+        },
+        ...(bonusVibeSparks > 0 ? { $inc: { pulseSparks: bonusVibeSparks } } : {})
+      }
+    ).catch(() => {});
+
     // Real-time broadcast to ALL connected users via Socket.io
     const io = req.app.get('io');
     if (io) {
@@ -102,9 +132,33 @@ router.post('/create', authMiddleware, async (req, res) => {
         avatar: user.avatar || '',
         vibe: newVibe
       });
+
+      if (newVibeStreak >= 3 || bonusVibeSparks > 0) {
+        const rewardPayload = {
+          bonusSparks: bonusVibeSparks || 15,
+          streakCount: newVibeStreak,
+          milestoneHit: newVibeStreak === 3 ? 3 : null,
+          auraUnlocked: 'neon_flame',
+          isVibeStreak: true
+        };
+        io.to(`user_${resolvedUserId}`).emit('streak_sparks_reward', rewardPayload);
+        io.to(resolvedUserId).emit('streak_sparks_reward', rewardPayload);
+        if (bonusVibeSparks > 0) {
+          const updatedUser = await User.findOne({ $or: [{ id: resolvedUserId }, { username: user.username }] }).select('pulseSparks hasNeonFlameAura').lean();
+          if (updatedUser) {
+            io.to(`user_${resolvedUserId}`).emit('sparks_updated', { pulseSparks: updatedUser.pulseSparks });
+            io.to(`user_${resolvedUserId}`).emit('user_profile_updated', { userId: resolvedUserId, hasNeonFlameAura: true });
+          }
+        }
+      }
     }
 
-    res.json({ success: true, vibe: newVibe });
+    res.json({
+      success: true,
+      vibe: newVibe,
+      vibeStreakCount: newVibeStreak,
+      auraUnlocked: unlockedFlame ? 'neon_flame' : null
+    });
   } catch (err) {
     console.error('Error creating vibe:', err);
     res.status(500).json({ error: 'Failed to create Vibe Story' });
