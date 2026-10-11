@@ -2079,7 +2079,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
-            setHasMoreOlderMessages(data.length >= 50);
+            const noMore = localStorage.getItem(`pulsechat_nomore_${chatId}`) === 'true';
+            setHasMoreOlderMessages(!noMore && data.length >= 50);
             const currentOutbox = getOutbox(user?.id);
             const pendingForChat = currentOutbox.filter(m => m.chatId === chatId);
             const serverIds = new Set(data.map(m => m.id));
@@ -2093,20 +2094,33 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               }
             });
 
-            // ALSO retain any pending messages from cached storage that haven't arrived from server yet
+            // Retain ALL previously loaded/cached messages (so older scrolled messages are NEVER wiped!)
             const cachedNow = getCachedMessages(chatId);
+            const messageMap = new Map();
+
+            // 1. First populate with cached messages so older scrolled messages stay in memory & cache
             cachedNow.forEach(c => {
               const k = c.clientTempId || c.id;
-              if (
-                (c.status === 'pending' || c.status === 'uploading' || c.id?.startsWith('temp_') || c.clientTempId?.startsWith('temp_')) &&
-                !serverIds.has(c.id) && !serverIds.has(c.clientTempId) &&
-                !pendingMap.has(k)
-              ) {
-                pendingMap.set(k, c);
+              if (k) messageMap.set(k, c);
+            });
+
+            // 2. Overwrite / merge with latest server messages (fresh status, reactions, new texts)
+            data.forEach(m => {
+              if (m && m.id) {
+                messageMap.set(m.id, m);
               }
             });
 
-            const merged = [...data, ...Array.from(pendingMap.values())].map(sanitizeFogSnapMessage);
+            // 3. Add pending outbox messages
+            pendingMap.forEach((p, k) => {
+              messageMap.set(k, p);
+            });
+
+            // 4. Sort chronologically
+            const merged = Array.from(messageMap.values())
+              .sort((a, b) => new Date(a.timestamp || a.createdAt || 0) - new Date(b.timestamp || b.createdAt || 0))
+              .map(sanitizeFogSnapMessage);
+
             setMessages(merged);
             setCachedMessages(chatId, merged);
           }
@@ -2943,6 +2957,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       if (Array.isArray(data)) {
         if (data.length < 50) {
           setHasMoreOlderMessages(false);
+          try { localStorage.setItem(`pulsechat_nomore_${chatId}`, 'true'); } catch {}
         } else {
           setHasMoreOlderMessages(true);
         }
@@ -2952,6 +2967,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             const newOldMsgs = data.filter(m => !currentIds.has(m.id));
             if (newOldMsgs.length === 0) {
               scrollPositionRef.current.isPrepending = false;
+              setHasMoreOlderMessages(false);
+              try { localStorage.setItem(`pulsechat_nomore_${chatId}`, 'true'); } catch {}
               return prev;
             }
             const merged = [...newOldMsgs, ...prev];
@@ -2960,6 +2977,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           });
         } else {
           scrollPositionRef.current.isPrepending = false;
+          setHasMoreOlderMessages(false);
+          try { localStorage.setItem(`pulsechat_nomore_${chatId}`, 'true'); } catch {}
         }
       } else {
         scrollPositionRef.current.isPrepending = false;

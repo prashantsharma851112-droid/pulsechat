@@ -6,7 +6,7 @@ export const DISGUISE_PRESETS = [
     id: 'default',
     name: 'PulseChat',
     subtitle: 'Original cyber-pulse AMOLED branding',
-    title: 'PulseChat - Feel The Beat of Chatting',
+    title: 'PulseChat',
     badge: 'Default',
     accentColor: '#6366f1',
     iconUrl: '/icon-192.png',
