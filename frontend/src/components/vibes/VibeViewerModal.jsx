@@ -1282,7 +1282,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     setShareSentTo(prev => ({ ...prev, [targetChatId]: true }));
   };
 
-  // 3. Download Story as Video with Song (STRICTLY FOR OWN STORY)
+  // 3. Download Story as Video with Song and ALL Visual Elements (STRICTLY FOR OWN STORY)
   const handleDownloadStoryAsVideo = async () => {
     if (!isMine) {
       alert("You can only download your own story.");
@@ -1294,8 +1294,22 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     setDownloadProgress(8);
 
     try {
-      // Fast path: Pure video story without separate external audio URL
-      if (isCurrentStoryVideo && !currentVibe.audioUrl) {
+      // Check if story has any overlays, custom styling, or audio additions
+      const hasStoryOverlays = Boolean(
+        currentVibe.caption ||
+        (Array.isArray(currentVibe.stickersData) && currentVibe.stickersData.length > 0) ||
+        (Array.isArray(currentVibe.selectedStickers) && currentVibe.selectedStickers.length > 0) ||
+        currentVibe.songTitle ||
+        currentVibe.audioUrl ||
+        (currentVibe.animatedBg && currentVibe.animatedBg !== 'none') ||
+        (currentVibe.textStyle3D && currentVibe.textStyle3D !== 'none') ||
+        (currentVibe.imageFilter && currentVibe.imageFilter !== 'none') ||
+        (currentVibe.imageZoom && Number(currentVibe.imageZoom) !== 1.0) ||
+        (currentVibe.imagePos && (currentVibe.imagePos.x !== 50 || currentVibe.imagePos.y !== 50))
+      );
+
+      // Fast path: ONLY pure raw video story without ANY overlays or audio replacements
+      if (isCurrentStoryVideo && !currentVibe.audioUrl && !hasStoryOverlays) {
         setDownloadProgress(35);
         try {
           const response = await fetch(currentVibe.mediaUrl);
@@ -1315,14 +1329,14 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
           setTimeout(() => setIsDownloadingStory(false), 500);
           return;
         } catch (directErr) {
-          console.warn('Direct video fetch failed, proceeding with canvas recording engine:', directErr);
+          console.warn('Direct video fetch failed, proceeding with composite canvas recording engine:', directErr);
         }
       }
 
-      // High-Definition Canvas + Web Audio API + MediaRecorder Video Synthesizer
+      // High-Definition Canvas (720x1280 9:16) + Web Audio API + MediaRecorder Compositor
       let durationSec = Math.max(5, Math.min(Number(currentVibe?.storyDuration || currentVibe?.duration || 10), 15));
 
-      // 1. Load visual asset (Image or Video)
+      // 1. Preload visual asset (Image or Video)
       let visualElement = null;
       let visualBlobUrl = null;
       if (currentVibe.mediaUrl) {
@@ -1362,9 +1376,34 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
         }
       }
 
+      // 2. Preload album art if music sticker is active
+      let albumArtImg = null;
+      if (currentVibe.songTitle) {
+        const artUrl = currentVibe.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(currentVibe.songTitle || 'track')}`;
+        try {
+          const art = new Image();
+          try {
+            const aResp = await fetch(artUrl);
+            const aBlob = await aResp.blob();
+            art.src = URL.createObjectURL(aBlob);
+          } catch {
+            art.crossOrigin = 'anonymous';
+            art.src = artUrl;
+          }
+          await new Promise(r => {
+            art.onload = r;
+            art.onerror = r;
+            setTimeout(r, 2000);
+          });
+          albumArtImg = art;
+        } catch (artErr) {
+          console.warn('Album art preload warning:', artErr);
+        }
+      }
+
       setDownloadProgress(25);
 
-      // 2. Setup AudioContext and Audio Track (Plays the full story song)
+      // 3. Setup AudioContext and Audio Track (Plays the full story song)
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       const audioCtx = new AudioContextClass();
       const audioDest = audioCtx.createMediaStreamDestination();
@@ -1400,7 +1439,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
 
       setDownloadProgress(35);
 
-      // 3. Setup Canvas and MediaStream
+      // 4. Setup Canvas and MediaStream
       const canvas = document.createElement('canvas');
       canvas.width = 720;
       canvas.height = 1280;
@@ -1441,6 +1480,68 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
       const startTime = performance.now();
       const totalDurationMs = durationSec * 1000;
 
+      // 5. Initialize Live Wallpaper Particles if active
+      const liveBgType = currentVibe.animatedBg;
+      const isLiveWallpaper = liveBgType && liveBgType !== 'none';
+      const liveParticles = [];
+      if (isLiveWallpaper) {
+        let emojis = ['✨', '⭐', '🌟', '💫', '🪐', '🌌'];
+        let isDown = false;
+        let pCount = 28;
+        if (liveBgType === 'love_hearts_live') {
+          emojis = ['💖', '💗', '💕', '❤️', '🌸'];
+        } else if (liveBgType === 'nature_forest_live') {
+          emojis = ['🍃', '🌿', '🍂', '🍁', '🌱'];
+          isDown = true;
+        } else if (liveBgType === 'ocean_waves_live') {
+          emojis = ['🫧', '💧', '🌊', '✨'];
+        } else if (liveBgType === 'cyber_grid_live') {
+          emojis = ['⚡', '🔮', '✨', '🪐', '🌟'];
+        } else if (liveBgType === 'matrix_code_live') {
+          emojis = ['0', '1', '🟢', '⚡', '1', '0', '❇️'];
+          isDown = true;
+          pCount = 38;
+        } else if (liveBgType === 'firefly_night_live') {
+          emojis = ['✨', '🟡', '💡', '🌟', '💛'];
+        }
+
+        for (let i = 0; i < pCount; i++) {
+          liveParticles.push({
+            x: Math.random() * 720,
+            y: Math.random() * 1280,
+            size: Math.random() * 16 + 20,
+            vy: isDown ? (Math.random() * 2.2 + 1.0) : -(Math.random() * 2.0 + 0.8),
+            vx: (Math.random() - 0.5) * 1.0,
+            opacity: Math.random() * 0.4 + 0.25,
+            rotation: Math.random() * Math.PI * 2,
+            vRot: (Math.random() - 0.5) * 0.025,
+            emoji: emojis[Math.floor(Math.random() * emojis.length)],
+            isDown
+          });
+        }
+      }
+
+      // Helper function for text wrapping on canvas
+      const wrapCanvasText = (context, text, maxWidth) => {
+        if (!text) return [];
+        const words = String(text).split(/\s+/);
+        const lines = [];
+        let curLine = '';
+        for (let i = 0; i < words.length; i++) {
+          const w = words[i];
+          const test = curLine ? `${curLine} ${w}` : w;
+          const met = context.measureText(test);
+          if (met.width > maxWidth && curLine) {
+            lines.push(curLine);
+            curLine = w;
+          } else {
+            curLine = test;
+          }
+        }
+        if (curLine) lines.push(curLine);
+        return lines;
+      };
+
       await new Promise((resolve) => {
         let isFinished = false;
         const renderLoop = () => {
@@ -1455,81 +1556,484 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
             return;
           }
 
-          // Background gradient
-          const bgGrad = ctx.createLinearGradient(0, 0, 0, 1280);
-          bgGrad.addColorStop(0, '#09090b');
-          bgGrad.addColorStop(0.5, '#1e1b4b');
-          bgGrad.addColorStop(1, '#09090b');
-          ctx.fillStyle = bgGrad;
-          ctx.fillRect(0, 0, 720, 1280);
+          // A. DRAW BACKGROUND
+          if (isLiveWallpaper) {
+            const bgGradMap = {
+              love_hearts_live: ['#2b081c', '#0d0208'],
+              nature_forest_live: ['#062419', '#020d09'],
+              ocean_waves_live: ['#072740', '#020c14'],
+              matrix_code_live: ['#021a0d', '#000904'],
+              starry_galaxy_live: ['#110d2c', '#04020f'],
+              firefly_night_live: ['#1c1902', '#080701'],
+              cyber_grid_live: ['#1b0730', '#080210']
+            };
+            const pair = bgGradMap[liveBgType] || ['#110d2c', '#04020f'];
+            const radGrad = ctx.createRadialGradient(360, 640, 40, 360, 640, 780);
+            radGrad.addColorStop(0, pair[0]);
+            radGrad.addColorStop(1, pair[1]);
+            ctx.fillStyle = radGrad;
+            ctx.fillRect(0, 0, 720, 1280);
 
-          // Draw Visual Media
+            // Animate live wallpaper particles
+            liveParticles.forEach(p => {
+              p.y += p.vy;
+              p.x += p.vx;
+              p.rotation += p.vRot;
+              if (p.isDown) {
+                if (p.y > 1320) { p.y = -30; p.x = Math.random() * 720; }
+              } else {
+                if (p.y < -30) { p.y = 1320; p.x = Math.random() * 720; }
+              }
+              if (p.x < -20) p.x = 740;
+              if (p.x > 740) p.x = -20;
+
+              ctx.save();
+              ctx.globalAlpha = p.opacity;
+              ctx.translate(p.x, p.y);
+              ctx.rotate(p.rotation);
+              ctx.font = `${Math.round(p.size)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(p.emoji, 0, 0);
+              ctx.restore();
+            });
+          } else {
+            // User gradient or default gradient
+            const gradMatches = currentVibe.bgGradient ? currentVibe.bgGradient.match(/#[a-fA-F0-9]{3,8}|rgba?\([^)]+\)/g) : null;
+            const bgGrad = ctx.createLinearGradient(0, 0, 720, 1280);
+            if (gradMatches && gradMatches.length >= 2) {
+              gradMatches.forEach((color, idx) => {
+                bgGrad.addColorStop(idx / (gradMatches.length - 1), color);
+              });
+            } else {
+              bgGrad.addColorStop(0, '#6366f1');
+              bgGrad.addColorStop(1, '#a855f7');
+            }
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, 720, 1280);
+          }
+
+          // B. DRAW VISUAL MEDIA (IMAGE OR VIDEO) WITH FILTERS, ZOOM & POSITION
           if (visualElement) {
-            const natW = visualElement.videoWidth || visualElement.naturalWidth || 720;
-            const natH = visualElement.videoHeight || visualElement.naturalHeight || 1280;
+            ctx.save();
+            const filterMap = {
+              warm: 'sepia(0.35) contrast(1.1) brightness(1.05)',
+              cyber: 'contrast(1.2) saturate(1.4) hue-rotate(15deg)',
+              vintage: 'sepia(0.4) contrast(1.1)',
+              bw: 'grayscale(1) contrast(1.3)',
+              diamond: 'contrast(1.1) brightness(1.15) saturate(1.2)',
+              vivid: 'saturate(1.9) contrast(1.15)'
+            };
+            if (currentVibe.imageFilter && filterMap[currentVibe.imageFilter]) {
+              ctx.filter = filterMap[currentVibe.imageFilter];
+            }
+            ctx.globalAlpha = Number(currentVibe.imageOpacity ?? 1.0);
+
+            const posX = ((currentVibe.imagePos?.x ?? 50) / 100) * 720;
+            const posY = ((currentVibe.imagePos?.y ?? 50) / 100) * 1280;
+            const zoom = Number(currentVibe.imageZoom ?? 1.0);
             const fit = currentVibe.imageFit || 'cover';
 
+            const natW = visualElement.videoWidth || visualElement.naturalWidth || 720;
+            const natH = visualElement.videoHeight || visualElement.naturalHeight || 1280;
+
+            let dw = 720;
+            let dh = 1280;
             if (fit === 'contain' || fit === 'padded') {
-              const scale = Math.min(680 / natW, 1100 / natH);
-              const dw = natW * scale;
-              const dh = natH * scale;
-              ctx.drawImage(visualElement, (720 - dw) / 2, (1280 - dh) / 2, dw, dh);
+              const scale = Math.min(680 / natW, 1140 / natH);
+              dw = natW * scale * zoom;
+              dh = natH * scale * zoom;
             } else {
               const scale = Math.max(720 / natW, 1280 / natH);
-              const dw = natW * scale;
-              const dh = natH * scale;
-              ctx.drawImage(visualElement, (720 - dw) / 2, (1280 - dh) / 2, dw, dh);
+              dw = natW * scale * zoom;
+              dh = natH * scale * zoom;
             }
+
+            if (fit === 'padded') {
+              ctx.beginPath();
+              ctx.roundRect(posX - dw / 2, posY - dh / 2, dw, dh, 24);
+              ctx.clip();
+            }
+
+            ctx.drawImage(visualElement, posX - dw / 2, posY - dh / 2, dw, dh);
+            ctx.restore();
           }
 
-          // Draw Caption
+          // C. DRAW 3D TYPOGRAPHY / CAPTION
           if (currentVibe.caption) {
             ctx.save();
-            ctx.font = 'bold 30px sans-serif';
-            ctx.textAlign = 'center';
+            const textX = 720 * ((currentVibe.textPos?.x ?? 50) / 100);
+            const textY = 1280 * ((currentVibe.textPos?.y ?? 50) / 100);
+            const userTextSize = (currentVibe.textSize || 1.3) * 1.15;
+            const fontSize = Math.round(26 * userTextSize);
+            ctx.font = `800 ${fontSize}px sans-serif`;
+            ctx.textAlign = currentVibe.textAlign || 'center';
             ctx.textBaseline = 'middle';
-            const textY = 1280 * ((currentVibe.textPos?.y ?? 65) / 100);
-            const metrics = ctx.measureText(currentVibe.caption);
-            const boxW = Math.min(640, metrics.width + 48);
-            const boxH = 54;
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
-            ctx.beginPath();
-            ctx.roundRect((720 - boxW) / 2, textY - boxH / 2, boxW, boxH, 20);
-            ctx.fill();
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText(currentVibe.caption, 360, textY);
+
+            const maxTextW = 600;
+            const lines = wrapCanvasText(ctx, currentVibe.caption, maxTextW);
+            const lineHeight = fontSize * 1.38;
+            const totalTextH = lines.length * lineHeight;
+            const startY = textY - totalTextH / 2 + lineHeight / 2;
+
+            // Background box styling
+            const bgStyle = currentVibe.textBgStyle;
+            if (bgStyle && bgStyle !== 'none') {
+              let longestW = 0;
+              lines.forEach(l => {
+                const w = ctx.measureText(l).width;
+                if (w > longestW) longestW = w;
+              });
+              const boxW = Math.min(660, longestW + 48);
+              const boxH = totalTextH + 28;
+              const boxX = textX - boxW / 2;
+              const boxY = textY - boxH / 2;
+
+              ctx.save();
+              if (bgStyle === 'neon') {
+                ctx.fillStyle = 'rgba(99, 102, 241, 0.9)';
+                ctx.shadowColor = 'rgba(99, 102, 241, 0.85)';
+                ctx.shadowBlur = 24;
+              } else if (bgStyle === 'gradient') {
+                const g = ctx.createLinearGradient(boxX, boxY, boxX + boxW, boxY + boxH);
+                g.addColorStop(0, '#f09433');
+                g.addColorStop(0.5, '#dc2743');
+                g.addColorStop(1, '#bc1888');
+                ctx.fillStyle = g;
+                ctx.shadowColor = 'rgba(220, 39, 67, 0.6)';
+                ctx.shadowBlur = 20;
+              } else {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.78)';
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
+                ctx.shadowBlur = 18;
+              }
+              ctx.beginPath();
+              ctx.roundRect(boxX, boxY, boxW, boxH, 20);
+              ctx.fill();
+              ctx.restore();
+            }
+
+            // 3D Text Layers
+            const style3D = currentVibe.textStyle3D;
+            lines.forEach((line, idx) => {
+              const curY = startY + idx * lineHeight;
+              if (style3D === 'text-3d-neon') {
+                ctx.save();
+                ctx.fillStyle = '#023e8a';
+                ctx.fillText(line, textX, curY + 4);
+                ctx.fillStyle = '#0077b6';
+                ctx.fillText(line, textX, curY + 2);
+                ctx.fillStyle = '#00f0ff';
+                ctx.shadowColor = 'rgba(0, 240, 255, 0.95)';
+                ctx.shadowBlur = 22;
+                ctx.fillText(line, textX, curY);
+                ctx.restore();
+              } else if (style3D === 'text-3d-gold') {
+                ctx.save();
+                ctx.fillStyle = '#78350f';
+                ctx.fillText(line, textX, curY + 4);
+                ctx.fillStyle = '#b45309';
+                ctx.fillText(line, textX, curY + 2);
+                ctx.fillStyle = '#fef08a';
+                ctx.shadowColor = 'rgba(245, 158, 11, 0.85)';
+                ctx.shadowBlur = 18;
+                ctx.fillText(line, textX, curY);
+                ctx.restore();
+              } else if (style3D === 'text-3d-flame') {
+                ctx.save();
+                ctx.fillStyle = '#7f1d1d';
+                ctx.fillText(line, textX, curY + 4);
+                ctx.fillStyle = '#ea580c';
+                ctx.fillText(line, textX, curY + 2);
+                ctx.fillStyle = '#fef08a';
+                ctx.shadowColor = 'rgba(249, 115, 22, 0.9)';
+                ctx.shadowBlur = 20;
+                ctx.fillText(line, textX, curY);
+                ctx.restore();
+              } else if (style3D === 'text-3d-cosmic') {
+                ctx.save();
+                ctx.fillStyle = '#581c87';
+                ctx.fillText(line, textX, curY + 4);
+                ctx.fillStyle = '#9333ea';
+                ctx.fillText(line, textX, curY + 2);
+                ctx.fillStyle = '#e9d5ff';
+                ctx.shadowColor = 'rgba(168, 85, 247, 0.9)';
+                ctx.shadowBlur = 20;
+                ctx.fillText(line, textX, curY);
+                ctx.restore();
+              } else if (style3D === 'text-3d-candy') {
+                ctx.save();
+                ctx.fillStyle = '#831843';
+                ctx.fillText(line, textX, curY + 4);
+                ctx.fillStyle = '#ec4899';
+                ctx.fillText(line, textX, curY + 2);
+                ctx.fillStyle = '#fce7f3';
+                ctx.shadowColor = 'rgba(236, 72, 153, 0.85)';
+                ctx.shadowBlur = 18;
+                ctx.fillText(line, textX, curY);
+                ctx.restore();
+              } else {
+                ctx.save();
+                if (!bgStyle || bgStyle === 'none') {
+                  ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+                  ctx.shadowBlur = 14;
+                  ctx.shadowOffsetY = 3;
+                }
+                ctx.fillStyle = currentVibe.textColor || '#ffffff';
+                ctx.fillText(line, textX, curY);
+                ctx.restore();
+              }
+            });
+
             ctx.restore();
           }
 
-          // Draw Music Tag Sticker
-          if (currentVibe.songTitle || currentVibe.audioUrl) {
+          // D. DRAW FLOATING INTERACTIVE STICKERS & BADGES
+          if (Array.isArray(currentVibe.stickersData) && currentVibe.stickersData.length > 0) {
+            currentVibe.stickersData.forEach(s => {
+              ctx.save();
+              const stX = ((s.x ?? 50) / 100) * 720;
+              const stY = ((s.y ?? 50) / 100) * 1280;
+              const scale = Number(s.scale || 1.0);
+
+              if (s.isTipBadge || s.emoji === '⚡ Tip Sparks') {
+                const bw = 170 * scale;
+                const bh = 46 * scale;
+                const bx = stX - bw / 2;
+                const by = stY - bh / 2;
+                const bg = ctx.createLinearGradient(bx, by, bx + bw, by + bh);
+                bg.addColorStop(0, '#f59e0b');
+                bg.addColorStop(1, '#ec4899');
+                ctx.fillStyle = bg;
+                ctx.shadowColor = 'rgba(245, 158, 11, 0.7)';
+                ctx.shadowBlur = 18 * scale;
+                ctx.beginPath();
+                ctx.roundRect(bx, by, bw, bh, 24 * scale);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = `900 ${Math.round(18 * scale)}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('⚡ Tip Sparks', stX, stY);
+              } else if (s.emoji) {
+                ctx.font = `${Math.round(52 * scale)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.75)';
+                ctx.shadowBlur = 14 * scale;
+                ctx.fillText(s.emoji, stX, stY);
+              }
+              ctx.restore();
+            });
+          } else if (Array.isArray(currentVibe.selectedStickers) && currentVibe.selectedStickers.length > 0) {
             ctx.save();
-            const tagY = 160;
-            const tagText = `🎵 ${currentVibe.songTitle || 'PulseChat Music'}`;
-            ctx.font = 'bold 23px sans-serif';
+            const emojis = currentVibe.selectedStickers;
+            const startX = 660 - emojis.length * 42;
+            const badgeY = 1180;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.beginPath();
+            ctx.roundRect(startX - 15, badgeY - 25, emojis.length * 42 + 30, 48, 20);
+            ctx.fill();
+            ctx.font = '28px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            const mWidth = ctx.measureText(tagText).width;
-            const pillW = Math.min(600, mWidth + 40);
-            const pillH = 44;
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
-            ctx.beginPath();
-            ctx.roundRect((720 - pillW) / 2, tagY - pillH / 2, pillW, pillH, 22);
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-            ctx.fillStyle = '#f59e0b';
-            ctx.fillText(tagText, 360, tagY);
+            emojis.forEach((em, i) => {
+              ctx.fillText(em, startX + i * 42 + 20, badgeY);
+            });
             ctx.restore();
           }
 
-          // PulseChat Watermark
+          // E. DRAW INSTAGRAM MUSIC STICKER WIDGET
+          if (currentVibe.songTitle) {
+            ctx.save();
+            const mStyle = viewerMusicStyle || currentVibe.musicStyle || 'card';
+            const mScale = (currentVibe.musicScale || 1.0) * 1.35;
+            const mX = ((currentVibe.musicPos?.x ?? 50) / 100) * 720;
+            const mY = ((currentVibe.musicPos?.y ?? 20) / 100) * 1280;
+
+            ctx.translate(mX, mY);
+            ctx.scale(mScale, mScale);
+
+            const eq1 = 4 + Math.abs(Math.sin(elapsed / 180)) * 12;
+            const eq2 = 5 + Math.abs(Math.sin(elapsed / 220 + 1)) * 15;
+            const eq3 = 4 + Math.abs(Math.sin(elapsed / 160 + 2)) * 10;
+            const eq4 = 4 + Math.abs(Math.sin(elapsed / 200 + 3)) * 14;
+
+            const songName = currentVibe.songTitle;
+            const artistName = currentVibe.artistName || 'Pulse Music';
+
+            if (mStyle === 'pill') {
+              const pillW = 220;
+              const pillH = 40;
+              ctx.fillStyle = 'rgba(0, 0, 0, 0.76)';
+              ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+              ctx.shadowBlur = 15;
+              ctx.beginPath();
+              ctx.roundRect(-pillW / 2, -pillH / 2, pillW, pillH, 20);
+              ctx.fill();
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+              ctx.lineWidth = 1;
+              ctx.stroke();
+
+              const discR = 14;
+              const discX = -pillW / 2 + 22;
+              ctx.save();
+              ctx.translate(discX, 0);
+              ctx.rotate((elapsed / 1000) * 1.5);
+              ctx.beginPath();
+              ctx.arc(0, 0, discR, 0, Math.PI * 2);
+              ctx.clip();
+              if (albumArtImg) {
+                ctx.drawImage(albumArtImg, -discR, -discR, discR * 2, discR * 2);
+              } else {
+                ctx.fillStyle = '#ec4899';
+                ctx.fillRect(-discR, -discR, discR * 2, discR * 2);
+              }
+              ctx.restore();
+
+              ctx.font = 'bold 13px sans-serif';
+              ctx.fillStyle = '#ffffff';
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'middle';
+              const displayPillText = `${songName} • ${artistName}`;
+              ctx.fillText(displayPillText.length > 20 ? displayPillText.slice(0, 18) + '...' : displayPillText, -pillW / 2 + 44, 0);
+
+              const eqX = pillW / 2 - 32;
+              const drawBar = (x, h, col) => {
+                ctx.fillStyle = col;
+                ctx.fillRect(x, 7 - h, 3, h);
+              };
+              drawBar(eqX, eq1, '#38bdf8');
+              drawBar(eqX + 5, eq2, '#f59e0b');
+              drawBar(eqX + 10, eq3, '#ec4899');
+              drawBar(eqX + 15, eq4, '#a855f7');
+
+            } else if (mStyle === 'vinyl') {
+              const vinylR = 48;
+              ctx.save();
+              ctx.translate(0, -18);
+              ctx.rotate((elapsed / 1000) * 1.2);
+
+              const vGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, vinylR);
+              vGrad.addColorStop(0, '#2a2a2a');
+              vGrad.addColorStop(0.5, '#121212');
+              vGrad.addColorStop(1, '#000000');
+              ctx.fillStyle = vGrad;
+              ctx.beginPath();
+              ctx.arc(0, 0, vinylR, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+              ctx.lineWidth = 1.5;
+              ctx.stroke();
+
+              [22, 32, 40].forEach(r => {
+                ctx.beginPath();
+                ctx.arc(0, 0, r, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+                ctx.lineWidth = 0.8;
+                ctx.stroke();
+              });
+
+              const centerR = 20;
+              ctx.save();
+              ctx.beginPath();
+              ctx.arc(0, 0, centerR, 0, Math.PI * 2);
+              ctx.clip();
+              if (albumArtImg) {
+                ctx.drawImage(albumArtImg, -centerR, -centerR, centerR * 2, centerR * 2);
+              } else {
+                ctx.fillStyle = '#8b5cf6';
+                ctx.fillRect(-centerR, -centerR, centerR * 2, centerR * 2);
+              }
+              ctx.restore();
+
+              ctx.fillStyle = '#000000';
+              ctx.beginPath();
+              ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+              ctx.lineWidth = 1;
+              ctx.stroke();
+              ctx.restore();
+
+              const bW = 160;
+              const bH = 26;
+              ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+              ctx.beginPath();
+              ctx.roundRect(-bW / 2, 38, bW, bH, 13);
+              ctx.fill();
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+              ctx.stroke();
+
+              ctx.font = 'bold 12px sans-serif';
+              ctx.fillStyle = '#ffffff';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(songName.length > 18 ? songName.slice(0, 16) + '...' : songName, 0, 51);
+
+            } else {
+              // Card (default) or square / banner
+              const cardW = 225;
+              const cardH = 60;
+              ctx.fillStyle = 'rgba(15, 17, 24, 0.86)';
+              ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+              ctx.shadowBlur = 18;
+              ctx.beginPath();
+              ctx.roundRect(-cardW / 2, -cardH / 2, cardW, cardH, 16);
+              ctx.fill();
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+              ctx.lineWidth = 1.2;
+              ctx.stroke();
+
+              const artSize = 44;
+              const artX = -cardW / 2 + 8;
+              const artY = -artSize / 2;
+              ctx.save();
+              ctx.beginPath();
+              ctx.roundRect(artX, artY, artSize, artSize, 10);
+              ctx.clip();
+              if (albumArtImg) {
+                ctx.drawImage(albumArtImg, artX, artY, artSize, artSize);
+              } else {
+                ctx.fillStyle = '#6366f1';
+                ctx.fillRect(artX, artY, artSize, artSize);
+              }
+              ctx.restore();
+
+              ctx.font = 'bold 14px sans-serif';
+              ctx.fillStyle = '#ffffff';
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'top';
+              ctx.fillText(songName.length > 14 ? songName.slice(0, 12) + '...' : songName, artX + artSize + 10, artY + 4);
+
+              ctx.font = '500 11px sans-serif';
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+              ctx.fillText(artistName.length > 16 ? artistName.slice(0, 14) + '...' : artistName, artX + artSize + 10, artY + 24);
+
+              const eqX = cardW / 2 - 28;
+              const drawBar = (x, h, col) => {
+                ctx.fillStyle = col;
+                ctx.fillRect(x, 8 - h, 3, h);
+              };
+              drawBar(eqX, eq1, '#ec4899');
+              drawBar(eqX + 5, eq2, '#f59e0b');
+              drawBar(eqX + 10, eq3, '#06b6d4');
+              drawBar(eqX + 15, eq4, '#a855f7');
+            }
+
+            ctx.restore();
+          }
+
+          // F. PULSECHAT BRANDING WATERMARK
           ctx.save();
           ctx.font = '600 20px sans-serif';
           ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
           ctx.textAlign = 'center';
-          ctx.fillText(`⚡ PulseChat • ${vibeGroup?.displayName || 'Story'}`, 360, 1220);
+          ctx.fillText(`⚡ PulseChat • ${vibeGroup?.displayName || 'Story'}`, 360, 1240);
           ctx.restore();
 
           requestAnimationFrame(renderLoop);
