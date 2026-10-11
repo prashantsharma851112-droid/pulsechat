@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
+import { createPortal } from 'react-dom';
 import { AuthContext } from '../../context/AuthContext';
 import { useAppMusic } from '../../context/AppMusicContext';
 import { Music, Disc, Edit3, Trash2, X, Heart } from 'lucide-react';
@@ -40,16 +41,19 @@ function NoteLikersModal({ isOpen, onClose, targetUserId, initialLikes = [] }) {
 
   if (!isOpen) return null;
 
-  return (
+  const modalContent = (
     <div
-      onClick={onClose}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        zIndex: 99999,
+        background: 'rgba(0, 0, 0, 0.82)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        zIndex: 999999,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -61,14 +65,14 @@ function NoteLikersModal({ isOpen, onClose, targetUserId, initialLikes = [] }) {
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
-          maxWidth: '340px',
+          maxWidth: '350px',
           maxHeight: '75vh',
-          background: '#161622',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          borderRadius: '20px',
+          background: '#13121d',
+          border: '1px solid rgba(255, 255, 255, 0.14)',
+          borderRadius: '22px',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.85), 0 0 30px rgba(255, 45, 85, 0.2)',
+          boxShadow: '0 20px 50px rgba(0,0,0,0.9), 0 0 35px rgba(255, 45, 85, 0.25)',
           overflow: 'hidden'
         }}
       >
@@ -82,13 +86,13 @@ function NoteLikersModal({ isOpen, onClose, targetUserId, initialLikes = [] }) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Heart size={18} fill="#ff2d55" color="#ff2d55" />
-            <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#ffffff' }}>
+            <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700, color: '#ffffff' }}>
               Note Likes
             </h3>
             <span style={{
               fontSize: '0.72rem',
-              fontWeight: 700,
-              background: 'rgba(255, 45, 85, 0.16)',
+              fontWeight: 800,
+              background: 'rgba(255, 45, 85, 0.18)',
               color: '#ff2d55',
               padding: '2px 8px',
               borderRadius: '12px'
@@ -97,6 +101,7 @@ function NoteLikersModal({ isOpen, onClose, targetUserId, initialLikes = [] }) {
             </span>
           </div>
           <button
+            type="button"
             onClick={onClose}
             style={{
               background: 'rgba(255, 255, 255, 0.08)',
@@ -125,7 +130,7 @@ function NoteLikersModal({ isOpen, onClose, targetUserId, initialLikes = [] }) {
         }}>
           {likesList.length === 0 ? (
             <div style={{
-              padding: '30px 10px',
+              padding: '32px 10px',
               textAlign: 'center',
               color: 'var(--text-muted, #94a3b8)',
               fontSize: '0.82rem',
@@ -138,45 +143,59 @@ function NoteLikersModal({ isOpen, onClose, targetUserId, initialLikes = [] }) {
               <span>No likes yet. Double tap the note to be the first to like!</span>
             </div>
           ) : (
-            likesList.map((liker, idx) => (
-              <div
-                key={liker.userId || idx}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '6px 4px'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <img
-                    src={liker.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${liker.username || 'user'}`}
-                    alt={liker.displayName || liker.username}
-                    style={{
-                      width: '38px',
-                      height: '38px',
-                      borderRadius: '50%',
-                      objectFit: 'cover',
-                      border: '1.5px solid rgba(255, 45, 85, 0.4)'
-                    }}
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#ffffff' }}>
-                      {liker.displayName || liker.username}
-                    </span>
-                    <span style={{ fontSize: '0.70rem', color: '#94a3b8' }}>
-                      @{liker.username} {liker.likedAt ? `• ${formatTimeAgo(liker.likedAt)}` : ''}
-                    </span>
+            likesList.map((liker, idx) => {
+              const uName = liker.username || liker.displayName || 'user';
+              const dName = liker.displayName || liker.username || 'Pulse User';
+              const fallbackAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(uName)}`;
+
+              return (
+                <div
+                  key={liker.userId || idx}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '6px 4px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '11px', minWidth: 0 }}>
+                    <img
+                      src={liker.avatar || fallbackAvatar}
+                      alt={dName}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = fallbackAvatar;
+                      }}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                        border: '2px solid rgba(255, 45, 85, 0.45)',
+                        flexShrink: 0
+                      }}
+                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                      <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {dName}
+                      </span>
+                      <span style={{ fontSize: '0.70rem', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        @{uName} {liker.likedAt ? `• ${formatTimeAgo(liker.likedAt)}` : ''}
+                      </span>
+                    </div>
                   </div>
+                  <Heart size={16} fill="#ff2d55" color="#ff2d55" style={{ filter: 'drop-shadow(0 0 5px rgba(255,45,85,0.7))', flexShrink: 0 }} />
                 </div>
-                <Heart size={16} fill="#ff2d55" color="#ff2d55" style={{ filter: 'drop-shadow(0 0 4px rgba(255,45,85,0.6))' }} />
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(modalContent, document.body);
 }
 
 export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, isMine = true, isPopped = false, onPop }) {

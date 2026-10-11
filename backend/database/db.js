@@ -436,6 +436,7 @@ module.exports = {
       for (const { otherId, lastMessage } of ordered) {
         if (otherId === 'anonymous_pulse_bot') {
           const unreadCount = unreadMap.get('anonymous_pulse_bot') || 0;
+          const msgContent = typeof lastMessage?.content === 'string' ? lastMessage.content : '🤫 Secret Message';
           results.push({
             id: 'anonymous_pulse_bot',
             username: 'anonymous_pulse',
@@ -443,10 +444,12 @@ module.exports = {
             avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=anonymous_pulse_bot&backgroundColor=09090b',
             status: 'Secret messages from your Instagram link 🤫',
             isAnonymousBot: true,
-            lastMessage: {
-              ...lastMessage,
-              content: lastMessage.content || '🤫 Secret Message'
-            },
+            lastMessage: msgContent,
+            lastMessageTime: lastMessage.timestamp || new Date().toISOString(),
+            lastMessageTimestamp: lastMessage.timestamp || new Date().toISOString(),
+            lastMessageFromMe: false,
+            lastMessageStatus: lastMessage.status || 'delivered',
+            lastMessageType: 'anonymous_pulse',
             unreadCount
           });
           continue;

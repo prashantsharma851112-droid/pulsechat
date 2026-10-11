@@ -605,6 +605,17 @@ router.put('/music-note/:targetUserId/like', authMiddleware, async (req, res) =>
     );
     let isLiked = false;
 
+    // Fetch liking user's fresh profile to store real avatar and displayName
+    const likingUser = await User.findOne({
+      $or: [
+        { id: myId },
+        { username: myUsername }
+      ]
+    }).select('id username displayName avatar').lean();
+
+    const freshAvatar = likingUser?.avatar || req.user.avatar || '';
+    const freshDisplayName = likingUser?.displayName || req.user.displayName || myUsername || 'User';
+
     if (existingIdx !== -1) {
       // Unlike
       targetUser.musicNote.likes.splice(existingIdx, 1);
@@ -614,8 +625,8 @@ router.put('/music-note/:targetUserId/like', authMiddleware, async (req, res) =>
       targetUser.musicNote.likes.push({
         userId: myId,
         username: myUsername,
-        displayName: req.user.displayName || myUsername || 'User',
-        avatar: req.user.avatar || '',
+        displayName: freshDisplayName,
+        avatar: freshAvatar,
         likedAt: new Date().toISOString()
       });
       isLiked = true;
@@ -631,18 +642,43 @@ router.put('/music-note/:targetUserId/like', authMiddleware, async (req, res) =>
       if (targetUser.username) redis.invalidateUser(targetUser.username).catch(() => {});
     } catch (e) {}
 
+    // Populate likers with fresh user avatars before returning
+    const likerIds = (targetUser.musicNote.likes || []).map(l => l.userId).filter(Boolean);
+    const likerUsernames = (targetUser.musicNote.likes || []).map(l => l.username).filter(Boolean);
+    const likerUsers = await User.find({
+      $or: [
+        { id: { $in: likerIds } },
+        { username: { $in: likerUsernames } }
+      ]
+    }).select('id username displayName avatar').lean();
+
+    const likerMap = new Map();
+    likerUsers.forEach(u => {
+      if (u.id) likerMap.set(String(u.id), u);
+      if (u.username) likerMap.set(u.username, u);
+    });
+
+    const enrichedLikes = (targetUser.musicNote.likes || []).map(l => {
+      const u = (l.userId && likerMap.get(String(l.userId))) || (l.username && likerMap.get(l.username));
+      return {
+        ...l,
+        displayName: u?.displayName || l.displayName || l.username || 'User',
+        avatar: u?.avatar || l.avatar || ''
+      };
+    });
+
     const io = req.app.get('io');
     if (io) {
       const socketPayload = {
         targetUserId: targetUser.id || targetUser._id.toString(),
         targetUsername: targetUser.username,
         musicNote: targetUser.musicNote,
-        likes: targetUser.musicNote.likes,
+        likes: enrichedLikes,
         likedBy: {
           userId: myId,
           username: myUsername,
-          displayName: req.user.displayName || myUsername,
-          avatar: req.user.avatar || ''
+          displayName: freshDisplayName,
+          avatar: freshAvatar
         },
         isLiked
       };
@@ -654,7 +690,7 @@ router.put('/music-note/:targetUserId/like', authMiddleware, async (req, res) =>
       });
     }
 
-    res.json({ success: true, isLiked, likes: targetUser.musicNote.likes, musicNote: targetUser.musicNote });
+    res.json({ success: true, isLiked, likes: enrichedLikes, musicNote: targetUser.musicNote });
   } catch (err) {
     console.error('Error toggling music note like:', err);
     res.status(500).json({ error: 'Failed to toggle like' });
@@ -692,7 +728,31 @@ router.get('/music-note/:targetUserId/likes', authMiddleware, async (req, res) =
       return res.status(403).json({ error: 'Only the note owner can view who liked their note' });
     }
 
-    res.json({ success: true, likes: targetUser.musicNote.likes || [] });
+    const likerIds = (targetUser.musicNote.likes || []).map(l => l.userId).filter(Boolean);
+    const likerUsernames = (targetUser.musicNote.likes || []).map(l => l.username).filter(Boolean);
+    const likerUsers = await User.find({
+      $or: [
+        { id: { $in: likerIds } },
+        { username: { $in: likerUsernames } }
+      ]
+    }).select('id username displayName avatar').lean();
+
+    const userMap = new Map();
+    likerUsers.forEach(u => {
+      if (u.id) userMap.set(String(u.id), u);
+      if (u.username) userMap.set(u.username, u);
+    });
+
+    const enrichedLikes = (targetUser.musicNote.likes || []).map(l => {
+      const u = (l.userId && userMap.get(String(l.userId))) || (l.username && userMap.get(l.username));
+      return {
+        ...l,
+        displayName: u?.displayName || l.displayName || l.username || 'User',
+        avatar: u?.avatar || l.avatar || ''
+      };
+    });
+
+    res.json({ success: true, likes: enrichedLikes });
   } catch (err) {
     console.error('Error fetching note likes:', err);
     res.status(500).json({ error: 'Failed to fetch note likes' });

@@ -2571,7 +2571,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                       </div>
                     </div>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {g.lastMessage || g.description || `${g.members?.length || 0} members`}
+                      {(typeof g.lastMessage === 'string' ? g.lastMessage : g.lastMessage?.content) || g.description || `${g.members?.length || 0} members`}
                     </p>
                   </div>
                 </div>
@@ -2728,7 +2728,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                           if (isContactTyping) {
                             return <span style={{ color: '#22c55e', fontWeight: 600 }}>✍️ typing...</span>;
                           }
-                          return u.lastMessage ? u.lastMessage : `@${u.username}`;
+                          if (u.lastMessage) {
+                            return typeof u.lastMessage === 'string' ? u.lastMessage : (u.lastMessage.content || `@${u.username}`);
+                          }
+                          return `@${u.username}`;
                         })()}
                       </p>
                     </div>
