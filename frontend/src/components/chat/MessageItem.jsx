@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
-import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward, Edit3, ExternalLink, Globe, Ghost, Share2 } from 'lucide-react';
+import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward, Edit3, ExternalLink, Globe, Ghost, Share2, ArrowLeft, MoreVertical, Loader2 } from 'lucide-react';
 import ThreadModal from './ThreadModal';
+import ForwardModal from './ForwardModal';
 import ViewOnceModal from './ViewOnceModal';
 import FogSnapModal from './FogSnapModal';
 import EditPollModal from './EditPollModal';
@@ -17,6 +19,20 @@ import { getCachedMediaUrl, getSyncCachedMediaUrl } from '../../utils/mediaCache
 
 // In-memory set of loaded media URLs so images never flash or reload when scrolling
 const loadedMediaUrlsGlobal = new Set();
+
+function formatLightboxDateTime(timestamp) {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
+  if (isToday) {
+    return `Today, ${time}`;
+  }
+  const day = date.getDate();
+  const month = date.toLocaleDateString([], { month: 'long' });
+  return `${day} ${month}, ${time}`;
+}
 
 function AnonymousPulseCard({ message, currentUser }) {
   const [showReplyModal, setShowReplyModal] = useState(false);
@@ -952,6 +968,55 @@ function MessageItem({
   const [viewCountsState, setViewCountsState] = useState(message.viewCounts || {});
   const [downloadState, setDownloadState] = useState(''); // '' | 'Saving...' | 'Saved!'
   const [showImagePreview, setShowImagePreview] = useState(false);
+  const [showLightboxControls, setShowLightboxControls] = useState(true);
+  const [showForwardModal, setShowForwardModal] = useState(false);
+  const [isStarredLocally, setIsStarredLocally] = useState(() => isStarred);
+
+  useEffect(() => {
+    setIsStarredLocally(isStarred);
+  }, [isStarred]);
+
+  const handleToggleStar = () => {
+    const targetId = message.id || message._id;
+    if (!targetId) return;
+    const nextState = !isStarredLocally;
+    setIsStarredLocally(nextState);
+    try {
+      const storageKey = `pulsechat_starred_${chatId}`;
+      const saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      const next = saved.includes(targetId) ? saved.filter(id => id !== targetId) : [...saved, targetId];
+      localStorage.setItem(storageKey, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('pulsechat_star_updated', { detail: { chatId, messageId: targetId } }));
+    } catch {}
+  };
+
+  const handleForwardToTargets = async (targets, msgToFwd) => {
+    if (!targets || !targets.length) return;
+    const targetMsg = msgToFwd || message;
+    for (const t of targets) {
+      const targetIsGroup = !!t.isGroup;
+      const targetChatId = targetIsGroup ? t.id : [currentUser.id, t.id].sort().join('_');
+      const fwdTempId = 'fwd_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+      const fwdPayload = {
+        chatId: targetChatId,
+        senderId: currentUser.id,
+        senderName: currentUser.displayName || currentUser.username || 'You',
+        receiverId: targetIsGroup ? '' : t.id,
+        isGroup: targetIsGroup,
+        isForwarded: true,
+        content: targetMsg.content || '',
+        type: targetMsg.type || 'image',
+        mediaUrl: targetMsg.mediaUrl || null,
+        fileName: targetMsg.fileName || null,
+        clientTempId: fwdTempId,
+        timestamp: new Date().toISOString()
+      };
+      if (socket) {
+        socket.emit('send_message', fwdPayload);
+      }
+    }
+    setShowForwardModal(false);
+  };
   const [showGiftUnboxModal, setShowGiftUnboxModal] = useState(false);
   const giftStorageKey = (message.type === 'gift' && message.id) ? `pulse_gift_unboxed_${message.id}` : null;
   const [isGiftUnboxed, setIsGiftUnboxed] = useState(() => {
@@ -2791,294 +2856,262 @@ function MessageItem({
         </div>
       )}
 
-      {/* Fullscreen Image / Drawing Preview Modal */}
-      {showImagePreview && message.mediaUrl && !message.isViewOnce && !message.isFogSnap && (
+      {/* Fullscreen Image / Drawing Preview Modal (Portal to body so header and footer are completely hidden) */}
+      {showImagePreview && message.mediaUrl && !message.isViewOnce && !message.isFogSnap && typeof document !== 'undefined' && createPortal(
         <div
-          onClick={() => setShowImagePreview(false)}
           style={{
             position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.94)',
-            backdropFilter: 'blur(12px)',
-            zIndex: 99999,
+            inset: 0,
+            width: '100vw',
+            height: '100vh',
+            background: '#000000',
+            zIndex: 9999999,
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'space-between',
+            justifyContent: 'center',
             alignItems: 'center',
-            padding: '16px',
-            boxSizing: 'border-box'
+            overflow: 'hidden',
+            userSelect: 'none'
           }}
+          onClick={() => setShowLightboxControls(prev => !prev)}
         >
-          {/* WhatsApp-Style Top Bar */}
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px 16px',
-              background: 'rgba(15, 23, 42, 0.78)',
-              backdropFilter: 'blur(12px)',
-              borderRadius: '16px',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
-              boxSizing: 'border-box',
-              zIndex: 10
-            }}
-          >
-            {/* Left: Back button + Sender Name & Timestamp */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#fff' }}>
-              <button
-                type="button"
-                onClick={() => setShowImagePreview(false)}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  border: 'none',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'background 0.15s ease'
-                }}
-                title="Back"
-              >
-                <CornerUpLeft size={18} style={{ transform: 'scaleX(-1)' }} />
-              </button>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontWeight: 700, fontSize: '0.98rem', color: '#fff' }}>
-                  {isMine ? 'You' : (senderName || 'Partner')}
-                </span>
-                <span style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.7)', marginTop: '1px' }}>
-                  {new Date(message.timestamp || Date.now()).toLocaleDateString([], { month: 'short', day: 'numeric' })}, {timeStr}
-                </span>
-              </div>
-            </div>
-
-            {/* Right: Action Buttons (Download, Edit Drawing, Share, Close) */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {onEditDrawing && (
+          {/* WhatsApp Top Bar */}
+          {showLightboxControls && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '62px',
+                padding: '0 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: 'linear-gradient(180deg, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0) 100%)',
+                zIndex: 20
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#fff' }}>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowImagePreview(false);
-                    onEditDrawing(message.mediaUrl, message.whiteboardData);
-                  }}
+                  onClick={() => setShowImagePreview(false)}
                   style={{
-                    background: 'rgba(255, 255, 255, 0.12)',
+                    background: 'none',
                     border: 'none',
                     color: '#fff',
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
                     cursor: 'pointer',
-                    transition: 'all 0.15s ease'
+                    padding: '6px',
+                    display: 'flex',
+                    alignItems: 'center'
                   }}
-                  title="Open and edit on Drawboard"
+                  title="Back"
                 >
-                  <Edit3 size={17} />
+                  <ArrowLeft size={22} />
                 </button>
-              )}
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontWeight: 700, fontSize: '1rem', color: '#fff', lineHeight: 1.2 }}>
+                    {isMine ? 'You' : (senderName || 'Partner')}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.72)', marginTop: '2px' }}>
+                    {formatLightboxDateTime(message.timestamp)}
+                  </span>
+                </div>
+              </div>
 
-              <button
-                type="button"
-                onClick={(e) => handleDownloadMedia(
-                  e,
-                  message.mediaUrl,
-                  message.fileName || (message.content?.includes('drawing') ? `pulsechat_drawing_${Date.now()}.png` : `pulsechat_image_${Date.now()}.jpg`)
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', color: '#fff' }}>
+                <button
+                  type="button"
+                  onClick={handleToggleStar}
+                  style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}
+                  title={isStarredLocally ? "Unstar" : "Star"}
+                >
+                  <Star size={20} fill={isStarredLocally ? "#f59e0b" : "none"} color={isStarredLocally ? "#f59e0b" : "#fff"} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => handleDownloadMedia(e, message.mediaUrl, message.fileName || `pulsechat_image_${Date.now()}.jpg`)}
+                  style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}
+                  title="Download"
+                >
+                  <Download size={20} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowForwardModal(true)}
+                  style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}
+                  title="Forward"
+                >
+                  <Forward size={20} />
+                </button>
+
+                {onEditDrawing && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowImagePreview(false);
+                      onEditDrawing(message.mediaUrl, message.whiteboardData);
+                    }}
+                    style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}
+                    title="Edit on Drawboard"
+                  >
+                    <Edit3 size={20} />
+                  </button>
                 )}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.12)',
-                  border: 'none',
-                  color: '#fff',
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
-                title="Download image"
-              >
-                <Download size={17} />
-              </button>
 
-              <button
-                type="button"
-                onClick={async () => {
-                  if (navigator.share) {
-                    try {
-                      await navigator.share({
-                        title: message.fileName || 'PulseChat Image',
-                        url: message.mediaUrl
-                      });
-                    } catch {}
-                  } else {
-                    navigator.clipboard.writeText(message.mediaUrl);
-                    alert('Image link copied to clipboard!');
-                  }
-                }}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.12)',
-                  border: 'none',
-                  color: '#fff',
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
-                title="Share image"
-              >
-                <Share2 size={17} />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowImagePreview(false)}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.12)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '36px',
-                  height: '36px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer'
-                }}
-                title="Close"
-              >
-                <X size={18} />
-              </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (navigator.share) {
+                      try {
+                        await navigator.share({ title: message.fileName || 'PulseChat Photo', url: message.mediaUrl });
+                      } catch {}
+                    } else {
+                      navigator.clipboard.writeText(message.mediaUrl);
+                      alert('Image link copied to clipboard!');
+                    }
+                  }}
+                  style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}
+                  title="Share"
+                >
+                  <Share2 size={20} />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Centered Image View with Instagram-style Swipe Down to Dismiss */}
+          {/* Center Image View */}
           <div
-            onClick={(e) => e.stopPropagation()}
-            onTouchStart={handleImageTouchStart}
-            onTouchMove={handleImageTouchMove}
-            onTouchEnd={handleImageTouchEnd}
             style={{
-              flex: 1,
+              width: '100%',
+              height: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: '100%',
-              maxHeight: 'calc(100vh - 160px)',
               padding: '12px',
-              overflow: 'hidden',
-              boxSizing: 'border-box',
-              touchAction: 'none',
-              transform: imageDragY > 0 ? `translateY(${imageDragY}px) scale(${Math.max(0.72, 1 - imageDragY / 700)})` : 'none',
-              transition: isDraggingImage ? 'none' : 'transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.24s ease',
-              opacity: imageDragY > 0 ? Math.max(0.3, 1 - imageDragY / 380) : 1
+              boxSizing: 'border-box'
             }}
+            onTouchStart={handleImageTouchStart}
+            onTouchMove={handleImageTouchMove}
+            onTouchEnd={handleImageTouchEnd}
           >
             <img
               src={message.mediaUrl}
-              alt="Fullscreen Preview"
+              alt="Fullscreen View"
               draggable={false}
               style={{
-                maxWidth: '94vw',
-                maxHeight: '74vh',
+                maxWidth: '100vw',
+                maxHeight: '100vh',
                 objectFit: 'contain',
-                borderRadius: '12px',
-                boxShadow: '0 16px 48px rgba(0,0,0,0.7)',
-                userSelect: 'none'
+                transform: imageDragY > 0 ? `translateY(${imageDragY}px) scale(${Math.max(0.75, 1 - imageDragY / 700)})` : 'none',
+                transition: isDraggingImage ? 'none' : 'transform 0.22s ease'
               }}
             />
           </div>
 
-          {/* WhatsApp-Style Bottom Bar: Reply pill + Quick Reactions */}
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: '100%',
-              maxWidth: '820px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '10px 18px',
-              background: 'rgba(15, 23, 42, 0.88)',
-              backdropFilter: 'blur(16px)',
-              borderRadius: '26px',
-              border: '1px solid rgba(255, 255, 255, 0.16)',
-              boxSizing: 'border-box',
-              boxShadow: '0 12px 36px rgba(0,0,0,0.65)',
-              gap: '12px',
-              zIndex: 10
-            }}
-          >
-            {/* Left: Reply pill */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowImagePreview(false);
-                if (onReply) onReply(message);
-              }}
+          {/* WhatsApp Bottom Bar */}
+          {showLightboxControls && (
+            <div
+              onClick={(e) => e.stopPropagation()}
               style={{
-                background: 'rgba(255, 255, 255, 0.12)',
-                border: 'none',
-                borderRadius: '18px',
-                padding: '8px 16px',
-                color: '#fff',
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                padding: '14px 18px 22px 18px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                fontSize: '0.86rem',
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'background 0.15s ease'
+                justifyContent: 'space-between',
+                background: 'linear-gradient(0deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0) 100%)',
+                gap: '14px',
+                zIndex: 20
               }}
-              title="Reply to this image"
             >
-              <CornerUpLeft size={16} color="var(--accent, #38bdf8)" />
-              <span style={{ opacity: 0.9 }}>Reply...</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImagePreview(false);
+                  if (onReply) onReply(message);
+                }}
+                style={{
+                  flex: 1,
+                  maxWidth: '220px',
+                  background: 'rgba(30, 41, 59, 0.88)',
+                  border: '1px solid rgba(255, 255, 255, 0.14)',
+                  borderRadius: '24px',
+                  padding: '10px 18px',
+                  color: 'rgba(255, 255, 255, 0.85)',
+                  fontSize: '0.94rem',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                <CornerUpLeft size={16} color="#38bdf8" />
+                <span>Reply</span>
+              </button>
 
-            {/* Right: Quick Reactions emojis */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-              {['❤️', '👍', '😂', '😮', '😢', '🙏'].map(em => (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <button
-                  key={em}
                   type="button"
-                  onClick={() => handleReact(em)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    fontSize: '1.45rem',
-                    cursor: 'pointer',
-                    padding: '2px 4px',
-                    lineHeight: 1,
-                    transition: 'transform 0.15s ease'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.3)'}
-                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                  title={`React ${em}`}
+                  onClick={() => handleReact('❤️')}
+                  style={{ background: 'none', border: 'none', fontSize: '1.65rem', cursor: 'pointer', padding: 0, lineHeight: 1 }}
                 >
-                  {em}
+                  ❤️
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => handleReact('😂')}
+                  style={{ background: 'none', border: 'none', fontSize: '1.65rem', cursor: 'pointer', padding: 0, lineHeight: 1 }}
+                >
+                  😂
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onOpenUnlimitedEmoji) {
+                      setShowImagePreview(false);
+                      onOpenUnlimitedEmoji(message);
+                    } else {
+                      handleReact('👍');
+                    }
+                  }}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.15)',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '36px',
+                    height: '36px',
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}
+                  title="Reactions"
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
+          )}
+
+          {/* Forward Modal */}
+          {showForwardModal && (
+            <ForwardModal
+              message={message}
+              currentUserId={currentUser?.id}
+              onClose={() => setShowForwardModal(false)}
+              onForward={handleForwardToTargets}
+            />
+          )}
+        </div>,
+        document.body
       )}
 
       {showThread && (
