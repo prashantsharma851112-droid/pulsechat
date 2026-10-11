@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc, Lock, MessageSquare, Smile, Heart, Search, Clock, BarChart3, ChevronUp, MessageCircle, Sparkles } from 'lucide-react';
+import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc, Lock, MessageSquare, Smile, Heart, Search, Clock, BarChart3, ChevronUp, MessageCircle, Sparkles, MoreVertical, Download, Share2, Check, Copy, Film, Loader2 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
-import { updateRecentChatSnippet, getCachedAllUsers } from '../../utils/offlineStorage';
+import { updateRecentChatSnippet, getCachedAllUsers, getCachedRecentChats } from '../../utils/offlineStorage';
 import { useBackHandler } from '../../utils/backNavigation';
 
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
@@ -232,6 +232,14 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     l => (l.userId && (l.userId === myUserId || l.userId === user?.id || l.userId === user?._id)) ||
          (user?.username && l.username && String(l.username).toLowerCase() === String(user.username).toLowerCase())
   );
+
+  // 3-Dots Story Options, Video Download & Share state
+  const [isStoryOptionsOpen, setIsStoryOptionsOpen] = useState(false);
+  const [isDownloadingStory, setIsDownloadingStory] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [shareSentTo, setShareSentTo] = useState({});
 
   // Sponsored Story Ad State (for non-VIP users between stories)
   const [showingSponsoredAd, setShowingSponsoredAd] = useState(false);
@@ -739,7 +747,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     }
   }, [currentIndex, currentVibe?.id, isAudioMuted]);
 
-  const isAnySubmodalOpen = showViewersSheet || showSparksTipModal || showSparksWallet || showGetSparksModal || showReplySheet || showUnlimitedEmojiModal;
+  const isAnySubmodalOpen = showViewersSheet || showSparksTipModal || showSparksWallet || showGetSparksModal || showReplySheet || showUnlimitedEmojiModal || isStoryOptionsOpen || isDownloadingStory || showShareModal;
 
   useEffect(() => {
     if (videoPlayerRef.current) {
@@ -1200,6 +1208,368 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
 
   const handleDeleteVibe = handleDelete;
 
+  // 1. Share Story Handler (Native sheet or custom modal)
+  const handleShareStory = async () => {
+    const shareData = {
+      title: `${vibeGroup?.displayName || 'User'}'s Story on PulseChat`,
+      text: `Check out ${vibeGroup?.displayName || 'User'}'s story on PulseChat! ⚡`,
+      url: window.location.href
+    };
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setShowShareModal(true);
+        }
+        return;
+      }
+    }
+    setShowShareModal(true);
+  };
+
+  // 2. Share Candidates list (recent chats & friends)
+  const shareCandidates = React.useMemo(() => {
+    const recent = getCachedRecentChats(user?.id) || [];
+    const list = [];
+    const seen = new Set();
+    recent.forEach(c => {
+      const id = c.id || c._id;
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        list.push({
+          id,
+          name: c.displayName || c.username || c.name || 'Chat',
+          avatar: c.avatar
+        });
+      }
+    });
+    if (list.length === 0) {
+      const all = getCachedAllUsers() || [];
+      all.slice(0, 10).forEach(u => {
+        const id = u.id || u._id;
+        if (id && id !== user?.id && !seen.has(id)) {
+          seen.add(id);
+          list.push({
+            id,
+            name: u.displayName || u.username || 'Friend',
+            avatar: u.avatar
+          });
+        }
+      });
+    }
+    return list;
+  }, [user?.id, showShareModal]);
+
+  const handleSendStoryToFriend = (targetChatId, friendName) => {
+    if (!socket || !targetChatId) return;
+    socket.emit('send_message', {
+      chatId: targetChatId,
+      senderId: user?.id,
+      senderName: user?.displayName || user?.name || user?.username,
+      type: 'story_reply',
+      content: `Check out ${vibeGroup?.displayName || 'User'}'s story ⚡`,
+      mediaUrl: currentVibe?.mediaUrl,
+      storyReply: {
+        vibeId: currentVibe?.id,
+        authorName: vibeGroup?.displayName || vibeGroup?.username,
+        authorAvatar: vibeGroup?.avatar,
+        mediaUrl: currentVibe?.mediaUrl,
+        caption: currentVibe?.caption || ''
+      }
+    });
+    setShareSentTo(prev => ({ ...prev, [targetChatId]: true }));
+  };
+
+  // 3. Download Story as Video with Song (STRICTLY FOR OWN STORY)
+  const handleDownloadStoryAsVideo = async () => {
+    if (!isMine) {
+      alert("You can only download your own story.");
+      return;
+    }
+    if (!currentVibe) return;
+
+    setIsDownloadingStory(true);
+    setDownloadProgress(8);
+
+    try {
+      // Fast path: Pure video story without separate external audio URL
+      if (isCurrentStoryVideo && !currentVibe.audioUrl) {
+        setDownloadProgress(35);
+        try {
+          const response = await fetch(currentVibe.mediaUrl);
+          if (!response.ok) throw new Error('Network response not ok');
+          setDownloadProgress(75);
+          const blob = await response.blob();
+          setDownloadProgress(95);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `pulsechat_story_${Date.now()}.mp4`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+          setDownloadProgress(100);
+          setTimeout(() => setIsDownloadingStory(false), 500);
+          return;
+        } catch (directErr) {
+          console.warn('Direct video fetch failed, proceeding with canvas recording engine:', directErr);
+        }
+      }
+
+      // High-Definition Canvas + Web Audio API + MediaRecorder Video Synthesizer
+      let durationSec = Math.max(5, Math.min(Number(currentVibe?.storyDuration || currentVibe?.duration || 10), 15));
+
+      // 1. Load visual asset (Image or Video)
+      let visualElement = null;
+      let visualBlobUrl = null;
+      if (currentVibe.mediaUrl) {
+        if (isCurrentStoryVideo) {
+          const vid = document.createElement('video');
+          vid.crossOrigin = 'anonymous';
+          vid.playsInline = true;
+          vid.muted = Boolean(currentVibe.audioUrl);
+          vid.src = currentVibe.mediaUrl;
+          vid.currentTime = 0;
+          await new Promise(r => {
+            vid.onloadeddata = r;
+            vid.onerror = r;
+            setTimeout(r, 4000);
+          });
+          if (vid.duration && !isNaN(vid.duration)) {
+            durationSec = Math.min(vid.duration, 30);
+          }
+          visualElement = vid;
+        } else {
+          const img = new Image();
+          try {
+            const r = await fetch(currentVibe.mediaUrl);
+            const b = await r.blob();
+            visualBlobUrl = URL.createObjectURL(b);
+            img.src = visualBlobUrl;
+          } catch {
+            img.crossOrigin = 'anonymous';
+            img.src = currentVibe.mediaUrl;
+          }
+          await new Promise(r => {
+            img.onload = r;
+            img.onerror = r;
+            setTimeout(r, 4000);
+          });
+          visualElement = img;
+        }
+      }
+
+      setDownloadProgress(25);
+
+      // 2. Setup AudioContext and Audio Track (Plays the full story song)
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioContextClass();
+      const audioDest = audioCtx.createMediaStreamDestination();
+      let audioEl = null;
+      let audioBlobUrl = null;
+
+      if (currentVibe.audioUrl) {
+        try {
+          let audioSrc = currentVibe.audioUrl;
+          try {
+            const aResp = await fetch(currentVibe.audioUrl);
+            const aBlob = await aResp.blob();
+            audioBlobUrl = URL.createObjectURL(aBlob);
+            audioSrc = audioBlobUrl;
+          } catch {}
+          audioEl = new Audio(audioSrc);
+          audioEl.crossOrigin = 'anonymous';
+          audioEl.currentTime = Number(currentVibe.songStartTime || 0) || 0;
+          audioEl.volume = 1.0;
+          const srcNode = audioCtx.createMediaElementSource(audioEl);
+          srcNode.connect(audioDest);
+        } catch (aErr) {
+          console.warn('Audio setup warning:', aErr);
+        }
+      } else if (isCurrentStoryVideo && visualElement) {
+        try {
+          const srcNode = audioCtx.createMediaElementSource(visualElement);
+          srcNode.connect(audioDest);
+        } catch (vErr) {
+          console.warn('Video audio setup warning:', vErr);
+        }
+      }
+
+      setDownloadProgress(35);
+
+      // 3. Setup Canvas and MediaStream
+      const canvas = document.createElement('canvas');
+      canvas.width = 720;
+      canvas.height = 1280;
+      const ctx = canvas.getContext('2d');
+
+      const canvasStream = canvas.captureStream(30);
+      const combinedTracks = [
+        ...canvasStream.getVideoTracks(),
+        ...audioDest.stream.getAudioTracks()
+      ];
+      const combinedStream = new MediaStream(combinedTracks);
+
+      let mimeType = 'video/webm;codecs=vp8,opus';
+      if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2')) {
+        mimeType = 'video/mp4;codecs=avc1,mp4a.40.2';
+      } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+        mimeType = 'video/mp4';
+      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=h264,opus')) {
+        mimeType = 'video/webm;codecs=h264,opus';
+      } else if (MediaRecorder.isTypeSupported('video/webm')) {
+        mimeType = 'video/webm';
+      }
+
+      const recorder = new MediaRecorder(combinedStream, {
+        mimeType,
+        videoBitsPerSecond: 2500000
+      });
+
+      const chunks = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      };
+
+      if (audioEl) audioEl.play().catch(() => {});
+      if (isCurrentStoryVideo && visualElement) visualElement.play().catch(() => {});
+      recorder.start(100);
+
+      const startTime = performance.now();
+      const totalDurationMs = durationSec * 1000;
+
+      await new Promise((resolve) => {
+        let isFinished = false;
+        const renderLoop = () => {
+          if (isFinished) return;
+          const elapsed = performance.now() - startTime;
+          const pct = Math.min(95, 35 + Math.round((elapsed / totalDurationMs) * 60));
+          setDownloadProgress(pct);
+
+          if (elapsed >= totalDurationMs) {
+            isFinished = true;
+            resolve();
+            return;
+          }
+
+          // Background gradient
+          const bgGrad = ctx.createLinearGradient(0, 0, 0, 1280);
+          bgGrad.addColorStop(0, '#09090b');
+          bgGrad.addColorStop(0.5, '#1e1b4b');
+          bgGrad.addColorStop(1, '#09090b');
+          ctx.fillStyle = bgGrad;
+          ctx.fillRect(0, 0, 720, 1280);
+
+          // Draw Visual Media
+          if (visualElement) {
+            const natW = visualElement.videoWidth || visualElement.naturalWidth || 720;
+            const natH = visualElement.videoHeight || visualElement.naturalHeight || 1280;
+            const fit = currentVibe.imageFit || 'cover';
+
+            if (fit === 'contain' || fit === 'padded') {
+              const scale = Math.min(680 / natW, 1100 / natH);
+              const dw = natW * scale;
+              const dh = natH * scale;
+              ctx.drawImage(visualElement, (720 - dw) / 2, (1280 - dh) / 2, dw, dh);
+            } else {
+              const scale = Math.max(720 / natW, 1280 / natH);
+              const dw = natW * scale;
+              const dh = natH * scale;
+              ctx.drawImage(visualElement, (720 - dw) / 2, (1280 - dh) / 2, dw, dh);
+            }
+          }
+
+          // Draw Caption
+          if (currentVibe.caption) {
+            ctx.save();
+            ctx.font = 'bold 30px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const textY = 1280 * ((currentVibe.textPos?.y ?? 65) / 100);
+            const metrics = ctx.measureText(currentVibe.caption);
+            const boxW = Math.min(640, metrics.width + 48);
+            const boxH = 54;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+            ctx.beginPath();
+            ctx.roundRect((720 - boxW) / 2, textY - boxH / 2, boxW, boxH, 20);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(currentVibe.caption, 360, textY);
+            ctx.restore();
+          }
+
+          // Draw Music Tag Sticker
+          if (currentVibe.songTitle || currentVibe.audioUrl) {
+            ctx.save();
+            const tagY = 160;
+            const tagText = `🎵 ${currentVibe.songTitle || 'PulseChat Music'}`;
+            ctx.font = 'bold 23px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const mWidth = ctx.measureText(tagText).width;
+            const pillW = Math.min(600, mWidth + 40);
+            const pillH = 44;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+            ctx.beginPath();
+            ctx.roundRect((720 - pillW) / 2, tagY - pillH / 2, pillW, pillH, 22);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.fillStyle = '#f59e0b';
+            ctx.fillText(tagText, 360, tagY);
+            ctx.restore();
+          }
+
+          // PulseChat Watermark
+          ctx.save();
+          ctx.font = '600 20px sans-serif';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+          ctx.textAlign = 'center';
+          ctx.fillText(`⚡ PulseChat • ${vibeGroup?.displayName || 'Story'}`, 360, 1220);
+          ctx.restore();
+
+          requestAnimationFrame(renderLoop);
+        };
+
+        requestAnimationFrame(renderLoop);
+      });
+
+      if (recorder.state !== 'inactive') recorder.stop();
+      if (audioEl) audioEl.pause();
+      if (isCurrentStoryVideo && visualElement) visualElement.pause();
+      audioCtx.close().catch(() => {});
+
+      await new Promise(r => { recorder.onstop = r; });
+
+      setDownloadProgress(98);
+      const finalBlob = new Blob(chunks, { type: mimeType });
+      const downloadUrl = URL.createObjectURL(finalBlob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+      a.download = `pulsechat_story_${Date.now()}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
+      if (visualBlobUrl) URL.revokeObjectURL(visualBlobUrl);
+      if (audioBlobUrl) URL.revokeObjectURL(audioBlobUrl);
+
+      setDownloadProgress(100);
+      setTimeout(() => {
+        setIsDownloadingStory(false);
+      }, 600);
+    } catch (err) {
+      console.error('Failed to export story video:', err);
+      alert('Could not export story video: ' + (err.message || 'Unknown error'));
+      setIsDownloadingStory(false);
+    }
+  };
+
   const effectiveOffset = cubeAnimating ? cubeAnimOffset : cubeOffset;
   const isTransitioning = effectiveOffset !== 0 || cubeAnimating !== null;
   const stageW = typeof window !== 'undefined' ? Math.min(440, window.innerWidth) : 380;
@@ -1427,7 +1797,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
             {Boolean(currentVibe?.audioUrl || isCurrentStoryVideo) && (
               <button
                 type="button"
@@ -1448,11 +1818,223 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                   });
                 }}
                 className="icon-btn-ghost"
-                style={{ color: '#fff', background: 'rgba(0,0,0,0.5)', borderRadius: '50%', padding: '6px' }}
+                style={{ color: '#fff', background: 'rgba(0,0,0,0.5)', borderRadius: '50%', padding: '6px', cursor: 'pointer', border: 'none' }}
                 title={isAudioMuted ? "Unmute Story Audio" : "Mute Story Audio"}
               >
                 {isAudioMuted ? <VolumeX size={17} color="#ef4444" /> : <Volume2 size={17} color="#38bdf8" />}
               </button>
+            )}
+
+            {/* 3-Dots More Options Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsStoryOptionsOpen(prev => !prev);
+              }}
+              className="icon-btn-ghost"
+              style={{
+                color: '#fff',
+                background: isStoryOptionsOpen ? 'rgba(99, 102, 241, 0.75)' : 'rgba(0,0,0,0.5)',
+                borderRadius: '50%',
+                padding: '6px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              title="Story Options"
+            >
+              <MoreVertical size={17} color="#fff" />
+            </button>
+
+            {/* Close Story Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="icon-btn-ghost"
+              style={{
+                color: '#fff',
+                background: 'rgba(0,0,0,0.5)',
+                borderRadius: '50%',
+                padding: '6px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              title="Close Story"
+            >
+              <X size={17} color="#fff" />
+            </button>
+
+            {/* 3-Dots Dropdown Menu */}
+            {isStoryOptionsOpen && (
+              <>
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsStoryOptionsOpen(false);
+                  }}
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 99
+                  }}
+                />
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    position: 'absolute',
+                    top: '42px',
+                    right: '0px',
+                    minWidth: '225px',
+                    background: 'rgba(15, 23, 42, 0.96)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(255, 255, 255, 0.18)',
+                    borderRadius: '16px',
+                    padding: '8px',
+                    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.75)',
+                    zIndex: 100,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px'
+                  }}
+                >
+                  {/* Download Option - ONLY FOR OWN STORY */}
+                  {isMine && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsStoryOptionsOpen(false);
+                        handleDownloadStoryAsVideo();
+                      }}
+                      disabled={isDownloadingStory}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: 'rgba(56, 189, 248, 0.12)',
+                        color: '#38bdf8',
+                        fontSize: '0.86rem',
+                        fontWeight: 700,
+                        cursor: isDownloadingStory ? 'not-allowed' : 'pointer',
+                        textAlign: 'left',
+                        transition: 'background 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.22)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)'}
+                    >
+                      <Download size={16} color="#38bdf8" />
+                      <span>{isDownloadingStory ? 'Exporting...' : 'Save to Device (with Song)'}</span>
+                    </button>
+                  )}
+
+                  {/* Share Story Option - Available for stories */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsStoryOptionsOpen(false);
+                      handleShareStory();
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: 'rgba(255, 255, 255, 0.06)',
+                      color: '#fff',
+                      fontSize: '0.86rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.25)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'}
+                  >
+                    <Share2 size={16} color="#a855f7" />
+                    <span>Share Story</span>
+                  </button>
+
+                  {/* Send to a PulseChat friend / chat */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsStoryOptionsOpen(false);
+                      setShowShareModal(true);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: 'rgba(255, 255, 255, 0.06)',
+                      color: '#fff',
+                      fontSize: '0.86rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.25)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'}
+                  >
+                    <Send size={16} color="#10b981" />
+                    <span>Send to Friend</span>
+                  </button>
+
+                  {/* Delete Story if isMine */}
+                  {isMine && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsStoryOptionsOpen(false);
+                        handleDelete();
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: 'rgba(239, 68, 68, 0.12)',
+                        color: '#f87171',
+                        fontSize: '0.86rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        marginTop: '2px',
+                        transition: 'background 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'}
+                    >
+                      <Trash2 size={16} color="#ef4444" />
+                      <span>Delete Story</span>
+                    </button>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -3490,6 +4072,242 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
         {/* Get / Top-Up Sparks Modal */}
         {showGetSparksModal && (
           <PulseProModal initialTab="sparks" onClose={() => setShowGetSparksModal(false)} />
+        )}
+
+        {/* Story Video Export / Download Overlay */}
+        {isDownloadingStory && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0, 0, 0, 0.85)',
+              backdropFilter: 'blur(16px)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 300,
+              padding: '24px',
+              textAlign: 'center',
+              color: '#fff'
+            }}
+          >
+            <div style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #38bdf8, #818cf8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '16px',
+              boxShadow: '0 8px 28px rgba(56, 189, 248, 0.45)'
+            }}>
+              <Download size={28} color="#fff" />
+            </div>
+
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.15rem', fontWeight: 800 }}>
+              Saving Story to Device
+            </h3>
+            <p style={{ margin: '0 0 20px 0', fontSize: '0.82rem', color: '#94a3b8', maxWidth: '280px', lineHeight: 1.4 }}>
+              Generating video with complete music & audio...
+            </p>
+
+            {/* Progress Bar */}
+            <div style={{
+              width: '260px',
+              height: '8px',
+              borderRadius: '4px',
+              background: 'rgba(255, 255, 255, 0.18)',
+              overflow: 'hidden',
+              marginBottom: '10px'
+            }}>
+              <div style={{
+                height: '100%',
+                width: `${downloadProgress}%`,
+                background: 'linear-gradient(90deg, #38bdf8, #818cf8)',
+                borderRadius: '4px',
+                transition: 'width 0.2s ease'
+              }} />
+            </div>
+
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#38bdf8' }}>
+              {downloadProgress}% Completed
+            </span>
+          </div>
+        )}
+
+        {/* Share Story Modal */}
+        {showShareModal && (
+          <div
+            onClick={() => setShowShareModal(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0, 0, 0, 0.82)',
+              backdropFilter: 'blur(14px)',
+              zIndex: 99999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px'
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: '#0f172a',
+                border: '1px solid rgba(255, 255, 255, 0.18)',
+                borderRadius: '24px',
+                width: '100%',
+                maxWidth: '380px',
+                padding: '20px',
+                boxShadow: '0 24px 60px rgba(0, 0, 0, 0.85)',
+                color: '#fff',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Share2 size={18} color="#a855f7" />
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>Share Story</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowShareModal(false)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '32px',
+                    height: '32px',
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Quick Action Buttons */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(window.location.href);
+                    setShareCopied(true);
+                    setTimeout(() => setShareCopied(false), 2000);
+                  }}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: '14px',
+                    padding: '12px',
+                    color: '#fff',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {shareCopied ? <Check size={20} color="#10b981" /> : <Copy size={20} color="#38bdf8" />}
+                  <span>{shareCopied ? 'Link Copied!' : 'Copy Link'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (navigator.share) {
+                      try {
+                        await navigator.share({
+                          title: `${vibeGroup?.displayName || 'User'}'s Story`,
+                          text: `Check out ${vibeGroup?.displayName || 'User'}'s story on PulseChat!`,
+                          url: window.location.href
+                        });
+                      } catch {}
+                    }
+                  }}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: '14px',
+                    padding: '12px',
+                    color: '#fff',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Share2 size={20} color="#a855f7" />
+                  <span>Other Apps</span>
+                </button>
+              </div>
+
+              {/* Friends list to send directly in PulseChat */}
+              <div>
+                <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 600, marginBottom: '8px' }}>
+                  Send to a Friend or Chat:
+                </div>
+                <div style={{ maxHeight: '190px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {shareCandidates.map(contact => (
+                    <div
+                      key={contact.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 12px',
+                        borderRadius: '12px',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.08)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <img
+                          src={contact.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${contact.name}`}
+                          alt={contact.name}
+                          style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+                        />
+                        <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#fff' }}>{contact.name}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSendStoryToFriend(contact.id, contact.name)}
+                        style={{
+                          background: shareSentTo[contact.id] ? '#10b981' : 'var(--accent, #6366f1)',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '16px',
+                          padding: '5px 12px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {shareSentTo[contact.id] ? 'Sent ✓' : 'Send'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
