@@ -3122,6 +3122,11 @@ function MessageItem({
         <ViewOnceModal
           message={message}
           viewCount={currentViewCount + 1}
+          senderName={senderName}
+          isMine={isMine}
+          onReply={onReply}
+          onReact={handleReact}
+          onOpenUnlimitedEmoji={onOpenUnlimitedEmoji}
           onMarkViewed={handleMarkViewed}
           onClose={() => setShowViewOnceModal(false)}
         />
@@ -3131,6 +3136,8 @@ function MessageItem({
         <FogSnapModal
           message={message}
           chatId={chatId}
+          senderName={senderName}
+          isMine={isMine}
           currentUserId={currentUser?.id}
           currentUserName={currentUser?.name || currentUser?.username}
           onRevealed={() => setFogStatus('revealed')}
@@ -3138,6 +3145,9 @@ function MessageItem({
             setFogStatus('burned');
             setShowFogSnapModal(false);
           }}
+          onReply={onReply}
+          onReact={handleReact}
+          onOpenUnlimitedEmoji={onOpenUnlimitedEmoji}
           onClose={() => setShowFogSnapModal(false)}
         />
       )}

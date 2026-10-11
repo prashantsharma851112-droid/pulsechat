@@ -1412,24 +1412,66 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
       // High-Definition Canvas (720x1280 9:16) + Web Audio API + MediaRecorder Compositor
       let durationSec = Math.max(5, Math.min(Number(currentVibe?.storyDuration || currentVibe?.duration || 10), 15));
 
-      // 1. Preload visual asset (Image or Video)
+      // 1. Setup AudioContext immediately while user gesture is active
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioContextClass();
+      if (audioCtx.state === 'suspended') {
+        try { await audioCtx.resume(); } catch {}
+      }
+      const audioDest = audioCtx.createMediaStreamDestination();
+
+      // Silent keep-alive oscillator ensures the Web Audio clock ticks continuously,
+      // preventing MediaRecorder from generating 0-second blank output.
+      const silentOsc = audioCtx.createOscillator();
+      const silentGain = audioCtx.createGain();
+      silentGain.gain.value = 0.00001;
+      silentOsc.connect(silentGain);
+      silentGain.connect(audioDest);
+      try { silentOsc.start(); } catch {}
+
+      // 2. Preload visual asset (Image or Video)
       let visualElement = null;
       let visualBlobUrl = null;
       if (currentVibe.mediaUrl) {
         if (isCurrentStoryVideo) {
+          let videoSrc = currentVibe.mediaUrl;
+          try {
+            const resp = await fetch(currentVibe.mediaUrl, { mode: 'cors' });
+            if (resp.ok) {
+              const b = await resp.blob();
+              visualBlobUrl = URL.createObjectURL(b);
+              videoSrc = visualBlobUrl;
+            }
+          } catch (e) {
+            console.warn('Video blob fetch skipped, using direct URL:', e);
+          }
+
           const vid = document.createElement('video');
           vid.crossOrigin = 'anonymous';
           vid.playsInline = true;
+          vid.webkitPlaysInline = true;
+          vid.preload = 'auto';
           vid.muted = Boolean(currentVibe.audioUrl);
-          vid.src = currentVibe.mediaUrl;
-          vid.currentTime = 0;
+          vid.src = videoSrc;
+          // CRITICAL: Attach to DOM offscreen so browser decodes and paints all frames cleanly
+          vid.style.position = 'fixed';
+          vid.style.top = '-9999px';
+          vid.style.left = '-9999px';
+          vid.style.width = '10px';
+          vid.style.height = '10px';
+          vid.style.opacity = '0.01';
+          vid.style.pointerEvents = 'none';
+          document.body.appendChild(vid);
+
           await new Promise(r => {
+            if (vid.readyState >= 2) return r();
             vid.onloadeddata = r;
+            vid.oncanplay = r;
             vid.onerror = r;
-            setTimeout(r, 4000);
+            setTimeout(r, 6000);
           });
-          if (vid.duration && !isNaN(vid.duration)) {
-            durationSec = Math.min(vid.duration, 30);
+          if (vid.duration && !isNaN(vid.duration) && vid.duration > 0) {
+            durationSec = Math.max(3, Math.min(vid.duration, 60));
           }
           visualElement = vid;
         } else {
@@ -1452,7 +1494,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
         }
       }
 
-      // 2. Preload album art if music sticker is active
+      // 3. Preload album art if music sticker is active
       let albumArtImg = null;
       if (currentVibe.songTitle) {
         const artUrl = currentVibe.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(currentVibe.songTitle || 'track')}`;
@@ -1479,10 +1521,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
 
       setDownloadProgress(25);
 
-      // 3. Setup AudioContext and Audio Track (Plays the full story song)
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      const audioCtx = new AudioContextClass();
-      const audioDest = audioCtx.createMediaStreamDestination();
+      // 4. Setup Audio Track (Plays the full story song or original video audio)
       let audioEl = null;
       let audioBlobUrl = null;
 
@@ -1506,6 +1545,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
         }
       } else if (isCurrentStoryVideo && visualElement) {
         try {
+          visualElement.muted = false;
           const srcNode = audioCtx.createMediaElementSource(visualElement);
           srcNode.connect(audioDest);
         } catch (vErr) {
@@ -1515,7 +1555,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
 
       setDownloadProgress(35);
 
-      // 4. Setup Canvas and MediaStream
+      // 5. Setup Canvas and MediaStream
       const canvas = document.createElement('canvas');
       canvas.width = 720;
       canvas.height = 1280;
@@ -1549,9 +1589,22 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
         if (e.data && e.data.size > 0) chunks.push(e.data);
       };
 
+      const recorderStopPromise = new Promise(resolve => {
+        recorder.onstop = resolve;
+      });
+
       if (audioEl) audioEl.play().catch(() => {});
-      if (isCurrentStoryVideo && visualElement) visualElement.play().catch(() => {});
-      recorder.start(100);
+      if (isCurrentStoryVideo && visualElement) {
+        visualElement.currentTime = 0;
+        const p = visualElement.play();
+        if (p !== undefined) {
+          p.catch(() => {
+            visualElement.muted = true;
+            visualElement.play().catch(() => {});
+          });
+        }
+      }
+      recorder.start(200);
 
       const startTime = performance.now();
       const totalDurationMs = durationSec * 1000;
@@ -1626,8 +1679,14 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
           const pct = Math.min(95, 35 + Math.round((elapsed / totalDurationMs) * 60));
           setDownloadProgress(pct);
 
+          if (isCurrentStoryVideo && visualElement && visualElement.ended) {
+            visualElement.currentTime = 0;
+            visualElement.play().catch(() => {});
+          }
+
           if (elapsed >= totalDurationMs) {
             isFinished = true;
+            try { recorder.requestData(); } catch {}
             resolve();
             return;
           }
@@ -2118,24 +2177,44 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
         requestAnimationFrame(renderLoop);
       });
 
-      if (recorder.state !== 'inactive') recorder.stop();
+      if (recorder.state === 'recording') {
+        recorder.stop();
+      }
+      await recorderStopPromise;
+
       if (audioEl) audioEl.pause();
       if (isCurrentStoryVideo && visualElement) visualElement.pause();
+      try { silentOsc.stop(); } catch {}
       audioCtx.close().catch(() => {});
 
-      await new Promise(r => { recorder.onstop = r; });
+      if (visualElement && visualElement.parentNode) {
+        visualElement.parentNode.removeChild(visualElement);
+      }
 
       setDownloadProgress(98);
       const finalBlob = new Blob(chunks, { type: mimeType });
-      const downloadUrl = URL.createObjectURL(finalBlob);
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
-      a.download = `pulsechat_story_${Date.now()}.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
+
+      // Fallback if chunks are empty or too small (e.g. unsupported platform)
+      if (!finalBlob || finalBlob.size < 1000) {
+        console.warn('Composite canvas recording output too small, downloading original media asset directly');
+        const fallbackA = document.createElement('a');
+        fallbackA.href = currentVibe.mediaUrl;
+        fallbackA.download = `pulsechat_story_${Date.now()}.${isCurrentStoryVideo ? 'mp4' : 'jpg'}`;
+        document.body.appendChild(fallbackA);
+        fallbackA.click();
+        document.body.removeChild(fallbackA);
+      } else {
+        const downloadUrl = URL.createObjectURL(finalBlob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+        a.download = `pulsechat_story_${Date.now()}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
+      }
+
       if (visualBlobUrl) URL.revokeObjectURL(visualBlobUrl);
       if (audioBlobUrl) URL.revokeObjectURL(audioBlobUrl);
 
@@ -2145,6 +2224,14 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
       }, 600);
     } catch (err) {
       console.error('Failed to export story video:', err);
+      try {
+        const fallbackA = document.createElement('a');
+        fallbackA.href = currentVibe.mediaUrl;
+        fallbackA.download = `pulsechat_story_${Date.now()}.${isCurrentStoryVideo ? 'mp4' : 'jpg'}`;
+        document.body.appendChild(fallbackA);
+        fallbackA.click();
+        document.body.removeChild(fallbackA);
+      } catch {}
       alert('Could not export story video: ' + (err.message || 'Unknown error'));
       setIsDownloadingStory(false);
     }

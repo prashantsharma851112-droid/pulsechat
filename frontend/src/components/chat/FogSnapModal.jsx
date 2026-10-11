@@ -1,14 +1,35 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Flame, ShieldAlert, Sparkles, Lock, AlertTriangle } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { X, Flame, ShieldAlert, Sparkles, Lock, AlertTriangle, ArrowLeft, CornerUpLeft, Plus } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
+import { useBackHandler } from '../../utils/backNavigation';
+
+function formatLightboxDateTime(timestamp) {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
+  if (isToday) {
+    return `Today, ${time}`;
+  }
+  const day = date.getDate();
+  const month = date.toLocaleDateString([], { month: 'long' });
+  return `${day} ${month}, ${time}`;
+}
 
 export default function FogSnapModal({
   message,
   chatId,
+  senderName,
+  isMine,
   currentUserId,
   currentUserName,
   onRevealed,
   onBurned,
+  onReply,
+  onReact,
+  onOpenUnlimitedEmoji,
   onClose
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
@@ -18,9 +39,18 @@ export default function FogSnapModal({
   const [imgLoaded, setImgLoaded] = useState(false);
 
   const canvasRef = useRef(null);
+  const imgRef = useRef(null);
   const isScratchingRef = useRef(false);
   const timerRef = useRef(null);
   const audioCtxRef = useRef(null);
+
+  useBackHandler(() => {
+    if (isRevealed) {
+      handleBurn();
+    } else {
+      onClose();
+    }
+  }, true);
 
   const duration = message?.fogSnapDuration || 7;
   const token = localStorage.getItem('pulsechat_token');
@@ -283,177 +313,315 @@ export default function FogSnapModal({
     };
   }, [reportScreenshot]);
 
-  return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      zIndex: 99999,
-      background: 'rgba(0, 0, 0, 0.94)',
-      backdropFilter: 'blur(16px)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '16px',
-      userSelect: 'none'
-    }}>
-      {/* Top Header Bar */}
-      <div style={{
-        position: 'absolute',
-        top: '20px',
-        left: '20px',
-        right: '20px',
+  const content = (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100vw',
+        height: '100vh',
+        zIndex: 9999999,
+        background: '#000000',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        zIndex: 50
-      }}>
-        {/* Burning Fuse Timer */}
-        {isRevealed ? (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'rgba(239, 68, 68, 0.25)',
-            border: '1.5px solid #ef4444',
-            borderRadius: '20px',
-            padding: '6px 16px',
-            color: '#ef4444',
-            fontWeight: 900,
-            fontSize: '0.95rem',
-            animation: 'pulse 0.5s infinite alternate'
-          }}>
-            <Flame size={18} />
-            <span>Evaporating in {timeLeft}s</span>
+        justifyContent: 'center',
+        userSelect: 'none',
+        overflow: 'hidden'
+      }}
+    >
+      {/* WhatsApp-Style Top Header Bar */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '62px',
+          padding: '0 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'linear-gradient(180deg, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0) 100%)',
+          zIndex: 50
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#fff' }}>
+          <button
+            type="button"
+            onClick={handleCloseClick}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#fff',
+              cursor: 'pointer',
+              padding: '6px',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            title="Back"
+          >
+            <ArrowLeft size={22} />
+          </button>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontWeight: 700, fontSize: '1rem', color: '#fff', lineHeight: 1.2 }}>
+              {isMine ? 'You' : (senderName || 'Partner')}
+            </span>
+            <span style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.72)', marginTop: '2px' }}>
+              ✨ Dust Image • {formatLightboxDateTime(message.timestamp)}
+            </span>
           </div>
-        ) : (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'rgba(245, 158, 11, 0.2)',
-            border: '1px solid rgba(245, 158, 11, 0.4)',
-            borderRadius: '20px',
-            padding: '6px 14px',
-            color: '#fbbf24',
-            fontWeight: 800,
-            fontSize: '0.86rem'
-          }}>
-            <Sparkles size={16} />
-            <span>Scratch with finger to reveal!</span>
-          </div>
-        )}
+        </div>
 
-        <button
-          onClick={handleCloseClick}
-          style={{
-            background: 'rgba(255,255,255,0.12)',
-            border: 'none',
-            color: '#fff',
-            width: '40px',
-            height: '40px',
-            borderRadius: '50%',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          <X size={20} />
-        </button>
+        {/* Right Header Status / Countdown */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {isRevealed ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(239, 68, 68, 0.25)',
+                border: '1.5px solid #ef4444',
+                borderRadius: '20px',
+                padding: '6px 14px',
+                color: '#ef4444',
+                fontWeight: 900,
+                fontSize: '0.86rem',
+                animation: 'pulse 0.5s infinite alternate'
+              }}
+            >
+              <Flame size={16} />
+              <span>Evaporating in {timeLeft}s</span>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'rgba(245, 158, 11, 0.2)',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                borderRadius: '20px',
+                padding: '6px 14px',
+                color: '#fbbf24',
+                fontWeight: 800,
+                fontSize: '0.82rem'
+              }}
+            >
+              <Sparkles size={15} />
+              <span>Scratch to reveal</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Screenshot Flash Alert */}
       {screenshotAlerted && (
-        <div style={{
-          position: 'absolute',
-          top: '80px',
-          zIndex: 60,
-          background: '#ef4444',
-          color: '#fff',
-          borderRadius: '16px',
-          padding: '10px 22px',
-          fontWeight: 900,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          boxShadow: '0 0 30px rgba(239, 68, 68, 0.9)'
-        }}>
+        <div
+          style={{
+            position: 'absolute',
+            top: '75px',
+            zIndex: 60,
+            background: '#ef4444',
+            color: '#fff',
+            borderRadius: '16px',
+            padding: '10px 22px',
+            fontWeight: 900,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            boxShadow: '0 0 30px rgba(239, 68, 68, 0.9)'
+          }}
+        >
           <AlertTriangle size={20} />
           <span>SCREENSHOT DETECTED! SENDER WAS ALERTED!</span>
         </div>
       )}
 
-      {/* Main Snap Card Container */}
-      <div style={{
-        position: 'relative',
-        width: '100%',
-        maxWidth: '480px',
-        maxHeight: '75vh',
-        aspectRatio: '9 / 16',
-        borderRadius: '24px',
-        overflow: 'hidden',
-        boxShadow: isRevealed
-          ? '0 0 40px rgba(239, 68, 68, 0.6), 0 25px 60px rgba(0,0,0,0.9)'
-          : '0 0 30px rgba(245, 158, 11, 0.4), 0 25px 60px rgba(0,0,0,0.9)',
-        border: isRevealed ? '2.5px solid #ef4444' : '2px solid rgba(245, 158, 11, 0.5)',
-        transition: 'all 0.3s ease',
-        filter: isBurned ? 'blur(15px) contrast(200%)' : 'none',
-        opacity: isBurned ? 0 : 1
-      }}>
-        {/* Underlying Photo */}
-        <img
-          src={message?.mediaUrl}
-          alt="Secret Fog Snap"
-          onLoad={() => {
-            setImgLoaded(true);
-            setTimeout(initCanvasFog, 50);
-          }}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            display: 'block'
-          }}
-        />
-
-        {/* Scratchable Fog Mist Canvas Overlay */}
-        <canvas
-          ref={canvasRef}
-          width={480}
-          height={720}
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
-          onMouseUp={onMouseUp}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            cursor: isRevealed ? 'default' : 'pointer',
-            touchAction: 'none'
-          }}
-        />
-      </div>
-
-      {/* Bottom Burn Status */}
-      {isBurned && (
-        <div style={{
-          position: 'absolute',
-          bottom: '40px',
-          color: '#9ca3af',
-          fontWeight: 800,
-          fontSize: '1rem',
+      {/* Full screen Main Media Container */}
+      <div
+        style={{
+          width: '100vw',
+          height: '100vh',
           display: 'flex',
           alignItems: 'center',
-          gap: '8px'
-        }}>
-          🌫️ Fog Snap has evaporated into smoke!
+          justifyContent: 'center',
+          padding: '12px',
+          boxSizing: 'border-box',
+          position: 'relative',
+          overflow: 'hidden'
+        }}
+      >
+        <div
+          style={{
+            position: 'relative',
+            maxWidth: '100vw',
+            maxHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            filter: isBurned ? 'blur(20px) contrast(200%)' : 'none',
+            opacity: isBurned ? 0 : 1,
+            transition: 'all 0.3s ease'
+          }}
+        >
+          {/* Underlying Photo */}
+          <img
+            ref={imgRef}
+            src={message?.mediaUrl}
+            alt="Secret Dust Image"
+            onLoad={() => {
+              setImgLoaded(true);
+              if (imgRef.current && canvasRef.current) {
+                const rect = imgRef.current.getBoundingClientRect();
+                if (rect.width && rect.height) {
+                  canvasRef.current.width = rect.width;
+                  canvasRef.current.height = rect.height;
+                }
+              }
+              setTimeout(initCanvasFog, 50);
+            }}
+            style={{
+              maxWidth: '100vw',
+              maxHeight: '100vh',
+              objectFit: 'contain',
+              display: 'block'
+            }}
+          />
+
+          {/* Scratchable Dust Mist Canvas Overlay */}
+          <canvas
+            ref={canvasRef}
+            width={480}
+            height={720}
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseUp={onMouseUp}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              cursor: isRevealed ? 'default' : 'pointer',
+              touchAction: 'none'
+            }}
+          />
+        </div>
+      </div>
+
+      {/* WhatsApp Bottom Bar with Reply & Emoji Reactions */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: '14px 18px 22px 18px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'linear-gradient(0deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0) 100%)',
+          gap: '14px',
+          zIndex: 50
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            handleCloseClick();
+            if (onReply) onReply(message);
+          }}
+          style={{
+            flex: 1,
+            maxWidth: '220px',
+            background: 'rgba(30, 41, 59, 0.88)',
+            border: '1px solid rgba(255, 255, 255, 0.14)',
+            borderRadius: '24px',
+            padding: '10px 18px',
+            color: 'rgba(255, 255, 255, 0.85)',
+            fontSize: '0.94rem',
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer'
+          }}
+        >
+          <CornerUpLeft size={16} color="#38bdf8" />
+          <span>Reply</span>
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            type="button"
+            onClick={() => onReact && onReact('❤️')}
+            style={{ background: 'none', border: 'none', fontSize: '1.65rem', cursor: 'pointer', padding: 0, lineHeight: 1 }}
+          >
+            ❤️
+          </button>
+          <button
+            type="button"
+            onClick={() => onReact && onReact('😂')}
+            style={{ background: 'none', border: 'none', fontSize: '1.65rem', cursor: 'pointer', padding: 0, lineHeight: 1 }}
+          >
+            😂
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (onOpenUnlimitedEmoji) {
+                handleCloseClick();
+                onOpenUnlimitedEmoji(message);
+              } else if (onReact) {
+                onReact('👍');
+              }
+            }}
+            style={{
+              background: 'rgba(255, 255, 255, 0.15)',
+              border: 'none',
+              borderRadius: '50%',
+              width: '36px',
+              height: '36px',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+            title="Reactions"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
+      </div>
+
+      {/* Bottom Burn Status Notification */}
+      {isBurned && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '80px',
+            color: '#ef4444',
+            fontWeight: 800,
+            fontSize: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'rgba(0,0,0,0.85)',
+            padding: '8px 18px',
+            borderRadius: '20px',
+            zIndex: 60
+          }}
+        >
+          🌫️ Dust Image evaporated into digital smoke!
         </div>
       )}
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : content;
 }

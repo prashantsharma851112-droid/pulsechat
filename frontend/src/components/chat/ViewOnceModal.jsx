@@ -1,7 +1,33 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Lock, ShieldAlert, Eye, AlertOctagon } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { X, Lock, ShieldAlert, Eye, AlertOctagon, ArrowLeft, CornerUpLeft, Plus } from 'lucide-react';
+import { useBackHandler } from '../../utils/backNavigation';
 
-export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, onClose }) {
+function formatLightboxDateTime(timestamp) {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
+  if (isToday) {
+    return `Today, ${time}`;
+  }
+  const day = date.getDate();
+  const month = date.toLocaleDateString([], { month: 'long' });
+  return `${day} ${month}, ${time}`;
+}
+
+export default function ViewOnceModal({
+  message,
+  viewCount = 1,
+  senderName,
+  isMine,
+  onReply,
+  onReact,
+  onOpenUnlimitedEmoji,
+  onMarkViewed,
+  onClose
+}) {
   const [hasMarkedViewed, setHasMarkedViewed] = useState(false);
   const [screenshotBlocked, setScreenshotBlocked] = useState(false);
   const [securityWarning, setSecurityWarning] = useState(null);
@@ -15,6 +41,11 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
 
   const isVideo = message?.type === 'video';
   const viewLimit = message?.viewLimit || (message?.isViewTwice ? 2 : 1);
+
+  useBackHandler(() => {
+    if (!hasMarkedViewed && onMarkViewed) onMarkViewed();
+    onClose();
+  }, true);
 
   const triggerSecurityAlert = useCallback((warningText) => {
     setScreenshotBlocked(true);
@@ -230,15 +261,17 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
 
   if (!message || !message.mediaUrl) return null;
 
-  return (
+  const content = (
     <div
-      className="view-once-modal-wrapper incoming-call-overlay"
+      className="view-once-modal-wrapper"
       onContextMenu={(e) => e.preventDefault()}
       onDragStart={(e) => e.preventDefault()}
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 100000,
+        width: '100vw',
+        height: '100vh',
+        zIndex: 9999999,
         background: '#000000',
         display: 'flex',
         flexDirection: 'column',
@@ -260,57 +293,67 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
         }
       `}</style>
 
-      {/* Top Navigation Bar */}
-      <div style={{
-        position: 'absolute',
-        top: '16px',
-        left: '16px',
-        right: '16px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        zIndex: 40
-      }}>
+      {/* WhatsApp-Style Top Header Bar */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '62px',
+          padding: '0 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'linear-gradient(180deg, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0) 100%)',
+          zIndex: 40
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#fff' }}>
+          <button
+            type="button"
+            onClick={handleClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#fff',
+              cursor: 'pointer',
+              padding: '6px',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            title="Back"
+          >
+            <ArrowLeft size={22} />
+          </button>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontWeight: 700, fontSize: '1rem', color: '#fff', lineHeight: 1.2 }}>
+              {isMine ? 'You' : (senderName || 'Partner')}
+            </span>
+            <span style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.72)', marginTop: '2px' }}>
+              {message?.isViewTwice ? 'Twice View' : (isVideo ? 'View Once video' : 'View Once photo')} • {formatLightboxDateTime(message.timestamp)}
+            </span>
+          </div>
+        </div>
+
+        {/* Right Header Protected Badge */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
+          gap: '6px',
           color: '#ffffff',
-          fontSize: '0.88rem',
-          fontWeight: 600,
-          background: 'rgba(255, 255, 255, 0.12)',
+          fontSize: '0.82rem',
+          fontWeight: 700,
+          background: 'rgba(255, 255, 255, 0.14)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
           padding: '6px 14px',
           borderRadius: '20px',
-          border: '1px solid rgba(255, 255, 255, 0.15)'
+          border: '1px solid rgba(255, 255, 255, 0.18)'
         }}>
-          <Lock size={15} color="#10b981" />
-          <span>
-            {message?.isViewTwice
-              ? `Twice View (2x) Protected ${isVideo ? 'Video' : 'Photo'}`
-              : `View Once (1x) Protected ${isVideo ? 'Video' : 'Photo'}`}
-          </span>
+          <Lock size={14} color={message?.isViewTwice ? "#38bdf8" : "#10b981"} />
+          <span>{message?.isViewTwice ? 'Twice View (2x)' : 'View Once (1x)'}</span>
         </div>
-
-        <button
-          onClick={handleClose}
-          className="icon-btn-ghost"
-          style={{
-            background: 'rgba(255, 255, 255, 0.15)',
-            color: '#ffffff',
-            padding: '10px',
-            borderRadius: '50%',
-            cursor: 'pointer',
-            border: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          title="Close & Discard"
-        >
-          <X size={22} />
-        </button>
       </div>
 
       {/* Security Warning Toast */}
@@ -340,14 +383,15 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
         </div>
       )}
 
-      {/* Media Viewing Core Container (WhatsApp-Style Direct View) */}
+      {/* Media Viewing Core Container (Full screen) */}
       <div style={{
-        maxWidth: '94vw',
-        maxHeight: '78vh',
-        position: 'relative',
+        width: '100vw',
+        height: '100vh',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        padding: '12px',
+        boxSizing: 'border-box'
       }}>
         {screenshotBlocked ? (
           /* High-Alert Security Blackout Shield */
@@ -373,8 +417,8 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
             </div>
           </div>
         ) : (
-          /* WhatsApp-Style Visible Protected Media */
-          <div style={{ position: 'relative', display: 'inline-block' }}>
+          /* Full screen Protected Media */
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {isVideo ? (
               <video
                 ref={videoRef}
@@ -384,11 +428,10 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
                 controls
                 draggable={false}
                 style={{
-                  maxWidth: '94vw',
-                  maxHeight: '76vh',
-                  borderRadius: '16px',
-                  display: 'block',
-                  boxShadow: '0 12px 40px rgba(0,0,0,0.8)'
+                  maxWidth: '100vw',
+                  maxHeight: '100vh',
+                  objectFit: 'contain',
+                  display: 'block'
                 }}
               />
             ) : !imageLoaded ? (
@@ -414,12 +457,11 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
               <canvas
                 ref={canvasRef}
                 style={{
-                  maxWidth: '94vw',
-                  maxHeight: '76vh',
-                  borderRadius: '16px',
+                  maxWidth: '100vw',
+                  maxHeight: '100vh',
+                  objectFit: 'contain',
                   pointerEvents: 'none',
-                  display: 'block',
-                  boxShadow: '0 12px 40px rgba(0,0,0,0.8)'
+                  display: 'block'
                 }}
               />
             )}
@@ -427,41 +469,93 @@ export default function ViewOnceModal({ message, viewCount = 1, onMarkViewed, on
         )}
       </div>
 
-      {/* WhatsApp-Style Bottom Security Banner */}
-      <div style={{
-        position: 'absolute',
-        bottom: '24px',
-        left: '20px',
-        right: '20px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '8px',
-        zIndex: 40
-      }}>
-        <div style={{
+      {/* WhatsApp Bottom Bar with Reply & Emoji Reactions */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: '14px 18px 22px 18px',
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
-          background: 'rgba(17, 24, 39, 0.85)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          padding: '10px 20px',
-          borderRadius: '30px',
-          color: '#ffffff',
-          fontSize: '0.82rem',
-          fontWeight: 600,
-          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)'
-        }}>
-          <Lock size={15} color="#10b981" />
-          <span>
-            {message?.isViewTwice
-              ? 'Twice View • Closes and permanently expires after 2 views'
-              : 'View Once • Closes and permanently expires once dismissed'}
-          </span>
+          justifyContent: 'space-between',
+          background: 'linear-gradient(0deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0) 100%)',
+          gap: '14px',
+          zIndex: 40
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            handleClose();
+            if (onReply) onReply(message);
+          }}
+          style={{
+            flex: 1,
+            maxWidth: '220px',
+            background: 'rgba(30, 41, 59, 0.88)',
+            border: '1px solid rgba(255, 255, 255, 0.14)',
+            borderRadius: '24px',
+            padding: '10px 18px',
+            color: 'rgba(255, 255, 255, 0.85)',
+            fontSize: '0.94rem',
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer'
+          }}
+        >
+          <CornerUpLeft size={16} color="#38bdf8" />
+          <span>Reply</span>
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            type="button"
+            onClick={() => onReact && onReact('❤️')}
+            style={{ background: 'none', border: 'none', fontSize: '1.65rem', cursor: 'pointer', padding: 0, lineHeight: 1 }}
+          >
+            ❤️
+          </button>
+          <button
+            type="button"
+            onClick={() => onReact && onReact('😂')}
+            style={{ background: 'none', border: 'none', fontSize: '1.65rem', cursor: 'pointer', padding: 0, lineHeight: 1 }}
+          >
+            😂
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (onOpenUnlimitedEmoji) {
+                handleClose();
+                onOpenUnlimitedEmoji(message);
+              } else if (onReact) {
+                onReact('👍');
+              }
+            }}
+            style={{
+              background: 'rgba(255, 255, 255, 0.15)',
+              border: 'none',
+              borderRadius: '50%',
+              width: '36px',
+              height: '36px',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+            title="Reactions"
+          >
+            <Plus size={18} />
+          </button>
         </div>
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : content;
 }
