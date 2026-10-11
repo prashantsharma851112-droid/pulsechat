@@ -544,7 +544,7 @@ export default function Register({ switchToLogin }) {
             e.preventDefault();
             window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'privacy' } }));
           }}
-          style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', padding: '2px 4px' }}
+          style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer' }}
         >
           Privacy Policy
         </a>
@@ -555,7 +555,7 @@ export default function Register({ switchToLogin }) {
             e.preventDefault();
             window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'terms' } }));
           }}
-          style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', padding: '2px 4px' }}
+          style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer' }}
         >
           Terms of Service
         </a>
@@ -566,7 +566,7 @@ export default function Register({ switchToLogin }) {
             e.preventDefault();
             window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'refund' } }));
           }}
-          style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', padding: '2px 4px' }}
+          style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer' }}
         >
           Refund & Cancellation
         </a>
@@ -577,7 +577,7 @@ export default function Register({ switchToLogin }) {
             e.preventDefault();
             window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'pricing' } }));
           }}
-          style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', padding: '2px 4px' }}
+          style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer' }}
         >
           Pricing
         </a>
@@ -588,7 +588,7 @@ export default function Register({ switchToLogin }) {
             e.preventDefault();
             window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'contact' } }));
           }}
-          style={{ color: 'rgba(255, 255, 255, 0.7)', textDecoration: 'none', padding: '2px 4px' }}
+          style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer' }}
         >
           Contact Us
         </a>

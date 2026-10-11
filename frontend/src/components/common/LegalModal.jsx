@@ -3,7 +3,7 @@ import LegalView from './LegalView';
 import { useBackHandler } from '../../utils/backNavigation';
 
 export default function LegalModal({ initialTab = 'privacy', onClose }) {
-  useBackHandler(onClose, true);
+  useBackHandler(typeof onClose === 'function' ? onClose : () => {}, true);
   return (
     <div style={{
       position: 'fixed',
@@ -12,10 +12,11 @@ export default function LegalModal({ initialTab = 'privacy', onClose }) {
       right: 0,
       bottom: 0,
       backgroundColor: '#0a0d14',
-      zIndex: 40000,
+      zIndex: 9999999,
       display: 'flex',
       flexDirection: 'column',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      animation: 'fadeIn 0.15s ease-out'
     }}>
       <LegalView initialTab={initialTab} onClose={onClose} />
     </div>

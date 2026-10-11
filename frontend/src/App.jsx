@@ -23,8 +23,8 @@ const IncomingCallModal = lazyWithRetry(() => import('./components/chat/Incoming
 const GroupCallModal = lazyWithRetry(() => import('./components/chat/GroupCallModal'));
 const IncomingGroupCallModal = lazyWithRetry(() => import('./components/chat/IncomingGroupCallModal'));
 const AppOnboardingModal = lazyWithRetry(() => import('./components/common/AppOnboardingModal'));
-const LegalView = lazyWithRetry(() => import('./components/common/LegalView'));
-const LegalModal = lazyWithRetry(() => import('./components/common/LegalModal'));
+import LegalView from './components/common/LegalView';
+import LegalModal from './components/common/LegalModal';
 const PulseHandleCardModal = lazyWithRetry(() => import('./components/profile/PulseHandleCardModal'));
 const AnonymousAskView = lazyWithRetry(() => import('./components/profile/AnonymousAskView'));
 import { BACKEND_URL } from './utils/config';
@@ -122,7 +122,7 @@ export default function App() {
   // Compliance & Legal Pages Direct Route Support (/privacy, /terms, /refund, /pricing, /contact)
   const [standaloneLegalTab, setStandaloneLegalTab] = useState(() => {
     if (typeof window !== 'undefined') {
-      const p = window.location.pathname.toLowerCase().replace('/', '');
+      const p = window.location.pathname.toLowerCase().replace(/^\/+|\/+$/g, '');
       if (['privacy', 'terms', 'refund', 'pricing', 'contact'].includes(p)) {
         return p;
       }
@@ -668,39 +668,49 @@ export default function App() {
 
   if (standaloneLegalTab) {
     return (
-      <LegalView
-        initialTab={standaloneLegalTab}
-        isStandalone={true}
-        onClose={() => {
-          window.history.pushState(null, '', '/');
-          setStandaloneLegalTab(null);
-        }}
-      />
+      <ErrorBoundary>
+        <LegalView
+          initialTab={standaloneLegalTab}
+          isStandalone={true}
+          onClose={() => {
+            window.history.pushState(null, '', '/');
+            setStandaloneLegalTab(null);
+          }}
+        />
+      </ErrorBoundary>
     );
   }
 
   if (standaloneHandleUser) {
     return (
-      <PulseHandleCardModal
-        targetUser={standaloneHandleUser}
-        currentUser={user}
-        standalone={true}
-        onClose={() => {
-          window.history.pushState(null, '', '/');
-          setStandaloneHandleUser(null);
-        }}
-        onOpenChat={(chatUser) => {
-          window.history.pushState(null, '', '/');
-          setStandaloneHandleUser(null);
-          setActiveChat(chatUser);
-        }}
-      />
+      <ErrorBoundary>
+        <React.Suspense fallback={<div style={{ height: '100dvh', background: '#0a0d14' }} />}>
+          <PulseHandleCardModal
+            targetUser={standaloneHandleUser}
+            currentUser={user}
+            standalone={true}
+            onClose={() => {
+              window.history.pushState(null, '', '/');
+              setStandaloneHandleUser(null);
+            }}
+            onOpenChat={(chatUser) => {
+              window.history.pushState(null, '', '/');
+              setStandaloneHandleUser(null);
+              setActiveChat(chatUser);
+            }}
+          />
+        </React.Suspense>
+      </ErrorBoundary>
     );
   }
 
   if (standaloneAskUser) {
     return (
-      <AnonymousAskView targetUsername={standaloneAskUser} />
+      <ErrorBoundary>
+        <React.Suspense fallback={<div style={{ height: '100dvh', background: '#0a0d14' }} />}>
+          <AnonymousAskView targetUsername={standaloneAskUser} />
+        </React.Suspense>
+      </ErrorBoundary>
     );
   }
 
@@ -714,19 +724,21 @@ export default function App() {
 
   if (!user) {
     return (
-      <>
-        {isRegisterView ? (
-          <Register switchToLogin={() => setIsRegisterView(false)} />
-        ) : (
-          <Login switchToRegister={() => setIsRegisterView(true)} />
-        )}
-        {legalModalTab && (
-          <LegalModal
-            initialTab={legalModalTab}
-            onClose={() => setLegalModalTab(null)}
-          />
-        )}
-      </>
+      <ErrorBoundary>
+        <React.Suspense fallback={<div style={{ height: '100dvh', background: '#0a0d14' }} />}>
+          {isRegisterView ? (
+            <Register switchToLogin={() => setIsRegisterView(false)} />
+          ) : (
+            <Login switchToRegister={() => setIsRegisterView(true)} />
+          )}
+          {legalModalTab && (
+            <LegalModal
+              initialTab={legalModalTab}
+              onClose={() => setLegalModalTab(null)}
+            />
+          )}
+        </React.Suspense>
+      </ErrorBoundary>
     );
   }
 
