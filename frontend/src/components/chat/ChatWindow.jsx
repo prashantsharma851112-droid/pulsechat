@@ -14,6 +14,7 @@ import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume, 
 import { BACKEND_URL } from '../../utils/config';
 import { executeTranslation } from '../../utils/translator';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
+import { useBackHandler } from '../../utils/backNavigation';
 
 import { lazyWithRetry } from '../../utils/lazyRetry';
 
@@ -1126,6 +1127,22 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [proModalTab, setProModalTab] = useState('pro');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [pendingMedia, setPendingMedia] = useState(null);
+
+  // Universal Back Button registration for all submodals/pickers inside ChatWindow
+  useBackHandler(() => setShowActionGrid(false), showActionGrid);
+  useBackHandler(() => setShowEmoji(false), showEmoji);
+  useBackHandler(() => setShowRecorder(false), showRecorder);
+  useBackHandler(() => setPendingMedia(null), Boolean(pendingMedia));
+  useBackHandler(() => setShowCreatePoll(false), showCreatePoll);
+  useBackHandler(() => setShowWhiteboard(false), showWhiteboard);
+  useBackHandler(() => setShowMoreMenu(false), showMoreMenu);
+  useBackHandler(() => setShowUserProfileModal(false), showUserProfileModal);
+  useBackHandler(() => setShowGroupProfileModal(false), showGroupProfileModal);
+  useBackHandler(() => setShowGiftPicker(false), showGiftPicker);
+  useBackHandler(() => setShow3DTextModal(false), show3DTextModal);
+  useBackHandler(() => setShowArrowGameModal(false), showArrowGameModal);
+  useBackHandler(() => setShowEmojiBurstPicker(false), showEmojiBurstPicker);
+  useBackHandler(() => setShowProModal(false), showProModal);
   const [groupMembersMap, setGroupMembersMap] = useState({});
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -6849,7 +6866,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </div>
           )}
 
-          {/* 4-Dot Button Beside Typing Input Box */}
+          {/* 4-Dot Feature Button Beside Typing Input Box */}
           {!showRecorder && (
             <button
               ref={actionGridBtnRef}
@@ -6858,15 +6875,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 setShowActionGrid(prev => !prev);
                 setShowEmoji(false);
               }}
-              className="icon-btn-ghost"
+              className="icon-btn-ghost interactive-action"
               title="Features & Attachments (4 Dots)"
               style={{
-                width: '40px',
-                height: '40px',
+                width: '42px',
+                height: '42px',
                 borderRadius: '50%',
-                background: showActionGrid ? 'var(--accent)' : 'var(--bg-card)',
-                color: showActionGrid ? '#fff' : 'var(--accent)',
-                border: showActionGrid ? '1px solid var(--accent)' : '1px solid var(--border)',
+                background: showActionGrid ? 'var(--accent, #6366f1)' : 'var(--bg-card, #202c33)',
+                color: showActionGrid ? '#fff' : 'var(--accent, #6366f1)',
+                border: showActionGrid ? '1px solid var(--accent, #6366f1)' : '1px solid var(--border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -6885,121 +6902,165 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </button>
           )}
 
-          {/* Voice Note Button Beside 4-Dot Button */}
-          {!showRecorder && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowActionGrid(false);
-                setShowEmoji(false);
-                setShowRecorder(true);
-              }}
-              className="icon-btn-ghost"
-              title="Record Voice Note"
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                color: 'var(--accent)',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <Mic size={20} />
-            </button>
-          )}
-
-          {/* Emoji Button in place of Voice Note */}
-          {!showRecorder && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowEmoji(prev => !prev);
-                setShowActionGrid(false);
-              }}
-              className="icon-btn-ghost"
-              title="Emoji Picker"
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                background: showEmoji ? 'rgba(245, 158, 11, 0.22)' : 'var(--bg-card)',
-                color: showEmoji ? '#f59e0b' : 'var(--text-muted)',
-                border: showEmoji ? '1px solid rgba(245, 158, 11, 0.6)' : '1px solid var(--border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                transition: 'all 0.15s ease',
-                cursor: 'pointer',
-                boxShadow: showEmoji ? '0 0 10px rgba(245, 158, 11, 0.35)' : 'none'
-              }}
-            >
-              <Smile size={20} />
-            </button>
-          )}
-
           {showRecorder ? (
             <VoiceRecorder onSendVoice={handleSendVoice} onCancel={() => setShowRecorder(false)} />
           ) : (
-            <form onSubmit={handleSendText} style={{ flex: 1, display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-              <input
-                type="text"
-                value={text}
-                onChange={handleTextChange}
-                placeholder={isGroup ? 'Message group...' : 'Type a message...'}
-                className="form-input"
-                ref={replyInputRef}
-                style={{ flex: 1, minWidth: 0, borderRadius: '24px', padding: '10px 16px', fontSize: '0.94rem' }}
-              />
-              {text.trim().length > 0 && (
+            <form onSubmit={handleSendText} style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {/* WhatsApp-Style Unified Capsule / Pill Container */}
+              <div
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: 'var(--bg-card, #202c33)',
+                  borderRadius: '26px',
+                  padding: '4px 10px 4px 12px',
+                  border: '1px solid var(--border)',
+                  minHeight: '44px',
+                  gap: '6px'
+                }}
+              >
+                {/* Emoji Button INSIDE on the left */}
                 <button
                   type="button"
-                  onClick={handleTranslateDraft}
-                  disabled={isTranslatingDraft}
-                  title={`Translate draft to ${targetLang.toUpperCase()} before sending`}
+                  onClick={() => {
+                    setShowEmoji(prev => !prev);
+                    setShowActionGrid(false);
+                  }}
+                  className="icon-btn-ghost interactive-action"
+                  title="Emoji Picker"
                   style={{
-                    background: 'rgba(6, 182, 212, 0.16)',
-                    border: '1px solid rgba(6, 182, 212, 0.45)',
-                    color: '#06b6d4',
-                    borderRadius: '20px',
-                    padding: '6px 10px',
-                    fontSize: '0.74rem',
-                    fontWeight: 700,
+                    background: 'transparent',
+                    border: 'none',
+                    color: showEmoji ? '#f59e0b' : 'var(--text-muted, #8696a0)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px',
-                    cursor: isTranslatingDraft ? 'wait' : 'pointer',
+                    justifyContent: 'center',
+                    padding: '4px',
+                    borderRadius: '50%',
+                    cursor: 'pointer',
                     flexShrink: 0,
                     transition: 'all 0.15s ease'
                   }}
                 >
-                  <Globe size={13} />
-                  <span>{isTranslatingDraft ? 'Translating...' : `➔ ${targetLang.toUpperCase()}`}</span>
+                  <Smile size={22} />
+                </button>
+
+                {/* Input text field in the middle */}
+                <input
+                  type="text"
+                  value={text}
+                  onChange={handleTextChange}
+                  placeholder={isGroup ? 'Message group...' : 'Type a message'}
+                  ref={replyInputRef}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: 'var(--text-main, #ffffff)',
+                    fontSize: '0.94rem',
+                    padding: '6px 4px'
+                  }}
+                />
+
+                {/* Draft Translate Button if text is present */}
+                {text.trim().length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleTranslateDraft}
+                    disabled={isTranslatingDraft}
+                    title={`Translate draft to ${targetLang.toUpperCase()} before sending`}
+                    style={{
+                      background: 'rgba(6, 182, 212, 0.16)',
+                      border: '1px solid rgba(6, 182, 212, 0.45)',
+                      color: '#06b6d4',
+                      borderRadius: '20px',
+                      padding: '4px 8px',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      cursor: isTranslatingDraft ? 'wait' : 'pointer',
+                      flexShrink: 0,
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <Globe size={12} />
+                    <span>{isTranslatingDraft ? 'Translating...' : `➔ ${targetLang.toUpperCase()}`}</span>
+                  </button>
+                )}
+
+                {/* When text is empty: Voice note (Mic) button inside the pill on the right */}
+                {text.trim().length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowActionGrid(false);
+                      setShowEmoji(false);
+                      setShowRecorder(true);
+                    }}
+                    className="icon-btn-ghost interactive-action"
+                    title="Record Voice Note"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-muted, #8696a0)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '4px',
+                      borderRadius: '50%',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <Mic size={22} />
+                  </button>
+                )}
+              </div>
+
+              {/* When text is entered: WhatsApp Vibrant Green Circular Send Button */}
+              {text.trim().length > 0 && (
+                <button
+                  type="submit"
+                  tabIndex={-1}
+                  className="interactive-action"
+                  title="Send Message (Hold to Schedule ⏰)"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handleSendBtnMouseDown(e);
+                  }}
+                  onMouseUp={handleSendBtnMouseUp}
+                  onTouchStart={handleSendBtnMouseDown}
+                  onTouchEnd={() => {
+                    handleSendBtnMouseUp();
+                    replyInputRef.current?.focus({ preventScroll: true });
+                  }}
+                  style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '50%',
+                    background: '#25d366',
+                    border: 'none',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 10px rgba(37, 211, 102, 0.45)',
+                    transition: 'transform 0.15s ease, background 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  <Send size={19} style={{ marginLeft: '2px' }} />
                 </button>
               )}
-              <button
-                type="submit"
-                tabIndex={-1}
-                className="btn-primary-round"
-                title="Send Message (Hold to Schedule ⏰)"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  handleSendBtnMouseDown(e);
-                }}
-                onMouseUp={handleSendBtnMouseUp}
-                onTouchStart={handleSendBtnMouseDown}
-                onTouchEnd={() => {
-                  handleSendBtnMouseUp();
-                  replyInputRef.current?.focus({ preventScroll: true });
-                }}
-                style={{ flexShrink: 0 }}
-              >
-                <Send size={18} />
-              </button>
             </form>
           )}
         </div>

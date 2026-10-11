@@ -162,13 +162,15 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
   const [activeEmojiCategory, setActiveEmojiCategory] = useState('smileys');
 
   // Hardware/Swipe Back button closes submodals first, otherwise closes story viewer safely
-  useBackHandler(() => setShowUnlimitedEmojiModal(false), showUnlimitedEmojiModal);
-  useBackHandler(() => setShowReplySheet(false), showReplySheet && !showUnlimitedEmojiModal);
-  useBackHandler(() => setShowGetSparksModal(false), showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal);
-  useBackHandler(() => setShowSparksWallet(false), showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal);
-  useBackHandler(() => setShowSparksTipModal(false), showSparksTipModal && !showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal);
-  useBackHandler(() => setShowViewersSheet(false), showViewersSheet && !showSparksTipModal && !showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal);
-  useBackHandler(onClose, !showViewersSheet && !showSparksTipModal && !showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal);
+  useBackHandler(() => setIsStoryOptionsOpen(false), isStoryOptionsOpen);
+  useBackHandler(() => setShowShareModal(false), showShareModal && !isStoryOptionsOpen);
+  useBackHandler(() => setShowUnlimitedEmojiModal(false), showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
+  useBackHandler(() => setShowReplySheet(false), showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
+  useBackHandler(() => setShowGetSparksModal(false), showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
+  useBackHandler(() => setShowSparksWallet(false), showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
+  useBackHandler(() => setShowSparksTipModal(false), showSparksTipModal && !showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
+  useBackHandler(() => setShowViewersSheet(false), showViewersSheet && !showSparksTipModal && !showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
+  useBackHandler(onClose, !isAnySubmodalOpen);
 
   // Per-story live views dictionary keyed by vibe ID
   const [viewsByVibeId, setViewsByVibeId] = useState(() => {
@@ -747,8 +749,20 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     }
   }, [currentIndex, currentVibe?.id, isAudioMuted]);
 
-  const isAnySubmodalOpen = showViewersSheet || showSparksTipModal || showSparksWallet || showGetSparksModal || showReplySheet || showUnlimitedEmojiModal || isStoryOptionsOpen || isDownloadingStory || showShareModal;
+  const isAnySubmodalOpen = Boolean(
+    showViewersSheet ||
+    showSparksTipModal ||
+    showSparksWallet ||
+    showGetSparksModal ||
+    showReplySheet ||
+    showUnlimitedEmojiModal ||
+    isStoryOptionsOpen ||
+    isDownloadingStory ||
+    showShareModal ||
+    (replyText && replyText.trim().length > 0)
+  );
 
+  // Auto-pause / resume video and audio when interacting with reply, react, viewers, sparks, or options
   useEffect(() => {
     if (videoPlayerRef.current) {
       if (isPaused || isHolding || isAnySubmodalOpen) {
@@ -757,17 +771,30 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
         try { videoPlayerRef.current.play().catch(() => {}); } catch (e) {}
       }
     }
-  }, [isPaused, isHolding, isAnySubmodalOpen]);
+    if (audioRef.current) {
+      if (isPaused || isHolding || isAnySubmodalOpen) {
+        try { audioRef.current.pause(); } catch (e) {}
+      } else {
+        if (!isAudioMuted) {
+          try { audioRef.current.play().catch(() => {}); } catch (e) {}
+        }
+      }
+    }
+  }, [isPaused, isHolding, isAnySubmodalOpen, isAudioMuted]);
 
-  // Story Auto-Advance Progress Bar Timer (for photo/text stories; videos manage progress via onTimeUpdate)
+  // Reset progress to 0 ONLY when switching to a different story
+  useEffect(() => {
+    setProgress(0);
+  }, [currentIndex, currentVibe?.id]);
+
+  // Story Auto-Advance Progress Bar Timer (seamlessly pauses when replying/viewing options, resumes upon dismiss!)
   useEffect(() => {
     if (isCurrentStoryVideo) return;
-    if (isPaused || isHolding || isAnySubmodalOpen || cubeAnimating || isCubeDragging) {
+    if (isPaused || isHolding || isAnySubmodalOpen || cubeAnimating || isCubeDragging || showingSponsoredAd) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
 
-    setProgress(0);
     if (timerRef.current) clearInterval(timerRef.current);
 
     const durSeconds = Math.max(5, Number(currentVibe?.storyDuration || currentVibe?.duration || 15));
@@ -786,7 +813,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [currentIndex, vibes.length, onClose, isPaused, isHolding, showViewersSheet, currentVibe?.id, currentVibe?.storyDuration, user?.isPro, showingSponsoredAd, isCurrentStoryVideo, cubeAnimating, isCubeDragging]);
+  }, [currentIndex, isPaused, isHolding, isAnySubmodalOpen, cubeAnimating, isCubeDragging, showingSponsoredAd, currentVibe?.id, currentVibe?.storyDuration, isCurrentStoryVideo]);
 
   // Clean up timers on unmount
   useEffect(() => {
@@ -1264,21 +1291,70 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
 
   const handleSendStoryToFriend = (targetChatId, friendName) => {
     if (!socket || !targetChatId) return;
-    socket.emit('send_message', {
-      chatId: targetChatId,
+    const authorId = currentVibe?.userId || vibeGroup?.userId;
+    const authorName = vibeGroup?.displayName || vibeGroup?.username || 'User';
+
+    // Compute proper 1-on-1 chatId if targetChatId is a user ID
+    let realChatId = targetChatId;
+    let partnerId = targetChatId;
+    const isGroupChat = String(targetChatId).startsWith('group_');
+
+    if (!isGroupChat && !String(targetChatId).includes('_') && user?.id) {
+      realChatId = [user.id, targetChatId].sort().join('_');
+      partnerId = targetChatId;
+    } else if (String(targetChatId).includes('_')) {
+      const parts = String(targetChatId).split('_');
+      partnerId = parts.find(p => p !== user?.id) || targetChatId;
+    }
+
+    const storyReplyData = {
+      storyId: currentVibe?.id || ('story_' + Date.now()),
+      mediaUrl: currentVibe?.mediaUrl || null,
+      mediaType: currentVibe?.mediaUrl ? (currentVibe.mediaUrl.match(/\.(mp4|webm|mov)$/i) ? 'video' : 'image') : 'text',
+      caption: currentVibe?.caption || '',
+      bgGradient: currentVibe?.bgGradient || null,
+      animatedBg: currentVibe?.animatedBg || 'none',
+      audioUrl: currentVibe?.audioUrl || null,
+      songTitle: currentVibe?.songTitle || '',
+      artistName: currentVibe?.artistName || '',
+      authorId: authorId,
+      authorName: authorName,
+      authorAvatar: vibeGroup?.avatar || currentVibe?.avatar || '',
+      textStyle3D: currentVibe?.textStyle3D || 'none',
+      textBgStyle: currentVibe?.textBgStyle || 'none',
+      stickersData: currentVibe?.stickersData || [],
+      createdAt: currentVibe?.createdAt || new Date().toISOString()
+    };
+
+    const tempMsg = {
+      id: 'msg_vibe_share_' + Date.now(),
+      chatId: realChatId,
       senderId: user?.id,
       senderName: user?.displayName || user?.name || user?.username,
+      receiverId: partnerId,
+      isGroup: isGroupChat,
       type: 'story_reply',
-      content: `Check out ${vibeGroup?.displayName || 'User'}'s story ⚡`,
-      mediaUrl: currentVibe?.mediaUrl,
-      storyReply: {
-        vibeId: currentVibe?.id,
-        authorName: vibeGroup?.displayName || vibeGroup?.username,
-        authorAvatar: vibeGroup?.avatar,
-        mediaUrl: currentVibe?.mediaUrl,
-        caption: currentVibe?.caption || ''
-      }
-    });
+      content: `Shared ${authorName}'s story ⚡`,
+      mediaUrl: currentVibe?.mediaUrl || null,
+      storyReply: storyReplyData,
+      status: 'sent',
+      timestamp: new Date().toISOString()
+    };
+
+    socket.emit('send_message', tempMsg);
+
+    // Instant local recent chat snippet update
+    if (user?.id && realChatId) {
+      const targetChatObj = {
+        id: partnerId,
+        displayName: friendName || 'Chat',
+        avatar: '',
+        isGroup: isGroupChat
+      };
+      updateRecentChatSnippet(user.id, realChatId, tempMsg, targetChatObj);
+      window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+    }
+
     setShareSentTo(prev => ({ ...prev, [targetChatId]: true }));
   };
 
@@ -2329,19 +2405,21 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
               </button>
             )}
 
-            {/* 3-Dots More Options Button */}
+            {/* 3-Dots More Options Button (Accessible on both own & other users' stories) */}
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsStoryOptionsOpen(prev => !prev);
               }}
-              className="icon-btn-ghost"
+              onTouchStart={(e) => e.stopPropagation()}
+              className="icon-btn-ghost interactive-action"
               style={{
                 color: '#fff',
-                background: isStoryOptionsOpen ? 'rgba(99, 102, 241, 0.75)' : 'rgba(0,0,0,0.5)',
+                background: isStoryOptionsOpen ? 'rgba(99, 102, 241, 0.85)' : 'rgba(0,0,0,0.5)',
                 borderRadius: '50%',
-                padding: '6px',
+                width: '36px',
+                height: '36px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -2351,32 +2429,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
               }}
               title="Story Options"
             >
-              <MoreVertical size={17} color="#fff" />
-            </button>
-
-            {/* Close Story Button */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose();
-              }}
-              className="icon-btn-ghost"
-              style={{
-                color: '#fff',
-                background: 'rgba(0,0,0,0.5)',
-                borderRadius: '50%',
-                padding: '6px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: 'none',
-                transition: 'all 0.15s ease'
-              }}
-              title="Close Story"
-            >
-              <X size={17} color="#fff" />
+              <MoreVertical size={18} color="#fff" />
             </button>
 
             {/* 3-Dots Dropdown Menu */}
@@ -2387,17 +2440,23 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                     e.stopPropagation();
                     setIsStoryOptionsOpen(false);
                   }}
+                  onTouchStart={(e) => {
+                    e.stopPropagation();
+                    setIsStoryOptionsOpen(false);
+                  }}
                   style={{
                     position: 'fixed',
                     inset: 0,
-                    zIndex: 99
+                    zIndex: 1490
                   }}
                 />
                 <div
                   onClick={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  className="interactive-action"
                   style={{
                     position: 'absolute',
-                    top: '42px',
+                    top: '44px',
                     right: '0px',
                     minWidth: '225px',
                     background: 'rgba(15, 23, 42, 0.96)',
@@ -2405,8 +2464,8 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                     border: '1px solid rgba(255, 255, 255, 0.18)',
                     borderRadius: '16px',
                     padding: '8px',
-                    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.75)',
-                    zIndex: 100,
+                    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.85)',
+                    zIndex: 1500,
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '4px'
@@ -2421,6 +2480,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                         handleDownloadStoryAsVideo();
                       }}
                       disabled={isDownloadingStory}
+                      className="interactive-action"
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -2445,13 +2505,14 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                     </button>
                   )}
 
-                  {/* Share Story Option - Available for stories */}
+                  {/* Share Story Option - Available for all stories */}
                   <button
                     type="button"
                     onClick={() => {
                       setIsStoryOptionsOpen(false);
                       handleShareStory();
                     }}
+                    className="interactive-action"
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -2475,13 +2536,14 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                     <span>Share Story</span>
                   </button>
 
-                  {/* Send to a PulseChat friend / chat */}
+                  {/* Send to a PulseChat friend / chat - Available for all stories */}
                   <button
                     type="button"
                     onClick={() => {
                       setIsStoryOptionsOpen(false);
                       setShowShareModal(true);
                     }}
+                    className="interactive-action"
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -2513,6 +2575,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                         setIsStoryOptionsOpen(false);
                         handleDelete();
                       }}
+                      className="interactive-action"
                       style={{
                         display: 'flex',
                         alignItems: 'center',

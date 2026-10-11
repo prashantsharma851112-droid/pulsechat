@@ -142,7 +142,11 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
           : (isVideo ? 'pulse_video.mp4' : 'pulse_image.jpg');
 
         const formData = new FormData();
-        formData.append('file', finalPayload, filename);
+        if (finalPayload instanceof File || finalPayload instanceof Blob) {
+          formData.append('file', finalPayload, filename);
+        } else {
+          formData.append('file', finalPayload);
+        }
         formData.append('api_key', sigData.apiKey);
         formData.append('timestamp', sigData.timestamp);
         formData.append('signature', sigData.signature);
@@ -155,7 +159,11 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
 
         if (!cdnRes.ok) {
           const autoFormData = new FormData();
-          autoFormData.append('file', finalPayload, filename);
+          if (finalPayload instanceof File || finalPayload instanceof Blob) {
+            autoFormData.append('file', finalPayload, filename);
+          } else {
+            autoFormData.append('file', finalPayload);
+          }
           autoFormData.append('api_key', sigData.apiKey);
           autoFormData.append('timestamp', sigData.timestamp);
           autoFormData.append('signature', sigData.signature);
@@ -221,7 +229,8 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
     console.error('All upload strategies failed:', err);
   }
 
-  if (typeof payloadToSend === 'string' && (payloadToSend.startsWith('http://') || payloadToSend.startsWith('https://'))) {
+  // 5. Final Resilience: If string is valid (compressed Data URL or HTTP URL), return it so user is not blocked!
+  if (typeof payloadToSend === 'string' && (payloadToSend.startsWith('http://') || payloadToSend.startsWith('https://') || payloadToSend.startsWith('data:'))) {
     return payloadToSend;
   }
   return '';

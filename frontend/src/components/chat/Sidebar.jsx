@@ -211,7 +211,53 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     return () => window.removeEventListener('pulsechat_open_sparks_wallet', handleOpenWallet);
   }, []);
 
-  // Hardware/Swipe Back button closes popup menus or clears search bar safely
+  // Listen to open story requests from chat cards (makes shared story cards accessible and playable!)
+  useEffect(() => {
+    const handleOpenStoryFromChat = (e) => {
+      const payload = e.detail;
+      if (!payload) return;
+      const group = {
+        userId: payload.authorId || 'author',
+        username: payload.authorName || 'User',
+        displayName: payload.authorName || 'User',
+        avatar: payload.authorAvatar || '',
+        vibes: [{
+          id: payload.storyId || payload.vibeId || ('vibe_' + Date.now()),
+          userId: payload.authorId || 'author',
+          username: payload.authorName || 'User',
+          displayName: payload.authorName || 'User',
+          avatar: payload.authorAvatar || '',
+          mediaUrl: payload.mediaUrl || null,
+          caption: payload.caption || '',
+          bgGradient: payload.bgGradient || 'linear-gradient(135deg, #6366f1, #a855f7)',
+          animatedBg: payload.animatedBg || 'none',
+          soundtrack: payload.soundtrack || 'lofi',
+          songTitle: payload.songTitle || '',
+          artistName: payload.artistName || '',
+          albumArt: payload.albumArt || '',
+          audioUrl: payload.audioUrl || '',
+          textStyle3D: payload.textStyle3D || 'none',
+          textBgStyle: payload.textBgStyle || 'none',
+          stickersData: payload.stickersData || [],
+          createdAt: payload.createdAt || new Date().toISOString()
+        }]
+      };
+      setSelectedVibeGroup(group);
+    };
+    window.addEventListener('pulsechat_open_story', handleOpenStoryFromChat);
+    return () => window.removeEventListener('pulsechat_open_story', handleOpenStoryFromChat);
+  }, []);
+
+  // Hardware/Swipe Back button closes popup modals, views, or search bar safely
+  useBackHandler(() => setSelectedVibeGroup(null), Boolean(selectedVibeGroup));
+  useBackHandler(() => setShowCreateVibe(false), showCreateVibe);
+  useBackHandler(() => setShowCreateGroupModal(false), showCreateGroupModal);
+  useBackHandler(() => setShowPulseZone(false), showPulseZone);
+  useBackHandler(() => setShowSparksWallet(false), showSparksWallet);
+  useBackHandler(() => setShowProModal(false), showProModal);
+  useBackHandler(() => setShowVibeSelector(false), showVibeSelector);
+  useBackHandler(() => setShowFeatureTourModal(false), showFeatureTourModal);
+  useBackHandler(() => setShowMusicPickerModal(false), showMusicPickerModal);
   useBackHandler(() => setShowTopMenu(false), showTopMenu);
   useBackHandler(() => setShowSwitchAccountMenu(false), showSwitchAccountMenu);
   useBackHandler(() => setSearchQuery(''), Boolean(searchQuery));

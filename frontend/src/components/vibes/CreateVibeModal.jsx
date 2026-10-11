@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { registerGlobalMusicAudio, stopGlobalMusicAudio, playSound } from '../../utils/audio';
-import { uploadMediaDirect } from '../../utils/mediaUpload';
+import { uploadMediaDirect, compressImageOnDevice } from '../../utils/mediaUpload';
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 import MusicPickerModal from './MusicPickerModal';
 import InstagramMusicSticker from './InstagramMusicSticker';
@@ -609,7 +609,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
     if (payloadToUpload) {
       try {
         const cdnUrl = await uploadMediaDirect(payloadToUpload, 'pulsechat_vibes', token, isVideo);
-        if (cdnUrl && (cdnUrl.startsWith('http://') || cdnUrl.startsWith('https://'))) {
+        if (cdnUrl && (cdnUrl.startsWith('http://') || cdnUrl.startsWith('https://') || cdnUrl.startsWith('data:'))) {
           finalMediaUrl = cdnUrl;
         }
       } catch (err) {
@@ -617,7 +617,22 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       }
     }
 
-    // STRICT GUARD: Local blob URLs must NEVER be saved to server database!
+    // Client-side fallback compression if cloud upload failed or was offline
+    if (!finalMediaUrl && selectedMediaFile) {
+      try {
+        if (!isVideo) {
+          finalMediaUrl = await compressImageOnDevice(selectedMediaFile, 1280, 0.82);
+        }
+      } catch (compErr) {
+        console.warn('Fallback local compression error:', compErr);
+      }
+    }
+
+    // STRICT GUARD: Local blob: URLs must NEVER be saved to server database
+    if (finalMediaUrl && finalMediaUrl.startsWith('blob:')) {
+      finalMediaUrl = '';
+    }
+
     if ((selectedMediaFile || (mediaUrl && (mediaUrl.startsWith('blob:') || mediaUrl.startsWith('data:')))) && !finalMediaUrl) {
       setError(isVideo ? 'Video upload failed. Please check your internet connection and try again.' : 'Photo upload failed. Please try again.');
       setSubmitting(false);
