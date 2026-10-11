@@ -1390,9 +1390,9 @@ function MessageItem({
 
   const timeStr = new Date(message.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  // Calculate total votes for poll
+  // Calculate total votes for poll (safely check options is an array)
   const pollData = message.pollData;
-  const totalVotes = pollData
+  const totalVotes = (pollData && Array.isArray(pollData.options))
     ? pollData.options.reduce((acc, opt) => acc + (opt.votes?.length || 0), 0)
     : 0;
 
@@ -1403,7 +1403,8 @@ function MessageItem({
       { label: 'Excited', emoji: '🔥', color: '#f59e0b' },
       { label: 'Casual', emoji: '💬', color: '#6366f1' }
     ];
-    const index = Math.abs(msgId.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % emotions.length;
+    const safeStr = typeof msgId === 'string' ? msgId : String(msgId || 'msg');
+    const index = Math.abs(safeStr.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % emotions.length;
     return emotions[index];
   };
 

@@ -157,6 +157,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     localStorage.setItem('pulsechat_scheduled_messages', JSON.stringify(nextList));
     setShowScheduleModal(false);
     setText('');
+    try {
+      if (chatId) localStorage.removeItem(`pulsechat_draft_${chatId}`);
+    } catch {}
     setActionToast(`Message scheduled for ${new Date(scheduledTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ⏰`);
     setTimeout(() => setActionToast(''), 3000);
   };
@@ -1085,7 +1088,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const [isNetConnected, setIsNetConnected] = useState(() => isDeviceOnline());
 
-  const [text, setText] = useState('');
+  // Draft text support (Instagram / WhatsApp style persistent drafts)
+  const [text, setText] = useState(() => {
+    try {
+      return (chatId ? localStorage.getItem(`pulsechat_draft_${chatId}`) : '') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  // Instagram-style Vanish Mode Swipe Up Gesture State
+  const [swipeUpDist, setSwipeUpDist] = useState(0);
+  const vanishTouchStartYRef = useRef(null);
+  const vanishTouchLastYRef = useRef(null);
+  const isVanishSwipeActiveRef = useRef(false);
+
   const [showRecorder, setShowRecorder] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showCreatePoll, setShowCreatePoll] = useState(false);
@@ -1353,6 +1370,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     isVanishModeRef.current = nextVal;
     setChatSetting(prev => ({ ...prev, vanishMode: nextVal }));
 
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate([40, 60, 40]); } catch {}
+    }
+    setActionToast(nextVal ? '👻 Vanish Mode turned ON' : '✨ Vanish Mode turned OFF');
+    setTimeout(() => setActionToast(''), 2500);
+
     try {
       const curToken = localStorage.getItem('pulsechat_token');
       await fetch(`${BACKEND_URL}/api/messages/settings/${encodeURIComponent(chatId)}/vanish`, {
@@ -1369,6 +1392,46 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     } catch (err) {
       console.error('Failed to toggle vanish mode:', err);
     }
+  };
+
+  // Instagram-style swipe up to toggle Vanish Mode
+  const handleVanishTouchStart = (e) => {
+    if (!chatContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight <= 45;
+    if (isAtBottom && e.touches && e.touches[0]) {
+      vanishTouchStartYRef.current = e.touches[0].clientY;
+      vanishTouchLastYRef.current = e.touches[0].clientY;
+      isVanishSwipeActiveRef.current = true;
+    } else {
+      isVanishSwipeActiveRef.current = false;
+      vanishTouchStartYRef.current = null;
+    }
+  };
+
+  const handleVanishTouchMove = (e) => {
+    if (!isVanishSwipeActiveRef.current || !vanishTouchStartYRef.current || !e.touches || !e.touches[0]) return;
+    const curY = e.touches[0].clientY;
+    vanishTouchLastYRef.current = curY;
+    const deltaY = vanishTouchStartYRef.current - curY; // positive = dragging UP
+    if (deltaY > 10) {
+      setSwipeUpDist(Math.min(deltaY, 110));
+    } else {
+      setSwipeUpDist(0);
+    }
+  };
+
+  const handleVanishTouchEnd = () => {
+    if (isVanishSwipeActiveRef.current && vanishTouchStartYRef.current && vanishTouchLastYRef.current) {
+      const deltaY = vanishTouchStartYRef.current - vanishTouchLastYRef.current;
+      if (deltaY >= 65) {
+        handleToggleVanishMode();
+      }
+    }
+    isVanishSwipeActiveRef.current = false;
+    vanishTouchStartYRef.current = null;
+    vanishTouchLastYRef.current = null;
+    setSwipeUpDist(0);
   };
 
   const socketRef = useRef(socket);
@@ -1419,6 +1482,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     };
   }, [chatId, triggerEvaporateVanishMessages]);
+
+  // Sync draft text on chatId change
+  useEffect(() => {
+    if (!chatId) return;
+    try {
+      const savedDraft = localStorage.getItem(`pulsechat_draft_${chatId}`) || '';
+      setText(savedDraft);
+    } catch {}
+  }, [chatId]);
 
   // In-Chat Mutual Nicknames
   const [showNicknameModal, setShowNicknameModal] = useState(false);
@@ -3028,6 +3100,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     dispatchMessage(text);
     setText('');
+    try {
+      if (chatId) localStorage.removeItem(`pulsechat_draft_${chatId}`);
+    } catch {}
 
     // Keep mobile virtual keyboard open continuously until user presses back
     if (replyInputRef.current) {
@@ -3727,6 +3802,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const handleTextChange = (e) => {
     const val = e.target.value;
     setText(val);
+    try {
+      if (chatId) {
+        if (val) {
+          localStorage.setItem(`pulsechat_draft_${chatId}`, val);
+        } else {
+          localStorage.removeItem(`pulsechat_draft_${chatId}`);
+        }
+      }
+    } catch {}
 
     if (!socket) return;
     const receiverId = isGroup ? '' : activeChat?.id;
@@ -3800,9 +3884,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   return (
     <div
-      className="chat-window-container"
+      className={`chat-window-container ${isVanishMode ? 'vanish-mode-active-container' : ''}`}
       data-chat-theme={chatTheme !== 'default' ? chatTheme : undefined}
-      style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-chat)', overflow: 'hidden', position: 'relative' }}
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100dvh',
+        background: 'var(--bg-chat)',
+        overflow: 'hidden',
+        position: 'relative',
+        boxShadow: isVanishMode ? 'inset 0 0 40px rgba(168, 85, 247, 0.28), inset 0 0 80px rgba(147, 51, 234, 0.16)' : undefined,
+        transition: 'box-shadow 0.4s ease'
+      }}
     >
       <ChatLiveWallpaper wallpaperId={chatWallpaper} customImage={customWallpaper} />
 
@@ -4291,21 +4385,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     <Palette size={16} color="var(--accent)" />
                     <span>Change Solid Theme</span>
                   </button>
-                  {!isGroup && (
-                    <button onClick={() => { setShowMoreMenu(false); setShowNicknameModal(true); }}>
-                      <Edit3 size={16} color="var(--accent)" />
-                      <span>Edit Nicknames</span>
-                    </button>
-                  )}
-                  {!isGroup && (
-                    <button onClick={() => {
-                      setShowMoreMenu(false);
-                      window.dispatchEvent(new CustomEvent('pulsechat_open_handle_card', { detail: { user: activeChat } }));
-                    }}>
-                      <Sparkles size={16} color="var(--accent)" />
-                      <span>View Pulse Card</span>
-                    </button>
-                  )}
                   <button onClick={() => {
                     setShowMoreMenu(false);
                     if (isGroup) {
@@ -5228,6 +5307,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         ref={chatContainerRef}
         className="chat-messages-scroll-area chat-scroll-stream"
         onScroll={handleChatContainerScroll}
+        onTouchStart={handleVanishTouchStart}
+        onTouchMove={handleVanishTouchMove}
+        onTouchEnd={handleVanishTouchEnd}
         onClick={() => {
           if (selectedActionMessages.length > 0) handleDismissActionMessage();
         }}
@@ -5246,6 +5328,42 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           willChange: 'scroll-position'
         }}
       >
+        {/* Instagram-style Vanish Mode Swipe-Up Gesture Indicator */}
+        {swipeUpDist > 15 && (
+          <div
+            className="vanish-swipe-indicator"
+            style={{
+              position: 'fixed',
+              bottom: '90px',
+              left: '50%',
+              transform: `translateX(-50%) translateY(-${Math.min(swipeUpDist * 0.4, 40)}px)`,
+              background: swipeUpDist >= 65
+                ? 'linear-gradient(135deg, #a855f7, #c084fc)'
+                : 'rgba(15, 23, 42, 0.92)',
+              border: `1.5px solid ${swipeUpDist >= 65 ? '#e9d5ff' : 'rgba(168, 85, 247, 0.6)'}`,
+              borderRadius: '24px',
+              padding: '8px 18px',
+              color: '#ffffff',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: swipeUpDist >= 65
+                ? '0 0 24px rgba(168, 85, 247, 0.8), 0 4px 16px rgba(0,0,0,0.5)'
+                : '0 4px 16px rgba(0,0,0,0.5)',
+              zIndex: 9999,
+              pointerEvents: 'none'
+            }}
+          >
+            <Ghost size={16} color={swipeUpDist >= 65 ? '#ffffff' : '#c084fc'} />
+            <span>
+              {swipeUpDist >= 65
+                ? (isVanishMode ? 'Release to turn off Vanish Mode' : 'Release to turn on Vanish Mode')
+                : (isVanishMode ? 'Swipe up to turn off Vanish Mode' : 'Swipe up to turn on Vanish Mode')}
+            </span>
+          </div>
+        )}
         {/* Load Earlier Messages Button (Pagination) */}
         {hasMoreOlderMessages && (
           <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 8px 0' }}>
