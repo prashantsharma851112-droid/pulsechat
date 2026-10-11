@@ -400,6 +400,25 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     }
   };
 
+  const handleCancelFriendRequest = async (e, targetUserId) => {
+    e.stopPropagation();
+    if (!token || !targetUserId) return;
+    try {
+      setOutgoingPendingIds(prev => {
+        const next = new Set(prev);
+        next.delete(targetUserId);
+        return next;
+      });
+      await fetch(`${BACKEND_URL}/api/friends/cancel/${targetUserId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      loadFriendshipInfo();
+    } catch (err) {
+      console.error('Failed to cancel friend request:', err);
+    }
+  };
+
   const handleDeleteChat = (e, chatItem) => {
     e.stopPropagation();
     if (!chatItem || !chatItem.id) return;
@@ -2460,9 +2479,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                             <Sparkles size={12} /> Synced
                           </span>
                         ) : outgoingPendingIds.has(u.id) ? (
-                          <span className="pulse-sync-btn pending" title="Pulse Sync Pending">
+                          <button
+                            type="button"
+                            className="pulse-sync-btn pending"
+                            onClick={(e) => handleCancelFriendRequest(e, u.id)}
+                            title="Click to cancel sync request"
+                            style={{ cursor: 'pointer' }}
+                          >
                             <Clock size={12} /> Beaming...
-                          </span>
+                          </button>
                         ) : (
                           <button
                             type="button"
@@ -2470,7 +2495,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                             onClick={(e) => handleSendFriendRequest(e, u.id)}
                             title="Sync Pulse Frequency to connect"
                           >
-                            <Sparkles size={12} /> ⚡ Sync
+                            <Sparkles size={12} /> Sync
                           </button>
                         )
                       )}
@@ -2807,9 +2832,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                             <Sparkles size={12} /> Synced
                           </span>
                         ) : outgoingPendingIds.has(u.id) ? (
-                          <span className="pulse-sync-btn pending" title="Pulse Sync Pending">
+                          <button
+                            type="button"
+                            className="pulse-sync-btn pending"
+                            onClick={(e) => handleCancelFriendRequest(e, u.id)}
+                            title="Click to cancel sync request"
+                            style={{ cursor: 'pointer' }}
+                          >
                             <Clock size={12} /> Beaming...
-                          </span>
+                          </button>
                         ) : (
                           <button
                             type="button"
@@ -2817,7 +2848,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                             onClick={(e) => handleSendFriendRequest(e, u.id)}
                             title="Sync Pulse Frequency to connect"
                           >
-                            <Sparkles size={12} /> ⚡ Sync
+                            <Sparkles size={12} /> Sync
                           </button>
                         )}
                       </div>

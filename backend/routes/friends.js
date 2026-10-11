@@ -487,14 +487,19 @@ router.delete('/cancel/:requestId', authMiddleware, async (req, res) => {
     const myIds = getUserIdentifiers(currentUser);
     if (req.user.id && !myIds.includes(req.user.id)) myIds.push(req.user.id);
 
+    const targetUser = await findUserAnywhere(requestId);
+    const targetIds = targetUser ? getUserIdentifiers(targetUser) : [requestId];
+
     const request = await FriendRequest.findOne({
-      id: requestId,
-      senderId: { $in: myIds },
+      $or: [
+        { id: requestId, senderId: { $in: myIds } },
+        { receiverId: { $in: targetIds }, senderId: { $in: myIds } }
+      ],
       status: 'pending'
     });
     if (!request) return res.status(404).json({ error: 'Friend request not found' });
 
-    await FriendRequest.deleteOne({ id: requestId });
+    await FriendRequest.deleteOne({ _id: request._id });
 
     const io = req.app.get('io');
     if (io) {

@@ -1712,7 +1712,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const sparksBalance = user?.pulseSparks ?? 0;
 
     if (!isPro && sparksBalance < 5) {
-      alert(`⚡ Sparks kam hain!\nDust text secret note bhejne ke liye 5 Sparks lagte hain.\nAapke paas sirf ${sparksBalance} Sparks hain.\n\nSparks Wallet se free video ad dekh kar ya Daily bonus se free Sparks lein.`);
+      alert(`⚡ Insufficient Sparks\nDust Text requires 5 Sparks.\nYour balance: ${sparksBalance} Sparks.\n\nEarn Sparks via Daily Bonus or Sparks Wallet.`);
       return;
     }
 
@@ -1755,7 +1755,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const sparksBalance = user?.pulseSparks ?? 0;
 
     if (!isPro && sparksBalance < 5) {
-      alert(`⚡ Sparks kam hain!\nEmoji particle burst ke liye 5 Sparks lagte hain.\nAapke paas sirf ${sparksBalance} Sparks hain.\n\nSparks Wallet se free video ad dekh kar free Sparks lein.`);
+      alert(`⚡ Insufficient Sparks\nEmoji particle burst requires 5 Sparks.\nYour balance: ${sparksBalance} Sparks.\n\nEarn Sparks via Daily Bonus or Sparks Wallet.`);
       return;
     }
 
@@ -2479,6 +2479,24 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     } catch (err) {
       console.error('Failed to accept friend request:', err);
       setFriendshipStatus('pending_received');
+    }
+  };
+
+  const handleCancelFriendRequest = async () => {
+    if (!token || !activeChat?.id) return;
+    const targetReqId = friendRequestId || activeChat.id;
+    setFriendshipStatus('none');
+    try {
+      await fetch(`${BACKEND_URL}/api/friends/cancel/${targetReqId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setFriendRequestId(null);
+      setActionToast('Sync request cancelled');
+      setTimeout(() => setActionToast(''), 3000);
+      window.dispatchEvent(new CustomEvent('pulsechat_friend_cancelled', { detail: { targetId: activeChat.id } }));
+    } catch (err) {
+      console.error('Failed to cancel friend request:', err);
     }
   };
 
@@ -3332,7 +3350,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const sparksBalance = user?.pulseSparks ?? 0;
 
     if (!isPro && sparksBalance < 5) {
-      alert(`⚡ Sparks kam hain!\nPoll create karne ke liye 5 Sparks lagte hain.\nAapke paas sirf ${sparksBalance} Sparks hain.\n\nSparks Wallet se video ad dekh kar ya daily bonus se free Sparks claim karein.`);
+      alert(`⚡ Insufficient Sparks\nCreating a poll requires 5 Sparks.\nYour balance: ${sparksBalance} Sparks.\n\nEarn Sparks via Daily Bonus or Sparks Wallet.`);
       return;
     }
 
@@ -3356,10 +3374,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (isGroup) return true;
     if (!isOnline) {
       const name = activeChat?.displayName || activeChat?.username || 'User';
-      const msg = `⚠️ ${name} abhi offline hai! Dono online honge tabhi ${activityName} open hoga.`;
+      const msg = `${name} is currently offline`;
       setActionToast(msg);
-      alert(msg);
-      setTimeout(() => setActionToast(''), 4500);
+      setTimeout(() => setActionToast(''), 3000);
       return false;
     }
     return true;
@@ -5503,59 +5520,110 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
         )}
         {!isGroup && !isAnonymousBot && friendshipStatus !== 'friends' && (
-          <div className="pulse-sync-card" style={{ margin: 'auto' }}>
-            <div className="pulse-orb-icon">
-              <Sparkles size={28} />
-            </div>
-            <h4 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-main)', fontWeight: 800 }}>
-              ⚡ Pulse Frequency Sync
-            </h4>
-            <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: '340px' }}>
-              Before transmitting direct messages, synchronize frequencies with <strong>{activeChat.displayName || activeChat.username}</strong>.
-            </p>
-
-            {friendshipStatus === 'none' && (
-              <>
-                <div style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Pick Your Vibe:
-                </div>
-                <div className="pulse-vibes-row">
-                  {['⚡ Quick Pulse', '🚀 Collab & Code', '🎮 Gaming', '☕ Coffee Chat', '🎵 Music Vibe'].map((vibe) => (
-                    <button
-                      key={vibe}
-                      type="button"
-                      className={`pulse-vibe-pill ${selectedVibe === vibe ? 'active' : ''}`}
-                      onClick={() => setSelectedVibe(vibe)}
-                    >
-                      {vibe}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            padding: '8px 16px',
+            margin: '8px auto 12px auto',
+            maxWidth: '540px',
+            width: 'calc(100% - 24px)',
+            borderRadius: '20px',
+            background: 'rgba(24, 24, 27, 0.78)',
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
+            fontSize: '0.82rem',
+            color: 'var(--text-muted)',
+            zIndex: 10
+          }}>
             {friendshipStatus === 'pending_sent' ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.86rem', fontWeight: 600, padding: '8px 16px', background: 'var(--hover-bg)', borderRadius: '20px', border: '1px solid var(--border)' }}>
-                <Clock size={16} /> 📡 Frequency Beaming... (Sync Pending)
-              </div>
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                  <Clock size={15} color="#f59e0b" style={{ flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    Sync request sent to <strong style={{ color: 'var(--text-main)' }}>{activeChat.displayName || activeChat.username}</strong>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCancelFriendRequest}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    color: '#f87171',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    borderRadius: '16px',
+                    padding: '4px 13px',
+                    fontSize: '0.74rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    transition: 'all 0.15s ease'
+                  }}
+                  title="Cancel sync request"
+                >
+                  Cancel Request
+                </button>
+              </>
             ) : friendshipStatus === 'pending_received' ? (
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={handleAcceptFriendRequest}
-                style={{ padding: '9px 24px', borderRadius: '24px', fontSize: '0.9rem', fontWeight: 700, boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)' }}
-              >
-                <Sparkles size={17} /> ⚡ Accept & Sync Pulse
-              </button>
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                  <Sparkles size={15} color="var(--accent)" style={{ flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <strong style={{ color: 'var(--text-main)' }}>{activeChat.displayName || activeChat.username}</strong> wants to connect
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAcceptFriendRequest}
+                  style={{
+                    background: 'var(--accent, #6366f1)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '16px',
+                    padding: '5px 16px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)',
+                    flexShrink: 0
+                  }}
+                >
+                  Accept
+                </button>
+              </>
             ) : (
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={handleSendFriendRequest}
-                style={{ padding: '9px 24px', borderRadius: '24px', fontSize: '0.9rem', fontWeight: 700, boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)' }}
-              >
-                <Sparkles size={17} /> ⚡ Sync Pulse ({selectedVibe})
-              </button>
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                  <Sparkles size={15} color="var(--accent)" style={{ flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    Sync with <strong style={{ color: 'var(--text-main)' }}>{activeChat.displayName || activeChat.username}</strong> to chat
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSendFriendRequest}
+                  style={{
+                    background: 'var(--accent, #6366f1)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '16px',
+                    padding: '5px 16px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)',
+                    flexShrink: 0
+                  }}
+                >
+                  <Sparkles size={12} /> Sync
+                </button>
+              </>
             )}
           </div>
         )}
