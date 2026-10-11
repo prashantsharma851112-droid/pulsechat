@@ -893,28 +893,8 @@ function MessageItem({
   const { user: currentUser } = useContext(AuthContext);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Synchronous cache resolution to eliminate visual flickering / image re-decoding on scroll
+  // Stable direct media handling without re-rendering blob swaps
   const isMediaImage = Boolean(message.mediaUrl && (message.type === 'image' || message.mediaType === 'image'));
-  const syncCachedUrl = isMediaImage ? getSyncCachedMediaUrl(message.mediaUrl) : '';
-  const initialMediaUrl = syncCachedUrl || message.mediaUrl;
-  const isAlreadyLoaded = isMediaImage ? (loadedMediaUrlsGlobal.has(message.mediaUrl) || Boolean(syncCachedUrl)) : false;
-
-  const [imgLoaded, setImgLoaded] = useState(isAlreadyLoaded);
-  const [cachedMediaUrl, setCachedMediaUrl] = useState(initialMediaUrl);
-
-  useEffect(() => {
-    let isMounted = true;
-    if (isMediaImage && message.mediaUrl && !getSyncCachedMediaUrl(message.mediaUrl)) {
-      getCachedMediaUrl(message.mediaUrl).then(url => {
-        if (isMounted && url) {
-          setCachedMediaUrl(url);
-          loadedMediaUrlsGlobal.add(url);
-          loadedMediaUrlsGlobal.add(message.mediaUrl);
-        }
-      });
-    }
-    return () => { isMounted = false; };
-  }, [message.mediaUrl, isMediaImage]);
 
   const [audioObj, setAudioObj] = useState(null);
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -2050,37 +2030,27 @@ function MessageItem({
                 </button>
               </div>
             ) : (
-              <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%', minWidth: '160px', minHeight: '120px', borderRadius: '10px', overflow: 'hidden', background: 'rgba(255,255,255,0.06)' }}>
-                {!imgLoaded && !isAlreadyLoaded && !cachedMediaUrl && (
-                  <div style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: 'rgba(255,255,255,0.06)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--text-muted)',
-                    fontSize: '0.75rem'
-                  }}>
-                    <span>🖼️</span>
-                  </div>
-                )}
+              <div style={{
+                position: 'relative',
+                display: 'inline-block',
+                maxWidth: '100%',
+                width: '260px',
+                aspectRatio: '4 / 3',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                background: 'rgba(255,255,255,0.06)'
+              }}>
                 <img
-                  src={cachedMediaUrl || message.mediaUrl}
+                  src={message.mediaUrl}
                   alt={message.fileName || "Attached Media"}
                   loading="eager"
                   decoding="async"
                   onClick={() => setShowImagePreview(true)}
-                  onLoad={() => {
-                    loadedMediaUrlsGlobal.add(message.mediaUrl);
-                    if (cachedMediaUrl) loadedMediaUrlsGlobal.add(cachedMediaUrl);
-                    setImgLoaded(true);
-                  }}
                   style={{
-                    maxWidth: '100%',
-                    maxHeight: '280px',
+                    width: '100%',
+                    height: '100%',
                     objectFit: 'cover',
-                    borderRadius: '10px',
+                    borderRadius: '12px',
                     display: 'block',
                     cursor: 'pointer',
                     opacity: message.status === 'pending' ? 0.78 : ((message.isUploading || message.status === 'uploading') ? 0.9 : 1),

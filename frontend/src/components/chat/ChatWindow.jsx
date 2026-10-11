@@ -1606,6 +1606,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   // Pagination for infinite fast scroll
   const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const isLoadingOlderRef = useRef(false);
 
   // Pulse Aura Soundscapes State
   const [activeAura, setActiveAura] = useState(() => {
@@ -2135,7 +2136,17 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               .sort((a, b) => new Date(a.timestamp || a.createdAt || 0) - new Date(b.timestamp || b.createdAt || 0))
               .map(sanitizeFogSnapMessage);
 
-            setMessages(merged);
+            // WhatsApp pattern: Skip re-rendering if messages are already identical in memory
+            setMessages(prev => {
+              if (prev.length === merged.length) {
+                const isIdentical = prev.every((m, idx) => {
+                  const o = merged[idx];
+                  return m.id === o?.id && m.status === o?.status && m.content === o?.content;
+                });
+                if (isIdentical) return prev;
+              }
+              return merged;
+            });
             setCachedMessages(chatId, merged);
           }
         })
@@ -2964,10 +2975,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   const handleLoadOlderMessages = async () => {
-    if (isLoadingOlder || messages.length === 0) return;
+    if (isLoadingOlderRef.current || messages.length === 0) return;
     const oldestMsg = messages.find(m => m.timestamp && !m.id?.startsWith('temp_'));
     if (!oldestMsg || !oldestMsg.timestamp) return;
 
+    isLoadingOlderRef.current = true;
     if (chatContainerRef.current) {
       scrollPositionRef.current = {
         prevScrollHeight: chatContainerRef.current.scrollHeight,
@@ -2976,7 +2988,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       };
     }
 
-    setIsLoadingOlder(true);
     try {
       // 1. WhatsApp Local-First check: Try IndexedDB first on device SSD (0ms, 0 bytes network!)
       const localOlder = await getCachedMessagesFromLocalDb(chatId, 50, oldestMsg.timestamp);
@@ -2993,14 +3004,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           return [...newOldMsgs, ...prev];
         });
         if (hasNew) {
-          setIsLoadingOlder(false);
+          isLoadingOlderRef.current = false;
           return;
         }
       }
 
       // 2. If not found locally in IndexedDB, fetch from server
       if (!token) {
-        setIsLoadingOlder(false);
+        isLoadingOlderRef.current = false;
         return;
       }
       const isCurGhost = isGhostModeRef.current;
@@ -3044,7 +3055,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       console.warn('Failed to load older messages:', err);
       scrollPositionRef.current.isPrepending = false;
     } finally {
-      setIsLoadingOlder(false);
+      isLoadingOlderRef.current = false;
     }
   };
 
@@ -3052,7 +3063,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const target = e.currentTarget;
     // Smart Prefetching (WhatsApp style sliding window): Start loading 350px before reaching top
     // so older messages are already in RAM and prepended before the user reaches the end!
-    if (target.scrollTop <= 350 && hasMoreOlderMessages && !isLoadingOlder) {
+    if (target.scrollTop <= 350 && hasMoreOlderMessages && !isLoadingOlderRef.current) {
       handleLoadOlderMessages();
     }
 
@@ -5446,7 +5457,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         style={{
           flex: 1,
           overflowY: 'auto',
-          overflowAnchor: 'auto',
+          overflowAnchor: 'none',
           padding: '1rem',
           display: 'flex',
           flexDirection: 'column',
@@ -5454,8 +5465,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           position: 'relative',
           zIndex: selectedActionMessages.length > 0 ? 45 : 1,
           WebkitOverflowScrolling: 'touch',
-          overscrollBehaviorY: 'contain',
-          willChange: 'scroll-position'
+          overscrollBehaviorY: 'contain'
         }}
       >
         {/* Instagram-style Vanish Mode Swipe-Up Gesture Indicator */}
@@ -5492,31 +5502,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 ? (isVanishMode ? 'Release to turn off Vanish Mode' : 'Release to turn on Vanish Mode')
                 : (isVanishMode ? 'Swipe up to turn off Vanish Mode' : 'Swipe up to turn on Vanish Mode')}
             </span>
-          </div>
-        )}
-        {/* Load Earlier Messages Button (Pagination) */}
-        {hasMoreOlderMessages && (
-          <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 8px 0' }}>
-            <button
-              onClick={handleLoadOlderMessages}
-              disabled={isLoadingOlder}
-              style={{
-                background: 'var(--bg-card)',
-                color: 'var(--accent)',
-                border: '1px solid var(--border)',
-                borderRadius: '16px',
-                padding: '5px 14px',
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                cursor: isLoadingOlder ? 'wait' : 'pointer',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px'
-              }}
-            >
-              {isLoadingOlder ? '⏳ Loading earlier history...' : '↑ Load older messages'}
-            </button>
           </div>
         )}
         {!isGroup && !isAnonymousBot && friendshipStatus !== 'friends' && (
