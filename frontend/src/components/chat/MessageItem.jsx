@@ -1585,8 +1585,8 @@ function MessageItem({
           transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1), background 0.15s ease',
           userSelect: isDragging ? 'none' : 'auto',
           position: 'relative',
-          filter: message.status === 'pending' ? 'grayscale(0.55)' : 'none',
-          opacity: message.status === 'pending' ? 0.88 : 1
+          filter: 'none',
+          opacity: 1
         }}
       >
         {/* Double-Tap Heart Burst Animation */}
@@ -1968,13 +1968,12 @@ function MessageItem({
                   preload="metadata"
                   style={{ maxWidth: '100%', maxHeight: '280px', objectFit: 'contain', borderRadius: '10px', display: 'block', background: '#000' }}
                 />
-                {/* 0ms Optimistic Video Upload Spinner */}
-                {(message.isUploading || message.status === 'uploading') && (
+                {/* 0ms Optimistic Video Upload Spinner - strictly for active temp upload */}
+                {(message.isUploading && !message.mediaUrl?.startsWith('http') && message.id?.startsWith('temp_')) && (
                   <div style={{
                     position: 'absolute',
                     inset: 0,
                     background: 'rgba(0, 0, 0, 0.6)',
-                    backdropFilter: 'blur(3px)',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -1983,8 +1982,8 @@ function MessageItem({
                     zIndex: 20
                   }}>
                     <div style={{
-                      width: '44px',
-                      height: '44px',
+                      width: '40px',
+                      height: '40px',
                       borderRadius: '50%',
                       background: 'rgba(15, 23, 42, 0.85)',
                       border: '2.5px solid rgba(255,255,255,0.2)',
@@ -1996,7 +1995,7 @@ function MessageItem({
                       animation: 'spin 0.9s linear infinite'
                     }} />
                     <span style={{ fontSize: '0.74rem', color: '#fff', fontWeight: 700, letterSpacing: '0.3px', textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
-                      Uploading video...
+                      Sending video...
                     </span>
                   </div>
                 )}
@@ -2008,7 +2007,6 @@ function MessageItem({
                     top: '8px',
                     right: '8px',
                     background: 'rgba(15, 23, 42, 0.78)',
-                    backdropFilter: 'blur(8px)',
                     color: '#fff',
                     border: '1px solid rgba(255, 255, 255, 0.25)',
                     borderRadius: '20px',
@@ -2053,17 +2051,16 @@ function MessageItem({
                     borderRadius: '12px',
                     display: 'block',
                     cursor: 'pointer',
-                    opacity: message.status === 'pending' ? 0.78 : ((message.isUploading || message.status === 'uploading') ? 0.9 : 1),
-                    filter: message.status === 'pending' ? 'grayscale(0.8) brightness(0.85)' : ((message.isUploading || message.status === 'uploading') ? 'blur(5px) brightness(0.88)' : 'none')
+                    opacity: 1,
+                    filter: 'none'
                   }}
                 />
-                {/* Telegram-style 0ms Optimistic Upload Spinner */}
-                {(message.isUploading || message.status === 'uploading') && (
+                {/* 0ms Optimistic Upload Spinner - strictly for active temp upload */}
+                {(message.isUploading && !message.mediaUrl?.startsWith('http') && message.id?.startsWith('temp_')) && (
                   <div style={{
                     position: 'absolute',
                     inset: 0,
                     background: 'rgba(0, 0, 0, 0.45)',
-                    backdropFilter: 'blur(2px)',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -2072,8 +2069,8 @@ function MessageItem({
                     zIndex: 20
                   }}>
                     <div style={{
-                      width: '46px',
-                      height: '46px',
+                      width: '40px',
+                      height: '40px',
                       borderRadius: '50%',
                       background: 'rgba(15, 23, 42, 0.85)',
                       border: '3px solid rgba(255,255,255,0.2)',
@@ -2085,7 +2082,7 @@ function MessageItem({
                       animation: 'spin 0.85s linear infinite'
                     }} />
                     <span style={{ fontSize: '0.74rem', color: '#fff', fontWeight: 700, letterSpacing: '0.3px', textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
-                      Uploading...
+                      Sending...
                     </span>
                   </div>
                 )}
