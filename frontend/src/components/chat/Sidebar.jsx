@@ -218,6 +218,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const topMenuRef = useRef(null);
   const switchAccountMenuRef = useRef(null);
   const activeChatRef = React.useRef(activeChat);
+  const lastRevalidateRef = useRef(0);
   useEffect(() => {
     activeChatRef.current = activeChat;
   }, [activeChat]);
@@ -833,9 +834,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       });
   }, [token, user?.id]);
 
-  // Background silent revalidation on window focus and socket reconnect
+  // Background silent revalidation on window focus and socket reconnect (throttled to 60s)
   useEffect(() => {
     const handleRevalidate = () => {
+      const now = Date.now();
+      if (now - lastRevalidateRef.current < 60000) {
+        return;
+      }
+      lastRevalidateRef.current = now;
       loadRecentChats();
       loadAllUsers();
       loadFriendshipInfo();
@@ -918,16 +924,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   }, [loadRecentChats, loadGroups, loadAllUsers]);
 
 
-  // Instant local recent chat update listener (from ChatWindow dispatch)
-  useEffect(() => {
-    const handleRecentUpdated = () => {
-      if (user?.id) {
-        setRecentChats(getCachedRecentChats(user.id));
-      }
-    };
-    window.addEventListener('pulsechat_recent_updated', handleRecentUpdated);
-    return () => window.removeEventListener('pulsechat_recent_updated', handleRecentUpdated);
-  }, [user?.id]);
 
   useEffect(() => {
     if (activeChat && user?.id) {

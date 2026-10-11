@@ -1280,6 +1280,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   // Track if this is the initial load (to use instant scroll vs smooth scroll)
   const isInitialLoad = useRef(true);
+  const loadedChatIdRef = useRef(null);
   const lastRenderedLastMsgIdRef = useRef(null);
   const scrollPositionRef = useRef({ prevScrollHeight: 0, prevScrollTop: 0, isPrepending: false });
 
@@ -2038,22 +2039,29 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   // Load message history & group details
   useEffect(() => {
-    // Chat badle toh reply aur initial scroll flag reset karo
-    isInitialLoad.current = true;
-    lastRenderedLastMsgIdRef.current = null;
-    scrollPositionRef.current = { prevScrollHeight: 0, prevScrollTop: 0, isPrepending: false };
-    setReplyTo(null);
-    setChatSetting({ disappearingEnabled: false });
-    setBlockStatus({ isBlockedByMe: false, isBlockedByThem: false });
+    const isDifferentChat = loadedChatIdRef.current !== chatId;
+    loadedChatIdRef.current = chatId;
+
+    if (isDifferentChat) {
+      // Chat badle toh reply aur initial scroll flag reset karo
+      isInitialLoad.current = true;
+      lastRenderedLastMsgIdRef.current = null;
+      scrollPositionRef.current = { prevScrollHeight: 0, prevScrollTop: 0, isPrepending: false };
+      setReplyTo(null);
+      setChatSetting({ disappearingEnabled: false });
+      setBlockStatus({ isBlockedByMe: false, isBlockedByThem: false });
+    }
 
     if (activeChat) {
-      // 1. Instantly display cached messages from local storage
-      const cached = getCachedMessages(chatId);
-      const outbox = getOutbox(user?.id);
-      const pendingForThisChat = outbox.filter(m => m.chatId === chatId);
-      const cachedIds = new Set(cached.map(m => m.id));
-      const combinedInitial = [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))].map(sanitizeFogSnapMessage);
-      setMessages(combinedInitial);
+      if (isDifferentChat) {
+        // 1. Instantly display cached messages from local storage
+        const cached = getCachedMessages(chatId);
+        const outbox = getOutbox(user?.id);
+        const pendingForThisChat = outbox.filter(m => m.chatId === chatId);
+        const cachedIds = new Set(cached.map(m => m.id));
+        const combinedInitial = [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))].map(sanitizeFogSnapMessage);
+        setMessages(combinedInitial);
+      }
 
       // Cache this contact/group into allUsers for future offline searches
       if (user?.id && !activeChat.isGroup) {
@@ -2179,7 +2187,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         if (activeChat?._id) clearUnreadCount(user.id, activeChat._id);
         if (activeChat?.username) clearUnreadCount(user.id, activeChat.username);
         if (chatId) clearUnreadCount(user.id, chatId);
-        window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+        if (isDifferentChat) {
+          window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+        }
       }
 
       // Explicitly mark read / delivered via REST endpoint
@@ -2196,10 +2206,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       if (socket) {
         socket.emit('join_chat', chatId);
-        socket.emit('mark_chat_read', { chatId, userId: user.id, isGhost: isCurGhost });
+        socket.emit('mark_chat_read', { chatId, userId: user?.id, isGhost: isCurGhost });
       }
     }
-  }, [activeChat, chatId, isGroup, token, socket, user.id, isGhostMode]);
+  }, [chatId, activeChat?.id, isGroup, token, socket, user?.id, isGhostMode]);
 
   // Re-join chat room immediately when socket reconnects
   useEffect(() => {

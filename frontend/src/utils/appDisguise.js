@@ -10,22 +10,18 @@ export const DISGUISE_PRESETS = [
     badge: 'Default',
     accentColor: '#6366f1',
     iconUrl: '/icon-192.png',
-    iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+    iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 512 512">
+      <rect width="512" height="512" rx="128" fill="#0b0f19"/>
+      <circle cx="256" cy="256" r="180" fill="url(#grad)" />
+      <path d="M180 210 Q256 160 332 210 Q360 256 332 302 Q256 352 180 302 Q152 256 180 210 Z" fill="#ffffff" />
+      <circle cx="215" cy="256" r="20" fill="#6366f1" />
+      <circle cx="297" cy="256" r="20" fill="#6366f1" />
       <defs>
-        <linearGradient id="pcGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#2563eb"/>
-          <stop offset="50%" stop-color="#4f46e5"/>
-          <stop offset="100%" stop-color="#7c3aed"/>
+        <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#6366f1" />
+          <stop offset="100%" stop-color="#4f46e5" />
         </linearGradient>
       </defs>
-      <!-- Chat bubble container with tail -->
-      <path d="M40 24h112a28 28 0 0 1 28 28v68a28 28 0 0 1-28 28H132l-22 22a4 4 0 0 1-6.8-2.8V148H40a28 28 0 0 1-28-28V52a28 28 0 0 1 28-28z" fill="url(#pcGrad)"/>
-      <!-- Inner white rounded badge -->
-      <rect x="28" y="38" width="136" height="96" rx="22" fill="#ffffff"/>
-      <!-- Bold stylized P letter -->
-      <path d="M52 56h34c14 0 23 8 23 20s-9 20-23 20H68v24H52V56zm16 13v14h18c5 0 8.5-3 8.5-7s-3.5-7-8.5-7H68z" fill="url(#pcGrad)"/>
-      <!-- Heartbeat / ECG pulse waveform -->
-      <path d="M98 90l7-16 9 32 9-24 7 10h18" fill="none" stroke="#2563eb" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`
   },
   {
@@ -131,30 +127,44 @@ export const applyAppDisguise = (disguiseId = 'default') => {
   const svgDataUri = `data:image/svg+xml;utf8,${encodeURIComponent(preset.iconSvg)}`;
   const initialIconUrl = isDefault ? '/icon-192.png' : svgDataUri;
 
-  // 3. Helper to update all head icon links
-  const setFavicons = (href, type = 'image/png') => {
+  // 3. Helper to update all head icon links with multi-resolution support (16x16, 32x32, 48x48, 192x192)
+  const setFavicons = (iconsMap = {}) => {
     if (typeof document === 'undefined') return;
     try {
-      // Remove all existing icon links to force Chrome/Android to reload & not stick to cached icons
+      // Remove all existing icon links to force browser & Windows OS titlebar to reload
       const existingIcons = document.querySelectorAll("link[rel*='icon'], link[rel='apple-touch-icon'], link[rel='shortcut icon']");
       existingIcons.forEach(el => el.remove());
 
-      const addLink = (rel, mime) => {
+      const addLink = (rel, mime, sizes, href) => {
+        if (!href) return;
         const link = document.createElement('link');
         link.rel = rel;
         if (mime) link.type = mime;
+        if (sizes) link.setAttribute('sizes', sizes);
         link.href = `${href}${href.startsWith('data:') ? '' : (href.includes('?') ? '&' : '?') + 'v=' + Date.now()}`;
         document.head.appendChild(link);
       };
 
-      addLink('icon', type);
-      addLink('shortcut icon', type);
-      addLink('apple-touch-icon', type);
+      if (typeof iconsMap === 'string') {
+        addLink('icon', 'image/png', '192x192', iconsMap);
+        addLink('icon', 'image/png', '32x32', iconsMap);
+        addLink('icon', 'image/png', '16x16', iconsMap);
+        addLink('shortcut icon', 'image/png', '32x32', iconsMap);
+        addLink('apple-touch-icon', 'image/png', '180x180', iconsMap);
+      } else {
+        if (iconsMap.png16) addLink('icon', 'image/png', '16x16', iconsMap.png16);
+        if (iconsMap.png32) addLink('icon', 'image/png', '32x32', iconsMap.png32);
+        if (iconsMap.png48) addLink('icon', 'image/png', '48x48', iconsMap.png48);
+        if (iconsMap.png192) addLink('icon', 'image/png', '192x192', iconsMap.png192);
+        if (iconsMap.png32 || iconsMap.png192) addLink('shortcut icon', 'image/png', '32x32', iconsMap.png32 || iconsMap.png192);
+        if (iconsMap.png192) addLink('apple-touch-icon', 'image/png', '180x180', iconsMap.png192);
+        if (iconsMap.svg) addLink('icon', 'image/svg+xml', 'any', iconsMap.svg);
+      }
     } catch (e) {}
   };
 
   // Immediately apply initial icon link
-  setFavicons(initialIconUrl, isDefault ? 'image/png' : 'image/svg+xml');
+  setFavicons(isDefault ? '/icon-192.png' : { svg: svgDataUri, png192: svgDataUri });
 
   // 4. Update Web App Manifest dynamically so Android PWA / Home Screen uses disguise name & icon
   const updateManifest = (iconHref, appName) => {
@@ -170,6 +180,9 @@ export const applyAppDisguise = (disguiseId = 'default') => {
         background_color: "#000000",
         theme_color: "#000000",
         icons: [
+          { src: iconHref, sizes: "16x16", type: "image/png" },
+          { src: iconHref, sizes: "32x32", type: "image/png" },
+          { src: iconHref, sizes: "48x48", type: "image/png" },
           { src: iconHref, sizes: "192x192", type: "image/png", purpose: "any maskable" },
           { src: iconHref, sizes: "512x512", type: "image/png", purpose: "any maskable" }
         ]
@@ -185,26 +198,44 @@ export const applyAppDisguise = (disguiseId = 'default') => {
     } catch (e) {}
   };
 
-  // 5. For non-default SVG icons, convert SVG to PNG Data URL via offscreen canvas
-  // Android Chrome, Samsung Internet, and mobile task switchers only render PNG icons!
+  // 5. Multi-size Canvas PNG rendering: Windows titlebars specifically require 16x16 & 32x32 icons!
   if (!isDefault && typeof document !== 'undefined') {
     try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 192;
-      canvas.height = 192;
-      const ctx = canvas.getContext('2d');
+      const svgBlob = new Blob([preset.iconSvg], { type: 'image/svg+xml;charset=utf-8' });
+      const blobUrl = URL.createObjectURL(svgBlob);
       const img = new Image();
-      img.crossOrigin = 'anonymous';
       img.onload = () => {
         try {
-          ctx.clearRect(0, 0, 192, 192);
-          ctx.drawImage(img, 0, 0, 192, 192);
-          const pngUrl = canvas.toDataURL('image/png');
-          setFavicons(pngUrl, 'image/png');
-          updateManifest(pngUrl, preset.name);
-        } catch (e) {}
+          const renderPng = (sz) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = sz;
+            canvas.height = sz;
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, sz, sz);
+            return canvas.toDataURL('image/png');
+          };
+
+          const icons = {
+            png16: renderPng(16),
+            png32: renderPng(32),
+            png48: renderPng(48),
+            png192: renderPng(192),
+            svg: svgDataUri
+          };
+
+          setFavicons(icons);
+          updateManifest(icons.png192, preset.name);
+          URL.revokeObjectURL(blobUrl);
+        } catch (e) {
+          URL.revokeObjectURL(blobUrl);
+        }
       };
-      img.src = svgDataUri;
+      img.onerror = () => {
+        URL.revokeObjectURL(blobUrl);
+      };
+      img.src = blobUrl;
     } catch (e) {}
   } else {
     updateManifest('/icon-192.png', preset.name);

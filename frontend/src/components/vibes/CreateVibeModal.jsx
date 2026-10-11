@@ -294,7 +294,12 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       let stream = null;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facing, width: { ideal: 1080 }, height: { ideal: 1920 } },
+          video: {
+            facingMode: facing,
+            width: { ideal: 720, max: 1280 },
+            height: { ideal: 1280, max: 1920 },
+            frameRate: { ideal: 30, max: 30 }
+          },
           audio: false
         });
       } catch (err1) {

@@ -34,7 +34,15 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
   const startRecording = async () => {
     setErrorMsg(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: 48000
+        }
+      });
       streamRef.current = stream;
 
       // Realtime AudioContext & AnalyserNode for dancing live microphone waves
@@ -70,8 +78,16 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
       }
 
       const mimeType = getSupportedMimeType();
-      const options = mimeType ? { mimeType } : {};
-      const mediaRecorder = new MediaRecorder(stream, options);
+      const options = {
+        ...(mimeType ? { mimeType } : {}),
+        audioBitsPerSecond: 128000
+      };
+      let mediaRecorder;
+      try {
+        mediaRecorder = new MediaRecorder(stream, options);
+      } catch (errOptions) {
+        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+      }
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
@@ -82,13 +98,13 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
       };
 
       mediaRecorder.onstop = () => {
-        const finalType = mimeType || 'audio/wav';
+        const finalType = mimeType || 'audio/webm';
         const blob = new Blob(chunksRef.current, { type: finalType });
         setRawAudioBlob(blob);
         setFilteredAudioBlob(blob);
       };
 
-      mediaRecorder.start(100);
+      mediaRecorder.start();
       setRecording(true);
 
       timerRef.current = setInterval(() => setTimer(t => t + 1), 1000);
