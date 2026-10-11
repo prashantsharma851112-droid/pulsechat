@@ -2591,8 +2591,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     const handleReactionUpdated = ({ messageId, reactions }) => {
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, reactions } : m));
+      setMessages(prev => {
+        const next = prev.map(m => (m.id === messageId || m._id === messageId || m.clientTempId === messageId) ? { ...m, reactions } : m);
+        setCachedMessages(chatId, next);
+        return next;
+      });
     };
+
+    const handleOptimisticReaction = (e) => {
+      const { messageId, reactions } = e.detail || {};
+      if (!messageId) return;
+      setMessages(prev => {
+        const next = prev.map(m => (m.id === messageId || m._id === messageId || m.clientTempId === messageId) ? { ...m, reactions } : m);
+        setCachedMessages(chatId, next);
+        return next;
+      });
+    };
+    window.addEventListener('pulsechat_optimistic_reaction', handleOptimisticReaction);
 
     const handleMessageRestored = ({ restoredMsg }) => {
       setMessages(prev => prev.map(m => m.id === restoredMsg.id ? restoredMsg : m));
@@ -2818,6 +2833,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.off('fog_snap_burned', handleFogBurned);
       window.removeEventListener('pulsechat_fog_snap_burned', handleWindowFogBurned);
       window.removeEventListener('pulsechat_group_updated', handleGroupWindowEvent);
+      window.removeEventListener('pulsechat_optimistic_reaction', handleOptimisticReaction);
     };
   }, [socket, chatId, user.id, token, isGroup, activeChat]);
 

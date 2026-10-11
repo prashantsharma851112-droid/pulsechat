@@ -1166,12 +1166,37 @@ function MessageItem({
 
   const handleReact = (emoji) => {
     recordRecentReaction(emoji);
-    const existingList = message.reactions?.[emoji] || [];
-    const isAlreadyReacted = Array.isArray(existingList) && existingList.includes(currentUser?.id);
+    const targetMsgId = message.id || message._id || message.clientTempId;
+    if (!targetMsgId || !currentUser?.id) return;
 
-    if (socket && currentUser?.id) {
-      socket.emit('add_reaction', { messageId: message.id, chatId, emoji, userId: currentUser.id });
+    // 1. Optimistic update: Update reactions map immediately
+    const existingReactions = { ...(message.reactions || {}) };
+    const currentList = Array.isArray(existingReactions[emoji]) ? [...existingReactions[emoji]] : [];
+    const myId = currentUser.id;
+    const isAlreadyReacted = currentList.includes(myId);
+
+    if (isAlreadyReacted) {
+      existingReactions[emoji] = currentList.filter(id => id !== myId);
+      if (existingReactions[emoji].length === 0) {
+        delete existingReactions[emoji];
+      }
+    } else {
+      existingReactions[emoji] = [...currentList, myId];
     }
+
+    message.reactions = existingReactions;
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechat_optimistic_reaction', {
+        detail: { messageId: targetMsgId, reactions: existingReactions }
+      }));
+    }
+
+    // 2. Emit to socket for DB persistence & sync
+    if (socket) {
+      socket.emit('add_reaction', { messageId: targetMsgId, chatId, emoji, userId: myId });
+    }
+
     if (!isAlreadyReacted && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
         detail: { emoji: emoji || '❤️', mode: 'reaction', duration: 3 }
@@ -1369,6 +1394,7 @@ function MessageItem({
   };
 
   const timeStr = new Date(message.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const isPureMedia = (message.type === 'image' || message.type === 'video') && !message.isViewOnce && !message.isFogSnap && Boolean(message.mediaUrl) && !message.content?.trim();
 
   // Calculate total votes for poll (safely check options is an array)
   const pollData = message.pollData;
@@ -1573,14 +1599,14 @@ function MessageItem({
               ? (isMine ? 'linear-gradient(135deg, rgba(75, 85, 99, 0.78), rgba(55, 65, 81, 0.78))' : 'rgba(55, 65, 81, 0.7)')
               : ((isSelected || isSelectedForAction) ? 'rgba(99, 102, 241, 0.28)' : (isMine ? 'var(--bubble-sent)' : 'var(--bubble-received)')),
           color: isMine ? '#ffffff' : 'var(--text-main)',
-          padding: (message.type === 'gift' || message.type === '3d_text') ? '2px 4px' : '0.75rem 1rem',
+          padding: isPureMedia ? '3px' : ((message.type === 'gift' || message.type === '3d_text') ? '2px 4px' : '0.75rem 1rem'),
           borderRadius: isMine ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
           boxShadow: isSelectedForAction
             ? '0 0 22px rgba(99, 102, 241, 0.55), 0 4px 14px rgba(0,0,0,0.3)'
-            : ((message.type === 'gift' || message.type === '3d_text') ? 'none' : '0 2px 6px rgba(0,0,0,0.08)'),
+            : ((message.type === 'gift' || message.type === '3d_text' || isPureMedia) ? 'none' : '0 2px 6px rgba(0,0,0,0.08)'),
           border: isSelectedForAction
             ? '1.5px solid var(--accent)'
-            : (isSelected ? '1.5px solid var(--accent)' : (message.status === 'pending' ? '1px dashed rgba(156, 163, 175, 0.4)' : ((message.type === 'gift' || message.type === '3d_text') ? 'none' : '1px solid transparent'))),
+            : (isSelected ? '1.5px solid var(--accent)' : (message.status === 'pending' ? '1px dashed rgba(156, 163, 175, 0.4)' : ((message.type === 'gift' || message.type === '3d_text' || isPureMedia) ? 'none' : '1px solid transparent'))),
           transform: `translateX(${dragX}px)`,
           transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1), background 0.15s ease',
           userSelect: isDragging ? 'none' : 'auto',
@@ -1958,15 +1984,15 @@ function MessageItem({
 
         {/* Standard Media / Image / Video Message */}
         {(message.type === 'image' || message.type === 'video') && !message.isViewOnce && !message.isFogSnap && message.mediaUrl && (
-          <div style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', marginBottom: '4px', maxWidth: '100%' }}>
+          <div style={{ position: 'relative', borderRadius: '13px', overflow: 'hidden', marginBottom: isPureMedia ? '0' : '4px', maxWidth: '100%' }}>
             {message.type === 'video' ? (
-              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', width: '280px', maxWidth: '100%' }}>
                 <video
                   src={message.mediaUrl}
                   controls
                   playsInline
                   preload="metadata"
-                  style={{ maxWidth: '100%', maxHeight: '280px', objectFit: 'contain', borderRadius: '10px', display: 'block', background: '#000' }}
+                  style={{ maxWidth: '100%', maxHeight: '320px', objectFit: 'contain', borderRadius: '13px', display: 'block', background: '#000' }}
                 />
                 {/* 0ms Optimistic Video Upload Spinner - strictly for active temp upload */}
                 {(message.isUploading && !message.mediaUrl?.startsWith('http') && message.id?.startsWith('temp_')) && (
@@ -1999,56 +2025,66 @@ function MessageItem({
                     </span>
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={(e) => handleDownloadMedia(e, message.mediaUrl, message.fileName || `pulsechat_video_${Date.now()}.mp4`)}
-                  style={{
+                {/* WhatsApp-style bottom-right timestamp badge */}
+                {isPureMedia && (
+                  <div style={{
                     position: 'absolute',
-                    top: '8px',
+                    bottom: '6px',
                     right: '8px',
-                    background: 'rgba(15, 23, 42, 0.78)',
+                    background: 'rgba(0, 0, 0, 0.52)',
+                    backdropFilter: 'blur(4px)',
                     color: '#fff',
-                    border: '1px solid rgba(255, 255, 255, 0.25)',
-                    borderRadius: '20px',
-                    padding: '5px 11px',
-                    fontSize: '0.74rem',
-                    fontWeight: 600,
+                    borderRadius: '12px',
+                    padding: '2px 8px',
+                    fontSize: '0.68rem',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '5px',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
-                    zIndex: 10,
-                    transition: 'all 0.2s ease'
-                  }}
-                  title="Save video to device"
-                >
-                  <Download size={13} />
-                  <span>{downloadState || 'Save Video'}</span>
-                </button>
+                    gap: '4px',
+                    pointerEvents: 'none',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
+                    zIndex: 5
+                  }}>
+                    {isStarred && <Star size={10} fill="#f59e0b" color="#f59e0b" />}
+                    <span>{timeStr}</span>
+                    {isMine && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        {message.status === 'pending' ? (
+                          <Clock size={11} color="#e2e8f0" />
+                        ) : message.status === 'read' ? (
+                          <CheckCheck size={13} color="#38bdf8" />
+                        ) : message.status === 'delivered' ? (
+                          <CheckCheck size={13} color="#e2e8f0" />
+                        ) : (
+                          <Check size={13} color="#e2e8f0" />
+                        )}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
-              <div style={{
-                position: 'relative',
-                display: 'inline-block',
-                maxWidth: '100%',
-                width: '260px',
-                aspectRatio: '4 / 3',
-                borderRadius: '12px',
-                overflow: 'hidden',
-                background: 'rgba(255,255,255,0.06)'
-              }}>
+              <div
+                style={{
+                  position: 'relative',
+                  display: 'inline-block',
+                  maxWidth: '100%',
+                  width: '280px',
+                  borderRadius: '13px',
+                  overflow: 'hidden',
+                  background: 'rgba(255,255,255,0.06)'
+                }}
+                onClick={() => setShowImagePreview(true)}
+              >
                 <img
                   src={message.mediaUrl}
                   alt={message.fileName || "Attached Media"}
                   loading="eager"
                   decoding="async"
-                  onClick={() => setShowImagePreview(true)}
                   style={{
                     width: '100%',
-                    height: '100%',
+                    maxHeight: '340px',
                     objectFit: 'cover',
-                    borderRadius: '12px',
+                    borderRadius: '13px',
                     display: 'block',
                     cursor: 'pointer',
                     opacity: 1,
@@ -2086,100 +2122,42 @@ function MessageItem({
                     </span>
                   </div>
                 )}
-                {/* Floating Download, Edit & Fullscreen Controls */}
-                <div style={{
-                  position: 'absolute',
-                  top: '8px',
-                  right: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  zIndex: 10
-                }}>
-                  {onEditDrawing && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditDrawing(message.mediaUrl, message.whiteboardData);
-                      }}
-                      style={{
-                        background: 'rgba(99, 102, 241, 0.88)',
-                        backdropFilter: 'blur(8px)',
-                        color: '#fff',
-                        border: '1px solid rgba(255, 255, 255, 0.3)',
-                        borderRadius: '20px',
-                        padding: '5px 10px',
-                        fontSize: '0.74rem',
-                        fontWeight: 700,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        cursor: 'pointer',
-                        boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)',
-                        transition: 'all 0.2s ease'
-                      }}
-                      title="Edit this drawing on Live Drawboard"
-                    >
-                      <Edit3 size={12} />
-                      <span>Edit</span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowImagePreview(true);
-                    }}
-                    style={{
-                      background: 'rgba(15, 23, 42, 0.78)',
-                      backdropFilter: 'blur(8px)',
-                      color: '#fff',
-                      border: '1px solid rgba(255, 255, 255, 0.25)',
-                      borderRadius: '50%',
-                      width: '28px',
-                      height: '28px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.35)'
-                    }}
-                    title="View Fullscreen"
-                  >
-                    <Maximize2 size={13} />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={(e) => handleDownloadMedia(
-                      e,
-                      message.mediaUrl,
-                      message.fileName || (message.content?.includes('drawing') ? `pulsechat_drawing_${Date.now()}.png` : `pulsechat_image_${Date.now()}.jpg`)
+                {/* WhatsApp-style bottom-right timestamp badge */}
+                {isPureMedia && (
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '6px',
+                    right: '8px',
+                    background: 'rgba(0, 0, 0, 0.52)',
+                    backdropFilter: 'blur(4px)',
+                    color: '#fff',
+                    borderRadius: '12px',
+                    padding: '2px 8px',
+                    fontSize: '0.68rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    pointerEvents: 'none',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
+                    zIndex: 5
+                  }}>
+                    {isStarred && <Star size={10} fill="#f59e0b" color="#f59e0b" />}
+                    <span>{timeStr}</span>
+                    {isMine && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        {message.status === 'pending' ? (
+                          <Clock size={11} color="#e2e8f0" />
+                        ) : message.status === 'read' ? (
+                          <CheckCheck size={13} color="#38bdf8" />
+                        ) : message.status === 'delivered' ? (
+                          <CheckCheck size={13} color="#e2e8f0" />
+                        ) : (
+                          <Check size={13} color="#e2e8f0" />
+                        )}
+                      </span>
                     )}
-                    style={{
-                      background: 'rgba(15, 23, 42, 0.78)',
-                      backdropFilter: 'blur(8px)',
-                      color: '#fff',
-                      border: '1px solid rgba(255, 255, 255, 0.25)',
-                      borderRadius: '20px',
-                      padding: '5px 11px',
-                      fontSize: '0.74rem',
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      cursor: 'pointer',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
-                      transition: 'all 0.2s ease'
-                    }}
-                    title="Save image to device"
-                  >
-                    <Download size={13} />
-                    <span>{downloadState || 'Save'}</span>
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2637,8 +2615,8 @@ function MessageItem({
           </div>
         )}
 
-        {/* Timestamp & Ticks (hidden for gift stickers and 3D text as they display it natively) */}
-        {message.type !== 'gift' && message.type !== '3d_text' && (
+        {/* Timestamp & Ticks (hidden for pure media, gift stickers, and 3D text) */}
+        {message.type !== 'gift' && message.type !== '3d_text' && !isPureMedia && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem', marginTop: '0.35rem', fontSize: '0.68rem', opacity: 0.75 }}>
             {message.isVanish && (
               <Ghost size={11} color="#c084fc" style={{ marginRight: '1px', flexShrink: 0 }} title="Vanish Mode Message · Disappears when chat is closed" />
@@ -2834,28 +2812,57 @@ function MessageItem({
             boxSizing: 'border-box'
           }}
         >
-          {/* Top Bar */}
+          {/* WhatsApp-Style Top Bar */}
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
               width: '100%',
-              maxWidth: '960px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '10px 18px',
-              background: 'rgba(255, 255, 255, 0.08)',
+              padding: '12px 16px',
+              background: 'rgba(15, 23, 42, 0.78)',
+              backdropFilter: 'blur(12px)',
               borderRadius: '16px',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              boxSizing: 'border-box'
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              boxSizing: 'border-box',
+              zIndex: 10
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fff', fontSize: '0.92rem', fontWeight: 600 }}>
-              <span>{message.content?.includes('drawing') ? '🎨 Whiteboard Drawing' : '🖼️ Photo Preview'}</span>
-              {message.fileName && <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 400 }}>({message.fileName})</span>}
+            {/* Left: Back button + Sender Name & Timestamp */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#fff' }}>
+              <button
+                type="button"
+                onClick={() => setShowImagePreview(false)}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: 'none',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background 0.15s ease'
+                }}
+                title="Back"
+              >
+                <CornerUpLeft size={18} style={{ transform: 'scaleX(-1)' }} />
+              </button>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontWeight: 700, fontSize: '0.98rem', color: '#fff' }}>
+                  {isMine ? 'You' : (senderName || 'Partner')}
+                </span>
+                <span style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.7)', marginTop: '1px' }}>
+                  {new Date(message.timestamp || Date.now()).toLocaleDateString([], { month: 'short', day: 'numeric' })}, {timeStr}
+                </span>
+              </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Right: Action Buttons (Download, Edit Drawing, Share, Close) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {onEditDrawing && (
                 <button
                   type="button"
@@ -2864,25 +2871,24 @@ function MessageItem({
                     onEditDrawing(message.mediaUrl, message.whiteboardData);
                   }}
                   style={{
+                    background: 'rgba(255, 255, 255, 0.12)',
+                    border: 'none',
+                    color: '#fff',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    background: 'var(--accent, #6366f1)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '10px',
-                    padding: '8px 14px',
-                    fontSize: '0.82rem',
-                    fontWeight: 700,
+                    justifyContent: 'center',
                     cursor: 'pointer',
-                    boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)'
+                    transition: 'all 0.15s ease'
                   }}
-                  title="Open and edit on Live Drawboard"
+                  title="Open and edit on Drawboard"
                 >
-                  <Edit3 size={15} />
-                  <span>Edit Drawing ✏️</span>
+                  <Edit3 size={17} />
                 </button>
               )}
+
               <button
                 type="button"
                 onClick={(e) => handleDownloadMedia(
@@ -2891,30 +2897,61 @@ function MessageItem({
                   message.fileName || (message.content?.includes('drawing') ? `pulsechat_drawing_${Date.now()}.png` : `pulsechat_image_${Date.now()}.jpg`)
                 )}
                 style={{
+                  background: 'rgba(255, 255, 255, 0.12)',
+                  border: 'none',
+                  color: '#fff',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  background: 'var(--accent)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '10px',
-                  padding: '8px 16px',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
+                  justifyContent: 'center',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)'
+                  transition: 'all 0.15s ease'
                 }}
-                title="Download this image to your device"
+                title="Download image"
               >
-                <Download size={15} />
-                <span>{downloadState === 'Saved!' ? 'Saved to Device!' : (downloadState || 'Save to Device')}</span>
+                <Download size={17} />
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (navigator.share) {
+                    try {
+                      await navigator.share({
+                        title: message.fileName || 'PulseChat Image',
+                        url: message.mediaUrl
+                      });
+                    } catch {}
+                  } else {
+                    navigator.clipboard.writeText(message.mediaUrl);
+                    alert('Image link copied to clipboard!');
+                  }
+                }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.12)',
+                  border: 'none',
+                  color: '#fff',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                title="Share image"
+              >
+                <Share2 size={17} />
               </button>
 
               <button
                 type="button"
                 onClick={() => setShowImagePreview(false)}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.15)',
+                  background: 'rgba(255, 255, 255, 0.12)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '50%',
@@ -2925,7 +2962,7 @@ function MessageItem({
                   justifyContent: 'center',
                   cursor: 'pointer'
                 }}
-                title="Close preview"
+                title="Close"
               >
                 <X size={18} />
               </button>
@@ -2944,8 +2981,8 @@ function MessageItem({
               alignItems: 'center',
               justifyContent: 'center',
               width: '100%',
-              maxHeight: 'calc(100vh - 120px)',
-              padding: '16px',
+              maxHeight: 'calc(100vh - 160px)',
+              padding: '12px',
               overflow: 'hidden',
               boxSizing: 'border-box',
               touchAction: 'none',
@@ -2959,14 +2996,87 @@ function MessageItem({
               alt="Fullscreen Preview"
               draggable={false}
               style={{
-                maxWidth: '92vw',
-                maxHeight: '82vh',
+                maxWidth: '94vw',
+                maxHeight: '74vh',
                 objectFit: 'contain',
                 borderRadius: '12px',
                 boxShadow: '0 16px 48px rgba(0,0,0,0.7)',
                 userSelect: 'none'
               }}
             />
+          </div>
+
+          {/* WhatsApp-Style Bottom Bar: Reply pill + Quick Reactions */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '820px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 18px',
+              background: 'rgba(15, 23, 42, 0.88)',
+              backdropFilter: 'blur(16px)',
+              borderRadius: '26px',
+              border: '1px solid rgba(255, 255, 255, 0.16)',
+              boxSizing: 'border-box',
+              boxShadow: '0 12px 36px rgba(0,0,0,0.65)',
+              gap: '12px',
+              zIndex: 10
+            }}
+          >
+            {/* Left: Reply pill */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowImagePreview(false);
+                if (onReply) onReply(message);
+              }}
+              style={{
+                background: 'rgba(255, 255, 255, 0.12)',
+                border: 'none',
+                borderRadius: '18px',
+                padding: '8px 16px',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '0.86rem',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'background 0.15s ease'
+              }}
+              title="Reply to this image"
+            >
+              <CornerUpLeft size={16} color="var(--accent, #38bdf8)" />
+              <span style={{ opacity: 0.9 }}>Reply...</span>
+            </button>
+
+            {/* Right: Quick Reactions emojis */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              {['❤️', '👍', '😂', '😮', '😢', '🙏'].map(em => (
+                <button
+                  key={em}
+                  type="button"
+                  onClick={() => handleReact(em)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '1.45rem',
+                    cursor: 'pointer',
+                    padding: '2px 4px',
+                    lineHeight: 1,
+                    transition: 'transform 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.3)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  title={`React ${em}`}
+                >
+                  {em}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

@@ -1546,12 +1546,16 @@ io.on('connection', (socket) => {
     if (updatedMsg) {
       const userReactions = updatedMsg.reactions?.[emoji] || [];
       const isAdded = userReactions.includes(userId);
+      const canonicalChatId = updatedMsg.chatId || chatId;
+      const payload = { messageId: updatedMsg.id || messageId, chatId: canonicalChatId, reactions: updatedMsg.reactions, emoji, userId, isAdded };
 
-      io.to(chatId).emit('reaction_updated', { messageId, chatId, reactions: updatedMsg.reactions, emoji, userId, isAdded });
-      if (chatId && chatId.includes('_')) {
-        const parts = chatId.split('_');
+      socket.emit('reaction_updated', payload);
+      if (chatId) io.to(chatId).emit('reaction_updated', payload);
+      if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('reaction_updated', payload);
+      if (canonicalChatId && canonicalChatId.includes('_')) {
+        const parts = canonicalChatId.split('_');
         parts.forEach(uId => {
-          io.to(`user_${uId}`).emit('reaction_updated', { messageId, chatId, reactions: updatedMsg.reactions, emoji, userId, isAdded });
+          io.to(`user_${uId}`).emit('reaction_updated', payload);
           redis.invalidateRecent(uId).catch(() => {});
         });
       }

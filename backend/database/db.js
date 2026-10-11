@@ -184,7 +184,14 @@ module.exports = {
   },
 
   toggleReaction: async (messageId, emoji, userId) => {
-    const msg = await Message.findOne({ id: messageId });
+    const mongoose = require('mongoose');
+    const isObjectId = mongoose.Types.ObjectId.isValid(messageId);
+    const msg = await Message.findOne({
+      $or: [
+        { id: String(messageId) },
+        ...(isObjectId ? [{ _id: messageId }] : [])
+      ]
+    });
     if (!msg) return null;
 
     let reactions = msg.reactions || {};
