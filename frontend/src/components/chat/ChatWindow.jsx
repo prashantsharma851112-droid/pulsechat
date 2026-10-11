@@ -43,6 +43,7 @@ const ChatNicknameModal = lazyWithRetry(() => import('./ChatNicknameModal'));
 const ShareableStoryCardModal = lazyWithRetry(() => import('../profile/ShareableStoryCardModal'));
 import {
   getCachedMessages,
+  getCachedMessagesFromLocalDb,
   setCachedMessages,
   appendCachedMessage,
   updateCachedMessageStatus,
@@ -2054,13 +2055,26 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     if (activeChat) {
       if (isDifferentChat) {
-        // 1. Instantly display cached messages from local storage
+        // 1. Instantly display cached messages from local storage (0ms sync)
         const cached = getCachedMessages(chatId);
         const outbox = getOutbox(user?.id);
         const pendingForThisChat = outbox.filter(m => m.chatId === chatId);
         const cachedIds = new Set(cached.map(m => m.id));
         const combinedInitial = [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))].map(sanitizeFogSnapMessage);
         setMessages(combinedInitial);
+
+        // 2. Local-First Architecture: Check if IndexedDB has deeper message history on device SSD
+        getCachedMessagesFromLocalDb(chatId, 150).then((dbMsgs) => {
+          if (Array.isArray(dbMsgs) && dbMsgs.length > cached.length) {
+            setMessages(prev => {
+              const prevIds = new Set(prev.map(m => m.id));
+              const extra = dbMsgs.filter(m => !prevIds.has(m.id));
+              if (extra.length === 0) return prev;
+              const merged = [...extra, ...prev].sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+              return merged.map(sanitizeFogSnapMessage);
+            });
+          }
+        }).catch(() => {});
       }
 
       // Cache this contact/group into allUsers for future offline searches
@@ -2932,7 +2946,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   const handleLoadOlderMessages = async () => {
-    if (isLoadingOlder || messages.length === 0 || !token) return;
+    if (isLoadingOlder || messages.length === 0) return;
     const oldestMsg = messages.find(m => m.timestamp && !m.id?.startsWith('temp_'));
     if (!oldestMsg || !oldestMsg.timestamp) return;
 
@@ -2946,6 +2960,31 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     setIsLoadingOlder(true);
     try {
+      // 1. WhatsApp Local-First check: Try IndexedDB first on device SSD (0ms, 0 bytes network!)
+      const localOlder = await getCachedMessagesFromLocalDb(chatId, 50, oldestMsg.timestamp);
+      if (Array.isArray(localOlder) && localOlder.length > 0) {
+        let hasNew = false;
+        setMessages(prev => {
+          const currentIds = new Set(prev.map(m => m.id));
+          const newOldMsgs = localOlder.filter(m => !currentIds.has(m.id));
+          if (newOldMsgs.length === 0) {
+            scrollPositionRef.current.isPrepending = false;
+            return prev;
+          }
+          hasNew = true;
+          return [...newOldMsgs, ...prev];
+        });
+        if (hasNew) {
+          setIsLoadingOlder(false);
+          return;
+        }
+      }
+
+      // 2. If not found locally in IndexedDB, fetch from server
+      if (!token) {
+        setIsLoadingOlder(false);
+        return;
+      }
       const isCurGhost = isGhostModeRef.current;
       const res = await fetch(`${BACKEND_URL}/api/messages/${chatId}?limit=50&before=${encodeURIComponent(oldestMsg.timestamp)}${isCurGhost ? '&ghost=true' : ''}`, {
         headers: {
@@ -2993,7 +3032,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleChatContainerScroll = (e) => {
     const target = e.currentTarget;
-    if (target.scrollTop <= 75 && hasMoreOlderMessages && !isLoadingOlder) {
+    // Smart Prefetching (WhatsApp style sliding window): Start loading 350px before reaching top
+    // so older messages are already in RAM and prepended before the user reaches the end!
+    if (target.scrollTop <= 350 && hasMoreOlderMessages && !isLoadingOlder) {
       handleLoadOlderMessages();
     }
 
@@ -5526,7 +5567,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           const dateLabel = formatMessageDateHeader(msg.timestamp);
 
           return (
-            <React.Fragment key={msg.id || msg.clientTempId || index}>
+            <div
+              key={msg.id || msg.clientTempId || index}
+              className="message-item-contain"
+              style={{
+                contain: 'layout style',
+                contentVisibility: 'auto',
+                containIntrinsicSize: 'auto 64px'
+              }}
+            >
               {showDateHeader && (
                 <div style={{ display: 'flex', justifyContent: 'center', margin: '0.5rem 0' }}>
                   <div
@@ -5594,7 +5643,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 onToggleTranslation={() => handleToggleTranslation(msg.id)}
                 targetLang={targetLang}
               />
-            </React.Fragment>
+            </div>
           );
         })}
         <div ref={messagesEndRef} style={{ overflowAnchor: 'none', height: '1px' }} />

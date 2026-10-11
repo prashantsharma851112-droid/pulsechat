@@ -1,4 +1,5 @@
-// local storage helper functions
+// local storage & local-first IndexedDB helper functions
+import { saveMessagesToLocalDb, getMessagesFromLocalDb } from './localDatabase';
 
 const STORAGE_KEYS = {
   USER: 'pulsechat_user',
@@ -284,6 +285,7 @@ export function getCachedMessages(chatId) {
 
 export function setCachedMessages(chatId, messages) {
   if (typeof window === 'undefined' || !chatId || !Array.isArray(messages)) return;
+  // 1. Instant sync localStorage for 0ms initial load
   try {
     const trimmed = messages.slice(-250);
     localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`, JSON.stringify(trimmed));
@@ -295,6 +297,15 @@ export function setCachedMessages(chatId, messages) {
       console.warn('LocalStorage error setting messages', err);
     }
   }
+
+  // 2. Asynchronous local-first IndexedDB storage for unlimited history (thousands of messages)
+  try {
+    saveMessagesToLocalDb(chatId, messages);
+  } catch (_) {}
+}
+
+export async function getCachedMessagesFromLocalDb(chatId, limit = 100, beforeTimestamp = null) {
+  return getMessagesFromLocalDb(chatId, limit, beforeTimestamp);
 }
 
 export function appendCachedMessage(chatId, message) {
