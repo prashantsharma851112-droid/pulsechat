@@ -84,8 +84,9 @@ export default function FogSnapModal({
     } catch (e) {}
   };
 
-  // Pre-draw Frosted Fog Mist over Canvas
+  // Pre-draw Frosted Fog Mist over Canvas (Recipient only)
   const initCanvasFog = useCallback(() => {
+    if (isMine) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -121,7 +122,29 @@ export default function FogSnapModal({
     ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
     ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
     ctx.fillText('🔒 Protected Media • Auto-destructs after reveal', w / 2, h / 2 + 35);
-  }, []);
+  }, [isMine]);
+
+  const syncCanvasWithImage = useCallback(() => {
+    if (isMine) return;
+    const img = imgRef.current;
+    const canvas = canvasRef.current;
+    if (!img || !canvas) return;
+    const rect = img.getBoundingClientRect();
+    if (rect.width && rect.height) {
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    }
+    initCanvasFog();
+  }, [isMine, initCanvasFog]);
+
+  useEffect(() => {
+    if (isMine) return;
+    const img = imgRef.current;
+    if (img && img.complete) {
+      setImgLoaded(true);
+      setTimeout(syncCanvasWithImage, 50);
+    }
+  }, [isMine, syncCanvasWithImage]);
 
   const lastPosRef = useRef({ x: null, y: null });
 
@@ -155,12 +178,12 @@ export default function FogSnapModal({
           fetch(`${BACKEND_URL}/api/messages/fog-snap/reveal`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ messageId: message.id, chatId })
+            body: JSON.stringify({ messageId: message?.id || message?._id, chatId })
           }).catch(() => {});
         }
       }
     } catch (e) {}
-  }, [isRevealed, message, chatId, onRevealed, token]);
+  }, [isRevealed, isMine, message, chatId, onRevealed, token]);
 
   // Scratch Action Handler (Buttery Smooth continuous stroke)
   const handleScratch = useCallback((clientX, clientY) => {
@@ -499,14 +522,16 @@ export default function FogSnapModal({
             alt="Secret Dust Image"
             onLoad={() => {
               setImgLoaded(true);
-              if (imgRef.current && canvasRef.current) {
-                const rect = imgRef.current.getBoundingClientRect();
-                if (rect.width && rect.height) {
-                  canvasRef.current.width = rect.width;
-                  canvasRef.current.height = rect.height;
+              if (!isMine) {
+                if (imgRef.current && canvasRef.current) {
+                  const rect = imgRef.current.getBoundingClientRect();
+                  if (rect.width && rect.height) {
+                    canvasRef.current.width = rect.width;
+                    canvasRef.current.height = rect.height;
+                  }
                 }
+                setTimeout(initCanvasFog, 50);
               }
-              setTimeout(initCanvasFog, 50);
             }}
             style={{
               maxWidth: '100vw',
@@ -516,26 +541,29 @@ export default function FogSnapModal({
             }}
           />
 
-          {/* Scratchable Dust Mist Canvas Overlay */}
-          <canvas
-            ref={canvasRef}
-            width={480}
-            height={720}
-            onMouseDown={onMouseDown}
-            onMouseMove={onMouseMove}
-            onMouseUp={onMouseUp}
-            onTouchStart={onTouchStart}
-            onTouchMove={onTouchMove}
-            onTouchEnd={onTouchEnd}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              cursor: isRevealed ? 'default' : 'pointer',
-              touchAction: 'none'
-            }}
-          />
+          {/* Scratchable Dust Mist Canvas Overlay (Recipient only) */}
+          {!isMine && (
+            <canvas
+              ref={canvasRef}
+              width={480}
+              height={720}
+              onMouseDown={onMouseDown}
+              onMouseMove={onMouseMove}
+              onMouseUp={onMouseUp}
+              onTouchStart={onTouchStart}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                cursor: isRevealed ? 'default' : 'pointer',
+                touchAction: 'none',
+                display: isRevealed ? 'none' : 'block'
+              }}
+            />
+          )}
         </div>
       </div>
 

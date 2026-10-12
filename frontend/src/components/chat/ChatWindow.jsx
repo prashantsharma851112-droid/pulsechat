@@ -2618,10 +2618,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     const handleReadUpdate = ({ messageId, status }) => {
       setMessages(prev => {
-        const next = prev.map(m => m.id === messageId ? { ...m, status: 'read' } : m);
+        const next = prev.map(m =>
+          (m.id === messageId || m._id === messageId || m.clientTempId === messageId)
+            ? { ...m, status: 'read' }
+            : m
+        );
         setCachedMessages(chatId, next);
         return next;
       });
+      updateCachedMessageStatus(chatId, messageId, { status: 'read' });
     };
 
     const handleReactionUpdated = ({ messageId, reactions }) => {
@@ -2685,10 +2690,28 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     };
 
-    const handleChatReadUpdate = ({ chatId: targetChatId, userId }) => {
-      if (targetChatId === chatId && userId !== user.id) {
+    const handleChatReadUpdate = ({ chatId: targetChatId, canonicalChatId, userId }) => {
+      if (userId && (userId === user?.id || userId === user?._id)) return;
+
+      const currentCanonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+      const targetCanonical = canonicalChatId || ((targetChatId && targetChatId.includes('_')) ? targetChatId.split('_').sort().join('_') : targetChatId);
+
+      const isMatch = Boolean(
+        targetChatId === chatId ||
+        (targetCanonical && targetCanonical === currentCanonical) ||
+        (targetChatId && (targetChatId === activeChat?.id || targetChatId === activeChat?._id || targetChatId === activeChat?.username)) ||
+        (activeChat?.id && targetChatId && targetChatId.includes(activeChat.id)) ||
+        (activeChat?._id && targetChatId && targetChatId.includes(String(activeChat._id))) ||
+        (chatId && targetChatId && (String(chatId).replace(/_/g, '') === String(targetChatId).replace(/_/g, '')))
+      );
+
+      if (isMatch) {
         setMessages(prev => {
-          const next = prev.map(m => m.senderId === user.id ? { ...m, status: 'read' } : m);
+          const next = prev.map(m =>
+            (m.senderId === user?.id || m.senderId === user?._id)
+              ? { ...m, status: 'read' }
+              : m
+          );
           setCachedMessages(chatId, next);
           return next;
         });
@@ -2697,17 +2720,26 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     const handleMessageDeliveredUpdate = ({ messageId, status }) => {
       setMessages(prev => {
-        const next = prev.map(m => m.id === messageId ? { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) } : m);
+        const next = prev.map(m =>
+          (m.id === messageId || m._id === messageId || m.clientTempId === messageId)
+            ? { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) }
+            : m
+        );
         setCachedMessages(chatId, next);
         return next;
       });
+      updateCachedMessageStatus(chatId, messageId, { status: 'delivered' });
     };
 
     const handleMessagesDelivered = ({ messageIds, status }) => {
       if (Array.isArray(messageIds) && messageIds.length > 0) {
-        const idSet = new Set(messageIds);
+        const idSet = new Set(messageIds.map(String));
         setMessages(prev => {
-          const next = prev.map(m => idSet.has(m.id) ? { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) } : m);
+          const next = prev.map(m =>
+            (idSet.has(String(m.id)) || (m._id && idSet.has(String(m._id))) || (m.clientTempId && idSet.has(String(m.clientTempId))))
+              ? { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) }
+              : m
+          );
           setCachedMessages(chatId, next);
           return next;
         });
@@ -2824,7 +2856,22 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         mediaUrl: null
       });
     };
+    const handleFogRevealed = ({ messageId }) => {
+      if (!messageId) return;
+      setMessages(prev => {
+        const updated = prev.map(m => {
+          if (m.id === messageId || m._id === messageId || m.clientTempId === messageId) {
+            return { ...m, fogSnapStatus: 'revealed', status: 'read' };
+          }
+          return m;
+        });
+        setCachedMessages(chatId, updated);
+        return updated;
+      });
+      updateCachedMessageStatus(chatId, messageId, { fogSnapStatus: 'revealed', status: 'read' });
+    };
     socket.on('fog_snap_burned', handleFogBurned);
+    socket.on('fog_snap_revealed', handleFogRevealed);
 
     const handleWindowFogBurned = (e) => {
       if (e.detail?.messageId) {
@@ -2873,6 +2920,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.off('chat_setting_updated', handleChatSettingUpdated);
       socket.off('chat_nickname_updated', handleChatNicknameUpdated);
       socket.off('chat_vanish_mode_updated', handleChatVanishModeUpdated);
+      socket.off('vanish_messages_evaporated', handleVanishMessagesEvaporated);
+      socket.off('message_blocked', handleMessageBlocked);
+      socket.off('group_updated', handleGroupUpdated);
+      socket.off('fog_snap_burned', handleFogBurned);
+      socket.off('fog_snap_revealed', handleFogRevealed);
       socket.off('vanish_messages_evaporated', handleVanishMessagesEvaporated);
       socket.off('message_blocked', handleMessageBlocked);
       socket.off('group_updated', handleGroupUpdated);

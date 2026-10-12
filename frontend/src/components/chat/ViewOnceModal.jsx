@@ -204,25 +204,20 @@ export default function ViewOnceModal({
       }
     };
 
-    // 2. Window Blur (triggers immediately when Windows Snipping Tool opens or app switches)
-    const handleBlur = () => {
-      triggerSecurityAlert("⚠️ Window lost focus (Screen capture / Snipping detected)! Media hidden.");
-    };
-
-    // 3. Document Visibility Change
+    // 2. Document Visibility Change
     const handleVisibilityChange = () => {
       if (document.hidden) {
         triggerSecurityAlert("⚠️ App switched or minimized! Screen capture is prohibited.");
       }
     };
 
-    // 4. Page hide / Orientation / Resize
+    // 3. Page hide / Orientation / Resize
     const handlePageHide = () => {
       setIsHolding(false);
       clearCanvas();
     };
 
-    // 5. Context Menu & Drag prevention
+    // 4. Context Menu & Drag prevention
     const handleContextMenu = (e) => e.preventDefault();
     const handleCopy = (e) => {
       e.preventDefault();
@@ -234,7 +229,6 @@ export default function ViewOnceModal({
     document.addEventListener('keydown', handleKeyIntercept, { capture: true });
     document.addEventListener('keyup', handleKeyIntercept, { capture: true });
 
-    window.addEventListener('blur', handleBlur);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pagehide', handlePageHide);
     document.addEventListener('contextmenu', handleContextMenu);
@@ -246,7 +240,6 @@ export default function ViewOnceModal({
       document.removeEventListener('keydown', handleKeyIntercept, { capture: true });
       document.removeEventListener('keyup', handleKeyIntercept, { capture: true });
 
-      window.removeEventListener('blur', handleBlur);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
       document.removeEventListener('contextmenu', handleContextMenu);
@@ -435,36 +428,45 @@ export default function ViewOnceModal({
                   display: 'block'
                 }}
               />
-            ) : !imageLoaded ? (
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '12px',
-                color: '#9ca3af',
-                padding: '40px'
-              }}>
-                <div style={{
-                  width: '36px',
-                  height: '36px',
-                  border: '3px solid rgba(255,255,255,0.15)',
-                  borderTopColor: '#6366f1',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite'
-                }} />
-                <span style={{ fontSize: '0.85rem' }}>Loading protected media...</span>
-              </div>
             ) : (
-              <canvas
-                ref={canvasRef}
-                style={{
-                  maxWidth: '100vw',
-                  maxHeight: '100vh',
-                  objectFit: 'contain',
+              <div style={{ position: 'relative', maxWidth: '100vw', maxHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <img
+                  src={message.mediaUrl}
+                  alt="Protected View"
+                  draggable={false}
+                  onContextMenu={(e) => e.preventDefault()}
+                  style={{
+                    maxWidth: '100vw',
+                    maxHeight: '100vh',
+                    objectFit: 'contain',
+                    display: 'block',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    pointerEvents: 'none'
+                  }}
+                  onLoad={() => setImageLoaded(true)}
+                />
+                {/* Subtle DRM Watermark overlay */}
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
                   pointerEvents: 'none',
-                  display: 'block'
-                }}
-              />
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'column',
+                  transform: 'rotate(-25deg)',
+                  opacity: 0.16,
+                  color: '#fff',
+                  fontWeight: 800,
+                  fontSize: '1rem',
+                  letterSpacing: '2px',
+                  textAlign: 'center',
+                  textShadow: '0 0 4px rgba(0,0,0,0.8)'
+                }}>
+                  🔒 PULSECHAT • PROTECTED VIEW • DO NOT CAPTURE
+                </div>
+              </div>
             )}
           </div>
         )}

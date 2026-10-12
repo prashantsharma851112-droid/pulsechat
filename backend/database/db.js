@@ -320,6 +320,13 @@ module.exports = {
       msg.viewedBy.push(userId);
       msg.markModified('viewedBy');
     }
+    // Set status to read so sender receives double blue tick
+    msg.status = 'read';
+    if (!msg.readBy) msg.readBy = [];
+    if (!msg.readBy.includes(userId)) {
+      msg.readBy.push(userId);
+      msg.markModified('readBy');
+    }
     await msg.save();
     return msg;
   },

@@ -167,6 +167,11 @@ const getOtherParticipantId = async (chatId, myUserId) => {
       otherKey = parts.find(p => !myKeys.includes(p));
     }
 
+    // CRITICAL: If chatId is a single ID (e.g. partner ID), otherKey is directly chatId!
+    if (!otherKey && !myKeys.includes(chatId) && !String(chatId).startsWith('group_')) {
+      otherKey = chatId;
+    }
+
     if (otherKey) {
       const isOtherObjectId = mongoose.Types.ObjectId.isValid(otherKey);
       const other = await User.findOne({
@@ -363,21 +368,21 @@ io.on('connection', (socket) => {
           if (uDoc.username) hiddenOnlineUsers.delete(uDoc.username);
         }
 
-        if (uDoc.id && uDoc.id !== userId) {
+        if (uDoc.id) {
           socket.join(`user_${uDoc.id}`);
           socket.join(uDoc.id);
           onlineUsers.set(uDoc.id, socket.id);
         }
         if (uDoc._id) {
           const strId = uDoc._id.toString();
-          if (strId !== userId) {
-            socket.join(`user_${strId}`);
-            socket.join(strId);
-          }
+          socket.join(`user_${strId}`);
+          socket.join(strId);
+          onlineUsers.set(strId, socket.id);
         }
-        if (uDoc.username && uDoc.username !== userId) {
+        if (uDoc.username) {
           socket.join(`user_${uDoc.username}`);
           socket.join(uDoc.username);
+          onlineUsers.set(uDoc.username, socket.id);
         }
       }
     } catch {}
@@ -389,9 +394,16 @@ io.on('connection', (socket) => {
 
     // Mobile data on ya user connect hone par pending 'sent' messages ko 'delivered' mark karo
     try {
-      const pendingMsgs = await Message.find({ receiverId: userId, status: 'sent' }).lean();
+      const allUserVariants = Array.from(new Set([
+        userId,
+        socket.userCustomId,
+        socket.userMongoId,
+        socket.userUsername
+      ].filter(Boolean)));
+
+      const pendingMsgs = await Message.find({ receiverId: { $in: allUserVariants }, status: 'sent' }).lean();
       if (pendingMsgs.length > 0) {
-        await Message.updateMany({ receiverId: userId, status: 'sent' }, { status: 'delivered' });
+        await Message.updateMany({ receiverId: { $in: allUserVariants }, status: 'sent' }, { status: 'delivered' });
 
         // Sender ko notify karo taaki unke screen par Single Tick turant Double Tick bann jaye
         const senderMap = {};
@@ -403,11 +415,19 @@ io.on('connection', (socket) => {
 
         for (const [sId, chats] of Object.entries(senderMap)) {
           for (const [cId, msgIds] of Object.entries(chats)) {
-            io.to(`user_${sId}`).emit('messages_delivered', { chatId: cId, messageIds: msgIds, status: 'delivered' });
-            io.to(cId).emit('messages_delivered', { chatId: cId, messageIds: msgIds, status: 'delivered' });
+            const canonicalCId = (cId && cId.includes('_')) ? cId.split('_').sort().join('_') : cId;
+            const delivPayload = { chatId: cId, canonicalChatId: canonicalCId, messageIds: msgIds, status: 'delivered' };
+            io.to(`user_${sId}`).emit('messages_delivered', delivPayload);
+            io.to(sId).emit('messages_delivered', delivPayload);
+            if (cId) io.to(cId).emit('messages_delivered', delivPayload);
+            if (canonicalCId && canonicalCId !== cId) io.to(canonicalCId).emit('messages_delivered', delivPayload);
+
             for (const mId of msgIds) {
-              io.to(`user_${sId}`).emit('message_delivered_update', { messageId: mId, chatId: cId, status: 'delivered' });
-              io.to(cId).emit('message_delivered_update', { messageId: mId, chatId: cId, status: 'delivered' });
+              const singlePayload = { messageId: mId, chatId: cId, canonicalChatId: canonicalCId, status: 'delivered' };
+              io.to(`user_${sId}`).emit('message_delivered_update', singlePayload);
+              io.to(sId).emit('message_delivered_update', singlePayload);
+              if (cId) io.to(cId).emit('message_delivered_update', singlePayload);
+              if (canonicalCId && canonicalCId !== cId) io.to(canonicalCId).emit('message_delivered_update', singlePayload);
             }
           }
         }
@@ -419,7 +439,12 @@ io.on('connection', (socket) => {
 
   // Join Chat Room / Group Room
   socket.on('join_chat', (chatId) => {
+    if (!chatId) return;
     socket.join(chatId);
+    if (chatId.includes('_')) {
+      const canonical = chatId.split('_').sort().join('_');
+      socket.join(canonical);
+    }
   });
 
   // Typing Indicators
@@ -808,8 +833,27 @@ io.on('connection', (socket) => {
         }
       }
 
-      // Check if recipient is currently online
-      const isReceiverOnline = Boolean(resolvedReceiverId && !isGroup && onlineUsers.has(resolvedReceiverId));
+      // Check if recipient is currently online (check all identifier variants)
+      let isReceiverOnline = false;
+      if (resolvedReceiverId && !isGroup) {
+        if (onlineUsers.has(resolvedReceiverId)) {
+          isReceiverOnline = true;
+        } else {
+          try {
+            const rDoc = await User.findOne({
+              $or: [
+                { id: resolvedReceiverId },
+                ...(mongoose.Types.ObjectId.isValid(resolvedReceiverId) ? [{ _id: resolvedReceiverId }] : []),
+                { username: resolvedReceiverId }
+              ]
+            }).select('id _id username').lean();
+            if (rDoc) {
+              const rVars = [rDoc.id, rDoc._id?.toString(), rDoc.username].filter(Boolean);
+              isReceiverOnline = rVars.some(v => onlineUsers.has(v));
+            }
+          } catch {}
+        }
+      }
       const initialStatus = isReceiverOnline ? 'delivered' : 'sent';
 
       const newMsg = {
@@ -859,9 +903,14 @@ io.on('connection', (socket) => {
         ackCallback({ success: true, message: newMsg });
       }
 
-      // 2. Immediate zero-latency emission to chat room and sender's private room
+      // 2. Immediate zero-latency emission to chat room, canonical room, and sender's private room
+      const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
       io.to(chatId).emit('new_message', newMsg);
+      if (canonicalChatId && canonicalChatId !== chatId) {
+        io.to(canonicalChatId).emit('new_message', newMsg);
+      }
       io.to(`user_${senderId}`).emit('new_message', newMsg);
+      io.to(senderId).emit('new_message', newMsg);
 
       // Auto-update Pulse Streak for 1-on-1 chats
       if (!isGroup && resolvedReceiverId && senderId !== resolvedReceiverId) {
@@ -977,29 +1026,61 @@ io.on('connection', (socket) => {
   socket.on('message_delivered', async ({ messageId, chatId, senderId }) => {
     try {
       if (!messageId) return;
-      await Message.findOneAndUpdate({ id: messageId, status: 'sent' }, { status: 'delivered' });
+      await Message.findOneAndUpdate(
+        { $or: [{ id: messageId }, { clientTempId: messageId }] },
+        { status: 'delivered' }
+      );
+      const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+      const singlePayload = { messageId, chatId, canonicalChatId, status: 'delivered' };
+      const multiPayload = { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered' };
+
       if (senderId) {
-        io.to(`user_${senderId}`).emit('message_delivered_update', { messageId, chatId, status: 'delivered' });
-        io.to(`user_${senderId}`).emit('messages_delivered', { chatId, messageIds: [messageId], status: 'delivered' });
+        io.to(`user_${senderId}`).emit('message_delivered_update', singlePayload);
+        io.to(senderId).emit('message_delivered_update', singlePayload);
+        io.to(`user_${senderId}`).emit('messages_delivered', multiPayload);
+        io.to(senderId).emit('messages_delivered', multiPayload);
       }
       if (chatId) {
-        io.to(chatId).emit('message_delivered_update', { messageId, chatId, status: 'delivered' });
-        io.to(chatId).emit('messages_delivered', { chatId, messageIds: [messageId], status: 'delivered' });
+        io.to(chatId).emit('message_delivered_update', singlePayload);
+        io.to(chatId).emit('messages_delivered', multiPayload);
+      }
+      if (canonicalChatId && canonicalChatId !== chatId) {
+        io.to(canonicalChatId).emit('message_delivered_update', singlePayload);
+        io.to(canonicalChatId).emit('messages_delivered', multiPayload);
       }
     } catch (err) {
       console.error('Error handling message_delivered ack:', err);
     }
   });
 
-  // View Once Opened Handler
+  // View Once Opened Handler (Recipient opened photo/video -> Double Blue Tick & Viewed Badge)
   socket.on('view_once_opened', async ({ messageId, userId, chatId }) => {
-    const updatedMsg = await db.markViewOnceOpened(messageId, userId);
-    if (updatedMsg) {
-      io.to(chatId).emit('view_once_updated', {
-        messageId,
-        viewedBy: updatedMsg.viewedBy,
-        viewCounts: updatedMsg.viewCounts
-      });
+    try {
+      const updatedMsg = await db.markViewOnceOpened(messageId, userId);
+      if (updatedMsg) {
+        const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+        const viewPayload = {
+          messageId,
+          viewedBy: updatedMsg.viewedBy,
+          viewCounts: updatedMsg.viewCounts,
+          status: updatedMsg.status || 'read'
+        };
+        const readPayload = { messageId, chatId, canonicalChatId, status: 'read' };
+
+        if (chatId) io.to(chatId).emit('view_once_updated', viewPayload);
+        if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('view_once_updated', viewPayload);
+
+        if (updatedMsg.senderId) {
+          io.to(`user_${updatedMsg.senderId}`).emit('view_once_updated', viewPayload);
+          io.to(updatedMsg.senderId).emit('view_once_updated', viewPayload);
+          io.to(`user_${updatedMsg.senderId}`).emit('message_read_update', readPayload);
+          io.to(updatedMsg.senderId).emit('message_read_update', readPayload);
+        }
+        if (chatId) io.to(chatId).emit('message_read_update', readPayload);
+        if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('message_read_update', readPayload);
+      }
+    } catch (err) {
+      console.error('view_once_opened error:', err);
     }
   });
 
@@ -1128,40 +1209,51 @@ io.on('connection', (socket) => {
   socket.on('mark_read', async ({ messageId, chatId, userId, isGhost }) => {
     const readerId = userId || socket.userId;
     const isGhostMode = Boolean(isGhost) || await resolveGhostMode(readerId, chatId);
+    const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+
     if (isGhostMode) {
       if (readerId) {
         const updated = await Message.findOneAndUpdate(
-          { id: messageId },
+          { $or: [{ id: messageId }, { clientTempId: messageId }] },
           { $addToSet: { readBy: readerId }, $set: { status: 'delivered' } },
           { new: true }
         ).lean();
+        const delivPayload = { messageId, chatId, canonicalChatId, status: 'delivered' };
         if (updated && updated.senderId) {
-          io.to(`user_${updated.senderId}`).emit('message_delivered_update', { messageId, chatId, status: 'delivered' });
-          io.to(`user_${updated.senderId}`).emit('messages_delivered', { chatId, messageIds: [messageId], status: 'delivered' });
+          io.to(`user_${updated.senderId}`).emit('message_delivered_update', delivPayload);
+          io.to(updated.senderId).emit('message_delivered_update', delivPayload);
+          io.to(`user_${updated.senderId}`).emit('messages_delivered', { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered' });
+          io.to(updated.senderId).emit('messages_delivered', { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered' });
         }
-        if (chatId) {
-          io.to(chatId).emit('message_delivered_update', { messageId, chatId, status: 'delivered' });
-        }
-        io.to(`user_${readerId}`).emit('chat_read_update', { chatId, userId: readerId });
-        io.to(readerId).emit('chat_read_update', { chatId, userId: readerId });
+        if (chatId) io.to(chatId).emit('message_delivered_update', delivPayload);
+        if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('message_delivered_update', delivPayload);
+        io.to(`user_${readerId}`).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
+        io.to(readerId).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
       }
-      socket.emit('chat_read_update', { chatId, userId: readerId });
+      socket.emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
       return;
     }
 
     const updateDoc = { $addToSet: { readBy: readerId }, $set: { status: 'read' } };
-    const updatedMsg = await Message.findOneAndUpdate({ id: messageId }, updateDoc, { new: true }).lean();
+    const updatedMsg = await Message.findOneAndUpdate(
+      { $or: [{ id: messageId }, { clientTempId: messageId }] },
+      updateDoc,
+      { new: true }
+    ).lean();
 
-    io.to(chatId).emit('message_read_update', { messageId, status: 'read' });
+    const readPayload = { messageId, chatId, canonicalChatId, status: 'read' };
+    if (chatId) io.to(chatId).emit('message_read_update', readPayload);
+    if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('message_read_update', readPayload);
+
     if (updatedMsg && updatedMsg.senderId) {
-      io.to(`user_${updatedMsg.senderId}`).emit('message_read_update', { messageId, status: 'read' });
-      io.to(updatedMsg.senderId).emit('message_read_update', { messageId, status: 'read' });
+      io.to(`user_${updatedMsg.senderId}`).emit('message_read_update', readPayload);
+      io.to(updatedMsg.senderId).emit('message_read_update', readPayload);
     }
     if (readerId) {
-      io.to(`user_${readerId}`).emit('chat_read_update', { chatId, userId: readerId });
-      io.to(readerId).emit('chat_read_update', { chatId, userId: readerId });
+      io.to(`user_${readerId}`).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
+      io.to(readerId).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
     }
-    socket.emit('chat_read_update', { chatId, userId: readerId });
+    socket.emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
   });
 
   // Pulse Aura Soundscapes Synchronization
@@ -1517,34 +1609,39 @@ io.on('connection', (socket) => {
   socket.on('mark_chat_read', async ({ chatId, userId, isGhost }) => {
     const readerId = userId || socket.userId;
     const isGhostMode = Boolean(isGhost) || await resolveGhostMode(readerId, chatId);
+    const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
 
     await db.markChatAsRead(chatId, readerId, isGhostMode);
 
     // ALWAYS emit to reader so their sidebar/tab unread badge immediately clears!
     if (readerId) {
-      io.to(`user_${readerId}`).emit('chat_read_update', { chatId, userId: readerId });
-      io.to(readerId).emit('chat_read_update', { chatId, userId: readerId });
+      io.to(`user_${readerId}`).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
+      io.to(readerId).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
       redis.invalidateRecent(readerId).catch(() => {});
     }
-    socket.emit('chat_read_update', { chatId, userId: readerId });
+    socket.emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
 
     const otherId = await getOtherParticipantId(chatId, readerId);
 
     if (isGhostMode) {
       // In Ghost Mode: emit DELIVERED (double grey tick) to sender, NEVER blue tick!
-      io.to(chatId).emit('messages_delivered', { chatId, status: 'delivered' });
+      const ghostPayload = { chatId, canonicalChatId, status: 'delivered' };
+      if (chatId) io.to(chatId).emit('messages_delivered', ghostPayload);
+      if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('messages_delivered', ghostPayload);
       if (otherId) {
-        io.to(`user_${otherId}`).emit('messages_delivered', { chatId, status: 'delivered' });
-        io.to(otherId).emit('messages_delivered', { chatId, status: 'delivered' });
+        io.to(`user_${otherId}`).emit('messages_delivered', ghostPayload);
+        io.to(otherId).emit('messages_delivered', ghostPayload);
       }
       return;
     }
 
     // Normal Mode: emit READ (double blue tick)
-    io.to(chatId).emit('chat_read_update', { chatId, userId: readerId });
+    const normalPayload = { chatId, canonicalChatId, userId: readerId, status: 'read' };
+    if (chatId) io.to(chatId).emit('chat_read_update', normalPayload);
+    if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('chat_read_update', normalPayload);
     if (otherId) {
-      io.to(`user_${otherId}`).emit('chat_read_update', { chatId, userId: readerId });
-      io.to(otherId).emit('chat_read_update', { chatId, userId: readerId });
+      io.to(`user_${otherId}`).emit('chat_read_update', normalPayload);
+      io.to(otherId).emit('chat_read_update', normalPayload);
     }
   });
 

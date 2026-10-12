@@ -36,6 +36,10 @@ const getOtherParticipantId = async (chatId, myUserId) => {
       otherKey = parts.find(p => !myKeys.includes(p));
     }
 
+    if (!otherKey && !myKeys.includes(chatId) && !String(chatId).startsWith('group_')) {
+      otherKey = chatId;
+    }
+
     if (otherKey) {
       const other = await User.findOne({
         $or: [
@@ -484,7 +488,15 @@ router.post('/fog-snap/reveal', authMiddleware, async (req, res) => {
   try {
     const { messageId, chatId } = req.body;
     const Message = require('../models/Message');
-    const existingMsg = await Message.findOne({ id: messageId });
+    const mongoose = require('mongoose');
+    const redis = require('../utils/redis');
+
+    const query = { $or: [{ id: messageId }] };
+    if (mongoose.Types.ObjectId.isValid(messageId)) {
+      query.$or.push({ _id: messageId });
+    }
+
+    const existingMsg = await Message.findOne(query);
     if (!existingMsg) return res.status(404).json({ error: 'Message not found' });
 
     // Senders previewing their own sent media must never trigger reveal broadcast
@@ -494,14 +506,45 @@ router.post('/fog-snap/reveal', authMiddleware, async (req, res) => {
     }
 
     const msg = await Message.findOneAndUpdate(
-      { id: messageId },
-      { fogSnapStatus: 'revealed' },
+      query,
+      { fogSnapStatus: 'revealed', status: 'read', $addToSet: { readBy: req.user.id } },
       { new: true }
     );
 
+    // Invalidate Redis RAM cache
+    if (chatId) {
+      await redis.invalidateChat(chatId).catch(() => {});
+      if (chatId.includes('_')) {
+        const parts = chatId.split('_');
+        const revChatId = `${parts[1]}_${parts[0]}`;
+        await redis.invalidateChat(revChatId).catch(() => {});
+        await redis.invalidateChat(parts[0]).catch(() => {});
+        await redis.invalidateChat(parts[1]).catch(() => {});
+        redis.invalidateRecent(parts[0]).catch(() => {});
+        redis.invalidateRecent(parts[1]).catch(() => {});
+      }
+    }
+
     const io = req.app.get('io');
-    if (io && chatId) {
-      io.to(chatId).emit('fog_snap_revealed', { messageId, chatId, revealedBy: req.user.id });
+    if (io) {
+      const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+      const revealPayload = { messageId, chatId, canonicalChatId, revealedBy: req.user.id };
+      const readPayload = { messageId, chatId, canonicalChatId, status: 'read' };
+
+      if (chatId) {
+        io.to(chatId).emit('fog_snap_revealed', revealPayload);
+        io.to(chatId).emit('message_read_update', readPayload);
+      }
+      if (canonicalChatId && canonicalChatId !== chatId) {
+        io.to(canonicalChatId).emit('fog_snap_revealed', revealPayload);
+        io.to(canonicalChatId).emit('message_read_update', readPayload);
+      }
+      if (existingMsg.senderId) {
+        io.to(`user_${existingMsg.senderId}`).emit('fog_snap_revealed', revealPayload);
+        io.to(existingMsg.senderId).emit('fog_snap_revealed', revealPayload);
+        io.to(`user_${existingMsg.senderId}`).emit('message_read_update', readPayload);
+        io.to(existingMsg.senderId).emit('message_read_update', readPayload);
+      }
     }
 
     res.json({ success: true, message: msg });
@@ -533,7 +576,7 @@ router.post('/fog-snap/burn', authMiddleware, async (req, res) => {
 
     const msg = await Message.findOneAndUpdate(
       query,
-      { fogSnapStatus: 'burned', content: '🌫️ Fog Snap Evaporated', mediaUrl: null, $addToSet: { viewedBy: req.user.id } },
+      { fogSnapStatus: 'burned', status: 'read', content: '🌫️ Fog Snap Evaporated', mediaUrl: null, $addToSet: { viewedBy: req.user.id, readBy: req.user.id } },
       { new: true }
     );
 
@@ -701,27 +744,41 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
 router.put('/:chatId/read', authMiddleware, async (req, res) => {
   try {
     const isGhostMode = await resolveGhostMode(req.user.id, req.params.chatId, req);
+    const canonicalChatId = (req.params.chatId && req.params.chatId.includes('_'))
+      ? req.params.chatId.split('_').sort().join('_')
+      : req.params.chatId;
 
     await db.markChatAsRead(req.params.chatId, req.user.id, isGhostMode);
     const io = req.app.get('io');
     if (io) {
       // ALWAYS emit to reader so their sidebar/tab unread badge immediately clears!
-      io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+      const readerPayload = { chatId: req.params.chatId, canonicalChatId, userId: req.user.id };
+      io.to(`user_${req.user.id}`).emit('chat_read_update', readerPayload);
+      io.to(req.user.id).emit('chat_read_update', readerPayload);
+
       const otherId = await getOtherParticipantId(req.params.chatId, req.user.id);
 
       if (isGhostMode) {
-        io.to(req.params.chatId).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
+        const delivPayload = { chatId: req.params.chatId, canonicalChatId, status: 'delivered' };
+        io.to(req.params.chatId).emit('messages_delivered', delivPayload);
+        if (canonicalChatId && canonicalChatId !== req.params.chatId) {
+          io.to(canonicalChatId).emit('messages_delivered', delivPayload);
+        }
         if (otherId) {
-          io.to(`user_${otherId}`).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
-          io.to(otherId).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
+          io.to(`user_${otherId}`).emit('messages_delivered', delivPayload);
+          io.to(otherId).emit('messages_delivered', delivPayload);
         }
         return res.json({ success: true, ghostMode: true });
       }
 
-      io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+      const readPayload = { chatId: req.params.chatId, canonicalChatId, userId: req.user.id, status: 'read' };
+      io.to(req.params.chatId).emit('chat_read_update', readPayload);
+      if (canonicalChatId && canonicalChatId !== req.params.chatId) {
+        io.to(canonicalChatId).emit('chat_read_update', readPayload);
+      }
       if (otherId) {
-        io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-        io.to(otherId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+        io.to(`user_${otherId}`).emit('chat_read_update', readPayload);
+        io.to(otherId).emit('chat_read_update', readPayload);
       }
     }
     res.json({ success: true, ghostMode: false });

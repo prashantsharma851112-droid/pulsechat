@@ -1145,7 +1145,7 @@ function MessageItem({
 
   const viewLimit = message.viewLimit || (message.isViewTwice ? 2 : 1);
   const myUserId = currentUser?.id || currentUser?._id || '';
-  const myLocalViewCount = isMine ? 0 : parseInt(localStorage.getItem(`pulse_view_count_${message.id}`) || '0', 10);
+  const myLocalViewCount = isMine ? 0 : parseInt(localStorage.getItem(`pulse_view_count_${message.id || message._id}`) || '0', 10);
   const serverViewCount = isMine ? 0 : (viewCountsState?.[myUserId] || message.viewCounts?.[myUserId] || 0);
   const currentViewCount = Math.max(myLocalViewCount, serverViewCount);
 
@@ -1168,14 +1168,14 @@ function MessageItem({
     if (isMine) return; // Sender previewing their own message must never consume view count or mark viewed!
     const nextCount = currentViewCount + 1;
     try {
-      localStorage.setItem(`pulse_view_count_${message.id}`, String(nextCount));
+      localStorage.setItem(`pulse_view_count_${message.id || message._id}`, String(nextCount));
     } catch {}
     setViewCountsState(prev => ({ ...prev, [myUserId]: nextCount }));
     if (nextCount >= viewLimit) {
       setViewedByState(prev => [...prev, myUserId]);
     }
     if (socket && myUserId) {
-      socket.emit('view_once_opened', { messageId: message.id, userId: myUserId, chatId });
+      socket.emit('view_once_opened', { messageId: message.id || message._id, userId: myUserId, chatId });
     }
   };
 
