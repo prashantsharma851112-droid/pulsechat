@@ -1048,7 +1048,7 @@ module.exports = {
     };
   },
 
-  runAutoCleanupJob: async (days = 7) => {
+  runAutoCleanupJob: async (days = 15) => {
     try {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - days);

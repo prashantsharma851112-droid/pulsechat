@@ -48,8 +48,8 @@ const messageSchema = new mongoose.Schema({
   storyReply: { type: Object, default: null },
   // Instagram-style Vanish Mode (Permanent Auto-evaporate on chat exit)
   isVanish: { type: Boolean, default: false },
-  // Auto-decay / disappearing message expiry (MongoDB TTL index - 30-day lifetime free storage rule)
-  expiresAt: { type: Date, default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), index: { expires: 0 } }
+  // WhatsApp-Style Auto-Decay / Disappearing message expiry (MongoDB TTL index - 15-day lifetime free storage protection rule)
+  expiresAt: { type: Date, default: () => new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), index: { expires: 0 } }
 });
 
 messageSchema.index({ chatId: 1, isVanish: 1 });

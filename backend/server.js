@@ -2098,12 +2098,12 @@ mongoose.connect(config.MONGO_URI)
         }, 10 * 60 * 1000);
       }
 
-      // auto-cleanup chats older than 7 days
+      // WhatsApp-Style auto-cleanup: delivered messages older than 15 days archived from MongoDB (stored in user phone IndexedDB)
       const AUTO_CLEANUP_INTERVAL = 12 * 60 * 60 * 1000;
       setTimeout(async () => {
         try {
-          console.log('Running 7-day chat auto-cleanup...');
-          await db.runAutoCleanupJob(7);
+          console.log('Running 15-day chat auto-cleanup (WhatsApp-style DB protection)...');
+          await db.runAutoCleanupJob(15);
         } catch (e) {
           console.warn('Auto-cleanup startup error:', e.message);
         }
@@ -2111,8 +2111,8 @@ mongoose.connect(config.MONGO_URI)
 
       setInterval(async () => {
         try {
-          console.log('Running periodic chat auto-cleanup...');
-          await db.runAutoCleanupJob(7);
+          console.log('Running periodic 15-day chat auto-cleanup...');
+          await db.runAutoCleanupJob(15);
         } catch (e) {
           console.warn('Auto-cleanup interval error:', e.message);
         }

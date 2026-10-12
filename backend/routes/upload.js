@@ -2,14 +2,32 @@ const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
 const { uploadToCloudinary, isCloudinaryConfigured } = require('../utils/cloudinary');
+const { isR2Configured, generateR2PresignedUrl, uploadBufferToR2 } = require('../utils/r2Storage');
 const { checkAndUpdateFileQuota } = require('../utils/fileQuota');
 
-// Instagram Architecture: Generate presigned upload params.
-// The client uploads large media DIRECTLY to Cloudinary edge servers.
-// 0 bytes of media pass through Render Node.js backend!
+// Instagram / Cloudflare Architecture: Generate presigned upload params.
+// Priority 1: Cloudflare R2 (100% Free Egress Bandwidth, Zero data fees)
+// Priority 2: Cloudinary Edge CDN
 router.get('/signature', authMiddleware, (req, res) => {
   try {
-    const { folder = 'pulsechat_media' } = req.query;
+    const { folder = 'pulsechat_media', fileName = '', contentType = 'image/jpeg' } = req.query;
+
+    // 1. Cloudflare R2 Presigned Upload (Unlimited Free Bandwidth)
+    if (isR2Configured()) {
+      const uniqueFileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${fileName || 'media.bin'}`.replace(/\/{2,}/g, '/');
+      const r2Presigned = generateR2PresignedUrl(uniqueFileName, contentType);
+      if (r2Presigned) {
+        return res.json({
+          directUpload: true,
+          provider: 'r2',
+          uploadUrl: r2Presigned.uploadUrl,
+          publicUrl: r2Presigned.publicUrl,
+          key: r2Presigned.key
+        });
+      }
+    }
+
+    // 2. Cloudinary Edge CDN Upload
     if (!isCloudinaryConfigured()) {
       return res.json({ directUpload: false });
     }
@@ -29,6 +47,7 @@ router.get('/signature', authMiddleware, (req, res) => {
 
     res.json({
       directUpload: true,
+      provider: 'cloudinary',
       cloudName,
       apiKey,
       timestamp,

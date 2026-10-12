@@ -128,12 +128,44 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
   try {
     const effectiveToken = token || (typeof window !== 'undefined' ? (localStorage.getItem('pulsechat_token') || '') : '');
     const authHeader = effectiveToken ? { Authorization: `Bearer ${effectiveToken}` } : {};
-    const sigRes = await fetch(`${BACKEND_URL}/api/upload/signature?folder=${encodeURIComponent(folder)}`, {
+    const ext = (finalPayload instanceof File && finalPayload.name)
+      ? finalPayload.name.split('.').pop()
+      : (isVideo ? 'mp4' : 'jpg');
+    const mime = (finalPayload instanceof File && finalPayload.type)
+      ? finalPayload.type
+      : (isVideo ? 'video/mp4' : 'image/jpeg');
+
+    const sigRes = await fetch(`${BACKEND_URL}/api/upload/signature?folder=${encodeURIComponent(folder)}&fileName=${encodeURIComponent(`file.${ext}`)}&contentType=${encodeURIComponent(mime)}`, {
       headers: { ...authHeader }
     });
 
     if (sigRes.ok) {
       const sigData = await sigRes.json();
+
+      // Cloudflare R2: Direct Edge PUT Upload (Zero Egress Bandwidth Fees)
+      if (sigData.directUpload && sigData.provider === 'r2' && sigData.uploadUrl && sigData.publicUrl) {
+        let binaryBody = finalPayload;
+        if (typeof finalPayload === 'string' && finalPayload.startsWith('data:')) {
+          const res = await fetch(finalPayload);
+          binaryBody = await res.blob();
+        }
+
+        const r2Res = await fetch(sigData.uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': mime
+          },
+          body: binaryBody
+        });
+
+        if (r2Res.ok) {
+          return sigData.publicUrl;
+        } else {
+          console.warn('R2 direct upload error, falling back...');
+        }
+      }
+
+      // Cloudinary Edge CDN: Direct POST Upload
       if (sigData.directUpload && sigData.cloudName && sigData.apiKey && sigData.signature) {
         // 3. Direct upload to Cloudinary Edge CDN (bypasses Render entirely!)
         const resourceType = isVideo ? 'video' : 'image';
