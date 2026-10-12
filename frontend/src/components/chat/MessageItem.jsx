@@ -1083,6 +1083,7 @@ function MessageItem({
   const mouseLongPressTimerRef = useRef(null);
   const isLongPressRef = useRef(false);
   const justLongPressedRef = useRef(false);
+  const lastDoubleTapTimeRef = useRef(0);
 
   useEffect(() => {
     if (!socket) return;
@@ -1288,7 +1289,7 @@ function MessageItem({
     }
   };
 
-  const handleReact = (emoji) => {
+  const handleReact = (emoji, forceAdd = false) => {
     recordRecentReaction(emoji);
     const targetMsgId = message.id || message._id || message.clientTempId;
     const myId = currentUser?.id || currentUser?._id;
@@ -1299,13 +1300,23 @@ function MessageItem({
     const currentList = Array.isArray(existingReactions[emoji]) ? [...existingReactions[emoji]] : [];
     const isAlreadyReacted = currentList.includes(myId);
 
-    if (isAlreadyReacted) {
+    if (isAlreadyReacted && !forceAdd) {
       existingReactions[emoji] = currentList.filter(id => id !== myId);
       if (existingReactions[emoji].length === 0) {
         delete existingReactions[emoji];
       }
-    } else {
+    } else if (!isAlreadyReacted) {
       existingReactions[emoji] = [...currentList, myId];
+    } else {
+      // Already reacted and forceAdd is true: keep reaction, trigger animation burst
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
+          detail: { emoji: emoji || '❤️', mode: 'reaction', duration: 2 }
+        }));
+      }
+      setShowContextMenu(false);
+      if (onDismissAction) onDismissAction();
+      return;
     }
 
     message.reactions = existingReactions;
@@ -1331,7 +1342,31 @@ function MessageItem({
   };
 
   const handleDoubleTap = () => {
-    handleReact('❤️');
+    const now = Date.now();
+    if (now - lastDoubleTapTimeRef.current < 450) {
+      return; // Ignore duplicate synthetic events within 450ms
+    }
+    lastDoubleTapTimeRef.current = now;
+
+    // Cancel any pending long press so action menu does NOT pop up
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    if (mouseLongPressTimerRef.current) {
+      clearTimeout(mouseLongPressTimerRef.current);
+      mouseLongPressTimerRef.current = null;
+    }
+    isLongPressRef.current = false;
+    justLongPressedRef.current = true;
+    setTimeout(() => { justLongPressedRef.current = false; }, 400);
+
+    // Dismiss any open action sheet so it doesn't show up on double tap
+    if (onDismissAction) onDismissAction();
+    setShowContextMenu(false);
+
+    // Always add heart reaction on double tap
+    handleReact('❤️', true);
     setShowHeartBurst(true);
     setTimeout(() => setShowHeartBurst(false), 750);
   };

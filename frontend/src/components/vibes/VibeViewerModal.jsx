@@ -4,7 +4,7 @@ import { SocketContext } from '../../context/SocketContext';
 import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc, Lock, MessageSquare, Smile, Heart, Search, Clock, BarChart3, ChevronUp, MessageCircle, Sparkles, MoreVertical, Download, Share2, Check, Copy, Film, Loader2 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
-import { updateRecentChatSnippet, getCachedAllUsers, getCachedRecentChats, appendCachedMessage } from '../../utils/offlineStorage';
+import { updateRecentChatSnippet, getCachedAllUsers, getCachedRecentChats, getCachedFriends, appendCachedMessage } from '../../utils/offlineStorage';
 import { useBackHandler } from '../../utils/backNavigation';
 
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
@@ -1259,12 +1259,13 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
 
   // 2. Share Candidates list (recent chats & all friends)
   const shareCandidates = React.useMemo(() => {
-    const recent = getCachedRecentChats(user?.id) || [];
+    const uid = user?.id || user?._id;
+    const recent = getCachedRecentChats(uid) || [];
     const list = [];
     const seen = new Set();
     recent.forEach(c => {
       const id = c.id || c._id;
-      if (id && id !== user?.id && !seen.has(id)) {
+      if (id && id !== uid && !seen.has(id)) {
         seen.add(id);
         list.push({
           id,
@@ -1275,10 +1276,24 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
       }
     });
 
-    const all = getCachedAllUsers() || [];
+    const friends = getCachedFriends(uid) || [];
+    friends.forEach(f => {
+      const id = f.id || f._id;
+      if (id && id !== uid && !seen.has(id)) {
+        seen.add(id);
+        list.push({
+          id,
+          name: f.displayName || f.username || 'Friend',
+          avatar: f.avatar,
+          isGroup: false
+        });
+      }
+    });
+
+    const all = getCachedAllUsers(uid) || [];
     all.forEach(u => {
       const id = u.id || u._id;
-      if (id && id !== user?.id && !seen.has(id)) {
+      if (id && id !== uid && !seen.has(id)) {
         seen.add(id);
         list.push({
           id,
@@ -1289,7 +1304,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
       }
     });
     return list;
-  }, [user?.id, showShareModal]);
+  }, [user?.id, user?._id, showShareModal]);
 
   const handleSendStoryToFriend = (targetChatId, friendName, targetIsGroup = false) => {
     if (!socket || !targetChatId) return;
@@ -1335,9 +1350,11 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
 
     const tempMsg = {
       id: 'msg_vibe_share_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      clientTempId: 'msg_vibe_share_' + Date.now(),
       chatId: realChatId,
       senderId: user?.id || user?._id,
       senderName: user?.displayName || user?.name || user?.username,
+      senderUsername: user?.username || '',
       senderAvatar: user?.avatar || '',
       receiverId: partnerId,
       isGroup: isGroupChat,
@@ -1355,6 +1372,8 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     // 2. Append directly to local message cache so it appears in ChatWindow
     try {
       appendCachedMessage(realChatId, tempMsg);
+      const canonical = realChatId.includes('_') ? realChatId.split('_').sort().join('_') : realChatId;
+      if (canonical !== realChatId) appendCachedMessage(canonical, tempMsg);
     } catch {}
 
     // 3. Instant local recent chat snippet update

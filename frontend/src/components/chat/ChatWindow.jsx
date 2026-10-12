@@ -2188,13 +2188,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 });
                 if (isIdentical) return prev;
               }
-              // If user was near bottom before server sync, maintain bottom anchor
+              // If user was near bottom before server sync or on initial load, ensure bottom anchor
               if (chatContainerRef.current) {
-                const isNearBtm = chatContainerRef.current.scrollHeight - chatContainerRef.current.scrollTop - chatContainerRef.current.clientHeight < 150;
-                if (isNearBtm) {
-                  requestAnimationFrame(() => {
+                const distFromBtm = chatContainerRef.current.scrollHeight - chatContainerRef.current.scrollTop - chatContainerRef.current.clientHeight;
+                if (!showScrollBottomRef.current || distFromBtm < 350) {
+                  const doScroll = () => {
+                    if (chatContainerRef.current) {
+                      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+                    }
                     messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
-                  });
+                  };
+                  doScroll();
+                  requestAnimationFrame(doScroll);
+                  setTimeout(doScroll, 40);
                 }
               }
               return merged;
@@ -2571,6 +2577,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       const isThisChat = Boolean(
         msg && (
           msg.chatId === chatId ||
+          (msg.chatId && chatId && typeof msg.chatId === 'string' && typeof chatId === 'string' && msg.chatId.includes('_') && chatId.includes('_') && msg.chatId.split('_').sort().join('_') === chatId.split('_').sort().join('_')) ||
           (!isGroup && (
             (msg.senderId === activeChat?.id && (msg.receiverId === user?.id || !msg.receiverId)) ||
             (msg.senderId === user?.id && msg.receiverId === activeChat?.id) ||
@@ -3001,20 +3008,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const lastMsgId = lastMsg?.id || lastMsg?._id || lastMsg?.clientTempId;
     const prevLastId = lastRenderedLastMsgIdRef.current;
 
+    const scrollToBottom = (behavior = 'instant') => {
+      if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      }
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    };
+
     // Initial load: instant jump to the last message at bottom
     if (isInitialLoad.current) {
-      const scrollBottom = () => {
-        if (chatContainerRef.current) {
-          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-        }
-        messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
-      };
-      scrollBottom();
-      // Double rAF / tick check to account for dynamic heights / image previews
-      requestAnimationFrame(scrollBottom);
-      setTimeout(scrollBottom, 60);
-
-      isInitialLoad.current = false;
+      scrollToBottom('instant');
+      requestAnimationFrame(() => scrollToBottom('instant'));
+      setTimeout(() => scrollToBottom('instant'), 40);
+      setTimeout(() => scrollToBottom('instant'), 150);
+      setTimeout(() => { isInitialLoad.current = false; }, 300);
       lastRenderedLastMsgIdRef.current = lastMsgId;
       return;
     }
@@ -3036,21 +3043,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     if (isSentByMe) {
       // User sent a message -> scroll to bottom smoothly
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      scrollToBottom('smooth');
       setShowScrollBottom(false);
       showScrollBottomRef.current = false;
     } else {
-      // Someone else sent a message -> strictly do NOT scroll if user has scrolled up reading
-      if (showScrollBottomRef.current) {
-        // User scrolled up! Do not disturb reading position
-        return;
-      }
-      const isNearBottom = chatContainerRef.current
-        ? (chatContainerRef.current.scrollHeight - chatContainerRef.current.scrollTop - chatContainerRef.current.clientHeight < 120)
-        : true;
+      // Someone else sent a message -> auto scroll if near bottom (< 450px) during active chat
+      const distFromBottom = chatContainerRef.current
+        ? (chatContainerRef.current.scrollHeight - chatContainerRef.current.scrollTop - chatContainerRef.current.clientHeight)
+        : 0;
 
-      if (isNearBottom) {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      if (distFromBottom < 450) {
+        scrollToBottom('smooth');
+        setShowScrollBottom(false);
+        showScrollBottomRef.current = false;
       }
     }
   }, [messages, user?.id]);
@@ -3218,15 +3223,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleChatContainerScroll = (e) => {
     const target = e.currentTarget;
-    // Smart Prefetching (WhatsApp style sliding window): Start loading 350px before reaching top
-    // so older messages are already in RAM and prepended before the user reaches the end!
-    if (target.scrollTop <= 350 && hasMoreOlderMessages && !isLoadingOlderRef.current) {
+    // Smart Prefetching: Only trigger when there is genuine scrollable history and user scrolls near top
+    if (target.scrollHeight > target.clientHeight + 200 && target.scrollTop <= 150 && hasMoreOlderMessages && !isLoadingOlderRef.current) {
       handleLoadOlderMessages();
     }
 
-    // Track if user has scrolled away from the latest messages (> 100px)
+    // Track if user has scrolled away from the latest messages (> 250px)
     const distFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
-    const isScrolledUp = distFromBottom > 100;
+    const isScrolledUp = distFromBottom > 250;
     if (showScrollBottomRef.current !== isScrolledUp) {
       setShowScrollBottom(isScrolledUp);
       showScrollBottomRef.current = isScrolledUp;

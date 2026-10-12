@@ -45,8 +45,13 @@ module.exports = {
   },
 
   getMessages: async (chatId, limit = 50, before = null, userId = null) => {
+    let chatQuery = chatId;
+    if (chatId && typeof chatId === 'string' && chatId.includes('_')) {
+      const parts = chatId.split('_');
+      chatQuery = { $in: [chatId, parts.sort().join('_'), parts.reverse().join('_')] };
+    }
     const query = {
-      chatId,
+      chatId: chatQuery,
       $or: [
         { expiresAt: null },
         { expiresAt: { $gt: new Date() } }

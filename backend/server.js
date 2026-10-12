@@ -856,10 +856,12 @@ io.on('connection', (socket) => {
       }
       const initialStatus = isReceiverOnline ? 'delivered' : 'sent';
 
+      const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+
       const newMsg = {
         id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
         clientTempId: clientTempId || null,
-        chatId,
+        chatId: canonicalChatId,
         senderId,
         senderName: resolvedSenderName,
         senderUsername: senderUsername || '',
