@@ -4,7 +4,7 @@ import { SocketContext } from '../../context/SocketContext';
 import { X, Music, Trash2, Zap, Eye, Send, Users, Volume2, VolumeX, Disc, Lock, MessageSquare, Smile, Heart, Search, Clock, BarChart3, ChevronUp, MessageCircle, Sparkles, MoreVertical, Download, Share2, Check, Copy, Film, Loader2 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
-import { updateRecentChatSnippet, getCachedAllUsers, getCachedRecentChats } from '../../utils/offlineStorage';
+import { updateRecentChatSnippet, getCachedAllUsers, getCachedRecentChats, appendCachedMessage } from '../../utils/offlineStorage';
 import { useBackHandler } from '../../utils/backNavigation';
 
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
@@ -1264,25 +1264,27 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     const seen = new Set();
     recent.forEach(c => {
       const id = c.id || c._id;
-      if (id && !seen.has(id)) {
+      if (id && id !== user?.id && !seen.has(id)) {
         seen.add(id);
         list.push({
           id,
           name: c.displayName || c.username || c.name || 'Chat',
-          avatar: c.avatar
+          avatar: c.avatar,
+          isGroup: Boolean(c.isGroup || String(id).startsWith('group_'))
         });
       }
     });
     if (list.length === 0) {
       const all = getCachedAllUsers() || [];
-      all.slice(0, 10).forEach(u => {
+      all.slice(0, 15).forEach(u => {
         const id = u.id || u._id;
         if (id && id !== user?.id && !seen.has(id)) {
           seen.add(id);
           list.push({
             id,
             name: u.displayName || u.username || 'Friend',
-            avatar: u.avatar
+            avatar: u.avatar,
+            isGroup: false
           });
         }
       });
@@ -1290,22 +1292,21 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     return list;
   }, [user?.id, showShareModal]);
 
-  const handleSendStoryToFriend = (targetChatId, friendName) => {
+  const handleSendStoryToFriend = (targetChatId, friendName, targetIsGroup = false) => {
     if (!socket || !targetChatId) return;
     const authorId = currentVibe?.userId || vibeGroup?.userId;
     const authorName = vibeGroup?.displayName || vibeGroup?.username || 'User';
 
-    // Compute proper 1-on-1 chatId if targetChatId is a user ID
+    const isGroupChat = Boolean(targetIsGroup || String(targetChatId).startsWith('group_'));
     let realChatId = targetChatId;
     let partnerId = targetChatId;
-    const isGroupChat = String(targetChatId).startsWith('group_');
 
-    if (!isGroupChat && !String(targetChatId).includes('_') && user?.id) {
-      realChatId = [user.id, targetChatId].sort().join('_');
+    if (isGroupChat) {
+      realChatId = targetChatId;
+      partnerId = '';
+    } else {
       partnerId = targetChatId;
-    } else if (String(targetChatId).includes('_')) {
-      const parts = String(targetChatId).split('_');
-      partnerId = parts.find(p => p !== user?.id) || targetChatId;
+      realChatId = user?.id ? [user.id, targetChatId].sort().join('_') : targetChatId;
     }
 
     const storyReplyData = {
@@ -1318,20 +1319,23 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
       audioUrl: currentVibe?.audioUrl || null,
       songTitle: currentVibe?.songTitle || '',
       artistName: currentVibe?.artistName || '',
+      albumArt: currentVibe?.albumArt || '',
       authorId: authorId,
       authorName: authorName,
       authorAvatar: vibeGroup?.avatar || currentVibe?.avatar || '',
       textStyle3D: currentVibe?.textStyle3D || 'none',
       textBgStyle: currentVibe?.textBgStyle || 'none',
       stickersData: currentVibe?.stickersData || [],
+      selectedStickers: currentVibe?.selectedStickers || [],
       createdAt: currentVibe?.createdAt || new Date().toISOString()
     };
 
     const tempMsg = {
-      id: 'msg_vibe_share_' + Date.now(),
+      id: 'msg_vibe_share_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
       chatId: realChatId,
       senderId: user?.id,
       senderName: user?.displayName || user?.name || user?.username,
+      senderAvatar: user?.avatar || '',
       receiverId: partnerId,
       isGroup: isGroupChat,
       type: 'story_reply',
@@ -1342,9 +1346,15 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
       timestamp: new Date().toISOString()
     };
 
+    // 1. Emit via socket to backend
     socket.emit('send_message', tempMsg);
 
-    // Instant local recent chat snippet update
+    // 2. Append directly to local message cache so it appears in ChatWindow
+    try {
+      appendCachedMessage(realChatId, tempMsg);
+    } catch {}
+
+    // 3. Instant local recent chat snippet update
     if (user?.id && realChatId) {
       const targetChatObj = {
         id: partnerId,
@@ -1354,6 +1364,11 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
       };
       updateRecentChatSnippet(user.id, realChatId, tempMsg, targetChatObj);
       window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+    }
+
+    // 4. Notify any active chat window to display the card immediately
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechat_new_message', { detail: tempMsg }));
     }
 
     setShareSentTo(prev => ({ ...prev, [targetChatId]: true }));
@@ -1454,12 +1469,12 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
           vid.preload = 'auto';
           vid.muted = Boolean(currentVibe.audioUrl);
           vid.src = videoSrc;
-          // CRITICAL: Attach to DOM offscreen so browser decodes and paints all frames cleanly
+          // CRITICAL: Attach to DOM offscreen with proper dimensions so browser decodes all frames via GPU hardware
           vid.style.position = 'fixed';
           vid.style.top = '-9999px';
           vid.style.left = '-9999px';
-          vid.style.width = '10px';
-          vid.style.height = '10px';
+          vid.style.width = '720px';
+          vid.style.height = '1280px';
           vid.style.opacity = '0.01';
           vid.style.pointerEvents = 'none';
           document.body.appendChild(vid);
@@ -1556,33 +1571,37 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
 
       setDownloadProgress(35);
 
-      // 5. Setup Canvas and MediaStream
+      // 5. Setup Canvas and MediaStream (Smooth 60 FPS, High Bitrate)
       const canvas = document.createElement('canvas');
       canvas.width = 720;
       canvas.height = 1280;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
 
-      const canvasStream = canvas.captureStream(30);
+      const canvasStream = canvas.captureStream(60);
       const combinedTracks = [
         ...canvasStream.getVideoTracks(),
         ...audioDest.stream.getAudioTracks()
       ];
       const combinedStream = new MediaStream(combinedTracks);
 
-      let mimeType = 'video/webm;codecs=vp8,opus';
+      let mimeType = 'video/mp4';
       if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2')) {
         mimeType = 'video/mp4;codecs=avc1,mp4a.40.2';
       } else if (MediaRecorder.isTypeSupported('video/mp4')) {
         mimeType = 'video/mp4';
+      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+        mimeType = 'video/webm;codecs=vp9,opus';
       } else if (MediaRecorder.isTypeSupported('video/webm;codecs=h264,opus')) {
         mimeType = 'video/webm;codecs=h264,opus';
+      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+        mimeType = 'video/webm;codecs=vp8,opus';
       } else if (MediaRecorder.isTypeSupported('video/webm')) {
         mimeType = 'video/webm';
       }
 
       const recorder = new MediaRecorder(combinedStream, {
         mimeType,
-        videoBitsPerSecond: 2500000
+        videoBitsPerSecond: 6000000 // 6 Mbps for smooth, crisp 60fps video
       });
 
       const chunks = [];
@@ -1605,19 +1624,39 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
           });
         }
       }
-      recorder.start(200);
+
+      // CRITICAL: Call start() WITHOUT timeslice parameter to produce a unified,
+      // non-fragmented video file with complete seek index and smooth playback without stutter
+      recorder.start();
 
       const startTime = performance.now();
       const totalDurationMs = durationSec * 1000;
 
-      // 5. Initialize Live Wallpaper Particles if active
+      // 6. Precompute Static Visual Elements to avoid heavy computations inside 60fps renderLoop
       const liveBgType = currentVibe.animatedBg;
       const isLiveWallpaper = liveBgType && liveBgType !== 'none';
       const liveParticles = [];
+      let precomputedBgFill = null;
+
       if (isLiveWallpaper) {
+        const bgGradMap = {
+          love_hearts_live: ['#2b081c', '#0d0208'],
+          nature_forest_live: ['#062419', '#020d09'],
+          ocean_waves_live: ['#072740', '#020c14'],
+          matrix_code_live: ['#021a0d', '#000904'],
+          starry_galaxy_live: ['#110d2c', '#04020f'],
+          firefly_night_live: ['#1c1902', '#080701'],
+          cyber_grid_live: ['#1b0730', '#080210']
+        };
+        const pair = bgGradMap[liveBgType] || ['#110d2c', '#04020f'];
+        const radGrad = ctx.createRadialGradient(360, 640, 40, 360, 640, 780);
+        radGrad.addColorStop(0, pair[0]);
+        radGrad.addColorStop(1, pair[1]);
+        precomputedBgFill = radGrad;
+
         let emojis = ['✨', '⭐', '🌟', '💫', '🪐', '🌌'];
         let isDown = false;
-        let pCount = 28;
+        let pCount = 26;
         if (liveBgType === 'love_hearts_live') {
           emojis = ['💖', '💗', '💕', '❤️', '🌸'];
         } else if (liveBgType === 'nature_forest_live') {
@@ -1630,7 +1669,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
         } else if (liveBgType === 'matrix_code_live') {
           emojis = ['0', '1', '🟢', '⚡', '1', '0', '❇️'];
           isDown = true;
-          pCount = 38;
+          pCount = 34;
         } else if (liveBgType === 'firefly_night_live') {
           emojis = ['✨', '🟡', '💡', '🌟', '💛'];
         }
@@ -1649,19 +1688,84 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
             isDown
           });
         }
+      } else {
+        const gradMatches = currentVibe.bgGradient ? currentVibe.bgGradient.match(/#[a-fA-F0-9]{3,8}|rgba?\([^)]+\)/g) : null;
+        const bgGrad = ctx.createLinearGradient(0, 0, 720, 1280);
+        if (gradMatches && gradMatches.length >= 2) {
+          gradMatches.forEach((color, idx) => {
+            bgGrad.addColorStop(idx / (gradMatches.length - 1), color);
+          });
+        } else {
+          bgGrad.addColorStop(0, '#6366f1');
+          bgGrad.addColorStop(1, '#a855f7');
+        }
+        precomputedBgFill = bgGrad;
       }
 
-      // Helper function for text wrapping on canvas
-      const wrapCanvasText = (context, text, maxWidth) => {
-        if (!text) return [];
-        const words = String(text).split(/\s+/);
+      // Precompute Media (Image or Video) drawing dimensions
+      let precomputedMediaRect = null;
+      let imageFilterStr = 'none';
+      const imageOpacityVal = Number(currentVibe.imageOpacity ?? 1.0);
+      if (visualElement) {
+        const filterMap = {
+          warm: 'sepia(0.35) contrast(1.1) brightness(1.05)',
+          cyber: 'contrast(1.2) saturate(1.4) hue-rotate(15deg)',
+          vintage: 'sepia(0.4) contrast(1.1)',
+          bw: 'grayscale(1) contrast(1.3)',
+          diamond: 'contrast(1.1) brightness(1.15) saturate(1.2)',
+          vivid: 'saturate(1.9) contrast(1.15)'
+        };
+        if (currentVibe.imageFilter && filterMap[currentVibe.imageFilter]) {
+          imageFilterStr = filterMap[currentVibe.imageFilter];
+        }
+
+        const posX = ((currentVibe.imagePos?.x ?? 50) / 100) * 720;
+        const posY = ((currentVibe.imagePos?.y ?? 50) / 100) * 1280;
+        const zoom = Number(currentVibe.imageZoom ?? 1.0);
+        const fit = currentVibe.imageFit || 'cover';
+
+        const natW = visualElement.videoWidth || visualElement.naturalWidth || 720;
+        const natH = visualElement.videoHeight || visualElement.naturalHeight || 1280;
+
+        let dw = 720;
+        let dh = 1280;
+        if (fit === 'contain' || fit === 'padded') {
+          const scale = Math.min(680 / natW, 1140 / natH);
+          dw = natW * scale * zoom;
+          dh = natH * scale * zoom;
+        } else {
+          const scale = Math.max(720 / natW, 1280 / natH);
+          dw = natW * scale * zoom;
+          dh = natH * scale * zoom;
+        }
+
+        precomputedMediaRect = {
+          dx: posX - dw / 2,
+          dy: posY - dh / 2,
+          dw,
+          dh,
+          fit
+        };
+      }
+
+      // Precompute Caption & 3D Typography layout
+      let precomputedCaption = null;
+      if (currentVibe.caption) {
+        const textX = 720 * ((currentVibe.textPos?.x ?? 50) / 100);
+        const textY = 1280 * ((currentVibe.textPos?.y ?? 50) / 100);
+        const userTextSize = (currentVibe.textSize || 1.3) * 1.15;
+        const fontSize = Math.round(26 * userTextSize);
+        ctx.font = `800 ${fontSize}px sans-serif`;
+
+        const maxTextW = 600;
+        const words = String(currentVibe.caption).split(/\s+/);
         const lines = [];
         let curLine = '';
         for (let i = 0; i < words.length; i++) {
           const w = words[i];
           const test = curLine ? `${curLine} ${w}` : w;
-          const met = context.measureText(test);
-          if (met.width > maxWidth && curLine) {
+          const met = ctx.measureText(test);
+          if (met.width > maxTextW && curLine) {
             lines.push(curLine);
             curLine = w;
           } else {
@@ -1669,18 +1773,80 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
           }
         }
         if (curLine) lines.push(curLine);
-        return lines;
-      };
 
+        const lineHeight = fontSize * 1.38;
+        const totalTextH = lines.length * lineHeight;
+        const startY = textY - totalTextH / 2 + lineHeight / 2;
+
+        let boxData = null;
+        const bgStyle = currentVibe.textBgStyle;
+        if (bgStyle && bgStyle !== 'none') {
+          let longestW = 0;
+          lines.forEach(l => {
+            const w = ctx.measureText(l).width;
+            if (w > longestW) longestW = w;
+          });
+          const boxW = Math.min(660, longestW + 48);
+          const boxH = totalTextH + 28;
+          const boxX = textX - boxW / 2;
+          const boxY = textY - boxH / 2;
+          let boxFill = null;
+          if (bgStyle === 'neon') {
+            boxFill = 'rgba(99, 102, 241, 0.9)';
+          } else if (bgStyle === 'gradient') {
+            const g = ctx.createLinearGradient(boxX, boxY, boxX + boxW, boxY + boxH);
+            g.addColorStop(0, '#f09433');
+            g.addColorStop(0.5, '#dc2743');
+            g.addColorStop(1, '#bc1888');
+            boxFill = g;
+          } else {
+            boxFill = 'rgba(0, 0, 0, 0.78)';
+          }
+          boxData = { boxX, boxY, boxW, boxH, bgStyle, boxFill };
+        }
+
+        precomputedCaption = {
+          textX,
+          textY,
+          fontSize,
+          lines,
+          lineHeight,
+          startY,
+          boxData,
+          textAlign: currentVibe.textAlign || 'center',
+          style3D: currentVibe.textStyle3D,
+          textColor: currentVibe.textColor || '#ffffff'
+        };
+      }
+
+      // Precompute Music Sticker Static Layout
+      let precomputedMusic = null;
+      if (currentVibe.songTitle) {
+        const mStyle = viewerMusicStyle || currentVibe.musicStyle || 'card';
+        const mScale = (currentVibe.musicScale || 1.0) * 1.35;
+        const mX = ((currentVibe.musicPos?.x ?? 50) / 100) * 720;
+        const mY = ((currentVibe.musicPos?.y ?? 20) / 100) * 1280;
+        const songName = currentVibe.songTitle;
+        const artistName = currentVibe.artistName || 'Pulse Music';
+        precomputedMusic = { mStyle, mScale, mX, mY, songName, artistName };
+      }
+
+      // 7. Ultra-Smooth 60fps Canvas Render Loop with Delta-Timing
       await new Promise((resolve) => {
         let isFinished = false;
-        const renderLoop = () => {
+        let lastLoopTime = performance.now();
+
+        const renderLoop = (nowTime) => {
           if (isFinished) return;
-          const elapsed = performance.now() - startTime;
+          const currentTimestamp = nowTime || performance.now();
+          const elapsed = currentTimestamp - startTime;
+          const dt = Math.min((currentTimestamp - lastLoopTime) / (1000 / 60), 2.0) || 1.0;
+          lastLoopTime = currentTimestamp;
+
           const pct = Math.min(95, 35 + Math.round((elapsed / totalDurationMs) * 60));
           setDownloadProgress(pct);
 
-          if (isCurrentStoryVideo && visualElement && visualElement.ended) {
+          if (isCurrentStoryVideo && visualElement && (visualElement.ended || visualElement.paused)) {
             visualElement.currentTime = 0;
             visualElement.play().catch(() => {});
           }
@@ -1693,28 +1859,20 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
           }
 
           // A. DRAW BACKGROUND
-          if (isLiveWallpaper) {
-            const bgGradMap = {
-              love_hearts_live: ['#2b081c', '#0d0208'],
-              nature_forest_live: ['#062419', '#020d09'],
-              ocean_waves_live: ['#072740', '#020c14'],
-              matrix_code_live: ['#021a0d', '#000904'],
-              starry_galaxy_live: ['#110d2c', '#04020f'],
-              firefly_night_live: ['#1c1902', '#080701'],
-              cyber_grid_live: ['#1b0730', '#080210']
-            };
-            const pair = bgGradMap[liveBgType] || ['#110d2c', '#04020f'];
-            const radGrad = ctx.createRadialGradient(360, 640, 40, 360, 640, 780);
-            radGrad.addColorStop(0, pair[0]);
-            radGrad.addColorStop(1, pair[1]);
-            ctx.fillStyle = radGrad;
-            ctx.fillRect(0, 0, 720, 1280);
+          ctx.fillStyle = precomputedBgFill;
+          ctx.fillRect(0, 0, 720, 1280);
 
-            // Animate live wallpaper particles
-            liveParticles.forEach(p => {
-              p.y += p.vy;
-              p.x += p.vx;
-              p.rotation += p.vRot;
+          // Animate live wallpaper particles (fast scale transform, no font re-parsing)
+          if (isLiveWallpaper && liveParticles.length > 0) {
+            ctx.font = '30px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            for (let i = 0; i < liveParticles.length; i++) {
+              const p = liveParticles[i];
+              p.y += p.vy * dt;
+              p.x += p.vx * dt;
+              p.rotation += p.vRot * dt;
               if (p.isDown) {
                 if (p.y > 1320) { p.y = -30; p.x = Math.random() * 720; }
               } else {
@@ -1727,131 +1885,68 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
               ctx.globalAlpha = p.opacity;
               ctx.translate(p.x, p.y);
               ctx.rotate(p.rotation);
-              ctx.font = `${Math.round(p.size)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
+              const scale = p.size / 30;
+              ctx.scale(scale, scale);
               ctx.fillText(p.emoji, 0, 0);
               ctx.restore();
-            });
-          } else {
-            // User gradient or default gradient
-            const gradMatches = currentVibe.bgGradient ? currentVibe.bgGradient.match(/#[a-fA-F0-9]{3,8}|rgba?\([^)]+\)/g) : null;
-            const bgGrad = ctx.createLinearGradient(0, 0, 720, 1280);
-            if (gradMatches && gradMatches.length >= 2) {
-              gradMatches.forEach((color, idx) => {
-                bgGrad.addColorStop(idx / (gradMatches.length - 1), color);
-              });
-            } else {
-              bgGrad.addColorStop(0, '#6366f1');
-              bgGrad.addColorStop(1, '#a855f7');
             }
-            ctx.fillStyle = bgGrad;
-            ctx.fillRect(0, 0, 720, 1280);
           }
 
-          // B. DRAW VISUAL MEDIA (IMAGE OR VIDEO) WITH FILTERS, ZOOM & POSITION
-          if (visualElement) {
+          // B. DRAW VISUAL MEDIA (IMAGE OR VIDEO)
+          if (visualElement && precomputedMediaRect) {
             ctx.save();
-            const filterMap = {
-              warm: 'sepia(0.35) contrast(1.1) brightness(1.05)',
-              cyber: 'contrast(1.2) saturate(1.4) hue-rotate(15deg)',
-              vintage: 'sepia(0.4) contrast(1.1)',
-              bw: 'grayscale(1) contrast(1.3)',
-              diamond: 'contrast(1.1) brightness(1.15) saturate(1.2)',
-              vivid: 'saturate(1.9) contrast(1.15)'
-            };
-            if (currentVibe.imageFilter && filterMap[currentVibe.imageFilter]) {
-              ctx.filter = filterMap[currentVibe.imageFilter];
+            if (imageFilterStr !== 'none') {
+              ctx.filter = imageFilterStr;
             }
-            ctx.globalAlpha = Number(currentVibe.imageOpacity ?? 1.0);
+            ctx.globalAlpha = imageOpacityVal;
 
-            const posX = ((currentVibe.imagePos?.x ?? 50) / 100) * 720;
-            const posY = ((currentVibe.imagePos?.y ?? 50) / 100) * 1280;
-            const zoom = Number(currentVibe.imageZoom ?? 1.0);
-            const fit = currentVibe.imageFit || 'cover';
-
-            const natW = visualElement.videoWidth || visualElement.naturalWidth || 720;
-            const natH = visualElement.videoHeight || visualElement.naturalHeight || 1280;
-
-            let dw = 720;
-            let dh = 1280;
-            if (fit === 'contain' || fit === 'padded') {
-              const scale = Math.min(680 / natW, 1140 / natH);
-              dw = natW * scale * zoom;
-              dh = natH * scale * zoom;
-            } else {
-              const scale = Math.max(720 / natW, 1280 / natH);
-              dw = natW * scale * zoom;
-              dh = natH * scale * zoom;
-            }
-
-            if (fit === 'padded') {
+            if (precomputedMediaRect.fit === 'padded') {
               ctx.beginPath();
-              ctx.roundRect(posX - dw / 2, posY - dh / 2, dw, dh, 24);
+              ctx.roundRect(precomputedMediaRect.dx, precomputedMediaRect.dy, precomputedMediaRect.dw, precomputedMediaRect.dh, 24);
               ctx.clip();
             }
 
-            ctx.drawImage(visualElement, posX - dw / 2, posY - dh / 2, dw, dh);
+            ctx.drawImage(visualElement, precomputedMediaRect.dx, precomputedMediaRect.dy, precomputedMediaRect.dw, precomputedMediaRect.dh);
             ctx.restore();
           }
 
           // C. DRAW 3D TYPOGRAPHY / CAPTION
-          if (currentVibe.caption) {
+          if (precomputedCaption) {
             ctx.save();
-            const textX = 720 * ((currentVibe.textPos?.x ?? 50) / 100);
-            const textY = 1280 * ((currentVibe.textPos?.y ?? 50) / 100);
-            const userTextSize = (currentVibe.textSize || 1.3) * 1.15;
-            const fontSize = Math.round(26 * userTextSize);
-            ctx.font = `800 ${fontSize}px sans-serif`;
-            ctx.textAlign = currentVibe.textAlign || 'center';
+            ctx.font = `800 ${precomputedCaption.fontSize}px sans-serif`;
+            ctx.textAlign = precomputedCaption.textAlign;
             ctx.textBaseline = 'middle';
 
-            const maxTextW = 600;
-            const lines = wrapCanvasText(ctx, currentVibe.caption, maxTextW);
-            const lineHeight = fontSize * 1.38;
-            const totalTextH = lines.length * lineHeight;
-            const startY = textY - totalTextH / 2 + lineHeight / 2;
-
             // Background box styling
-            const bgStyle = currentVibe.textBgStyle;
-            if (bgStyle && bgStyle !== 'none') {
-              let longestW = 0;
-              lines.forEach(l => {
-                const w = ctx.measureText(l).width;
-                if (w > longestW) longestW = w;
-              });
-              const boxW = Math.min(660, longestW + 48);
-              const boxH = totalTextH + 28;
-              const boxX = textX - boxW / 2;
-              const boxY = textY - boxH / 2;
-
+            if (precomputedCaption.boxData) {
+              const b = precomputedCaption.boxData;
               ctx.save();
-              if (bgStyle === 'neon') {
-                ctx.fillStyle = 'rgba(99, 102, 241, 0.9)';
+              ctx.fillStyle = b.boxFill;
+              if (b.bgStyle === 'neon') {
                 ctx.shadowColor = 'rgba(99, 102, 241, 0.85)';
                 ctx.shadowBlur = 24;
-              } else if (bgStyle === 'gradient') {
-                const g = ctx.createLinearGradient(boxX, boxY, boxX + boxW, boxY + boxH);
-                g.addColorStop(0, '#f09433');
-                g.addColorStop(0.5, '#dc2743');
-                g.addColorStop(1, '#bc1888');
-                ctx.fillStyle = g;
+              } else if (b.bgStyle === 'gradient') {
                 ctx.shadowColor = 'rgba(220, 39, 67, 0.6)';
                 ctx.shadowBlur = 20;
               } else {
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.78)';
                 ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
                 ctx.shadowBlur = 18;
               }
               ctx.beginPath();
-              ctx.roundRect(boxX, boxY, boxW, boxH, 20);
+              ctx.roundRect(b.boxX, b.boxY, b.boxW, b.boxH, 20);
               ctx.fill();
               ctx.restore();
             }
 
             // 3D Text Layers
-            const style3D = currentVibe.textStyle3D;
-            lines.forEach((line, idx) => {
+            const style3D = precomputedCaption.style3D;
+            const lines = precomputedCaption.lines;
+            const startY = precomputedCaption.startY;
+            const lineHeight = precomputedCaption.lineHeight;
+            const textX = precomputedCaption.textX;
+
+            for (let idx = 0; idx < lines.length; idx++) {
+              const line = lines[idx];
               const curY = startY + idx * lineHeight;
               if (style3D === 'text-3d-neon') {
                 ctx.save();
@@ -1910,16 +2005,16 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                 ctx.restore();
               } else {
                 ctx.save();
-                if (!bgStyle || bgStyle === 'none') {
+                if (!precomputedCaption.boxData) {
                   ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
                   ctx.shadowBlur = 14;
                   ctx.shadowOffsetY = 3;
                 }
-                ctx.fillStyle = currentVibe.textColor || '#ffffff';
+                ctx.fillStyle = precomputedCaption.textColor;
                 ctx.fillText(line, textX, curY);
                 ctx.restore();
               }
-            });
+            }
 
             ctx.restore();
           }
@@ -1984,12 +2079,9 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
           }
 
           // E. DRAW INSTAGRAM MUSIC STICKER WIDGET
-          if (currentVibe.songTitle) {
+          if (precomputedMusic) {
             ctx.save();
-            const mStyle = viewerMusicStyle || currentVibe.musicStyle || 'card';
-            const mScale = (currentVibe.musicScale || 1.0) * 1.35;
-            const mX = ((currentVibe.musicPos?.x ?? 50) / 100) * 720;
-            const mY = ((currentVibe.musicPos?.y ?? 20) / 100) * 1280;
+            const { mStyle, mScale, mX, mY, songName, artistName } = precomputedMusic;
 
             ctx.translate(mX, mY);
             ctx.scale(mScale, mScale);
@@ -1998,9 +2090,6 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
             const eq2 = 5 + Math.abs(Math.sin(elapsed / 220 + 1)) * 15;
             const eq3 = 4 + Math.abs(Math.sin(elapsed / 160 + 2)) * 10;
             const eq4 = 4 + Math.abs(Math.sin(elapsed / 200 + 3)) * 14;
-
-            const songName = currentVibe.songTitle;
-            const artistName = currentVibe.artistName || 'Pulse Music';
 
             if (mStyle === 'pill') {
               const pillW = 220;
@@ -4942,7 +5031,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                       </div>
                       <button
                         type="button"
-                        onClick={() => handleSendStoryToFriend(contact.id, contact.name)}
+                        onClick={() => handleSendStoryToFriend(contact.id, contact.name, contact.isGroup)}
                         style={{
                           background: shareSentTo[contact.id] ? '#10b981' : 'var(--accent, #6366f1)',
                           color: '#fff',

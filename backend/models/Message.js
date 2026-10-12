@@ -44,7 +44,8 @@ const messageSchema = new mongoose.Schema({
   replyTo: { type: Object, default: null }, // { id, content, type, senderId, senderName }
   // WhatsApp-style forwarded indicator
   isForwarded: { type: Boolean, default: false },
-  // Instagram-style Story reply / reaction data
+  // Instagram-style Story reply / reaction / share data
+  storyReply: { type: Object, default: null },
   // Instagram-style Vanish Mode (Permanent Auto-evaporate on chat exit)
   isVanish: { type: Boolean, default: false },
   // Auto-decay / disappearing message expiry (MongoDB TTL index - 30-day lifetime free storage rule)

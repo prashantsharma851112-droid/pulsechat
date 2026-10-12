@@ -317,6 +317,7 @@ function StoryReplyCard({ message, isMine, onOpenStory, onOpenSparksWallet }) {
   const sr = message.storyReply;
   const isReaction = Boolean(sr?.reactionEmoji || (!sr && message.content && message.content.startsWith('Reacted ') && message.content.includes('story')));
   const isSparks = Boolean(sr?.tipSparks || (!sr && message.content && message.content.startsWith('Tipped ') && message.content.includes('story')));
+  const isSharedStory = Boolean(message.content && (message.content.startsWith('Shared ') || message.content.includes("'s story")));
 
   let reactionEmoji = sr?.reactionEmoji;
   if (!reactionEmoji && message.content) {
@@ -454,7 +455,7 @@ function StoryReplyCard({ message, isMine, onOpenStory, onOpenSparksWallet }) {
               background: 'linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)',
               display: 'inline-block'
             }} />
-            {isMyStory ? 'Your Story' : 'Story'}
+            {isSharedStory ? 'Shared Story' : (isMyStory ? 'Your Story' : 'Story')}
           </span>
 
           <span style={{
@@ -592,6 +593,32 @@ function StoryReplyCard({ message, isMine, onOpenStory, onOpenSparksWallet }) {
           }}>
             Wallet →
           </span>
+        </div>
+      ) : isSharedStory ? (
+        /* Shared Story Card Footer */
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '6px 8px',
+          borderRadius: '12px',
+          background: 'rgba(0,0,0,0.18)'
+        }}>
+          <span style={{ fontSize: '1.25rem' }}>⚡</span>
+          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+            <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {isMine ? (message.content || 'Shared story') : `${message.senderName || 'Friend'} shared a story`}
+            </span>
+            {sr?.songTitle ? (
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                🎵 {sr.songTitle} {sr.artistName ? `• ${sr.artistName}` : ''}
+              </span>
+            ) : (
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                Tap to view story
+              </span>
+            )}
+          </div>
         </div>
       ) : (
         /* Instagram Style Story Reply Message Text */

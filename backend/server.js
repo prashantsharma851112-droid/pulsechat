@@ -542,7 +542,7 @@ io.on('connection', (socket) => {
     const {
       chatId, senderId, receiverId, isGroup, content, type, textStyle,
       audioUrl, mediaUrl, fileName, fileSize, pollData, giftData, callData,
-      isViewOnce, replyTo, clientTempId,
+      isViewOnce, replyTo, storyReply, clientTempId,
       senderName, senderUsername, senderAvatar, senderIsPro, senderProTier, senderCustomBadge
     } = messageData;
 
@@ -849,6 +849,7 @@ io.on('connection', (socket) => {
         timestamp: new Date().toISOString(),
         reactions: {},
         replyTo: replyTo || null,
+        storyReply: storyReply || messageData.storyReply || null,
         isVanish: Boolean(messageData.isVanish),
         expiresAt
       };
@@ -858,8 +859,9 @@ io.on('connection', (socket) => {
         ackCallback({ success: true, message: newMsg });
       }
 
-      // 2. Immediate zero-latency emission to chat room
+      // 2. Immediate zero-latency emission to chat room and sender's private room
       io.to(chatId).emit('new_message', newMsg);
+      io.to(`user_${senderId}`).emit('new_message', newMsg);
 
       // Auto-update Pulse Streak for 1-on-1 chats
       if (!isGroup && resolvedReceiverId && senderId !== resolvedReceiverId) {

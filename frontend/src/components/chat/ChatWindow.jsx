@@ -2847,9 +2847,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         }
       }
     };
-    window.addEventListener('pulsechat_group_updated', handleGroupWindowEvent);
+    const handleLocalNewMessage = (e) => {
+      if (e.detail) {
+        handleNewMessage(e.detail);
+      }
+    };
+    window.addEventListener('pulsechat_new_message', handleLocalNewMessage);
 
     return () => {
+      window.removeEventListener('pulsechat_new_message', handleLocalNewMessage);
       socket.off('new_message', handleNewMessage);
       socket.off('poll_updated', handlePollUpdate);
       socket.off('poll_edited', handlePollEdit);
