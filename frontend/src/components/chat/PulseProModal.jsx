@@ -150,7 +150,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        throw new Error(data.error || 'Failed to claim 7-day free trial');
+        throw new Error(data.error || 'Failed to claim 1-month free subscription');
       }
       if (data.user && updateUserProfile) {
         updateUserProfile(data.user);
@@ -167,7 +167,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
       }
       setStatusMsg({
         type: 'success',
-        text: data.message || '🎉 7-Day VIP Free Trial Activated!'
+        text: data.message || '🎉 1-Month VIP Free Subscription Activated!'
       });
       setTimeout(() => {
         onClose();
@@ -742,10 +742,10 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                     </div>
                     <div>
                       <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        🎁 7-Day VIP Free Trial
+                        🎁 1-Month VIP Free Subscription
                       </div>
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                        Zero cost • Unlock all VIP features for 7 days
+                        Zero cost • Unlock all VIP features for 30 days free
                       </div>
                     </div>
                   </div>
@@ -766,7 +766,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                       boxShadow: '0 2px 10px rgba(16, 185, 129, 0.4)'
                     }}
                   >
-                    {loading ? <Loader2 size={14} className="spin" /> : 'Claim Free'}
+                    {loading ? <Loader2 size={14} className="spin" /> : 'Claim 1 Month Free ⚡'}
                   </button>
                 </div>
               )}

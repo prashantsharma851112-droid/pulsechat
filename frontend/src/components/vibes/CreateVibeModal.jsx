@@ -996,10 +996,33 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 justifyContent: 'center',
                 cursor: 'pointer'
               }}
+              title="Flip Camera"
             >
               <SwitchCamera size={19} />
             </button>
           )}
+
+          {/* Media Picker / Gallery Shortcut Icon */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              background: mediaUrl ? 'rgba(99, 102, 241, 0.45)' : 'rgba(0, 0, 0, 0.45)',
+              backdropFilter: 'blur(12px)',
+              border: mediaUrl ? '1.5px solid #818cf8' : '1px solid rgba(255, 255, 255, 0.15)',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+            title="Upload Photo or Video"
+          >
+            <ImageIcon size={19} />
+          </button>
         </div>
 
         {/* Right Side: Circular Tools Row */}
@@ -1958,36 +1981,60 @@ export default function CreateVibeModal({ onClose, onCreated }) {
         ) : (
           /* Normal State (Matching Screenshot 1): Cancel on left, Your Vibe ⚡ on right */
           <>
-            {/* Left: Cancel Pill Button */}
-            <button
-              type="button"
-              onClick={() => {
-                if (mediaUrl || caption) {
-                  setMediaUrl('');
-                  setSelectedMediaFile(null);
-                  setCaption('');
-                  setStickersList([]);
-                  setSelectedSong(null);
-                  startCamera(facingMode);
-                } else {
-                  onClose();
-                }
-              }}
-              style={{
-                padding: '12px 24px',
-                borderRadius: '24px',
-                background: 'rgba(255, 255, 255, 0.16)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                border: 'none',
-                color: '#ffffff',
-                fontWeight: 700,
-                fontSize: '0.94rem',
-                cursor: 'pointer'
-              }}
-            >
-              Cancel
-            </button>
+            {/* Left: Button Group (Cancel + Gallery) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (mediaUrl || caption) {
+                    setMediaUrl('');
+                    setSelectedMediaFile(null);
+                    setCaption('');
+                    setStickersList([]);
+                    setSelectedSong(null);
+                    startCamera(facingMode);
+                  } else {
+                    onClose();
+                  }
+                }}
+                style={{
+                  padding: '12px 22px',
+                  borderRadius: '24px',
+                  background: 'rgba(255, 255, 255, 0.16)',
+                  backdropFilter: 'blur(16px)',
+                  WebkitBackdropFilter: 'blur(16px)',
+                  border: 'none',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.94rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '50%',
+                  background: 'rgba(255, 255, 255, 0.18)',
+                  backdropFilter: 'blur(16px)',
+                  WebkitBackdropFilter: 'blur(16px)',
+                  border: '1px solid rgba(255, 255, 255, 0.25)',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+                title="Choose from Gallery"
+              >
+                <ImageIcon size={20} />
+              </button>
+            </div>
 
             {/* Right: Instagram Story Pill ("Your Vibe ⚡ ▷") */}
             <button

@@ -2589,8 +2589,15 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
             {/* 3-Dots More Options Button (Accessible on both own & other users' stories) */}
             <button
               type="button"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+              }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+              }}
               onClick={(e) => {
                 e.stopPropagation();
+                setIsHolding(false);
                 setIsPaused(true);
                 setIsStoryOptionsOpen(true);
               }}
@@ -2606,6 +2613,8 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                 alignItems: 'center',
                 justifyContent: 'center',
                 border: 'none',
+                position: 'relative',
+                zIndex: 35,
                 transition: 'all 0.15s ease'
               }}
               title="Story Options"
@@ -4718,9 +4727,11 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
         {isStoryOptionsOpen && (
           <div
             onClick={(e) => {
-              e.stopPropagation();
-              setIsStoryOptionsOpen(false);
-              setIsPaused(false);
+              if (e.target === e.currentTarget) {
+                e.stopPropagation();
+                setIsStoryOptionsOpen(false);
+                setIsPaused(false);
+              }
             }}
             style={{
               position: 'fixed',

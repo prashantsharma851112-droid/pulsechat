@@ -47,13 +47,13 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 app.options('*', cors());
-app.use(express.json({ limit: '25mb' }));
-app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Middleware to catch body parser errors (e.g. 413 Payload Too Large) as JSON instead of HTML
 app.use((err, req, res, next) => {
   if (err && (err.type === 'entity.too.large' || err.status === 413)) {
-    return res.status(413).json({ error: 'File size too large. Please upload an image under 10MB.' });
+    return res.status(413).json({ error: 'File size too large. Please upload an image or video under 50MB.' });
   }
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
     return res.status(400).json({ error: 'Invalid JSON request payload.' });
@@ -1071,6 +1071,14 @@ io.on('connection', (socket) => {
 
         if (chatId) io.to(chatId).emit('view_once_updated', viewPayload);
         if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('view_once_updated', viewPayload);
+        if (chatId && chatId.includes('_')) {
+          const parts = chatId.split('_');
+          io.to(`${parts[1]}_${parts[0]}`).emit('view_once_updated', viewPayload);
+          parts.forEach(uId => {
+            io.to(`user_${uId}`).emit('view_once_updated', viewPayload);
+            io.to(uId).emit('view_once_updated', viewPayload);
+          });
+        }
 
         if (updatedMsg.senderId) {
           io.to(`user_${updatedMsg.senderId}`).emit('view_once_updated', viewPayload);

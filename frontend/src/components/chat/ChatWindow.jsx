@@ -1464,6 +1464,29 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const triggerEvaporateVanishMessages = useCallback((targetChatId) => {
     const cid = targetChatId || activeChatIdRef.current;
     if (!cid) return;
+
+    // 0ms Synchronous local purge: Immediately purge isVanish messages from memory and localStorage cache
+    setMessages(prev => {
+      const nonVanish = prev.filter(m => !m?.isVanish);
+      return nonVanish;
+    });
+
+    const relatedKeys = [
+      cid,
+      cid.includes('_') ? cid.split('_').reverse().join('_') : null,
+      cid.includes('_') ? cid.split('_').sort().join('_') : null
+    ].filter(Boolean);
+
+    relatedKeys.forEach(key => {
+      try {
+        const cached = getCachedMessages(key);
+        if (Array.isArray(cached) && cached.some(m => m?.isVanish)) {
+          const cleaned = cached.filter(m => !m?.isVanish);
+          setCachedMessages(key, cleaned);
+        }
+      } catch (err) {}
+    });
+
     try {
       const curToken = localStorage.getItem('pulsechat_token');
       if (curToken) {
@@ -2791,6 +2814,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         setMessages(prev => {
           const filtered = prev.filter(m => !deletedIds.includes(m.id) && !deletedIds.includes(m._id) && !m.isVanish);
           setCachedMessages(chatId, filtered);
+          if (currentCanonical && currentCanonical !== chatId) {
+            setCachedMessages(currentCanonical, filtered);
+          }
           return filtered;
         });
       }
@@ -2994,27 +3020,34 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
 
     // Check if the last message actually changed (a brand new message arrived at bottom)
-    const isNewMessageAtBottom = lastMsgId && lastMsgId !== prevLastId;
+    const isTempResolution = (
+      lastMsg?.clientTempId && (lastMsg.clientTempId === prevLastId || lastMsg.id === prevLastId)
+    );
+    const isNewMessageAtBottom = lastMsgId && lastMsgId !== prevLastId && !isTempResolution;
     lastRenderedLastMsgIdRef.current = lastMsgId;
 
     if (!isNewMessageAtBottom) {
-      // Existing messages updated (reaction, edit, status, avatar) -> DO NOT SCROLL!
+      // Existing messages updated (reaction, edit, status, avatar, temp resolution) -> DO NOT SCROLL!
       return;
     }
 
     // A brand new message arrived at the bottom
-    const isSentByMe = lastMsg.senderId === user?.id || (typeof lastMsg.id === 'string' && (lastMsg.id.startsWith('temp_') || lastMsg.id.startsWith('sched_')));
+    const isSentByMe = (lastMsg.senderId === user?.id || lastMsg.senderId === user?._id) || (typeof lastMsg.id === 'string' && (lastMsg.id.startsWith('temp_') || lastMsg.id.startsWith('sched_')));
 
     if (isSentByMe) {
-      // User sent a message -> always scroll to bottom smoothly
+      // User sent a message -> scroll to bottom smoothly
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       setShowScrollBottom(false);
       showScrollBottomRef.current = false;
     } else {
-      // Someone else sent a message -> only auto-scroll if user is already near bottom
+      // Someone else sent a message -> strictly do NOT scroll if user has scrolled up reading
+      if (showScrollBottomRef.current) {
+        // User scrolled up! Do not disturb reading position
+        return;
+      }
       const isNearBottom = chatContainerRef.current
         ? (chatContainerRef.current.scrollHeight - chatContainerRef.current.scrollTop - chatContainerRef.current.clientHeight < 120)
-        : !showScrollBottomRef.current;
+        : true;
 
       if (isNearBottom) {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -5599,7 +5632,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         style={{
           flex: 1,
           overflowY: 'auto',
-          overflowAnchor: 'none',
+          overflowAnchor: 'auto',
           padding: '1rem',
           display: 'flex',
           flexDirection: 'column',

@@ -1087,23 +1087,23 @@ function MessageItem({
   useEffect(() => {
     if (!socket) return;
     const handleViewOnceUpdate = ({ messageId, viewedBy, viewCounts }) => {
-      if (messageId === message.id) {
+      if (messageId === message.id || messageId === message._id || messageId === message.clientTempId) {
         if (viewedBy) setViewedByState(viewedBy);
         if (viewCounts) setViewCountsState(viewCounts);
       }
     };
     socket.on('view_once_updated', handleViewOnceUpdate);
     return () => socket.off('view_once_updated', handleViewOnceUpdate);
-  }, [socket, message.id]);
+  }, [socket, message.id, message._id, message.clientTempId]);
 
   useEffect(() => {
-    if (!message.isFogSnap) return;
+    if (!message.isFogSnap && !message.isDustImage) return;
     const handleFogBurned = ({ messageId }) => {
-      if (messageId === message.id || messageId === message._id) {
+      if (messageId === message.id || messageId === message._id || messageId === message.clientTempId) {
         setFogStatus('burned');
         message.fogSnapStatus = 'burned';
         message.mediaUrl = null;
-        message.content = '🌫️ Fog Snap Evaporated';
+        message.content = message.isDustImage ? 'Dust Image Evaporated' : '🌫️ Fog Snap Evaporated';
         try {
           if (message.id) localStorage.setItem(`pulse_fog_burned_${message.id}`, 'true');
           if (message._id) localStorage.setItem(`pulse_fog_burned_${message._id}`, 'true');
@@ -1111,35 +1111,53 @@ function MessageItem({
       }
     };
     const handleFogRevealed = ({ messageId }) => {
-      if (messageId === message.id || messageId === message._id) {
+      if (messageId === message.id || messageId === message._id || messageId === message.clientTempId) {
         setFogStatus('revealed');
+      }
+    };
+    const handleDustDissolved = (data) => {
+      const targetId = data?.messageId || data?.messageMongoId || data?.clientTempId;
+      if (targetId && (targetId === message.id || targetId === message._id || targetId === message.clientTempId)) {
+        setFogStatus('burned');
+        message.fogSnapStatus = 'burned';
+        message.mediaUrl = null;
+        message.content = 'Dust Image Evaporated';
+        try {
+          if (message.id) localStorage.setItem(`pulse_fog_burned_${message.id}`, 'true');
+          if (message._id) localStorage.setItem(`pulse_fog_burned_${message._id}`, 'true');
+        } catch (e) {}
       }
     };
     if (socket) {
       socket.on('fog_snap_burned', handleFogBurned);
       socket.on('fog_snap_revealed', handleFogRevealed);
+      socket.on('stealth_dust_dissolved', handleDustDissolved);
     }
     const handleWindowFogBurned = (e) => {
-      if (e.detail?.messageId === message.id || e.detail?.messageId === message._id) {
+      if (e.detail?.messageId === message.id || e.detail?.messageId === message._id || e.detail?.messageId === message.clientTempId) {
         handleFogBurned({ messageId: e.detail.messageId });
       }
     };
     window.addEventListener('pulsechat_fog_snap_burned', handleWindowFogBurned);
+    window.addEventListener('pulsechat_stealth_dust_dissolved', handleDustDissolved);
 
     return () => {
       if (socket) {
         socket.off('fog_snap_burned', handleFogBurned);
         socket.off('fog_snap_revealed', handleFogRevealed);
+        socket.off('stealth_dust_dissolved', handleDustDissolved);
       }
       window.removeEventListener('pulsechat_fog_snap_burned', handleWindowFogBurned);
+      window.removeEventListener('pulsechat_stealth_dust_dissolved', handleDustDissolved);
     };
-  }, [socket, message.id, message._id, message.isFogSnap]);
+  }, [socket, message.id, message._id, message.clientTempId, message.isFogSnap, message.isDustImage]);
 
   const isFogBurned = Boolean(
     fogStatus === 'burned' ||
     message.fogSnapStatus === 'burned' ||
     message.content === '🌫️ Fog Snap Evaporated' ||
-    (message.isFogSnap && !message.mediaUrl) ||
+    message.content === 'Dust Image Evaporated' ||
+    ((message.isFogSnap || message.isDustImage) && !message.mediaUrl) ||
     isFogBurnedLocally
   );
 
@@ -1151,7 +1169,18 @@ function MessageItem({
 
   // Filter out sender ID from viewedByState so sender viewing never marks it opened for recipient
   const recipientViews = (viewedByState || []).filter(uid => String(uid) !== String(message.senderId) && uid !== 'sender');
-  const hasRecipientOpened = message.isViewOnce && (recipientViews.length > 0 || message.isViewed);
+  const recipientViewCountsTotal = Object.entries(viewCountsState || message.viewCounts || {}).reduce((acc, [uid, count]) => {
+    return (String(uid) !== String(message.senderId) && uid !== 'sender') ? acc + (Number(count) || 0) : acc;
+  }, 0);
+  const hasRecipientOpened = Boolean(
+    (message.isViewOnce || message.isViewTwice || message.viewLimit) && (
+      recipientViews.length > 0 ||
+      recipientViewCountsTotal > 0 ||
+      message.isViewed ||
+      message.status === 'read' ||
+      (Array.isArray(message.readBy) && message.readBy.some(uid => String(uid) !== String(message.senderId)))
+    )
+  );
   const isConsumedByMe = !isMine && (
     currentViewCount >= viewLimit ||
     recipientViews.includes(myUserId) ||
@@ -1262,12 +1291,12 @@ function MessageItem({
   const handleReact = (emoji) => {
     recordRecentReaction(emoji);
     const targetMsgId = message.id || message._id || message.clientTempId;
-    if (!targetMsgId || !currentUser?.id) return;
+    const myId = currentUser?.id || currentUser?._id;
+    if (!targetMsgId || !myId) return;
 
     // 1. Optimistic update: Update reactions map immediately
     const existingReactions = { ...(message.reactions || {}) };
     const currentList = Array.isArray(existingReactions[emoji]) ? [...existingReactions[emoji]] : [];
-    const myId = currentUser.id;
     const isAlreadyReacted = currentList.includes(myId);
 
     if (isAlreadyReacted) {
@@ -1381,7 +1410,7 @@ function MessageItem({
     } else {
       // Check double tap
       const now = Date.now();
-      if (now - lastTapRef.current < 320) {
+      if (now - lastTapRef.current < 380) {
         handleDoubleTap();
         lastTapRef.current = 0;
       } else {
@@ -1446,6 +1475,15 @@ function MessageItem({
     if (isMouseDownRef.current) {
       if (dragX >= 35 && onReply && !justLongPressedRef.current) {
         onReply(message);
+      } else if (!isLongPressRef.current && !justLongPressedRef.current && dragX < 6) {
+        // Double tap check for mouse
+        const now = Date.now();
+        if (now - lastTapRef.current < 380) {
+          handleDoubleTap();
+          lastTapRef.current = 0;
+        } else {
+          lastTapRef.current = now;
+        }
       }
       isMouseDownRef.current = false;
       setIsDragging(false);
@@ -1581,6 +1619,12 @@ function MessageItem({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onDoubleClick={(e) => {
+        if (!isMultiSelectMode && !isInActionSelectionMode) {
+          e.stopPropagation();
+          handleDoubleTap();
+        }
+      }}
       style={{
         alignSelf: isMine ? 'flex-end' : 'flex-start',
         maxWidth: '78%',

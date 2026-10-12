@@ -7,7 +7,7 @@ const User = require('../models/User');
 const SparksTransaction = require('../models/SparksTransaction');
 
 // Create a new 24-hour Vibe Story
-router.post('/create', authMiddleware, async (req, res) => {
+router.post(['/create', '/'], authMiddleware, async (req, res) => {
   try {
     const {
       id,

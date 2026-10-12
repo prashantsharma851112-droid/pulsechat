@@ -437,7 +437,7 @@ router.post('/claim-vip-trial', authMiddleware, async (req, res) => {
 
     userDoc.isPro = true;
     userDoc.proTier = 'monthly';
-    userDoc.proExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 Days Free Trial
+    userDoc.proExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 1 Month (30 Days) Free Monthly Subscription!
     userDoc.customBadge = '⚡ VIP';
     userDoc.hasUsedVipTrial = true;
     await userDoc.save();
@@ -470,12 +470,12 @@ router.post('/claim-vip-trial', authMiddleware, async (req, res) => {
 
     res.json({
       success: true,
-      message: '🎉 7-Day VIP Free Trial Activated! Enjoy all VIP perks.',
+      message: '🎉 1-Month VIP Free Subscription Activated! Enjoy all VIP perks for 30 days.',
       user: sanitizedUser
     });
   } catch (err) {
     console.error('Trial activation error:', err);
-    res.status(500).json({ error: 'Failed to activate 7-Day Free Trial' });
+    res.status(500).json({ error: 'Failed to activate 1-Month Free Subscription' });
   }
 });
 
