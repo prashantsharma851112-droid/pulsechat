@@ -1257,7 +1257,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     setShowShareModal(true);
   };
 
-  // 2. Share Candidates list (recent chats & friends)
+  // 2. Share Candidates list (recent chats & all friends)
   const shareCandidates = React.useMemo(() => {
     const recent = getCachedRecentChats(user?.id) || [];
     const list = [];
@@ -1274,21 +1274,20 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
         });
       }
     });
-    if (list.length === 0) {
-      const all = getCachedAllUsers() || [];
-      all.slice(0, 15).forEach(u => {
-        const id = u.id || u._id;
-        if (id && id !== user?.id && !seen.has(id)) {
-          seen.add(id);
-          list.push({
-            id,
-            name: u.displayName || u.username || 'Friend',
-            avatar: u.avatar,
-            isGroup: false
-          });
-        }
-      });
-    }
+
+    const all = getCachedAllUsers() || [];
+    all.forEach(u => {
+      const id = u.id || u._id;
+      if (id && id !== user?.id && !seen.has(id)) {
+        seen.add(id);
+        list.push({
+          id,
+          name: u.displayName || u.username || 'Friend',
+          avatar: u.avatar,
+          isGroup: false
+        });
+      }
+    });
     return list;
   }, [user?.id, showShareModal]);
 
@@ -1302,11 +1301,15 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     let partnerId = targetChatId;
 
     if (isGroupChat) {
-      realChatId = targetChatId;
       partnerId = '';
+      realChatId = targetChatId;
+    } else if (String(targetChatId).includes('_')) {
+      const parts = String(targetChatId).split('_');
+      partnerId = parts.find(p => p !== user?.id && p !== user?._id) || parts[0];
+      realChatId = parts.sort().join('_');
     } else {
       partnerId = targetChatId;
-      realChatId = user?.id ? [user.id, targetChatId].sort().join('_') : targetChatId;
+      realChatId = (user?.id || user?._id) ? [user.id || user._id, targetChatId].sort().join('_') : targetChatId;
     }
 
     const storyReplyData = {
@@ -1333,7 +1336,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     const tempMsg = {
       id: 'msg_vibe_share_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
       chatId: realChatId,
-      senderId: user?.id,
+      senderId: user?.id || user?._id,
       senderName: user?.displayName || user?.name || user?.username,
       senderAvatar: user?.avatar || '',
       receiverId: partnerId,
@@ -1356,10 +1359,11 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
 
     // 3. Instant local recent chat snippet update
     if (user?.id && realChatId) {
+      const candidateMatch = shareCandidates.find(c => c.id === targetChatId || c.id === partnerId);
       const targetChatObj = {
         id: partnerId,
-        displayName: friendName || 'Chat',
-        avatar: '',
+        displayName: friendName || candidateMatch?.name || 'Chat',
+        avatar: candidateMatch?.avatar || '',
         isGroup: isGroupChat
       };
       updateRecentChatSnippet(user.id, realChatId, tempMsg, targetChatObj);
@@ -2587,9 +2591,9 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setIsStoryOptionsOpen(prev => !prev);
+                setIsPaused(true);
+                setIsStoryOptionsOpen(true);
               }}
-              onTouchStart={(e) => e.stopPropagation()}
               className="icon-btn-ghost interactive-action"
               style={{
                 color: '#fff',
@@ -2608,178 +2612,6 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
             >
               <MoreVertical size={18} color="#fff" />
             </button>
-
-            {/* 3-Dots Dropdown Menu */}
-            {isStoryOptionsOpen && (
-              <>
-                <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsStoryOptionsOpen(false);
-                  }}
-                  onTouchStart={(e) => {
-                    e.stopPropagation();
-                    setIsStoryOptionsOpen(false);
-                  }}
-                  style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: 1490
-                  }}
-                />
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  onTouchStart={(e) => e.stopPropagation()}
-                  className="interactive-action"
-                  style={{
-                    position: 'absolute',
-                    top: '44px',
-                    right: '0px',
-                    minWidth: '225px',
-                    background: 'rgba(15, 23, 42, 0.96)',
-                    backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(255, 255, 255, 0.18)',
-                    borderRadius: '16px',
-                    padding: '8px',
-                    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.85)',
-                    zIndex: 1500,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px'
-                  }}
-                >
-                  {/* Download Option - ONLY FOR OWN STORY */}
-                  {isMine && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsStoryOptionsOpen(false);
-                        handleDownloadStoryAsVideo();
-                      }}
-                      disabled={isDownloadingStory}
-                      className="interactive-action"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        width: '100%',
-                        padding: '10px 14px',
-                        borderRadius: '10px',
-                        border: 'none',
-                        background: 'rgba(56, 189, 248, 0.12)',
-                        color: '#38bdf8',
-                        fontSize: '0.86rem',
-                        fontWeight: 700,
-                        cursor: isDownloadingStory ? 'not-allowed' : 'pointer',
-                        textAlign: 'left',
-                        transition: 'background 0.15s ease'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.22)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)'}
-                    >
-                      <Download size={16} color="#38bdf8" />
-                      <span>{isDownloadingStory ? 'Exporting...' : 'Save to Device (with Song)'}</span>
-                    </button>
-                  )}
-
-                  {/* Share Story Option - Available for all stories */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsStoryOptionsOpen(false);
-                      handleShareStory();
-                    }}
-                    className="interactive-action"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: '10px',
-                      border: 'none',
-                      background: 'rgba(255, 255, 255, 0.06)',
-                      color: '#fff',
-                      fontSize: '0.86rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      transition: 'background 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.25)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'}
-                  >
-                    <Share2 size={16} color="#a855f7" />
-                    <span>Share Story</span>
-                  </button>
-
-                  {/* Send to a PulseChat friend / chat - Available for all stories */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsStoryOptionsOpen(false);
-                      setShowShareModal(true);
-                    }}
-                    className="interactive-action"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: '10px',
-                      border: 'none',
-                      background: 'rgba(255, 255, 255, 0.06)',
-                      color: '#fff',
-                      fontSize: '0.86rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      transition: 'background 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.25)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'}
-                  >
-                    <Send size={16} color="#10b981" />
-                    <span>Send to Friend</span>
-                  </button>
-
-                  {/* Delete Story if isMine */}
-                  {isMine && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsStoryOptionsOpen(false);
-                        handleDelete();
-                      }}
-                      className="interactive-action"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        width: '100%',
-                        padding: '10px 14px',
-                        borderRadius: '10px',
-                        border: 'none',
-                        background: 'rgba(239, 68, 68, 0.12)',
-                        color: '#f87171',
-                        fontSize: '0.86rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        marginTop: '2px',
-                        transition: 'background 0.15s ease'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'}
-                    >
-                      <Trash2 size={16} color="#ef4444" />
-                      <span>Delete Story</span>
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
           </div>
         </div>
 
@@ -4879,6 +4711,250 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
             <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#38bdf8' }}>
               {downloadProgress}% Completed
             </span>
+          </div>
+        )}
+
+        {/* Instagram-Style Story 3-Dots Options Sheet / Modal */}
+        {isStoryOptionsOpen && (
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsStoryOptionsOpen(false);
+              setIsPaused(false);
+            }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0, 0, 0, 0.75)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              zIndex: 99998,
+              display: 'flex',
+              alignItems: 'flex-end',
+              justifyContent: 'center',
+              padding: '0 0 max(16px, env(safe-area-inset-bottom, 16px)) 0'
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: '#0f172a',
+                border: '1px solid rgba(255, 255, 255, 0.16)',
+                borderRadius: '24px',
+                width: '92vw',
+                maxWidth: '400px',
+                padding: '16px',
+                boxShadow: '0 24px 60px rgba(0, 0, 0, 0.9)',
+                color: '#fff',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                animation: 'pulseModalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1)'
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px 10px 8px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Sparkles size={17} color="#a855f7" />
+                  <span style={{ fontSize: '0.96rem', fontWeight: 800 }}>Story Options</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsStoryOptionsOpen(false);
+                    setIsPaused(false);
+                  }}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '30px',
+                    height: '30px',
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* Option 1: Send to Friend in Chat (Share as card) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsStoryOptionsOpen(false);
+                  setShowShareModal(true);
+                }}
+                className="interactive-action"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  width: '100%',
+                  padding: '12px 14px',
+                  borderRadius: '14px',
+                  border: 'none',
+                  background: 'rgba(16, 185, 129, 0.14)',
+                  color: '#10b981',
+                  fontSize: '0.92rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.24)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.14)'}
+              >
+                <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Send size={18} color="#10b981" />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span>Send to Friend</span>
+                  <span style={{ fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.65)', fontWeight: 500 }}>Share directly in chat as story card</span>
+                </div>
+              </button>
+
+              {/* Option 2: Share Story (Other apps / Copy link) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsStoryOptionsOpen(false);
+                  handleShareStory();
+                }}
+                className="interactive-action"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  width: '100%',
+                  padding: '12px 14px',
+                  borderRadius: '14px',
+                  border: 'none',
+                  background: 'rgba(168, 85, 247, 0.14)',
+                  color: '#c084fc',
+                  fontSize: '0.92rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(168, 85, 247, 0.24)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(168, 85, 247, 0.14)'}
+              >
+                <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'rgba(168, 85, 247, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Share2 size={18} color="#c084fc" />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span>Share Story</span>
+                  <span style={{ fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.65)', fontWeight: 500 }}>Share to WhatsApp, Instagram, or Copy link</span>
+                </div>
+              </button>
+
+              {/* Option 3: Download (Own story only) */}
+              {isMine && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsStoryOptionsOpen(false);
+                    handleDownloadStoryAsVideo();
+                  }}
+                  disabled={isDownloadingStory}
+                  className="interactive-action"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '14px',
+                    border: 'none',
+                    background: 'rgba(56, 189, 248, 0.14)',
+                    color: '#38bdf8',
+                    fontSize: '0.92rem',
+                    fontWeight: 700,
+                    cursor: isDownloadingStory ? 'not-allowed' : 'pointer',
+                    textAlign: 'left',
+                    transition: 'background 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.24)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.14)'}
+                >
+                  <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'rgba(56, 189, 248, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Download size={18} color="#38bdf8" />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span>{isDownloadingStory ? 'Exporting...' : 'Save to Device (with Song)'}</span>
+                    <span style={{ fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.65)', fontWeight: 500 }}>Download video with music and all elements</span>
+                  </div>
+                </button>
+              )}
+
+              {/* Option 4: Delete Story (Own story only) */}
+              {isMine && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsStoryOptionsOpen(false);
+                    handleDelete();
+                  }}
+                  className="interactive-action"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '14px',
+                    border: 'none',
+                    background: 'rgba(239, 68, 68, 0.14)',
+                    color: '#f87171',
+                    fontSize: '0.92rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'background 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.24)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.14)'}
+                >
+                  <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Trash2 size={18} color="#f87171" />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span>Delete Story</span>
+                    <span style={{ fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.65)', fontWeight: 500 }}>Permanently remove this story</span>
+                  </div>
+                </button>
+              )}
+
+              {/* Cancel Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsStoryOptionsOpen(false);
+                  setIsPaused(false);
+                }}
+                className="interactive-action"
+                style={{
+                  width: '100%',
+                  padding: '11px',
+                  borderRadius: '14px',
+                  border: '1px solid rgba(255, 255, 255, 0.14)',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  color: '#fff',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  marginTop: '4px'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 

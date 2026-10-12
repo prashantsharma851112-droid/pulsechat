@@ -1792,13 +1792,15 @@ function MessageItem({
           </div>
         )}
 
-        {/* Instagram-Style Story Reply / Reaction Message */}
+        {/* Instagram-Style Story Reply / Reaction / Shared Story Message */}
         {(message.type === 'story_reply' || Boolean(message.storyReply) || (
-          message.type === 'text' && message.content && (
+          message.content && (
             message.content.startsWith('Replied to your story:') ||
             message.content.startsWith('You replied: ') ||
             (message.content.startsWith('Reacted ') && message.content.includes('story')) ||
-            (message.content.startsWith('Tipped ') && message.content.includes('story'))
+            (message.content.startsWith('Tipped ') && message.content.includes('story')) ||
+            message.content.startsWith('Shared ') ||
+            message.content.includes("'s story")
           )
         )) ? (
           <StoryReplyCard

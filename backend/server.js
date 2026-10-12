@@ -960,7 +960,9 @@ io.on('connection', (socket) => {
       // Notify recipient private room for badge/sound if they are outside the active chat room
       if (resolvedReceiverId && !isGroup) {
         io.to(`user_${resolvedReceiverId}`).emit('new_message', newMsg);
+        io.to(resolvedReceiverId).emit('new_message', newMsg);
         io.to(`user_${resolvedReceiverId}`).emit('message_notification', newMsg);
+        io.to(resolvedReceiverId).emit('message_notification', newMsg);
         redis.invalidateRecent(resolvedReceiverId).catch(() => {});
         redis.invalidateRecent(senderId).catch(() => {});
       } else if (isGroup) {
