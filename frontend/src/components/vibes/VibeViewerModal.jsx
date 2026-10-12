@@ -2204,8 +2204,121 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
               ctx.textBaseline = 'middle';
               ctx.fillText(songName.length > 18 ? songName.slice(0, 16) + '...' : songName, 0, 51);
 
+            } else if (mStyle === 'banner') {
+              // Vibrant Neon Gradient Banner (Indigo to Pink gradient matching viewer UI)
+              const bW = 230;
+              const bH = 48;
+              const bGrad = ctx.createLinearGradient(-bW / 2, -bH / 2, bW / 2, bH / 2);
+              bGrad.addColorStop(0, 'rgba(99, 102, 241, 0.94)');
+              bGrad.addColorStop(1, 'rgba(236, 72, 153, 0.94)');
+
+              ctx.fillStyle = bGrad;
+              ctx.shadowColor = 'rgba(236, 72, 153, 0.5)';
+              ctx.shadowBlur = 20;
+              ctx.beginPath();
+              ctx.roundRect(-bW / 2, -bH / 2, bW, bH, 16);
+              ctx.fill();
+
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+              ctx.lineWidth = 1.2;
+              ctx.stroke();
+
+              // Circular music note badge on left
+              const badgeR = 13;
+              const badgeX = -bW / 2 + 20;
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+              ctx.beginPath();
+              ctx.arc(badgeX, 0, badgeR, 0, Math.PI * 2);
+              ctx.fill();
+
+              // Draw music note symbol in badge
+              ctx.fillStyle = '#ffffff';
+              ctx.beginPath();
+              ctx.arc(badgeX - 2, 3, 3, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillRect(badgeX, -5, 2, 9);
+              ctx.fillRect(badgeX, -5, 5, 2);
+
+              // Title and artist text
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'middle';
+              ctx.font = 'bold 13px sans-serif';
+              ctx.fillStyle = '#ffffff';
+              const maxTitleLen = 17;
+              const displayTitle = songName.length > maxTitleLen ? songName.slice(0, 15) + '...' : songName;
+              ctx.fillText(displayTitle, badgeX + 18, -6);
+
+              ctx.font = '500 10px sans-serif';
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+              const maxArtistLen = 20;
+              const displayArtist = artistName.length > maxArtistLen ? artistName.slice(0, 18) + '...' : artistName;
+              ctx.fillText(displayArtist, badgeX + 18, 9);
+
+              // Equalizer wave bars on right (white)
+              const eqX = bW / 2 - 28;
+              const drawBar = (x, h) => {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(x, 6 - h, 2.5, h);
+              };
+              drawBar(eqX, Math.min(13, eq1));
+              drawBar(eqX + 5, Math.min(14, eq2));
+              drawBar(eqX + 10, Math.min(11, eq3));
+              drawBar(eqX + 15, Math.min(13, eq4));
+
+            } else if (mStyle === 'square') {
+              // Square Album Poster style
+              const sqSize = 98;
+              ctx.save();
+              ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
+              ctx.shadowBlur = 24;
+              ctx.beginPath();
+              ctx.roundRect(-sqSize / 2, -sqSize / 2, sqSize, sqSize, 16);
+              ctx.clip();
+
+              if (albumArtImg) {
+                ctx.drawImage(albumArtImg, -sqSize / 2, -sqSize / 2, sqSize, sqSize);
+              } else {
+                ctx.fillStyle = '#6366f1';
+                ctx.fillRect(-sqSize / 2, -sqSize / 2, sqSize, sqSize);
+              }
+
+              // Bottom dark gradient overlay for text readability
+              const bottomGrad = ctx.createLinearGradient(0, -sqSize / 2 + 35, 0, sqSize / 2);
+              bottomGrad.addColorStop(0, 'rgba(0,0,0,0)');
+              bottomGrad.addColorStop(1, 'rgba(0,0,0,0.88)');
+              ctx.fillStyle = bottomGrad;
+              ctx.fillRect(-sqSize / 2, -sqSize / 2, sqSize, sqSize);
+
+              ctx.font = 'bold 11px sans-serif';
+              ctx.fillStyle = '#ffffff';
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'bottom';
+              ctx.fillText(songName.length > 12 ? songName.slice(0, 10) + '...' : songName, -sqSize / 2 + 8, sqSize / 2 - 16);
+
+              ctx.font = '500 9px sans-serif';
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+              ctx.fillText(artistName.length > 10 ? artistName.slice(0, 8) + '...' : artistName, -sqSize / 2 + 8, sqSize / 2 - 4);
+
+              const eqX = sqSize / 2 - 20;
+              const drawBar = (x, h) => {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(x, sqSize / 2 - 4 - h, 2, h);
+              };
+              drawBar(eqX, Math.min(10, eq1));
+              drawBar(eqX + 4, Math.min(12, eq2));
+              drawBar(eqX + 8, Math.min(8, eq3));
+              drawBar(eqX + 12, Math.min(10, eq4));
+
+              ctx.restore();
+
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.roundRect(-sqSize / 2, -sqSize / 2, sqSize, sqSize, 16);
+              ctx.stroke();
+
             } else {
-              // Card (default) or square / banner
+              // Classic Frosted Glass Album Card
               const cardW = 225;
               const cardH = 60;
               ctx.fillStyle = 'rgba(15, 17, 24, 0.86)';
@@ -2586,41 +2699,43 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
               </button>
             )}
 
-            {/* 3-Dots More Options Button (Accessible on both own & other users' stories) */}
-            <button
-              type="button"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-              }}
-              onTouchStart={(e) => {
-                e.stopPropagation();
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsHolding(false);
-                setIsPaused(true);
-                setIsStoryOptionsOpen(true);
-              }}
-              className="icon-btn-ghost interactive-action"
-              style={{
-                color: '#fff',
-                background: isStoryOptionsOpen ? 'rgba(99, 102, 241, 0.85)' : 'rgba(0,0,0,0.5)',
-                borderRadius: '50%',
-                width: '36px',
-                height: '36px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: 'none',
-                position: 'relative',
-                zIndex: 35,
-                transition: 'all 0.15s ease'
-              }}
-              title="Story Options"
-            >
-              <MoreVertical size={18} color="#fff" />
-            </button>
+            {/* 3-Dots More Options Button (Only for own story) */}
+            {isMine && (
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                }}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsHolding(false);
+                  setIsPaused(true);
+                  setIsStoryOptionsOpen(true);
+                }}
+                className="icon-btn-ghost interactive-action"
+                style={{
+                  color: '#fff',
+                  background: isStoryOptionsOpen ? 'rgba(99, 102, 241, 0.85)' : 'rgba(0,0,0,0.5)',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: 'none',
+                  position: 'relative',
+                  zIndex: 35,
+                  transition: 'all 0.15s ease'
+                }}
+                title="Story Options"
+              >
+                <MoreVertical size={18} color="#fff" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -3117,29 +3232,6 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                     <span>{currentVibe.sparksEarned}</span>
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  title="Delete Story"
-                  className="interactive-action"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ef4444',
-                    background: 'rgba(0, 0, 0, 0.55)',
-                    backdropFilter: 'blur(16px)',
-                    border: '1px solid rgba(239, 68, 68, 0.35)',
-                    borderRadius: '50%',
-                    width: '38px',
-                    height: '38px',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 18px rgba(0, 0, 0, 0.45)',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <Trash2 size={16} />
-                </button>
               </div>
             </div>
           ) : !isMine && authorFriendStatus !== 'friends' ? (
@@ -3292,6 +3384,31 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                 }}
               >
                 <Heart size={19} fill={isCurrentStoryLiked ? '#ffffff' : 'none'} color="#ffffff" />
+              </button>
+
+              {/* 🔗 Share Story Circular Button (For other users' story) */}
+              <button
+                type="button"
+                onClick={() => setShowShareModal(true)}
+                title="Share Story"
+                className="interactive-action"
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
+                  background: 'rgba(0, 0, 0, 0.45)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <Share2 size={18} />
               </button>
             </div>
           )}
