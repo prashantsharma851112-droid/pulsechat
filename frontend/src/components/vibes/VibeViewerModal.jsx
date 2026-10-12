@@ -161,16 +161,6 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
   const [showUnlimitedEmojiModal, setShowUnlimitedEmojiModal] = useState(false);
   const [activeEmojiCategory, setActiveEmojiCategory] = useState('smileys');
 
-  // Hardware/Swipe Back button closes submodals first, otherwise closes story viewer safely
-  useBackHandler(() => setIsStoryOptionsOpen(false), isStoryOptionsOpen);
-  useBackHandler(() => setShowShareModal(false), showShareModal && !isStoryOptionsOpen);
-  useBackHandler(() => setShowUnlimitedEmojiModal(false), showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
-  useBackHandler(() => setShowReplySheet(false), showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
-  useBackHandler(() => setShowGetSparksModal(false), showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
-  useBackHandler(() => setShowSparksWallet(false), showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
-  useBackHandler(() => setShowSparksTipModal(false), showSparksTipModal && !showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
-  useBackHandler(() => setShowViewersSheet(false), showViewersSheet && !showSparksTipModal && !showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
-  useBackHandler(onClose, !isAnySubmodalOpen);
 
   // Per-story live views dictionary keyed by vibe ID
   const [viewsByVibeId, setViewsByVibeId] = useState(() => {
@@ -761,6 +751,17 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     showShareModal ||
     (replyText && replyText.trim().length > 0)
   );
+
+  // Hardware/Swipe Back button closes submodals first, otherwise closes story viewer safely
+  useBackHandler(() => setIsStoryOptionsOpen(false), isStoryOptionsOpen);
+  useBackHandler(() => setShowShareModal(false), showShareModal && !isStoryOptionsOpen);
+  useBackHandler(() => setShowUnlimitedEmojiModal(false), showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
+  useBackHandler(() => setShowReplySheet(false), showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
+  useBackHandler(() => setShowGetSparksModal(false), showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
+  useBackHandler(() => setShowSparksWallet(false), showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
+  useBackHandler(() => setShowSparksTipModal(false), showSparksTipModal && !showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
+  useBackHandler(() => setShowViewersSheet(false), showViewersSheet && !showSparksTipModal && !showSparksWallet && !showGetSparksModal && !showReplySheet && !showUnlimitedEmojiModal && !showShareModal && !isStoryOptionsOpen);
+  useBackHandler(onClose, !isAnySubmodalOpen);
 
   // Auto-pause / resume video and audio when interacting with reply, react, viewers, sparks, or options
   useEffect(() => {

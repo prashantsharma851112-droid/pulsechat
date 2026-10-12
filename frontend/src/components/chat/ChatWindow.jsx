@@ -6295,17 +6295,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         )}
 
         <div style={{
-          padding: '0.75rem 1rem',
-          paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))',
+          padding: '0.5rem 0.5rem',
+          paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))',
           background: (chatWallpaper && chatWallpaper !== 'none') ? 'color-mix(in srgb, var(--bg-sidebar) 85%, transparent)' : 'var(--bg-sidebar)',
           backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
           WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
           borderTop: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
-          gap: '0.5rem',
+          gap: '6px',
           position: 'relative',
-          zIndex: 2
+          zIndex: 2,
+          width: '100%',
+          boxSizing: 'border-box'
         }}>
           {showEmoji && (
             <EmojiPicker onSelectEmoji={(emoji) => setText(prev => prev + emoji)} onClose={() => setShowEmoji(false)} />
@@ -6905,19 +6907,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           {showRecorder ? (
             <VoiceRecorder onSendVoice={handleSendVoice} onCancel={() => setShowRecorder(false)} />
           ) : (
-            <form onSubmit={handleSendText} style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <form onSubmit={handleSendText} style={{ flex: 1, minWidth: 0, display: 'flex', gap: '6px', alignItems: 'center' }}>
               {/* WhatsApp-Style Unified Capsule / Pill Container */}
               <div
                 style={{
                   flex: 1,
+                  minWidth: 0,
                   display: 'flex',
                   alignItems: 'center',
                   background: 'var(--bg-card, #202c33)',
                   borderRadius: '26px',
-                  padding: '4px 10px 4px 12px',
+                  padding: '4px 8px 4px 10px',
                   border: '1px solid var(--border)',
                   minHeight: '44px',
-                  gap: '6px'
+                  gap: '4px',
+                  boxSizing: 'border-box'
                 }}
               >
                 {/* Emoji Button INSIDE on the left */}
@@ -6976,55 +6980,53 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                       background: 'rgba(6, 182, 212, 0.16)',
                       border: '1px solid rgba(6, 182, 212, 0.45)',
                       color: '#06b6d4',
-                      borderRadius: '20px',
-                      padding: '4px 8px',
-                      fontSize: '0.72rem',
+                      borderRadius: '16px',
+                      padding: '4px 6px',
+                      fontSize: '0.7rem',
                       fontWeight: 700,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px',
+                      gap: '3px',
                       cursor: isTranslatingDraft ? 'wait' : 'pointer',
                       flexShrink: 0,
                       transition: 'all 0.15s ease'
                     }}
                   >
-                    <Globe size={12} />
-                    <span>{isTranslatingDraft ? 'Translating...' : `➔ ${targetLang.toUpperCase()}`}</span>
-                  </button>
-                )}
-
-                {/* When text is empty: Voice note (Mic) button inside the pill on the right */}
-                {text.trim().length === 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowActionGrid(false);
-                      setShowEmoji(false);
-                      setShowRecorder(true);
-                    }}
-                    className="icon-btn-ghost interactive-action"
-                    title="Record Voice Note"
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: 'var(--text-muted, #8696a0)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '4px',
-                      borderRadius: '50%',
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    <Mic size={22} />
+                    <Globe size={11} />
+                    <span>{isTranslatingDraft ? '...' : `➔ ${targetLang.toUpperCase()}`}</span>
                   </button>
                 )}
               </div>
 
-              {/* When text is entered: WhatsApp Vibrant Green Circular Send Button */}
-              {text.trim().length > 0 && (
+              {/* WhatsApp-Style Circular Action Button (Mic when empty, Vibrant Green Send when typed) */}
+              {text.trim().length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowActionGrid(false);
+                    setShowEmoji(false);
+                    setShowRecorder(true);
+                  }}
+                  className="interactive-action"
+                  title="Record Voice Note"
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '50%',
+                    background: 'var(--bg-card, #202c33)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-muted, #8696a0)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Mic size={20} />
+                </button>
+              ) : (
                 <button
                   type="submit"
                   tabIndex={-1}
@@ -7041,8 +7043,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     replyInputRef.current?.focus({ preventScroll: true });
                   }}
                   style={{
-                    width: '44px',
-                    height: '44px',
+                    width: '42px',
+                    height: '42px',
                     borderRadius: '50%',
                     background: '#25d366',
                     border: 'none',
@@ -7058,7 +7060,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
                   onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
-                  <Send size={19} style={{ marginLeft: '2px' }} />
+                  <Send size={18} style={{ marginLeft: '2px' }} />
                 </button>
               )}
             </form>
