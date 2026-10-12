@@ -484,6 +484,15 @@ router.post('/fog-snap/reveal', authMiddleware, async (req, res) => {
   try {
     const { messageId, chatId } = req.body;
     const Message = require('../models/Message');
+    const existingMsg = await Message.findOne({ id: messageId });
+    if (!existingMsg) return res.status(404).json({ error: 'Message not found' });
+
+    // Senders previewing their own sent media must never trigger reveal broadcast
+    const callerId = String(req.user?.id || req.user?._id || '');
+    if (callerId && (String(existingMsg.senderId) === callerId)) {
+      return res.json({ success: true, message: existingMsg, ignored: true });
+    }
+
     const msg = await Message.findOneAndUpdate(
       { id: messageId },
       { fogSnapStatus: 'revealed' },
@@ -511,6 +520,15 @@ router.post('/fog-snap/burn', authMiddleware, async (req, res) => {
     const query = { $or: [{ id: messageId }] };
     if (mongoose.Types.ObjectId.isValid(messageId)) {
       query.$or.push({ _id: messageId });
+    }
+
+    const existingMsg = await Message.findOne(query);
+    if (!existingMsg) return res.status(404).json({ error: 'Message not found' });
+
+    // Senders previewing or closing their sent Dust Image must NEVER burn or evaporate it!
+    const callerId = String(req.user?.id || req.user?._id || '');
+    if (callerId && (String(existingMsg.senderId) === callerId)) {
+      return res.json({ success: true, message: existingMsg, ignored: true });
     }
 
     const msg = await Message.findOneAndUpdate(

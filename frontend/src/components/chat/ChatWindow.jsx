@@ -1148,6 +1148,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const dustImageInputRef = useRef(null);
+  const lastMediaSentRef = useRef({ time: 0, key: '' });
 
   // Live Chat Translation State
   const [targetLang, setTargetLang] = useState(() => {
@@ -3673,6 +3674,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const isDust = Boolean(isFogSnap || isDustImage);
     const isTwice = Boolean(isViewTwice);
     const calculatedLimit = isTwice ? 2 : (viewLimit || (isViewOnce ? 1 : 1));
+
+    // Deduplication Lock: drop rapid duplicate triggers within 1200ms
+    const mediaDedupeKey = `${fileName || rawFile?.name || ''}_${fileSize || rawFile?.size || ''}_${msgType}_${isDust ? 'dust' : (isTwice ? 'twice' : (isViewOnce ? 'once' : 'normal'))}`;
+    const now = Date.now();
+    if (now - lastMediaSentRef.current.time < 1200 && lastMediaSentRef.current.key === mediaDedupeKey) {
+      console.warn('Blocked duplicate media send invocation:', mediaDedupeKey);
+      return;
+    }
+    lastMediaSentRef.current = { time: now, key: mediaDedupeKey };
 
     // 0ms Optimistic Media Bubble (Telegram Magic):
     // Instantly renders in chat with circular progress ring while uploading in background!

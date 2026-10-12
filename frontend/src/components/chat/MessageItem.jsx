@@ -950,7 +950,7 @@ function MessageItem({
   };
   const fogStorageKey = message?.id ? `pulse_fog_burned_${message.id}` : (message?._id ? `pulse_fog_burned_${message._id}` : null);
   const isFogBurnedLocally = (() => {
-    if (!fogStorageKey) return false;
+    if (!fogStorageKey || isMine) return false;
     try {
       return localStorage.getItem(fogStorageKey) === 'true';
     } catch {
@@ -1117,17 +1117,19 @@ function MessageItem({
   );
 
   const viewLimit = message.viewLimit || (message.isViewTwice ? 2 : 1);
-  const myUserId = currentUser?.id || '';
-  const myLocalViewCount = parseInt(localStorage.getItem(`pulse_view_count_${message.id}`) || '0', 10);
-  const serverViewCount = viewCountsState?.[myUserId] || message.viewCounts?.[myUserId] || 0;
+  const myUserId = currentUser?.id || currentUser?._id || '';
+  const myLocalViewCount = isMine ? 0 : parseInt(localStorage.getItem(`pulse_view_count_${message.id}`) || '0', 10);
+  const serverViewCount = isMine ? 0 : (viewCountsState?.[myUserId] || message.viewCounts?.[myUserId] || 0);
   const currentViewCount = Math.max(myLocalViewCount, serverViewCount);
 
+  // Filter out sender ID from viewedByState so sender viewing never marks it opened for recipient
+  const recipientViews = (viewedByState || []).filter(uid => String(uid) !== String(message.senderId) && uid !== 'sender');
+  const hasRecipientOpened = message.isViewOnce && (recipientViews.length > 0 || message.isViewed);
   const isConsumedByMe = !isMine && (
     currentViewCount >= viewLimit ||
-    viewedByState.includes(myUserId) ||
+    recipientViews.includes(myUserId) ||
     message.isViewed
   );
-  const hasRecipientOpened = message.isViewOnce && viewedByState.length > 0;
   const isAlreadyViewed = isMine ? hasRecipientOpened : isConsumedByMe;
 
   const handleOpenViewOnce = () => {
@@ -1136,6 +1138,7 @@ function MessageItem({
   };
 
   const handleMarkViewed = () => {
+    if (isMine) return; // Sender previewing their own message must never consume view count or mark viewed!
     const nextCount = currentViewCount + 1;
     try {
       localStorage.setItem(`pulse_view_count_${message.id}`, String(nextCount));
@@ -1957,7 +1960,9 @@ function MessageItem({
                 </div>
               </div>
             ) : isMine ? (
-              <div
+              <button
+                type="button"
+                onClick={() => setShowFogSnapModal(true)}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -1969,6 +1974,7 @@ function MessageItem({
                   boxShadow: '0 4px 15px rgba(245, 158, 11, 0.15)',
                   backdropFilter: 'blur(10px)',
                   color: '#fff',
+                  cursor: 'pointer',
                   textAlign: 'left'
                 }}
               >
@@ -1994,10 +2000,10 @@ function MessageItem({
                     </span>
                   </div>
                   <div style={{ fontSize: '0.74rem', opacity: 0.82, marginTop: '2px' }}>
-                    🔒 Sent • Scratchable by recipient only
+                    🔒 Sent by you • Scratchable by recipient only
                   </div>
                 </div>
-              </div>
+              </button>
             ) : (
               <button
                 onClick={() => setShowFogSnapModal(true)}

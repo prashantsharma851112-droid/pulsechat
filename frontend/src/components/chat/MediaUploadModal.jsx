@@ -13,9 +13,13 @@ export default function MediaUploadModal({ mediaFile, onSend, onClose }) {
     return 'normal';
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   if (!mediaFile) return null;
 
   const handleConfirmSend = () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     const isDust = viewMode === 'dust' && !isVideo;
     const isTwice = viewMode === 'twice';
     const isOnce = viewMode === 'once';
@@ -217,6 +221,7 @@ export default function MediaUploadModal({ mediaFile, onSend, onClose }) {
           </button>
           <button
             className="btn-primary"
+            disabled={isSubmitting}
             style={{
               borderRadius: '14px',
               padding: '8px 18px',
@@ -225,6 +230,8 @@ export default function MediaUploadModal({ mediaFile, onSend, onClose }) {
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
+              opacity: isSubmitting ? 0.65 : 1,
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
               background: viewMode === 'dust'
                 ? 'linear-gradient(135deg, #f59e0b, #d97706)'
                 : (viewMode === 'twice'
@@ -237,13 +244,15 @@ export default function MediaUploadModal({ mediaFile, onSend, onClose }) {
           >
             <Send size={15} />
             <span>
-              {viewMode === 'dust'
-                ? 'Send Dust Image 🌫️'
-                : (viewMode === 'twice'
-                    ? 'Send Twice View 2️⃣'
-                    : (viewMode === 'once'
-                        ? 'Send View Once 1️⃣'
-                        : 'Send Media'))}
+              {isSubmitting
+                ? 'Sending...'
+                : (viewMode === 'dust'
+                    ? 'Send Dust Image 🌫️'
+                    : (viewMode === 'twice'
+                        ? 'Send Twice View 2️⃣'
+                        : (viewMode === 'once'
+                            ? 'Send View Once 1️⃣'
+                            : 'Send Media')))}
             </span>
           </button>
         </div>

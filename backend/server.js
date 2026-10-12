@@ -1434,11 +1434,19 @@ io.on('connection', (socket) => {
       if (mongoose.Types.ObjectId.isValid(messageId)) {
         query.$or.push({ _id: messageId });
       }
+      const existing = await Message.findOne(query);
+      if (!existing) return;
+
+      const callerId = String(userId || socket.userId || '');
+      if (callerId && (String(existing.senderId) === callerId)) {
+        return; // Sender viewing their own sent media never triggers reveal broadcast
+      }
+
       await Message.updateOne(query, { fogSnapStatus: 'revealed' });
       if (chatId) {
-        io.to(chatId).emit('fog_snap_revealed', { messageId, chatId, revealedBy: userId });
+        io.to(chatId).emit('fog_snap_revealed', { messageId, chatId, revealedBy: callerId });
         if (chatId.includes('_')) {
-          chatId.split('_').forEach(uId => io.to(`user_${uId}`).emit('fog_snap_revealed', { messageId, chatId, revealedBy: userId }));
+          chatId.split('_').forEach(uId => io.to(`user_${uId}`).emit('fog_snap_revealed', { messageId, chatId, revealedBy: callerId }));
         }
       }
     } catch (e) {}
@@ -1452,6 +1460,14 @@ io.on('connection', (socket) => {
       if (mongoose.Types.ObjectId.isValid(messageId)) {
         query.$or.push({ _id: messageId });
       }
+      const existing = await Message.findOne(query);
+      if (!existing) return;
+
+      const callerId = String(socket.userId || '');
+      if (callerId && (String(existing.senderId) === callerId)) {
+        return; // Sender closing or viewing sent dust image must NEVER burn it for recipient!
+      }
+
       await Message.updateOne(query, {
         fogSnapStatus: 'burned',
         content: '🌫️ Fog Snap Evaporated',

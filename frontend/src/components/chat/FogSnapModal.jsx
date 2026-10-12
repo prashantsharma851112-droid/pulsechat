@@ -45,7 +45,7 @@ export default function FogSnapModal({
   const audioCtxRef = useRef(null);
 
   useBackHandler(() => {
-    if (isRevealed) {
+    if (!isMine && isRevealed) {
       handleBurn();
     } else {
       onClose();
@@ -148,14 +148,16 @@ export default function FogSnapModal({
         setIsRevealed(true);
         // Wipe remaining canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        if (onRevealed) onRevealed();
+        if (!isMine) {
+          if (onRevealed) onRevealed();
 
-        // Notify backend that fog snap was revealed
-        fetch(`${BACKEND_URL}/api/messages/fog-snap/reveal`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ messageId: message.id, chatId })
-        }).catch(() => {});
+          // Notify backend that fog snap was revealed (Recipient only!)
+          fetch(`${BACKEND_URL}/api/messages/fog-snap/reveal`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ messageId: message.id, chatId })
+          }).catch(() => {});
+        }
       }
     } catch (e) {}
   }, [isRevealed, message, chatId, onRevealed, token]);
@@ -225,8 +227,9 @@ export default function FogSnapModal({
     lastPosRef.current = { x: null, y: null };
   };
 
-  // Countdown Fuse once revealed
+  // Countdown Fuse once revealed (Recipient only!)
   useEffect(() => {
+    if (isMine) return; // Sender preview never triggers auto-burn countdown
     if (!isRevealed || isBurned) return;
 
     timerRef.current = setInterval(() => {
@@ -243,9 +246,13 @@ export default function FogSnapModal({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isRevealed, isBurned]);
+  }, [isRevealed, isBurned, isMine]);
 
   const handleBurn = () => {
+    if (isMine) {
+      onClose();
+      return;
+    }
     if (isBurned) return;
     setIsBurned(true);
     const msgId = message?.id || message?._id;
@@ -274,7 +281,7 @@ export default function FogSnapModal({
   };
 
   const handleCloseClick = () => {
-    if (isRevealed) {
+    if (!isMine && isRevealed) {
       handleBurn();
     } else {
       onClose();
@@ -283,6 +290,7 @@ export default function FogSnapModal({
 
   // Screenshot Detection Guard
   const reportScreenshot = useCallback(() => {
+    if (isMine) return; // Sender previewing never triggers screenshot alert
     setScreenshotAlerted(true);
     fetch(`${BACKEND_URL}/api/messages/fog-snap/screenshot`, {
       method: 'POST',
@@ -375,7 +383,25 @@ export default function FogSnapModal({
 
         {/* Right Header Status / Countdown */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {isRevealed ? (
+          {isMine ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'rgba(245, 158, 11, 0.2)',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                borderRadius: '20px',
+                padding: '6px 14px',
+                color: '#fbbf24',
+                fontWeight: 800,
+                fontSize: '0.82rem'
+              }}
+            >
+              <Sparkles size={15} />
+              <span>Preview (Sender)</span>
+            </div>
+          ) : isRevealed ? (
             <div
               style={{
                 display: 'flex',

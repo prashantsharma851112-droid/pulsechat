@@ -76,13 +76,14 @@ export default function ViewOnceModal({
     }, 3500);
   }, []);
 
-  // Mark viewed once user opens or closes
+  // Mark viewed once recipient opens or closes
   const markViewedOnce = useCallback(() => {
+    if (isMine) return; // Sender preview never consumes view limit or marks viewed!
     if (!hasMarkedViewed) {
       setHasMarkedViewed(true);
       if (onMarkViewed) onMarkViewed();
     }
-  }, [hasMarkedViewed, onMarkViewed]);
+  }, [isMine, hasMarkedViewed, onMarkViewed]);
 
   useEffect(() => {
     markViewedOnce();
@@ -351,8 +352,8 @@ export default function ViewOnceModal({
           borderRadius: '20px',
           border: '1px solid rgba(255, 255, 255, 0.18)'
         }}>
-          <Lock size={14} color={message?.isViewTwice ? "#38bdf8" : "#10b981"} />
-          <span>{message?.isViewTwice ? 'Twice View (2x)' : 'View Once (1x)'}</span>
+          <Lock size={14} color={isMine ? "#fbbf24" : (message?.isViewTwice ? "#38bdf8" : "#10b981")} />
+          <span>{isMine ? 'Preview (Sender)' : (message?.isViewTwice ? 'Twice View (2x)' : 'View Once (1x)')}</span>
         </div>
       </div>
 

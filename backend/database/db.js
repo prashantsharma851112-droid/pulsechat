@@ -297,20 +297,30 @@ module.exports = {
     const msg = await Message.findOne({ id: messageId });
     if (!msg || !msg.isViewOnce) return null;
 
-    // Only count as viewed if opened by recipient (not sender)
-    if (msg.senderId !== userId) {
-      if (!msg.viewCounts) msg.viewCounts = {};
-      const currentViews = (msg.viewCounts[userId] || 0) + 1;
-      msg.viewCounts[userId] = currentViews;
-      msg.markModified('viewCounts');
+    // Check if the user is the sender (must NOT count as recipient view)
+    const isSender = String(msg.senderId) === String(userId);
+    if (isSender) return null;
 
-      const maxLimit = msg.viewLimit || (msg.isViewTwice ? 2 : 1);
-      if (currentViews >= maxLimit && !msg.viewedBy.includes(userId)) {
-        msg.viewedBy.push(userId);
-        msg.markModified('viewedBy');
+    try {
+      const senderUser = await User.findOne({ $or: [{ id: msg.senderId }, { _id: msg.senderId }] }).select('id _id');
+      if (senderUser) {
+        if (String(senderUser.id) === String(userId) || String(senderUser._id) === String(userId)) {
+          return null;
+        }
       }
-      await msg.save();
+    } catch (e) {}
+
+    if (!msg.viewCounts) msg.viewCounts = {};
+    const currentViews = (msg.viewCounts[userId] || 0) + 1;
+    msg.viewCounts[userId] = currentViews;
+    msg.markModified('viewCounts');
+
+    const maxLimit = msg.viewLimit || (msg.isViewTwice ? 2 : 1);
+    if (currentViews >= maxLimit && !msg.viewedBy.includes(userId)) {
+      msg.viewedBy.push(userId);
+      msg.markModified('viewedBy');
     }
+    await msg.save();
     return msg;
   },
 
