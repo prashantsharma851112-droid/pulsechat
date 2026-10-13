@@ -12,6 +12,7 @@ import SparksWalletModal from '../chat/SparksWalletModal';
 import PulseProModal from '../chat/PulseProModal';
 import { EMOJI_CATEGORIES } from '../chat/EmojiPicker';
 import InstagramMusicSticker from './InstagramMusicSticker';
+import fixWebmDuration from 'fix-webm-duration';
 
 
 function formatStoryTimeAgo(dateInput) {
@@ -1306,26 +1307,25 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     return list;
   }, [user?.id, user?._id, showShareModal]);
 
-  const handleSendStoryToFriend = (targetChatId, friendName, targetIsGroup = false) => {
-    if (!socket || !targetChatId) return;
+  const handleSendStoryToFriend = (targetContactId, friendName, targetIsGroup = false) => {
+    if (!socket || !targetContactId) return;
     const authorId = currentVibe?.userId || vibeGroup?.userId;
     const authorName = vibeGroup?.displayName || vibeGroup?.username || 'User';
 
-    const isGroupChat = Boolean(targetIsGroup || String(targetChatId).startsWith('group_'));
-    let realChatId = targetChatId;
-    let partnerId = targetChatId;
+    const myUid = user?.id || user?._id;
+    const isGroupChat = Boolean(targetIsGroup || String(targetContactId).startsWith('group_'));
+    let partnerId = targetContactId;
+    let realChatId = targetContactId;
 
     if (isGroupChat) {
       partnerId = '';
-      realChatId = targetChatId;
-    } else if (String(targetChatId).includes('_')) {
-      const parts = String(targetChatId).split('_');
-      partnerId = parts.find(p => p !== user?.id && p !== user?._id) || parts[0];
-      realChatId = parts.sort().join('_');
+      realChatId = targetContactId;
     } else {
-      partnerId = targetChatId;
-      realChatId = (user?.id || user?._id) ? [user.id || user._id, targetChatId].sort().join('_') : targetChatId;
+      partnerId = targetContactId;
+      realChatId = myUid ? [myUid, targetContactId].sort().join('_') : targetContactId;
     }
+
+    const candidateMatch = shareCandidates.find(c => c.id === targetContactId || c._id === targetContactId);
 
     const storyReplyData = {
       storyId: currentVibe?.id || ('story_' + Date.now()),
@@ -1352,7 +1352,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
       id: 'msg_vibe_share_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
       clientTempId: 'msg_vibe_share_' + Date.now(),
       chatId: realChatId,
-      senderId: user?.id || user?._id,
+      senderId: myUid,
       senderName: user?.displayName || user?.name || user?.username,
       senderUsername: user?.username || '',
       senderAvatar: user?.avatar || '',
@@ -1372,20 +1372,18 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
     // 2. Append directly to local message cache so it appears in ChatWindow
     try {
       appendCachedMessage(realChatId, tempMsg);
-      const canonical = realChatId.includes('_') ? realChatId.split('_').sort().join('_') : realChatId;
-      if (canonical !== realChatId) appendCachedMessage(canonical, tempMsg);
     } catch {}
 
     // 3. Instant local recent chat snippet update
-    if (user?.id && realChatId) {
-      const candidateMatch = shareCandidates.find(c => c.id === targetChatId || c.id === partnerId);
+    if (myUid && realChatId) {
       const targetChatObj = {
         id: partnerId,
         displayName: friendName || candidateMatch?.name || 'Chat',
         avatar: candidateMatch?.avatar || '',
+        username: candidateMatch?.username || '',
         isGroup: isGroupChat
       };
-      updateRecentChatSnippet(user.id, realChatId, tempMsg, targetChatObj);
+      updateRecentChatSnippet(myUid, realChatId, tempMsg, targetChatObj);
       window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
     }
 
@@ -1394,7 +1392,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
       window.dispatchEvent(new CustomEvent('pulsechat_new_message', { detail: tempMsg }));
     }
 
-    setShareSentTo(prev => ({ ...prev, [targetChatId]: true }));
+    setShareSentTo(prev => ({ ...prev, [targetContactId]: true }));
   };
 
   // 3. Download Story as Video with Song and ALL Visual Elements (STRICTLY FOR OWN STORY)
@@ -2418,7 +2416,20 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
       }
 
       setDownloadProgress(98);
-      const finalBlob = new Blob(chunks, { type: mimeType });
+      let finalBlob = new Blob(chunks, { type: mimeType });
+
+      // Fix WebM 0-second duration bug in Chromium / Android MediaRecorder
+      if (mimeType.includes('webm') && finalBlob && finalBlob.size > 1000) {
+        try {
+          finalBlob = await new Promise((resolve) => {
+            fixWebmDuration(finalBlob, totalDurationMs, (fixedBlob) => {
+              resolve(fixedBlob || finalBlob);
+            });
+          });
+        } catch (webmErr) {
+          console.warn('Could not patch WebM duration header:', webmErr);
+        }
+      }
 
       // Fallback if chunks are empty or too small (e.g. unsupported platform)
       if (!finalBlob || finalBlob.size < 1000) {

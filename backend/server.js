@@ -789,9 +789,8 @@ io.on('connection', (socket) => {
 
       // Auto-resolve receiverId for 1-on-1 chats if not explicitly provided
       let resolvedReceiverId = receiverId || '';
-      if (!resolvedReceiverId && !isGroup && chatId && chatId.includes('_')) {
-        const parts = chatId.split('_');
-        resolvedReceiverId = parts.find(p => p !== senderId) || '';
+      if ((!resolvedReceiverId || resolvedReceiverId === 'user') && !isGroup && chatId) {
+        resolvedReceiverId = await getOtherParticipantId(chatId, senderId) || '';
       }
 
       // Enforce friendship for 1-on-1 messages: non-synced users cannot send messages
@@ -856,7 +855,9 @@ io.on('connection', (socket) => {
       }
       const initialStatus = isReceiverOnline ? 'delivered' : 'sent';
 
-      const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+      const canonicalChatId = (!isGroup && senderId && resolvedReceiverId && resolvedReceiverId !== 'user')
+        ? [senderId, resolvedReceiverId].sort().join('_')
+        : chatId;
 
       const newMsg = {
         id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
@@ -905,14 +906,17 @@ io.on('connection', (socket) => {
         ackCallback({ success: true, message: newMsg });
       }
 
-      // 2. Immediate zero-latency emission to chat room, canonical room, and sender's private room
-      const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+      // 2. Immediate zero-latency emission to chat room, canonical room, and participants' private rooms
       io.to(chatId).emit('new_message', newMsg);
       if (canonicalChatId && canonicalChatId !== chatId) {
         io.to(canonicalChatId).emit('new_message', newMsg);
       }
       io.to(`user_${senderId}`).emit('new_message', newMsg);
       io.to(senderId).emit('new_message', newMsg);
+      if (resolvedReceiverId && resolvedReceiverId !== 'user') {
+        io.to(`user_${resolvedReceiverId}`).emit('new_message', newMsg);
+        io.to(resolvedReceiverId).emit('new_message', newMsg);
+      }
 
       // Auto-update Pulse Streak for 1-on-1 chats
       if (!isGroup && resolvedReceiverId && senderId !== resolvedReceiverId) {

@@ -46,17 +46,20 @@ export function getCachedRecentChats(userId) {
   if (typeof window === 'undefined' || !userId) return [];
   const raw = safeParse(localStorage.getItem(`${STORAGE_KEYS.RECENT_PREFIX}${userId}`), []);
   if (!Array.isArray(raw)) return [];
-  return [...raw].sort((a, b) => {
-    const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
-    const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
-    return tB - tA;
-  });
+  return raw
+    .filter(c => c && c.id && c.id !== 'user' && c.id !== 'undefined' && c.id !== 'null')
+    .sort((a, b) => {
+      const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
+      const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
+      return tB - tA;
+    });
 }
 
 export function setCachedRecentChats(userId, chats) {
   if (typeof window === 'undefined' || !userId || !Array.isArray(chats)) return;
   try {
-    const sorted = [...chats].sort((a, b) => {
+    const valid = chats.filter(c => c && c.id && c.id !== 'user' && c.id !== 'undefined' && c.id !== 'null');
+    const sorted = [...valid].sort((a, b) => {
       const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
       const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
       return tB - tA;
@@ -97,6 +100,7 @@ export function restoreDeletedChatId(userId, chatId) {
 // update last message snippet in recent chats
 export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
   if (!userId || !chatId || !message) return;
+  if (targetChat?.id === 'user' || message.receiverId === 'user') return;
   restoreDeletedChatId(userId, chatId);
   if (targetChat?.id) restoreDeletedChatId(userId, targetChat.id);
   if (targetChat?._id) restoreDeletedChatId(userId, targetChat._id);

@@ -829,8 +829,18 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           );
 
           const combined = [...serverMapped, ...extraLocal];
+          const seenKeys = new Set();
           const finalSorted = combined
-            .filter(c => !deletedSet.has(c.id) && (!c._id || !deletedSet.has(c._id)))
+            .filter(c => {
+              if (!c || !c.id || c.id === 'user' || c.id === 'undefined') return false;
+              if (deletedSet.has(c.id) || (c._id && deletedSet.has(c._id))) return false;
+              const key = c.id || c._id;
+              if (seenKeys.has(key)) return false;
+              if (c.username && seenKeys.has(c.username)) return false;
+              seenKeys.add(key);
+              if (c.username) seenKeys.add(c.username);
+              return true;
+            })
             .sort((a, b) => {
               const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
               const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();

@@ -46,9 +46,15 @@ module.exports = {
 
   getMessages: async (chatId, limit = 50, before = null, userId = null) => {
     let chatQuery = chatId;
-    if (chatId && typeof chatId === 'string' && chatId.includes('_')) {
-      const parts = chatId.split('_');
-      chatQuery = { $in: [chatId, parts.sort().join('_'), parts.reverse().join('_')] };
+    if (chatId && typeof chatId === 'string') {
+      const queryList = [chatId];
+      if (chatId.includes('_user_')) {
+        const idx = chatId.indexOf('_user_');
+        const first = chatId.slice(0, idx);
+        const second = chatId.slice(idx + 1);
+        queryList.push(`${second}_${first}`);
+      }
+      chatQuery = queryList.length > 1 ? { $in: queryList } : chatId;
     }
     const query = {
       chatId: chatQuery,
@@ -517,6 +523,7 @@ module.exports = {
           continue;
         }
 
+        if (otherId === 'user') continue;
         const otherUser = userMap.get(otherId);
         if (!otherUser) continue;
         const otherUniqueKey = otherUser.id || (otherUser._id ? otherUser._id.toString() : null) || otherUser.username;
