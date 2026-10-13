@@ -1078,9 +1078,12 @@ function MessageItem({
   const touchStartXRef = useRef(0);
   const touchStartYRef = useRef(0);
   const isSwipingRef = useRef(false);
-  const lastTapRef = useRef(0);
+  const lastTouchTapRef = useRef(0);
+  const lastMouseTapRef = useRef(0);
+  const lastTouchTimeRef = useRef(0);
   const isMouseDownRef = useRef(false);
   const mouseStartXRef = useRef(0);
+  const mouseStartYRef = useRef(0);
   const longPressTimerRef = useRef(null);
   const mouseLongPressTimerRef = useRef(null);
   const isLongPressRef = useRef(false);
@@ -1160,38 +1163,37 @@ function MessageItem({
     message.fogSnapStatus === 'burned' ||
     message.content === '🌫️ Fog Snap Evaporated' ||
     message.content === 'Dust Image Evaporated' ||
-    ((message.isFogSnap || message.isDustImage) && !message.mediaUrl) ||
     isFogBurnedLocally
   );
 
   const viewLimit = message.viewLimit || (message.isViewTwice ? 2 : 1);
-  const myUserId = currentUser?.id || currentUser?._id || '';
+  const myUserId = String(currentUser?.id || currentUser?._id || '');
   const myLocalViewCount = isMine ? 0 : parseInt(localStorage.getItem(`pulse_view_count_${message.id || message._id}`) || '0', 10);
   const serverViewCount = isMine ? 0 : (viewCountsState?.[myUserId] || message.viewCounts?.[myUserId] || 0);
   const currentViewCount = Math.max(myLocalViewCount, serverViewCount);
 
   // Filter out sender ID from viewedByState so sender viewing never marks it opened for recipient
-  const recipientViews = (viewedByState || []).filter(uid => String(uid) !== String(message.senderId) && uid !== 'sender');
+  const recipientViews = (viewedByState || []).filter(uid => String(uid) !== String(message.senderId) && uid !== 'sender').map(String);
   const recipientViewCountsTotal = Object.entries(viewCountsState || message.viewCounts || {}).reduce((acc, [uid, count]) => {
     return (String(uid) !== String(message.senderId) && uid !== 'sender') ? acc + (Number(count) || 0) : acc;
   }, 0);
   const hasRecipientOpened = Boolean(
     (message.isViewOnce || message.isViewTwice || message.viewLimit) && (
       recipientViews.length > 0 ||
-      recipientViewCountsTotal > 0 ||
-      message.isViewed ||
-      message.status === 'read' ||
-      (Array.isArray(message.readBy) && message.readBy.some(uid => String(uid) !== String(message.senderId)))
+      recipientViewCountsTotal > 0
     )
   );
   const isConsumedByMe = !isMine && (
     currentViewCount >= viewLimit ||
-    recipientViews.includes(myUserId) ||
-    message.isViewed
+    recipientViews.includes(myUserId)
   );
   const isAlreadyViewed = isMine ? hasRecipientOpened : isConsumedByMe;
 
-  const handleOpenViewOnce = () => {
+  const handleOpenViewOnce = (e) => {
+    if (e) {
+      e.stopPropagation();
+      if (e.cancelable) e.preventDefault();
+    }
     if (isConsumedByMe) return;
     setShowViewOnceModal(true);
   };
@@ -1375,7 +1377,16 @@ function MessageItem({
 
   // Touch Long-Press Selection & Swipe-to-Reply Detection
   const handleTouchStart = (e) => {
+    lastTouchTimeRef.current = Date.now();
     if (isMultiSelectMode || isInActionSelectionMode) return;
+    // Tapping on button, pill, or interactive controls must never trigger message selection or swipe
+    if (e.target && e.target.closest && e.target.closest('button, a, input, select, textarea, [role="button"], .interactive-action')) {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+      return;
+    }
     const touch = e.touches[0];
     touchStartXRef.current = touch.clientX;
     touchStartYRef.current = touch.clientY;
@@ -1383,29 +1394,32 @@ function MessageItem({
     isLongPressRef.current = false;
 
     if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    // Deliberate hold threshold (1.8s) so scrolling NEVER accidentally selects
     longPressTimerRef.current = setTimeout(() => {
       isLongPressRef.current = true;
       justLongPressedRef.current = true;
       setTimeout(() => {
         justLongPressedRef.current = false;
       }, 500);
+      // Tactile haptic vibration feel on selection
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate(40);
+        try { navigator.vibrate([70, 40, 70]); } catch (err) {}
       }
       if (onSelectForAction) {
         onSelectForAction(message);
       }
-    }, 420);
+    }, 1800);
   };
 
   const handleTouchMove = (e) => {
+    lastTouchTimeRef.current = Date.now();
     if (isMultiSelectMode) return;
     const touch = e.touches[0];
     const deltaX = touch.clientX - touchStartXRef.current;
     const deltaY = Math.abs(touch.clientY - touchStartYRef.current);
 
-    // Cancel long press if finger moved significantly
-    if (Math.abs(deltaX) > 18 || deltaY > 18) {
+    // Cancel long press immediately if finger moved even slightly (scrolling started)
+    if (Math.abs(deltaX) > 6 || deltaY > 6) {
       if (longPressTimerRef.current) {
         clearTimeout(longPressTimerRef.current);
         longPressTimerRef.current = null;
@@ -1423,7 +1437,8 @@ function MessageItem({
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e) => {
+    lastTouchTimeRef.current = Date.now();
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
@@ -1440,18 +1455,23 @@ function MessageItem({
     if (isSwipingRef.current) {
       if (dragX >= 35 && onReply) {
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          navigator.vibrate(35);
+          try { navigator.vibrate(35); } catch (err) {}
         }
         onReply(message);
       }
     } else {
-      // Check double tap
-      const now = Date.now();
-      if (now - lastTapRef.current < 380) {
-        handleDoubleTap();
-        lastTapRef.current = 0;
-      } else {
-        lastTapRef.current = now;
+      // Don't treat taps on buttons or pills as double-tap reactions
+      const isInteractiveTarget = e.target && e.target.closest && e.target.closest('button, a, input, select, textarea, [role="button"], .interactive-action');
+      if (!isInteractiveTarget) {
+        // Strict Double Tap check: ONLY two separate physical taps between 70ms and 320ms
+        const now = Date.now();
+        const diff = now - lastTouchTapRef.current;
+        if (diff > 70 && diff < 320) {
+          handleDoubleTap();
+          lastTouchTapRef.current = 0;
+        } else {
+          lastTouchTapRef.current = now;
+        }
       }
     }
 
@@ -1462,9 +1482,15 @@ function MessageItem({
 
   // Desktop Mouse Drag to Swipe & Long-Press Select
   const handleMouseDown = (e) => {
+    // Ignore synthetic mouse events dispatched by touch devices
+    if (Date.now() - lastTouchTimeRef.current < 900) return;
     if (isMultiSelectMode || isInActionSelectionMode || e.button !== 0) return;
+    if (e.target && e.target.closest && e.target.closest('button, a, input, select, textarea, [role="button"], .interactive-action')) {
+      return;
+    }
     isMouseDownRef.current = true;
     mouseStartXRef.current = e.clientX;
+    mouseStartYRef.current = e.clientY;
     isLongPressRef.current = false;
 
     if (mouseLongPressTimerRef.current) clearTimeout(mouseLongPressTimerRef.current);
@@ -1477,13 +1503,15 @@ function MessageItem({
       if (onSelectForAction) {
         onSelectForAction(message);
       }
-    }, 450);
+    }, 1800);
   };
 
   const handleMouseMove = (e) => {
+    if (Date.now() - lastTouchTimeRef.current < 900) return;
     if (!isMouseDownRef.current || isMultiSelectMode) return;
     const deltaX = e.clientX - mouseStartXRef.current;
-    if (Math.abs(deltaX) > 8) {
+    const deltaY = Math.abs(e.clientY - mouseStartYRef.current);
+    if (Math.abs(deltaX) > 6 || deltaY > 6) {
       if (mouseLongPressTimerRef.current) {
         clearTimeout(mouseLongPressTimerRef.current);
         mouseLongPressTimerRef.current = null;
@@ -1497,7 +1525,8 @@ function MessageItem({
     }
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e) => {
+    if (Date.now() - lastTouchTimeRef.current < 900) return;
     if (mouseLongPressTimerRef.current) {
       clearTimeout(mouseLongPressTimerRef.current);
       mouseLongPressTimerRef.current = null;
@@ -1513,13 +1542,16 @@ function MessageItem({
       if (dragX >= 35 && onReply && !justLongPressedRef.current) {
         onReply(message);
       } else if (!isLongPressRef.current && !justLongPressedRef.current && dragX < 6) {
-        // Double tap check for mouse
-        const now = Date.now();
-        if (now - lastTapRef.current < 380) {
-          handleDoubleTap();
-          lastTapRef.current = 0;
-        } else {
-          lastTapRef.current = now;
+        const isInteractiveTarget = e.target && e.target.closest && e.target.closest('button, a, input, select, textarea, [role="button"], .interactive-action');
+        if (!isInteractiveTarget) {
+          const now = Date.now();
+          const diff = now - lastMouseTapRef.current;
+          if (diff > 70 && diff < 320) {
+            handleDoubleTap();
+            lastMouseTapRef.current = 0;
+          } else {
+            lastMouseTapRef.current = now;
+          }
         }
       }
       isMouseDownRef.current = false;
@@ -1757,7 +1789,6 @@ function MessageItem({
             e.stopPropagation();
           }
         }}
-        onDoubleClick={(!isMultiSelectMode && !isInActionSelectionMode) ? handleDoubleTap : undefined}
         onContextMenu={(e) => {
           if (!isMultiSelectMode) {
             e.preventDefault();
@@ -2019,6 +2050,9 @@ function MessageItem({
               <button
                 type="button"
                 onClick={handleOpenViewOnce}
+                onTouchEnd={(e) => {
+                  e.stopPropagation();
+                }}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -2080,7 +2114,13 @@ function MessageItem({
             ) : (
               <button
                 type="button"
-                onClick={() => setShowFogSnapModal(true)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowFogSnapModal(true);
+                }}
+                onTouchEnd={(e) => {
+                  e.stopPropagation();
+                }}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -3278,7 +3318,7 @@ function MessageItem({
         />
       )}
 
-      {showFogSnapModal && !isFogBurned && (
+      {showFogSnapModal && (
         <FogSnapModal
           message={message}
           chatId={chatId}

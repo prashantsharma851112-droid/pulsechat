@@ -41,6 +41,7 @@ export default function ViewOnceModal({
 
   const isVideo = message?.type === 'video';
   const viewLimit = message?.viewLimit || (message?.isViewTwice ? 2 : 1);
+  const targetMediaUrl = message?.mediaUrl || (Array.isArray(message?.mediaUrls) && message?.mediaUrls[0]) || '';
 
   useBackHandler(() => {
     if (!hasMarkedViewed && onMarkViewed) onMarkViewed();
@@ -91,11 +92,11 @@ export default function ViewOnceModal({
 
   // Preload Image into offscreen buffer
   useEffect(() => {
-    if (!message || !message.mediaUrl || isVideo) return;
+    if (!message || !targetMediaUrl || isVideo) return;
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.src = message.mediaUrl;
+    img.src = targetMediaUrl;
     img.onload = () => {
       imageObjRef.current = img;
       setImageLoaded(true);
@@ -103,13 +104,13 @@ export default function ViewOnceModal({
     img.onerror = () => {
       // Fallback without crossOrigin in case CDN restricts CORS
       const fallbackImg = new Image();
-      fallbackImg.src = message.mediaUrl;
+      fallbackImg.src = targetMediaUrl;
       fallbackImg.onload = () => {
         imageObjRef.current = fallbackImg;
         setImageLoaded(true);
       };
     };
-  }, [message, isVideo]);
+  }, [message, targetMediaUrl, isVideo]);
 
   // Clear canvas immediately
   const clearCanvas = useCallback(() => {
@@ -253,7 +254,7 @@ export default function ViewOnceModal({
     onClose();
   };
 
-  if (!message || !message.mediaUrl) return null;
+  if (!message || !targetMediaUrl) return null;
 
   const content = (
     <div
@@ -416,7 +417,7 @@ export default function ViewOnceModal({
             {isVideo ? (
               <video
                 ref={videoRef}
-                src={message.mediaUrl}
+                src={targetMediaUrl}
                 playsInline
                 autoPlay
                 controls
@@ -431,7 +432,7 @@ export default function ViewOnceModal({
             ) : (
               <div style={{ position: 'relative', maxWidth: '100vw', maxHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <img
-                  src={message.mediaUrl}
+                  src={targetMediaUrl}
                   alt="Protected View"
                   draggable={false}
                   onContextMenu={(e) => e.preventDefault()}

@@ -529,7 +529,7 @@ export default function FogSnapModal({
           {/* Underlying Photo */}
           <img
             ref={imgRef}
-            src={message?.mediaUrl}
+            src={message?.mediaUrl || (Array.isArray(message?.mediaUrls) && message?.mediaUrls[0]) || ''}
             alt="Secret Dust Image"
             onLoad={() => {
               setImgLoaded(true);
