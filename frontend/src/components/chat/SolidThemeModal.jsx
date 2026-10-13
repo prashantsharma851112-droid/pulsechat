@@ -19,8 +19,8 @@ const SOLID_THEMES = [
   { id: 'cyber_glow', name: '⚡ Cyber Pulse', color: '#06b6d4', card: '#082531', isPro: true }
 ];
 
-export default function SolidThemeModal({ onClose, onSelectTheme }) {
-  const { theme, changeTheme } = useContext(ThemeContext);
+export default function SolidThemeModal({ onClose, onSelectTheme, currentTheme }) {
+  const { theme } = useContext(ThemeContext);
   const { user } = useContext(AuthContext);
   const [showProModal, setShowProModal] = useState(false);
 
@@ -31,7 +31,7 @@ export default function SolidThemeModal({ onClose, onSelectTheme }) {
       setShowProModal(true);
       return;
     }
-    changeTheme(t.id);
+    // Only apply to this specific chat! Do NOT call global changeTheme()!
     if (onSelectTheme) onSelectTheme(t.id);
   };
 
@@ -75,11 +75,11 @@ export default function SolidThemeModal({ onClose, onSelectTheme }) {
           {/* Body */}
           <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-              Select App UI solid color theme. Changes apply across all chat screens instantly.
+              Select solid color theme for this chat. Changes apply specifically to this conversation.
             </div>
 
             {SOLID_THEMES.map((t) => {
-              const isCurrent = theme === t.id;
+              const isCurrent = (currentTheme || 'default') === t.id;
               const isLocked = t.isPro && !isUserProActive;
               return (
                 <div

@@ -995,6 +995,11 @@ function MessageItem({
   const [showEditPoll, setShowEditPoll] = useState(false);
   const [viewedByState, setViewedByState] = useState(message.viewedBy || []);
   const [viewCountsState, setViewCountsState] = useState(message.viewCounts || {});
+
+  useEffect(() => {
+    if (message.viewedBy) setViewedByState(message.viewedBy);
+    if (message.viewCounts) setViewCountsState(message.viewCounts);
+  }, [message.viewedBy, message.viewCounts]);
   const [downloadState, setDownloadState] = useState(''); // '' | 'Saving...' | 'Saved!'
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [showLightboxControls, setShowLightboxControls] = useState(true);
@@ -1092,8 +1097,14 @@ function MessageItem({
 
   useEffect(() => {
     if (!socket) return;
-    const handleViewOnceUpdate = ({ messageId, viewedBy, viewCounts }) => {
-      if (messageId === message.id || messageId === message._id || messageId === message.clientTempId) {
+    const handleViewOnceUpdate = ({ messageId, messageMongoId, viewedBy, viewCounts }) => {
+      const isMatch = (
+        messageId === message.id ||
+        messageId === message._id ||
+        messageId === message.clientTempId ||
+        (messageMongoId && (messageMongoId === message._id || messageMongoId === message.id))
+      );
+      if (isMatch) {
         if (viewedBy) setViewedByState(viewedBy);
         if (viewCounts) setViewCountsState(viewCounts);
       }

@@ -305,7 +305,15 @@ module.exports = {
   },
 
   markViewOnceOpened: async (messageId, userId) => {
-    const msg = await Message.findOne({ id: messageId });
+    if (!messageId) return null;
+    const mongoose = require('mongoose');
+    const isObjId = mongoose.Types.ObjectId.isValid(messageId);
+    const msg = await Message.findOne({
+      $or: [
+        { id: String(messageId) },
+        ...(isObjId ? [{ _id: messageId }] : [])
+      ]
+    });
     if (!msg || !msg.isViewOnce) return null;
 
     // Check if the user is the sender (must NOT count as recipient view)
@@ -651,8 +659,12 @@ module.exports = {
   },
 
   clearChatMessages: async (chatId) => {
-    const messages = await Message.find({ chatId }).lean();
-    await Message.deleteMany({ chatId });
+    if (!chatId) return [];
+    const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+    const reversedChatId = (chatId && chatId.includes('_')) ? chatId.split('_').reverse().join('_') : chatId;
+    const chatQueries = Array.from(new Set([chatId, canonicalChatId, reversedChatId]));
+    const messages = await Message.find({ chatId: { $in: chatQueries } }).lean();
+    await Message.deleteMany({ chatId: { $in: chatQueries } });
     return messages;
   },
 

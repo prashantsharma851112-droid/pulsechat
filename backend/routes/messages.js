@@ -740,6 +740,32 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
   }
 });
 
+// Clear all messages in chat
+router.delete('/clear/:chatId', authMiddleware, async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    await db.clearChatMessages(chatId);
+    const io = req.app.get('io');
+    if (io) {
+      const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+      io.to(chatId).emit('chat_cleared', { chatId });
+      if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('chat_cleared', { chatId: canonicalChatId });
+      if (chatId && chatId.includes('_')) {
+        const parts = chatId.split('_');
+        io.to(`${parts[1]}_${parts[0]}`).emit('chat_cleared', { chatId: `${parts[1]}_${parts[0]}` });
+        parts.forEach(uId => {
+          io.to(`user_${uId}`).emit('chat_cleared', { chatId });
+          io.to(uId).emit('chat_cleared', { chatId });
+        });
+      }
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error clearing chat:', err);
+    res.status(500).json({ error: 'Failed to clear chat' });
+  }
+});
+
 // Mark Chat Messages as Read
 router.put('/:chatId/read', authMiddleware, async (req, res) => {
   try {

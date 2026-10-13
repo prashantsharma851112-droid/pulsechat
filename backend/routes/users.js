@@ -540,13 +540,14 @@ router.put('/music-note', authMiddleware, async (req, res) => {
   try {
     const { song, noteText } = req.body;
     const targetUserId = req.user.id;
-    const existingUser = await User.findOne({ id: targetUserId });
+    const hasContent = Boolean((song && (song.songTitle || song.audioUrl)) || (noteText && String(noteText).trim().length > 0));
+    const existingUser = await User.findOne({ $or: [{ id: targetUserId }, { _id: targetUserId }] });
     const existingLikes = existingUser?.musicNote?.likes || [];
     const musicNote = hasContent ? {
       songTitle: song?.songTitle || '',
       artistName: song?.artistName || '',
       audioUrl: song?.audioUrl || '',
-      artworkUrl: song?.artworkUrl || '',
+      artworkUrl: song?.artworkUrl || song?.albumArt || '',
       duration: song?.duration || 0,
       startTime: Number(song?.startTime) || 0,
       snippetDuration: Number(song?.snippetDuration) || 30,

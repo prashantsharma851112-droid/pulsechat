@@ -663,7 +663,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   }, [chatMusicSong, chatId]);
 
   const [chatTheme, setChatTheme] = useState(() => {
-    return localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'default';
+    return localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || 'default';
   });
   const [selectedVibe, setSelectedVibe] = useState('⚡ Quick Pulse');
 
@@ -972,7 +972,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       localStorage.removeItem(`pulsechat_chat_theme_${chatId}`);
     } else {
       localStorage.setItem(`pulsechat_chat_theme_${chatId}`, newTheme);
-      localStorage.setItem('pulsechat_chat_default_theme', newTheme);
     }
     if (socket) {
       socket.emit('set_chat_theme', { chatId, themeId: newTheme, userId: user?.id, setBy: user?.id });
@@ -2690,7 +2689,41 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     const handleChatCleared = ({ chatId: targetChatId }) => {
-      if (targetChatId === chatId) setMessages([]);
+      const currentCanonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+      const targetCanonical = (targetChatId && targetChatId.includes('_')) ? targetChatId.split('_').sort().join('_') : targetChatId;
+      if (targetChatId === chatId || (currentCanonical && currentCanonical === targetCanonical)) {
+        setMessages([]);
+        setCachedMessages(chatId, []);
+        if (currentCanonical && currentCanonical !== chatId) {
+          setCachedMessages(currentCanonical, []);
+        }
+        updateRecentChatSnippet(user?.id, chatId, null, activeChat);
+        window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+      }
+    };
+
+    const handleViewOnceUpdated = ({ messageId, messageMongoId, viewedBy, viewCounts, status }) => {
+      setMessages(prev => {
+        const next = prev.map(m => {
+          const isMatch = (
+            m.id === messageId ||
+            (messageMongoId && (m._id === messageMongoId || m.id === messageMongoId)) ||
+            m._id === messageId ||
+            m.clientTempId === messageId
+          );
+          if (isMatch) {
+            return {
+              ...m,
+              viewedBy: viewedBy || m.viewedBy,
+              viewCounts: viewCounts || m.viewCounts,
+              status: status || m.status || 'read'
+            };
+          }
+          return m;
+        });
+        setCachedMessages(chatId, next);
+        return next;
+      });
     };
 
     const handleChatRestored = ({ chatId: targetChatId, messages: restoredMsgs }) => {
@@ -2850,6 +2883,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     socket.on('messages_delivered', handleMessagesDelivered);
     socket.on('reaction_updated', handleReactionUpdated);
     socket.on('message_restored', handleMessageRestored);
+    socket.on('view_once_updated', handleViewOnceUpdated);
     socket.on('chat_cleared', handleChatCleared);
     socket.on('chat_restored', handleChatRestored);
     const handleGroupUpdated = (data) => {
@@ -2953,6 +2987,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.off('messages_delivered', handleMessagesDelivered);
       socket.off('reaction_updated', handleReactionUpdated);
       socket.off('message_restored', handleMessageRestored);
+      socket.off('view_once_updated', handleViewOnceUpdated);
       socket.off('chat_cleared', handleChatCleared);
       socket.off('chat_restored', handleChatRestored);
       socket.off('multiple_messages_deleted', handleMultipleDeleted);
@@ -3090,18 +3125,34 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   }, [multiDeleteUndoSecs]);
 
   // Clear Entire Current Chat
-  const handleClearCurrentChat = () => {
+  const handleClearCurrentChat = async () => {
     if (!messages || messages.length === 0) return;
-    if (!window.confirm(`Clear all messages in "${activeChat.displayName}"?`)) return;
+    const chatTitle = activeChat?.displayName || activeChat?.name || 'this chat';
+    if (!window.confirm(`Clear all messages in "${chatTitle}"?`)) return;
 
     const backup = [...messages];
     setClearedBackup(backup);
     setClearedUndoSecs(8);
 
+    setMessages([]);
+    setCachedMessages(chatId, []);
+    const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+    if (canonicalChatId && canonicalChatId !== chatId) {
+      setCachedMessages(canonicalChatId, []);
+    }
+    updateRecentChatSnippet(user?.id, chatId, null, activeChat);
+    window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+
     if (socket) {
       socket.emit('clear_chat', { chatId });
     }
-    setMessages([]);
+
+    try {
+      fetch(`${BACKEND_URL}/api/messages/clear/${chatId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(() => {});
+    } catch (e) {}
   };
 
   const handleUndoClearChat = () => {
@@ -7436,6 +7487,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {showSolidThemeModal && (
         <SolidThemeModal
+          currentTheme={chatTheme}
           onClose={() => setShowSolidThemeModal(false)}
           onSelectTheme={handleSelectChatTheme}
         />

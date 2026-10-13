@@ -1069,12 +1069,13 @@ io.on('connection', (socket) => {
       if (updatedMsg) {
         const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
         const viewPayload = {
-          messageId,
+          messageId: updatedMsg.id || messageId,
+          messageMongoId: String(updatedMsg._id),
           viewedBy: updatedMsg.viewedBy,
           viewCounts: updatedMsg.viewCounts,
           status: updatedMsg.status || 'read'
         };
-        const readPayload = { messageId, chatId, canonicalChatId, status: 'read' };
+        const readPayload = { messageId: updatedMsg.id || messageId, messageMongoId: String(updatedMsg._id), chatId, canonicalChatId, status: 'read' };
 
         if (chatId) io.to(chatId).emit('view_once_updated', viewPayload);
         if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('view_once_updated', viewPayload);
@@ -1149,8 +1150,21 @@ io.on('connection', (socket) => {
 
   // Clear Specific Chat Handler
   socket.on('clear_chat', async ({ chatId }) => {
+    if (!chatId) return;
+    const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
     await db.clearChatMessages(chatId);
     io.to(chatId).emit('chat_cleared', { chatId });
+    if (canonicalChatId && canonicalChatId !== chatId) {
+      io.to(canonicalChatId).emit('chat_cleared', { chatId: canonicalChatId });
+    }
+    if (chatId && chatId.includes('_')) {
+      const parts = chatId.split('_');
+      io.to(`${parts[1]}_${parts[0]}`).emit('chat_cleared', { chatId: `${parts[1]}_${parts[0]}` });
+      parts.forEach(uId => {
+        io.to(`user_${uId}`).emit('chat_cleared', { chatId });
+        io.to(uId).emit('chat_cleared', { chatId });
+      });
+    }
   });
 
   // Restore Cleared Chat Handler (Undo Clear Chat)
