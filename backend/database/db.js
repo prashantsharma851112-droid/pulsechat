@@ -569,16 +569,21 @@ module.exports = {
         let lastMsgText = '';
         const isFromMe = myVariants.includes(lastMessage.senderId);
 
-        if (lastMessage.type === 'story_reply' || lastMessage.storyReply) {
+        if (lastMessage.type === 'stealth_dust' || lastMessage.isDustText) {
+          lastMsgText = '⚡ Stealth Dust Text';
+        } else if (lastMessage.type === 'story_reply' || lastMessage.storyReply) {
           const sr = lastMessage.storyReply;
-          if (sr?.reactionEmoji) {
+          const isSharedStory = (lastMessage.content && lastMessage.content.startsWith('Shared ')) || (!sr?.reactionEmoji && !sr?.tipSparks && !sr?.replyText);
+          if (isSharedStory) {
+            lastMsgText = isFromMe ? 'You shared a vibe ⚡' : 'Shared a vibe ⚡';
+          } else if (sr?.reactionEmoji) {
             lastMsgText = isFromMe ? `You reacted ${sr.reactionEmoji} to story` : `Reacted ${sr.reactionEmoji} to your story`;
           } else if (sr?.tipSparks) {
             lastMsgText = isFromMe ? `You tipped ⚡ ${sr.tipSparks} Sparks on story` : `Tipped ⚡ ${sr.tipSparks} Sparks on your story!`;
           } else if (sr?.replyText) {
             lastMsgText = isFromMe ? `You replied: "${sr.replyText}"` : `Replied to your story: "${sr.replyText}"`;
           } else {
-            lastMsgText = isFromMe ? `You replied to story` : `Replied to your story`;
+            lastMsgText = isFromMe ? 'You shared a vibe ⚡' : 'Shared a vibe ⚡';
           }
         } else if (lastMessage.type === 'text') {
           if (lastMessage.content && lastMessage.content.startsWith('Replied to your story:')) {
@@ -598,8 +603,6 @@ module.exports = {
           }
         } else if (lastMessage.type === '3d_text') {
           lastMsgText = `✨ 3D: ${lastMessage.content}`;
-        } else if (lastMessage.type === 'stealth_dust') {
-          lastMsgText = '⚡ Stealth Dust Text';
         } else if (lastMessage.type === 'gift') {
           lastMsgText = '🎁 Virtual Gift';
         } else if (lastMessage.type === 'call') {
@@ -626,7 +629,7 @@ module.exports = {
           lastMessage: lastMsgText,
           lastMessageTime: lastMessage.timestamp,
           lastMessageTimestamp: lastMessage.timestamp,
-          lastMessageFromMe: lastMessage.senderId === myId,
+          lastMessageFromMe: isFromMe,
           lastMessageStatus: lastMessage.status || 'sent',
           lastMessageType: lastMessage.type || 'text',
           unreadCount

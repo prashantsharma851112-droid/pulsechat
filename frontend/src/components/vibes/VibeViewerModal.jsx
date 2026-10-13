@@ -30,6 +30,90 @@ function formatStoryTimeAgo(dateInput) {
   return `${diffDays}d ago`;
 }
 
+function patchMp4ArrayBuffer(buffer, durationSec) {
+  try {
+    const view = new DataView(buffer);
+    const u8 = new Uint8Array(buffer);
+    const len = buffer.byteLength;
+
+    const getBoxType = (pos) => {
+      if (pos + 8 > len) return '';
+      return String.fromCharCode(u8[pos + 4], u8[pos + 5], u8[pos + 6], u8[pos + 7]);
+    };
+
+    let mvhdTimescale = 1000;
+
+    const scanAndPatch = (start, end) => {
+      let pos = start;
+      while (pos + 8 <= end) {
+        let size = view.getUint32(pos);
+        const type = getBoxType(pos);
+        if (size === 1 && pos + 16 <= end) {
+          size = view.getUint32(pos + 12);
+        } else if (size === 0) {
+          size = end - pos;
+        }
+        if (size < 8 || pos + size > end) break;
+
+        const containerTypes = ['moov', 'trak', 'mdia', 'mvex', 'minf', 'stbl'];
+        if (containerTypes.includes(type)) {
+          scanAndPatch(pos + 8, pos + size);
+        } else if (type === 'mvhd') {
+          const version = u8[pos + 8];
+          if (version === 0 && pos + 28 <= end) {
+            mvhdTimescale = view.getUint32(pos + 20) || 1000;
+            const durVal = Math.round(durationSec * mvhdTimescale);
+            view.setUint32(pos + 24, durVal);
+          } else if (version === 1 && pos + 40 <= end) {
+            mvhdTimescale = view.getUint32(pos + 28) || 1000;
+            const durVal = Math.round(durationSec * mvhdTimescale);
+            view.setUint32(pos + 32, 0);
+            view.setUint32(pos + 36, durVal);
+          }
+        } else if (type === 'tkhd') {
+          const version = u8[pos + 8];
+          const durVal = Math.round(durationSec * mvhdTimescale);
+          if (version === 0 && pos + 32 <= end) {
+            view.setUint32(pos + 28, durVal);
+          } else if (version === 1 && pos + 44 <= end) {
+            view.setUint32(pos + 36, 0);
+            view.setUint32(pos + 40, durVal);
+          }
+        } else if (type === 'mdhd') {
+          const version = u8[pos + 8];
+          if (version === 0 && pos + 28 <= end) {
+            const mdhdTimescale = view.getUint32(pos + 20) || mvhdTimescale;
+            const durVal = Math.round(durationSec * mdhdTimescale);
+            view.setUint32(pos + 24, durVal);
+          } else if (version === 1 && pos + 40 <= end) {
+            const mdhdTimescale = view.getUint32(pos + 28) || mvhdTimescale;
+            const durVal = Math.round(durationSec * mdhdTimescale);
+            view.setUint32(pos + 32, 0);
+            view.setUint32(pos + 36, durVal);
+          }
+        } else if (type === 'mehd') {
+          const version = u8[pos + 8];
+          const durVal = Math.round(durationSec * mvhdTimescale);
+          if (version === 0 && pos + 16 <= end) {
+            view.setUint32(pos + 12, durVal);
+          } else if (version === 1 && pos + 20 <= end) {
+            view.setUint32(pos + 12, 0);
+            view.setUint32(pos + 16, durVal);
+          }
+        }
+
+        pos += size;
+      }
+    };
+
+    scanAndPatch(0, len);
+    return buffer;
+  } catch (err) {
+    console.warn('patchMp4ArrayBuffer error:', err);
+    return buffer;
+  }
+}
+
 export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGroup, onClose, onRefresh, initialVibeId }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
@@ -1348,9 +1432,11 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
       createdAt: currentVibe?.createdAt || new Date().toISOString()
     };
 
+    const tempShareId = 'msg_vibe_share_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     const tempMsg = {
-      id: 'msg_vibe_share_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-      clientTempId: 'msg_vibe_share_' + Date.now(),
+      id: tempShareId,
+      tempId: tempShareId,
+      clientTempId: tempShareId,
       chatId: realChatId,
       senderId: myUid,
       senderName: user?.displayName || user?.name || user?.username,
@@ -2418,7 +2504,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
       setDownloadProgress(98);
       let finalBlob = new Blob(chunks, { type: mimeType });
 
-      // Fix WebM 0-second duration bug in Chromium / Android MediaRecorder
+      // Fix WebM & MP4 0-second duration bug in Chromium / Android MediaRecorder
       if (mimeType.includes('webm') && finalBlob && finalBlob.size > 1000) {
         try {
           finalBlob = await new Promise((resolve) => {
@@ -2428,6 +2514,14 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
           });
         } catch (webmErr) {
           console.warn('Could not patch WebM duration header:', webmErr);
+        }
+      } else if (mimeType.includes('mp4') && finalBlob && finalBlob.size > 1000) {
+        try {
+          const ab = await finalBlob.arrayBuffer();
+          const patchedAb = patchMp4ArrayBuffer(ab, durationSec);
+          finalBlob = new Blob([patchedAb], { type: mimeType });
+        } catch (mp4Err) {
+          console.warn('Could not patch MP4 duration header:', mp4Err);
         }
       }
 

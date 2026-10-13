@@ -2165,6 +2165,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             // 2. Overwrite / merge with latest server messages (fresh status, reactions, new texts)
             data.forEach(m => {
               if (m && m.id) {
+                if (m.clientTempId && messageMap.has(m.clientTempId)) {
+                  messageMap.delete(m.clientTempId);
+                }
+                if (m.tempId && messageMap.has(m.tempId)) {
+                  messageMap.delete(m.tempId);
+                }
                 messageMap.set(m.id, m);
               }
             });

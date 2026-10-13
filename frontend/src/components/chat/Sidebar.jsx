@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass, Edit3, Pin, Music, Disc, Play, Pause, Headphones } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, CheckCheck, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass, Edit3, Pin, Music, Disc, Play, Pause, Headphones } from 'lucide-react';
 import FriendsTab from './FriendsTab';
 import { useBackHandler } from '../../utils/backNavigation';
 import PulseVipBadge from '../common/PulseVipBadge';
@@ -97,6 +97,33 @@ class ModalErrorBoundary extends React.Component {
       );
     }
     return this.props.children;
+  }
+}
+
+function formatChatListTime(timeInput) {
+  if (!timeInput) return '';
+  try {
+    const d = new Date(timeInput);
+    if (isNaN(d.getTime())) return '';
+    const now = new Date();
+    const diffMs = now - d;
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHrs = Math.floor(diffMin / 60);
+    const diffDays = Math.floor(diffHrs / 24);
+
+    if (diffSec < 60) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m`;
+    if (diffHrs < 24 && d.getDate() === now.getDate()) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) {
+      return d.toLocaleDateString([], { weekday: 'short' });
+    }
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  } catch {
+    return '';
   }
 }
 
@@ -1036,18 +1063,21 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       const targetId = isMyMsg ? msg.receiverId : (msg.isGroup ? msg.chatId : msg.senderId);
       if (!targetId && !msg.chatId) return;
 
-      let contentSnippet = (msg.type === 'story_reply' || msg.storyReply)
+      let contentSnippet = (msg.type === 'stealth_dust' || msg.isDustText)
+        ? '⚡ Stealth Dust Text'
+        : (msg.type === 'story_reply' || msg.storyReply)
         ? (() => {
             const sr = msg.storyReply;
+            const isShared = (msg.content && msg.content.startsWith('Shared ')) || (!sr?.reactionEmoji && !sr?.tipSparks && !sr?.replyText);
+            if (isShared) return isMyMsg ? 'You shared a vibe ⚡' : 'Shared a vibe ⚡';
             if (sr?.reactionEmoji) return isMyMsg ? `You reacted ${sr.reactionEmoji} to story` : `Reacted ${sr.reactionEmoji} to your story`;
             if (sr?.tipSparks) return isMyMsg ? `You tipped ⚡ ${sr.tipSparks} Sparks on story` : `Tipped ⚡ ${sr.tipSparks} Sparks on your story!`;
             if (sr?.replyText) return isMyMsg ? `You replied: "${sr.replyText}"` : `Replied to your story: "${sr.replyText}"`;
-            return isMyMsg ? 'You replied to story' : 'Replied to your story';
+            return isMyMsg ? 'You shared a vibe ⚡' : 'Shared a vibe ⚡';
           })()
         : (msg.type === 'text'
         ? (msg.content || '')
         : (msg.type === '3d_text' ? `✨ 3D: ${msg.content}`
-        : msg.type === 'stealth_dust' ? '⚡ Stealth Dust Text'
         : msg.type === 'image' ? '📷 Photo'
         : msg.type === 'video' ? '🎥 Video'
         : msg.type === 'audio' || msg.type === 'voice' ? '🎤 Voice message'
@@ -1289,6 +1319,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       }));
     });
 
+    const handleReadUpdate = ({ messageId, chatId: cId, status }) => {
+      setRecentChats(prev => prev.map(c => {
+        if (c.id === cId || (cId && typeof cId === 'string' && cId.includes(c.id))) {
+          return { ...c, lastMessageStatus: status || 'read' };
+        }
+        return c;
+      }));
+    };
+    socket.on('message_read_update', handleReadUpdate);
+
     // Instant local read update (0ms, no network roundtrip needed)
     const handleChatRead = ({ chatId: cId, userId }) => {
       const readerStr = String(userId || '');
@@ -1314,6 +1354,22 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           return isMatch ? { ...c, unreadCount: 0 } : c;
         }));
         setGroups(prev => prev.map(g => g.id === cId ? { ...g, unreadCount: 0 } : g));
+      } else if (!isMe) {
+        // Other user read my messages -> mark lastMessageStatus as read
+        setRecentChats(prev => prev.map(c => {
+          const isMatch = Boolean(
+            c.id === cId ||
+            c._id === cId ||
+            (c.username && c.username === cId) ||
+            (c.chatId && c.chatId === cId) ||
+            (typeof cId === 'string' && (
+              (c.id && cId.includes(c.id)) ||
+              (c._id && cId.includes(c._id)) ||
+              (c.username && cId.includes(c.username))
+            ))
+          );
+          return isMatch ? { ...c, lastMessageStatus: 'read' } : c;
+        }));
       }
     };
     socket.on('chat_read_update', handleChatRead);
@@ -1500,6 +1556,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       socket.off('reaction_updated', handleReactionUpdated);
       socket.off('message_delivered_update', handleDeliveryUpdate);
       socket.off('messages_delivered');
+      socket.off('message_read_update', handleReadUpdate);
       socket.off('chat_read_update', handleChatRead);
       socket.off('new_user_registered', handleNewUser);
       socket.off('user_profile_updated', handleProfileUpdate);
@@ -2756,6 +2813,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                           )}
                         </h4>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {(u.lastMessageTimestamp || u.lastMessageTime) && (
+                            <span style={{
+                              fontSize: '0.72rem',
+                              color: u.unreadCount > 0 ? '#38bdf8' : 'var(--text-muted)',
+                              fontWeight: u.unreadCount > 0 ? 600 : 400,
+                              flexShrink: 0
+                            }}>
+                              {formatChatListTime(u.lastMessageTimestamp || u.lastMessageTime)}
+                            </span>
+                          )}
                           {u.unreadCount > 0 && (
                             <span className="unread-badge">
                               {u.unreadCount}
@@ -2797,7 +2864,18 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                           </button>
                         </div>
                       </div>
-                      <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <p style={{
+                        fontSize: '0.84rem',
+                        color: u.unreadCount > 0 ? 'var(--text-color)' : 'var(--text-muted)',
+                        fontWeight: u.unreadCount > 0 ? 500 : 400,
+                        margin: '2px 0 0 0',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
                         {(() => {
                           const contactChatId = u.isGroup ? u.id : (user?.id ? [user.id, u.id].sort().join('_') : u.id);
                           const typingUser = typingMap ? typingMap[contactChatId] : null;
@@ -2805,10 +2883,59 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                           if (isContactTyping) {
                             return <span style={{ color: '#22c55e', fontWeight: 600 }}>✍️ typing...</span>;
                           }
-                          if (u.lastMessage) {
-                            return typeof u.lastMessage === 'string' ? u.lastMessage : (u.lastMessage.content || `@${u.username}`);
+
+                          const isFromMe = Boolean(u.lastMessageFromMe);
+                          const status = u.lastMessageStatus || 'sent';
+
+                          let statusIcon = null;
+                          if (isFromMe && u.lastMessage) {
+                            if (status === 'read' || status === 'seen') {
+                              statusIcon = (
+                                <CheckCheck
+                                  size={14}
+                                  style={{
+                                    color: '#38bdf8',
+                                    flexShrink: 0,
+                                    filter: 'drop-shadow(0 0 2px rgba(56,189,248,0.5))'
+                                  }}
+                                />
+                              );
+                            } else if (status === 'delivered') {
+                              statusIcon = (
+                                <CheckCheck
+                                  size={14}
+                                  style={{
+                                    color: 'var(--text-muted, #94a3b8)',
+                                    flexShrink: 0
+                                  }}
+                                />
+                              );
+                            } else {
+                              statusIcon = (
+                                <Check
+                                  size={14}
+                                  style={{
+                                    color: 'var(--text-muted, #94a3b8)',
+                                    flexShrink: 0
+                                  }}
+                                />
+                              );
+                            }
                           }
-                          return `@${u.username}`;
+
+                          let textSnippet = `@${u.username}`;
+                          if (u.lastMessage) {
+                            textSnippet = typeof u.lastMessage === 'string' ? u.lastMessage : (u.lastMessage.content || `@${u.username}`);
+                          }
+
+                          return (
+                            <>
+                              {statusIcon}
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {textSnippet}
+                              </span>
+                            </>
+                          );
                         })()}
                       </p>
                     </div>

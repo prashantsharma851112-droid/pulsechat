@@ -117,28 +117,50 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
   });
 
   const isFromMe = message.senderId === userId;
-  let formattedContent = message.content || '';
-  if (message.type === 'text' && formattedContent) {
-    if (formattedContent.startsWith('Replied to your story:')) {
-      formattedContent = isFromMe
-        ? formattedContent.replace(/^Replied to your story:\s*/, 'You replied: ')
-        : formattedContent;
-    } else if (formattedContent.startsWith('Reacted ') && formattedContent.includes(' to your story')) {
-      formattedContent = isFromMe
-        ? formattedContent.replace(/\s*to your story$/, ' to story')
-        : formattedContent;
-    } else if (formattedContent.startsWith('Tipped ') && formattedContent.includes(' on your story!')) {
-      formattedContent = isFromMe
-        ? formattedContent.replace(/\s*on your story!$/, ' on story!')
-        : formattedContent;
+  let formattedContent = '';
+
+  if (message.type === 'stealth_dust' || message.isDustText) {
+    formattedContent = '⚡ Stealth Dust Text';
+  } else if (message.type === 'story_reply' || message.storyReply) {
+    const sr = message.storyReply;
+    const isShared = (message.content && message.content.startsWith('Shared ')) || (!sr?.reactionEmoji && !sr?.tipSparks && !sr?.replyText);
+    if (isShared) {
+      formattedContent = isFromMe ? 'You shared a vibe ⚡' : 'Shared a vibe ⚡';
+    } else if (sr?.reactionEmoji) {
+      formattedContent = isFromMe ? `You reacted ${sr.reactionEmoji} to story` : `Reacted ${sr.reactionEmoji} to your story`;
+    } else if (sr?.tipSparks) {
+      formattedContent = isFromMe ? `You tipped ⚡ ${sr.tipSparks} Sparks on story` : `Tipped ⚡ ${sr.tipSparks} Sparks on your story!`;
+    } else if (sr?.replyText) {
+      formattedContent = isFromMe ? `You replied: "${sr.replyText}"` : `Replied to your story: "${sr.replyText}"`;
+    } else {
+      formattedContent = isFromMe ? 'You shared a vibe ⚡' : 'Shared a vibe ⚡';
     }
+  } else if (message.type === 'text') {
+    let raw = message.content || '';
+    if (raw.startsWith('Replied to your story:')) {
+      formattedContent = isFromMe ? raw.replace(/^Replied to your story:\s*/, 'You replied: ') : raw;
+    } else if (raw.startsWith('Reacted ') && raw.includes(' to your story')) {
+      formattedContent = isFromMe ? raw.replace(/\s*to your story$/, ' to story') : raw;
+    } else if (raw.startsWith('Tipped ') && raw.includes(' on your story!')) {
+      formattedContent = isFromMe ? raw.replace(/\s*on your story!$/, ' on story!') : raw;
+    } else {
+      formattedContent = raw;
+    }
+  } else if (message.type === '3d_text') {
+    formattedContent = `✨ 3D: ${message.content}`;
+  } else if (message.type === 'voice') {
+    formattedContent = '🎤 Voice note';
+  } else if (message.type === 'image' || message.type === 'fog_snap') {
+    formattedContent = message.isFogSnap ? '🌫️ Fog Snap' : (message.content || '🖼️ Photo');
+  } else if (message.type === 'video') {
+    formattedContent = '🎥 Video';
+  } else {
+    formattedContent = message.content || 'Sent a file';
   }
 
   const msgTime = message.timestamp || new Date().toISOString();
   const snippet = {
-    lastMessage: message.type === '3d_text'
-      ? `✨ 3D: ${message.content}`
-      : (formattedContent || (message.type === 'voice' ? '🎤 Voice note' : 'Sent a file')),
+    lastMessage: formattedContent,
     lastMessageTime: msgTime,
     lastMessageTimestamp: msgTime,
     lastMessageType: message.type || 'text',
