@@ -536,19 +536,33 @@ router.get('/public/card/:username', async (req, res) => {
 });
 
 // Update or Clear User's Instagram-style Music Note (App-wide tune)
-router.put('/music-note', authMiddleware, async (req, res) => {
+const handleMusicNoteUpdate = async (req, res) => {
   try {
-    const { song, noteText } = req.body;
-    const targetUserId = req.user.id;
+    const { song, noteText } = req.body || {};
+    const targetUserId = req.userId || req.user?.id || req.user?._id;
     const hasContent = Boolean((song && (song.songTitle || song.audioUrl)) || (noteText && String(noteText).trim().length > 0));
-    const existingUser = await User.findOne({ $or: [{ id: targetUserId }, { _id: targetUserId }] });
+
+    const mongoose = require('mongoose');
+    const isObjectId = mongoose.Types.ObjectId.isValid(targetUserId);
+    const userQuery = {
+      $or: [
+        { id: targetUserId },
+        ...(isObjectId ? [{ _id: targetUserId }] : []),
+        { username: targetUserId }
+      ]
+    };
+    const existingUser = await User.findOne(userQuery);
+    if (!existingUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     const existingLikes = existingUser?.musicNote?.likes || [];
     const musicNote = hasContent ? {
       songTitle: song?.songTitle || '',
       artistName: song?.artistName || '',
       audioUrl: song?.audioUrl || '',
       artworkUrl: song?.artworkUrl || song?.albumArt || '',
-      duration: song?.duration || 0,
+      duration: Number(song?.duration) || 0,
       startTime: Number(song?.startTime) || 0,
       snippetDuration: Number(song?.snippetDuration) || 30,
       noteText: (noteText || '').trim(),
@@ -562,8 +576,8 @@ router.put('/music-note', authMiddleware, async (req, res) => {
     const io = req.app.get('io');
     if (io) {
       io.emit('user_music_note_updated', {
-        userId: req.user.id,
-        username: req.user.username,
+        userId: targetUserId,
+        username: req.user?.username || existingUser.username,
         musicNote
       });
     }
@@ -573,7 +587,10 @@ router.put('/music-note', authMiddleware, async (req, res) => {
     console.error('Error updating music note:', err);
     res.status(500).json({ error: 'Failed to update music note' });
   }
-});
+};
+
+router.put('/music-note', authMiddleware, handleMusicNoteUpdate);
+router.delete('/music-note', authMiddleware, handleMusicNoteUpdate);
 
 // Toggle Like on a User's Instagram-style Vibe Music Note
 router.put('/music-note/:targetUserId/like', authMiddleware, async (req, res) => {

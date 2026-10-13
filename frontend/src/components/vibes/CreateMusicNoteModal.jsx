@@ -45,20 +45,13 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
         if (user.musicNote.duration) {
           setTrackTotalDuration(Number(user.musicNote.duration));
         }
-      } else if (currentTrack) {
-        setSelectedSong(currentTrack);
-        setStartTime(0);
-        setSnippetDuration(30);
-        if (currentTrack.duration) {
-          setTrackTotalDuration(Number(currentTrack.duration));
-        }
       } else {
         setSelectedSong(null);
         setStartTime(0);
         setSnippetDuration(30);
       }
     }
-  }, [isOpen, user?.musicNote, musicNoteText, currentTrack]);
+  }, [isOpen, user?.musicNote, musicNoteText]);
 
   // Clean audio on unmount or close
   useEffect(() => {
@@ -521,7 +514,7 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-          {(currentTrack || musicNoteText || user?.musicNote) && (
+          {Boolean(musicNoteText || user?.musicNote) && (
             <button
               type="button"
               onClick={handleDelete}

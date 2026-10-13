@@ -165,7 +165,8 @@ export function AuthProvider({ children }) {
           ...(data.hideOnlineStatus !== undefined && { hideOnlineStatus: Boolean(data.hideOnlineStatus) }),
           ...(data.hideReadReceipts !== undefined && { hideReadReceipts: Boolean(data.hideReadReceipts) }),
           ...(data.ghostChats !== undefined && { ghostChats: data.ghostChats }),
-          ...(data.autoCleanupEnabled !== undefined && { autoCleanupEnabled: Boolean(data.autoCleanupEnabled) })
+          ...(data.autoCleanupEnabled !== undefined && { autoCleanupEnabled: Boolean(data.autoCleanupEnabled) }),
+          ...(data.musicNote !== undefined && { musicNote: data.musicNote })
         };
         setCachedUser(merged);
         const curToken = localStorage.getItem('pulsechat_token');
@@ -178,6 +179,24 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('pulsechat_user_profile_updated', handleProfileUpdateEvent);
   }, []);
 
+  // Listen for real-time music note updates (Create / Edit / Remove)
+  useEffect(() => {
+    const handleMusicNoteUpdateEvent = (e) => {
+      const note = e.detail?.musicNote !== undefined ? e.detail.musicNote : null;
+      setUser(current => {
+        if (!current) return current;
+        const merged = { ...current, musicNote: note };
+        setCachedUser(merged);
+        const curToken = localStorage.getItem('pulsechat_token');
+        if (curToken) updateSavedAccountsList(merged, curToken);
+        return merged;
+      });
+    };
+
+    window.addEventListener('pulsechat_music_note_updated', handleMusicNoteUpdateEvent);
+    return () => window.removeEventListener('pulsechat_music_note_updated', handleMusicNoteUpdateEvent);
+  }, []);
+
   // Auto-cleanup local message storage (keeps last 7 days safe, cleans older)
   useEffect(() => {
     if (user && user.autoCleanupEnabled !== false) {
@@ -186,11 +205,16 @@ export function AuthProvider({ children }) {
   }, [user?.id, user?.autoCleanupEnabled]);
 
   const updateUserProfile = (updatedUser) => {
-    setUser(updatedUser);
-    setCachedUser(updatedUser);
-    if (token) {
-      updateSavedAccountsList(updatedUser, token);
-    }
+    setUser(current => {
+      const merged = typeof updatedUser === 'function'
+        ? updatedUser(current)
+        : (current && updatedUser ? { ...current, ...updatedUser } : updatedUser);
+      setCachedUser(merged);
+      if (token && merged) {
+        updateSavedAccountsList(merged, token);
+      }
+      return merged;
+    });
   };
 
   const blockUser = async (targetUserId) => {

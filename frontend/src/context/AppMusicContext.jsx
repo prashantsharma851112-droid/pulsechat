@@ -205,8 +205,29 @@ export function AppMusicProvider({ children }) {
 
   // Save as User's Instagram-style Music Note (Sync to backend profile, NO background autoplay)
   const saveMusicNote = useCallback(async (song, noteText = '') => {
-    setMusicNoteText(noteText);
-    localStorage.setItem('pulsechat_app_music_note_text', noteText);
+    const trimmedText = (noteText || '').trim();
+    setMusicNoteText(trimmedText);
+    localStorage.setItem('pulsechat_app_music_note_text', trimmedText);
+
+    // Optimistically update local profile and trigger immediate UI sync
+    const optimisticNote = (song || trimmedText) ? {
+      songTitle: song?.songTitle || '',
+      artistName: song?.artistName || '',
+      audioUrl: song?.audioUrl || '',
+      artworkUrl: song?.artworkUrl || song?.albumArt || '',
+      duration: Number(song?.duration) || 0,
+      startTime: Number(song?.startTime) || 0,
+      snippetDuration: Number(song?.snippetDuration) || 30,
+      noteText: trimmedText,
+      likes: user?.musicNote?.likes || [],
+      updatedAt: new Date().toISOString()
+    } : null;
+
+    if (updateUserProfile) {
+      updateUserProfile(current => ({ ...current, musicNote: optimisticNote }));
+    }
+    window.dispatchEvent(new CustomEvent('pulsechat_music_note_updated', { detail: { musicNote: optimisticNote } }));
+    window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
 
     if (token) {
       try {
@@ -216,42 +237,49 @@ export function AppMusicProvider({ children }) {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`
           },
-          body: JSON.stringify({ song, noteText })
+          body: JSON.stringify({ song, noteText: trimmedText })
         });
         const data = await res.json();
-        if (data.success && data.musicNote) {
-          if (updateUserProfile && user) {
-            updateUserProfile({ ...user, musicNote: data.musicNote });
+        if (data.success) {
+          const finalNote = data.musicNote !== undefined ? data.musicNote : optimisticNote;
+          if (updateUserProfile) {
+            updateUserProfile(current => ({ ...current, musicNote: finalNote }));
           }
-          window.dispatchEvent(new CustomEvent('pulsechat_music_note_updated', { detail: { musicNote: data.musicNote } }));
+          window.dispatchEvent(new CustomEvent('pulsechat_music_note_updated', { detail: { musicNote: finalNote } }));
+          window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
         }
       } catch (e) {
         console.warn('Failed to sync music note to server:', e);
       }
     }
-  }, [token, updateUserProfile, user]);
+  }, [token, updateUserProfile, user?.musicNote?.likes]);
 
   const deleteMusicNote = useCallback(async () => {
     setMusicNoteText('');
     localStorage.removeItem('pulsechat_app_music_note_text');
 
+    // Optimistically clear local profile and trigger immediate UI sync
+    if (updateUserProfile) {
+      updateUserProfile(current => ({ ...current, musicNote: null }));
+    }
+    window.dispatchEvent(new CustomEvent('pulsechat_music_note_updated', { detail: { musicNote: null } }));
+    window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
+
     if (token) {
       try {
         await fetch(`${BACKEND_URL}/api/users/music-note`, {
-          method: 'PUT',
+          method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`
           },
           body: JSON.stringify({ song: null, noteText: '' })
         });
-        if (updateUserProfile && user) {
-          updateUserProfile({ ...user, musicNote: null });
-        }
-        window.dispatchEvent(new CustomEvent('pulsechat_music_note_updated', { detail: { musicNote: null } }));
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Failed to delete music note on server:', e);
+      }
     }
-  }, [token, updateUserProfile, user]);
+  }, [token, updateUserProfile]);
 
   // Audio Priority & Coordination:
   // Auto-pause App music when chat music plays, and auto-resume right when chat music stops!
@@ -292,20 +320,25 @@ export function AppMusicProvider({ children }) {
   useEffect(() => {
     if (!socket) return;
     const handleSocketNote = (data) => {
-      if (data?.userId === user?.id) {
-        if (updateUserProfile && user) {
-          updateUserProfile({ ...user, musicNote: data.musicNote || null });
+      const isMe = data?.userId === user?.id ||
+        (user?._id && String(data?.userId) === String(user._id)) ||
+        (data?.username && data?.username === user?.username);
+
+      if (isMe) {
+        const updatedNote = data.musicNote || null;
+        if (updateUserProfile) {
+          updateUserProfile(current => ({ ...current, musicNote: updatedNote }));
         }
-        if (data.musicNote?.noteText !== undefined) {
-          setMusicNoteText(data.musicNote.noteText);
-        }
+        setMusicNoteText(updatedNote?.noteText || '');
+        window.dispatchEvent(new CustomEvent('pulsechat_music_note_updated', { detail: { musicNote: updatedNote } }));
+        window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
       }
     };
     socket.on('user_music_note_updated', handleSocketNote);
     return () => {
       socket.off('user_music_note_updated', handleSocketNote);
     };
-  }, [socket, user?.id, updateUserProfile, user]);
+  }, [socket, user?.id, user?._id, user?.username, updateUserProfile]);
 
   const value = {
     currentTrack,

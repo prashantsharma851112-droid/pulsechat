@@ -202,7 +202,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
   const { user, token } = useContext(AuthContext);
   const { deleteMusicNote } = useAppMusic();
 
-  const activeNote = isMine ? (note || user?.musicNote) : note;
+  const activeNote = isMine ? (note !== undefined ? note : user?.musicNote) : note;
   const [showOptions, setShowOptions] = useState(false);
   const [isPlayingNote, setIsPlayingNote] = useState(false);
   const [showHeartBurst, setShowHeartBurst] = useState(false);
@@ -755,6 +755,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
               type="button"
               onClick={() => {
                 stopNoteAudio();
+                onPop && onPop();
                 onOpenPicker && onOpenPicker();
               }}
               style={{
@@ -778,6 +779,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
               type="button"
               onClick={() => {
                 stopNoteAudio();
+                onPop && onPop();
                 deleteMusicNote();
               }}
               style={{
