@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Flame, ShieldAlert, Sparkles, Lock, AlertTriangle, ArrowLeft, CornerUpLeft, Plus } from 'lucide-react';
+import { X, Flame, ShieldAlert, Sparkles, Lock, ArrowLeft, CornerUpLeft, Plus } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { useBackHandler } from '../../utils/backNavigation';
 
@@ -33,38 +33,30 @@ export default function FogSnapModal({
   onClose,
   socket
 }) {
-  const [isRevealed, setIsRevealed] = useState(false);
   const [timeLeft, setTimeLeft] = useState(message?.fogSnapDuration || 10);
   const [screenshotAlerted, setScreenshotAlerted] = useState(false);
   const [isBurned, setIsBurned] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
-  const canvasRef = useRef(null);
   const imgRef = useRef(null);
-  const isScratchingRef = useRef(false);
   const timerRef = useRef(null);
   const audioCtxRef = useRef(null);
-
-  useBackHandler(() => {
-    if (!isMine && isRevealed) {
-      handleBurn();
-    } else {
-      onClose();
-    }
-  }, true);
+  const burnedRef = useRef(false);
 
   const duration = message?.fogSnapDuration || 10;
   const token = localStorage.getItem('pulsechat_token');
+  const targetMediaUrl = message?.mediaUrl || (Array.isArray(message?.mediaUrls) && message?.mediaUrls[0]) || '';
 
-  // Simple web audio sizzle sound
-  const playSizzle = () => {
+  // Web audio sizzle / dissolve sound
+  const playSizzle = useCallback(() => {
     try {
       if (!audioCtxRef.current) {
         audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
       }
       const ctx = audioCtxRef.current;
       if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-      const bufferSize = ctx.sampleRate * 0.15;
+      const bufferSize = ctx.sampleRate * 0.2;
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
       for (let i = 0; i < bufferSize; i++) {
@@ -74,211 +66,27 @@ export default function FogSnapModal({
       noise.buffer = buffer;
       const filter = ctx.createBiquadFilter();
       filter.type = 'highpass';
-      filter.frequency.value = 2500;
+      filter.frequency.value = 2200;
       const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.04, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.05, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
       noise.connect(filter);
       filter.connect(gain);
       gain.connect(ctx.destination);
       noise.start();
     } catch (e) {}
-  };
+  }, []);
 
-  // Pre-draw Frosted Fog Mist over Canvas (Recipient only)
-  const initCanvasFog = useCallback(() => {
-    if (isMine) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const w = canvas.width;
-    const h = canvas.height;
-
-    // Frosted dark slate fog gradient
-    const grad = ctx.createLinearGradient(0, 0, w, h);
-    grad.addColorStop(0, '#1e293b');
-    grad.addColorStop(0.5, '#0f172a');
-    grad.addColorStop(1, '#1e1b4b');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-
-    // Frosted mist noise particles
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-    for (let i = 0; i < 600; i++) {
-      ctx.fillRect(Math.random() * w, Math.random() * h, Math.random() * 4 + 1, Math.random() * 4 + 1);
-    }
-
-    // Glowing Secret Dust Image Title & Instruction
-    ctx.fillStyle = '#f59e0b';
-    ctx.font = 'bold 22px "Plus Jakarta Sans", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('✨ SCRATCH DUST IMAGE', w / 2, h / 2 - 25);
-
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 14px "Plus Jakarta Sans", sans-serif';
-    ctx.fillText('Scratch smoothly with your finger to reveal!', w / 2, h / 2 + 10);
-
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
-    ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
-    ctx.fillText('🔒 Protected Media • Auto-destructs after reveal', w / 2, h / 2 + 35);
-  }, [isMine]);
-
-  const syncCanvasWithImage = useCallback(() => {
-    if (isMine) return;
-    const img = imgRef.current;
-    const canvas = canvasRef.current;
-    if (!img || !canvas) return;
-    const rect = img.getBoundingClientRect();
-    if (rect.width && rect.height) {
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-    }
-    initCanvasFog();
-  }, [isMine, initCanvasFog]);
-
-  useEffect(() => {
-    if (isMine) return;
-    const img = imgRef.current;
-    if (img && img.complete) {
-      setImgLoaded(true);
-      setTimeout(syncCanvasWithImage, 50);
-    }
-  }, [isMine, syncCanvasWithImage]);
-
-  const lastPosRef = useRef({ x: null, y: null });
-
-  // Calculate Cleared Percentage
-  const checkScratchPercentage = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || isRevealed) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    try {
-      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imgData.data;
-      let transparentPixels = 0;
-      const totalPixels = data.length / 4;
-      // Sample every 16th pixel for speed
-      for (let i = 3; i < data.length; i += 16) {
-        if (data[i] < 128) transparentPixels++;
-      }
-
-      const ratio = transparentPixels / (totalPixels / 4);
-      if (ratio > 0.42) {
-        // More than 42% scratched: Fully Reveal & Start Countdown!
-        setIsRevealed(true);
-        // Wipe remaining canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        if (!isMine) {
-          if (onRevealed) onRevealed();
-
-          // Notify backend that fog snap was revealed (Recipient only!)
-          fetch(`${BACKEND_URL}/api/messages/fog-snap/reveal`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ messageId: message?.id || message?._id, chatId })
-          }).catch(() => {});
-        }
-      }
-    } catch (e) {}
-  }, [isRevealed, isMine, message, chatId, onRevealed, token]);
-
-  // Scratch Action Handler (Buttery Smooth continuous stroke)
-  const handleScratch = useCallback((clientX, clientY) => {
-    const canvas = canvasRef.current;
-    if (!canvas || isRevealed) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-
-    ctx.save();
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = 64;
-
-    ctx.beginPath();
-    if (lastPosRef.current.x !== null && lastPosRef.current.y !== null) {
-      ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    } else {
-      ctx.arc(x, y, 32, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-
-    lastPosRef.current = { x, y };
-
-    playSizzle();
-    checkScratchPercentage();
-  }, [isRevealed, checkScratchPercentage]);
-
-  // Mouse & Touch events
-  const onMouseDown = (e) => {
-    isScratchingRef.current = true;
-    lastPosRef.current = { x: null, y: null };
-    handleScratch(e.clientX, e.clientY);
-  };
-  const onMouseMove = (e) => {
-    if (isScratchingRef.current) handleScratch(e.clientX, e.clientY);
-  };
-  const onMouseUp = () => {
-    isScratchingRef.current = false;
-    lastPosRef.current = { x: null, y: null };
-  };
-
-  const onTouchStart = (e) => {
-    if (e.touches && e.touches.length > 0) {
-      isScratchingRef.current = true;
-      lastPosRef.current = { x: null, y: null };
-      handleScratch(e.touches[0].clientX, e.touches[0].clientY);
-    }
-  };
-  const onTouchMove = (e) => {
-    if (isScratchingRef.current && e.touches && e.touches.length > 0) {
-      handleScratch(e.touches[0].clientX, e.touches[0].clientY);
-    }
-  };
-  const onTouchEnd = () => {
-    isScratchingRef.current = false;
-    lastPosRef.current = { x: null, y: null };
-  };
-
-  // Countdown Fuse once revealed (Recipient only!)
-  useEffect(() => {
-    if (isMine) return; // Sender preview never triggers auto-burn countdown
-    if (!isRevealed || isBurned) return;
-
-    timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current);
-          handleBurn();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isRevealed, isBurned, isMine]);
-
-  const handleBurn = () => {
+  const handleBurn = useCallback(() => {
     if (isMine) {
       onClose();
       return;
     }
-    if (isBurned) return;
+    if (burnedRef.current) return;
+    burnedRef.current = true;
     setIsBurned(true);
+    playSizzle();
+
     const msgId = message?.id || message?._id;
     try {
       if (message?.id) localStorage.setItem(`pulse_fog_burned_${message.id}`, 'true');
@@ -291,9 +99,6 @@ export default function FogSnapModal({
       }));
       window.dispatchEvent(new CustomEvent('pulsechat_stealth_dust_dissolved', {
         detail: { messageId: msgId, chatId }
-      }));
-      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
-        detail: { emoji: '⚡', count: 25 }
       }));
     }
 
@@ -311,52 +116,67 @@ export default function FogSnapModal({
 
     setTimeout(() => {
       onClose();
-    }, 600);
-  };
+    }, 450);
+  }, [isMine, message, chatId, socket, token, onBurned, onClose, playSizzle]);
+
+  useBackHandler(() => {
+    if (!isMine) {
+      handleBurn();
+    } else {
+      onClose();
+    }
+  }, true);
+
+  // 10-Second Countdown Timer (Recipient only)
+  useEffect(() => {
+    if (isMine) return; // Sender preview does not trigger burn countdown
+    if (burnedRef.current) return;
+
+    if (onRevealed) onRevealed();
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          handleBurn();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isMine, handleBurn, onRevealed]);
 
   const handleCloseClick = () => {
-    if (!isMine && isRevealed) {
+    if (!isMine) {
       handleBurn();
     } else {
       onClose();
     }
   };
 
-  // Screenshot Detection Guard
-  const reportScreenshot = useCallback(() => {
-    if (isMine) return; // Sender previewing never triggers screenshot alert
-    setScreenshotAlerted(true);
-    fetch(`${BACKEND_URL}/api/messages/fog-snap/screenshot`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ messageId: message.id, chatId })
-    }).catch(() => {});
-
-    setTimeout(() => setScreenshotAlerted(false), 3000);
-  }, [message, chatId, token]);
-
+  // Keyboard shortcut & screenshot interceptors
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'PrintScreen' || (e.ctrlKey && e.shiftKey && e.key === 'I')) {
-        reportScreenshot();
+        setScreenshotAlerted(true);
+        setTimeout(() => setScreenshotAlerted(false), 3000);
       }
     };
-    const handleVisibility = () => {
-      if (document.hidden) {
-        reportScreenshot();
-      }
-    };
-
     window.addEventListener('keyup', handleKeyDown);
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => {
-      window.removeEventListener('keyup', handleKeyDown);
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, [reportScreenshot]);
+    return () => window.removeEventListener('keyup', handleKeyDown);
+  }, []);
+
+  if (!message || !targetMediaUrl) return null;
 
   const content = (
     <div
+      className="fog-snap-modal-wrapper"
+      onContextMenu={(e) => e.preventDefault()}
+      onDragStart={(e) => e.preventDefault()}
       style={{
         position: 'fixed',
         inset: 0,
@@ -369,9 +189,37 @@ export default function FogSnapModal({
         alignItems: 'center',
         justifyContent: 'center',
         userSelect: 'none',
+        WebkitUserSelect: 'none',
         overflow: 'hidden'
       }}
     >
+      {/* Top 10-Second Countdown Progress Bar (Recipient only) */}
+      {!isMine && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '4px',
+            background: 'rgba(255, 255, 255, 0.15)',
+            zIndex: 60
+          }}
+        >
+          <div
+            style={{
+              height: '100%',
+              width: `${(timeLeft / duration) * 100}%`,
+              background: timeLeft <= 3
+                ? 'linear-gradient(90deg, #ef4444, #f97316)'
+                : 'linear-gradient(90deg, #f59e0b, #eab308)',
+              transition: 'width 1s linear',
+              boxShadow: '0 0 10px rgba(245, 158, 11, 0.8)'
+            }}
+          />
+        </div>
+      )}
+
       {/* WhatsApp-Style Top Header Bar */}
       <div
         style={{
@@ -379,12 +227,12 @@ export default function FogSnapModal({
           top: 0,
           left: 0,
           right: 0,
-          height: '62px',
+          height: '64px',
           padding: '0 16px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          background: 'linear-gradient(180deg, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0) 100%)',
+          background: 'linear-gradient(180deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0) 100%)',
           zIndex: 50
         }}
       >
@@ -409,97 +257,47 @@ export default function FogSnapModal({
             <span style={{ fontWeight: 700, fontSize: '1rem', color: '#fff', lineHeight: 1.2 }}>
               {isMine ? 'You' : (senderName || 'Partner')}
             </span>
-            <span style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.72)', marginTop: '2px' }}>
-              ✨ Dust Image • {formatLightboxDateTime(message.timestamp)}
+            <span style={{ fontSize: '0.74rem', color: 'rgba(255, 255, 255, 0.72)', marginTop: '2px' }}>
+              Dust Image • {formatLightboxDateTime(message.timestamp)}
             </span>
           </div>
         </div>
 
-        {/* Right Header Status / Countdown */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* 10-Second Fuse Badge / Sender Preview Badge */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: isMine
+              ? 'rgba(255, 255, 255, 0.15)'
+              : (timeLeft <= 3 ? 'rgba(239, 68, 68, 0.28)' : 'rgba(245, 158, 11, 0.25)'),
+            border: `1.5px solid ${isMine ? 'rgba(255, 255, 255, 0.25)' : (timeLeft <= 3 ? '#ef4444' : '#f59e0b')}`,
+            color: '#fff',
+            padding: '6px 14px',
+            borderRadius: '24px',
+            fontSize: '0.86rem',
+            fontWeight: 800,
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            boxShadow: isMine ? 'none' : '0 0 16px rgba(245, 158, 11, 0.35)'
+          }}
+        >
           {isMine ? (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                background: 'rgba(245, 158, 11, 0.2)',
-                border: '1px solid rgba(245, 158, 11, 0.4)',
-                borderRadius: '20px',
-                padding: '6px 14px',
-                color: '#fbbf24',
-                fontWeight: 800,
-                fontSize: '0.82rem'
-              }}
-            >
-              <Sparkles size={15} />
+            <>
+              <Lock size={14} color="#fbbf24" />
               <span>Preview (Sender)</span>
-            </div>
-          ) : isRevealed ? (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: 'rgba(239, 68, 68, 0.25)',
-                border: '1.5px solid #ef4444',
-                borderRadius: '20px',
-                padding: '6px 14px',
-                color: '#ef4444',
-                fontWeight: 900,
-                fontSize: '0.86rem',
-                animation: 'pulse 0.5s infinite alternate'
-              }}
-            >
-              <Flame size={16} />
-              <span>Evaporating in {timeLeft}s</span>
-            </div>
+            </>
           ) : (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                background: 'rgba(245, 158, 11, 0.2)',
-                border: '1px solid rgba(245, 158, 11, 0.4)',
-                borderRadius: '20px',
-                padding: '6px 14px',
-                color: '#fbbf24',
-                fontWeight: 800,
-                fontSize: '0.82rem'
-              }}
-            >
-              <Sparkles size={15} />
-              <span>Scratch to reveal</span>
-            </div>
+            <>
+              <Flame size={16} color={timeLeft <= 3 ? '#ef4444' : '#f59e0b'} />
+              <span>{timeLeft}s</span>
+            </>
           )}
         </div>
       </div>
 
-      {/* Screenshot Flash Alert */}
-      {screenshotAlerted && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '75px',
-            zIndex: 60,
-            background: '#ef4444',
-            color: '#fff',
-            borderRadius: '16px',
-            padding: '10px 22px',
-            fontWeight: 900,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            boxShadow: '0 0 30px rgba(239, 68, 68, 0.9)'
-          }}
-        >
-          <AlertTriangle size={20} />
-          <span>SCREENSHOT DETECTED! SENDER WAS ALERTED!</span>
-        </div>
-      )}
-
-      {/* Full screen Main Media Container */}
+      {/* Main Photo Container */}
       <div
         style={{
           width: '100vw',
@@ -513,69 +311,118 @@ export default function FogSnapModal({
           overflow: 'hidden'
         }}
       >
-        <div
-          style={{
-            position: 'relative',
-            maxWidth: '100vw',
-            maxHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            filter: isBurned ? 'blur(20px) contrast(200%)' : 'none',
-            opacity: isBurned ? 0 : 1,
-            transition: 'all 0.3s ease'
-          }}
-        >
-          {/* Underlying Photo */}
-          <img
-            ref={imgRef}
-            src={message?.mediaUrl || (Array.isArray(message?.mediaUrls) && message?.mediaUrls[0]) || ''}
-            alt="Secret Dust Image"
-            onLoad={() => {
-              setImgLoaded(true);
-              if (!isMine) {
-                if (imgRef.current && canvasRef.current) {
-                  const rect = imgRef.current.getBoundingClientRect();
-                  if (rect.width && rect.height) {
-                    canvasRef.current.width = rect.width;
-                    canvasRef.current.height = rect.height;
-                  }
-                }
-                setTimeout(initCanvasFog, 50);
-              }
-            }}
+        {!imgLoaded && !imgError && (
+          <div
             style={{
+              position: 'absolute',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '12px',
+              color: 'rgba(255, 255, 255, 0.7)'
+            }}
+          >
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                border: '3px solid rgba(245, 158, 11, 0.25)',
+                borderTopColor: '#f59e0b',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite'
+              }}
+            />
+            <span style={{ fontSize: '0.84rem', fontWeight: 600 }}>Loading photo...</span>
+          </div>
+        )}
+
+        {imgError ? (
+          <div
+            style={{
+              textAlign: 'center',
+              color: 'rgba(255, 255, 255, 0.7)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '10px'
+            }}
+          >
+            <span style={{ fontSize: '2rem' }}>⚠️</span>
+            <span>Could not load image</span>
+            <button
+              onClick={handleCloseClick}
+              style={{
+                padding: '6px 16px',
+                borderRadius: '12px',
+                background: 'rgba(255,255,255,0.15)',
+                color: '#fff',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              Close
+            </button>
+          </div>
+        ) : (
+          <div
+            style={{
+              position: 'relative',
               maxWidth: '100vw',
               maxHeight: '100vh',
-              objectFit: 'contain',
-              display: 'block'
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              filter: isBurned ? 'blur(25px) contrast(200%)' : 'none',
+              opacity: isBurned ? 0 : (imgLoaded ? 1 : 0),
+              transition: 'all 0.35s ease'
             }}
-          />
+          >
+            <img
+              ref={imgRef}
+              src={targetMediaUrl}
+              alt="Dust Image"
+              draggable={false}
+              onContextMenu={(e) => e.preventDefault()}
+              onLoad={() => setImgLoaded(true)}
+              onError={() => {
+                setImgError(true);
+                setImgLoaded(true);
+              }}
+              style={{
+                maxWidth: '100vw',
+                maxHeight: '100vh',
+                objectFit: 'contain',
+                display: 'block',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                pointerEvents: 'none'
+              }}
+            />
 
-          {/* Scratchable Dust Mist Canvas Overlay (Recipient only) */}
-          {!isMine && (
-            <canvas
-              ref={canvasRef}
-              width={480}
-              height={720}
-              onMouseDown={onMouseDown}
-              onMouseMove={onMouseMove}
-              onMouseUp={onMouseUp}
-              onTouchStart={onTouchStart}
-              onTouchMove={onTouchMove}
-              onTouchEnd={onTouchEnd}
+            {/* Subtle Protected Overlay Watermark */}
+            <div
               style={{
                 position: 'absolute',
                 inset: 0,
-                width: '100%',
-                height: '100%',
-                cursor: isRevealed ? 'default' : 'pointer',
-                touchAction: 'none',
-                display: isRevealed ? 'none' : 'block'
+                pointerEvents: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column',
+                transform: 'rotate(-25deg)',
+                opacity: 0.16,
+                color: '#fff',
+                fontWeight: 800,
+                fontSize: '1rem',
+                letterSpacing: '2px',
+                textAlign: 'center',
+                textShadow: '0 0 4px rgba(0,0,0,0.8)'
               }}
-            />
-          )}
-        </div>
+            >
+              🔒 PULSECHAT • DUST IMAGE • AUTO-EVAPORATES
+            </div>
+          </div>
+        )}
       </div>
 
       {/* WhatsApp Bottom Bar with Reply & Emoji Reactions */}
@@ -664,25 +511,26 @@ export default function FogSnapModal({
         </div>
       </div>
 
-      {/* Bottom Burn Status Notification */}
+      {/* Burn Status Notification */}
       {isBurned && (
         <div
           style={{
             position: 'absolute',
             bottom: '80px',
-            color: '#ef4444',
+            color: '#f59e0b',
             fontWeight: 800,
-            fontSize: '1rem',
+            fontSize: '0.95rem',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
             background: 'rgba(0,0,0,0.85)',
             padding: '8px 18px',
             borderRadius: '20px',
-            zIndex: 60
+            zIndex: 60,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.6)'
           }}
         >
-          🌫️ Dust Image evaporated into digital smoke!
+          🌫️ Dust Image evaporated on both sides!
         </div>
       )}
     </div>

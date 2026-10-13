@@ -576,7 +576,14 @@ router.post('/fog-snap/burn', authMiddleware, async (req, res) => {
 
     const msg = await Message.findOneAndUpdate(
       query,
-      { fogSnapStatus: 'burned', status: 'read', content: '🌫️ Fog Snap Evaporated', mediaUrl: null, $addToSet: { viewedBy: req.user.id, readBy: req.user.id } },
+      {
+        fogSnapStatus: 'burned',
+        status: 'read',
+        content: existingMsg.isDustImage ? 'Dust Image Evaporated' : '🌫️ Fog Snap Evaporated',
+        mediaUrl: null,
+        mediaUrls: [],
+        $addToSet: { viewedBy: req.user.id, readBy: req.user.id }
+      },
       { new: true }
     );
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Send, Eye, Shield, Sparkles } from 'lucide-react';
+import { X, Send } from 'lucide-react';
 
 export default function MediaUploadModal({ mediaFile, onSend, onClose }) {
   const isVideo = mediaFile?.type?.startsWith('video/');
@@ -40,222 +40,286 @@ export default function MediaUploadModal({ mediaFile, onSend, onClose }) {
     });
   };
 
+  const getModeLabel = () => {
+    switch (viewMode) {
+      case 'once': return 'View Once (1x)';
+      case 'twice': return 'Twice View (2x)';
+      case 'dust': return 'Dust Image (10s Auto-Burn)';
+      default: return 'Standard Media';
+    }
+  };
+
   return (
-    <div className="incoming-call-overlay" style={{ zIndex: 10000 }}>
-      <div className="incoming-call-card" style={{ maxWidth: '440px', width: '92%', padding: '1.25rem', background: 'var(--bg-sidebar)', borderRadius: '24px', border: '1px solid var(--border)', boxShadow: '0 24px 60px rgba(0,0,0,0.6)' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '1.2rem' }}>
-              {viewMode === 'dust' ? '🌫️' : (viewMode === 'twice' ? '2️⃣' : (viewMode === 'once' ? '1️⃣' : '📷'))}
-            </span>
-            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)' }}>
-              {isVideo ? 'Send Video' : 'Send Photo'}
-            </h3>
-          </div>
-          <button onClick={onClose} className="icon-btn-ghost" title="Close">
-            <X size={20} />
-          </button>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 100000,
+        background: '#0b141a',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        userSelect: 'none'
+      }}
+    >
+      {/* Top Header Bar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '14px 18px',
+          background: 'linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%)',
+          zIndex: 10
+        }}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            background: 'rgba(255, 255, 255, 0.12)',
+            border: 'none',
+            borderRadius: '50%',
+            width: '40px',
+            height: '40px',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer'
+          }}
+          title="Cancel"
+        >
+          <X size={22} />
+        </button>
+
+        {/* Selected Mode Pill Badge */}
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '6px 14px',
+            borderRadius: '20px',
+            background: viewMode === 'dust'
+              ? 'rgba(245, 158, 11, 0.22)'
+              : (viewMode === 'twice'
+                ? 'rgba(14, 165, 233, 0.22)'
+                : (viewMode === 'once'
+                  ? 'rgba(168, 85, 247, 0.22)'
+                  : 'rgba(255, 255, 255, 0.12)')),
+            border: `1px solid ${
+              viewMode === 'dust'
+                ? '#f59e0b'
+                : (viewMode === 'twice'
+                  ? '#0ea5e9'
+                  : (viewMode === 'once'
+                    ? '#a855f7'
+                    : 'rgba(255, 255, 255, 0.2)'))
+            }`,
+            color: '#ffffff',
+            fontSize: '0.82rem',
+            fontWeight: 700
+          }}
+        >
+          <span>
+            {viewMode === 'dust' ? '🌫️' : (viewMode === 'twice' ? '②' : (viewMode === 'once' ? '①' : '⚪'))}
+          </span>
+          <span>{getModeLabel()}</span>
         </div>
+      </div>
 
-        {/* Media Preview Container */}
-        <div style={{ width: '100%', maxHeight: '250px', borderRadius: '16px', overflow: 'hidden', background: '#0a0a0f', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', border: '1px solid rgba(255,255,255,0.08)' }}>
-          {isVideo ? (
-            <video src={mediaFile.dataUrl} controls style={{ maxWidth: '100%', maxHeight: '250px' }} />
-          ) : (
-            <img src={mediaFile.dataUrl} alt="Preview" style={{ maxWidth: '100%', maxHeight: '250px', objectFit: 'contain' }} />
-          )}
-
-          {viewMode === 'dust' && (
-            <div style={{ position: 'absolute', top: 10, left: 10, padding: '4px 10px', borderRadius: '12px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', color: '#fbbf24', fontSize: '0.72rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <Sparkles size={12} /> SCRATCH DUST LAYER ACTIVE
-            </div>
-          )}
-          {viewMode === 'twice' && (
-            <div style={{ position: 'absolute', top: 10, left: 10, padding: '4px 10px', borderRadius: '12px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', color: '#38bdf8', fontSize: '0.72rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <Shield size={12} /> 2X TWICE VIEW ACTIVE
-            </div>
-          )}
-          {viewMode === 'once' && (
-            <div style={{ position: 'absolute', top: 10, left: 10, padding: '4px 10px', borderRadius: '12px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', color: '#a855f7', fontSize: '0.72rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <Eye size={12} /> 1X VIEW ONCE ACTIVE
-            </div>
-          )}
-        </div>
-
-        {/* Mode Selector Pill Buttons */}
-        <div style={{ marginBottom: '0.85rem' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
-            Privacy & View Mode
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: isVideo ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)', gap: '6px' }}>
-            {/* 1. Normal */}
-            <button
-              type="button"
-              onClick={() => setViewMode('normal')}
-              style={{
-                padding: '7px 4px',
-                borderRadius: '12px',
-                border: viewMode === 'normal' ? '1.5px solid var(--accent)' : '1px solid var(--border)',
-                background: viewMode === 'normal' ? 'var(--accent)' : 'var(--bg-card)',
-                color: viewMode === 'normal' ? '#fff' : 'var(--text-main)',
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '2px'
-              }}
-            >
-              <span>⚪</span>
-              <span>Normal</span>
-            </button>
-
-            {/* 2. View Once */}
-            <button
-              type="button"
-              onClick={() => setViewMode('once')}
-              style={{
-                padding: '7px 4px',
-                borderRadius: '12px',
-                border: viewMode === 'once' ? '1.5px solid #a855f7' : '1px solid var(--border)',
-                background: viewMode === 'once' ? 'linear-gradient(135deg, #a855f7, #6366f1)' : 'var(--bg-card)',
-                color: viewMode === 'once' ? '#fff' : 'var(--text-main)',
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '2px'
-              }}
-            >
-              <span>1️⃣</span>
-              <span>Once</span>
-            </button>
-
-            {/* 3. Twice View */}
-            <button
-              type="button"
-              onClick={() => setViewMode('twice')}
-              style={{
-                padding: '7px 4px',
-                borderRadius: '12px',
-                border: viewMode === 'twice' ? '1.5px solid #0ea5e9' : '1px solid var(--border)',
-                background: viewMode === 'twice' ? 'linear-gradient(135deg, #0ea5e9, #2563eb)' : 'var(--bg-card)',
-                color: viewMode === 'twice' ? '#fff' : 'var(--text-main)',
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '2px'
-              }}
-            >
-              <span>2️⃣</span>
-              <span>Twice</span>
-            </button>
-
-            {/* 4. Dust Image (Photos only) */}
-            {!isVideo && (
-              <button
-                type="button"
-                onClick={() => setViewMode('dust')}
-                style={{
-                  padding: '7px 4px',
-                  borderRadius: '12px',
-                  border: viewMode === 'dust' ? '1.5px solid #f59e0b' : '1px solid var(--border)',
-                  background: viewMode === 'dust' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'var(--bg-card)',
-                  color: viewMode === 'dust' ? '#fff' : 'var(--text-main)',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '2px'
-                }}
-              >
-                <span>🌫️</span>
-                <span>Dust Img</span>
-              </button>
-            )}
-          </div>
-
-          {/* Mode Description Banner */}
-          <div style={{
-            marginTop: '8px',
-            padding: '8px 12px',
-            borderRadius: '10px',
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            fontSize: '0.73rem',
-            color: 'var(--text-muted)',
-            lineHeight: 1.4
-          }}>
-            {viewMode === 'normal' && (
-              <span>⚪ <b>Standard Message</b>: Stored in chat history for normal viewing.</span>
-            )}
-            {viewMode === 'once' && (
-              <span style={{ color: '#c084fc' }}>1️⃣ <b>WhatsApp View Once</b>: Recipient can open only 1 time. Disappears immediately after viewing with anti-screenshot lock.</span>
-            )}
-            {viewMode === 'twice' && (
-              <span style={{ color: '#38bdf8' }}>2️⃣ <b>WhatsApp Twice View</b>: Recipient can open 2 times before it locks permanently. Anti-screenshot protected.</span>
-            )}
-            {viewMode === 'dust' && (
-              <span style={{ color: '#fbbf24' }}>🌫️ <b>Scratch Dust Image</b>: Covered with frosted dust! Recipient gently scratches the mist with finger/mouse to reveal photo.</span>
-            )}
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
-          <button className="btn-secondary" onClick={onClose} style={{ borderRadius: '14px', padding: '8px 16px', fontSize: '0.84rem' }}>
-            Cancel
-          </button>
-          <button
-            className="btn-primary"
-            disabled={isSubmitting}
+      {/* Main Preview Container */}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '8px',
+          overflow: 'hidden',
+          position: 'relative'
+        }}
+      >
+        {isVideo ? (
+          <video
+            src={mediaFile.dataUrl}
+            controls
+            playsInline
             style={{
-              borderRadius: '14px',
-              padding: '8px 18px',
-              fontSize: '0.84rem',
-              fontWeight: 700,
+              maxWidth: '100%',
+              maxHeight: '74vh',
+              objectFit: 'contain',
+              borderRadius: '12px'
+            }}
+          />
+        ) : (
+          <img
+            src={mediaFile.dataUrl}
+            alt="Preview"
+            style={{
+              maxWidth: '100%',
+              maxHeight: '74vh',
+              objectFit: 'contain',
+              borderRadius: '12px',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.5)'
+            }}
+          />
+        )}
+      </div>
+
+      {/* WhatsApp-Style Bottom Control Bar */}
+      <div
+        style={{
+          padding: '16px 20px 24px 20px',
+          background: 'linear-gradient(0deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0) 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          zIndex: 10
+        }}
+      >
+        {/* Mode Selector Icons (Normal, Once, Twice, Dust) */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            background: 'rgba(255, 255, 255, 0.08)',
+            padding: '6px 10px',
+            borderRadius: '28px',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.12)'
+          }}
+        >
+          {/* 1. Normal Mode Button */}
+          <button
+            type="button"
+            onClick={() => setViewMode('normal')}
+            title="Standard photo"
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              border: viewMode === 'normal' ? '2px solid #ffffff' : '1.5px solid transparent',
+              background: viewMode === 'normal' ? 'rgba(255, 255, 255, 0.25)' : 'transparent',
+              color: '#ffffff',
+              fontSize: '1rem',
+              fontWeight: 800,
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              opacity: isSubmitting ? 0.65 : 1,
-              cursor: isSubmitting ? 'not-allowed' : 'pointer',
-              background: viewMode === 'dust'
-                ? 'linear-gradient(135deg, #f59e0b, #d97706)'
-                : (viewMode === 'twice'
-                    ? 'linear-gradient(135deg, #0ea5e9, #2563eb)'
-                    : (viewMode === 'once'
-                        ? 'linear-gradient(135deg, #a855f7, #6366f1)'
-                        : undefined))
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.18s ease'
             }}
-            onClick={handleConfirmSend}
           >
-            <Send size={15} />
-            <span>
-              {isSubmitting
-                ? 'Sending...'
-                : (viewMode === 'dust'
-                    ? 'Send Dust Image 🌫️'
-                    : (viewMode === 'twice'
-                        ? 'Send Twice View 2️⃣'
-                        : (viewMode === 'once'
-                            ? 'Send View Once 1️⃣'
-                            : 'Send Media')))}
-            </span>
+            ⚪
           </button>
+
+          {/* 2. Once View (① WhatsApp style) */}
+          <button
+            type="button"
+            onClick={() => setViewMode('once')}
+            title="WhatsApp View Once (1x)"
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              border: viewMode === 'once' ? '2.5px solid #a855f7' : '1.5px solid rgba(255, 255, 255, 0.3)',
+              background: viewMode === 'once' ? 'linear-gradient(135deg, #a855f7, #6366f1)' : 'transparent',
+              color: '#ffffff',
+              fontSize: '1.05rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.18s ease',
+              boxShadow: viewMode === 'once' ? '0 0 14px rgba(168, 85, 247, 0.6)' : 'none'
+            }}
+          >
+            ①
+          </button>
+
+          {/* 3. Twice View (② WhatsApp style) */}
+          <button
+            type="button"
+            onClick={() => setViewMode('twice')}
+            title="WhatsApp Twice View (2x)"
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              border: viewMode === 'twice' ? '2.5px solid #0ea5e9' : '1.5px solid rgba(255, 255, 255, 0.3)',
+              background: viewMode === 'twice' ? 'linear-gradient(135deg, #0ea5e9, #2563eb)' : 'transparent',
+              color: '#ffffff',
+              fontSize: '1.05rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.18s ease',
+              boxShadow: viewMode === 'twice' ? '0 0 14px rgba(14, 165, 233, 0.6)' : 'none'
+            }}
+          >
+            ②
+          </button>
+
+          {/* 4. Dust Image (🌫️ - Photos only) */}
+          {!isVideo && (
+            <button
+              type="button"
+              onClick={() => setViewMode('dust')}
+              title="Dust Image (10s auto-burn on both sides)"
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                border: viewMode === 'dust' ? '2.5px solid #f59e0b' : '1.5px solid rgba(255, 255, 255, 0.3)',
+                background: viewMode === 'dust' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'transparent',
+                color: '#ffffff',
+                fontSize: '1.05rem',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.18s ease',
+                boxShadow: viewMode === 'dust' ? '0 0 14px rgba(245, 158, 11, 0.6)' : 'none'
+              }}
+            >
+              🌫️
+            </button>
+          )}
         </div>
+
+        {/* WhatsApp-Style Circular Send Button */}
+        <button
+          type="button"
+          onClick={handleConfirmSend}
+          disabled={isSubmitting}
+          style={{
+            width: '52px',
+            height: '52px',
+            borderRadius: '50%',
+            border: 'none',
+            background: '#25D366',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: isSubmitting ? 'not-allowed' : 'pointer',
+            opacity: isSubmitting ? 0.7 : 1,
+            boxShadow: '0 4px 16px rgba(37, 211, 102, 0.45)',
+            transition: 'transform 0.15s ease'
+          }}
+          title="Send"
+        >
+          <Send size={22} style={{ marginLeft: '2px' }} />
+        </button>
       </div>
     </div>
   );

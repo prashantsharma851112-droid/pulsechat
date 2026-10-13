@@ -6632,7 +6632,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             ref={cameraInputRef}
             accept="image/*"
             capture="environment"
-            onChange={handleFileSelect}
+            onChange={(e) => handleSpecificMediaSelect(e, 'normal')}
             style={{ display: 'none' }}
           />
 

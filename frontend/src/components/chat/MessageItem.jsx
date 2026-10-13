@@ -1201,9 +1201,8 @@ function MessageItem({
   const isAlreadyViewed = isMine ? hasRecipientOpened : isConsumedByMe;
 
   const handleOpenViewOnce = (e) => {
-    if (e) {
+    if (e && e.stopPropagation) {
       e.stopPropagation();
-      if (e.cancelable) e.preventDefault();
     }
     if (isConsumedByMe) return;
     setShowViewOnceModal(true);
@@ -2061,9 +2060,6 @@ function MessageItem({
               <button
                 type="button"
                 onClick={handleOpenViewOnce}
-                onTouchEnd={(e) => {
-                  e.stopPropagation();
-                }}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -2128,9 +2124,6 @@ function MessageItem({
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowFogSnapModal(true);
-                }}
-                onTouchEnd={(e) => {
-                  e.stopPropagation();
                 }}
                 style={{
                   display: 'inline-flex',

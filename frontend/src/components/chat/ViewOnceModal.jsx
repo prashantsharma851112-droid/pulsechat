@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Lock, ShieldAlert, Eye, AlertOctagon, ArrowLeft, CornerUpLeft, Plus } from 'lucide-react';
+import { X, Lock, ShieldAlert, ArrowLeft, CornerUpLeft, Plus, AlertOctagon } from 'lucide-react';
 import { useBackHandler } from '../../utils/backNavigation';
 
 function formatLightboxDateTime(timestamp) {
@@ -32,50 +32,13 @@ export default function ViewOnceModal({
   const [screenshotBlocked, setScreenshotBlocked] = useState(false);
   const [securityWarning, setSecurityWarning] = useState(null);
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [isHolding, setIsHolding] = useState(false);
+  const [mediaError, setMediaError] = useState(false);
 
-  const canvasRef = useRef(null);
-  const imageObjRef = useRef(null);
   const videoRef = useRef(null);
   const warningTimerRef = useRef(null);
 
   const isVideo = message?.type === 'video';
-  const viewLimit = message?.viewLimit || (message?.isViewTwice ? 2 : 1);
   const targetMediaUrl = message?.mediaUrl || (Array.isArray(message?.mediaUrls) && message?.mediaUrls[0]) || '';
-
-  useBackHandler(() => {
-    if (!hasMarkedViewed && onMarkViewed) onMarkViewed();
-    onClose();
-  }, true);
-
-  const triggerSecurityAlert = useCallback((warningText) => {
-    setScreenshotBlocked(true);
-    setSecurityWarning(warningText);
-
-    // Immediately blank canvas
-    if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-      }
-    }
-
-    if (videoRef.current) {
-      videoRef.current.pause();
-    }
-
-    // Overwrite clipboard to destroy any captured bitmap buffer
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText('').catch(() => {});
-    }
-
-    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
-    warningTimerRef.current = setTimeout(() => {
-      setScreenshotBlocked(false);
-      setSecurityWarning(null);
-    }, 3500);
-  }, []);
 
   // Mark viewed once recipient opens or closes
   const markViewedOnce = useCallback(() => {
@@ -90,102 +53,32 @@ export default function ViewOnceModal({
     markViewedOnce();
   }, [markViewedOnce]);
 
-  // Preload Image into offscreen buffer
-  useEffect(() => {
-    if (!message || !targetMediaUrl || isVideo) return;
+  useBackHandler(() => {
+    markViewedOnce();
+    onClose();
+  }, true);
 
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = targetMediaUrl;
-    img.onload = () => {
-      imageObjRef.current = img;
-      setImageLoaded(true);
-    };
-    img.onerror = () => {
-      // Fallback without crossOrigin in case CDN restricts CORS
-      const fallbackImg = new Image();
-      fallbackImg.src = targetMediaUrl;
-      fallbackImg.onload = () => {
-        imageObjRef.current = fallbackImg;
-        setImageLoaded(true);
-      };
-    };
-  }, [message, targetMediaUrl, isVideo]);
+  const triggerSecurityAlert = useCallback((warningText) => {
+    setScreenshotBlocked(true);
+    setSecurityWarning(warningText);
 
-  // Clear canvas immediately
-  const clearCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (videoRef.current) {
+      videoRef.current.pause();
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText('').catch(() => {});
+    }
+
+    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+    warningTimerRef.current = setTimeout(() => {
+      setScreenshotBlocked(false);
+      setSecurityWarning(null);
+    }, 3000);
   }, []);
 
-  // Render photo onto HTML5 Canvas with security watermark
-  const drawImageToCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    const img = imageObjRef.current;
-    if (!canvas || !img) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Calculate max dimensions fitting screen
-    const maxW = Math.min(window.innerWidth * 0.95, 960);
-    const maxH = Math.min(window.innerHeight * 0.82, 850);
-
-    let width = img.naturalWidth || 600;
-    let height = img.naturalHeight || 400;
-
-    const ratio = Math.min(maxW / width, maxH / height, 1);
-    const renderW = Math.round(width * ratio);
-    const renderH = Math.round(height * ratio);
-
-    canvas.width = renderW;
-    canvas.height = renderH;
-
-    // Draw main image
-    ctx.drawImage(img, 0, 0, renderW, renderH);
-
-    // Draw subtle DRM diagonal anti-screenshot security watermark
-    ctx.save();
-    ctx.font = 'bold 15px "Plus Jakarta Sans", sans-serif';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
-    ctx.textAlign = 'center';
-    ctx.translate(renderW / 2, renderH / 2);
-    ctx.rotate(-Math.PI / 6);
-    ctx.fillText('🔒 PULSECHAT • PROTECTED VIEW • DO NOT CAPTURE', 0, 0);
-    ctx.fillText('CONFIDENTIAL & VIEW-RESTRICTED', 0, 30);
-    ctx.restore();
-  }, []);
-
-  // Draw image or play video immediately when ready
+  // Anti-Screenshot keyboard shortcut interceptor
   useEffect(() => {
-    if (screenshotBlocked) {
-      clearCanvas();
-      if (videoRef.current) videoRef.current.pause();
-      return;
-    }
-
-    if (isVideo) {
-      if (videoRef.current) {
-        videoRef.current.play().catch(() => {});
-      }
-      return;
-    }
-
-    if (imageLoaded) {
-      const raf = requestAnimationFrame(() => {
-        drawImageToCanvas();
-      });
-      return () => cancelAnimationFrame(raf);
-    }
-  }, [imageLoaded, screenshotBlocked, isVideo, drawImageToCanvas, clearCanvas]);
-
-  // Comprehensive Anti-Screenshot, Snipping Tool & Visibility Loss Interceptors
-  useEffect(() => {
-    // 1. Intercept PrintScreen and OS screenshot shortcuts
     const handleKeyIntercept = (e) => {
       const isPrintScreen =
         e.key === 'PrintScreen' ||
@@ -194,7 +87,7 @@ export default function ViewOnceModal({
         e.which === 44;
 
       const isSnippingOrSave =
-        (e.metaKey && e.shiftKey) || // Mac screenshot or Windows Win+Shift+S
+        (e.metaKey && e.shiftKey) ||
         (e.ctrlKey && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) ||
         (e.altKey && isPrintScreen);
 
@@ -205,49 +98,15 @@ export default function ViewOnceModal({
       }
     };
 
-    // 2. Document Visibility Change
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        triggerSecurityAlert("⚠️ App switched or minimized! Screen capture is prohibited.");
-      }
-    };
-
-    // 3. Page hide / Orientation / Resize
-    const handlePageHide = () => {
-      setIsHolding(false);
-      clearCanvas();
-    };
-
-    // 4. Context Menu & Drag prevention
-    const handleContextMenu = (e) => e.preventDefault();
-    const handleCopy = (e) => {
-      e.preventDefault();
-      if (e.clipboardData) e.clipboardData.clearData();
-    };
-
     window.addEventListener('keydown', handleKeyIntercept, { capture: true });
     window.addEventListener('keyup', handleKeyIntercept, { capture: true });
-    document.addEventListener('keydown', handleKeyIntercept, { capture: true });
-    document.addEventListener('keyup', handleKeyIntercept, { capture: true });
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pagehide', handlePageHide);
-    document.addEventListener('contextmenu', handleContextMenu);
-    document.addEventListener('copy', handleCopy);
 
     return () => {
       window.removeEventListener('keydown', handleKeyIntercept, { capture: true });
       window.removeEventListener('keyup', handleKeyIntercept, { capture: true });
-      document.removeEventListener('keydown', handleKeyIntercept, { capture: true });
-      document.removeEventListener('keyup', handleKeyIntercept, { capture: true });
-
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', handlePageHide);
-      document.removeEventListener('contextmenu', handleContextMenu);
-      document.removeEventListener('copy', handleCopy);
       if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
     };
-  }, [triggerSecurityAlert, clearCanvas]);
+  }, [triggerSecurityAlert]);
 
   const handleClose = () => {
     markViewedOnce();
@@ -274,11 +133,10 @@ export default function ViewOnceModal({
         justifyContent: 'center',
         userSelect: 'none',
         WebkitUserSelect: 'none',
-        WebkitTouchCallout: 'none',
         overflow: 'hidden'
       }}
     >
-      {/* CSS Print & Screen Recording Blocker */}
+      {/* CSS Print Blocker */}
       <style>{`
         @media print {
           body, .view-once-modal-wrapper, * {
@@ -332,89 +190,144 @@ export default function ViewOnceModal({
         </div>
 
         {/* Right Header Protected Badge */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          color: '#ffffff',
-          fontSize: '0.82rem',
-          fontWeight: 700,
-          background: 'rgba(255, 255, 255, 0.14)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          padding: '6px 14px',
-          borderRadius: '20px',
-          border: '1px solid rgba(255, 255, 255, 0.18)'
-        }}>
-          <Lock size={14} color={isMine ? "#fbbf24" : (message?.isViewTwice ? "#38bdf8" : "#10b981")} />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            color: '#ffffff',
+            fontSize: '0.82rem',
+            fontWeight: 700,
+            background: 'rgba(255, 255, 255, 0.14)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            padding: '6px 14px',
+            borderRadius: '20px',
+            border: '1px solid rgba(255, 255, 255, 0.18)'
+          }}
+        >
+          <Lock size={14} color={isMine ? "#fbbf24" : (message?.isViewTwice ? "#38bdf8" : "#a855f7")} />
           <span>{isMine ? 'Preview (Sender)' : (message?.isViewTwice ? 'Twice View (2x)' : 'View Once (1x)')}</span>
         </div>
       </div>
 
       {/* Security Warning Toast */}
       {securityWarning && (
-        <div style={{
-          position: 'absolute',
-          top: '75px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: 'rgba(239, 68, 68, 0.96)',
-          color: '#ffffff',
-          padding: '10px 20px',
-          borderRadius: '30px',
-          fontSize: '0.85rem',
-          fontWeight: 700,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          zIndex: 50,
-          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.7)',
-          animation: 'fadeIn 0.2s ease',
-          textAlign: 'center',
-          maxWidth: '90%'
-        }}>
+        <div
+          style={{
+            position: 'absolute',
+            top: '75px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(239, 68, 68, 0.96)',
+            color: '#ffffff',
+            padding: '10px 20px',
+            borderRadius: '30px',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            zIndex: 50,
+            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.7)',
+            maxWidth: '90%'
+          }}
+        >
           <AlertOctagon size={20} color="#ffffff" />
           <span>{securityWarning}</span>
         </div>
       )}
 
-      {/* Media Viewing Core Container (Full screen) */}
-      <div style={{
-        width: '100vw',
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '12px',
-        boxSizing: 'border-box'
-      }}>
+      {/* Media Viewing Core Container */}
+      <div
+        style={{
+          width: '100vw',
+          height: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '12px',
+          boxSizing: 'border-box'
+        }}
+      >
         {screenshotBlocked ? (
-          /* High-Alert Security Blackout Shield */
-          <div style={{
-            width: '320px',
-            padding: '2.5rem 1.5rem',
-            background: '#111827',
-            border: '2px solid #ef4444',
-            borderRadius: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '12px',
-            textAlign: 'center',
-            color: '#f87171',
-            boxShadow: '0 10px 40px rgba(239, 68, 68, 0.25)'
-          }}>
+          <div
+            style={{
+              width: '320px',
+              padding: '2.5rem 1.5rem',
+              background: '#111827',
+              border: '2px solid #ef4444',
+              borderRadius: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '12px',
+              textAlign: 'center',
+              color: '#f87171'
+            }}
+          >
             <ShieldAlert size={48} color="#ef4444" />
             <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#fff' }}>Screenshot Blocked!</div>
             <div style={{ fontSize: '0.8rem', color: '#9ca3af', lineHeight: 1.5 }}>
-              Screenshots and screen recording are strictly prohibited for privacy. Media is permanently protected.
+              Screenshots and screen recording are prohibited. Media is protected.
             </div>
           </div>
         ) : (
-          /* Full screen Protected Media */
-          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {isVideo ? (
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+            {!imageLoaded && !isVideo && !mediaError && (
+              <div
+                style={{
+                  position: 'absolute',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '12px',
+                  color: 'rgba(255, 255, 255, 0.7)'
+                }}
+              >
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    border: '3px solid rgba(168, 85, 247, 0.25)',
+                    borderTopColor: '#a855f7',
+                    borderRadius: '50%',
+                    animation: 'spin 0.8s linear infinite'
+                  }}
+                />
+                <span style={{ fontSize: '0.84rem', fontWeight: 600 }}>Loading photo...</span>
+              </div>
+            )}
+
+            {mediaError ? (
+              <div
+                style={{
+                  textAlign: 'center',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}
+              >
+                <span style={{ fontSize: '2rem' }}>⚠️</span>
+                <span>Could not load media</span>
+                <button
+                  onClick={handleClose}
+                  style={{
+                    padding: '6px 16px',
+                    borderRadius: '12px',
+                    background: 'rgba(255,255,255,0.15)',
+                    color: '#fff',
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            ) : isVideo ? (
               <video
                 ref={videoRef}
                 src={targetMediaUrl}
@@ -436,35 +349,41 @@ export default function ViewOnceModal({
                   alt="Protected View"
                   draggable={false}
                   onContextMenu={(e) => e.preventDefault()}
+                  onLoad={() => setImageLoaded(true)}
+                  onError={() => {
+                    setMediaError(true);
+                    setImageLoaded(true);
+                  }}
                   style={{
                     maxWidth: '100vw',
                     maxHeight: '100vh',
                     objectFit: 'contain',
-                    display: 'block',
+                    display: imageLoaded ? 'block' : 'none',
                     userSelect: 'none',
                     WebkitUserSelect: 'none',
                     pointerEvents: 'none'
                   }}
-                  onLoad={() => setImageLoaded(true)}
                 />
                 {/* Subtle DRM Watermark overlay */}
-                <div style={{
-                  position: 'absolute',
-                  inset: 0,
-                  pointerEvents: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexDirection: 'column',
-                  transform: 'rotate(-25deg)',
-                  opacity: 0.16,
-                  color: '#fff',
-                  fontWeight: 800,
-                  fontSize: '1rem',
-                  letterSpacing: '2px',
-                  textAlign: 'center',
-                  textShadow: '0 0 4px rgba(0,0,0,0.8)'
-                }}>
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    pointerEvents: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'column',
+                    transform: 'rotate(-25deg)',
+                    opacity: 0.16,
+                    color: '#fff',
+                    fontWeight: 800,
+                    fontSize: '1rem',
+                    letterSpacing: '2px',
+                    textAlign: 'center',
+                    textShadow: '0 0 4px rgba(0,0,0,0.8)'
+                  }}
+                >
                   🔒 PULSECHAT • PROTECTED VIEW • DO NOT CAPTURE
                 </div>
               </div>
