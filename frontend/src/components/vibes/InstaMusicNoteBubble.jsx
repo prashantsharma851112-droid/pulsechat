@@ -219,8 +219,10 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
   useEffect(() => {
     if (Array.isArray(activeNote?.likes)) {
       setLikes(activeNote.likes);
+    } else {
+      setLikes([]);
     }
-  }, [activeNote?.likes]);
+  }, [activeNote?.likes, activeNote?.updatedAt]);
 
   // Real-time like sync via custom event
   useEffect(() => {

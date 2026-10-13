@@ -556,7 +556,6 @@ const handleMusicNoteUpdate = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const existingLikes = existingUser?.musicNote?.likes || [];
     const musicNote = hasContent ? {
       songTitle: song?.songTitle || '',
       artistName: song?.artistName || '',
@@ -566,7 +565,7 @@ const handleMusicNoteUpdate = async (req, res) => {
       startTime: Number(song?.startTime) || 0,
       snippetDuration: Number(song?.snippetDuration) || 30,
       noteText: (noteText || '').trim(),
-      likes: Array.isArray(existingLikes) ? existingLikes : [],
+      likes: [], // Likes reset on edit/delete so users can like the new vibe afresh
       updatedAt: new Date().toISOString()
     } : null;
 
@@ -578,6 +577,11 @@ const handleMusicNoteUpdate = async (req, res) => {
       io.emit('user_music_note_updated', {
         userId: targetUserId,
         username: req.user?.username || existingUser.username,
+        musicNote
+      });
+      io.emit('user_music_note_liked', {
+        targetUserId,
+        likes: [],
         musicNote
       });
     }

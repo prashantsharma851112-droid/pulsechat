@@ -219,14 +219,16 @@ export function AppMusicProvider({ children }) {
       startTime: Number(song?.startTime) || 0,
       snippetDuration: Number(song?.snippetDuration) || 30,
       noteText: trimmedText,
-      likes: user?.musicNote?.likes || [],
+      likes: [], // Reset likes to empty array so users can like the new vibe note freshly
       updatedAt: new Date().toISOString()
     } : null;
 
     if (updateUserProfile) {
       updateUserProfile(current => ({ ...current, musicNote: optimisticNote }));
     }
+    const myTargetId = user?.id || user?._id;
     window.dispatchEvent(new CustomEvent('pulsechat_music_note_updated', { detail: { musicNote: optimisticNote } }));
+    window.dispatchEvent(new CustomEvent('pulsechat_music_note_liked', { detail: { targetUserId: myTargetId, likes: [] } }));
     window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
 
     if (token) {
@@ -246,13 +248,14 @@ export function AppMusicProvider({ children }) {
             updateUserProfile(current => ({ ...current, musicNote: finalNote }));
           }
           window.dispatchEvent(new CustomEvent('pulsechat_music_note_updated', { detail: { musicNote: finalNote } }));
+          window.dispatchEvent(new CustomEvent('pulsechat_music_note_liked', { detail: { targetUserId: myTargetId, likes: [] } }));
           window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
         }
       } catch (e) {
         console.warn('Failed to sync music note to server:', e);
       }
     }
-  }, [token, updateUserProfile, user?.musicNote?.likes]);
+  }, [token, updateUserProfile, user?.id, user?._id]);
 
   const deleteMusicNote = useCallback(async () => {
     setMusicNoteText('');
@@ -262,7 +265,9 @@ export function AppMusicProvider({ children }) {
     if (updateUserProfile) {
       updateUserProfile(current => ({ ...current, musicNote: null }));
     }
+    const myTargetId = user?.id || user?._id;
     window.dispatchEvent(new CustomEvent('pulsechat_music_note_updated', { detail: { musicNote: null } }));
+    window.dispatchEvent(new CustomEvent('pulsechat_music_note_liked', { detail: { targetUserId: myTargetId, likes: [] } }));
     window.dispatchEvent(new CustomEvent('pulsechat_vibes_updated'));
 
     if (token) {
@@ -279,7 +284,7 @@ export function AppMusicProvider({ children }) {
         console.warn('Failed to delete music note on server:', e);
       }
     }
-  }, [token, updateUserProfile]);
+  }, [token, updateUserProfile, user?.id, user?._id]);
 
   // Audio Priority & Coordination:
   // Auto-pause App music when chat music plays, and auto-resume right when chat music stops!
