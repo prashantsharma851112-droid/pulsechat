@@ -30,10 +30,11 @@ export default function FogSnapModal({
   onReply,
   onReact,
   onOpenUnlimitedEmoji,
-  onClose
+  onClose,
+  socket
 }) {
   const [isRevealed, setIsRevealed] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(message?.fogSnapDuration || 7);
+  const [timeLeft, setTimeLeft] = useState(message?.fogSnapDuration || 10);
   const [screenshotAlerted, setScreenshotAlerted] = useState(false);
   const [isBurned, setIsBurned] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
@@ -52,7 +53,7 @@ export default function FogSnapModal({
     }
   }, true);
 
-  const duration = message?.fogSnapDuration || 7;
+  const duration = message?.fogSnapDuration || 10;
   const token = localStorage.getItem('pulsechat_token');
 
   // Simple web audio sizzle sound
@@ -288,6 +289,16 @@ export default function FogSnapModal({
       window.dispatchEvent(new CustomEvent('pulsechat_fog_snap_burned', {
         detail: { messageId: msgId, chatId }
       }));
+      window.dispatchEvent(new CustomEvent('pulsechat_stealth_dust_dissolved', {
+        detail: { messageId: msgId, chatId }
+      }));
+      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
+        detail: { emoji: '⚡', count: 25 }
+      }));
+    }
+
+    if (socket) {
+      socket.emit('burn_fog_snap', { messageId: msgId, chatId });
     }
 
     fetch(`${BACKEND_URL}/api/messages/fog-snap/burn`, {

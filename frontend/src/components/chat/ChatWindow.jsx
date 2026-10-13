@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useContext, useCallback, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3, Ghost, Search, Globe, ChevronUp, ChevronDown, ArrowDown } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Camera, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3, Ghost, Search, Globe, ChevronUp, ChevronDown, ArrowDown } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -1147,6 +1147,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const dustImageInputRef = useRef(null);
   const lastMediaSentRef = useRef({ time: 0, key: '' });
 
@@ -3658,8 +3659,144 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setWhiteboardInitialData(null);
   };
 
+  const handleSendMultiPhotos = async (files) => {
+    if (!files || files.length === 0) return;
+
+    // Enforce 5MB limit per file
+    const MAX_SINGLE_FILE_BYTES = 5 * 1024 * 1024;
+    for (const f of files) {
+      if (f.size > MAX_SINGLE_FILE_BYTES) {
+        alert(`⚠️ File "${f.name}" exceeds 5MB limit (${(f.size / (1024 * 1024)).toFixed(2)}MB). Maximum allowed size is 5MB per photo.`);
+        return;
+      }
+    }
+
+    // Daily quota check
+    const totalBytes = files.reduce((acc, f) => acc + f.size, 0);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const storageKey = `pulsechat_daily_file_bytes_${user?.id || 'guest'}_${todayStr}`;
+    const todayUsed = parseInt(localStorage.getItem(storageKey) || '0', 10);
+    const MAX_DAILY_FILE_BYTES = 10 * 1024 * 1024;
+
+    if (todayUsed + totalBytes > MAX_DAILY_FILE_BYTES) {
+      const usedMB = (todayUsed / (1024 * 1024)).toFixed(1);
+      alert(`⚠️ Daily file sharing limit of 10MB reached! (Used: ${usedMB}MB / 10MB). Cannot send ${files.length} photos (${(totalBytes / (1024 * 1024)).toFixed(2)}MB).`);
+      return;
+    }
+    localStorage.setItem(storageKey, String(todayUsed + totalBytes));
+
+    const currentReplyTo = replyTo;
+    setReplyTo(null);
+
+    const localBlobUrls = files.map(f => URL.createObjectURL(f));
+    const tempMediaId = 'temp_media_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+
+    const optimisticMsg = {
+      ...getSenderPayload(),
+      id: tempMediaId,
+      clientTempId: tempMediaId,
+      chatId,
+      senderId: user.id,
+      receiverId: isGroup ? '' : activeChat.id,
+      isGroup,
+      mediaUrls: localBlobUrls,
+      mediaUrl: localBlobUrls[0],
+      type: 'image_group',
+      status: 'uploading',
+      isUploading: true,
+      timestamp: new Date().toISOString(),
+      reactions: {},
+      replyTo: currentReplyTo
+    };
+
+    const isOnlineNow = isDeviceOnline() && Boolean(socket?.connected);
+    if (!isOnlineNow) {
+      let persistentUrls = localBlobUrls;
+      try {
+        persistentUrls = await Promise.all(files.map(f => new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = () => resolve(URL.createObjectURL(f));
+          reader.readAsDataURL(f);
+        })));
+      } catch (e) {
+        persistentUrls = localBlobUrls;
+      }
+
+      const offlineMsg = {
+        ...optimisticMsg,
+        mediaUrls: persistentUrls,
+        mediaUrl: persistentUrls[0],
+        status: 'pending',
+        isUploading: false
+      };
+      setMessages(prev => [...prev, offlineMsg]);
+      appendCachedMessage(chatId, offlineMsg);
+      addToOutbox(user.id, {
+        ...offlineMsg,
+        needsUpload: true,
+        mediaUrls: persistentUrls
+      });
+      updateRecentChatSnippet(user.id, chatId, offlineMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
+      window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      playSound('sent');
+      return;
+    }
+
+    setMessages(prev => [...prev, optimisticMsg]);
+    appendCachedMessage(chatId, optimisticMsg);
+    updateRecentChatSnippet(user.id, chatId, optimisticMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
+    window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    playSound('sent');
+
+    // Background upload all photos concurrently
+    (async () => {
+      try {
+        const uploadPromises = files.map(file => uploadMediaDirect(file, 'pulsechat_media', token, false));
+        const uploadedUrls = await Promise.all(uploadPromises);
+
+        setMessages(prev => prev.map(m => m.id === tempMediaId ? { ...m, mediaUrls: uploadedUrls, mediaUrl: uploadedUrls[0], status: 'sent', isUploading: false } : m));
+
+        socket.emit('send_message', {
+          ...getSenderPayload(),
+          clientTempId: tempMediaId,
+          chatId,
+          senderId: user.id,
+          receiverId: isGroup ? '' : activeChat.id,
+          isGroup,
+          mediaUrls: uploadedUrls,
+          mediaUrl: uploadedUrls[0],
+          type: 'image_group',
+          replyTo: currentReplyTo
+        });
+      } catch (err) {
+        console.error('Multi-photo upload error:', err);
+        setMessages(prev => prev.map(m => m.id === tempMediaId ? { ...m, status: 'error', isUploading: false } : m));
+      }
+    })();
+  };
+
   const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
+    const rawFiles = Array.from(e.target.files || []);
+    if (!rawFiles || rawFiles.length === 0) return;
+
+    // Check if user selected multiple images (Max 6)
+    if (rawFiles.length > 1) {
+      if (rawFiles.length > 6) {
+        alert('⚠️ You can send a maximum of 6 photos at a time. The first 6 photos will be sent.');
+      }
+      const chosenFiles = rawFiles.slice(0, 6);
+      const allImages = chosenFiles.every(f => f.type.startsWith('image/'));
+      if (allImages) {
+        handleSendMultiPhotos(chosenFiles);
+        e.target.value = '';
+        return;
+      }
+    }
+
+    const file = rawFiles[0];
     if (!file) return;
 
     // Enforce 5MB single file limit
@@ -6427,6 +6564,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           <input
             type="file"
             ref={fileInputRef}
+            multiple
             accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
             onChange={handleFileSelect}
             style={{ display: 'none' }}
@@ -6436,6 +6574,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             ref={dustImageInputRef}
             accept="image/*,video/*"
             onChange={(e) => handleSpecificMediaSelect(e, 'dust')}
+            style={{ display: 'none' }}
+          />
+          <input
+            type="file"
+            ref={cameraInputRef}
+            accept="image/*"
+            capture="environment"
+            onChange={handleFileSelect}
             style={{ display: 'none' }}
           />
 
@@ -7012,6 +7158,32 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 <circle cx="7" cy="17" r="2.5" />
                 <circle cx="17" cy="17" r="2.5" />
               </svg>
+            </button>
+          )}
+
+          {/* Camera Button Right Beside 4-Dot Menu */}
+          {!showRecorder && (
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              className="icon-btn-ghost interactive-action"
+              title="Camera - Click & Send Photo"
+              style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '50%',
+                background: 'var(--bg-card, #202c33)',
+                color: 'var(--text-muted, #8696a0)',
+                border: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                transition: 'all 0.15s ease',
+                cursor: 'pointer'
+              }}
+            >
+              <Camera size={20} />
             </button>
           )}
 

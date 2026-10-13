@@ -14,6 +14,7 @@ const messageSchema = new mongoose.Schema({
   textStyle: { type: String, default: null },
   audioUrl: { type: String, default: null },
   mediaUrl: { type: String, default: null },
+  mediaUrls: { type: [String], default: [] },
   fileName: { type: String, default: null },
   fileSize: { type: String, default: null },
   pollData: { type: Object, default: null },

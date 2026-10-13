@@ -566,7 +566,7 @@ io.on('connection', (socket) => {
   socket.on('send_message', async (messageData, ackCallback) => {
     const {
       chatId, senderId, receiverId, isGroup, content, type, textStyle,
-      audioUrl, mediaUrl, fileName, fileSize, pollData, giftData, callData,
+      audioUrl, mediaUrl, mediaUrls, fileName, fileSize, pollData, giftData, callData,
       isViewOnce, replyTo, storyReply, clientTempId,
       senderName, senderUsername, senderAvatar, senderIsPro, senderProTier, senderCustomBadge
     } = messageData;
@@ -877,7 +877,8 @@ io.on('connection', (socket) => {
         type: type || 'text',
         textStyle: textStyle || (type === '3d_text' ? 'cyber-neon' : null),
         audioUrl: finalAudioUrl,
-        mediaUrl: finalMediaUrl,
+        mediaUrl: finalMediaUrl || (Array.isArray(mediaUrls) && mediaUrls.length > 0 ? mediaUrls[0] : null),
+        mediaUrls: Array.isArray(mediaUrls) ? mediaUrls : (finalMediaUrl ? [finalMediaUrl] : []),
         fileName: fileName || null,
         fileSize: fileSize || null,
         pollData: pollData || null,
@@ -1580,8 +1581,9 @@ io.on('connection', (socket) => {
 
       await Message.updateOne(query, {
         fogSnapStatus: 'burned',
-        content: '🌫️ Fog Snap Evaporated',
+        content: existing.isDustImage ? 'Dust Image Evaporated' : '🌫️ Fog Snap Evaporated',
         mediaUrl: null,
+        mediaUrls: [],
         $addToSet: { viewedBy: socket.userId }
       });
       if (chatId) {

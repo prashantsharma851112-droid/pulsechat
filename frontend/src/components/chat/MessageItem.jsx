@@ -8,6 +8,7 @@ import ForwardModal from './ForwardModal';
 import ViewOnceModal from './ViewOnceModal';
 import FogSnapModal from './FogSnapModal';
 import EditPollModal from './EditPollModal';
+import MultiPhotoGalleryModal from './MultiPhotoGalleryModal';
 import { getPollTheme, getPollAura } from './pollThemes';
 import PulseVipBadge from '../common/PulseVipBadge';
 import Sticker3D from '../common/Sticker3D';
@@ -944,6 +945,7 @@ function MessageItem({
   const [showThread, setShowThread] = useState(false);
   const [showViewOnceModal, setShowViewOnceModal] = useState(false);
   const [showFogSnapModal, setShowFogSnapModal] = useState(false);
+  const [showMultiGallery, setShowMultiGallery] = useState(false);
 
   // Swipe-down to dismiss physics on fullscreen media lightbox
   const [imageDragY, setImageDragY] = useState(0);
@@ -1992,7 +1994,7 @@ function MessageItem({
           );
         })())}
 
-        {/* View Once / Twice View Media Message */}
+        {/* WhatsApp-Style Minimalist View Once / Twice View Media Message */}
         {(message.type === 'image' || message.type === 'video') && message.isViewOnce && !message.isFogSnap && (
           <div style={{ padding: '2px 0' }}>
             {isAlreadyViewed ? (
@@ -2000,169 +2002,199 @@ function MessageItem({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '6px 14px',
-                borderRadius: '20px',
-                background: 'rgba(0,0,0,0.25)',
-                color: 'var(--text-muted)',
-                fontSize: '0.85rem'
+                padding: '6px 12px',
+                borderRadius: '16px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                color: 'var(--text-muted, #94a3b8)',
+                fontSize: '0.9rem',
+                border: '1px solid rgba(255, 255, 255, 0.08)'
               }}>
-                <span style={{ fontWeight: 800 }}>{viewLimit === 2 ? '2️⃣' : '1️⃣'}</span>
-                <Check size={14} color="var(--text-muted)" />
-                <span style={{ fontWeight: 600 }}>Opened</span>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, opacity: 0.65 }}>
+                  <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3 3" />
+                  <path d="M8.5 12.5l2.5 2.5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span style={{ fontWeight: 500 }}>Opened</span>
               </div>
             ) : (
               <button
+                type="button"
                 onClick={handleOpenViewOnce}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '8px',
-                  padding: '8px 16px',
-                  borderRadius: '20px',
-                  background: viewLimit === 2
-                    ? 'linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(37, 99, 235, 0.25))'
-                    : 'rgba(255, 255, 255, 0.15)',
+                  padding: '6px 12px',
+                  borderRadius: '16px',
+                  background: 'rgba(255, 255, 255, 0.12)',
                   color: '#fff',
-                  border: viewLimit === 2 ? '1px solid rgba(14, 165, 233, 0.45)' : '1px solid rgba(255,255,255,0.3)',
+                  border: '1px solid rgba(255, 255, 255, 0.22)',
                   cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
+                  fontSize: '0.92rem',
+                  fontWeight: 500,
                   transition: 'transform 0.15s ease'
                 }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
               >
-                <span style={{ fontWeight: 800 }}>{viewLimit === 2 ? '2️⃣' : '1️⃣'}</span>
-                <Eye size={16} />
-                <span>
-                  {isMine
-                    ? `${viewLimit === 2 ? 'Twice View' : 'View Once'} ${message.type === 'video' ? 'Video' : 'Photo'}`
-                    : (viewLimit === 2 && currentViewCount === 1
-                        ? `1 View Left • ${message.type === 'video' ? 'Video' : 'Photo'}`
-                        : `${viewLimit === 2 ? 'Twice View' : 'View Once'} ${message.type === 'video' ? 'Video' : 'Photo'}`)}
-                </span>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                  <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3 3" />
+                  <text
+                    x="12"
+                    y="15.5"
+                    textAnchor="middle"
+                    fontSize="11"
+                    fontWeight="800"
+                    fill="currentColor"
+                    fontFamily="sans-serif"
+                  >
+                    {String(viewLimit || 1)}
+                  </text>
+                </svg>
+                <span>{message.type === 'video' ? 'Video' : 'Photo'}</span>
               </button>
             )}
           </div>
         )}
 
-        {/* Fog Snap / Dust Image (Scratch-to-Reveal) Media Message */}
+        {/* WhatsApp-Style Minimalist Dust Image (Scratch-to-Reveal / 10s Burn) */}
         {(message.type === 'image' || message.type === 'video') && message.isFogSnap && (
-          <div style={{ padding: '4px 0' }}>
+          <div style={{ padding: '2px 0' }}>
             {isFogBurned ? (
               <div style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '10px',
-                padding: '9px 16px',
+                gap: '8px',
+                padding: '6px 12px',
                 borderRadius: '16px',
                 background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px dashed rgba(255, 255, 255, 0.2)',
-                color: 'rgba(255, 255, 255, 0.55)',
-                fontSize: '0.85rem'
+                color: 'var(--text-muted, #94a3b8)',
+                fontSize: '0.9rem',
+                border: '1px solid rgba(255, 255, 255, 0.08)'
               }}>
-                <span style={{ fontSize: '1.25rem' }}>🌫️</span>
-                <div>
-                  <div style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)' }}>
-                    {message.isDustImage ? 'Dust Image Evaporated' : 'Fog Snap Evaporated'}
-                  </div>
-                  <div style={{ fontSize: '0.72rem', opacity: 0.8 }}>Burned into smoke forever</div>
-                </div>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, opacity: 0.65 }}>
+                  <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3 3" />
+                  <path d="M8.5 12.5l2.5 2.5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span style={{ fontWeight: 500 }}>Evaporated</span>
               </div>
-            ) : isMine ? (
+            ) : (
               <button
                 type="button"
                 onClick={() => setShowFogSnapModal(true)}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '12px',
-                  padding: '10px 16px',
+                  gap: '8px',
+                  padding: '6px 12px',
                   borderRadius: '16px',
-                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(234, 88, 12, 0.2) 50%, rgba(168, 85, 247, 0.15) 100%)',
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  color: '#fff',
                   border: '1px solid rgba(245, 158, 11, 0.35)',
-                  boxShadow: '0 4px 15px rgba(245, 158, 11, 0.15)',
-                  backdropFilter: 'blur(10px)',
-                  color: '#fff',
                   cursor: 'pointer',
-                  textAlign: 'left'
-                }}
-              >
-                <div style={{
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '1.3rem',
-                  boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)',
-                  flexShrink: 0
-                }}>
-                  🌫️
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>{message.isDustImage ? '✨ Scratch Dust Image' : 'Secret Fog Snap'}</span>
-                    <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      {message.fogSnapDuration || 10}s
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.74rem', opacity: 0.82, marginTop: '2px' }}>
-                    🔒 Sent by you • Scratchable by recipient only
-                  </div>
-                </div>
-              </button>
-            ) : (
-              <button
-                onClick={() => setShowFogSnapModal(true)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '10px 16px',
-                  borderRadius: '16px',
-                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(234, 88, 12, 0.25) 50%, rgba(168, 85, 247, 0.2) 100%)',
-                  border: '1px solid rgba(245, 158, 11, 0.45)',
-                  boxShadow: '0 4px 15px rgba(245, 158, 11, 0.25)',
-                  backdropFilter: 'blur(10px)',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  textAlign: 'left',
+                  fontSize: '0.92rem',
+                  fontWeight: 500,
                   transition: 'transform 0.15s ease'
                 }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
               >
-                <div style={{
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '1.3rem',
-                  boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)',
-                  flexShrink: 0
-                }}>
-                  🌫️
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>{message.isDustImage ? '✨ Scratch Dust Image' : 'Secret Fog Snap'}</span>
-                    <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      {message.fogSnapDuration || 10}s
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.74rem', opacity: 0.85, marginTop: '2px' }}>
-                    👆 Tap to scratch frosted mist & reveal
-                  </div>
-                </div>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, color: '#f59e0b' }}>
+                  <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3 3" />
+                  <text
+                    x="12"
+                    y="15.5"
+                    textAnchor="middle"
+                    fontSize="9.5"
+                    fontWeight="800"
+                    fill="currentColor"
+                    fontFamily="sans-serif"
+                  >
+                    10s
+                  </text>
+                </svg>
+                <span>{message.type === 'video' ? 'Video' : 'Photo'}</span>
               </button>
             )}
           </div>
         )}
 
+        {/* Multi-Photo Stack (Instagram Card Deck) */}
+        {(message.type === 'image_group' || (Array.isArray(message.mediaUrls) && message.mediaUrls.length > 1)) && (
+          <div style={{ position: 'relative', margin: '4px 0 6px 0', maxWidth: '100%' }}>
+            {/* Top Stack Header (e.g. ♡ Suhani sent 4 photos) */}
+            <div style={{
+              fontSize: '0.86rem',
+              fontWeight: 600,
+              color: 'var(--text-main, #fff)',
+              marginBottom: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              <span style={{ color: '#ec4899', fontSize: '0.95rem' }}>♡</span>
+              <span>{isMine ? 'You' : (senderName || 'User')} sent {message.mediaUrls.length} photos</span>
+            </div>
+
+            {/* Stacked Cards Deck */}
+            <div
+              onClick={() => setShowMultiGallery(true)}
+              style={{
+                position: 'relative',
+                width: '230px',
+                height: '280px',
+                cursor: 'pointer',
+                margin: '8px auto 14px 10px',
+                userSelect: 'none'
+              }}
+              title="Click to view all photos"
+            >
+              {message.mediaUrls.slice(0, 4).map((url, idx, arr) => {
+                const count = arr.length;
+                let rot = 0;
+                let transX = 0;
+                let transY = 0;
+                if (count > 1) {
+                  if (idx === 0) { rot = -8; transX = -12; transY = -4; }
+                  else if (idx === 1) { rot = 6; transX = 10; transY = -2; }
+                  else if (idx === 2) { rot = -3; transX = -5; transY = 2; }
+                  else if (idx === 3) { rot = 0; transX = 0; transY = 4; }
+                }
+                const zIndex = idx + 1;
+                return (
+                  <div
+                    key={idx}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      transform: `rotate(${rot}deg) translate(${transX}px, ${transY}px)`,
+                      borderRadius: '20px',
+                      overflow: 'hidden',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                      border: '2px solid rgba(255,255,255,0.22)',
+                      background: '#18181b',
+                      zIndex,
+                      transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                    }}
+                  >
+                    <img
+                      src={url}
+                      alt={`Photo ${idx + 1}`}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        display: 'block'
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Standard Media / Image / Video Message */}
-        {(message.type === 'image' || message.type === 'video') && !message.isViewOnce && !message.isFogSnap && message.mediaUrl && (
+        {(message.type === 'image' || message.type === 'video') && !message.isViewOnce && !message.isFogSnap && (!message.mediaUrls || message.mediaUrls.length <= 1) && message.mediaUrl && (
           <div style={{ position: 'relative', borderRadius: '13px', overflow: 'hidden', marginBottom: isPureMedia ? '0' : '4px', maxWidth: '100%' }}>
             {message.type === 'video' ? (
               <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', width: '280px', maxWidth: '100%' }}>
@@ -3263,6 +3295,14 @@ function MessageItem({
           onReact={handleReact}
           onOpenUnlimitedEmoji={onOpenUnlimitedEmoji}
           onClose={() => setShowFogSnapModal(false)}
+          socket={socket}
+        />
+      )}
+
+      {showMultiGallery && (
+        <MultiPhotoGalleryModal
+          photos={message.mediaUrls || [message.mediaUrl]}
+          onClose={() => setShowMultiGallery(false)}
         />
       )}
 
