@@ -1132,6 +1132,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [proModalTab, setProModalTab] = useState('pro');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [moreSubMenuOpen, setMoreSubMenuOpen] = useState(false);
+  const moreMenuRef = useRef(null);
   const [isChatLockedState, setIsChatLockedState] = useState(() => isChatLocked(chatId));
   const [isChatMutedState, setIsChatMutedState] = useState(() => isChatMuted(chatId));
   const [showChatLockPinModal, setShowChatLockPinModal] = useState(false);
@@ -2148,17 +2149,44 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     return () => clearInterval(interval);
   }, [chatId, socket]);
 
-  // Close 3-dots more menu on outside click
+  // Close 3-dots more menu ONLY on genuine outside click
   useEffect(() => {
+    if (!showMoreMenu) return;
     const handleOutsideClick = (e) => {
-      if (!e.target.closest('.chat-header-more-container')) {
-        setShowMoreMenu(false);
+      // 1. Check if click was inside container via ref
+      if (moreMenuRef.current && moreMenuRef.current.contains(e.target)) {
+        return;
       }
+      // 2. Check composedPath in case child element unmounted during state change
+      if (e.composedPath) {
+        const path = e.composedPath();
+        if (moreMenuRef.current && path.includes(moreMenuRef.current)) {
+          return;
+        }
+        if (path.some(el => el.classList && el.classList.contains('chat-header-more-container'))) {
+          return;
+        }
+      }
+      // 3. Fallback closest check
+      if (e.target && e.target.closest && e.target.closest('.chat-header-more-container')) {
+        return;
+      }
+
+      // Truly outside click: close menu and reset submenu
+      setShowMoreMenu(false);
+      setMoreSubMenuOpen(false);
     };
-    if (showMoreMenu) {
+
+    const timer = setTimeout(() => {
       document.addEventListener('click', handleOutsideClick);
-      return () => document.removeEventListener('click', handleOutsideClick);
-    }
+      document.addEventListener('touchstart', handleOutsideClick);
+    }, 10);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
   }, [showMoreMenu]);
 
   // Load message history & group details
@@ -4941,9 +4969,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </button>
 
             {/* 3-Dots More Options Menu */}
-            <div className="chat-header-more-container" style={{ position: 'relative', zIndex: 500 }}>
+            <div
+              ref={moreMenuRef}
+              className="chat-header-more-container"
+              style={{ position: 'relative', zIndex: 500 }}
+              onClick={(e) => e.stopPropagation()}
+            >
               <button
-                onClick={() => setShowMoreMenu(prev => !prev)}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMoreMenu(prev => {
+                    if (!prev) setMoreSubMenuOpen(false);
+                    return !prev;
+                  });
+                }}
                 className="icon-btn-ghost"
                 title="More Options"
                 style={{ width: '38px', height: '38px', borderRadius: '50%', background: showMoreMenu ? 'var(--hover-bg)' : 'transparent' }}
@@ -4952,7 +4992,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               </button>
 
               {showMoreMenu && (
-                <div className="chat-header-dropdown-menu">
+                <div
+                  className="chat-header-dropdown-menu"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   {!moreSubMenuOpen ? (
                     <>
                       {/* Voice & Video Calls */}
@@ -5002,7 +5045,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
                       <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
                       <button 
-                        onClick={() => setMoreSubMenuOpen(true)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMoreSubMenuOpen(true);
+                        }}
                         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -5015,7 +5062,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   ) : (
                     <>
                       <button 
-                        onClick={() => setMoreSubMenuOpen(false)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMoreSubMenuOpen(false);
+                        }}
                         style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, borderBottom: '1px solid var(--border)', paddingBottom: '8px', marginBottom: '4px', width: '100%' }}
                       >
                         <ChevronLeft size={16} color="var(--accent)" />
