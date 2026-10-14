@@ -1,5 +1,6 @@
 // push notification utils
 import { BACKEND_URL } from './config';
+import { isChatMuted } from './securityLock';
 
 // convert base64 to uint8array for vapid key
 function urlBase64ToUint8Array(base64String) {
@@ -137,6 +138,7 @@ export async function showPushNotification(title, body, icon = '/icon-192.png', 
   if (typeof window === 'undefined' || !('Notification' in window)) return;
   if (localStorage.getItem('pulsechat_notifications_enabled') === 'false') return;
   if (Notification.permission !== 'granted') return;
+  if (data?.chatId && isChatMuted(data.chatId)) return;
 
   const notifPayloadData = {
     url: window.location.origin,

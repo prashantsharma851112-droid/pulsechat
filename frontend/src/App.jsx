@@ -27,6 +27,8 @@ import LegalView from './components/common/LegalView';
 import LegalModal from './components/common/LegalModal';
 const PulseHandleCardModal = lazyWithRetry(() => import('./components/profile/PulseHandleCardModal'));
 const AnonymousAskView = lazyWithRetry(() => import('./components/profile/AnonymousAskView'));
+const PinLockModal = lazyWithRetry(() => import('./components/common/PinLockModal'));
+import { isAppLockEnabled, isChatMuted } from './utils/securityLock';
 import { BACKEND_URL } from './utils/config';
 import { updateUserProfileInStorage, clearUnreadCount, getCachedAllUsers } from './utils/offlineStorage';
 import { initBackListeners, useBackHandler } from './utils/backNavigation';
@@ -118,6 +120,19 @@ export default function App() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [fullDpData, setFullDpData] = useState(null); // { imageUrl, name, username }
+
+  // App Lock Authentication State
+  const [isAppUnlocked, setIsAppUnlocked] = useState(() => !isAppLockEnabled());
+
+  useEffect(() => {
+    const handleAppLockChanged = (e) => {
+      if (!e.detail?.enabled) {
+        setIsAppUnlocked(true);
+      }
+    };
+    window.addEventListener('pulsechat_app_lock_changed', handleAppLockChanged);
+    return () => window.removeEventListener('pulsechat_app_lock_changed', handleAppLockChanged);
+  }, []);
 
   // Compliance & Legal Pages Direct Route Support (/privacy, /terms, /refund, /pricing, /contact)
   const [standaloneLegalTab, setStandaloneLegalTab] = useState(() => {
@@ -574,6 +589,9 @@ export default function App() {
     const currentlyOpenId = activeChatRef.current?.id;
     if (lastNotification.senderId === currentlyOpenId && !lastNotification.isFriendRequest && !lastNotification.isFriendAccepted) return;
 
+    const notifChatId = lastNotification.chatId || (user?.id && lastNotification.senderId ? [user.id, lastNotification.senderId].sort().join('_') : null);
+    if (notifChatId && isChatMuted(notifChatId)) return;
+
     const toastId = lastNotification.id + '_' + lastNotification.receivedAt;
     const senderTitle = lastNotification.isGroup
       ? (lastNotification.groupName || 'Group')
@@ -953,6 +971,17 @@ export default function App() {
               setModalHandleUser(null);
               setActiveChat(chatUser);
             }}
+          />
+        )}
+
+        {/* Full-Screen App Lock Screen */}
+        {user && isAppLockEnabled() && !isAppUnlocked && (
+          <PinLockModal
+            mode="verify"
+            title="PulseChat Locked"
+            description="Enter your 4-digit security PIN to open PulseChat"
+            onSuccess={() => setIsAppUnlocked(true)}
+            onCancel={() => {}}
           />
         )}
       </React.Suspense>

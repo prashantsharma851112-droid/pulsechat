@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useContext, useCallback, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Camera, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3, Ghost, Search, Globe, ChevronUp, ChevronDown, ArrowDown } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Camera, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3, Ghost, Search, Globe, ChevronUp, ChevronDown, ArrowDown, Lock, Unlock, ChevronLeft, ChevronRight, Bell, BellOff } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -42,6 +42,8 @@ const SparksWalletModal = lazyWithRetry(() => import('./SparksWalletModal'));
 const ScheduleMessageModal = lazyWithRetry(() => import('./ScheduleMessageModal'));
 const ChatNicknameModal = lazyWithRetry(() => import('./ChatNicknameModal'));
 const ShareableStoryCardModal = lazyWithRetry(() => import('../profile/ShareableStoryCardModal'));
+const PinLockModal = lazyWithRetry(() => import('../common/PinLockModal'));
+import { isChatLocked, setChatLocked, getSecurityPin, isChatMuted, setChatMuted } from '../../utils/securityLock';
 import {
   getCachedMessages,
   getCachedMessagesFromLocalDb,
@@ -1125,7 +1127,88 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const actionGridBtnRef = useRef(null);
   const [proModalTab, setProModalTab] = useState('pro');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [moreSubMenuOpen, setMoreSubMenuOpen] = useState(false);
+  const [isChatLockedState, setIsChatLockedState] = useState(() => isChatLocked(chatId));
+  const [isChatMutedState, setIsChatMutedState] = useState(() => isChatMuted(chatId));
+  const [showChatLockPinModal, setShowChatLockPinModal] = useState(false);
+  const [chatLockPinMode, setChatLockPinMode] = useState('verify');
   const [pendingMedia, setPendingMedia] = useState(null);
+
+  useEffect(() => {
+    setIsChatLockedState(isChatLocked(chatId));
+    setIsChatMutedState(isChatMuted(chatId));
+    setMoreSubMenuOpen(false);
+  }, [chatId]);
+
+  useEffect(() => {
+    const handleLockUpdated = (e) => {
+      if (e.detail?.chatId === chatId) {
+        setIsChatLockedState(Boolean(e.detail.locked));
+      }
+    };
+    const handleMuteUpdated = (e) => {
+      if (e.detail?.chatId === chatId) {
+        setIsChatMutedState(Boolean(e.detail.muted));
+      }
+    };
+    window.addEventListener('pulsechat_chat_lock_updated', handleLockUpdated);
+    window.addEventListener('pulsechat_chat_mute_updated', handleMuteUpdated);
+    return () => {
+      window.removeEventListener('pulsechat_chat_lock_updated', handleLockUpdated);
+      window.removeEventListener('pulsechat_chat_mute_updated', handleMuteUpdated);
+    };
+  }, [chatId]);
+
+  const handleToggleChatLockFromMenu = () => {
+    setShowMoreMenu(false);
+    setMoreSubMenuOpen(false);
+    if (!chatId) return;
+    if (isChatLockedState) {
+      setChatLockPinMode('verify');
+      setShowChatLockPinModal(true);
+    } else {
+      const pin = getSecurityPin();
+      if (!pin) {
+        setChatLockPinMode('setup');
+        setShowChatLockPinModal(true);
+      } else {
+        setChatLocked(chatId, true);
+        setIsChatLockedState(true);
+        window.dispatchEvent(new CustomEvent('pulsechat_chat_lock_updated', { detail: { chatId, locked: true } }));
+        setActionToast('Chat locked with PIN 🔒');
+        setTimeout(() => setActionToast(''), 2500);
+      }
+    }
+  };
+
+  const handleChatLockPinSuccess = () => {
+    if (!chatId) return;
+    if (chatLockPinMode === 'verify') {
+      setChatLocked(chatId, false);
+      setIsChatLockedState(false);
+      window.dispatchEvent(new CustomEvent('pulsechat_chat_lock_updated', { detail: { chatId, locked: false } }));
+      setActionToast('Chat unlocked 🔓');
+    } else {
+      setChatLocked(chatId, true);
+      setIsChatLockedState(true);
+      window.dispatchEvent(new CustomEvent('pulsechat_chat_lock_updated', { detail: { chatId, locked: true } }));
+      setActionToast('Chat locked with PIN 🔒');
+    }
+    setShowChatLockPinModal(false);
+    setTimeout(() => setActionToast(''), 2500);
+  };
+
+  const handleToggleChatMuteFromMenu = () => {
+    setShowMoreMenu(false);
+    setMoreSubMenuOpen(false);
+    if (!chatId) return;
+    const next = !isChatMutedState;
+    setChatMuted(chatId, next);
+    setIsChatMutedState(next);
+    window.dispatchEvent(new CustomEvent('pulsechat_chat_mute_updated', { detail: { chatId, muted: next } }));
+    setActionToast(next ? 'Notifications muted 🔕' : 'Notifications unmuted 🔔');
+    setTimeout(() => setActionToast(''), 2500);
+  };
 
   // Universal Back Button registration for all submodals/pickers inside ChatWindow
   useBackHandler(() => setShowActionGrid(false), showActionGrid);
@@ -4914,39 +4997,82 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     <Ghost size={16} color={isVanishMode ? '#c084fc' : 'var(--accent)'} />
                     <span>Vanish Mode {isVanishMode ? '(On)' : '(Off)'}</span>
                   </button>
-                  {!isGroup && (
-                    <button
-                      onClick={async () => {
-                        setShowMoreMenu(false);
-                        const willBlock = !blockStatus.isBlockedByMe;
-                        const confirmMsg = willBlock
-                          ? `Are you sure you want to block ${activeChat.displayName}? You will no longer receive their messages or calls.`
-                          : `Unblock ${activeChat.displayName}?`;
-                        if (window.confirm(confirmMsg)) {
-                          if (willBlock) {
-                            await blockUser(activeChat.id);
-                            setBlockStatus(prev => ({ ...prev, isBlockedByMe: true }));
-                          } else {
-                            await unblockUser(activeChat.id);
-                            setBlockStatus(prev => ({ ...prev, isBlockedByMe: false }));
-                          }
-                        }
-                      }}
-                      style={{ color: blockStatus.isBlockedByMe ? 'var(--accent)' : '#ef4444' }}
-                    >
-                      <Ban size={16} color={blockStatus.isBlockedByMe ? 'var(--accent)' : '#ef4444'} />
-                      <span>{blockStatus.isBlockedByMe ? 'Unblock Contact' : 'Block Contact'}</span>
-                    </button>
-                  )}
+                  {!moreSubMenuOpen ? (
+                    <>
+                      <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
+                      <button 
+                        onClick={() => setMoreSubMenuOpen(true)}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <MoreVertical size={16} color="var(--accent)" />
+                          <span>More</span>
+                        </div>
+                        <ChevronRight size={16} color="var(--text-muted)" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button 
+                        onClick={() => setMoreSubMenuOpen(false)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, borderBottom: '1px solid var(--border)', paddingBottom: '8px', marginBottom: '4px', width: '100%' }}
+                      >
+                        <ChevronLeft size={16} color="var(--accent)" />
+                        <span>More options</span>
+                      </button>
 
-                  <button onClick={() => { setShowMoreMenu(false); handleClearCurrentChat(); }} style={{ color: '#ef4444' }}>
-                    <Trash2 size={16} color="#ef4444" />
-                    <span>Clear Chat</span>
-                  </button>
-                  <button onClick={() => { setShowMoreMenu(false); isGroup ? setShowGroupProfileModal(true) : setShowUserProfileModal(true); }}>
-                    <Info size={16} color="var(--text-muted)" />
-                    <span>{isGroup ? 'Group Info' : 'Contact Info'}</span>
-                  </button>
+                      {/* 1. Contact Info */}
+                      <button onClick={() => { setShowMoreMenu(false); setMoreSubMenuOpen(false); isGroup ? setShowGroupProfileModal(true) : setShowUserProfileModal(true); }}>
+                        <Info size={16} color="var(--accent)" />
+                        <span>{isGroup ? 'Group Info' : 'Contact Info'}</span>
+                      </button>
+
+                      {/* 2. Chat Lock */}
+                      <button onClick={handleToggleChatLockFromMenu}>
+                        {isChatLockedState ? <Unlock size={16} color="#10b981" /> : <Lock size={16} color="var(--accent)" />}
+                        <span>{isChatLockedState ? 'Unlock Chat' : 'Chat Lock 🔒'}</span>
+                      </button>
+
+                      {/* 3. Mute / Unmute Notifications */}
+                      <button onClick={handleToggleChatMuteFromMenu}>
+                        {isChatMutedState ? <Bell size={16} color="var(--accent)" /> : <BellOff size={16} color="#f59e0b" />}
+                        <span>{isChatMutedState ? 'Unmute Notifications' : 'Mute Notifications'}</span>
+                      </button>
+
+                      {/* 4. Clear Chat */}
+                      <button onClick={() => { setShowMoreMenu(false); setMoreSubMenuOpen(false); handleClearCurrentChat(); }} style={{ color: '#ef4444' }}>
+                        <Trash2 size={16} color="#ef4444" />
+                        <span>Clear Chat</span>
+                      </button>
+
+                      {/* 5. Block Contact */}
+                      {!isGroup && (
+                        <button
+                          onClick={async () => {
+                            setShowMoreMenu(false);
+                            setMoreSubMenuOpen(false);
+                            const willBlock = !blockStatus.isBlockedByMe;
+                            const confirmMsg = willBlock
+                              ? `Are you sure you want to block ${activeChat.displayName}? You will no longer receive their messages or calls.`
+                              : `Unblock ${activeChat.displayName}?`;
+                            if (window.confirm(confirmMsg)) {
+                              if (willBlock) {
+                                await blockUser(activeChat.id);
+                                setBlockStatus(prev => ({ ...prev, isBlockedByMe: true }));
+                              } else {
+                                await unblockUser(activeChat.id);
+                                setBlockStatus(prev => ({ ...prev, isBlockedByMe: false }));
+                              }
+                            }
+                          }}
+                          style={{ color: blockStatus.isBlockedByMe ? 'var(--accent)' : '#ef4444' }}
+                        >
+                          <Ban size={16} color={blockStatus.isBlockedByMe ? 'var(--accent)' : '#ef4444'} />
+                          <span>{blockStatus.isBlockedByMe ? 'Unblock Contact' : 'Block Contact'}</span>
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
 
@@ -7446,6 +7572,27 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           onClose={() => setShowUserProfileModal(false)}
           onStartCall={onStartCall}
           onOpenFullDp={onOpenFullDp}
+          messages={messages}
+          onDeleteMessages={(ids) => {
+            if (socket && chatId) {
+              socket.emit('delete_multiple_messages', { messageIds: ids, chatId });
+            }
+            setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, type: 'deleted', content: 'This message was deleted' } : m));
+          }}
+          onForwardMessages={(msgs) => {
+            setSelectedActionMessages(msgs);
+            setShowForwardModal(true);
+          }}
+        />
+      )}
+
+      {showChatLockPinModal && (
+        <PinLockModal
+          mode={chatLockPinMode}
+          title={chatLockPinMode === 'setup' ? 'Set Chat Lock PIN' : 'Enter PIN to Unlock'}
+          description={chatLockPinMode === 'setup' ? 'Create a 4-digit PIN to protect locked chats' : 'Enter your 4-digit security PIN'}
+          onSuccess={handleChatLockPinSuccess}
+          onCancel={() => setShowChatLockPinModal(false)}
         />
       )}
 

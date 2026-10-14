@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
-import { X, CheckCircle2, Phone, Video, Eye, Info, User, ShieldCheck, Clock, Ban, Unlock, UserPlus, UserCheck, Loader2, Sparkles, Zap, Image as ImageIcon, FileText, Link2, Film, Download, ExternalLink, Edit3 } from 'lucide-react';
+import { X, CheckCircle2, Phone, Video, Eye, Info, User, ShieldCheck, Clock, Ban, Unlock, UserPlus, UserCheck, Loader2, Sparkles, Zap, Image as ImageIcon, FileText, Link2, Film, Download, ExternalLink, Edit3, ChevronRight, Lock, HardDrive, Bell, BellOff } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
 import PulseVipBadge from '../common/PulseVipBadge';
 import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
 import { getCachedAllUsers, getCachedFriends, setCachedFriends, getCachedMessages } from '../../utils/offlineStorage';
+import ChatManageStorageModal, { formatStorageSize, estimateMessageSize } from './ChatManageStorageModal';
+import PinLockModal from '../common/PinLockModal';
+import { isChatLocked, setChatLocked, getSecurityPin, isChatMuted, setChatMuted } from '../../utils/securityLock';
 
-export default function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp }) {
+export default function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp, messages: propMessages, onDeleteMessages, onForwardMessages }) {
   const { user, token, blockUser, unblockUser } = useContext(AuthContext);
   const { socket, onlineUsers, vibeAuras } = useContext(SocketContext);
   const [profileData, setProfileData] = useState(targetUser);
@@ -20,19 +23,34 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
   const isBlocked = Boolean(user?.blockedUsers && user.blockedUsers.includes(targetUser.id));
   const chatId = user?.id && targetUser?.id ? [user.id, targetUser.id].sort().join('_') : null;
 
+  // Manage Storage, Chat Lock & Mute States
+  const [showManageStorage, setShowManageStorage] = useState(false);
+  const [isLocked, setIsLocked] = useState(() => chatId ? isChatLocked(chatId) : false);
+  const [isMuted, setIsMuted] = useState(() => chatId ? isChatMuted(chatId) : false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinModalMode, setPinModalMode] = useState('verify');
+
   // Shared Media, Files & Links States
   const [sharedTab, setSharedTab] = useState('media'); // 'media' | 'files' | 'links'
   const [sharedMessages, setSharedMessages] = useState(() => {
+    if (propMessages && propMessages.length > 0) return propMessages;
     if (!chatId) return [];
     return getCachedMessages(chatId) || [];
   });
 
+  useEffect(() => {
+    if (propMessages && propMessages.length > 0) {
+      setSharedMessages(propMessages);
+    }
+  }, [propMessages]);
+
   const sharedMediaItems = useMemo(() => {
-    return (sharedMessages || []).filter(m => (m.type === 'image' || m.type === 'video') && m.mediaUrl && !m.isFogSnap && !m.isViewOnce);
+    return (sharedMessages || []).filter(m => (m.type === 'image' || m.type === 'video') && m.mediaUrl && !m.isFogSnap && !m.isViewOnce && m.type !== 'deleted');
   }, [sharedMessages]);
 
   const sharedFilesItems = useMemo(() => {
-    return (sharedMessages || []).filter(m => (m.type === 'document' || m.fileName) && m.mediaUrl);
+    return (sharedMessages || []).filter(m => (m.type === 'document' || m.fileName) && m.mediaUrl && m.type !== 'deleted');
+
   }, [sharedMessages]);
 
   const sharedLinksItems = useMemo(() => {
@@ -47,6 +65,62 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
     });
     return list;
   }, [sharedMessages]);
+
+  const totalMediaBytes = useMemo(() => {
+    let bytes = 0;
+    (sharedMediaItems || []).forEach(m => { bytes += estimateMessageSize(m); });
+    (sharedFilesItems || []).forEach(m => { bytes += estimateMessageSize(m); });
+    return bytes;
+  }, [sharedMediaItems, sharedFilesItems]);
+
+  const handleToggleChatLock = () => {
+    if (!chatId) return;
+    if (isLocked) {
+      setPinModalMode('verify');
+      setShowPinModal(true);
+    } else {
+      const existingPin = getSecurityPin();
+      if (!existingPin) {
+        setPinModalMode('setup');
+        setShowPinModal(true);
+      } else {
+        setChatLocked(chatId, true);
+        setIsLocked(true);
+        window.dispatchEvent(new CustomEvent('pulsechat_chat_lock_updated', { detail: { chatId, locked: true } }));
+      }
+    }
+  };
+
+  const handlePinSuccess = () => {
+    if (!chatId) return;
+    if (pinModalMode === 'verify') {
+      setChatLocked(chatId, false);
+      setIsLocked(false);
+      window.dispatchEvent(new CustomEvent('pulsechat_chat_lock_updated', { detail: { chatId, locked: false } }));
+    } else {
+      setChatLocked(chatId, true);
+      setIsLocked(true);
+      window.dispatchEvent(new CustomEvent('pulsechat_chat_lock_updated', { detail: { chatId, locked: true } }));
+    }
+    setShowPinModal(false);
+  };
+
+  const handleToggleNotificationMute = () => {
+    if (!chatId) return;
+    const next = !isMuted;
+    setChatMuted(chatId, next);
+    setIsMuted(next);
+    window.dispatchEvent(new CustomEvent('pulsechat_chat_mute_updated', { detail: { chatId, muted: next } }));
+  };
+
+  const handleDeleteMediaFromStorage = (messageIds) => {
+    if (onDeleteMessages) {
+      onDeleteMessages(messageIds);
+    } else if (socket && chatId) {
+      socket.emit('delete_multiple_messages', { messageIds, chatId });
+    }
+    setSharedMessages(prev => prev.filter(m => !messageIds.includes(m.id)));
+  };
 
   const fetchFriendStatus = async () => {
     if (!targetUser?.id || targetUser.id === user?.id) return;
@@ -974,6 +1048,97 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                 )}
               </div>
             )}
+
+            {/* Manage Storage Row (WhatsApp style) */}
+            <div
+              onClick={() => setShowManageStorage(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 4px 4px 4px',
+                marginTop: '10px',
+                borderTop: '1px solid var(--border)',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <HardDrive size={16} color="var(--accent)" />
+                <div>
+                  <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Manage storage
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {formatStorageSize(totalMediaBytes)}
+                  </div>
+                </div>
+              </div>
+              <ChevronRight size={18} color="var(--text-muted)" />
+            </div>
+          </div>
+
+          {/* WhatsApp-Style Chat Lock Card */}
+          <div style={{
+            background: 'var(--bg-chat)',
+            border: '1px solid var(--border)',
+            borderRadius: '14px',
+            padding: '14px',
+            marginBottom: '14px',
+            textAlign: 'left'
+          }}>
+            <div
+              onClick={handleToggleChatLock}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: isLocked ? 'rgba(0, 168, 132, 0.15)' : 'var(--hover-bg)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Lock size={16} color={isLocked ? 'var(--accent, #00a884)' : 'var(--text-muted)'} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Chat lock
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    Lock and hide this chat on this device
+                  </div>
+                </div>
+              </div>
+
+              {/* Toggle Switch */}
+              <div style={{
+                width: '38px',
+                height: '22px',
+                borderRadius: '11px',
+                background: isLocked ? 'var(--accent, #00a884)' : 'var(--border)',
+                position: 'relative',
+                transition: 'all 0.2s ease',
+                flexShrink: 0
+              }}>
+                <div style={{
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  background: '#fff',
+                  position: 'absolute',
+                  top: '2px',
+                  left: isLocked ? '18px' : '2px',
+                  transition: 'all 0.2s ease'
+                }} />
+              </div>
+            </div>
           </div>
 
           {/* Bio / About Info Box */}
@@ -1086,6 +1251,49 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
 
             <div style={{ height: '1px', background: 'var(--border)' }} />
 
+            {/* Mute Notifications Toggle */}
+            <div
+              onClick={handleToggleNotificationMute}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '6px 0',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {isMuted ? <BellOff size={16} color="#f59e0b" /> : <Bell size={16} color="var(--accent)" />}
+                <div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Mute Notifications</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{isMuted ? 'Notifications are muted for this chat' : 'Receive alerts for incoming messages'}</div>
+                </div>
+              </div>
+
+              <div style={{
+                width: '36px',
+                height: '20px',
+                borderRadius: '10px',
+                background: isMuted ? 'var(--accent)' : 'var(--border)',
+                position: 'relative',
+                transition: 'all 0.2s ease',
+                flexShrink: 0
+              }}>
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  background: '#fff',
+                  position: 'absolute',
+                  top: '2px',
+                  left: isMuted ? '18px' : '2px',
+                  transition: 'all 0.2s ease'
+                }} />
+              </div>
+            </div>
+
+            <div style={{ height: '1px', background: 'var(--border)' }} />
+
             {/* Block / Unblock Contact Button */}
             <button
               onClick={handleBlockToggle}
@@ -1112,6 +1320,30 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
           </div>
         </div>
       </div>
+
+      {/* Manage Storage Modal (WhatsApp Style) */}
+      {showManageStorage && (
+        <ChatManageStorageModal
+          chatId={chatId}
+          targetUser={userToDisplay}
+          messages={sharedMessages}
+          onClose={() => setShowManageStorage(false)}
+          onDeleteMessages={handleDeleteMediaFromStorage}
+          onForwardMessages={onForwardMessages}
+          onOpenFullDp={onOpenFullDp}
+        />
+      )}
+
+      {/* PIN Lock Setup / Verification Modal for Chat Lock */}
+      {showPinModal && (
+        <PinLockModal
+          mode={pinModalMode}
+          title={pinModalMode === 'setup' ? 'Set Chat Lock PIN' : 'Enter PIN to Unlock'}
+          description={pinModalMode === 'setup' ? 'Create a 4-digit PIN to protect locked chats' : 'Enter your 4-digit security PIN'}
+          onSuccess={handlePinSuccess}
+          onCancel={() => setShowPinModal(false)}
+        />
+      )}
     </div>
   );
 }

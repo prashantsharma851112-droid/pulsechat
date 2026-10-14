@@ -24,6 +24,8 @@ const PulseZoneModal = lazyWithRetry(() => import('../zone/PulseZoneModal'));
 const SparksWalletModal = lazyWithRetry(() => import('./SparksWalletModal'));
 const VibeAuraSelectorModal = lazyWithRetry(() => import('./VibeAuraSelectorModal'));
 const MusicPickerModal = lazyWithRetry(() => import('../vibes/MusicPickerModal'));
+const PinLockModal = lazyWithRetry(() => import('../common/PinLockModal'));
+import { isChatLocked, isChatMuted, getLockedChats, getMutedChats } from '../../utils/securityLock';
 import { BACKEND_URL } from '../../utils/config';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
 import {
@@ -149,6 +151,26 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       return [];
     }
   });
+
+  const [showLockPinModal, setShowLockPinModal] = useState(false);
+  const [pendingLockedChat, setPendingLockedChat] = useState(null);
+  const [lockedChatIdsState, setLockedChatIdsState] = useState(() => getLockedChats());
+  const [mutedChatIdsState, setMutedChatIdsState] = useState(() => getMutedChats());
+
+  useEffect(() => {
+    const handleLockUpdated = () => {
+      setLockedChatIdsState(getLockedChats());
+    };
+    const handleMuteUpdated = () => {
+      setMutedChatIdsState(getMutedChats());
+    };
+    window.addEventListener('pulsechat_chat_lock_updated', handleLockUpdated);
+    window.addEventListener('pulsechat_chat_mute_updated', handleMuteUpdated);
+    return () => {
+      window.removeEventListener('pulsechat_chat_lock_updated', handleLockUpdated);
+      window.removeEventListener('pulsechat_chat_mute_updated', handleMuteUpdated);
+    };
+  }, []);
 
   const togglePinChat = (e, targetId) => {
     if (e) {
@@ -1640,7 +1662,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     return () => clearTimeout(timer);
   }, [searchQuery, token, user?.id]);
 
-  const handleSelectUser = (selectedUser) => {
+  const proceedSelectUser = (selectedUser) => {
     if (selectedUser?.id && user?.id) {
       clearUnreadCount(user.id, selectedUser.id);
       setRecentChats(prev => prev.map(c => (
@@ -1653,7 +1675,17 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     setSearchResults([]);
   };
 
-  const handleSelectGroup = (group) => {
+  const handleSelectUser = (selectedUser) => {
+    const cid = selectedUser?.id && user?.id ? [user.id, selectedUser.id].sort().join('_') : selectedUser?.id;
+    if (isChatLocked(cid)) {
+      setPendingLockedChat({ type: 'user', data: selectedUser });
+      setShowLockPinModal(true);
+      return;
+    }
+    proceedSelectUser(selectedUser);
+  };
+
+  const proceedSelectGroup = (group) => {
     if (group?.id && user?.id) {
       clearUnreadCount(user.id, group.id);
       setRecentChats(prev => prev.map(c => c.id === group.id ? { ...c, unreadCount: 0 } : c));
@@ -1666,6 +1698,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     });
     setSearchQuery('');
     setSearchResults([]);
+  };
+
+  const handleSelectGroup = (group) => {
+    if (isChatLocked(group?.id)) {
+      setPendingLockedChat({ type: 'group', data: group });
+      setShowLockPinModal(true);
+      return;
+    }
+    proceedSelectGroup(group);
   };
 
   const handlePanicWipe = () => {
@@ -2811,6 +2852,18 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                               🔥 {u.streakCount}
                             </span>
                           )}
+                          {/* Locked Chat Indicator */}
+                          {isChatLocked(u.isGroup ? u.id : (user?.id ? [user.id, u.id].sort().join('_') : u.id)) && (
+                            <span title="Locked Chat" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center' }}>
+                              🔒
+                            </span>
+                          )}
+                          {/* Muted Chat Indicator */}
+                          {isChatMuted(u.isGroup ? u.id : (user?.id ? [user.id, u.id].sort().join('_') : u.id)) && (
+                            <span title="Notifications Muted" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', opacity: 0.7 }}>
+                              🔕
+                            </span>
+                          )}
                         </h4>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           {(u.lastMessageTimestamp || u.lastMessageTime) && (
@@ -3273,6 +3326,29 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           onSelectSong={(song) => {
             playAppMusicTrack(song);
             setShowMusicPickerModal(false);
+          }}
+        />
+      )}
+
+      {showLockPinModal && (
+        <PinLockModal
+          mode="verify"
+          title="Locked Chat"
+          description="Enter your 4-digit PIN to open this chat"
+          onSuccess={() => {
+            if (pendingLockedChat) {
+              if (pendingLockedChat.type === 'user') {
+                proceedSelectUser(pendingLockedChat.data);
+              } else {
+                proceedSelectGroup(pendingLockedChat.data);
+              }
+              setPendingLockedChat(null);
+            }
+            setShowLockPinModal(false);
+          }}
+          onCancel={() => {
+            setPendingLockedChat(null);
+            setShowLockPinModal(false);
           }}
         />
       )}

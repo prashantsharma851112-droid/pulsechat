@@ -19,6 +19,8 @@ import LegalModal from '../common/LegalModal';
 import ChangePasswordForm from './ChangePasswordForm';
 import { useBackHandler } from '../../utils/backNavigation';
 import { DISGUISE_PRESETS, getAppDisguise, applyAppDisguise } from '../../utils/appDisguise';
+import PinLockModal from '../common/PinLockModal';
+import { isAppLockEnabled, setAppLockEnabled, getSecurityPin, isChatMuted, setChatMuted, getMutedChats } from '../../utils/securityLock';
 
 const THEMES = [
   { id: 'midnight_amoled', name: '🖤 Midnight AMOLED (Default)', color: '#000000', isPro: false },
@@ -136,6 +138,52 @@ export default function SettingsModal({
   const [isCamouflageExpanded, setIsCamouflageExpanded] = useState(false);
   const [isChangePasswordExpanded, setIsChangePasswordExpanded] = useState(false);
 
+  // Specific Chat Notifications & Mute Manager
+  const [notificationSearchQuery, setNotificationSearchQuery] = useState('');
+  const [mutedChatIds, setMutedChatIds] = useState(() => getMutedChats());
+
+  // App Lock (PIN Security)
+  const [appLockEnabledState, setAppLockEnabledState] = useState(() => isAppLockEnabled());
+  const [showAppLockPinModal, setShowAppLockPinModal] = useState(false);
+  const [appLockPinMode, setAppLockPinMode] = useState('setup');
+
+  const handleToggleChatMuteInSettings = (targetContact) => {
+    if (!user?.id || !targetContact?.id) return;
+    const cid = [user.id, targetContact.id].sort().join('_');
+    const isCurrentlyMuted = isChatMuted(cid);
+    const next = !isCurrentlyMuted;
+    setChatMuted(cid, next);
+    setMutedChatIds(getMutedChats());
+    window.dispatchEvent(new CustomEvent('pulsechat_chat_mute_updated', { detail: { chatId: cid, muted: next } }));
+  };
+
+  const handleToggleAppLock = () => {
+    if (appLockEnabledState) {
+      setAppLockPinMode('verify');
+      setShowAppLockPinModal(true);
+    } else {
+      const pin = getSecurityPin();
+      if (!pin) {
+        setAppLockPinMode('setup');
+        setShowAppLockPinModal(true);
+      } else {
+        setAppLockEnabled(true);
+        setAppLockEnabledState(true);
+      }
+    }
+  };
+
+  const handleAppLockPinSuccess = () => {
+    if (appLockPinMode === 'verify') {
+      setAppLockEnabled(false);
+      setAppLockEnabledState(false);
+    } else {
+      setAppLockEnabled(true);
+      setAppLockEnabledState(true);
+    }
+    setShowAppLockPinModal(false);
+  };
+
   const handleSelectDisguise = (presetId) => {
     setCurrentDisguise(presetId);
     applyAppDisguise(presetId);
@@ -197,6 +245,14 @@ export default function SettingsModal({
       c.name.toLowerCase().includes(q) || (c.username && c.username.toLowerCase().includes(q))
     );
   }, [availableGhostContacts, ghostSearchQuery]);
+
+  const filteredNotificationContacts = useMemo(() => {
+    const q = notificationSearchQuery.trim().toLowerCase();
+    if (!q) return availableGhostContacts;
+    return availableGhostContacts.filter(c => 
+      c.name.toLowerCase().includes(q) || (c.username && c.username.toLowerCase().includes(q))
+    );
+  }, [availableGhostContacts, notificationSearchQuery]);
 
   const handleSelectGhostModeType = (type) => {
     setGhostModeType(type);
@@ -1102,6 +1158,130 @@ export default function SettingsModal({
                   <Bell size={14} color="var(--accent)" /> Send Test Notification Alert
                 </button>
               </div>
+
+              {/* Specific Chat Notification Search & Mute Manager */}
+              <div style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: '16px',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <BellOff size={18} color="var(--accent)" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                        Chat Notifications & Mute List
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                        Search contacts to toggle notifications ON or OFF individually
+                      </div>
+                    </div>
+                  </div>
+                  {mutedChatIds.length > 0 && (
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '2px 8px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.18)', color: '#ef4444' }}>
+                      {mutedChatIds.length} Muted
+                    </span>
+                  )}
+                </div>
+
+                {/* Search Bar */}
+                <div style={{ position: 'relative' }}>
+                  <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                  <input
+                    type="text"
+                    value={notificationSearchQuery}
+                    onChange={(e) => setNotificationSearchQuery(e.target.value)}
+                    placeholder="Search contact or username..."
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px 8px 34px',
+                      borderRadius: '10px',
+                      border: '1px solid var(--border)',
+                      background: 'var(--bg-main)',
+                      color: 'var(--text-main)',
+                      fontSize: '0.82rem',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+
+                {/* Contact List with Toggle */}
+                <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {filteredNotificationContacts.length > 0 ? (
+                    filteredNotificationContacts.map(c => {
+                      const cid = user?.id && c.id ? [user.id, c.id].sort().join('_') : c.id;
+                      const isMuted = isChatMuted(cid);
+                      return (
+                        <div
+                          key={c.id}
+                          onClick={() => handleToggleChatMuteInSettings(c)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '8px 12px',
+                            borderRadius: '10px',
+                            background: isMuted ? 'rgba(239, 68, 68, 0.08)' : 'var(--hover-bg)',
+                            border: isMuted ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid var(--border)',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                            <img
+                              src={c.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.username || c.name}`}
+                              alt=""
+                              style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                            />
+                            <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                              <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {c.name}
+                              </div>
+                              <div style={{ fontSize: '0.7rem', color: isMuted ? '#ef4444' : 'var(--text-muted)' }}>
+                                {isMuted ? '🔕 Notifications Muted' : '🔔 Notifications Active'}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Toggle Switch */}
+                          <div style={{
+                            width: '38px',
+                            height: '22px',
+                            borderRadius: '11px',
+                            background: !isMuted ? '#10b981' : 'var(--border)',
+                            position: 'relative',
+                            transition: 'all 0.2s ease',
+                            flexShrink: 0,
+                            marginLeft: '8px'
+                          }}>
+                            <div style={{
+                              width: '18px',
+                              height: '18px',
+                              borderRadius: '50%',
+                              background: '#fff',
+                              position: 'absolute',
+                              top: '2px',
+                              left: !isMuted ? '18px' : '2px',
+                              transition: 'all 0.2s ease'
+                            }} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '1.2rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                      No contacts found
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -1110,6 +1290,96 @@ export default function SettingsModal({
               ============================================================== */}
           {activeSection === 'privacy' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* App Lock (PIN Security) Card */}
+              <div style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: '16px',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                <div
+                  onClick={handleToggleAppLock}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '12px',
+                      background: appLockEnabledState ? 'rgba(16, 185, 129, 0.15)' : 'var(--hover-bg)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <Lock size={20} color={appLockEnabledState ? '#10b981' : 'var(--text-muted)'} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        App Lock (PIN Protection)
+                        <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '1px 6px', borderRadius: '6px', background: appLockEnabledState ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.08)', color: appLockEnabledState ? '#10b981' : 'var(--text-muted)' }}>
+                          {appLockEnabledState ? 'ACTIVE' : 'OFF'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Require 4-digit PIN to open PulseChat on this device
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Toggle Switch */}
+                  <div style={{
+                    width: '38px',
+                    height: '22px',
+                    borderRadius: '11px',
+                    background: appLockEnabledState ? '#10b981' : 'var(--border)',
+                    position: 'relative',
+                    transition: 'all 0.2s ease',
+                    flexShrink: 0
+                  }}>
+                    <div style={{
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      background: '#fff',
+                      position: 'absolute',
+                      top: '2px',
+                      left: appLockEnabledState ? '18px' : '2px',
+                      transition: 'all 0.2s ease'
+                    }} />
+                  </div>
+                </div>
+
+                {appLockEnabledState && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '8px', borderTop: '1px solid var(--border)' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAppLockPinMode('change');
+                        setShowAppLockPinModal(true);
+                      }}
+                      className="btn-secondary"
+                      style={{
+                        padding: '6px 14px',
+                        fontSize: '0.78rem',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Change PIN 🔑
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* WhatsApp-Style Ghost Mode / Stealth Read Settings */}
               <div style={{
                 background: 'var(--bg-card)',
@@ -2628,6 +2898,17 @@ export default function SettingsModal({
           <LegalModal
             initialTab={legalViewTab}
             onClose={() => setLegalViewTab(null)}
+          />
+        )}
+
+        {/* App Lock PIN Modal */}
+        {showAppLockPinModal && (
+          <PinLockModal
+            mode={appLockPinMode}
+            title={appLockPinMode === 'setup' ? 'Set App Lock PIN' : (appLockPinMode === 'change' ? 'Change Security PIN' : 'Verify Security PIN')}
+            description={appLockPinMode === 'setup' ? 'Create a 4-digit PIN to secure PulseChat' : (appLockPinMode === 'change' ? 'Verify your current PIN, then choose a new PIN' : 'Enter your 4-digit PIN to continue')}
+            onSuccess={handleAppLockPinSuccess}
+            onCancel={() => setShowAppLockPinModal(false)}
           />
         )}
       </div>
