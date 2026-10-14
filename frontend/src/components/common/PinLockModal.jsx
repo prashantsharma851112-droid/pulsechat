@@ -4,18 +4,25 @@ import { Lock, X, Delete, Check, ShieldCheck, KeyRound } from 'lucide-react';
 import { getSecurityPin, setSecurityPin, verifySecurityPin } from '../../utils/securityLock';
 
 export default function PinLockModal({
-  isOpen,
+  isOpen = true,
   mode = 'verify', // 'verify' | 'setup' | 'change'
   title,
   subtitle,
+  description,
   onSuccess,
-  onClose
+  onClose,
+  onCancel
 }) {
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [isConfirmingStep, setIsConfirmingStep] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isShaking, setIsShaking] = useState(false);
+
+  const handleClose = () => {
+    if (onClose) onClose();
+    if (onCancel) onCancel();
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -27,7 +34,7 @@ export default function PinLockModal({
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (isOpen === false) return null;
 
   const triggerErrorShake = (msg) => {
     setErrorMsg(msg);
@@ -56,7 +63,7 @@ export default function PinLockModal({
         if (mode === 'verify') {
           if (verifySecurityPin(next)) {
             if (onSuccess) onSuccess(next);
-            if (onClose) onClose();
+            handleClose();
           } else {
             triggerErrorShake('Incorrect PIN. Try again.');
           }
@@ -73,7 +80,7 @@ export default function PinLockModal({
             if (next === confirmPin) {
               setSecurityPin(next);
               if (onSuccess) onSuccess(next);
-              if (onClose) onClose();
+              handleClose();
             } else {
               triggerErrorShake('PINs do not match. Start over.');
             }
@@ -96,7 +103,7 @@ export default function PinLockModal({
       : (isConfirmingStep ? 'Confirm 4-Digit PIN' : 'Set 4-Digit Security PIN')
   );
 
-  const modalSubtitle = subtitle || (
+  const modalSubtitle = subtitle || description || (
     mode === 'verify'
       ? 'Enter your PIN to access protected content'
       : (isConfirmingStep ? 'Re-enter your PIN to confirm' : 'Choose a memorable 4-digit code')
@@ -118,7 +125,7 @@ export default function PinLockModal({
         animation: 'fadeIn 0.15s ease'
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget && onClose) onClose();
+        if (e.target === e.currentTarget) handleClose();
       }}
     >
       <div
@@ -137,10 +144,10 @@ export default function PinLockModal({
         }}
       >
         {/* Close Button if allow close */}
-        {onClose && (
+        {(onClose || onCancel) && (
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             style={{
               position: 'absolute',
               top: '16px',

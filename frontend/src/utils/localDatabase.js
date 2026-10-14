@@ -145,6 +145,30 @@ export async function deleteMessagesFromLocalDb(messageIds) {
 }
 
 /**
+ * Remove all messages of a chat from local IndexedDB
+ */
+export async function clearChatFromLocalDb(chatId) {
+  if (!chatId) return;
+  const db = await getDb();
+  if (!db) return;
+
+  try {
+    const tx = db.transaction([STORE_MESSAGES], 'readwrite');
+    const store = tx.objectStore(STORE_MESSAGES);
+    const index = store.index('chatId');
+    const request = index.getAllKeys(String(chatId));
+    request.onsuccess = (e) => {
+      const keys = e.target.result || [];
+      for (const k of keys) {
+        store.delete(k);
+      }
+    };
+  } catch (err) {
+    console.warn('clearChatFromLocalDb error:', err);
+  }
+}
+
+/**
  * Update a message in local IndexedDB (e.g. status='deleted', content='This message was deleted')
  */
 export async function updateMessageInLocalDb(msgId, updates) {

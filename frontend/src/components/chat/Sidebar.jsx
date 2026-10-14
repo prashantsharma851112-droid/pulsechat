@@ -3332,6 +3332,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
       {showLockPinModal && (
         <PinLockModal
+          isOpen={true}
           mode="verify"
           title="Locked Chat"
           description="Enter your 4-digit PIN to open this chat"
@@ -3344,6 +3345,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               }
               setPendingLockedChat(null);
             }
+            setShowLockPinModal(false);
+          }}
+          onClose={() => {
+            setPendingLockedChat(null);
             setShowLockPinModal(false);
           }}
           onCancel={() => {

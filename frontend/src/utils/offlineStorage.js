@@ -1,5 +1,5 @@
 // local storage & local-first IndexedDB helper functions
-import { saveMessagesToLocalDb, getMessagesFromLocalDb, deleteMessagesFromLocalDb, updateMessageInLocalDb } from './localDatabase';
+import { saveMessagesToLocalDb, getMessagesFromLocalDb, deleteMessagesFromLocalDb, updateMessageInLocalDb, clearChatFromLocalDb } from './localDatabase';
 
 const STORAGE_KEYS = {
   USER: 'pulsechat_user',
@@ -304,9 +304,33 @@ export function mergeIntoAllUsersCache(userId, newUsers) {
 }
 
 // message history cache
-export function getCachedMessages(chatId) {
+export function getDeletedForMeIds(userId) {
+  if (typeof window === 'undefined' || !userId) return new Set();
+  const raw = localStorage.getItem(`pulsechat_deleted_msg_ids_${userId}`);
+  return new Set(safeParse(raw, []));
+}
+
+export function addDeletedForMeId(userId, messageId) {
+  if (typeof window === 'undefined' || !userId || !messageId) return;
+  const set = getDeletedForMeIds(userId);
+  set.add(String(messageId));
+  try {
+    const arr = Array.from(set).slice(-500);
+    localStorage.setItem(`pulsechat_deleted_msg_ids_${userId}`, JSON.stringify(arr));
+  } catch (e) {}
+}
+
+export function getCachedMessages(chatId, userId = null) {
   if (typeof window === 'undefined' || !chatId) return [];
-  return safeParse(localStorage.getItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`), []);
+  const msgs = safeParse(localStorage.getItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`), []);
+  if (!Array.isArray(msgs)) return [];
+  if (userId) {
+    const deletedSet = getDeletedForMeIds(userId);
+    if (deletedSet.size > 0) {
+      return msgs.filter(m => !deletedSet.has(String(m.id)) && !deletedSet.has(String(m._id)) && !deletedSet.has(String(m.clientTempId)));
+    }
+  }
+  return msgs;
 }
 
 export function setCachedMessages(chatId, messages) {
@@ -328,6 +352,23 @@ export function setCachedMessages(chatId, messages) {
   try {
     saveMessagesToLocalDb(chatId, messages);
   } catch (_) {}
+}
+
+export function clearCachedMessages(chatId) {
+  if (!chatId) return;
+  try {
+    localStorage.removeItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`);
+  } catch (e) {}
+  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+  if (canonicalChatId && canonicalChatId !== chatId) {
+    try {
+      localStorage.removeItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${canonicalChatId}`);
+    } catch (e) {}
+  }
+  clearChatFromLocalDb(chatId);
+  if (canonicalChatId && canonicalChatId !== chatId) {
+    clearChatFromLocalDb(canonicalChatId);
+  }
 }
 
 export async function getCachedMessagesFromLocalDb(chatId, limit = 100, beforeTimestamp = null) {
@@ -362,15 +403,22 @@ export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
   setCachedMessages(chatId, updated);
 }
 
-export function removeCachedMessages(chatId, messageIds) {
+export function removeCachedMessages(chatId, messageIds, userId = null) {
   if (!chatId || !Array.isArray(messageIds) || messageIds.length === 0) return;
   const idsSet = new Set(messageIds.map(String));
   const msgs = getCachedMessages(chatId);
   const filtered = msgs.filter(m => !idsSet.has(String(m.id)) && !idsSet.has(String(m._id)) && !idsSet.has(String(m.clientTempId)));
   try {
     localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`, JSON.stringify(filtered.slice(-250)));
+    const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+    if (canonicalChatId && canonicalChatId !== chatId) {
+      localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${canonicalChatId}`, JSON.stringify(filtered.slice(-250)));
+    }
     deleteMessagesFromLocalDb(messageIds);
   } catch (e) {}
+  if (userId) {
+    messageIds.forEach(id => addDeletedForMeId(userId, id));
+  }
 }
 
 export function markCachedMessagesDeleted(chatId, messageIds) {

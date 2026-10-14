@@ -64,8 +64,12 @@ import {
   updateGroupInStorage,
   clearUnreadCount,
   removeCachedMessages,
-  markCachedMessagesDeleted
+  markCachedMessagesDeleted,
+  clearCachedMessages,
+  getDeletedForMeIds,
+  addDeletedForMeId
 } from '../../utils/offlineStorage';
+import { deleteMessagesFromLocalDb, clearChatFromLocalDb } from '../../utils/localDatabase';
 
 export const GLOBAL_LANGUAGES = [
   { code: 'hi', name: 'Hindi', flag: '🇮🇳' },
@@ -1168,16 +1172,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       setShowChatLockPinModal(true);
     } else {
       const pin = getSecurityPin();
-      if (!pin) {
-        setChatLockPinMode('setup');
-        setShowChatLockPinModal(true);
-      } else {
-        setChatLocked(chatId, true);
-        setIsChatLockedState(true);
-        window.dispatchEvent(new CustomEvent('pulsechat_chat_lock_updated', { detail: { chatId, locked: true } }));
-        setActionToast('Chat locked with PIN 🔒');
-        setTimeout(() => setActionToast(''), 2500);
-      }
+      setChatLockPinMode(pin ? 'verify' : 'setup');
+      setShowChatLockPinModal(true);
     }
   };
 
@@ -2183,25 +2179,25 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (activeChat) {
       if (isDifferentChat) {
         // 1. Instantly display cached messages from local storage (0ms sync)
-        const cached = getCachedMessages(chatId);
+        const cached = getCachedMessages(chatId, user?.id);
         const outbox = getOutbox(user?.id);
         const pendingForThisChat = outbox.filter(m => m.chatId === chatId);
         const cachedIds = new Set(cached.map(m => m.id));
         const combinedInitial = [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))].map(sanitizeFogSnapMessage);
         setMessages(combinedInitial);
 
-        // 2. Local-First Architecture: Check if IndexedDB has deeper message history on device SSD
-        getCachedMessagesFromLocalDb(chatId, 150).then((dbMsgs) => {
-          if (Array.isArray(dbMsgs) && dbMsgs.length > cached.length) {
-            setMessages(prev => {
-              const prevIds = new Set(prev.map(m => m.id));
-              const extra = dbMsgs.filter(m => !prevIds.has(m.id));
-              if (extra.length === 0) return prev;
-              const merged = [...extra, ...prev].sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
-              return merged.map(sanitizeFogSnapMessage);
-            });
-          }
-        }).catch(() => {});
+        // 2. If memory/localStorage cache was empty on cold start, check IndexedDB once
+        if (cached.length === 0) {
+          getCachedMessagesFromLocalDb(chatId, 50).then((dbMsgs) => {
+            if (Array.isArray(dbMsgs) && dbMsgs.length > 0) {
+              const deletedIds = getDeletedForMeIds(user?.id);
+              const validMsgs = dbMsgs.filter(m => !deletedIds.has(String(m.id)) && !deletedIds.has(String(m._id)));
+              if (validMsgs.length > 0) {
+                setMessages(validMsgs.map(sanitizeFogSnapMessage));
+              }
+            }
+          }).catch(() => {});
+        }
       }
 
       // Cache this contact/group into allUsers for future offline searches
@@ -2224,7 +2220,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             setHasMoreOlderMessages(!noMore && data.length >= 50);
             const currentOutbox = getOutbox(user?.id);
             const pendingForChat = currentOutbox.filter(m => m.chatId === chatId);
-            const serverIds = new Set(data.map(m => m.id));
+
+            // Filter out any locally deleted messages
+            const deletedForMe = getDeletedForMeIds(user?.id);
+            const serverMsgs = data.filter(m => !deletedForMe.has(String(m.id)) && !deletedForMe.has(String(m._id)));
+            const serverIds = new Set(serverMsgs.map(m => m.id));
 
             // Retain any pending messages from outbox
             const pendingMap = new Map();
@@ -2235,18 +2235,24 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               }
             });
 
-            // Retain ALL previously loaded/cached messages (so older scrolled messages are NEVER wiped!)
-            const cachedNow = getCachedMessages(chatId);
+            // Retain older scrolled messages, but DO NOT resurrect deleted messages from cache that server omitted!
+            const cachedNow = getCachedMessages(chatId, user?.id);
             const messageMap = new Map();
 
-            // 1. First populate with cached messages so older scrolled messages stay in memory & cache
-            cachedNow.forEach(c => {
-              const k = c.clientTempId || c.id;
-              if (k) messageMap.set(k, c);
-            });
+            // If server returned messages, only retain cached messages that are older than the server window
+            if (serverMsgs.length > 0) {
+              const oldestServerTime = new Date(serverMsgs[0].timestamp || serverMsgs[0].createdAt || 0).getTime();
+              cachedNow.forEach(c => {
+                const k = c.clientTempId || c.id;
+                const cTime = new Date(c.timestamp || c.createdAt || 0).getTime();
+                if (k && cTime < oldestServerTime) {
+                  messageMap.set(k, c);
+                }
+              });
+            }
 
-            // 2. Overwrite / merge with latest server messages (fresh status, reactions, new texts)
-            data.forEach(m => {
+            // Populate fresh server messages
+            serverMsgs.forEach(m => {
               if (m && m.id) {
                 if (m.clientTempId && messageMap.has(m.clientTempId)) {
                   messageMap.delete(m.clientTempId);
@@ -2258,12 +2264,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               }
             });
 
-            // 3. Add pending outbox messages
+            // Add pending outbox messages
             pendingMap.forEach((p, k) => {
               messageMap.set(k, p);
             });
 
-            // 4. Sort chronologically
+            // Sort chronologically
             const merged = Array.from(messageMap.values())
               .sort((a, b) => new Date(a.timestamp || a.createdAt || 0) - new Date(b.timestamp || b.createdAt || 0))
               .map(sanitizeFogSnapMessage);
@@ -2776,10 +2782,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       const targetCanonical = (targetChatId && targetChatId.includes('_')) ? targetChatId.split('_').sort().join('_') : targetChatId;
       if (targetChatId === chatId || (currentCanonical && currentCanonical === targetCanonical)) {
         setMessages([]);
-        setCachedMessages(chatId, []);
-        if (currentCanonical && currentCanonical !== chatId) {
-          setCachedMessages(currentCanonical, []);
-        }
+        clearCachedMessages(chatId);
         updateRecentChatSnippet(user?.id, chatId, null, activeChat);
         window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
       }
@@ -3218,11 +3221,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setClearedUndoSecs(8);
 
     setMessages([]);
-    setCachedMessages(chatId, []);
-    const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-    if (canonicalChatId && canonicalChatId !== chatId) {
-      setCachedMessages(canonicalChatId, []);
-    }
+    clearCachedMessages(chatId);
     updateRecentChatSnippet(user?.id, chatId, null, activeChat);
     window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
 
@@ -4175,7 +4174,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       setCachedMessages(chatId, next);
       return next;
     });
-    removeCachedMessages(chatId, [msgId]);
+    removeCachedMessages(chatId, [msgId], user?.id);
+    deleteMessagesFromLocalDb([msgId]);
     if (socket && user?.id) {
       socket.emit('delete_message_for_me', { messageId: msgId, chatId, userId: user.id });
     }
@@ -4953,52 +4953,53 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
               {showMoreMenu && (
                 <div className="chat-header-dropdown-menu">
-                  {/* Voice & Video Calls */}
-                  <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, false)) : onStartCall(false); }}>
-                    <Phone size={16} color="var(--accent)" />
-                    <span>{isGroup ? 'Group Voice Call' : 'Voice Call'}</span>
-                  </button>
-                  <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, true)) : onStartCall(true); }}>
-                    <Video size={16} color="var(--accent)" />
-                    <span>{isGroup ? 'Group Video Call' : 'Video Call'}</span>
-                  </button>
-
-                  {/* Search in chat */}
-                  <button onClick={() => {
-                    setShowMoreMenu(false);
-                    setShowInChatSearch(true);
-                    setTimeout(() => inChatSearchInputRef.current?.focus(), 120);
-                  }}>
-                    <Search size={16} color="var(--accent)" />
-                    <span>Search in chat</span>
-                  </button>
-
-                  <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
-                  <button onClick={() => { setShowMoreMenu(false); setShowThemeModal(true); }}>
-                    <ImageIcon size={16} color="var(--accent)" />
-                    <span>Chat background</span>
-                  </button>
-                  <button onClick={() => { setShowMoreMenu(false); setShowSolidThemeModal(true); }}>
-                    <Palette size={16} color="var(--accent)" />
-                    <span>Change Solid Theme</span>
-                  </button>
-                  <button onClick={() => {
-                    setShowMoreMenu(false);
-                    if (isGroup) {
-                      setShowGroupProfileModal(true);
-                    } else {
-                      setShowUserProfileModal(true);
-                    }
-                  }}>
-                    <Clock size={16} color="var(--accent)" />
-                    <span>Disappearing Messages {chatSetting?.disappearingEnabled ? '(On)' : '(Off)'}</span>
-                  </button>
-                  <button onClick={() => { setShowMoreMenu(false); handleToggleVanishMode(); }}>
-                    <Ghost size={16} color={isVanishMode ? '#c084fc' : 'var(--accent)'} />
-                    <span>Vanish Mode {isVanishMode ? '(On)' : '(Off)'}</span>
-                  </button>
                   {!moreSubMenuOpen ? (
                     <>
+                      {/* Voice & Video Calls */}
+                      <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, false)) : onStartCall(false); }}>
+                        <Phone size={16} color="var(--accent)" />
+                        <span>{isGroup ? 'Group Voice Call' : 'Voice Call'}</span>
+                      </button>
+                      <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, true)) : onStartCall(true); }}>
+                        <Video size={16} color="var(--accent)" />
+                        <span>{isGroup ? 'Group Video Call' : 'Video Call'}</span>
+                      </button>
+
+                      {/* Search in chat */}
+                      <button onClick={() => {
+                        setShowMoreMenu(false);
+                        setShowInChatSearch(true);
+                        setTimeout(() => inChatSearchInputRef.current?.focus(), 120);
+                      }}>
+                        <Search size={16} color="var(--accent)" />
+                        <span>Search in chat</span>
+                      </button>
+
+                      <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
+                      <button onClick={() => { setShowMoreMenu(false); setShowThemeModal(true); }}>
+                        <ImageIcon size={16} color="var(--accent)" />
+                        <span>Chat background</span>
+                      </button>
+                      <button onClick={() => { setShowMoreMenu(false); setShowSolidThemeModal(true); }}>
+                        <Palette size={16} color="var(--accent)" />
+                        <span>Change Solid Theme</span>
+                      </button>
+                      <button onClick={() => {
+                        setShowMoreMenu(false);
+                        if (isGroup) {
+                          setShowGroupProfileModal(true);
+                        } else {
+                          setShowUserProfileModal(true);
+                        }
+                      }}>
+                        <Clock size={16} color="var(--accent)" />
+                        <span>Disappearing Messages {chatSetting?.disappearingEnabled ? '(On)' : '(Off)'}</span>
+                      </button>
+                      <button onClick={() => { setShowMoreMenu(false); handleToggleVanishMode(); }}>
+                        <Ghost size={16} color={isVanishMode ? '#c084fc' : 'var(--accent)'} />
+                        <span>Vanish Mode {isVanishMode ? '(On)' : '(Off)'}</span>
+                      </button>
+
                       <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
                       <button 
                         onClick={() => setMoreSubMenuOpen(true)}
@@ -5018,34 +5019,28 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                         style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, borderBottom: '1px solid var(--border)', paddingBottom: '8px', marginBottom: '4px', width: '100%' }}
                       >
                         <ChevronLeft size={16} color="var(--accent)" />
-                        <span>More options</span>
+                        <span>More</span>
                       </button>
 
-                      {/* 1. Contact Info */}
-                      <button onClick={() => { setShowMoreMenu(false); setMoreSubMenuOpen(false); isGroup ? setShowGroupProfileModal(true) : setShowUserProfileModal(true); }}>
-                        <Info size={16} color="var(--accent)" />
-                        <span>{isGroup ? 'Group Info' : 'Contact Info'}</span>
-                      </button>
-
-                      {/* 2. Chat Lock */}
+                      {/* 1. Chat Lock */}
                       <button onClick={handleToggleChatLockFromMenu}>
                         {isChatLockedState ? <Unlock size={16} color="#10b981" /> : <Lock size={16} color="var(--accent)" />}
                         <span>{isChatLockedState ? 'Unlock Chat' : 'Chat Lock 🔒'}</span>
                       </button>
 
-                      {/* 3. Mute / Unmute Notifications */}
+                      {/* 2. Mute / Unmute Notifications */}
                       <button onClick={handleToggleChatMuteFromMenu}>
                         {isChatMutedState ? <Bell size={16} color="var(--accent)" /> : <BellOff size={16} color="#f59e0b" />}
                         <span>{isChatMutedState ? 'Unmute Notifications' : 'Mute Notifications'}</span>
                       </button>
 
-                      {/* 4. Clear Chat */}
+                      {/* 3. Clear Chat */}
                       <button onClick={() => { setShowMoreMenu(false); setMoreSubMenuOpen(false); handleClearCurrentChat(); }} style={{ color: '#ef4444' }}>
                         <Trash2 size={16} color="#ef4444" />
                         <span>Clear Chat</span>
                       </button>
 
-                      {/* 5. Block Contact */}
+                      {/* 4. Block Contact (if direct chat) */}
                       {!isGroup && (
                         <button
                           onClick={async () => {
@@ -5071,6 +5066,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                           <span>{blockStatus.isBlockedByMe ? 'Unblock Contact' : 'Block Contact'}</span>
                         </button>
                       )}
+
+                      {/* 5. Contact Info / Group Info (Placed LAST in the list!) */}
+                      <button onClick={() => { setShowMoreMenu(false); setMoreSubMenuOpen(false); isGroup ? setShowGroupProfileModal(true) : setShowUserProfileModal(true); }}>
+                        <Info size={16} color="var(--accent)" />
+                        <span>{isGroup ? 'Group Info' : 'Contact Info'}</span>
+                      </button>
                     </>
                   )}
                 </div>
@@ -7588,10 +7589,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {showChatLockPinModal && (
         <PinLockModal
+          isOpen={true}
           mode={chatLockPinMode}
-          title={chatLockPinMode === 'setup' ? 'Set Chat Lock PIN' : 'Enter PIN to Unlock'}
-          description={chatLockPinMode === 'setup' ? 'Create a 4-digit PIN to protect locked chats' : 'Enter your 4-digit security PIN'}
+          title={isChatLockedState ? 'Unlock Chat' : (chatLockPinMode === 'setup' ? 'Set Chat Lock PIN' : 'Confirm PIN to Lock')}
+          description={isChatLockedState ? 'Enter your 4-digit security PIN to unlock this chat' : (chatLockPinMode === 'setup' ? 'Create a 4-digit PIN to protect locked chats' : 'Enter your 4-digit PIN to lock this chat')}
           onSuccess={handleChatLockPinSuccess}
+          onClose={() => setShowChatLockPinModal(false)}
           onCancel={() => setShowChatLockPinModal(false)}
         />
       )}

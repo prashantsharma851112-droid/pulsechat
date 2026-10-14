@@ -1337,10 +1337,12 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
       {/* PIN Lock Setup / Verification Modal for Chat Lock */}
       {showPinModal && (
         <PinLockModal
+          isOpen={true}
           mode={pinModalMode}
           title={pinModalMode === 'setup' ? 'Set Chat Lock PIN' : 'Enter PIN to Unlock'}
           description={pinModalMode === 'setup' ? 'Create a 4-digit PIN to protect locked chats' : 'Enter your 4-digit security PIN'}
           onSuccess={handlePinSuccess}
+          onClose={() => setShowPinModal(false)}
           onCancel={() => setShowPinModal(false)}
         />
       )}

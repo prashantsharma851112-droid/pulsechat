@@ -2904,10 +2904,12 @@ export default function SettingsModal({
         {/* App Lock PIN Modal */}
         {showAppLockPinModal && (
           <PinLockModal
+            isOpen={true}
             mode={appLockPinMode}
             title={appLockPinMode === 'setup' ? 'Set App Lock PIN' : (appLockPinMode === 'change' ? 'Change Security PIN' : 'Verify Security PIN')}
             description={appLockPinMode === 'setup' ? 'Create a 4-digit PIN to secure PulseChat' : (appLockPinMode === 'change' ? 'Verify your current PIN, then choose a new PIN' : 'Enter your 4-digit PIN to continue')}
             onSuccess={handleAppLockPinSuccess}
+            onClose={() => setShowAppLockPinModal(false)}
             onCancel={() => setShowAppLockPinModal(false)}
           />
         )}

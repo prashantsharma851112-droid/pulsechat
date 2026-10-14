@@ -977,10 +977,12 @@ export default function App() {
         {/* Full-Screen App Lock Screen */}
         {user && isAppLockEnabled() && !isAppUnlocked && (
           <PinLockModal
+            isOpen={true}
             mode="verify"
             title="PulseChat Locked"
             description="Enter your 4-digit security PIN to open PulseChat"
             onSuccess={() => setIsAppUnlocked(true)}
+            onClose={() => {}}
             onCancel={() => {}}
           />
         )}
