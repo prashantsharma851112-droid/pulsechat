@@ -7,6 +7,7 @@ import { playSound } from '../../utils/audio';
 import ArrowPuzzleGame from './ArrowPuzzleGame';
 import TempleRunGame from './TempleRunGame';
 import TicTacToeAIGame from './TicTacToeAIGame';
+import CandyCrushGame from './CandyCrushGame';
 import { useBackHandler } from '../../utils/backNavigation';
 
 export default function PulseZoneModal({ onClose }) {
@@ -185,7 +186,7 @@ export default function PulseZoneModal({ onClose }) {
         className="modal-card modal-responsive"
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: (selectedGame === 'temple' || selectedGame === 'racer') ? '960px' : '540px',
+          maxWidth: (selectedGame === 'temple' || selectedGame === 'racer') ? '960px' : (selectedGame === 'candy' ? '580px' : '540px'),
           width: '100%',
           maxHeight: '94dvh',
           display: 'flex',
@@ -382,6 +383,67 @@ export default function PulseZoneModal({ onClose }) {
               {/* When no game is selected: Clean Arcade Launcher Cards */}
               {selectedGame === null ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {/* Candy Crush Saga Card */}
+                  <div
+                    onClick={() => setSelectedGame('candy')}
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.22), rgba(168, 85, 247, 0.16))',
+                      border: '1.5px solid rgba(236, 72, 153, 0.55)',
+                      borderRadius: '16px',
+                      padding: '14px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 4px 16px rgba(236, 72, 153, 0.25)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div style={{
+                        width: '52px',
+                        height: '52px',
+                        borderRadius: '14px',
+                        background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.8rem',
+                        boxShadow: '0 4px 14px rgba(236, 72, 153, 0.45)'
+                      }}>
+                        🍬
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Candy Crush Saga</span>
+                          <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #ec4899, #f43f5e)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>NEW • HIT</span>
+                        </div>
+                        <div style={{ fontSize: '0.74rem', color: '#fbcfe8', fontWeight: 600 }}>
+                          Match 3 Candies, Combos & Sugar Crush
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedGame('candy'); }}
+                      style={{
+                        background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '8px 16px',
+                        fontWeight: 900,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        boxShadow: '0 4px 12px rgba(236, 72, 153, 0.4)'
+                      }}
+                    >
+                      <Play size={14} fill="#fff" /> PLAY
+                    </button>
+                  </div>
+
                   {/* Temple Run 3D Card */}
                   <div
                     onClick={() => setSelectedGame('temple')}
@@ -638,12 +700,20 @@ export default function PulseZoneModal({ onClose }) {
                       <ArrowLeft size={15} /> All Games
                     </button>
                     <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {selectedGame === 'candy' && <span>🍬 Candy Crush Saga</span>}
                       {selectedGame === 'temple' && <span>🗿 Temple Run 3D</span>}
                       {selectedGame === 'arrow' && <span>🎯 Arrow Puzzle</span>}
                       {selectedGame === 'tapper' && <span>⚡ Speed Tapper</span>}
                       {selectedGame === 'tictactoe' && <span>🎮 Tic-Tac-Toe vs Computer</span>}
                     </div>
                   </div>
+
+                  {selectedGame === 'candy' && (
+                    <CandyCrushGame
+                      onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
+                      onBack={() => setSelectedGame(null)}
+                    />
+                  )}
 
                   {selectedGame === 'tictactoe' && (
                     <TicTacToeAIGame
