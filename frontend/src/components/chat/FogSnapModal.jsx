@@ -129,10 +129,20 @@ export default function FogSnapModal({
 
   // 10-Second Countdown Timer (Recipient only)
   useEffect(() => {
+    if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
+      setImgLoaded(true);
+    }
+  }, [targetMediaUrl]);
+
+  useEffect(() => {
     if (isMine) return; // Sender preview does not trigger burn countdown
     if (burnedRef.current) return;
 
     if (onRevealed) onRevealed();
+    const msgId = message?.id || message?._id;
+    if (socket && msgId && currentUserId) {
+      socket.emit('reveal_fog_snap', { messageId: msgId, chatId, userId: currentUserId });
+    }
 
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
@@ -382,11 +392,12 @@ export default function FogSnapModal({
               src={targetMediaUrl}
               alt="Dust Image"
               draggable={false}
+              loading="eager"
+              decoding="async"
               onContextMenu={(e) => e.preventDefault()}
               onLoad={() => setImgLoaded(true)}
               onError={() => {
                 setImgError(true);
-                setImgLoaded(true);
               }}
               style={{
                 maxWidth: '100vw',

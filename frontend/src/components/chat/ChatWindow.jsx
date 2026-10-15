@@ -91,7 +91,7 @@ export const GLOBAL_LANGUAGES = [
 ];
 
 const sanitizeFogSnapMessage = (m) => {
-  if (!m || !m.isFogSnap) return m;
+  if (!m || (!m.isFogSnap && !m.isDustImage)) return m;
   const isBurnedLocally = (() => {
     try {
       return (m.id && localStorage.getItem(`pulse_fog_burned_${m.id}`) === 'true') ||
@@ -100,8 +100,8 @@ const sanitizeFogSnapMessage = (m) => {
       return false;
     }
   })();
-  if (m.fogSnapStatus === 'burned' || m.content === '🌫️ Fog Snap Evaporated' || (!m.mediaUrl && m.isFogSnap) || isBurnedLocally) {
-    return { ...m, fogSnapStatus: 'burned', content: '🌫️ Fog Snap Evaporated', mediaUrl: null };
+  if (m.fogSnapStatus === 'burned' || m.content === '🌫️ Fog Snap Evaporated' || m.content === 'Dust Image Evaporated' || (!m.mediaUrl && (m.isFogSnap || m.isDustImage)) || isBurnedLocally) {
+    return null;
   }
   return m;
 };
@@ -2211,7 +2211,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         const outbox = getOutbox(user?.id);
         const pendingForThisChat = outbox.filter(m => m.chatId === chatId);
         const cachedIds = new Set(cached.map(m => m.id));
-        const combinedInitial = [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))].map(sanitizeFogSnapMessage);
+        const combinedInitial = [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))].map(sanitizeFogSnapMessage).filter(Boolean);
         setMessages(combinedInitial);
 
         // 2. If memory/localStorage cache was empty on cold start, check IndexedDB once
@@ -2221,7 +2221,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               const deletedIds = getDeletedForMeIds(user?.id);
               const validMsgs = dbMsgs.filter(m => !deletedIds.has(String(m.id)) && !deletedIds.has(String(m._id)));
               if (validMsgs.length > 0) {
-                setMessages(validMsgs.map(sanitizeFogSnapMessage));
+                setMessages(validMsgs.map(sanitizeFogSnapMessage).filter(Boolean));
               }
             }
           }).catch(() => {});
@@ -2300,7 +2300,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             // Sort chronologically
             const merged = Array.from(messageMap.values())
               .sort((a, b) => new Date(a.timestamp || a.createdAt || 0) - new Date(b.timestamp || b.createdAt || 0))
-              .map(sanitizeFogSnapMessage);
+              .map(sanitizeFogSnapMessage)
+              .filter(Boolean);
 
             // WhatsApp pattern: Skip re-rendering if messages are already identical in memory
             setMessages(prev => {
@@ -2713,6 +2714,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       if (isThisChat) {
         const sanitizedMsg = sanitizeFogSnapMessage(msg);
+        if (!sanitizedMsg) {
+          const targetId = msg.id || msg._id || msg.clientTempId;
+          if (targetId) {
+            setMessages(prev => {
+              const updated = prev.filter(m => m.id !== targetId && m._id !== targetId && m.clientTempId !== targetId);
+              setCachedMessages(chatId, updated);
+              return updated;
+            });
+            removeCachedMessages(chatId, [targetId], user?.id);
+            deleteMessagesFromLocalDb([targetId]);
+          }
+          return;
+        }
         setMessages(prev => {
           const matchIdx = prev.findIndex(m =>
             (sanitizedMsg.clientTempId && (String(m.id) === String(sanitizedMsg.clientTempId) || String(m.clientTempId) === String(sanitizedMsg.clientTempId))) ||
@@ -3029,20 +3043,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         localStorage.setItem(`pulse_fog_burned_${messageId}`, 'true');
       } catch (e) {}
       setMessages(prev => {
-        const updated = prev.map(m => {
-          if (m.id === messageId || m._id === messageId) {
-            return { ...m, fogSnapStatus: 'burned', content: '🌫️ Fog Snap Evaporated', mediaUrl: null };
-          }
-          return m;
-        });
-        setCachedMessages(chatId, updated);
-        return updated;
+        const next = prev.filter(m => m.id !== messageId && m._id !== messageId && m.clientTempId !== messageId);
+        setCachedMessages(chatId, next);
+        return next;
       });
-      updateCachedMessageStatus(chatId, messageId, {
-        fogSnapStatus: 'burned',
-        content: '🌫️ Fog Snap Evaporated',
-        mediaUrl: null
-      });
+      removeCachedMessages(chatId, [messageId], user?.id);
+      deleteMessagesFromLocalDb([messageId]);
     };
     const handleFogRevealed = ({ messageId }) => {
       if (!messageId) return;
@@ -6171,7 +6177,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           const dateLabel = formatMessageDateHeader(msg.timestamp);
 
           return (
-            <React.Fragment key={msg.id || msg.clientTempId || index}>
+            <React.Fragment key={msg.clientTempId || msg.id || index}>
               {showDateHeader && (
                 <div style={{ display: 'flex', justifyContent: 'center', margin: '0.5rem 0' }}>
                   <div
@@ -6194,7 +6200,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               )}
               <MessageItem
                 message={msg}
-                isMine={msg.senderId === user.id}
+                isMine={String(msg.senderId) === String(user?.id || user?._id || '')}
                 chatId={chatId}
                 senderName={
                   msg.senderId === user.id

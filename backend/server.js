@@ -1593,13 +1593,7 @@ io.on('connection', (socket) => {
         return; // Sender closing or viewing sent dust image must NEVER burn it for recipient!
       }
 
-      await Message.updateOne(query, {
-        fogSnapStatus: 'burned',
-        content: existing.isDustImage ? 'Dust Image Evaporated' : '🌫️ Fog Snap Evaporated',
-        mediaUrl: null,
-        mediaUrls: [],
-        $addToSet: { viewedBy: socket.userId }
-      });
+      await Message.deleteOne(query);
       if (chatId) {
         await redis.invalidateChat(chatId).catch(() => {});
         if (chatId.includes('_')) {

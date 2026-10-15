@@ -34,6 +34,7 @@ export default function ViewOnceModal({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [mediaError, setMediaError] = useState(false);
 
+  const imgRef = useRef(null);
   const videoRef = useRef(null);
   const warningTimerRef = useRef(null);
 
@@ -50,8 +51,16 @@ export default function ViewOnceModal({
   }, [isMine, hasMarkedViewed, onMarkViewed]);
 
   useEffect(() => {
-    markViewedOnce();
-  }, [markViewedOnce]);
+    if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
+      setImageLoaded(true);
+    }
+  }, [targetMediaUrl]);
+
+  useEffect(() => {
+    if (imageLoaded || isVideo) {
+      markViewedOnce();
+    }
+  }, [imageLoaded, isVideo, markViewedOnce]);
 
   useBackHandler(() => {
     markViewedOnce();
@@ -345,20 +354,24 @@ export default function ViewOnceModal({
             ) : (
               <div style={{ position: 'relative', maxWidth: '100vw', maxHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <img
+                  ref={imgRef}
                   src={targetMediaUrl}
                   alt="Protected View"
                   draggable={false}
+                  loading="eager"
+                  decoding="async"
                   onContextMenu={(e) => e.preventDefault()}
                   onLoad={() => setImageLoaded(true)}
                   onError={() => {
                     setMediaError(true);
-                    setImageLoaded(true);
                   }}
                   style={{
                     maxWidth: '100vw',
                     maxHeight: '100vh',
                     objectFit: 'contain',
-                    display: imageLoaded ? 'block' : 'none',
+                    display: 'block',
+                    opacity: imageLoaded ? 1 : 0,
+                    transition: 'opacity 0.2s ease',
                     userSelect: 'none',
                     WebkitUserSelect: 'none',
                     pointerEvents: 'none'

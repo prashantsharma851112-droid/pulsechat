@@ -979,7 +979,7 @@ function MessageItem({
   };
   const fogStorageKey = message?.id ? `pulse_fog_burned_${message.id}` : (message?._id ? `pulse_fog_burned_${message._id}` : null);
   const isFogBurnedLocally = (() => {
-    if (!fogStorageKey || isMine) return false;
+    if (!fogStorageKey) return false;
     try {
       return localStorage.getItem(fogStorageKey) === 'true';
     } catch {
@@ -1125,6 +1125,9 @@ function MessageItem({
           if (message.id) localStorage.setItem(`pulse_fog_burned_${message.id}`, 'true');
           if (message._id) localStorage.setItem(`pulse_fog_burned_${message._id}`, 'true');
         } catch (e) {}
+        if (onDeleteLocal) {
+          onDeleteLocal(message.id || message._id || message.clientTempId);
+        }
       }
     };
     const handleFogRevealed = ({ messageId }) => {
@@ -1143,6 +1146,9 @@ function MessageItem({
           if (message.id) localStorage.setItem(`pulse_fog_burned_${message.id}`, 'true');
           if (message._id) localStorage.setItem(`pulse_fog_burned_${message._id}`, 'true');
         } catch (e) {}
+        if (onDeleteLocal) {
+          onDeleteLocal(message.id || message._id || message.clientTempId);
+        }
       }
     };
     if (socket) {
@@ -1191,7 +1197,7 @@ function MessageItem({
   const hasRecipientOpened = Boolean(
     (message.isViewOnce || message.isViewTwice || message.viewLimit) && (
       recipientViews.length > 0 ||
-      recipientViewCountsTotal > 0
+      recipientViewCountsTotal >= viewLimit
     )
   );
   const isConsumedByMe = !isMine && (
@@ -1625,6 +1631,10 @@ function MessageItem({
     const index = Math.abs(safeStr.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % emotions.length;
     return emotions[index];
   };
+
+  if (isFogBurned && (message.isFogSnap || message.isDustImage)) {
+    return null;
+  }
 
   if (message.type === 'deleted') {
     return (
@@ -2100,25 +2110,7 @@ function MessageItem({
         {/* WhatsApp-Style Minimalist Dust Image (Scratch-to-Reveal / 10s Burn) */}
         {(message.type === 'image' || message.type === 'video') && message.isFogSnap && (
           <div style={{ padding: '2px 0' }}>
-            {isFogBurned ? (
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '6px 12px',
-                borderRadius: '16px',
-                background: 'rgba(255, 255, 255, 0.05)',
-                color: 'var(--text-muted, #94a3b8)',
-                fontSize: '0.9rem',
-                border: '1px solid rgba(255, 255, 255, 0.08)'
-              }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, opacity: 0.65 }}>
-                  <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3 3" />
-                  <path d="M8.5 12.5l2.5 2.5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <span style={{ fontWeight: 500 }}>Evaporated</span>
-              </div>
-            ) : (
+            {isFogBurned ? null : (
               <button
                 type="button"
                 onClick={(e) => {

@@ -574,18 +574,7 @@ router.post('/fog-snap/burn', authMiddleware, async (req, res) => {
       return res.json({ success: true, message: existingMsg, ignored: true });
     }
 
-    const msg = await Message.findOneAndUpdate(
-      query,
-      {
-        fogSnapStatus: 'burned',
-        status: 'read',
-        content: existingMsg.isDustImage ? 'Dust Image Evaporated' : '🌫️ Fog Snap Evaporated',
-        mediaUrl: null,
-        mediaUrls: [],
-        $addToSet: { viewedBy: req.user.id, readBy: req.user.id }
-      },
-      { new: true }
-    );
+    await Message.deleteOne(query);
 
     // Invalidate Redis RAM cache
     if (chatId) {
@@ -609,7 +598,7 @@ router.post('/fog-snap/burn', authMiddleware, async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: msg });
+    res.json({ success: true, deleted: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to burn fog snap' });
   }
