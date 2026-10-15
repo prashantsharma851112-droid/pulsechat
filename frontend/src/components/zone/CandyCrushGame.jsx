@@ -355,6 +355,284 @@ const findHintMove = (board) => {
   return null;
 };
 
+function CandyVisual({ candy }) {
+  if (!candy) return null;
+  const { type, special, id } = candy;
+  const uid = id || Math.random().toString(36).substr(2, 6);
+
+  if (type === 'color_bomb') {
+    return (
+      <svg viewBox="0 0 60 60" width="88%" height="88%" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.65))' }}>
+        <defs>
+          <radialGradient id={`choco-grad-${uid}`} cx="35%" cy="30%" r="70%">
+            <stop offset="0%" stopColor="#5c3826" />
+            <stop offset="45%" stopColor="#3d2314" />
+            <stop offset="90%" stopColor="#221207" />
+            <stop offset="100%" stopColor="#0f0703" />
+          </radialGradient>
+        </defs>
+        <circle cx="30" cy="30" r="23" fill={`url(#choco-grad-${uid})`} />
+        {/* Colorful Rainbow Sprinkles */}
+        <circle cx="22" cy="18" r="3" fill="#ef4444" />
+        <circle cx="36" cy="17" r="2.8" fill="#eab308" />
+        <circle cx="28" cy="24" r="3.2" fill="#3b82f6" />
+        <circle cx="16" cy="28" r="2.7" fill="#10b981" />
+        <circle cx="38" cy="29" r="3" fill="#f97316" />
+        <circle cx="24" cy="35" r="2.8" fill="#a855f7" />
+        <circle cx="35" cy="39" r="3.1" fill="#ec4899" />
+        <circle cx="18" cy="39" r="2.5" fill="#eab308" />
+        <circle cx="29" cy="43" r="2.6" fill="#3b82f6" />
+        <ellipse cx="23" cy="15" rx="6" ry="3" transform="rotate(-25 23 15)" fill="#ffffff" opacity="0.65" />
+      </svg>
+    );
+  }
+
+  // Striped overlays (white candy stripes)
+  const renderStripes = () => {
+    if (special === 'striped_h') {
+      return (
+        <g opacity="0.95">
+          <line x1="6" y1="18" x2="54" y2="18" stroke="#ffffff" strokeWidth="4.5" strokeLinecap="round" opacity="0.9" />
+          <line x1="6" y1="30" x2="54" y2="30" stroke="#ffffff" strokeWidth="4.5" strokeLinecap="round" opacity="0.9" />
+          <line x1="6" y1="42" x2="54" y2="42" stroke="#ffffff" strokeWidth="4.5" strokeLinecap="round" opacity="0.9" />
+        </g>
+      );
+    }
+    if (special === 'striped_v') {
+      return (
+        <g opacity="0.95">
+          <line x1="18" y1="6" x2="18" y2="54" stroke="#ffffff" strokeWidth="4.5" strokeLinecap="round" opacity="0.9" />
+          <line x1="30" y1="6" x2="30" y2="54" stroke="#ffffff" strokeWidth="4.5" strokeLinecap="round" opacity="0.9" />
+          <line x1="42" y1="6" x2="42" y2="54" stroke="#ffffff" strokeWidth="4.5" strokeLinecap="round" opacity="0.9" />
+        </g>
+      );
+    }
+    return null;
+  };
+
+  const renderWrappedBadge = () => {
+    if (special !== 'wrapped') return null;
+    return (
+      <g>
+        <rect x="8" y="8" width="44" height="44" rx="8" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeDasharray="3 3" opacity="0.9" />
+        <circle cx="30" cy="30" r="14" fill="rgba(255,255,255,0.25)" />
+      </g>
+    );
+  };
+
+  switch (type) {
+    case 'red': // Curved Red Jelly Bean (iconic kidney bean)
+      return (
+        <svg viewBox="0 0 60 60" width="88%" height="88%" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.5))' }}>
+          <defs>
+            <radialGradient id={`red-grad-${uid}`} cx="35%" cy="30%" r="70%">
+              <stop offset="0%" stopColor="#ff5a5a" />
+              <stop offset="30%" stopColor="#e50914" />
+              <stop offset="75%" stopColor="#b30006" />
+              <stop offset="100%" stopColor="#660000" />
+            </radialGradient>
+            <linearGradient id={`red-gloss-${uid}`} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.85" />
+              <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+            </linearGradient>
+            <clipPath id={`clip-red-${uid}`}>
+              <path d="M 17 20 C 21 10, 36 8, 45 16 C 54 24, 52 38, 44 46 C 35 53, 23 49, 21 38 C 19 28, 12 26, 17 20 Z" />
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#clip-red-${uid})`}>
+            <path
+              d="M 17 20 C 21 10, 36 8, 45 16 C 54 24, 52 38, 44 46 C 35 53, 23 49, 21 38 C 19 28, 12 26, 17 20 Z"
+              fill={`url(#red-grad-${uid})`}
+            />
+            {renderStripes()}
+          </g>
+          <path
+            d="M 17 20 C 21 10, 36 8, 45 16 C 54 24, 52 38, 44 46 C 35 53, 23 49, 21 38 C 19 28, 12 26, 17 20 Z"
+            fill="none"
+            stroke="#ff8080"
+            strokeWidth="1.2"
+            opacity="0.55"
+          />
+          {/* Top Curved Specular Highlight */}
+          <path
+            d="M 23 15 C 29 11, 39 12, 43 18 C 38 15, 27 15, 23 19 Z"
+            fill={`url(#red-gloss-${uid})`}
+          />
+          <ellipse cx="25" cy="22" rx="4" ry="2.2" transform="rotate(-30 25 22)" fill="#ffffff" opacity="0.75" />
+          {renderWrappedBadge()}
+        </svg>
+      );
+
+    case 'orange': // Vertical Oval Lozenge
+      return (
+        <svg viewBox="0 0 60 60" width="88%" height="88%" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.5))' }}>
+          <defs>
+            <radialGradient id={`orange-grad-${uid}`} cx="40%" cy="30%" r="70%">
+              <stop offset="0%" stopColor="#ffb347" />
+              <stop offset="35%" stopColor="#ff7b00" />
+              <stop offset="80%" stopColor="#d35400" />
+              <stop offset="100%" stopColor="#7a2e00" />
+            </radialGradient>
+            <clipPath id={`clip-orange-${uid}`}>
+              <ellipse cx="30" cy="30" rx="16" ry="23" />
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#clip-orange-${uid})`}>
+            <ellipse cx="30" cy="30" rx="16" ry="23" fill={`url(#orange-grad-${uid})`} />
+            {renderStripes()}
+          </g>
+          <ellipse cx="30" cy="30" rx="16" ry="23" fill="none" stroke="#ffa34d" strokeWidth="1.2" opacity="0.55" />
+          {/* Longitudinal Gloss Shine */}
+          <path
+            d="M 24 12 C 27 10, 31 10, 34 12 C 35 18, 33 34, 27 40 C 25 34, 24 22, 24 12 Z"
+            fill="#ffffff"
+            opacity="0.4"
+          />
+          <ellipse cx="27" cy="18" rx="4.5" ry="3" transform="rotate(-15 27 18)" fill="#ffffff" opacity="0.82" />
+          {renderWrappedBadge()}
+        </svg>
+      );
+
+    case 'yellow': // Teardrop / Lemon Drop
+      return (
+        <svg viewBox="0 0 60 60" width="88%" height="88%" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.5))' }}>
+          <defs>
+            <radialGradient id={`yellow-grad-${uid}`} cx="40%" cy="35%" r="65%">
+              <stop offset="0%" stopColor="#fffab3" />
+              <stop offset="35%" stopColor="#ffd000" />
+              <stop offset="80%" stopColor="#e69100" />
+              <stop offset="100%" stopColor="#8a4f00" />
+            </radialGradient>
+            <clipPath id={`clip-yellow-${uid}`}>
+              <path d="M 30 7 C 30 7, 48 26, 48 37 C 48 47, 40 52, 30 52 C 20 52, 12 47, 12 37 C 12 26, 30 7, 30 7 Z" />
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#clip-yellow-${uid})`}>
+            <path
+              d="M 30 7 C 30 7, 48 26, 48 37 C 48 47, 40 52, 30 52 C 20 52, 12 47, 12 37 C 12 26, 30 7, 30 7 Z"
+              fill={`url(#yellow-grad-${uid})`}
+            />
+            {/* Inner Pear Accent */}
+            <path
+              d="M 30 13 C 30 13, 43 28, 43 37 C 43 44, 37 48, 30 48 C 23 48, 17 44, 17 37 C 17 28, 30 13, 30 13 Z"
+              fill="#ffe833"
+              opacity="0.45"
+            />
+            {renderStripes()}
+          </g>
+          <path
+            d="M 30 7 C 30 7, 48 26, 48 37 C 48 47, 40 52, 30 52 C 20 52, 12 47, 12 37 C 12 26, 30 7, 30 7 Z"
+            fill="none"
+            stroke="#ffea75"
+            strokeWidth="1.2"
+            opacity="0.65"
+          />
+          {/* Gloss */}
+          <ellipse cx="25" cy="24" rx="4" ry="7" transform="rotate(-25 25 24)" fill="#ffffff" opacity="0.85" />
+          <ellipse cx="23" cy="38" rx="3.5" ry="2" fill="#ffffff" opacity="0.5" />
+          {renderWrappedBadge()}
+        </svg>
+      );
+
+    case 'green': // Rounded Square / Pillow Chiclet
+      return (
+        <svg viewBox="0 0 60 60" width="88%" height="88%" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.5))' }}>
+          <defs>
+            <radialGradient id={`green-grad-${uid}`} cx="35%" cy="30%" r="70%">
+              <stop offset="0%" stopColor="#8aff73" />
+              <stop offset="35%" stopColor="#22c50e" />
+              <stop offset="80%" stopColor="#15803d" />
+              <stop offset="100%" stopColor="#052e16" />
+            </radialGradient>
+            <clipPath id={`clip-green-${uid}`}>
+              <rect x="9" y="9" width="42" height="42" rx="12" ry="12" />
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#clip-green-${uid})`}>
+            <rect x="9" y="9" width="42" height="42" rx="12" ry="12" fill={`url(#green-grad-${uid})`} />
+            {renderStripes()}
+          </g>
+          {/* Inner Highlight Border */}
+          <rect x="12" y="12" width="36" height="36" rx="9" ry="9" fill="none" stroke="#7aff66" strokeWidth="1.5" opacity="0.65" />
+          {/* Top Curved Gloss */}
+          <path
+            d="M 14 18 C 14 13, 19 12, 26 12 C 38 12, 44 14, 44 18 C 38 22, 22 22, 14 18 Z"
+            fill="#ffffff"
+            opacity="0.8"
+          />
+          {renderWrappedBadge()}
+        </svg>
+      );
+
+    case 'blue': // Blue Sphere Lollipop with Ring
+      return (
+        <svg viewBox="0 0 60 60" width="88%" height="88%" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.5))' }}>
+          <defs>
+            <radialGradient id={`blue-grad-${uid}`} cx="35%" cy="30%" r="70%">
+              <stop offset="0%" stopColor="#82ebff" />
+              <stop offset="30%" stopColor="#0284c7" />
+              <stop offset="80%" stopColor="#0369a1" />
+              <stop offset="100%" stopColor="#082f49" />
+            </radialGradient>
+            <clipPath id={`clip-blue-${uid}`}>
+              <circle cx="30" cy="30" r="22" />
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#clip-blue-${uid})`}>
+            <circle cx="30" cy="30" r="22" fill={`url(#blue-grad-${uid})`} />
+            {renderStripes()}
+          </g>
+          {/* Equatorial Disc Ring */}
+          <ellipse cx="30" cy="32" rx="23" ry="8" fill="none" stroke="#38bdf8" strokeWidth="2.5" opacity="0.88" />
+          <ellipse cx="30" cy="31" rx="22" ry="7" fill="none" stroke="#0284c7" strokeWidth="1.5" />
+          {/* Top Gloss */}
+          <ellipse cx="24" cy="18" rx="6.5" ry="3.8" transform="rotate(-15 24 18)" fill="#ffffff" opacity="0.85" />
+          <circle cx="21" cy="24" r="1.8" fill="#ffffff" opacity="0.6" />
+          {renderWrappedBadge()}
+        </svg>
+      );
+
+    case 'purple': // Scalloped 8-Petal Flower Cluster
+      return (
+        <svg viewBox="0 0 60 60" width="88%" height="88%" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.5))' }}>
+          <defs>
+            <radialGradient id={`purple-grad-${uid}`} cx="40%" cy="35%" r="65%">
+              <stop offset="0%" stopColor="#f594ff" />
+              <stop offset="35%" stopColor="#c026d3" />
+              <stop offset="80%" stopColor="#86198f" />
+              <stop offset="100%" stopColor="#4a044e" />
+            </radialGradient>
+            <clipPath id={`clip-purple-${uid}`}>
+              <path
+                d="M 30 7 C 34 7, 36 11, 40 12 C 44 13, 47 11, 50 14 C 53 17, 51 20, 52 24 C 53 28, 57 30, 57 34 C 57 38, 53 40, 52 44 C 51 48, 53 51, 50 54 C 47 57, 44 55, 40 56 C 36 57, 34 61, 30 61 C 26 61, 24 57, 20 56 C 16 55, 13 57, 10 54 C 7 51, 9 48, 8 44 C 7 40, 3 38, 3 34 C 3 30, 7 28, 8 24 C 9 20, 7 17, 10 14 C 13 11, 16 13, 20 12 C 24 11, 26 7, 30 7 Z"
+                transform="scale(0.85) translate(5, 5)"
+              />
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#clip-purple-${uid})`}>
+            <path
+              d="M 30 7 C 34 7, 36 11, 40 12 C 44 13, 47 11, 50 14 C 53 17, 51 20, 52 24 C 53 28, 57 30, 57 34 C 57 38, 53 40, 52 44 C 51 48, 53 51, 50 54 C 47 57, 44 55, 40 56 C 36 57, 34 61, 30 61 C 26 61, 24 57, 20 56 C 16 55, 13 57, 10 54 C 7 51, 9 48, 8 44 C 7 40, 3 38, 3 34 C 3 30, 7 28, 8 24 C 9 20, 7 17, 10 14 C 13 11, 16 13, 20 12 C 24 11, 26 7, 30 7 Z"
+              transform="scale(0.85) translate(5, 5)"
+              fill={`url(#purple-grad-${uid})`}
+            />
+            {renderStripes()}
+          </g>
+          {/* Sugar Crystals & Dimples */}
+          <circle cx="27" cy="24" r="1.6" fill="#ffffff" opacity="0.8" />
+          <circle cx="34" cy="25" r="1.3" fill="#ffffff" opacity="0.75" />
+          <circle cx="25" cy="32" r="1.4" fill="#ffffff" opacity="0.8" />
+          <circle cx="34" cy="33" r="1.6" fill="#ffffff" opacity="0.85" />
+          <circle cx="30" cy="29" r="1.8" fill="#ffffff" opacity="0.9" />
+          <ellipse cx="25" cy="18" rx="4" ry="2" transform="rotate(-15 25 18)" fill="#ffffff" opacity="0.75" />
+          {renderWrappedBadge()}
+        </svg>
+      );
+
+    default:
+      return null;
+  }
+}
+
 export default function CandyCrushGame({ onScoreUpdate, onBack }) {
   const [level, setLevel] = useState(() => {
     try {
@@ -967,15 +1245,15 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
           position: 'relative',
           width: '100%',
           aspectRatio: '1 / 1',
-          background: 'rgba(15, 23, 42, 0.85)',
-          border: '2px solid rgba(236, 72, 153, 0.35)',
-          borderRadius: '22px',
-          padding: '8px',
+          background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+          border: '3px solid #334155',
+          borderRadius: '20px',
+          padding: '6px',
           display: 'grid',
           gridTemplateColumns: `repeat(${GRID_SIZE}, 1fr)`,
           gridTemplateRows: `repeat(${GRID_SIZE}, 1fr)`,
-          gap: '5px',
-          boxShadow: '0 12px 35px rgba(0, 0, 0, 0.6), inset 0 2px 10px rgba(255, 255, 255, 0.05)',
+          gap: '2px',
+          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.75), inset 0 2px 10px rgba(255, 255, 255, 0.08)',
           overflow: 'hidden',
           touchAction: 'none'
         }}
@@ -985,7 +1263,7 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
           row.map((candy, c) => {
             const isSelected = selectedCell?.r === r && selectedCell?.c === c;
             const isHint = hintCells?.some(h => h.r === r && h.c === c);
-            const candyConfig = CANDY_TYPES.find(t => t.id === candy?.type);
+            const isEven = (r + c) % 2 === 0;
 
             return (
               <div
@@ -999,90 +1277,24 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
                   position: 'relative',
                   width: '100%',
                   height: '100%',
-                  borderRadius: '12px',
+                  borderRadius: '6px',
                   background: isSelected
-                    ? 'rgba(255, 255, 255, 0.25)'
-                    : 'rgba(255, 255, 255, 0.04)',
+                    ? 'rgba(255, 255, 255, 0.35)'
+                    : (isEven ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.22)'),
                   border: isSelected
                     ? '2.5px solid #fbbf24'
-                    : (isHint ? '2px dashed #f43f5e' : '1px solid rgba(255, 255, 255, 0.06)'),
+                    : (isHint ? '2px dashed #f43f5e' : '1px solid rgba(255, 255, 255, 0.04)'),
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
-                  transform: isSelected ? 'scale(1.08)' : (isHint ? 'scale(1.04)' : 'scale(1)'),
+                  transform: isSelected ? 'scale(1.12)' : (isHint ? 'scale(1.06)' : 'scale(1)'),
                   transition: 'transform 0.15s ease, background 0.15s ease',
-                  boxShadow: isSelected ? '0 0 16px rgba(251, 191, 36, 0.8)' : 'none'
+                  boxShadow: isSelected ? '0 0 16px rgba(251, 191, 36, 0.9)' : 'none',
+                  padding: '2px'
                 }}
               >
-                {candy && (
-                  <div
-                    style={{
-                      width: '84%',
-                      height: '84%',
-                      borderRadius: candy.special === 'wrapped' ? '10px' : (candy.special === 'color_bomb' ? '50%' : '14px'),
-                      background: candy.type === 'color_bomb'
-                        ? 'radial-gradient(circle, #f43f5e, #8b5cf6, #3b82f6, #10b981, #eab308)'
-                        : (candyConfig?.gradient || '#ec4899'),
-                      boxShadow: candy.type === 'color_bomb'
-                        ? '0 0 14px rgba(236, 72, 153, 0.9)'
-                        : `0 4px 10px ${candyConfig?.shadow || 'rgba(0,0,0,0.4)'}`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      position: 'relative',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    {/* Gloss Highlight on Candy */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '12%',
-                        left: '16%',
-                        width: '32%',
-                        height: '24%',
-                        borderRadius: '50%',
-                        background: 'rgba(255, 255, 255, 0.65)',
-                        filter: 'blur(1px)'
-                      }}
-                    />
-
-                    {/* Striped Candy Patterns */}
-                    {candy.special === 'striped_h' && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          background: 'repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(255,255,255,0.7) 4px, rgba(255,255,255,0.7) 8px)'
-                        }}
-                      />
-                    )}
-                    {candy.special === 'striped_v' && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          background: 'repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(255,255,255,0.7) 4px, rgba(255,255,255,0.7) 8px)'
-                        }}
-                      />
-                    )}
-
-                    {/* Wrapped Candy Badge */}
-                    {candy.special === 'wrapped' && (
-                      <div style={{ fontSize: '0.8rem', color: '#fff', fontWeight: 900 }}>
-                        🍬
-                      </div>
-                    )}
-
-                    {/* Color Bomb Sprinkle Ball Icon */}
-                    {candy.type === 'color_bomb' && (
-                      <div style={{ fontSize: '0.9rem', color: '#fff', animation: 'spin 4s linear infinite' }}>
-                        ✨
-                      </div>
-                    )}
-                  </div>
-                )}
+                <CandyVisual candy={candy} />
               </div>
             );
           })
