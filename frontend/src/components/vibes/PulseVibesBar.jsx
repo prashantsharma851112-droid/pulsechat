@@ -4,6 +4,7 @@ import { SocketContext } from '../../context/SocketContext';
 import { Plus } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { getCachedAllUsers } from '../../utils/offlineStorage';
+import { preloadMediaUrls } from '../../utils/mediaCache';
 import InstaMusicNoteBubble from './InstaMusicNoteBubble';
 import CreateMusicNoteModal from './CreateMusicNoteModal';
 
@@ -159,21 +160,40 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
     // Keep groups that have either active vibes or an active music note
     combinedGroups = combinedGroups.filter(g => (g.vibes && g.vibes.length > 0) || (g.musicNote && (g.musicNote.noteText || g.musicNote.songTitle)));
     setGroupedVibes(combinedGroups);
+
+    // Preload & cache story avatar photos on device CacheStorage (WhatsApp/Instagram style)
+    try {
+      const avatars = combinedGroups.map(g => g.avatar).filter(Boolean);
+      if (avatars.length > 0) preloadMediaUrls(avatars);
+    } catch (_) {}
   };
 
   useEffect(() => {
     fetchActiveVibes();
     syncViewedSet();
 
+    // Gentle fallback timer: only polls if socket is disconnected (protects Render from thousands of HTTP hits)
     const interval = setInterval(() => {
-      fetchActiveVibes();
       syncViewedSet();
-    }, 10000);
+      if (!socket || !socket.connected) {
+        fetchActiveVibes();
+      }
+    }, 60000);
 
     const handleUpdate = () => {
       fetchActiveVibes();
       syncViewedSet();
     };
+
+    // Auto-sync when user returns to the app tab
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchActiveVibes();
+        syncViewedSet();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     window.addEventListener('pulsechat_vibes_updated', handleUpdate);
     window.addEventListener('pulsechat_music_note_updated', handleUpdate);
     window.addEventListener('pulsechat_music_note_liked', handleUpdate);
@@ -190,12 +210,14 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
 
     if (socket) {
       socket.on('new_vibe_posted', handleUpdate);
+      socket.on('vibe_deleted', handleUpdate);
       socket.on('user_music_note_updated', handleUpdate);
       socket.on('user_music_note_liked', handleUpdate);
     }
 
     return () => {
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('pulsechat_vibes_updated', handleUpdate);
       window.removeEventListener('pulsechat_music_note_updated', handleUpdate);
       window.removeEventListener('pulsechat_music_note_liked', handleUpdate);
@@ -203,6 +225,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
       if (bc) bc.close();
       if (socket) {
         socket.off('new_vibe_posted', handleUpdate);
+        socket.off('vibe_deleted', handleUpdate);
         socket.off('user_music_note_updated', handleUpdate);
         socket.off('user_music_note_liked', handleUpdate);
       }

@@ -782,6 +782,12 @@ router.delete('/:vibeId', authMiddleware, async (req, res) => {
   try {
     const { vibeId } = req.params;
     await Vibe.deleteOne({ id: vibeId });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('vibe_deleted', { vibeId });
+    }
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete story' });

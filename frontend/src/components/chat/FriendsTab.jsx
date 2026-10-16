@@ -175,14 +175,31 @@ export default function FriendsTab({ setActiveChat, onRequestsCountChange, initi
     }
   }, [subTab, fetchRequests, fetchFriends]);
 
-  // Periodic safety polling every 4s while on the requests subtab to guarantee zero missed requests
+  // Safety sync on tab focus or gentle 60s fallback if socket disconnected (protects Render from continuous 4s HTTP polling)
   useEffect(() => {
     if (subTab !== 'requests') return;
-    const interval = setInterval(() => {
-      fetchRequests();
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [subTab, fetchRequests]);
+
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchRequests();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    let interval;
+    if (!socket || !socket.connected) {
+      interval = setInterval(() => {
+        fetchRequests();
+      }, 60000);
+    }
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+      if (interval) clearInterval(interval);
+    };
+  }, [subTab, fetchRequests, socket]);
 
   // Socket real-time 0ms instant event listeners
   useEffect(() => {

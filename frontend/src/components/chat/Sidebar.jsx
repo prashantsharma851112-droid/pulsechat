@@ -27,6 +27,7 @@ const MusicPickerModal = lazyWithRetry(() => import('../vibes/MusicPickerModal')
 const PinLockModal = lazyWithRetry(() => import('../common/PinLockModal'));
 import { isChatLocked, isChatMuted, getLockedChats, getMutedChats } from '../../utils/securityLock';
 import { BACKEND_URL } from '../../utils/config';
+import { preloadMediaUrls } from '../../utils/mediaCache';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
 import {
   getCachedUser,
@@ -723,6 +724,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         if (Array.isArray(freshUsers)) {
           setAllUsers(freshUsers);
           if (user?.id) setCachedAllUsers(user.id, freshUsers);
+          try {
+            const avatars = freshUsers.map(u => u.avatar).filter(Boolean);
+            if (avatars.length > 0) preloadMediaUrls(avatars);
+          } catch (_) {}
         }
       }
 
