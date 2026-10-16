@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { X, Zap, Battery, Sparkles, Check, Trash2, Music, Play, Pause, Disc } from 'lucide-react';
+import { X, Zap, Battery, Sparkles, Check, Trash2, Music, Play, Pause, Disc, Crown } from 'lucide-react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
 import { useAppMusic } from '../../context/AppMusicContext';
 import MusicPickerModal from '../vibes/MusicPickerModal';
+import PulseProModal from './PulseProModal';
+import SparksFeaturePromptModal from '../common/SparksFeaturePromptModal';
 import { updateUserProfileInStorage } from '../../utils/offlineStorage';
 
 const PRESET_AURAS = [
   { id: 'neon_flame', mood: 'Neon Flame Streak', emoji: '🔥', auraColor: '#ff0055', auraType: 'neon_flame', isExclusive: true, desc: '3-Day Streak Unlock' },
+  { id: 'dragon_aura', mood: 'Dragon Fury VIP', emoji: '🐉', auraColor: '#f59e0b', auraType: 'dragon_glow', isExclusive: true, desc: 'VIP Dragon Aura' },
   { id: 'lofi', mood: 'Listening to Lofi', emoji: '🎧', auraColor: '#a855f7', auraType: 'violet_wave' },
   { id: 'gaming', mood: 'Temple Run 3D', emoji: '🎮', auraColor: '#06b6d4', auraType: 'cyan_neon', inGame: 'Temple Run 3D' },
   { id: 'chai', mood: 'Chai Break', emoji: '☕', auraColor: '#f59e0b', auraType: 'amber_glow' },
@@ -33,6 +36,9 @@ export default function VibeAuraSelectorModal({
   const [selectedColor, setSelectedColor] = useState(currentAura?.auraColor || '#a855f7');
   const [isLowBattery, setIsLowBattery] = useState(Boolean(currentAura?.isLowBattery));
   const [detectedBattery, setDetectedBattery] = useState(null);
+
+  const [showProModal, setShowProModal] = useState(false);
+  const [pendingTrialAura, setPendingTrialAura] = useState(null);
 
   // App Background Music State
   const [attachedSong, setAttachedSong] = useState(currentTrack || null);
@@ -85,11 +91,17 @@ export default function VibeAuraSelectorModal({
     }
   }, []);
 
-  const isFlameUnlocked = Boolean(user?.hasNeonFlameAura || user?.streakCount >= 3 || user?.vibeStreakCount >= 3);
+  const isUserPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
+  const isFlameUnlocked = Boolean(isUserPro || user?.hasNeonFlameAura || user?.streakCount >= 3 || user?.vibeStreakCount >= 3);
+  const isDragonUnlocked = Boolean(isUserPro);
 
   const handleSelectPreset = (preset) => {
-    if (preset.isExclusive && !isFlameUnlocked) {
-      alert("🔥 'Neon Flame Aura' Locked Hai!\n\nLagaataar 3 din apne dost ke sath chat ya Vibe story update karein to unlock this exclusive legendary aura & Sparks drop reward!");
+    if (preset.id === 'neon_flame' && !isFlameUnlocked) {
+      setPendingTrialAura(preset);
+      return;
+    }
+    if (preset.id === 'dragon_aura' && !isDragonUnlocked) {
+      setPendingTrialAura(preset);
       return;
     }
     setSelectedMood(preset.mood);
@@ -113,12 +125,13 @@ export default function VibeAuraSelectorModal({
 
     const isActuallyLow = hasBattery && detectedBattery && detectedBattery <= 20;
     const isFlame = selectedColor === '#ff0055' || selectedEmoji === '🔥';
+    const isDragon = selectedEmoji === '🐉' || (trimmedMood && trimmedMood.toLowerCase().includes('dragon'));
     const auraData = {
       userId: effectiveUserId,
       mood: trimmedMood,
       emoji: selectedEmoji || '⚡',
       auraColor: isActuallyLow ? '#ef4444' : selectedColor,
-      auraType: isActuallyLow ? 'low_battery' : (isFlame ? 'neon_flame' : 'neon_pulse'),
+      auraType: isActuallyLow ? 'low_battery' : (isDragon ? 'dragon_glow' : (isFlame ? 'neon_flame' : 'neon_pulse')),
       isLowBattery: hasBattery,
       batteryLevel: hasBattery ? (detectedBattery !== null ? detectedBattery : 20) : null,
       inGame: trimmedMood.includes('Temple Run') ? 'Temple Run 3D' : '',
@@ -294,7 +307,7 @@ export default function VibeAuraSelectorModal({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '18px' }}>
           {PRESET_AURAS.map(preset => {
             const isSelected = selectedMood === preset.mood && !isLowBattery;
-            const isLocked = preset.isExclusive && !isFlameUnlocked;
+            const isLocked = (preset.id === 'neon_flame' && !isFlameUnlocked) || (preset.id === 'dragon_aura' && !isDragonUnlocked);
             return (
               <button
                 key={preset.id}
@@ -314,20 +327,21 @@ export default function VibeAuraSelectorModal({
                   cursor: 'pointer',
                   textAlign: 'left',
                   transition: 'all 0.15s ease',
-                  opacity: isLocked ? 0.75 : 1,
+                  opacity: isLocked ? 0.8 : 1,
                   position: 'relative'
                 }}
               >
                 <span style={{ fontSize: '1.25rem' }}>{preset.emoji}</span>
                 <div style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                    {preset.mood}
+                  <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span>{preset.mood}</span>
+                    {preset.isExclusive && <Crown size={12} color="#f59e0b" />}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: preset.auraColor }} />
                     {preset.isExclusive && (
-                      <span style={{ fontSize: '0.62rem', fontWeight: 700, color: isLocked ? '#f59e0b' : '#ff0055' }}>
-                        {isLocked ? '🔒 3d Streak' : '🔥 Unlocked'}
+                      <span style={{ fontSize: '0.62rem', fontWeight: 700, color: isLocked ? '#f59e0b' : '#10b981' }}>
+                        {isLocked ? '⚡ 10 (5m)' : (preset.id === 'dragon_aura' ? '👑 VIP Pro' : '🔥 Unlocked')}
                       </span>
                     )}
                   </div>
@@ -563,6 +577,89 @@ export default function VibeAuraSelectorModal({
             setAttachedSong(song);
             setShowMusicPicker(false);
           }}
+        />
+      )}
+
+      {pendingTrialAura && (
+        <SparksFeaturePromptModal
+          isOpen={Boolean(pendingTrialAura)}
+          onClose={() => setPendingTrialAura(null)}
+          featureKey="vibe_aura_trial_5m"
+          featureName={`${pendingTrialAura.mood} (5-Min Trial)`}
+          sparksCost={10}
+          icon={pendingTrialAura.emoji}
+          description="Free users can activate this legendary VIP Aura for 5 minutes for 10 Sparks! (Pulse Pro members enjoy unlimited lifetime access)."
+          onOpenProModal={() => {
+            setPendingTrialAura(null);
+            setShowProModal(true);
+          }}
+          onSuccess={() => {
+            const auraToApply = pendingTrialAura;
+            setPendingTrialAura(null);
+
+            const isDragon = auraToApply.id === 'dragon_aura';
+            const trialAuraData = {
+              userId: effectiveUserId,
+              mood: auraToApply.mood,
+              emoji: auraToApply.emoji,
+              auraColor: auraToApply.auraColor,
+              auraType: isDragon ? 'dragon_glow' : 'neon_flame',
+              isLowBattery: false,
+              batteryLevel: null,
+              inGame: '',
+              music: attachedSong || null
+            };
+
+            if (socket) {
+              socket.emit('update_vibe_aura', trialAuraData);
+            }
+            if (typeof updateUserProfile === 'function') {
+              updateUserProfile({ ...user, vibeAura: trialAuraData });
+            }
+            try {
+              updateUserProfileInStorage(effectiveUserId, { vibeAura: trialAuraData }, effectiveUserId);
+            } catch (e) {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+                detail: { targetUserId: effectiveUserId, updates: { vibeAura: trialAuraData } }
+              }));
+            }
+
+            if (onAuraUpdated) onAuraUpdated(trialAuraData);
+
+            // Revert after 5 minutes
+            setTimeout(() => {
+              const clearData = {
+                userId: effectiveUserId,
+                mood: '',
+                emoji: '',
+                auraColor: null,
+                auraType: 'none',
+                isLowBattery: false,
+                batteryLevel: null,
+                inGame: '',
+                cleared: true,
+                music: null
+              };
+              if (socket) socket.emit('update_vibe_aura', clearData);
+              if (typeof updateUserProfile === 'function') updateUserProfile({ ...user, vibeAura: null });
+              try { updateUserProfileInStorage(effectiveUserId, { vibeAura: null }, effectiveUserId); } catch (e) {}
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+                  detail: { targetUserId: effectiveUserId, updates: { vibeAura: null } }
+                }));
+              }
+            }, 5 * 60 * 1000);
+
+            onClose();
+          }}
+        />
+      )}
+
+      {showProModal && (
+        <PulseProModal
+          initialTab="pro"
+          onClose={() => setShowProModal(false)}
         />
       )}
     </div>

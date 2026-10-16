@@ -1,8 +1,9 @@
 import React, { useState, useContext } from 'react';
 import { ThemeContext } from '../../context/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Palette, Check, Crown, Lock } from 'lucide-react';
+import { X, Palette, Check, Crown, Lock, Zap } from 'lucide-react';
 import PulseProModal from './PulseProModal';
+import SparksFeaturePromptModal from '../common/SparksFeaturePromptModal';
 
 const SOLID_THEMES = [
   { id: 'midnight_amoled', name: '🖤 Midnight AMOLED (Default)', color: '#000000', card: '#0d0d0d', isPro: false },
@@ -23,12 +24,13 @@ export default function SolidThemeModal({ onClose, onSelectTheme, currentTheme }
   const { theme } = useContext(ThemeContext);
   const { user } = useContext(AuthContext);
   const [showProModal, setShowProModal] = useState(false);
+  const [pendingTrialTheme, setPendingTrialTheme] = useState(null);
 
   const isUserProActive = Boolean(user?.isPro && user?.proExpiresAt && new Date(user.proExpiresAt) > new Date());
 
   const handleSelectTheme = (t) => {
     if (t.isPro && !isUserProActive) {
-      setShowProModal(true);
+      setPendingTrialTheme(t);
       return;
     }
     // Only apply to this specific chat! Do NOT call global changeTheme()!
@@ -110,7 +112,12 @@ export default function SolidThemeModal({ onClose, onSelectTheme, currentTheme }
                       <Check size={14} strokeWidth={3} />
                     </div>
                   ) : isLocked ? (
-                    <Lock size={15} color="#f59e0b" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#f59e0b', background: 'rgba(245, 158, 11, 0.12)', padding: '2px 8px', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                        ⚡ 10 (5m)
+                      </span>
+                      <Lock size={15} color="#f59e0b" />
+                    </div>
                   ) : null}
                 </div>
               );
@@ -129,6 +136,34 @@ export default function SolidThemeModal({ onClose, onSelectTheme, currentTheme }
           </div>
         </div>
       </div>
+
+      {pendingTrialTheme && (
+        <SparksFeaturePromptModal
+          isOpen={Boolean(pendingTrialTheme)}
+          onClose={() => setPendingTrialTheme(null)}
+          featureKey="pro_theme_trial_5m"
+          featureName={`${pendingTrialTheme.name} (5-Min Trial)`}
+          sparksCost={10}
+          icon="🎨"
+          description="Free users can test this VIP Solid Theme live in this chat for 5 minutes for 10 Sparks! (Or unlock unlimited lifetime access with Pulse Pro)."
+          onOpenProModal={() => {
+            setPendingTrialTheme(null);
+            setShowProModal(true);
+          }}
+          onSuccess={() => {
+            const chosenId = pendingTrialTheme.id;
+            setPendingTrialTheme(null);
+            if (onSelectTheme) {
+              onSelectTheme(chosenId);
+              // Auto revert after 5 minutes
+              setTimeout(() => {
+                onSelectTheme('midnight_amoled');
+              }, 5 * 60 * 1000);
+            }
+            onClose();
+          }}
+        />
+      )}
 
       {showProModal && (
         <PulseProModal

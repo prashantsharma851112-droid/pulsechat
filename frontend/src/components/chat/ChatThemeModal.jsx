@@ -2,6 +2,7 @@ import React, { useState, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { X, Palette, Check, RotateCcw, Crown, Lock, Image as ImageIcon, Sparkles, Heart, Trees, Waves, Zap, Trash2 } from 'lucide-react';
 import PulseProModal from './PulseProModal';
+import SparksFeaturePromptModal from '../common/SparksFeaturePromptModal';
 
 const LIVE_WALLPAPERS = [
   {
@@ -169,6 +170,7 @@ export default function ChatThemeModal({
 }) {
   const { user } = useContext(AuthContext);
   const [showProModal, setShowProModal] = useState(false);
+  const [pendingTrialWallpaper, setPendingTrialWallpaper] = useState(null);
   const [activeTab, setActiveTab] = useState('live'); // 'live' | 'custom' | 'color'
   const fileInputRef = useRef(null);
 
@@ -184,7 +186,7 @@ export default function ChatThemeModal({
 
   const handleSelectLiveWallpaper = (w) => {
     if (w.isPro && !isUserPro) {
-      setShowProModal(true);
+      setPendingTrialWallpaper(w);
       return;
     }
     if (onSelectWallpaper) onSelectWallpaper(w.id);
@@ -371,8 +373,11 @@ export default function ChatThemeModal({
                               <Check size={14} strokeWidth={3} />
                             </div>
                           ) : isLocked ? (
-                            <div style={{ color: '#f59e0b' }}>
-                              <Lock size={16} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#f59e0b', background: 'rgba(245, 158, 11, 0.15)', padding: '2px 8px', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.35)' }}>
+                                ⚡ 10 (5m)
+                              </span>
+                              <Lock size={15} color="#f59e0b" />
                             </div>
                           ) : null}
                         </div>
@@ -537,6 +542,34 @@ export default function ChatThemeModal({
           </div>
         </div>
       </div>
+
+      {pendingTrialWallpaper && (
+        <SparksFeaturePromptModal
+          isOpen={Boolean(pendingTrialWallpaper)}
+          onClose={() => setPendingTrialWallpaper(null)}
+          featureKey="pro_theme_trial_5m"
+          featureName={`${pendingTrialWallpaper.name} (5-Min Trial)`}
+          sparksCost={10}
+          icon={pendingTrialWallpaper.icon || '✨'}
+          description="Free users can test this VIP Live Wallpaper in this chat for 5 minutes for 10 Sparks! (Pulse Pro gives unlimited lifetime access)."
+          onOpenProModal={() => {
+            setPendingTrialWallpaper(null);
+            setShowProModal(true);
+          }}
+          onSuccess={() => {
+            const chosenId = pendingTrialWallpaper.id;
+            setPendingTrialWallpaper(null);
+            if (onSelectWallpaper) {
+              onSelectWallpaper(chosenId);
+              // Auto revert after 5 minutes
+              setTimeout(() => {
+                onSelectWallpaper('none');
+              }, 5 * 60 * 1000);
+            }
+            onClose();
+          }}
+        />
+      )}
 
       {showProModal && (
         <PulseProModal

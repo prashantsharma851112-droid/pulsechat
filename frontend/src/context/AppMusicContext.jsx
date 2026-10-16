@@ -194,7 +194,7 @@ export function AppMusicProvider({ children }) {
   const handleExtendMusicListening = useCallback(() => {
     const today = new Date().toISOString().slice(0, 10);
     const prevBonus = Number(localStorage.getItem(`pulsechat_music_bonus_sec_${today}`)) || 0;
-    const newBonus = prevBonus + 1800; // +30 minutes
+    const newBonus = prevBonus + 300; // +5 minutes (300 seconds)
     localStorage.setItem(`pulsechat_music_bonus_sec_${today}`, newBonus);
     setBonusListeningSec(newBonus);
     setShowMusicLimitModal(false);
@@ -480,11 +480,11 @@ export function AppMusicProvider({ children }) {
         <SparksFeaturePromptModal
           isOpen={showMusicLimitModal}
           onClose={() => setShowMusicLimitModal(false)}
-          featureKey="music_boost_30m"
-          featureName="30-Min Music Listening Boost"
+          featureKey="music_boost_5m"
+          featureName="5-Min Music Listening Boost"
           sparksCost={10}
           icon="🎵"
-          description="Free users get 30 minutes of music daily. Unlock 30 more minutes with 10 Sparks, or upgrade to Pulse Pro for unlimited listening!"
+          description="Free users get 30 minutes of music daily. Unlock 5 more minutes with 10 Sparks ⚡, or upgrade to Pulse Pro for unlimited listening!"
           onSuccess={handleExtendMusicListening}
           onOpenProModal={() => {
             setShowMusicLimitModal(false);

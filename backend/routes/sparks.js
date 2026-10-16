@@ -297,10 +297,13 @@ router.post('/use-feature', authMiddleware, async (req, res) => {
 
     const { featureKey } = req.body;
     const FEATURE_COSTS = {
-      chat_game: { sparks: 5, title: 'Chat Game Session 🎮', description: 'Unlocked chat game session' },
-      music_boost_30m: { sparks: 10, title: 'Music Listening 30m Boost 🎵⚡', description: 'Unlocked +30 minutes of music listening' },
-      pro_theme: { sparks: 15, title: 'VIP Theme Unlock 🎨', description: 'Applied VIP Pro Theme' },
-      vibe_aura: { sparks: 20, title: 'VIP Aura Activation 🔮', description: 'Activated VIP Neon Aura' },
+      chat_game: { sparks: 5, title: 'Chat Game Play / Level 🎮', description: 'Unlocked chat game play round' },
+      music_boost_5m: { sparks: 10, title: 'Music Listening 5m Boost 🎵⚡', description: 'Unlocked +5 minutes of music listening' },
+      music_boost_30m: { sparks: 10, title: 'Music Listening 5m Boost 🎵⚡', description: 'Unlocked +5 minutes of music listening' },
+      pro_theme_trial_5m: { sparks: 10, title: 'VIP Theme 5-Min Trial 🎨', description: '5-minute live trial of VIP Pro Theme' },
+      pro_theme: { sparks: 10, title: 'VIP Theme 5-Min Trial 🎨', description: '5-minute live trial of VIP Pro Theme' },
+      vibe_aura_trial_5m: { sparks: 10, title: 'VIP Aura 5-Min Trial 🔮', description: '5-minute live trial of VIP Neon Aura' },
+      vibe_aura: { sparks: 10, title: 'VIP Aura 5-Min Trial 🔮', description: '5-minute live trial of VIP Neon Aura' },
       animated_3d_text: { sparks: 5, title: '3D VIP Text Message ✨', description: 'Sent 3D animated VIP text' },
     };
 
