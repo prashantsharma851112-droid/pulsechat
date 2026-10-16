@@ -778,9 +778,22 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
 
       {/* Owner Menu when popped rendered via portal to prevent clipping */}
       {isMine && isPopped && typeof document !== 'undefined' && createPortal(
-        <>
+        <div
+          className="insta-music-note-portal"
+          onTouchStart={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Transparent Backdrop to dismiss on tapping outside */}
           <div
+            className="insta-music-note-portal"
             onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onPop && onPop();
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
               e.stopPropagation();
               onPop && onPop();
             }}
@@ -792,6 +805,9 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
             }}
           />
           <div
+            className="insta-music-note-owner-menu"
+            onTouchStart={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             style={{
               position: 'fixed',
@@ -815,7 +831,9 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
             {likes.length > 0 && (
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   onPop && onPop();
                   setShowLikersModal(true);
                 }}
@@ -839,7 +857,9 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
             )}
             <button
               type="button"
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 stopNoteAudio();
                 onPop && onPop();
                 onOpenPicker && onOpenPicker();
@@ -863,7 +883,9 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
             </button>
             <button
               type="button"
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 stopNoteAudio();
                 onPop && onPop();
                 deleteMusicNote();
@@ -886,7 +908,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
               <Trash2 size={13} /> Remove Note
             </button>
           </div>
-        </>,
+        </div>,
         document.body
       )}
 

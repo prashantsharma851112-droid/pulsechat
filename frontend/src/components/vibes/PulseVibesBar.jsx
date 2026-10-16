@@ -19,13 +19,19 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
   useEffect(() => {
     if (!activePoppedNoteId) return;
     const handleDismissPopped = (e) => {
-      if (e.target && e.target.closest && e.target.closest('.insta-music-note-bubble-wrap')) {
+      if (
+        e.target &&
+        e.target.closest &&
+        (e.target.closest('.insta-music-note-bubble-wrap') ||
+         e.target.closest('.insta-music-note-owner-menu') ||
+         e.target.closest('.insta-music-note-portal'))
+      ) {
         return;
       }
       setActivePoppedNoteId(null);
     };
     window.addEventListener('click', handleDismissPopped);
-    window.addEventListener('touchstart', handleDismissPopped);
+    window.addEventListener('touchstart', handleDismissPopped, { passive: true });
     return () => {
       window.removeEventListener('click', handleDismissPopped);
       window.removeEventListener('touchstart', handleDismissPopped);

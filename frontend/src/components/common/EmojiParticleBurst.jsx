@@ -1,233 +1,214 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 export default function EmojiParticleBurst() {
-  const canvasRef = useRef(null);
+  const [particles, setParticles] = useState([]);
+  const idCounterRef = useRef(0);
+
+  const removeParticle = useCallback((id) => {
+    setParticles((prev) => prev.filter((p) => p.id !== id));
+  }, []);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    let animationFrameId;
-    let particles = [];
-
-    const handleResize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-
-    // Mode 1: Message Reaction Floating Aura Particle (Exact 3 Seconds)
-    class ReactionParticle {
-      constructor(emoji) {
-        this.mode = 'reaction';
-        this.emoji = emoji;
-        const screenW = window.innerWidth || 360;
-        const screenH = window.innerHeight || 640;
-
-        this.x = Math.random() * (screenW * 0.8) + screenW * 0.1;
-        this.y = screenH * (0.6 + Math.random() * 0.3);
-        this.size = Math.random() * 24 + 34; // 34px - 58px
-        this.vy = -(Math.random() * 2.2 + 1.8); // Smooth float disappearing in 3s
-        this.swaySpeed = Math.random() * 0.04 + 0.02;
-        this.swayAmount = Math.random() * 1.5 + 0.5;
-        this.phase = Math.random() * Math.PI * 2;
-
-        this.maxOpacity = Math.random() * 0.2 + 0.5;
-        this.opacity = 0;
-
-        this.totalFrames = 180; // Exact 3 seconds at 60fps
-        this.fadeInFrames = 15; // 0.25s fade in
-        this.fadeOutStart = 110; // Fades out cleanly between 1.8s and 3.0s
-        this.frameCounter = 0;
-      }
-
-      update() {
-        this.frameCounter++;
-        this.y += this.vy;
-        this.x += Math.sin(this.frameCounter * this.swaySpeed + this.phase) * this.swayAmount;
-
-        if (this.frameCounter <= this.fadeInFrames) {
-          this.opacity = (this.frameCounter / this.fadeInFrames) * this.maxOpacity;
-        } else if (this.frameCounter >= this.fadeOutStart) {
-          const remaining = this.totalFrames - this.frameCounter;
-          const fadeLength = this.totalFrames - this.fadeOutStart;
-          this.opacity = Math.max(0, (remaining / fadeLength) * this.maxOpacity);
-        } else {
-          this.opacity = this.maxOpacity;
-        }
-      }
-
-      draw(ctx) {
-        if (this.opacity <= 0) return;
-        ctx.save();
-        ctx.globalAlpha = this.opacity;
-
-        // Soft translucent pink/magenta radial aura glow behind particle
-        const glowRadius = this.size * 0.85;
-        const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glowRadius);
-        grad.addColorStop(0, 'rgba(236, 72, 153, 0.32)');
-        grad.addColorStop(1, 'rgba(236, 72, 153, 0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, glowRadius, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.font = `${this.size}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(this.emoji, this.x, this.y);
-        ctx.restore();
-      }
-    }
-
-    // Mode 2: Unique 3D Fireworks & Fountain Explosion for Emoji Burst (Exact 5 Seconds)
-    class BurstParticle {
-      constructor(emoji) {
-        this.mode = 'burst';
-        this.emoji = emoji;
-        const screenW = window.innerWidth || 360;
-        const screenH = window.innerHeight || 640;
-
-        // Origin: lower center of screen
-        this.x = screenW / 2 + (Math.random() - 0.5) * 40;
-        this.y = screenH * 0.7;
-
-        // Radial 360-degree fountain velocity
-        const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 14 + 5;
-        this.vx = Math.cos(angle) * speed;
-        this.vy = Math.sin(angle) * speed - 6; // upward fountain initial burst
-        this.gravity = 0.22;
-
-        this.size = Math.random() * 26 + 32;
-        this.scale = 0.3; // 3D expansion scale
-        this.maxScale = Math.random() * 0.6 + 0.8;
-        this.rotation = Math.random() * Math.PI * 2;
-        this.vRot = (Math.random() - 0.5) * 0.12;
-
-        this.maxOpacity = Math.random() * 0.2 + 0.75;
-        this.opacity = 0;
-
-        this.totalFrames = 300; // Exact 5 seconds at 60fps
-        this.fadeInFrames = 20; // 0.33s fade in
-        this.fadeOutStart = 200; // Fades out between 3.3s and 5.0s
-        this.frameCounter = 0;
-      }
-
-      update() {
-        this.frameCounter++;
-        this.x += this.vx;
-        this.y += this.vy;
-        this.vy += this.gravity;
-        this.vx *= 0.96; // Air resistance
-        this.rotation += this.vRot;
-
-        if (this.scale < this.maxScale) {
-          this.scale += 0.05;
-        }
-
-        if (this.frameCounter <= this.fadeInFrames) {
-          this.opacity = (this.frameCounter / this.fadeInFrames) * this.maxOpacity;
-        } else if (this.frameCounter >= this.fadeOutStart) {
-          const remaining = this.totalFrames - this.frameCounter;
-          const fadeLength = this.totalFrames - this.fadeOutStart;
-          this.opacity = Math.max(0, (remaining / fadeLength) * this.maxOpacity);
-        } else {
-          this.opacity = this.maxOpacity;
-        }
-      }
-
-      draw(ctx) {
-        if (this.opacity <= 0) return;
-        ctx.save();
-        ctx.globalAlpha = this.opacity;
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.rotation);
-        ctx.scale(this.scale, this.scale);
-
-        // Glowing stardust explosion aura
-        const glowRadius = this.size * 0.9;
-        const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, glowRadius);
-        grad.addColorStop(0, 'rgba(245, 158, 11, 0.4)'); // Gold / cyan explosion glow
-        grad.addColorStop(1, 'rgba(245, 158, 11, 0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.font = `${this.size}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(this.emoji, 0, 0);
-        ctx.restore();
-      }
-    }
-
-    const animate = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      particles = particles.filter(p => p.frameCounter < p.totalFrames);
-      particles.forEach(p => {
-        p.update();
-        p.draw(ctx);
-      });
-
-      if (particles.length > 0) {
-        animationFrameId = requestAnimationFrame(animate);
-      }
-    };
-
     const handleTriggerBurst = (e) => {
       const mode = e.detail?.mode || (e.detail?.duration === 5 ? 'burst' : 'reaction');
       const mainEmoji = e.detail?.emoji || '❤️';
 
+      const newBatch = [];
+      const now = Date.now();
+
       if (mode === 'reaction') {
-        // Clear previous reaction particles so screen stays clean
-        particles = particles.filter(p => p.mode !== 'reaction');
-        const reactCount = 10;
-        const accentEmojis = ['💗', '💖', '💕'];
+        // Floating Aura Reaction Emojis (Instagram/WhatsApp style - 7 smooth floating particles)
+        const reactCount = 7;
+        const accentHearts = ['💗', '💖', '💕'];
+
         for (let i = 0; i < reactCount; i++) {
-          const emojiToUse = (i % 3 === 0 && mainEmoji !== '❤️') ? accentEmojis[i % accentEmojis.length] : mainEmoji;
-          particles.push(new ReactionParticle(emojiToUse));
+          idCounterRef.current += 1;
+          const pId = `react_${now}_${idCounterRef.current}_${i}`;
+          const isAccent = (i % 3 === 0 && mainEmoji === '❤️');
+          const emojiToUse = isAccent ? accentHearts[i % accentHearts.length] : mainEmoji;
+
+          // Natural staggered horizontal distribution across chat screen
+          const leftPct = 15 + Math.random() * 70; // 15% - 85%
+          const bottomPct = 18 + Math.random() * 22; // 18% - 40%
+          const sizePx = 34 + Math.random() * 16; // 34px - 50px
+          const duration = 1.9 + Math.random() * 0.5; // 1.9s - 2.4s
+          const delay = (i * 0.055) + Math.random() * 0.04; // 0s - 0.4s
+          const sway1 = (Math.random() - 0.5) * 36;
+          const sway2 = -sway1 * (0.8 + Math.random() * 0.4);
+
+          newBatch.push({
+            id: pId,
+            mode: 'reaction',
+            emoji: emojiToUse,
+            leftPct,
+            bottomPct,
+            sizePx,
+            duration,
+            delay,
+            sway1,
+            sway2
+          });
         }
       } else {
-        // Unique 3D Fireworks Fountain Burst
-        particles = particles.filter(p => p.mode !== 'burst');
-        const burstCount = 18;
-        const sparkEmojis = ['✨', '🌟', '💥', '✨'];
+        // 3D Fireworks & Fountain Burst (12 vibrant particles shooting upward)
+        const burstCount = 12;
+        const sparkAccents = ['✨', '🌟', '💥'];
+
         for (let i = 0; i < burstCount; i++) {
-          const itemEmoji = (i % 4 === 0) ? sparkEmojis[i % sparkEmojis.length] : mainEmoji;
-          particles.push(new BurstParticle(itemEmoji));
+          idCounterRef.current += 1;
+          const pId = `burst_${now}_${idCounterRef.current}_${i}`;
+          const isSpark = (i % 4 === 0);
+          const emojiToUse = isSpark ? sparkAccents[i % sparkAccents.length] : mainEmoji;
+
+          const angle = (Math.PI * 2 * i) / burstCount + (Math.random() - 0.5) * 0.3;
+          const radiusX = 90 + Math.random() * 90;
+          const radiusY = 160 + Math.random() * 140;
+          const dx = Math.cos(angle) * radiusX;
+          const dy = -Math.abs(Math.sin(angle) * radiusY) - 80;
+          const rotMid = (Math.random() - 0.5) * 120;
+          const rotEnd = (Math.random() - 0.5) * 240;
+          const sizePx = 30 + Math.random() * 16;
+          const duration = 2.1 + Math.random() * 0.5;
+          const delay = (i * 0.035);
+
+          newBatch.push({
+            id: pId,
+            mode: 'burst',
+            emoji: emojiToUse,
+            dx,
+            dy,
+            rotMid,
+            rotEnd,
+            sizePx,
+            duration,
+            delay
+          });
         }
       }
 
-      cancelAnimationFrame(animationFrameId);
-      animationFrameId = requestAnimationFrame(animate);
+      setParticles((prev) => {
+        // Keep at most 24 active particles at once to guarantee 60-120fps performance
+        const combined = [...prev, ...newBatch];
+        return combined.slice(-24);
+      });
     };
 
     window.addEventListener('pulsechat_trigger_emoji_burst', handleTriggerBurst);
-
     return () => {
-      window.removeEventListener('resize', handleResize);
       window.removeEventListener('pulsechat_trigger_emoji_burst', handleTriggerBurst);
-      cancelAnimationFrame(animationFrameId);
     };
   }, []);
 
+  if (particles.length === 0) return null;
+
   return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
-        pointerEvents: 'none',
-        zIndex: 99999
-      }}
-    />
+    <>
+      <style>{`
+        @keyframes pulseFloatingReactionGpu {
+          0% {
+            transform: translate3d(0, 0, 0) scale(0.35);
+            opacity: 0;
+          }
+          15% {
+            transform: translate3d(var(--sway1, 10px), -60px, 0) scale(1.18);
+            opacity: 0.98;
+          }
+          45% {
+            transform: translate3d(var(--sway2, -10px), -210px, 0) scale(1.02);
+            opacity: 0.92;
+          }
+          75% {
+            transform: translate3d(var(--sway1, 10px), -360px, 0) scale(0.96);
+            opacity: 0.75;
+          }
+          100% {
+            transform: translate3d(var(--sway2, -10px), -500px, 0) scale(0.8);
+            opacity: 0;
+          }
+        }
+
+        @keyframes pulseBurstFountainGpu {
+          0% {
+            transform: translate3d(0, 0, 0) scale(0.3) rotate(0deg);
+            opacity: 0;
+          }
+          18% {
+            transform: translate3d(calc(var(--dx) * 0.45), calc(var(--dy) * 0.7), 0) scale(1.25) rotate(var(--rot-mid, 30deg));
+            opacity: 1;
+          }
+          65% {
+            transform: translate3d(calc(var(--dx) * 0.85), calc(var(--dy) * 1.05 + 60px), 0) scale(1) rotate(var(--rot-end, 60deg));
+            opacity: 0.88;
+          }
+          100% {
+            transform: translate3d(var(--dx), calc(var(--dy) * 1.1 + 190px), 0) scale(0.65) rotate(calc(var(--rot-end, 60deg) * 1.3));
+            opacity: 0;
+          }
+        }
+      `}</style>
+
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          pointerEvents: 'none',
+          zIndex: 99999,
+          overflow: 'hidden'
+        }}
+        aria-hidden="true"
+      >
+        {particles.map((p) => {
+          if (p.mode === 'reaction') {
+            return (
+              <div
+                key={p.id}
+                onAnimationEnd={() => removeParticle(p.id)}
+                style={{
+                  position: 'absolute',
+                  left: `${p.leftPct}%`,
+                  bottom: `${p.bottomPct}%`,
+                  fontSize: `${p.sizePx}px`,
+                  lineHeight: 1,
+                  userSelect: 'none',
+                  pointerEvents: 'none',
+                  filter: 'drop-shadow(0 0 12px rgba(236, 72, 153, 0.45)) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35))',
+                  animation: `pulseFloatingReactionGpu ${p.duration}s cubic-bezier(0.22, 1, 0.36, 1) ${p.delay}s forwards`,
+                  willChange: 'transform, opacity',
+                  '--sway1': `${p.sway1}px`,
+                  '--sway2': `${p.sway2}px`
+                }}
+              >
+                {p.emoji}
+              </div>
+            );
+          }
+
+          return (
+            <div
+              key={p.id}
+              onAnimationEnd={() => removeParticle(p.id)}
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '68%',
+                fontSize: `${p.sizePx}px`,
+                lineHeight: 1,
+                userSelect: 'none',
+                pointerEvents: 'none',
+                filter: 'drop-shadow(0 0 14px rgba(245, 158, 11, 0.55)) drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4))',
+                animation: `pulseBurstFountainGpu ${p.duration}s cubic-bezier(0.18, 0.89, 0.32, 1.15) ${p.delay}s forwards`,
+                willChange: 'transform, opacity',
+                '--dx': `${p.dx}px`,
+                '--dy': `${p.dy}px`,
+                '--rot-mid': `${p.rotMid}deg`,
+                '--rot-end': `${p.rotEnd}deg`
+              }}
+            >
+              {p.emoji}
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }

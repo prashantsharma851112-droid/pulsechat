@@ -128,6 +128,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const typingUser = typingMap[chatId];
   const isTyping = Boolean(typingUser && typingUser !== user?.username && typingUser !== user?.id && typingUser !== user?.displayName);
   const typingTimeoutRef = useRef(null);
+  const draftSaveTimeoutRef = useRef(null);
+  const lastTypingEmitRef = useRef(0);
 
   const partnerAura = useMemo(() => {
     if (isGroup) return null;
@@ -3859,6 +3861,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     dispatchMessage(text);
     setText('');
+    if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+    lastTypingEmitRef.current = 0;
     try {
       if (chatId) localStorage.removeItem(`pulsechat_draft_${chatId}`);
     } catch {}
@@ -4768,15 +4772,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const handleTextChange = (e) => {
     const val = e.target.value;
     setText(val);
-    try {
-      if (chatId) {
-        if (val) {
-          localStorage.setItem(`pulsechat_draft_${chatId}`, val);
-        } else {
-          localStorage.removeItem(`pulsechat_draft_${chatId}`);
+
+    // Debounce synchronous localStorage draft writes to eliminate keypress hitching
+    if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+    draftSaveTimeoutRef.current = setTimeout(() => {
+      try {
+        if (chatId) {
+          if (val) {
+            localStorage.setItem(`pulsechat_draft_${chatId}`, val);
+          } else {
+            localStorage.removeItem(`pulsechat_draft_${chatId}`);
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    }, 300);
 
     if (!socket) return;
     const receiverId = isGroup ? '' : activeChat?.id;
@@ -4787,32 +4796,40 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     if (!val.trim()) {
       socket.emit('typing_stop', { chatId, userId: user?.id, receiverId });
+      lastTypingEmitRef.current = 0;
       return;
     }
 
-    socket.emit('typing_start', {
-      chatId,
-      userId: user?.id,
-      username: user?.displayName || user?.username || 'User',
-      receiverId
-    });
+    // Throttle socket typing_start emissions to at most once every 2 seconds
+    const now = Date.now();
+    if (now - lastTypingEmitRef.current > 2000) {
+      lastTypingEmitRef.current = now;
+      socket.emit('typing_start', {
+        chatId,
+        userId: user?.id,
+        username: user?.displayName || user?.username || 'User',
+        receiverId
+      });
+    }
 
     typingTimeoutRef.current = setTimeout(() => {
       socket.emit('typing_stop', { chatId, userId: user?.id, receiverId });
+      lastTypingEmitRef.current = 0;
     }, 2500);
   };
 
   useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
       if (socket && user?.id && chatId) {
         socket.emit('typing_stop', { chatId, userId: user.id, receiverId: isGroup ? '' : activeChat?.id });
       }
     };
   }, [chatId]);
 
-  // Calculate Mood Timeline using sentence + word sentiment from utility
-  const moodTimeline = calculateConversationMoodTimeline(messages, cooldownMsg);
+  // Calculate Mood Timeline using sentence + word sentiment from utility (Memoized to prevent work on keystrokes)
+  const moodTimeline = useMemo(() => calculateConversationMoodTimeline(messages, cooldownMsg), [messages, cooldownMsg]);
   const moodInfo = moodTimeline.currentMood;
   const moodSteps = moodTimeline.timelineSteps;
 
