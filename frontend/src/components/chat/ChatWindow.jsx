@@ -46,6 +46,7 @@ const ChatNicknameModal = lazyWithRetry(() => import('./ChatNicknameModal'));
 const ShareableStoryCardModal = lazyWithRetry(() => import('../profile/ShareableStoryCardModal'));
 const PinLockModal = lazyWithRetry(() => import('../common/PinLockModal'));
 import { isChatLocked, setChatLocked, getSecurityPin, isChatMuted, setChatMuted } from '../../utils/securityLock';
+import SparksFeaturePromptModal from '../common/SparksFeaturePromptModal';
 import {
   getCachedMessages,
   getCachedMessagesFromLocalDb,
@@ -137,6 +138,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   }, [vibeAuras, user]);
   const [showVibeSelector, setShowVibeSelector] = useState(false);
   const [showTicTacToeModal, setShowTicTacToeModal] = useState(false);
+  const [sparksPromptConfig, setSparksPromptConfig] = useState(null);
 
   // Scheduled Messages (Send Later) State
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -3822,8 +3824,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     return true;
   };
 
-  const handleOpenArrowGame = () => {
-    if (!checkCanOpenActivity('Game (Arrow Battle)')) return;
+  const launchArrowGame = () => {
     setShowAppsFolderModal(false);
     setShowArrowGameModal(true);
     if (socket && chatId) {
@@ -3836,8 +3837,27 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   };
 
-  const handleOpenTicTacToe = () => {
-    if (!checkCanOpenActivity('Game (Tic-Tac-Toe)')) return;
+  const handleOpenArrowGame = () => {
+    if (!checkCanOpenActivity('Game (Arrow Battle)')) return;
+    const isUserPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
+
+    if (isUserPro) {
+      launchArrowGame();
+      return;
+    }
+
+    setShowAppsFolderModal(false);
+    setSparksPromptConfig({
+      featureKey: 'chat_game',
+      featureName: 'Arrow Battle Arena',
+      sparksCost: 5,
+      icon: '🎯',
+      description: '👑 VIP Chat Game: Free with Pulse Pro, or unlock this session for 5 Sparks ⚡!',
+      onSuccess: () => launchArrowGame()
+    });
+  };
+
+  const launchTicTacToe = () => {
     setShowAppsFolderModal(false);
     setShowTicTacToeModal(true);
     if (socket && chatId) {
@@ -3848,6 +3868,26 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         receiverId: isGroup ? '' : (activeChat?.id || activeChat?._id)
       });
     }
+  };
+
+  const handleOpenTicTacToe = () => {
+    if (!checkCanOpenActivity('Game (Tic-Tac-Toe)')) return;
+    const isUserPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
+
+    if (isUserPro) {
+      launchTicTacToe();
+      return;
+    }
+
+    setShowAppsFolderModal(false);
+    setSparksPromptConfig({
+      featureKey: 'chat_game',
+      featureName: 'Tic-Tac-Toe Arena',
+      sparksCost: 5,
+      icon: '❌⭕',
+      description: '👑 VIP Chat Game: Free with Pulse Pro, or unlock this session for 5 Sparks ⚡!',
+      onSuccess: () => launchTicTacToe()
+    });
   };
 
   const handleOpenWhiteboard = () => {
@@ -8134,8 +8174,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2 }}>
                     Arrow Battle
                   </span>
-                  <span style={{ fontSize: '0.64rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    Multiplayer
+                  <span style={{ fontSize: '0.62rem', color: '#f59e0b', fontWeight: 800, marginTop: '2px' }}>
+                    👑 PRO / ⚡ 5
                   </span>
                 </button>
 
@@ -8181,8 +8221,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2 }}>
                     Tic-Tac-Toe
                   </span>
-                  <span style={{ fontSize: '0.64rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    1v1 Arena
+                  <span style={{ fontSize: '0.62rem', color: '#f59e0b', fontWeight: 800, marginTop: '2px' }}>
+                    👑 PRO / ⚡ 5
                   </span>
                 </button>
               </div>
@@ -8210,6 +8250,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         <LiveArrowGameModal
           activeChat={activeChat}
           onClose={() => setShowArrowGameModal(false)}
+        />
+      )}
+
+      {sparksPromptConfig && (
+        <SparksFeaturePromptModal
+          isOpen={Boolean(sparksPromptConfig)}
+          onClose={() => setSparksPromptConfig(null)}
+          featureKey={sparksPromptConfig.featureKey}
+          featureName={sparksPromptConfig.featureName}
+          sparksCost={sparksPromptConfig.sparksCost}
+          icon={sparksPromptConfig.icon}
+          description={sparksPromptConfig.description}
+          onSuccess={sparksPromptConfig.onSuccess}
+          onOpenProModal={() => {
+            setSparksPromptConfig(null);
+            setShowPulseProModal(true);
+          }}
         />
       )}
 

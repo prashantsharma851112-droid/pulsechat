@@ -3,12 +3,38 @@ import { AuthContext } from './AuthContext';
 import { SocketContext } from './SocketContext';
 import { BACKEND_URL } from '../utils/config';
 import { getOrCacheAudioBlobUrl, getSyncCachedAudioUrl } from '../utils/mediaCache';
+import SparksFeaturePromptModal from '../components/common/SparksFeaturePromptModal';
+import PulseProModal from '../components/chat/PulseProModal';
 
 export const AppMusicContext = createContext(null);
 
 export function AppMusicProvider({ children }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
+
+  const getTodayDateStr = () => new Date().toISOString().slice(0, 10);
+
+  // Daily music listening seconds (Free tier limit = 30 mins = 1800s)
+  const [dailyListenedSec, setDailyListenedSec] = useState(() => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      return Number(localStorage.getItem(`pulsechat_music_listened_sec_${today}`)) || 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  const [bonusListeningSec, setBonusListeningSec] = useState(() => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      return Number(localStorage.getItem(`pulsechat_music_bonus_sec_${today}`)) || 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  const [showMusicLimitModal, setShowMusicLimitModal] = useState(false);
+  const [showPulseProModal, setShowPulseProModal] = useState(false);
 
   // Active App Music Track
   const [currentTrack, setCurrentTrack] = useState(() => {
@@ -41,6 +67,11 @@ export function AppMusicProvider({ children }) {
   // Live audio element reference
   const audioRef = useRef(null);
   const wasPlayingBeforeInterruptionRef = useRef(false);
+  const userRef = useRef(user);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // Sync user's Instagram-style music note text when profile updates
   useEffect(() => {
@@ -89,12 +120,37 @@ export function AppMusicProvider({ children }) {
       }
     });
 
-    audio.addEventListener('timeupdate', () => {
+    let lastSecondStamp = -1;
+    const handleTimeUpdate = () => {
       setProgress(audio.currentTime);
       if (audio.duration && !isNaN(audio.duration)) {
         setDuration(audio.duration);
       }
-    });
+
+      // Check daily listening limit for Free tier users (30 mins = 1800s)
+      const curSec = Math.floor(audio.currentTime);
+      if (curSec !== lastSecondStamp && !audio.paused) {
+        lastSecondStamp = curSec;
+
+        const isUserPro = Boolean(userRef.current?.isPro && (!userRef.current?.proExpiresAt || new Date(userRef.current.proExpiresAt) > new Date()));
+        if (!isUserPro) {
+          const today = new Date().toISOString().slice(0, 10);
+          const bonus = Number(localStorage.getItem(`pulsechat_music_bonus_sec_${today}`)) || 0;
+          const currentListened = (Number(localStorage.getItem(`pulsechat_music_listened_sec_${today}`)) || 0) + 1;
+          localStorage.setItem(`pulsechat_music_listened_sec_${today}`, currentListened);
+          setDailyListenedSec(currentListened);
+
+          const maxAllowed = 1800 + bonus;
+          if (currentListened >= maxAllowed) {
+            audio.pause();
+            setIsPlaying(false);
+            setShowMusicLimitModal(true);
+          }
+        }
+      }
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
 
     audio.addEventListener('play', () => {
       setIsPlaying(true);
@@ -120,6 +176,35 @@ export function AppMusicProvider({ children }) {
     };
   }, [currentTrack?.audioUrl]);
 
+  // Check if daily listening limit is reached
+  const checkDailyLimit = useCallback(() => {
+    const isUserPro = Boolean(userRef.current?.isPro && (!userRef.current?.proExpiresAt || new Date(userRef.current.proExpiresAt) > new Date()));
+    if (isUserPro) return true;
+    const today = new Date().toISOString().slice(0, 10);
+    const bonus = Number(localStorage.getItem(`pulsechat_music_bonus_sec_${today}`)) || 0;
+    const currentListened = Number(localStorage.getItem(`pulsechat_music_listened_sec_${today}`)) || 0;
+    const maxAllowed = 1800 + bonus;
+    if (currentListened >= maxAllowed) {
+      setShowMusicLimitModal(true);
+      return false;
+    }
+    return true;
+  }, []);
+
+  const handleExtendMusicListening = useCallback(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const prevBonus = Number(localStorage.getItem(`pulsechat_music_bonus_sec_${today}`)) || 0;
+    const newBonus = prevBonus + 1800; // +30 minutes
+    localStorage.setItem(`pulsechat_music_bonus_sec_${today}`, newBonus);
+    setBonusListeningSec(newBonus);
+    setShowMusicLimitModal(false);
+    setTimeout(() => {
+      if (audioRef.current) {
+        audioRef.current.play().catch(() => {});
+      }
+    }, 150);
+  }, []);
+
   // Sync volume & mute
   useEffect(() => {
     if (audioRef.current) {
@@ -130,6 +215,8 @@ export function AppMusicProvider({ children }) {
   // Play track
   const playTrack = useCallback((track, noteText = '') => {
     if (!track) return;
+    if (!checkDailyLimit()) return;
+
     setCurrentTrack(track);
     setMusicNoteText(noteText);
     localStorage.setItem('pulsechat_app_music', JSON.stringify(track));
@@ -143,7 +230,7 @@ export function AppMusicProvider({ children }) {
         });
       }
     }, 50);
-  }, []);
+  }, [checkDailyLimit]);
 
   const pauseTrack = useCallback(() => {
     wasPlayingBeforeInterruptionRef.current = false;
@@ -153,12 +240,13 @@ export function AppMusicProvider({ children }) {
   }, []);
 
   const resumeTrack = useCallback(() => {
+    if (!checkDailyLimit()) return;
     if (audioRef.current) {
       audioRef.current.play().catch(e => {
         console.warn('App music resume failed:', e);
       });
     }
-  }, []);
+  }, [checkDailyLimit]);
 
   const togglePlayPause = useCallback(() => {
     if (!audioRef.current) return;
@@ -365,6 +453,10 @@ export function AppMusicProvider({ children }) {
     duration,
     isMuted,
     volume,
+    dailyListenedSec,
+    bonusListeningSec,
+    dailyLimitSec: 1800 + bonusListeningSec,
+    isDailyLimitReached: !user?.isPro && dailyListenedSec >= (1800 + bonusListeningSec),
     isPickerOpen,
     openMusicPicker: () => setIsPickerOpen(true),
     closeMusicPicker: () => setIsPickerOpen(false),
@@ -377,12 +469,35 @@ export function AppMusicProvider({ children }) {
     toggleMute,
     clearTrack,
     saveMusicNote,
-    deleteMusicNote
+    deleteMusicNote,
+    openMusicLimitModal: () => setShowMusicLimitModal(true)
   };
 
   return (
     <AppMusicContext.Provider value={value}>
       {children}
+      {showMusicLimitModal && (
+        <SparksFeaturePromptModal
+          isOpen={showMusicLimitModal}
+          onClose={() => setShowMusicLimitModal(false)}
+          featureKey="music_boost_30m"
+          featureName="30-Min Music Listening Boost"
+          sparksCost={10}
+          icon="🎵"
+          description="Free users get 30 minutes of music daily. Unlock 30 more minutes with 10 Sparks, or upgrade to Pulse Pro for unlimited listening!"
+          onSuccess={handleExtendMusicListening}
+          onOpenProModal={() => {
+            setShowMusicLimitModal(false);
+            setShowPulseProModal(true);
+          }}
+        />
+      )}
+      {showPulseProModal && (
+        <PulseProModal
+          onClose={() => setShowPulseProModal(false)}
+          initialTab="pro"
+        />
+      )}
     </AppMusicContext.Provider>
   );
 }

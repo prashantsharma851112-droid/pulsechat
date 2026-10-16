@@ -287,4 +287,108 @@ router.post('/claim-ad-reward', authMiddleware, async (req, res) => {
   }
 });
 
+// 4. Unlock Pro Features with Sparks (Free users spend sparks, Pro users get it free)
+router.post('/use-feature', authMiddleware, async (req, res) => {
+  try {
+    const userId = resolveCanonicalUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized user' });
+    }
+
+    const { featureKey } = req.body;
+    const FEATURE_COSTS = {
+      chat_game: { sparks: 5, title: 'Chat Game Session 🎮', description: 'Unlocked chat game session' },
+      music_boost_30m: { sparks: 10, title: 'Music Listening 30m Boost 🎵⚡', description: 'Unlocked +30 minutes of music listening' },
+      pro_theme: { sparks: 15, title: 'VIP Theme Unlock 🎨', description: 'Applied VIP Pro Theme' },
+      vibe_aura: { sparks: 20, title: 'VIP Aura Activation 🔮', description: 'Activated VIP Neon Aura' },
+      animated_3d_text: { sparks: 5, title: '3D VIP Text Message ✨', description: 'Sent 3D animated VIP text' },
+    };
+
+    const targetFeature = FEATURE_COSTS[featureKey];
+    if (!targetFeature) {
+      return res.status(400).json({ error: 'Invalid feature specified' });
+    }
+
+    const isObjId = mongoose.Types.ObjectId.isValid(userId);
+    const userDoc = await User.findOne({
+      $or: [
+        { id: userId },
+        ...(isObjId ? [{ _id: userId }] : [])
+      ]
+    });
+
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const canonicalId = userDoc.id || userDoc._id.toString();
+    const isPro = Boolean(userDoc.isPro && (!userDoc.proExpiresAt || new Date(userDoc.proExpiresAt) > new Date()));
+
+    // Pro users get all Pro features completely FREE!
+    if (isPro) {
+      return res.json({
+        success: true,
+        isPro: true,
+        cost: 0,
+        balance: userDoc.pulseSparks || 0,
+        feature: featureKey
+      });
+    }
+
+    const cost = targetFeature.sparks;
+    const currentBalance = typeof userDoc.pulseSparks === 'number' ? userDoc.pulseSparks : 50;
+
+    if (currentBalance < cost) {
+      return res.status(400).json({
+        error: `Insufficient Sparks. This feature requires ${cost} Sparks (Your balance: ${currentBalance}).`,
+        insufficientSparks: true,
+        requiredSparks: cost,
+        currentBalance
+      });
+    }
+
+    const newBalance = currentBalance - cost;
+    userDoc.pulseSparks = newBalance;
+    await userDoc.save();
+
+    // Record debit transaction
+    const tx = await SparksTransaction.create({
+      userId: canonicalId,
+      type: 'debit',
+      amount: cost,
+      reason: `feature_${featureKey}`,
+      title: targetFeature.title,
+      description: targetFeature.description,
+      balanceAfter: newBalance
+    });
+
+    // Real-time socket broadcast
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user_${canonicalId}`).emit('sparks_updated', {
+        pulseSparks: newBalance,
+        spentAmount: cost,
+        type: 'debit',
+        title: `⚡ -${cost} Sparks (${targetFeature.title})`
+      });
+      io.to(`user_${canonicalId}`).emit('user_profile_updated', {
+        userId: canonicalId,
+        pulseSparks: newBalance
+      });
+    }
+
+    res.json({
+      success: true,
+      isPro: false,
+      cost,
+      balance: newBalance,
+      feature: featureKey,
+      transaction: tx
+    });
+  } catch (err) {
+    console.error('Error using feature with sparks:', err);
+    res.status(500).json({ error: 'Failed to process Sparks unlock' });
+  }
+});
+
 module.exports = router;
