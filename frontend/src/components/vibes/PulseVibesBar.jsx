@@ -279,11 +279,11 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '12px',
+        gap: '18px',
         overflowX: 'auto',
         overflowY: 'visible',
-        paddingTop: '68px',
-        paddingBottom: '6px',
+        paddingTop: '74px',
+        paddingBottom: '8px',
         WebkitOverflowScrolling: 'touch',
         scrollbarWidth: 'none'
       }}>
@@ -307,6 +307,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
             gap: '4px',
             cursor: 'pointer',
             flexShrink: 0,
+            minWidth: '76px',
             zIndex: activePoppedNoteId === 'mine' ? 60 : 2
           }}
         >
@@ -411,6 +412,7 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
                 gap: '4px',
                 cursor: 'pointer',
                 flexShrink: 0,
+                minWidth: '76px',
                 opacity: viewed ? 0.65 : 1,
                 zIndex: isPopped ? 60 : 1
               }}

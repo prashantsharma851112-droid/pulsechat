@@ -208,12 +208,42 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
   const [showHeartBurst, setShowHeartBurst] = useState(false);
   const [showLikersModal, setShowLikersModal] = useState(false);
   const [likes, setLikes] = useState(() => Array.isArray(activeNote?.likes) ? activeNote.likes : []);
+  const [menuCoords, setMenuCoords] = useState({ top: 0, left: 0 });
 
+  const bubbleRef = useRef(null);
   const noteAudioRef = useRef(null);
   const lastTapRef = useRef(0);
   const singleTapTimerRef = useRef(null);
 
   const targetUserId = authorUser?.userId || authorUser?.id || authorUser?._id || authorUser?.username || (isMine ? (user?.id || user?._id) : null);
+
+  // Calculate and clamp floating menu position when note is popped
+  useEffect(() => {
+    if (!isPopped) return;
+    const updateMenuPosition = () => {
+      if (bubbleRef.current) {
+        const rect = bubbleRef.current.getBoundingClientRect();
+        const menuWidth = 136;
+        let left = rect.left + rect.width / 2 - menuWidth / 2;
+        if (left < 10) left = 10;
+        if (left + menuWidth > window.innerWidth - 10) {
+          left = window.innerWidth - menuWidth - 10;
+        }
+        let top = rect.bottom + 6;
+        if (top + 130 > window.innerHeight) {
+          top = Math.max(10, rect.top - 125);
+        }
+        setMenuCoords({ top, left });
+      }
+    };
+    updateMenuPosition();
+    window.addEventListener('scroll', updateMenuPosition, true);
+    window.addEventListener('resize', updateMenuPosition);
+    return () => {
+      window.removeEventListener('scroll', updateMenuPosition, true);
+      window.removeEventListener('resize', updateMenuPosition);
+    };
+  }, [isPopped]);
 
   // Sync likes whenever note changes
   useEffect(() => {
@@ -524,6 +554,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
       `}</style>
 
       <div
+        ref={bubbleRef}
         className="insta-music-note-bubble-wrap"
         style={{
           position: 'absolute',
@@ -571,9 +602,9 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
               : (isPlayingNote
                   ? '0 4px 14px rgba(168, 85, 247, 0.5), 0 0 10px rgba(168, 85, 247, 0.4)'
                   : '0 4px 10px rgba(0,0,0,0.5)'),
-            width: '72px',
-            minWidth: '72px',
-            maxWidth: '72px',
+            width: '76px',
+            minWidth: '76px',
+            maxWidth: '76px',
             boxSizing: 'border-box',
             position: 'relative',
             transition: 'all 0.22s ease'
@@ -743,50 +774,67 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
           borderTop: `5px solid ${getTailColor()}`,
           margin: '-1px auto 0 auto'
         }} />
+      </div>
 
-        {/* Owner Menu when popped */}
-        {isMine && isPopped && (
+      {/* Owner Menu when popped rendered via portal to prevent clipping */}
+      {isMine && isPopped && typeof document !== 'undefined' && createPortal(
+        <>
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              onPop && onPop();
+            }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9998,
+              background: 'transparent'
+            }}
+          />
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              position: 'absolute',
-              top: 'calc(100% + 4px)',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              background: 'rgba(15, 15, 22, 0.96)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              borderRadius: '12px',
-              padding: '4px',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.8)',
-              zIndex: 110,
+              position: 'fixed',
+              top: `${menuCoords.top}px`,
+              left: `${menuCoords.left}px`,
+              background: 'rgba(18, 18, 28, 0.98)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '1px solid rgba(255, 255, 255, 0.18)',
+              borderRadius: '14px',
+              padding: '6px',
+              boxShadow: '0 12px 36px rgba(0,0,0,0.75), 0 0 16px rgba(168, 85, 247, 0.3)',
+              zIndex: 9999,
               display: 'flex',
               flexDirection: 'column',
-              gap: '2px',
-              minWidth: '115px'
+              gap: '3px',
+              minWidth: '136px',
+              animation: 'fadeIn 0.15s ease-out'
             }}
           >
             {likes.length > 0 && (
               <button
                 type="button"
                 onClick={() => {
+                  onPop && onPop();
                   setShowLikersModal(true);
                 }}
                 style={{
-                  padding: '5px 8px',
-                  borderRadius: '8px',
+                  padding: '7px 10px',
+                  borderRadius: '9px',
                   border: 'none',
-                  background: 'transparent',
+                  background: 'rgba(255, 45, 85, 0.12)',
                   color: '#ff2d55',
-                  fontSize: '0.70rem',
-                  fontWeight: 600,
+                  fontSize: '0.76rem',
+                  fontWeight: 700,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
+                  gap: '8px',
                   cursor: 'pointer',
                   textAlign: 'left'
                 }}
               >
-                <Heart size={11} fill="#ff2d55" color="#ff2d55" /> Likes ({likes.length})
+                <Heart size={13} fill="#ff2d55" color="#ff2d55" /> Likes ({likes.length})
               </button>
             )}
             <button
@@ -797,21 +845,21 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
                 onOpenPicker && onOpenPicker();
               }}
               style={{
-                padding: '5px 8px',
-                borderRadius: '8px',
+                padding: '7px 10px',
+                borderRadius: '9px',
                 border: 'none',
                 background: 'transparent',
-                color: '#e2e8f0',
-                fontSize: '0.70rem',
+                color: '#f1f5f9',
+                fontSize: '0.76rem',
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '8px',
                 cursor: 'pointer',
                 textAlign: 'left'
               }}
             >
-              <Edit3 size={11} color="#c084fc" /> Edit Note
+              <Edit3 size={13} color="#c084fc" /> Edit Note
             </button>
             <button
               type="button"
@@ -821,25 +869,26 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
                 deleteMusicNote();
               }}
               style={{
-                padding: '5px 8px',
-                borderRadius: '8px',
+                padding: '7px 10px',
+                borderRadius: '9px',
                 border: 'none',
-                background: 'transparent',
+                background: 'rgba(239, 68, 68, 0.1)',
                 color: '#ef4444',
-                fontSize: '0.70rem',
+                fontSize: '0.76rem',
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '8px',
                 cursor: 'pointer',
                 textAlign: 'left'
               }}
             >
-              <Trash2 size={11} /> Remove Note
+              <Trash2 size={13} /> Remove Note
             </button>
           </div>
-        )}
-      </div>
+        </>,
+        document.body
+      )}
 
       {/* Likers Modal (Instagram Story Viewers style - Only accessible to the note owner) */}
       {isMine && (
