@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Search, Play, Pause, Music, Sparkles, Check, Flame, Disc, Radio } from 'lucide-react';
+import { X, Search, Play, Pause, Music, Sparkles, Check, Flame, Disc, Radio, Volume2, Plus, CheckCircle2, Headphones } from 'lucide-react';
 import { registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 
 const PRESET_CATEGORIES = [
@@ -214,6 +214,8 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
     onClose();
   };
 
+  const activeSong = songs.find(s => s.trackId === playingTrackId) || null;
+
   if (!isOpen) return null;
 
   return (
@@ -224,8 +226,8 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
         left: 0,
         right: 0,
         bottom: 0,
-        background: 'rgba(0, 0, 0, 0.78)',
-        backdropFilter: 'blur(10px)',
+        background: 'rgba(0, 0, 0, 0.82)',
+        backdropFilter: 'blur(12px)',
         zIndex: 1200,
         display: 'flex',
         alignItems: 'center',
@@ -250,7 +252,7 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
           boxShadow: '0 10px 30px rgba(0,0,0,0.8)'
         }}>
           <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <Disc size={16} className="spin-slow" /> Playing Full Song:
+            <Disc size={16} className="vinyl-spin" /> Playing Full Song:
           </span>
           <div style={{ width: '130px', height: '36px', borderRadius: '8px', overflow: 'hidden' }}>
             <iframe
@@ -271,65 +273,106 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
       <div
         style={{
           width: '100%',
-          maxWidth: '460px',
-          height: '82vh',
-          maxHeight: '680px',
-          background: 'var(--bg-sidebar)',
-          border: '1px solid var(--border)',
-          borderRadius: '24px',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6)',
+          maxWidth: '480px',
+          height: '84vh',
+          maxHeight: '700px',
+          background: 'linear-gradient(180deg, #181428 0%, #0d0b16 100%)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          borderRadius: '26px',
+          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(168, 85, 247, 0.15)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
+          position: 'relative',
           animation: 'pulseModalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1)'
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
         <div style={{
-          padding: '1.1rem 1.25rem',
-          borderBottom: '1px solid var(--border)',
+          padding: '1.1rem 1.3rem',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          background: 'var(--bg-card)'
+          background: 'rgba(255, 255, 255, 0.03)',
+          backdropFilter: 'blur(12px)',
+          position: 'relative',
+          zIndex: 10
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Spinning Neon Vinyl Badge */}
             <div style={{
-              width: '32px',
-              height: '32px',
+              width: '40px',
+              height: '40px',
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
+              background: 'conic-gradient(#111827 0deg, #374151 45deg, #111827 90deg, #374151 135deg, #111827 180deg, #374151 225deg, #111827 270deg, #374151 315deg, #111827 360deg)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#fff',
-              boxShadow: '0 0 12px rgba(245, 158, 11, 0.5)'
+              boxShadow: playingTrackId ? '0 0 16px rgba(236, 72, 153, 0.6)' : '0 0 12px rgba(168, 85, 247, 0.35)',
+              border: '1.5px solid rgba(255, 255, 255, 0.2)',
+              position: 'relative',
+              flexShrink: 0
             }}>
-              <Disc size={18} className="spin-slow" />
+              <div className={playingTrackId ? 'vinyl-spin' : ''} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Disc size={22} color={playingTrackId ? "#ec4899" : "#a855f7"} />
+              </div>
+              <div style={{ position: 'absolute', width: '6px', height: '6px', borderRadius: '50%', background: '#fff' }} />
             </div>
+
             <div>
-              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)' }}>
-                PulseChat Music 🎵
-              </h3>
-              <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: '#fff', letterSpacing: '-0.01em' }}>
+                  PulseChat Music
+                </h3>
+                <span style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 800,
+                  color: '#10b981',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  padding: '2px 7px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10b981' }} />
+                  HQ FULL SONGS
+                </span>
+              </div>
+              <p style={{ margin: '2px 0 0 0', fontSize: '0.74rem', color: 'rgba(255, 255, 255, 0.6)' }}>
                 Search & attach any full song to your Chat & Vibe Story
               </p>
             </div>
           </div>
+
           <button
             onClick={handleCloseModal}
             className="icon-btn-ghost"
-            style={{ width: '32px', height: '32px', borderRadius: '50%' }}
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: 'none',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
           >
             <X size={18} />
           </button>
         </div>
 
-        {/* Search Bar */}
-        <div style={{ padding: '0.85rem 1.25rem', background: 'var(--bg-sidebar)' }}>
+        {/* Search Bar & Quick Categories */}
+        <div style={{ padding: '0.85rem 1.25rem 0.5rem 1.25rem', background: 'rgba(255, 255, 255, 0.015)' }}>
           <div style={{ position: 'relative' }}>
-            <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255, 255, 255, 0.45)' }} />
             <input
               type="text"
               value={query}
@@ -340,66 +383,106 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
                 borderRadius: '24px',
                 fontSize: '0.92rem',
                 paddingBlock: '0.65rem',
-                background: 'var(--bg-card)',
-                border: '1.5px solid var(--border)'
+                paddingRight: query ? '36px' : '14px',
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: '1.5px solid rgba(255, 255, 255, 0.12)',
+                color: '#fff',
+                width: '100%',
+                boxSizing: 'border-box'
               }}
               autoFocus
             />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'rgba(255, 255, 255, 0.12)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '20px',
+                  height: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  cursor: 'pointer'
+                }}
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
 
           {/* Quick Preset Categories Chips */}
           <div style={{
             display: 'flex',
-            gap: '6px',
+            gap: '8px',
             overflowX: 'auto',
             marginTop: '0.75rem',
             paddingBottom: '4px',
             scrollbarWidth: 'none'
           }}>
-            {PRESET_CATEGORIES.map(cat => (
-              <button
-                key={cat.label}
-                onClick={() => {
-                  setQuery(cat.query);
-                  searchSongs(cat.query);
-                }}
-                style={{
-                  whiteSpace: 'nowrap',
-                  padding: '4px 12px',
-                  borderRadius: '16px',
-                  background: query === cat.query ? 'var(--accent)' : 'var(--bg-card)',
-                  color: query === cat.query ? '#fff' : 'var(--text-main)',
-                  border: '1px solid var(--border)',
-                  fontSize: '0.76rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                {cat.label}
-              </button>
-            ))}
+            {PRESET_CATEGORIES.map(cat => {
+              const isCatActive = query === cat.query;
+              return (
+                <button
+                  key={cat.label}
+                  onClick={() => {
+                    setQuery(cat.query);
+                    searchSongs(cat.query);
+                  }}
+                  style={{
+                    whiteSpace: 'nowrap',
+                    padding: '6px 14px',
+                    borderRadius: '20px',
+                    background: isCatActive
+                      ? 'linear-gradient(135deg, #ec4899, #8b5cf6)'
+                      : 'rgba(255, 255, 255, 0.05)',
+                    color: isCatActive ? '#fff' : 'rgba(255, 255, 255, 0.75)',
+                    border: isCatActive ? '1px solid rgba(236, 72, 153, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
+                    fontSize: '0.78rem',
+                    fontWeight: isCatActive ? 800 : 600,
+                    cursor: 'pointer',
+                    boxShadow: isCatActive ? '0 2px 10px rgba(236, 72, 153, 0.35)' : 'none',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Songs List */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 0.85rem' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 1rem' }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
-              <Disc size={36} className="animate-spin" style={{ color: 'var(--accent)', marginBottom: '0.5rem' }} />
-              <p style={{ fontSize: '0.88rem', margin: 0 }}>Searching music library...</p>
+            <div style={{ textAlign: 'center', padding: '3.5rem 1rem', color: 'rgba(255, 255, 255, 0.6)' }}>
+              <div style={{ position: 'relative', display: 'inline-block', marginBottom: '0.8rem' }}>
+                <Disc size={42} className="vinyl-spin" style={{ color: '#ec4899' }} />
+                <div style={{ position: 'absolute', inset: 0, filter: 'blur(12px)', opacity: 0.6 }}>
+                  <Disc size={42} style={{ color: '#8b5cf6' }} />
+                </div>
+              </div>
+              <p style={{ fontSize: '0.9rem', margin: 0, fontWeight: 700, color: '#fff' }}>Searching full music library...</p>
+              <p style={{ fontSize: '0.76rem', color: 'rgba(255, 255, 255, 0.5)', margin: '4px 0 0 0' }}>Streaming in 320kbps Studio Master</p>
             </div>
           ) : error ? (
-            <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: '#ef4444', fontSize: '0.88rem' }}>
+            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#ef4444', fontSize: '0.88rem' }}>
               {error}
             </div>
           ) : songs.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
-              <Music size={36} style={{ opacity: 0.3, marginBottom: '0.5rem' }} />
-              <p style={{ margin: 0 }}>No songs found for "{query}"</p>
+            <div style={{ textAlign: 'center', padding: '3.5rem 1rem', color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.88rem' }}>
+              <Music size={40} style={{ opacity: 0.3, marginBottom: '0.5rem' }} />
+              <p style={{ margin: 0, fontWeight: 600 }}>No songs found for "{query}"</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {songs.map(song => {
                 const isSelected = selectedSong?.audioUrl === song.audioUrl || selectedSong?.songTitle === song.songTitle;
                 const isPreviewing = playingTrackId === song.trackId;
@@ -408,27 +491,60 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
                   <div
                     key={song.trackId || song.audioUrl}
                     onClick={() => handleSelect(song)}
+                    className={isPreviewing ? 'music-card-playing' : ''}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      padding: '8px 12px',
-                      borderRadius: '14px',
-                      background: isSelected ? 'rgba(99, 102, 241, 0.14)' : 'var(--bg-card)',
-                      border: isSelected ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                      padding: '10px 12px',
+                      borderRadius: '16px',
+                      background: isPreviewing
+                        ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.16) 0%, rgba(139, 92, 246, 0.16) 100%)'
+                        : isSelected
+                        ? 'rgba(16, 185, 129, 0.12)'
+                        : 'rgba(255, 255, 255, 0.04)',
+                      border: isPreviewing
+                        ? '1.5px solid rgba(236, 72, 153, 0.65)'
+                        : isSelected
+                        ? '1.5px solid #10b981'
+                        : '1px solid rgba(255, 255, 255, 0.08)',
                       cursor: 'pointer',
-                      transition: 'all 0.15s ease'
+                      transition: 'all 0.18s ease',
+                      boxShadow: isPreviewing
+                        ? '0 4px 18px rgba(236, 72, 153, 0.25)'
+                        : '0 2px 8px rgba(0,0,0,0.2)'
                     }}
                     onMouseEnter={(e) => {
-                      if (!isSelected) e.currentTarget.style.background = 'var(--hover-bg)';
+                      if (!isPreviewing && !isSelected) {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.18)';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                      }
                     }}
                     onMouseLeave={(e) => {
-                      if (!isSelected) e.currentTarget.style.background = 'var(--bg-card)';
+                      if (!isPreviewing && !isSelected) {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                      }
                     }}
                   >
                     {/* Album Art & Titles */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                      <div style={{ position: 'relative', width: '44px', height: '44px', borderRadius: '10px', overflow: 'hidden', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
+                      <div
+                        style={{
+                          position: 'relative',
+                          width: '46px',
+                          height: '46px',
+                          borderRadius: isPreviewing ? '50%' : '12px',
+                          overflow: 'hidden',
+                          flexShrink: 0,
+                          border: isPreviewing ? '1.5px solid #ec4899' : '1px solid rgba(255, 255, 255, 0.15)',
+                          boxShadow: isPreviewing ? '0 0 12px rgba(236, 72, 153, 0.5)' : 'none',
+                          transition: 'all 0.2s ease'
+                        }}
+                        className={isPreviewing ? 'vinyl-spin' : ''}
+                      >
                         <img
                           src={song.albumArt || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(song.songTitle)}`}
                           alt={song.songTitle}
@@ -440,55 +556,78 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
                           onClick={(e) => togglePreview(e, song)}
                           style={{
                             position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            background: isPreviewing ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.3)',
+                            inset: 0,
+                            background: isPreviewing ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)',
                             border: 'none',
                             color: '#fff',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             cursor: 'pointer',
-                            transition: 'background 0.15s ease'
+                            transition: 'all 0.15s ease'
                           }}
                           title={isPreviewing ? "Pause" : "Play Full Song"}
                         >
-                          {isPreviewing ? <Pause size={18} color="#ec4899" /> : <Play size={18} fill="#ffffff" />}
+                          {isPreviewing ? (
+                            <Pause size={18} color="#fff" />
+                          ) : (
+                            <Play size={18} fill="#ffffff" color="#ffffff" style={{ marginLeft: '2px' }} />
+                          )}
                         </button>
                       </div>
 
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{
-                          fontSize: '0.88rem',
-                          fontWeight: 700,
-                          color: 'var(--text-main)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {song.songTitle}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{
+                            fontSize: '0.88rem',
+                            fontWeight: 800,
+                            color: '#fff',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }} className={isPreviewing ? 'music-playing-shimmer' : ''}>
+                            {song.songTitle}
+                          </span>
+                          {/* Live Equalizer Bars dancing when previewing */}
+                          {isPreviewing && (
+                            <div style={{ display: 'inline-flex', alignItems: 'flex-end', gap: '2px', height: '14px', flexShrink: 0 }}>
+                              <span className="music-eq-bar" />
+                              <span className="music-eq-bar" />
+                              <span className="music-eq-bar" />
+                              <span className="music-eq-bar" />
+                            </div>
+                          )}
                         </div>
+
                         <div style={{
-                          fontSize: '0.76rem',
-                          color: 'var(--text-muted)',
+                          fontSize: '0.74rem',
+                          color: 'rgba(255, 255, 255, 0.65)',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '6px'
+                          gap: '6px',
+                          marginTop: '2px'
                         }}>
-                          <span>{song.artistName}</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{song.artistName}</span>
                           {song.duration && (
-                            <span style={{ color: '#10b981', fontWeight: 700, fontSize: '0.68rem', background: 'rgba(16, 185, 129, 0.15)', padding: '1px 5px', borderRadius: '4px' }}>
-                              {Math.floor(song.duration / 60)}:{(song.duration % 60) < 10 ? '0' : ''}{song.duration % 60} Full Song
+                            <span style={{
+                              color: '#10b981',
+                              fontWeight: 800,
+                              fontSize: '0.66rem',
+                              background: 'rgba(16, 185, 129, 0.15)',
+                              border: '1px solid rgba(16, 185, 129, 0.3)',
+                              padding: '1px 6px',
+                              borderRadius: '6px',
+                              flexShrink: 0
+                            }}>
+                              ⚡ {Math.floor(song.duration / 60)}:{(song.duration % 60) < 10 ? '0' : ''}{song.duration % 60}
                             </span>
                           )}
                           {isPreviewing && (
-                            <span style={{ color: '#ec4899', fontWeight: 700, fontSize: '0.7rem' }}>
-                              · 🎵 Playing Full Song...
+                            <span style={{ color: '#ec4899', fontWeight: 800, fontSize: '0.68rem', flexShrink: 0 }}>
+                              · Live Previewing
                             </span>
                           )}
                         </div>
@@ -496,34 +635,45 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
                     </div>
 
                     {/* Action Button */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '10px', flexShrink: 0 }}>
                       {isSelected ? (
                         <span style={{
                           fontSize: '0.74rem',
-                          fontWeight: 700,
-                          color: 'var(--accent)',
-                          background: 'rgba(99, 102, 241, 0.18)',
-                          padding: '3px 8px',
-                          borderRadius: '8px',
+                          fontWeight: 800,
+                          color: '#10b981',
+                          background: 'rgba(16, 185, 129, 0.2)',
+                          border: '1px solid #10b981',
+                          padding: '5px 10px',
+                          borderRadius: '20px',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '4px'
                         }}>
-                          <Check size={12} /> Selected
+                          <Check size={13} /> Added
                         </span>
                       ) : (
                         <button
                           type="button"
                           onClick={() => handleSelect(song)}
-                          className="btn-primary"
                           style={{
-                            padding: '4px 10px',
+                            padding: '6px 14px',
                             fontSize: '0.76rem',
-                            borderRadius: '8px',
-                            fontWeight: 600
+                            borderRadius: '20px',
+                            border: 'none',
+                            fontWeight: 800,
+                            background: isPreviewing
+                              ? 'linear-gradient(135deg, #ec4899, #8b5cf6)'
+                              : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            boxShadow: isPreviewing ? '0 4px 14px rgba(236, 72, 153, 0.4)' : '0 2px 8px rgba(99, 102, 241, 0.3)',
+                            transition: 'all 0.15s ease'
                           }}
                         >
-                          Add
+                          <Plus size={13} /> Add
                         </button>
                       )}
                     </div>
@@ -533,6 +683,100 @@ export default function MusicPickerModal({ isOpen, onClose, onSelectSong, select
             </div>
           )}
         </div>
+
+        {/* Bottom Floating Mini-Player Bar (When song is previewing) */}
+        {activeSong && (
+          <div style={{
+            padding: '10px 14px',
+            margin: '0 12px 12px 12px',
+            background: 'linear-gradient(135deg, rgba(24, 21, 40, 0.96) 0%, rgba(13, 11, 24, 0.98) 100%)',
+            border: '1.5px solid rgba(236, 72, 153, 0.55)',
+            borderRadius: '18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '10px',
+            boxShadow: '0 8px 25px rgba(0, 0, 0, 0.6), 0 0 20px rgba(236, 72, 153, 0.25)',
+            backdropFilter: 'blur(16px)',
+            animation: 'pulseModalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}>
+            {/* Left: Mini spinning vinyl + song info */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                  border: '1.5px solid #ec4899',
+                  boxShadow: '0 0 10px rgba(236, 72, 153, 0.5)'
+                }}
+                className="vinyl-spin"
+              >
+                <img src={activeSong.albumArt} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {activeSong.songTitle}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span>{activeSong.artistName}</span>
+                  <div style={{ display: 'inline-flex', alignItems: 'flex-end', gap: '2px', height: '10px', marginLeft: '4px' }}>
+                    <span className="music-eq-bar" />
+                    <span className="music-eq-bar" />
+                    <span className="music-eq-bar" />
+                    <span className="music-eq-bar" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Pause toggle + Use Song button */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={(e) => togglePreview(e, activeSong)}
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  border: 'none',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+                title="Pause Preview"
+              >
+                <Pause size={16} color="#ec4899" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelect(activeSong)}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: '20px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #ec4899, #8b5cf6)',
+                  color: '#fff',
+                  fontWeight: 800,
+                  fontSize: '0.78rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(236, 72, 153, 0.4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <span>Use Song</span>
+                <span>➔</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
