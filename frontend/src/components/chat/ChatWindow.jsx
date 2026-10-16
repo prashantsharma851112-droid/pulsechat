@@ -9,26 +9,29 @@ import ChatLiveWallpaper from './ChatLiveWallpaper';
 import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
 import PulseVipBadge from '../common/PulseVipBadge';
 import { recordRecentReaction } from '../../utils/quickReactions';
-import { uploadMediaDirect } from '../../utils/mediaUpload';
+import { uploadMediaDirect, compressImageOnDevice } from '../../utils/mediaUpload';
 import { playSound, playPulseAuraSound, stopPulseAuraSound, setPulseAuraVolume, registerGlobalMusicAudio, stopGlobalMusicAudio } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { executeTranslation } from '../../utils/translator';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
 import { useBackHandler } from '../../utils/backNavigation';
 
+// Core 4-Dot Drawer Modals imported directly to ensure 100% offline availability with ZERO chunk reload errors
+import CreatePollModal from './CreatePollModal';
+import MediaUploadModal from './MediaUploadModal';
+import Animated3DTextModal from './Animated3DTextModal';
+import ScheduleMessageModal from './ScheduleMessageModal';
+
 import { lazyWithRetry } from '../../utils/lazyRetry';
 
 // Code-Splitting: Lazy load heavy modals with automatic retry & reload resilience
-const CreatePollModal = lazyWithRetry(() => import('./CreatePollModal'));
 const WhiteboardModal = lazyWithRetry(() => import('./WhiteboardModal'));
 const UserProfileModal = lazyWithRetry(() => import('./UserProfileModal'));
 const GroupProfileModal = lazyWithRetry(() => import('./GroupProfileModal'));
-const MediaUploadModal = lazyWithRetry(() => import('./MediaUploadModal'));
 const ChatThemeModal = lazyWithRetry(() => import('./ChatThemeModal'));
 const SolidThemeModal = lazyWithRetry(() => import('./SolidThemeModal'));
 const PulseProModal = lazyWithRetry(() => import('./PulseProModal'));
 const GiftPickerModal = lazyWithRetry(() => import('./GiftPickerModal'));
-const Animated3DTextModal = lazyWithRetry(() => import('./Animated3DTextModal'));
 const LiveArrowGameModal = lazyWithRetry(() => import('./LiveArrowGameModal'));
 const TicTacToeModal = lazyWithRetry(() => import('./TicTacToeModal'));
 const PulseStreakModal = lazyWithRetry(() => import('./PulseStreakModal'));
@@ -39,7 +42,6 @@ const MessageInfoModal = lazyWithRetry(() => import('./MessageInfoModal'));
 const SetDefaultReactionsModal = lazyWithRetry(() => import('./SetDefaultReactionsModal'));
 const VibeViewerModal = lazyWithRetry(() => import('../vibes/VibeViewerModal'));
 const SparksWalletModal = lazyWithRetry(() => import('./SparksWalletModal'));
-const ScheduleMessageModal = lazyWithRetry(() => import('./ScheduleMessageModal'));
 const ChatNicknameModal = lazyWithRetry(() => import('./ChatNicknameModal'));
 const ShareableStoryCardModal = lazyWithRetry(() => import('../profile/ShareableStoryCardModal'));
 const PinLockModal = lazyWithRetry(() => import('../common/PinLockModal'));
@@ -1995,7 +1997,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               let finalMedia = pendingMsg.mediaDataUrl || pendingMsg.mediaUrl;
               if (finalMedia && finalMedia.startsWith('data:')) {
                 try {
-                  finalMedia = await uploadMediaDirect(finalMedia, 'pulsechat_media', token, pendingMsg.type === 'video');
+                  const curToken = token || (typeof window !== 'undefined' ? (localStorage.getItem('pulsechat_token') || '') : '');
+                  finalMedia = await uploadMediaDirect(finalMedia, 'pulsechat_media', curToken, pendingMsg.type === 'video');
                 } catch (e) {
                   console.warn('Media outbox upload error:', e);
                 }
@@ -2340,11 +2343,28 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               .map(sanitizeFogSnapMessage)
               .filter(Boolean);
 
-            // WhatsApp pattern: Skip re-rendering if messages are already identical in memory
+            // WhatsApp pattern: Retain any in-flight pending/uploading messages from state so they NEVER disappear!
             setMessages(prev => {
-              if (prev.length === merged.length) {
+              const pendingInState = prev.filter(pm => pm && (pm.status === 'pending' || pm.status === 'uploading' || pm.isUploading));
+              let finalMerged = merged;
+              if (pendingInState.length > 0) {
+                const finalMap = new Map();
+                merged.forEach(m => finalMap.set(m.clientTempId || m.id, m));
+                pendingInState.forEach(pm => {
+                  const pk = pm.clientTempId || pm.tempId || pm.id;
+                  if (!finalMap.has(pm.id) && !finalMap.has(pm.clientTempId)) {
+                    finalMap.set(pk, pm);
+                  }
+                });
+                finalMerged = Array.from(finalMap.values())
+                  .sort((a, b) => new Date(a.timestamp || a.createdAt || 0) - new Date(b.timestamp || b.createdAt || 0))
+                  .map(sanitizeFogSnapMessage)
+                  .filter(Boolean);
+              }
+
+              if (prev.length === finalMerged.length) {
                 const isIdentical = prev.every((m, idx) => {
-                  const o = merged[idx];
+                  const o = finalMerged[idx];
                   return m.id === o?.id && m.status === o?.status && m.content === o?.content;
                 });
                 if (isIdentical) return prev;
@@ -3917,12 +3937,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (!isOnlineNow) {
       let persistentUrls = localBlobUrls;
       try {
-        persistentUrls = await Promise.all(files.map(f => new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.onerror = () => resolve(URL.createObjectURL(f));
-          reader.readAsDataURL(f);
-        })));
+        persistentUrls = await Promise.all(files.map(async f => {
+          try {
+            if (f.type?.startsWith('image/')) {
+              return await compressImageOnDevice(f, 1280, 0.75);
+            }
+            return await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result);
+              reader.onerror = () => resolve(URL.createObjectURL(f));
+              reader.readAsDataURL(f);
+            });
+          } catch {
+            return URL.createObjectURL(f);
+          }
+        }));
       } catch (e) {
         persistentUrls = localBlobUrls;
       }
@@ -4160,17 +4189,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const isOnlineNow = isDeviceOnline() && Boolean(socket?.connected);
     if (!isOnlineNow) {
       let persistentDataUrl = mediaUrl;
-      if (rawFile) {
-        try {
+      try {
+        if (rawFile && rawFile.type?.startsWith('image/')) {
+          persistentDataUrl = await compressImageOnDevice(rawFile, 1280, 0.78);
+        } else if (rawFile) {
           persistentDataUrl = await new Promise((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result);
             reader.onerror = () => resolve(mediaUrl);
             reader.readAsDataURL(rawFile);
           });
-        } catch (e) {
-          persistentDataUrl = mediaUrl;
+        } else if (mediaUrl && mediaUrl.startsWith('data:image/')) {
+          persistentDataUrl = await compressImageOnDevice(mediaUrl, 1280, 0.78);
         }
+      } catch (e) {
+        persistentDataUrl = mediaUrl;
       }
 
       const offlineMediaMsg = {
@@ -8094,16 +8127,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     width: '56px',
                     height: '56px',
                     borderRadius: '17px',
-                    background: 'linear-gradient(135deg, #38bdf8, #ec4899)',
+                    background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(236, 72, 153, 0.22))',
+                    border: '1.5px solid rgba(56, 189, 248, 0.55)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#fff',
-                    boxShadow: '0 6px 16px rgba(56, 189, 248, 0.4)',
-                    marginBottom: '7px',
-                    fontSize: '1.65rem'
+                    boxShadow: '0 6px 16px rgba(56, 189, 248, 0.35)',
+                    marginBottom: '7px'
                   }}>
-                    🎮
+                    <svg width="34" height="34" viewBox="0 0 36 36" fill="none">
+                      <line x1="7" y1="9" x2="19" y2="27" stroke="#38bdf8" strokeWidth="4.2" strokeLinecap="round" />
+                      <line x1="19" y1="9" x2="7" y2="27" stroke="#38bdf8" strokeWidth="4.2" strokeLinecap="round" />
+                      <circle cx="27" cy="18" r="7.2" stroke="#ec4899" strokeWidth="4.2" />
+                    </svg>
                   </div>
                   <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2 }}>
                     Tic-Tac-Toe

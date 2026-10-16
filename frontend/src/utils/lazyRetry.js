@@ -17,9 +17,14 @@ export function lazyWithRetry(componentImport) {
         /Importing a module script failed/i.test(error?.message || '');
 
       if (isChunkLoadFailed) {
+        // NEVER trigger page reload when device is offline!
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          throw error;
+        }
+
         const lastReload = sessionStorage.getItem('pulsechat_chunk_reload_ts');
         const now = Date.now();
-        // Prevent infinite reload loop if offline (allow once every 12 seconds)
+        // Prevent infinite reload loop (allow once every 12 seconds)
         if (!lastReload || now - parseInt(lastReload, 10) > 12000) {
           sessionStorage.setItem('pulsechat_chunk_reload_ts', now.toString());
           window.location.reload();

@@ -630,14 +630,18 @@ export default function PulseZoneModal({ onClose }) {
                         width: '52px',
                         height: '52px',
                         borderRadius: '14px',
-                        background: 'linear-gradient(135deg, #a855f7, #6366f1)',
+                        background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(236, 72, 153, 0.22))',
+                        border: '1.5px solid rgba(56, 189, 248, 0.55)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '1.8rem',
-                        boxShadow: '0 4px 14px rgba(168, 85, 247, 0.4)'
+                        boxShadow: '0 4px 14px rgba(56, 189, 248, 0.35)'
                       }}>
-                        🎮
+                        <svg width="32" height="32" viewBox="0 0 36 36" fill="none">
+                          <line x1="7" y1="9" x2="19" y2="27" stroke="#38bdf8" strokeWidth="4.2" strokeLinecap="round" />
+                          <line x1="19" y1="9" x2="7" y2="27" stroke="#38bdf8" strokeWidth="4.2" strokeLinecap="round" />
+                          <circle cx="27" cy="18" r="7.2" stroke="#ec4899" strokeWidth="4.2" />
+                        </svg>
                       </div>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -695,7 +699,7 @@ export default function PulseZoneModal({ onClose }) {
                       {selectedGame === 'temple' && <span>🗿 Temple Run 3D</span>}
                       {selectedGame === 'arrow' && <span>🎯 Arrow Puzzle</span>}
                       {selectedGame === 'tapper' && <span>⚡ Speed Tapper</span>}
-                      {selectedGame === 'tictactoe' && <span>🎮 Tic-Tac-Toe vs Computer</span>}
+                      {selectedGame === 'tictactoe' && <span>❌⭕ Tic-Tac-Toe vs Computer</span>}
                     </div>
                   </div>
 
