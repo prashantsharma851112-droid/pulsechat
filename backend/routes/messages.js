@@ -648,11 +648,11 @@ router.post('/fog-snap/screenshot', authMiddleware, async (req, res) => {
 // Get Chat Message History - ultra fast response with Redis RAM cache, non-blocking background read receipts
 router.get('/:chatId', authMiddleware, async (req, res) => {
   try {
-    const { limit, before } = req.query;
+    const { limit, before, since } = req.query;
     const redis = require('../utils/redis');
 
     // 0. Instant RAM Cache Check for initial chat opening (0.5ms response time)
-    if (!before) {
+    if (!before && !since) {
       try {
         const cached = await redis.getCachedMessages(req.params.chatId);
         if (cached && Array.isArray(cached) && cached.length > 0) {
@@ -691,11 +691,11 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
       } catch {}
     }
 
-    const messages = await db.getMessages(req.params.chatId, limit, before, req.user?.id);
+    const messages = await db.getMessages(req.params.chatId, limit, before, req.user?.id, since);
     res.json(messages);
 
     // Save to Redis RAM Cache for next instant open
-    if (!before && Array.isArray(messages) && messages.length > 0) {
+    if (!before && !since && Array.isArray(messages) && messages.length > 0) {
       redis.setCachedMessages(req.params.chatId, messages, 1800).catch(() => {});
     }
 

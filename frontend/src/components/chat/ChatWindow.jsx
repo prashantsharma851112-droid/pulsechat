@@ -2273,9 +2273,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         mergeIntoAllUsersCache(user.id, [{ ...activeChat, avatar: chatAvatar || activeChat.avatar }]);
       }
 
-      // 2. Fetch fresh messages if online (fast 50 latest limit)
+      // 2. Fetch fresh messages: WhatsApp-style Local-First Delta Sync!
+      const cached = getCachedMessages(chatId, user?.id);
+      let latestCachedTime = null;
+      if (cached && cached.length > 0) {
+        const lastMsg = cached[cached.length - 1];
+        latestCachedTime = lastMsg?.timestamp || lastMsg?.createdAt || null;
+      }
+
+      // If local cache already exists, only query messages sent AFTER latestCachedTime!
+      const queryParam = latestCachedTime 
+        ? `since=${encodeURIComponent(latestCachedTime)}` 
+        : 'limit=50';
       const isCurrentGhost = checkGhostModeActive();
-      fetch(`${BACKEND_URL}/api/messages/${chatId}?limit=50${isCurrentGhost ? '&ghost=true' : ''}`, {
+
+      fetch(`${BACKEND_URL}/api/messages/${chatId}?${queryParam}${isCurrentGhost ? '&ghost=true' : ''}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           ...(isCurrentGhost ? { 'x-ghost-mode': 'true' } : {})
@@ -2284,14 +2296,39 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
-            const noMore = localStorage.getItem(`pulsechat_nomore_${chatId}`) === 'true';
-            setHasMoreOlderMessages(!noMore && data.length >= 50);
-            const currentOutbox = getOutbox(user?.id);
-            const pendingForChat = currentOutbox.filter(m => m.chatId === chatId);
+            // Delta Sync Optimization: If cache had latest messages and server returns 0,
+            // we are 100% up-to-date locally (0ms, 0 re-render, 0 database load)!
+            if (latestCachedTime && data.length === 0) {
+              return;
+            }
 
             // Filter out any locally deleted messages
             const deletedForMe = getDeletedForMeIds(user?.id);
             const serverMsgs = data.filter(m => !deletedForMe.has(String(m.id)) && !deletedForMe.has(String(m._id)));
+
+            // If delta new messages arrived, append and merge into local IndexedDB cache
+            if (latestCachedTime && serverMsgs.length > 0) {
+              const baseNow = getCachedMessages(chatId, user?.id);
+              const deltaMap = new Map();
+              baseNow.forEach(m => deltaMap.set(m.clientTempId || m.id, m));
+              serverMsgs.forEach(m => {
+                if (m.clientTempId) deltaMap.delete(m.clientTempId);
+                if (m.tempId) deltaMap.delete(m.tempId);
+                deltaMap.set(m.id, m);
+              });
+              const deltaMerged = Array.from(deltaMap.values())
+                .sort((a, b) => new Date(a.timestamp || a.createdAt || 0) - new Date(b.timestamp || b.createdAt || 0))
+                .map(sanitizeFogSnapMessage)
+                .filter(Boolean);
+              setMessages(deltaMerged);
+              setCachedMessages(chatId, deltaMerged);
+              return;
+            }
+
+            const noMore = localStorage.getItem(`pulsechat_nomore_${chatId}`) === 'true';
+            setHasMoreOlderMessages(!noMore && data.length >= 50);
+            const currentOutbox = getOutbox(user?.id);
+            const pendingForChat = currentOutbox.filter(m => m.chatId === chatId);
             const serverIds = new Set(serverMsgs.map(m => m.id));
 
             // Retain any pending messages from outbox

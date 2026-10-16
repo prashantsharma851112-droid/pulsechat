@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, useRef, useContext, useCallb
 import { AuthContext } from './AuthContext';
 import { SocketContext } from './SocketContext';
 import { BACKEND_URL } from '../utils/config';
+import { getOrCacheAudioBlobUrl, getSyncCachedAudioUrl } from '../utils/mediaCache';
 
 export const AppMusicContext = createContext(null);
 
@@ -66,11 +67,21 @@ export function AppMusicProvider({ children }) {
       return;
     }
 
-    // Create new audio instance
-    const audio = new Audio(currentTrack.audioUrl);
+    // Spotify-style Audio Disk Cache: Check if already cached in memory or device storage (0ms, 0 byte network)
+    const cachedImmediate = getSyncCachedAudioUrl(currentTrack.audioUrl);
+    const audio = new Audio(cachedImmediate || currentTrack.audioUrl);
     audio.preload = 'metadata';
     audio.volume = isMuted ? 0 : volume;
     audio.loop = true; // App-wide background music loops cleanly
+
+    // Async cache check: if not in sync cache, check CacheStorage or cache in background
+    if (!cachedImmediate) {
+      getOrCacheAudioBlobUrl(currentTrack.audioUrl).then(blobUrl => {
+        if (blobUrl && blobUrl !== currentTrack.audioUrl && audioRef.current === audio && audio.paused) {
+          audio.src = blobUrl;
+        }
+      }).catch(() => {});
+    }
 
     audio.addEventListener('loadedmetadata', () => {
       if (audio.duration && !isNaN(audio.duration)) {

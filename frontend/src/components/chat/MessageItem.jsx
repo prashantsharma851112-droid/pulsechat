@@ -16,7 +16,7 @@ import Animated3DText from '../common/Animated3DText';
 import GiftUnboxModal from './GiftUnboxModal';
 import AnonymousStoryReplyModal from './AnonymousStoryReplyModal';
 import { getSavedQuickReactions, recordRecentReaction } from '../../utils/quickReactions';
-import { getCachedMediaUrl, getSyncCachedMediaUrl } from '../../utils/mediaCache';
+import { getCachedMediaUrl, getSyncCachedMediaUrl, getOrCacheAudioBlobUrl, getSyncCachedAudioUrl } from '../../utils/mediaCache';
 
 // In-memory set of loaded media URLs so images never flash or reload when scrolling
 const loadedMediaUrlsGlobal = new Set();
@@ -728,8 +728,17 @@ function VoiceNotePlayer({ audioUrl, isMine, voiceFilter }) {
   }, [isPlaying]);
 
   useEffect(() => {
-    const audio = new Audio(audioUrl);
+    const initialSrc = getSyncCachedAudioUrl(audioUrl) || audioUrl;
+    const audio = new Audio(initialSrc);
     audioRef.current = audio;
+
+    if (!getSyncCachedAudioUrl(audioUrl)) {
+      getOrCacheAudioBlobUrl(audioUrl).then(blobSrc => {
+        if (blobSrc && blobSrc !== audioUrl && audioRef.current === audio && audio.paused) {
+          audio.src = blobSrc;
+        }
+      }).catch(() => {});
+    }
 
     audio.onloadedmetadata = () => {
       if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
@@ -1294,8 +1303,10 @@ function MessageItem({
       audioObj.pause();
       setIsPlaying(false);
     } else {
-      const audio = audioObj || new Audio(message.audioUrl);
+      const initialSrc = getSyncCachedAudioUrl(message.audioUrl) || message.audioUrl;
+      const audio = audioObj || new Audio(initialSrc);
       if (!audioObj) setAudioObj(audio);
+      getOrCacheAudioBlobUrl(message.audioUrl).catch(() => {});
 
       audio.play().then(() => {
         setIsPlaying(true);

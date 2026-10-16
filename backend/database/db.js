@@ -44,7 +44,7 @@ module.exports = {
     return updated;
   },
 
-  getMessages: async (chatId, limit = 50, before = null, userId = null) => {
+  getMessages: async (chatId, limit = 50, before = null, userId = null, since = null) => {
     let chatQuery = chatId;
     if (chatId && typeof chatId === 'string') {
       const queryList = [chatId];
@@ -69,12 +69,15 @@ module.exports = {
     if (before) {
       query.timestamp = { $lt: before };
     }
+    if (since) {
+      query.timestamp = { $gt: since };
+    }
     const limitNum = Math.min(parseInt(limit, 10) || 50, 200);
     const msgs = await Message.find(query)
-      .sort({ timestamp: -1 })
+      .sort({ timestamp: since ? 1 : -1 })
       .limit(limitNum)
       .lean();
-    return msgs.reverse();
+    return since ? msgs : msgs.reverse();
   },
 
   saveMessage: async (msg) => {

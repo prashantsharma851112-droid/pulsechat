@@ -100,3 +100,100 @@ export function preloadMediaUrls(urls = []) {
     });
   }).catch(() => {});
 }
+
+// ==========================================
+// Spotify-Style Audio Disk Cache (CacheStorage)
+// 1. First play streams and caches audio to disk in background.
+// 2. All subsequent plays load 100% offline from phone disk with 0 bytes internet!
+// ==========================================
+const AUDIO_CACHE_NAME = 'pulsechat-audio-v1';
+const inMemoryAudioBlobCache = new Map();
+
+/**
+ * Synchronously checks if an audio blob URL is already in fast memory cache.
+ */
+export function getSyncCachedAudioUrl(remoteUrl) {
+  if (!remoteUrl || typeof remoteUrl !== 'string') return '';
+  if (remoteUrl.startsWith('data:') || remoteUrl.startsWith('blob:') || remoteUrl.startsWith('/')) {
+    return remoteUrl;
+  }
+  return inMemoryAudioBlobCache.get(remoteUrl) || '';
+}
+
+/**
+ * Returns a local cached Blob URL for an audio track or voice note.
+ * If already cached on phone disk, returns it immediately (0ms, 0 byte network).
+ * If not cached, starts background caching and returns the streaming URL.
+ */
+export async function getOrCacheAudioBlobUrl(remoteUrl) {
+  if (!remoteUrl || typeof remoteUrl !== 'string') return '';
+  if (remoteUrl.startsWith('data:') || remoteUrl.startsWith('blob:') || remoteUrl.startsWith('/')) {
+    return remoteUrl;
+  }
+
+  // 1. Fast in-memory check (0ms)
+  if (inMemoryAudioBlobCache.has(remoteUrl)) {
+    return inMemoryAudioBlobCache.get(remoteUrl);
+  }
+
+  // 2. Check device disk cache (CacheStorage API)
+  if (typeof window !== 'undefined' && 'caches' in window) {
+    try {
+      const cache = await window.caches.open(AUDIO_CACHE_NAME);
+      const match = await cache.match(remoteUrl);
+      if (match) {
+        const blob = await match.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        inMemoryAudioBlobCache.set(remoteUrl, blobUrl);
+        return blobUrl;
+      }
+
+      // 3. Not in disk cache: Stream remote URL now & cache in background for future plays
+      fetch(remoteUrl, { mode: 'cors' })
+        .then(async (response) => {
+          if (response && response.ok) {
+            try {
+              await cache.put(remoteUrl, response.clone());
+              const blob = await response.blob();
+              const blobUrl = URL.createObjectURL(blob);
+              inMemoryAudioBlobCache.set(remoteUrl, blobUrl);
+            } catch (_) {}
+          }
+        })
+        .catch(() => {});
+    } catch (_) {}
+  }
+
+  return remoteUrl;
+}
+
+/**
+ * Background preloads audio files into local disk cache (Spotify offline download style).
+ */
+export function preloadAudioUrls(urls = []) {
+  if (typeof window === 'undefined' || !('caches' in window) || !Array.isArray(urls)) return;
+
+  window.caches.open(AUDIO_CACHE_NAME).then((cache) => {
+    urls.forEach((url) => {
+      if (url && typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+        if (!inMemoryAudioBlobCache.has(url)) {
+          cache.match(url).then((matched) => {
+            if (!matched) {
+              fetch(url, { mode: 'cors' })
+                .then(async (res) => {
+                  if (res && res.ok) {
+                    try {
+                      await cache.put(url, res.clone());
+                      const blob = await res.blob();
+                      inMemoryAudioBlobCache.set(url, URL.createObjectURL(blob));
+                    } catch (_) {}
+                  }
+                })
+                .catch(() => {});
+            }
+          }).catch(() => {});
+        }
+      }
+    });
+  }).catch(() => {});
+}
