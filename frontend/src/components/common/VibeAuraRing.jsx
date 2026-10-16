@@ -51,6 +51,18 @@ export function resolveUserAura(userObj, vibeAuras) {
   return null;
 }
 
+export function getProAuraRingClass(aura, isUserPro = false) {
+  if (!aura) return isUserPro ? 'pro-neon-avatar' : '';
+  const isExpired = aura.trialExpiresAt && Date.now() > Number(aura.trialExpiresAt);
+  if (isExpired || aura.cleared || aura.auraType === 'none') {
+    return isUserPro ? 'pro-neon-avatar' : '';
+  }
+  if (aura.auraType === 'dragon_glow') return 'pro-neon-avatar pro-neon-dragon';
+  if (aura.auraType === 'neon_flame') return 'pro-neon-avatar pro-neon-flame';
+  if (aura.auraType === 'cyber_neon') return 'pro-neon-avatar';
+  return isUserPro ? 'pro-neon-avatar' : '';
+}
+
 export default function VibeAuraRing({
   children,
   auraData,
@@ -94,13 +106,14 @@ export default function VibeAuraRing({
     inGame
   } = effectiveAura;
 
+  const isNeonRingAura = auraType === 'dragon_glow' || auraType === 'cyber_neon' || auraType === 'neon_flame';
+
   // Determine glow color: if specific auraColor is set, use it; if isLowBattery, use amber/red; if inGame, cyan
   const ringColor = (isLowBattery && batteryLevel && batteryLevel <= 20)
     ? '#ef4444'
     : (isLowBattery ? '#f59e0b' : (inGame ? '#06b6d4' : (auraColor || '#a855f7')));
 
   // Calculate top offset for Instagram-style thought note bubble
-  // Compact offset so it hugs the avatar closely and never clips above the screen
   const noteTop = hasCrown
     ? (size >= 80 ? '-26px' : '-20px')
     : (size >= 80 ? '-20px' : '-15px');
@@ -114,37 +127,21 @@ export default function VibeAuraRing({
         cursor: onClick ? 'pointer' : 'default'
       }}
     >
-      {/* Animated Aura Glow Ring */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: -3.5,
-          borderRadius: isGroup ? '14px' : '50%',
-          border: auraType === 'dragon_glow'
-            ? '2.5px solid #f59e0b'
-            : (auraType === 'neon_flame'
-              ? '2.5px solid #ff0055'
-              : (auraType === 'cyber_neon'
-                ? '2.5px solid #a855f7'
-                : `2px solid ${ringColor}`)),
-          boxShadow: auraType === 'dragon_glow'
-            ? '0 0 14px #f59e0b, 0 0 28px #ef4444, inset 0 0 6px #ffd700'
-            : (auraType === 'neon_flame'
-              ? '0 0 14px #ff0055, 0 0 28px #ff5500, inset 0 0 6px #ffaa00'
-              : (auraType === 'cyber_neon'
-                ? '0 0 14px #ec4899, 0 0 28px #06b6d4, inset 0 0 6px #a855f7'
-                : `0 0 10px ${ringColor}, inset 0 0 5px ${ringColor}`)),
-          animation: auraType === 'dragon_glow'
-            ? 'dragonGlowFlicker 1.4s infinite ease-in-out'
-            : (auraType === 'neon_flame'
-              ? 'neonFlameFlicker 1.4s infinite ease-in-out'
-              : (auraType === 'cyber_neon'
-                ? 'cyberNeonRainbow 2s infinite ease-in-out'
-                : 'vibeAuraPulse 2s infinite ease-in-out')),
-          pointerEvents: 'none',
-          zIndex: 1
-        }}
-      />
+      {/* Animated Aura Glow Ring (only for non-neon-ring auras e.g. low battery or custom mood) */}
+      {!isNeonRingAura && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: -3.5,
+            borderRadius: isGroup ? '14px' : '50%',
+            border: `2px solid ${ringColor}`,
+            boxShadow: `0 0 10px ${ringColor}, inset 0 0 5px ${ringColor}`,
+            animation: 'vibeAuraPulse 2s infinite ease-in-out',
+            pointerEvents: 'none',
+            zIndex: 1
+          }}
+        />
+      )}
 
       {/* Avatar Children */}
       <div style={{ position: 'relative', zIndex: 2, borderRadius: isGroup ? '12px' : '50%', overflow: 'visible' }}>

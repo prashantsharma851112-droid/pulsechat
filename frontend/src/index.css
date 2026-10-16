@@ -1827,6 +1827,83 @@ input, textarea {
   z-index: 3 !important;
 }
 
+/* --- DRAGON FURY VIP RING --- */
+.pro-neon-dragon::before {
+  background: conic-gradient(
+    #ffd700 0deg,
+    #f59e0b 45deg,
+    #ef4444 90deg,
+    #7f1d1d 150deg,
+    #f59e0b 210deg,
+    #ffd700 270deg,
+    #ef4444 330deg,
+    #ffd700 360deg
+  ) !important;
+  animation: dragonNeonSpin 2.6s linear infinite !important;
+  box-shadow: 0 0 12px #f59e0b, 0 0 24px #ef4444;
+}
+
+.pro-neon-dragon::after {
+  background: conic-gradient(
+    #ffd700 0deg,
+    #ef4444 90deg,
+    #f59e0b 180deg,
+    #b91c1c 270deg,
+    #ffd700 360deg
+  ) !important;
+  filter: blur(8px) !important;
+  opacity: 0.95 !important;
+  animation: dragonNeonSpin 2.6s linear infinite, dragonFlameFlicker 1.8s ease-in-out infinite alternate !important;
+}
+
+@keyframes dragonNeonSpin {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.02); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+@keyframes dragonFlameFlicker {
+  0% { opacity: 0.75; filter: blur(6px); }
+  50% { opacity: 1; filter: blur(10px); }
+  100% { opacity: 0.85; filter: blur(7px); }
+}
+
+/* --- NEON FLAME STREAK RING --- */
+.pro-neon-flame::before {
+  background: conic-gradient(
+    #ff0055 0deg,
+    #ff5500 70deg,
+    #ff007f 140deg,
+    #f97316 220deg,
+    #ff0055 300deg,
+    #ff3b00 360deg
+  ) !important;
+  animation: flameNeonSpin 2.2s linear infinite !important;
+  box-shadow: 0 0 12px #ff0055, 0 0 22px #ff5500;
+}
+
+.pro-neon-flame::after {
+  background: conic-gradient(
+    #ff0055 0deg,
+    #ff5500 120deg,
+    #ff007f 240deg,
+    #ff0055 360deg
+  ) !important;
+  filter: blur(8px) !important;
+  opacity: 0.95 !important;
+  animation: flameNeonSpin 2.2s linear infinite, flameFlicker 1.5s ease-in-out infinite alternate !important;
+}
+
+@keyframes flameNeonSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes flameFlicker {
+  0% { opacity: 0.75; filter: blur(6px); }
+  100% { opacity: 1; filter: blur(10px); }
+}
+
 /* --- 3D ANIMATED STICKERS STYLES --- */
 .sticker-3d-container {
   display: flex;

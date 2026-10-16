@@ -7,9 +7,8 @@ import SparksFeaturePromptModal from '../common/SparksFeaturePromptModal';
 const LIVE_WALLPAPERS = [
   {
     id: 'ocean_waves_live',
-    name: '🌊 Deep Ocean (Live Bubbles)',
+    name: '🌊 Deep Ocean',
     category: 'Sea & Sky',
-    tag: '✨ Live Sea Waves & Water Bubbles (FREE)',
     previewBg: 'linear-gradient(135deg, #0c4a6e, #082f49)',
     accent: '#0ea5e9',
     icon: <Waves size={16} color="#0ea5e9" />,
@@ -17,9 +16,8 @@ const LIVE_WALLPAPERS = [
   },
   {
     id: 'nature_forest_live',
-    name: '🌿 Emerald Nature (Live Leaves)',
+    name: '🌿 Emerald Nature',
     category: 'Nature & Forest',
-    tag: '✨ Live Falling Golden Leaves (FREE)',
     previewBg: 'linear-gradient(135deg, #064e3b, #022c22)',
     accent: '#10b981',
     icon: <Trees size={16} color="#10b981" />,
@@ -27,9 +25,8 @@ const LIVE_WALLPAPERS = [
   },
   {
     id: 'love_hearts_live',
-    name: '💖 Couple Love (Live Hearts)',
+    name: '💖 Couple Love',
     category: 'Love & Couples',
-    tag: '✨ Live Floating Pink Hearts',
     previewBg: 'linear-gradient(135deg, #831843, #500724)',
     accent: '#ec4899',
     icon: <Heart size={16} color="#ec4899" />,
@@ -37,9 +34,8 @@ const LIVE_WALLPAPERS = [
   },
   {
     id: 'matrix_code_live',
-    name: '🟢 Matrix Rain (Live Code)',
+    name: '🟢 Matrix Rain',
     category: 'Cyber & Hacker',
-    tag: '✨ Live Falling Digital Matrix Rain',
     previewBg: 'linear-gradient(135deg, #022c22, #001a0e)',
     accent: '#10b981',
     icon: <Sparkles size={16} color="#10b981" />,
@@ -47,9 +43,8 @@ const LIVE_WALLPAPERS = [
   },
   {
     id: 'starry_galaxy_live',
-    name: '🌌 Starry Galaxy (Live Cosmos)',
+    name: '🌌 Starry Galaxy',
     category: 'Cosmic & Space',
-    tag: '✨ Live Floating Twinkling Stars',
     previewBg: 'linear-gradient(135deg, #1e1b4b, #0f0e26)',
     accent: '#818cf8',
     icon: <Sparkles size={16} color="#818cf8" />,
@@ -57,9 +52,8 @@ const LIVE_WALLPAPERS = [
   },
   {
     id: 'firefly_night_live',
-    name: '💡 Firefly Night (Live Glow)',
+    name: '💡 Firefly Night',
     category: 'Nature & Glow',
-    tag: '✨ Live Glowing Golden Fireflies',
     previewBg: 'linear-gradient(135deg, #2d2600, #141100)',
     accent: '#eab308',
     icon: <Sparkles size={16} color="#eab308" />,
@@ -67,9 +61,8 @@ const LIVE_WALLPAPERS = [
   },
   {
     id: 'cyber_grid_live',
-    name: '⚡ Synthwave Grid (Live Cyber)',
+    name: '⚡ Synthwave Grid',
     category: 'Cosmic & Cyber',
-    tag: '✨ Live Synth Grid & Stardust',
     previewBg: 'linear-gradient(135deg, #581c87, #3b0764)',
     accent: '#a855f7',
     icon: <Zap size={16} color="#a855f7" />,
@@ -356,14 +349,14 @@ export default function ChatThemeModal({
                           background: w.previewBg,
                           border: isCurrent ? '2px solid #ec4899' : (w.isPro ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border)'),
                           position: 'relative',
-                          padding: '14px 16px',
-                          borderRadius: '16px',
+                          padding: '12px 14px',
+                          borderRadius: '14px',
                           cursor: 'pointer',
                           boxShadow: '0 4px 14px rgba(0,0,0,0.3)'
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div style={{ fontSize: '0.90rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             {w.icon}
                             <span>{w.name}</span>
                             {w.isPro && <Crown size={14} color="#f59e0b" />}
@@ -380,9 +373,6 @@ export default function ChatThemeModal({
                               <Lock size={15} color="#f59e0b" />
                             </div>
                           ) : null}
-                        </div>
-                        <div style={{ fontSize: '0.76rem', color: 'rgba(255, 255, 255, 0.85)', marginTop: '4px', fontWeight: 600 }}>
-                          {w.tag}
                         </div>
                       </div>
                     );

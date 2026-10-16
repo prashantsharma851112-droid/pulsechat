@@ -4,7 +4,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
 import PulseVipBadge from '../common/PulseVipBadge';
-import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
+import VibeAuraRing, { resolveUserAura, getProAuraRingClass } from '../common/VibeAuraRing';
 import { getCachedAllUsers, getCachedFriends, setCachedFriends, getCachedMessages } from '../../utils/offlineStorage';
 import ChatManageStorageModal, { formatStorageSize, estimateMessageSize } from './ChatManageStorageModal';
 import PinLockModal from '../common/PinLockModal';
@@ -492,7 +492,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
         <div style={{ padding: '0 1.5rem 2.5rem 1.5rem', marginTop: '-50px', textAlign: 'center', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {/* Avatar with Clickable Full DP trigger */}
           <div
-            className={userToDisplay?.isPro ? 'pro-neon-avatar pro-neon-avatar-lg' : ''}
+            className={`${getProAuraRingClass(userAura, userToDisplay?.isPro)} ${getProAuraRingClass(userAura, userToDisplay?.isPro) ? 'pro-neon-avatar-lg' : ''}`.trim()}
             style={{ position: 'relative', display: 'inline-block', marginBottom: '0.75rem' }}
           >
             {userToDisplay?.hasKingCrown ? (

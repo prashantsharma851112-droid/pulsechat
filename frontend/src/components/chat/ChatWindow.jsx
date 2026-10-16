@@ -6,7 +6,7 @@ import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
 import ChatLiveWallpaper from './ChatLiveWallpaper';
-import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
+import VibeAuraRing, { resolveUserAura, getProAuraRingClass } from '../common/VibeAuraRing';
 import PulseVipBadge from '../common/PulseVipBadge';
 import { recordRecentReaction } from '../../utils/quickReactions';
 import { uploadMediaDirect, compressImageOnDevice } from '../../utils/mediaUpload';
@@ -5031,7 +5031,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
             <VibeAuraRing aura={partnerAura} size={42} isGroup={isGroup} hasCrown={Boolean(!isGroup && (chatHasKingCrown || chatHasSilverCrown || chatHasStreakCrown))}>
               <div
-                className={!isGroup && chatIsPro ? 'pro-neon-avatar' : ''}
+                className={!isGroup ? getProAuraRingClass(partnerAura, chatIsPro) : ''}
                 style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
               >
                 {!isGroup && chatHasKingCrown ? (

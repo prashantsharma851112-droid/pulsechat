@@ -6,7 +6,7 @@ import FriendsTab from './FriendsTab';
 import { useBackHandler } from '../../utils/backNavigation';
 import PulseVipBadge from '../common/PulseVipBadge';
 import PulseVibesBar from '../vibes/PulseVibesBar';
-import VibeAuraRing, { resolveUserAura } from '../common/VibeAuraRing';
+import VibeAuraRing, { resolveUserAura, getProAuraRingClass } from '../common/VibeAuraRing';
 import { Gamepad2 } from 'lucide-react';
 import { useAppMusic } from '../../context/AppMusicContext';
 
@@ -1777,7 +1777,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           <div style={{ position: 'relative', flexShrink: 0, padding: '4px 3px 3px 4px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', overflow: 'visible' }}>
             <VibeAuraRing aura={myAura} size={44} hasCrown={Boolean(user?.hasKingCrown || user?.hasSilverCrown || user?.hasStreakCrown)}>
               <div
-                className={user?.isPro ? 'pro-neon-avatar' : ''}
+                className={getProAuraRingClass(myAura, user?.isPro)}
                 style={{ position: 'relative', flexShrink: 0 }}
               onClick={(e) => {
                 e.stopPropagation();
@@ -2587,7 +2587,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 >
                   <VibeAuraRing aura={searchAura} size={48} hasCrown={Boolean(u.hasKingCrown || u.hasSilverCrown || u.hasStreakCrown)} isGroup={u.isGroup}>
                     <div
-                      className={!u.isGroup && u.isPro ? 'pro-neon-avatar' : ''}
+                      className={!u.isGroup ? getProAuraRingClass(searchAura, u.isPro) : ''}
                       style={{ position: 'relative', flexShrink: 0 }}
                     >
                       {!u.isGroup && u.hasKingCrown ? (
@@ -2789,7 +2789,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                   >
                     <VibeAuraRing aura={friendAura} size={48} isGroup={u.isGroup} hasCrown={Boolean(u.hasKingCrown || u.hasSilverCrown || u.hasStreakCrown)}>
                       <div
-                        className={u.isPro ? 'pro-neon-avatar' : ''}
+                        className={!u.isGroup ? getProAuraRingClass(friendAura, u.isPro) : ''}
                         style={{ position: 'relative', flexShrink: 0 }}
                       >
                         {u.hasKingCrown ? (
@@ -3024,7 +3024,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                   >
                     <VibeAuraRing aura={contactAura} size={48} hasCrown={Boolean(u.hasKingCrown || u.hasSilverCrown || u.hasStreakCrown)}>
                       <div
-                        className={u.isPro ? 'pro-neon-avatar' : ''}
+                        className={getProAuraRingClass(contactAura, u.isPro)}
                         style={{ position: 'relative', flexShrink: 0 }}
                       >
                         {u.hasKingCrown ? (

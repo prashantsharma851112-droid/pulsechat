@@ -17,6 +17,7 @@ import PulseVipBadge from '../common/PulseVipBadge';
 import AppFeatureTourModal from '../common/AppFeatureTourModal';
 import LegalModal from '../common/LegalModal';
 import ChangePasswordForm from './ChangePasswordForm';
+import { getProAuraRingClass } from '../common/VibeAuraRing';
 import { useBackHandler } from '../../utils/backNavigation';
 import { DISGUISE_PRESETS, getAppDisguise, applyAppDisguise } from '../../utils/appDisguise';
 import PinLockModal from '../common/PinLockModal';
@@ -607,7 +608,7 @@ export default function SettingsModal({
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
                   <div
-                    className={user?.isPro ? 'pro-neon-avatar' : ''}
+                    className={getProAuraRingClass(user?.vibeAura, user?.isPro)}
                     style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
                   >
                     {user?.hasKingCrown ? (
