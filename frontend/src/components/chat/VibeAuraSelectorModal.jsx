@@ -138,7 +138,8 @@ export default function VibeAuraSelectorModal({
       isLowBattery: hasBattery,
       batteryLevel: hasBattery ? (detectedBattery !== null ? detectedBattery : 20) : null,
       inGame: trimmedMood.includes('Temple Run') ? 'Temple Run 3D' : '',
-      music: attachedSong || null
+      music: attachedSong || null,
+      isPro: Boolean(user?.isPro || user?.isAdmin)
     };
 
     if (socket) {

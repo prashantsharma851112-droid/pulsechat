@@ -747,14 +747,14 @@ module.exports = {
   },
 
   getChatSetting: async (rawChatId) => {
-    if (!rawChatId) return { disappearingEnabled: false, disappearingDuration: 86400, wallpaperId: 'none', customWallpaperUrl: null, chatTheme: 'midnight_amoled', nicknames: {}, vanishMode: false };
+    if (!rawChatId) return { disappearingEnabled: false, disappearingDuration: 86400, wallpaperId: 'none', customWallpaperUrl: null, chatTheme: 'midnight_amoled', nicknames: {}, vanishMode: false, themeTrialExpiresAt: null, wallpaperTrialExpiresAt: null };
     const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
     let query = { chatId: canonicalChatId };
     if (rawChatId.includes('_')) {
       const parts = rawChatId.split('_');
       query = { $or: [{ chatId: canonicalChatId }, { chatId: rawChatId }, { chatId: `${parts[1]}_${parts[0]}` }] };
     }
-    let setting = await ChatSetting.findOne(query).lean();
+    let setting = await ChatSetting.findOne(query);
     if (!setting) {
       setting = {
         chatId: canonicalChatId,
@@ -764,9 +764,28 @@ module.exports = {
         customWallpaperUrl: null,
         chatTheme: 'midnight_amoled',
         nicknames: {},
-        vanishMode: false
+        vanishMode: false,
+        themeTrialExpiresAt: null,
+        wallpaperTrialExpiresAt: null
       };
     } else {
+      const now = Date.now();
+      let needsSave = false;
+      if (setting.themeTrialExpiresAt && now >= new Date(setting.themeTrialExpiresAt).getTime()) {
+        setting.chatTheme = 'midnight_amoled';
+        setting.themeTrialExpiresAt = null;
+        needsSave = true;
+      }
+      if (setting.wallpaperTrialExpiresAt && now >= new Date(setting.wallpaperTrialExpiresAt).getTime()) {
+        setting.wallpaperId = 'none';
+        setting.customWallpaperUrl = null;
+        setting.wallpaperTrialExpiresAt = null;
+        needsSave = true;
+      }
+      if (needsSave) {
+        await setting.save().catch(() => {});
+      }
+      setting = setting.toObject ? setting.toObject() : setting;
       if (!setting.nicknames) setting.nicknames = {};
       setting.vanishMode = Boolean(setting.vanishMode);
     }
@@ -876,7 +895,7 @@ module.exports = {
     return deletedIds;
   },
 
-  setChatWallpaper: async (rawChatId, wallpaperId, customWallpaperUrl, userId) => {
+  setChatWallpaper: async (rawChatId, wallpaperId, customWallpaperUrl, userId, trialExpiresAt = null) => {
     if (!rawChatId) return null;
     const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
     let query = { chatId: canonicalChatId };
@@ -884,6 +903,7 @@ module.exports = {
       const parts = rawChatId.split('_');
       query = { $or: [{ chatId: canonicalChatId }, { chatId: rawChatId }, { chatId: `${parts[1]}_${parts[0]}` }] };
     }
+    const finalExpiresAt = trialExpiresAt ? new Date(trialExpiresAt) : null;
     let setting = await ChatSetting.findOne(query);
     if (!setting) {
       try {
@@ -891,6 +911,7 @@ module.exports = {
           chatId: canonicalChatId,
           wallpaperId: wallpaperId || 'none',
           customWallpaperUrl: customWallpaperUrl || null,
+          wallpaperTrialExpiresAt: finalExpiresAt,
           updatedAt: new Date(),
           updatedBy: userId || ''
         });
@@ -899,6 +920,7 @@ module.exports = {
         if (setting) {
           setting.wallpaperId = wallpaperId || 'none';
           setting.customWallpaperUrl = customWallpaperUrl || null;
+          setting.wallpaperTrialExpiresAt = finalExpiresAt;
           setting.updatedAt = new Date();
           setting.updatedBy = userId || '';
           await setting.save();
@@ -908,14 +930,15 @@ module.exports = {
       setting.chatId = canonicalChatId;
       setting.wallpaperId = wallpaperId || 'none';
       setting.customWallpaperUrl = customWallpaperUrl || null;
+      setting.wallpaperTrialExpiresAt = finalExpiresAt;
       setting.updatedAt = new Date();
       setting.updatedBy = userId || '';
       await setting.save();
     }
-    return setting ? (setting.toObject ? setting.toObject() : setting) : { chatId: canonicalChatId, wallpaperId: wallpaperId || 'none', customWallpaperUrl };
+    return setting ? (setting.toObject ? setting.toObject() : setting) : { chatId: canonicalChatId, wallpaperId: wallpaperId || 'none', customWallpaperUrl, wallpaperTrialExpiresAt: finalExpiresAt };
   },
 
-  setChatTheme: async (rawChatId, themeId, userId) => {
+  setChatTheme: async (rawChatId, themeId, userId, trialExpiresAt = null) => {
     if (!rawChatId) return null;
     const canonicalChatId = (rawChatId && rawChatId.includes('_')) ? rawChatId.split('_').sort().join('_') : rawChatId;
     let query = { chatId: canonicalChatId };
@@ -923,12 +946,14 @@ module.exports = {
       const parts = rawChatId.split('_');
       query = { $or: [{ chatId: canonicalChatId }, { chatId: rawChatId }, { chatId: `${parts[1]}_${parts[0]}` }] };
     }
+    const finalExpiresAt = trialExpiresAt ? new Date(trialExpiresAt) : null;
     let setting = await ChatSetting.findOne(query);
     if (!setting) {
       try {
         setting = await ChatSetting.create({
           chatId: canonicalChatId,
           chatTheme: themeId || 'midnight_amoled',
+          themeTrialExpiresAt: finalExpiresAt,
           updatedAt: new Date(),
           updatedBy: userId || ''
         });
@@ -936,6 +961,7 @@ module.exports = {
         setting = await ChatSetting.findOne({ chatId: canonicalChatId });
         if (setting) {
           setting.chatTheme = themeId || 'midnight_amoled';
+          setting.themeTrialExpiresAt = finalExpiresAt;
           setting.updatedAt = new Date();
           setting.updatedBy = userId || '';
           await setting.save();
@@ -944,11 +970,12 @@ module.exports = {
     } else {
       setting.chatId = canonicalChatId;
       setting.chatTheme = themeId || 'midnight_amoled';
+      setting.themeTrialExpiresAt = finalExpiresAt;
       setting.updatedAt = new Date();
       setting.updatedBy = userId || '';
       await setting.save();
     }
-    return setting ? (setting.toObject ? setting.toObject() : setting) : { chatId: canonicalChatId, chatTheme: themeId || 'midnight_amoled' };
+    return setting ? (setting.toObject ? setting.toObject() : setting) : { chatId: canonicalChatId, chatTheme: themeId || 'midnight_amoled', themeTrialExpiresAt: finalExpiresAt };
   },
 
   setChatNickname: async (rawChatId, targetUserId, nickname, userId) => {

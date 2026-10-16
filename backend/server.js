@@ -1297,15 +1297,37 @@ io.on('connection', (socket) => {
   });
 
   // Chat Live & Custom Wallpaper Real-Time Synchronization
+  // Chat Live & Custom Wallpaper Real-Time Synchronization
   socket.on('set_chat_wallpaper', async (data) => {
     if (!data) return;
-    const { chatId, wallpaperId, customWallpaperUrl, customImage, userId, setBy } = data;
+    const { chatId, wallpaperId, customWallpaperUrl, customImage, userId, setBy, isTrial, trialExpiresAt } = data;
     const finalCustomUrl = customWallpaperUrl || customImage || null;
-    const finalUserId = userId || setBy || null;
+    const finalUserId = userId || setBy || socket.userId || null;
+
+    let userIsPro = Boolean(socket.userIsPro);
+    if (!userIsPro && finalUserId) {
+      try {
+        const mongoose = require('mongoose');
+        const isObjectId = mongoose.Types.ObjectId.isValid(finalUserId);
+        const userConditions = [
+          { id: String(finalUserId) },
+          { username: String(finalUserId) }
+        ];
+        if (isObjectId) userConditions.push({ _id: finalUserId });
+        const u = await User.findOne({ $or: userConditions }).select('isPro proExpiresAt isAdmin').lean();
+        if (u && (u.isAdmin || (u.isPro && (!u.proExpiresAt || new Date(u.proExpiresAt) > new Date())))) {
+          userIsPro = true;
+        }
+      } catch (e) {}
+    }
+
+    const calculatedTrialExpiresAt = (!userIsPro && (isTrial || trialExpiresAt))
+      ? (Number(trialExpiresAt) || (Date.now() + 5 * 60 * 1000))
+      : null;
 
     let setting = null;
     try {
-      setting = await db.setChatWallpaper(chatId, wallpaperId, finalCustomUrl, finalUserId);
+      setting = await db.setChatWallpaper(chatId, wallpaperId, finalCustomUrl, finalUserId, calculatedTrialExpiresAt);
     } catch (e) {
       console.error('Error saving chat wallpaper to database:', e);
     }
@@ -1317,7 +1339,9 @@ io.on('connection', (socket) => {
       customWallpaperUrl: setting?.customWallpaperUrl || finalCustomUrl,
       customImage: setting?.customWallpaperUrl || finalCustomUrl,
       userId: finalUserId,
-      setBy: finalUserId
+      setBy: finalUserId,
+      isTrial: Boolean(calculatedTrialExpiresAt),
+      trialExpiresAt: calculatedTrialExpiresAt
     };
 
     io.to(chatId).emit('chat_wallpaper_updated', payload);
@@ -1332,14 +1356,65 @@ io.on('connection', (socket) => {
         io.to(uId).emit('chat_wallpaper_updated', payload);
       });
     }
+
+    // Server-side trial auto-expiration timer for 5-minute preview
+    if (calculatedTrialExpiresAt) {
+      const waitMs = Math.max(1000, calculatedTrialExpiresAt - Date.now());
+      setTimeout(async () => {
+        const curSetting = await db.getChatSetting(chatId);
+        if (curSetting && curSetting.wallpaperId === wallpaperId) {
+          const resetSetting = await db.setChatWallpaper(chatId, 'none', null, finalUserId, null);
+          const resetPayload = {
+            chatId: resetSetting?.chatId || chatId,
+            originalChatId: chatId,
+            wallpaperId: 'none',
+            customWallpaperUrl: null,
+            customImage: null,
+            userId: finalUserId,
+            setBy: 'system',
+            trialExpired: true
+          };
+          io.to(chatId).emit('chat_wallpaper_updated', resetPayload);
+          if (chatId.includes('_')) {
+            const parts = chatId.split('_');
+            io.to(`${parts[1]}_${parts[0]}`).emit('chat_wallpaper_updated', resetPayload);
+            parts.forEach(uId => {
+              io.to(`user_${uId}`).emit('chat_wallpaper_updated', resetPayload);
+              io.to(uId).emit('chat_wallpaper_updated', resetPayload);
+            });
+          }
+        }
+      }, waitMs);
+    }
   });
 
   // Chat Solid Color Theme Real-Time Synchronization
-  socket.on('set_chat_theme', async ({ chatId, themeId, setBy, userId }) => {
-    const finalUserId = userId || setBy || null;
+  socket.on('set_chat_theme', async ({ chatId, themeId, setBy, userId, isTrial, trialExpiresAt }) => {
+    const finalUserId = userId || setBy || socket.userId || null;
+    let userIsPro = Boolean(socket.userIsPro);
+    if (!userIsPro && finalUserId) {
+      try {
+        const mongoose = require('mongoose');
+        const isObjectId = mongoose.Types.ObjectId.isValid(finalUserId);
+        const userConditions = [
+          { id: String(finalUserId) },
+          { username: String(finalUserId) }
+        ];
+        if (isObjectId) userConditions.push({ _id: finalUserId });
+        const u = await User.findOne({ $or: userConditions }).select('isPro proExpiresAt isAdmin').lean();
+        if (u && (u.isAdmin || (u.isPro && (!u.proExpiresAt || new Date(u.proExpiresAt) > new Date())))) {
+          userIsPro = true;
+        }
+      } catch (e) {}
+    }
+
+    const calculatedTrialExpiresAt = (!userIsPro && (isTrial || trialExpiresAt))
+      ? (Number(trialExpiresAt) || (Date.now() + 5 * 60 * 1000))
+      : null;
+
     let setting = null;
     try {
-      setting = await db.setChatTheme(chatId, themeId, finalUserId);
+      setting = await db.setChatTheme(chatId, themeId, finalUserId, calculatedTrialExpiresAt);
     } catch (e) {
       console.error('Error saving chat theme to database:', e);
     }
@@ -1348,7 +1423,9 @@ io.on('connection', (socket) => {
       chatId: setting?.chatId || chatId,
       originalChatId: chatId,
       themeId: setting?.chatTheme || themeId,
-      setBy: finalUserId
+      setBy: finalUserId,
+      isTrial: Boolean(calculatedTrialExpiresAt),
+      trialExpiresAt: calculatedTrialExpiresAt
     };
     io.to(chatId).emit('chat_theme_updated', payload);
     if (setting?.chatId && setting.chatId !== chatId) {
@@ -1361,6 +1438,33 @@ io.on('connection', (socket) => {
         io.to(`user_${uId}`).emit('chat_theme_updated', payload);
         io.to(uId).emit('chat_theme_updated', payload);
       });
+    }
+
+    // Server-side trial auto-expiration timer for 5-minute theme preview
+    if (calculatedTrialExpiresAt) {
+      const waitMs = Math.max(1000, calculatedTrialExpiresAt - Date.now());
+      setTimeout(async () => {
+        const curSetting = await db.getChatSetting(chatId);
+        if (curSetting && curSetting.chatTheme === themeId) {
+          const resetSetting = await db.setChatTheme(chatId, 'midnight_amoled', finalUserId, null);
+          const resetPayload = {
+            chatId: resetSetting?.chatId || chatId,
+            originalChatId: chatId,
+            themeId: 'midnight_amoled',
+            setBy: 'system',
+            trialExpired: true
+          };
+          io.to(chatId).emit('chat_theme_updated', resetPayload);
+          if (chatId.includes('_')) {
+            const parts = chatId.split('_');
+            io.to(`${parts[1]}_${parts[0]}`).emit('chat_theme_updated', resetPayload);
+            parts.forEach(uId => {
+              io.to(`user_${uId}`).emit('chat_theme_updated', resetPayload);
+              io.to(uId).emit('chat_theme_updated', resetPayload);
+            });
+          }
+        }
+      }, waitMs);
     }
   });
 
@@ -1474,7 +1578,14 @@ io.on('connection', (socket) => {
     if (socket.userMongoId) userVibeAuras.delete(String(socket.userMongoId));
     if (socket.userUsername) userVibeAuras.delete(String(socket.userUsername));
     try {
-      await User.updateOne({ $or: [{ id: strId }, { username: strId }] }, { $unset: { vibeAura: 1 } });
+      const mongoose = require('mongoose');
+      const isObjectId = mongoose.Types.ObjectId.isValid(strId);
+      const clearConditions = [
+        { id: strId },
+        { username: strId }
+      ];
+      if (isObjectId) clearConditions.push({ _id: strId });
+      await User.updateOne({ $or: clearConditions }, { $unset: { vibeAura: 1 } });
     } catch (e) {}
 
     redis.invalidateUser(strId).catch(() => {});
@@ -1518,18 +1629,34 @@ io.on('connection', (socket) => {
     const hasLowBattery = Boolean(auraData.isLowBattery);
     const resolvedUsername = socket.userUsername || auraData.username || '';
 
-    // Check if user is Pro
-    let userIsPro = false;
+    // Check if user is Pro VIP
+    let userIsPro = Boolean(socket.userIsPro);
     try {
-      const uDoc = await User.findOne({ $or: [{ id: auraData.userId }, { username: auraData.userId }] }).select('isPro proExpiresAt').lean();
-      if (uDoc && uDoc.isPro && (!uDoc.proExpiresAt || new Date(uDoc.proExpiresAt) > new Date())) {
+      const mongoose = require('mongoose');
+      const isObjectId = mongoose.Types.ObjectId.isValid(auraData.userId);
+      const userConditions = [
+        { id: String(auraData.userId) },
+        { username: String(auraData.userId) }
+      ];
+      if (isObjectId) userConditions.push({ _id: auraData.userId });
+      if (socket.userId) userConditions.push({ id: String(socket.userId) });
+      if (socket.userMongoId) userConditions.push({ _id: socket.userMongoId });
+      if (socket.userUsername) userConditions.push({ username: socket.userUsername });
+
+      const uDoc = await User.findOne({ $or: userConditions }).select('isPro proExpiresAt isAdmin').lean();
+      if (uDoc && (uDoc.isAdmin || (uDoc.isPro && (!uDoc.proExpiresAt || new Date(uDoc.proExpiresAt) > new Date())))) {
         userIsPro = true;
       }
     } catch (e) {}
 
-    // VIP auras (dragon_glow, cyber_neon) for non-pro users are ALWAYS 5-min trials!
+    if (auraData.isPro && !auraData.isTrial) {
+      userIsPro = true;
+    }
+
+    // VIP auras (dragon_glow, cyber_neon) for non-pro users are 5-min trials!
+    // BUT for Pro VIP members (or streak unlocked), it is PERMANENT and NEVER expires!
     const isVipAura = auraData.auraType === 'dragon_glow' || auraData.auraType === 'cyber_neon';
-    const isTrial = Boolean(auraData.isTrial || auraData.trialExpiresAt || (isVipAura && !userIsPro));
+    const isTrial = userIsPro ? Boolean(auraData.isTrial && auraData.trialExpiresAt) : Boolean(auraData.isTrial || auraData.trialExpiresAt || isVipAura);
     const trialExpiresAt = isTrial ? (Number(auraData.trialExpiresAt) || (Date.now() + 5 * 60 * 1000)) : null;
 
     const clean = {
@@ -1552,7 +1679,14 @@ io.on('connection', (socket) => {
     if (socket.userMongoId) userVibeAuras.set(String(socket.userMongoId), clean);
 
     try {
-      await User.updateOne({ $or: [{ id: auraData.userId }, { username: auraData.userId }] }, { vibeAura: clean });
+      const mongoose = require('mongoose');
+      const isObjectId = mongoose.Types.ObjectId.isValid(auraData.userId);
+      const updateConditions = [
+        { id: String(auraData.userId) },
+        { username: String(auraData.userId) }
+      ];
+      if (isObjectId) updateConditions.push({ _id: auraData.userId });
+      await User.updateOne({ $or: updateConditions }, { vibeAura: clean });
     } catch (e) {}
 
     // Invalidate Redis user profile cache
@@ -2148,7 +2282,14 @@ mongoose.connect(config.MONGO_URI)
         for (const uid of expiredUserIds) {
           userVibeAuras.delete(uid);
           try {
-            await User.updateOne({ $or: [{ id: uid }, { username: uid }] }, { $unset: { vibeAura: 1 } });
+            const isObjectId = mongoose.Types.ObjectId.isValid(uid);
+            await User.updateOne({
+              $or: [
+                { id: uid },
+                { username: uid },
+                ...(isObjectId ? [{ _id: uid }] : [])
+              ]
+            }, { $unset: { vibeAura: 1 } });
           } catch (e) {}
           redis.invalidateUser(uid).catch(() => {});
           io.emit('user_profile_updated', { userId: uid, vibeAura: null });

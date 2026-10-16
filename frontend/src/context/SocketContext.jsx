@@ -41,32 +41,38 @@ export function SocketProvider({ children }) {
     const interval = setInterval(() => {
       const now = Date.now();
       try {
+        const currentUserIsPro = Boolean(userRef.current?.isPro || user?.isPro || userRef.current?.isAdmin || user?.isAdmin);
         const storedTrial = localStorage.getItem('pulsechat_aura_trial');
         if (storedTrial) {
-          const parsed = JSON.parse(storedTrial);
-          if (parsed && parsed.expiresAt && now >= Number(parsed.expiresAt)) {
+          if (currentUserIsPro) {
+            // Pro VIP users are immune: immediately remove any lingering trial key and never wipe VIP aura
             localStorage.removeItem('pulsechat_aura_trial');
-            const uid = userRef.current?.id || user?.id;
-            if (uid && socket) {
-              const clearData = {
-                userId: uid,
-                mood: '',
-                emoji: '',
-                auraColor: null,
-                auraType: 'none',
-                isLowBattery: false,
-                batteryLevel: null,
-                inGame: '',
-                cleared: true,
-                music: null
-              };
-              socket.emit('update_vibe_aura', clearData);
-            }
-            if (uid) {
-              try { updateUserProfileInStorage(uid, { vibeAura: null }, uid); } catch (e) {}
-              window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
-                detail: { targetUserId: uid, updates: { vibeAura: null } }
-              }));
+          } else {
+            const parsed = JSON.parse(storedTrial);
+            if (parsed && parsed.expiresAt && now >= Number(parsed.expiresAt)) {
+              localStorage.removeItem('pulsechat_aura_trial');
+              const uid = userRef.current?.id || user?.id;
+              if (uid && socket) {
+                const clearData = {
+                  userId: uid,
+                  mood: '',
+                  emoji: '',
+                  auraColor: null,
+                  auraType: 'none',
+                  isLowBattery: false,
+                  batteryLevel: null,
+                  inGame: '',
+                  cleared: true,
+                  music: null
+                };
+                socket.emit('update_vibe_aura', clearData);
+              }
+              if (uid) {
+                try { updateUserProfileInStorage(uid, { vibeAura: null }, uid); } catch (e) {}
+                window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+                  detail: { targetUserId: uid, updates: { vibeAura: null } }
+                }));
+              }
             }
           }
         }
@@ -78,7 +84,7 @@ export function SocketProvider({ children }) {
         const next = { ...prev };
         for (const k in next) {
           const item = next[k];
-          if (item?.trialExpiresAt && now >= Number(item.trialExpiresAt)) {
+          if (item?.isTrial && item?.trialExpiresAt && now >= Number(item.trialExpiresAt)) {
             delete next[k];
             changed = true;
           }

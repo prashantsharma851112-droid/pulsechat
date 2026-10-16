@@ -176,8 +176,9 @@ router.put('/settings/:chatId/disappearing', authMiddleware, async (req, res) =>
 // Set Chat Wallpaper (Live Themes or Custom Gallery Wallpapers) - MUST BE BEFORE /:chatId
 router.put('/settings/:chatId/wallpaper', authMiddleware, async (req, res) => {
   try {
-    const { wallpaperId, customWallpaperUrl } = req.body;
-    const setting = await db.setChatWallpaper(req.params.chatId, wallpaperId, customWallpaperUrl, req.user?.id);
+    const { wallpaperId, customWallpaperUrl, isTrial, trialExpiresAt } = req.body;
+    const finalExpiresAt = isTrial ? (Number(trialExpiresAt) || (Date.now() + 5 * 60 * 1000)) : null;
+    const setting = await db.setChatWallpaper(req.params.chatId, wallpaperId, customWallpaperUrl, req.user?.id, finalExpiresAt);
 
     const payload = {
       chatId: setting.chatId,
@@ -185,7 +186,9 @@ router.put('/settings/:chatId/wallpaper', authMiddleware, async (req, res) => {
       wallpaperId: setting.wallpaperId,
       customWallpaperUrl: setting.customWallpaperUrl,
       customImage: setting.customWallpaperUrl,
-      setBy: req.user?.id
+      setBy: req.user?.id,
+      isTrial: Boolean(finalExpiresAt),
+      trialExpiresAt: finalExpiresAt
     };
 
     const io = req.app.get('io');
@@ -214,14 +217,17 @@ router.put('/settings/:chatId/wallpaper', authMiddleware, async (req, res) => {
 // Set Chat Theme (Color theme) - MUST BE BEFORE /:chatId
 router.put('/settings/:chatId/theme', authMiddleware, async (req, res) => {
   try {
-    const { themeId } = req.body;
-    const setting = await db.setChatTheme(req.params.chatId, themeId, req.user?.id);
+    const { themeId, isTrial, trialExpiresAt } = req.body;
+    const finalExpiresAt = isTrial ? (Number(trialExpiresAt) || (Date.now() + 5 * 60 * 1000)) : null;
+    const setting = await db.setChatTheme(req.params.chatId, themeId, req.user?.id, finalExpiresAt);
 
     const payload = {
       chatId: setting?.chatId || req.params.chatId,
       originalChatId: req.params.chatId,
       themeId: setting?.chatTheme || themeId,
-      setBy: req.user?.id
+      setBy: req.user?.id,
+      isTrial: Boolean(finalExpiresAt),
+      trialExpiresAt: finalExpiresAt
     };
 
     const io = req.app.get('io');

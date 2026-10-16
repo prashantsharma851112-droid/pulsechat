@@ -54,7 +54,7 @@ export default function VipAuraSelectorModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   const effectiveUserId = user?._id || user?.id;
-  const isUserPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
+  const isUserPro = Boolean((user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date())) || user?.isAdmin || user?.isPro);
   const currentStreak = user?.streakCount || user?.vibeStreakCount || 0;
   const isStreakUnlocked = currentStreak >= 3;
   const myAura = resolveUserAura(user, vibeAuras);
@@ -72,6 +72,7 @@ export default function VipAuraSelectorModal({ isOpen, onClose }) {
       isLowBattery: false,
       batteryLevel: null,
       inGame: '',
+      isPro: isUserPro,
       isTrial: Boolean(isTrial),
       trialExpiresAt: finalExpiresAt
     };
