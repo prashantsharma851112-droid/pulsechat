@@ -303,8 +303,9 @@ export function AppMusicProvider({ children }) {
   }, []);
 
   // Save as User's Instagram-style Music Note (Sync to backend profile, NO background autoplay)
-  const saveMusicNote = useCallback(async (song, noteText = '') => {
+  const saveMusicNote = useCallback(async (song, noteText = '', noteTheme = 'default') => {
     const trimmedText = (noteText || '').trim();
+    const chosenTheme = noteTheme || song?.theme || 'default';
     setMusicNoteText(trimmedText);
     localStorage.setItem('pulsechat_app_music_note_text', trimmedText);
 
@@ -318,6 +319,7 @@ export function AppMusicProvider({ children }) {
       startTime: Number(song?.startTime) || 0,
       snippetDuration: Number(song?.snippetDuration) || 30,
       noteText: trimmedText,
+      theme: chosenTheme,
       likes: [], // Reset likes to empty array so users can like the new vibe note freshly
       updatedAt: new Date().toISOString()
     } : null;
@@ -338,7 +340,7 @@ export function AppMusicProvider({ children }) {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`
           },
-          body: JSON.stringify({ song, noteText: trimmedText })
+          body: JSON.stringify({ song, noteText: trimmedText, theme: chosenTheme })
         });
         const data = await res.json();
         if (data.success) {

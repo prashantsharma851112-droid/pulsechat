@@ -127,10 +127,11 @@ export default function InstagramMusicSticker({
           {/* Title & Artist info */}
           <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
             <div
+              className={isPlaying ? "music-playing-shimmer" : ""}
               style={{
                 fontSize: '0.82rem',
                 fontWeight: 800,
-                color: '#ffffff',
+                color: isPlaying ? undefined : '#ffffff',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -240,8 +241,8 @@ export default function InstagramMusicSticker({
               maxWidth: '135px'
             }}
           >
-            {songTitle}
-            <span style={{ fontWeight: 400, opacity: 0.7, marginLeft: '4px', fontSize: '0.68rem' }}>
+            <span className={isPlaying ? "music-playing-shimmer" : ""}>{songTitle}</span>
+            <span style={{ fontWeight: 400, opacity: 0.7, marginLeft: '4px', fontSize: '0.68rem', color: '#ffffff' }}>
               • {artistName || 'Pulse Music'}
             </span>
           </div>
@@ -373,9 +374,11 @@ export default function InstagramMusicSticker({
           >
             <Music size={11} color="#f59e0b" />
             <span
+              className={isPlaying ? "music-playing-shimmer" : ""}
               style={{
                 fontSize: '0.72rem',
                 fontWeight: 800,
+                color: isPlaying ? undefined : '#ffffff',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis'

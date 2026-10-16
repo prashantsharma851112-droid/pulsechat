@@ -428,6 +428,24 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
   const hasText = Boolean(activeNote?.noteText && activeNote.noteText.trim());
   const hasSong = Boolean(activeNote?.songTitle && activeNote.songTitle.trim());
 
+  const noteTheme = activeNote?.theme || activeNote?.noteTheme || 'default';
+  const themeClass = noteTheme !== 'default' ? `note-bubble-${noteTheme}` : '';
+
+  const getTailColor = () => {
+    if (noteTheme === 'live-aurora') return 'rgba(168, 85, 247, 0.95)';
+    if (noteTheme === 'live-dragon-flame') return 'rgba(217, 119, 6, 0.95)';
+    if (noteTheme === 'live-cyberpunk') return 'rgba(236, 72, 153, 0.95)';
+    if (noteTheme === 'live-golden-royalty') return 'rgba(217, 119, 6, 0.95)';
+    if (noteTheme === 'live-cosmic-galaxy') return 'rgba(112, 26, 117, 0.95)';
+    if (noteTheme === 'neon-violet') return 'rgba(124, 58, 237, 0.95)';
+    if (noteTheme === 'cyber-cyan') return 'rgba(6, 182, 212, 0.95)';
+    if (noteTheme === 'sunset-rose') return 'rgba(244, 63, 94, 0.95)';
+    if (noteTheme === 'emerald-matrix') return 'rgba(16, 185, 129, 0.95)';
+    if (isPlayingNote) return 'rgba(168, 85, 247, 0.95)';
+    if (isPopped) return '#c084fc';
+    return 'rgba(20, 20, 28, 0.94)';
+  };
+
   // If viewing own avatar and no note is set yet -> "+ Note" Instagram prompt
   if (!activeNote || (!hasText && !hasSong)) {
     if (!isMine) return null;
@@ -486,7 +504,7 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
   // Active Music Note Bubble:
   // - Fixed uniform width (72px)
   // - Dynamic vertical height expanding with thought text
-  // - Smooth Instagram headline / marquee ticker for song name
+  // - Smooth Instagram headline / marquee ticker for song name with iridescent shimmer
   // - Double tap to like with popping heart
   // - Corner heart badge visible to everyone
   // - Tap corner heart to view who liked
@@ -531,33 +549,35 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
         }}
         title={`${hasText ? activeNote.noteText + ' · ' : ''}${activeNote.songTitle || ''} (Double-tap to like, tap to listen)`}
       >
-        <div style={{
-          background: isPlayingNote
-            ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.98), rgba(168, 85, 247, 0.98))'
-            : (isPopped ? 'rgba(28, 26, 42, 0.98)' : 'rgba(20, 20, 28, 0.94)'),
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: isPopped
-            ? '1.8px solid #c084fc'
-            : (isPlayingNote ? '1.5px solid #c084fc' : '1px solid rgba(255, 255, 255, 0.2)'),
-          borderRadius: '16px',
-          padding: hasText && hasSong ? '4px 6px' : '3px 6px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '2px',
-          boxShadow: isPopped
-            ? '0 8px 26px rgba(0,0,0,0.85), 0 0 18px rgba(168, 85, 247, 0.7)'
-            : (isPlayingNote
-                ? '0 4px 14px rgba(168, 85, 247, 0.5), 0 0 10px rgba(168, 85, 247, 0.4)'
-                : '0 4px 10px rgba(0,0,0,0.5)'),
-          width: '72px',
-          minWidth: '72px',
-          maxWidth: '72px',
-          boxSizing: 'border-box',
-          position: 'relative',
-          transition: 'all 0.22s ease'
-        }}>
+        <div
+          className={themeClass}
+          style={{
+            background: isPlayingNote && noteTheme === 'default'
+              ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.98), rgba(168, 85, 247, 0.98))'
+              : (isPopped ? 'rgba(28, 26, 42, 0.98)' : 'rgba(20, 20, 28, 0.94)'),
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: isPopped
+              ? '1.8px solid #c084fc'
+              : (isPlayingNote ? '1.5px solid #c084fc' : '1px solid rgba(255, 255, 255, 0.2)'),
+            borderRadius: '16px',
+            padding: hasText && hasSong ? '4px 6px' : '3px 6px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '2px',
+            boxShadow: isPopped
+              ? '0 8px 26px rgba(0,0,0,0.85), 0 0 18px rgba(168, 85, 247, 0.7)'
+              : (isPlayingNote
+                  ? '0 4px 14px rgba(168, 85, 247, 0.5), 0 0 10px rgba(168, 85, 247, 0.4)'
+                  : '0 4px 10px rgba(0,0,0,0.5)'),
+            width: '72px',
+            minWidth: '72px',
+            maxWidth: '72px',
+            boxSizing: 'border-box',
+            position: 'relative',
+            transition: 'all 0.22s ease'
+          }}>
 
           {/* Double-tap Bursting Heart Animation */}
           {showHeartBurst && (
@@ -641,10 +661,28 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
                     willChange: 'transform'
                   }}
                 >
-                  <span style={{ fontSize: '0.58rem', fontWeight: 600, color: isPlayingNote ? '#ffffff' : '#e2e8f0', paddingRight: '12px', display: 'inline-block' }}>
+                  <span
+                    className="music-playing-shimmer"
+                    style={{
+                      fontSize: '0.58rem',
+                      fontWeight: 700,
+                      paddingRight: '14px',
+                      display: 'inline-block',
+                      letterSpacing: '0.2px'
+                    }}
+                  >
                     {activeNote.songTitle}
                   </span>
-                  <span style={{ fontSize: '0.58rem', fontWeight: 600, color: isPlayingNote ? '#ffffff' : '#e2e8f0', paddingRight: '12px', display: 'inline-block' }}>
+                  <span
+                    className="music-playing-shimmer"
+                    style={{
+                      fontSize: '0.58rem',
+                      fontWeight: 700,
+                      paddingRight: '14px',
+                      display: 'inline-block',
+                      letterSpacing: '0.2px'
+                    }}
+                  >
                     {activeNote.songTitle}
                   </span>
                 </div>
@@ -696,15 +734,13 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
           )}
         </div>
 
-        {/* Cute Speech Bubble Tail */}
+        {/* Cute Speech Bubble Tail matching active theme */}
         <div style={{
           width: 0,
           height: 0,
           borderLeft: '4px solid transparent',
           borderRight: '4px solid transparent',
-          borderTop: isPlayingNote
-            ? '5px solid rgba(168, 85, 247, 0.95)'
-            : (isPopped ? '5px solid #c084fc' : '5px solid rgba(20, 20, 28, 0.94)'),
+          borderTop: `5px solid ${getTailColor()}`,
           margin: '-1px auto 0 auto'
         }} />
 

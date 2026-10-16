@@ -538,7 +538,8 @@ router.get('/public/card/:username', async (req, res) => {
 // Update or Clear User's Instagram-style Music Note (App-wide tune)
 const handleMusicNoteUpdate = async (req, res) => {
   try {
-    const { song, noteText } = req.body || {};
+    const { song, noteText, theme, noteTheme } = req.body || {};
+    const chosenTheme = theme || noteTheme || song?.theme || 'default';
     const targetUserId = req.userId || req.user?.id || req.user?._id;
     const hasContent = Boolean((song && (song.songTitle || song.audioUrl)) || (noteText && String(noteText).trim().length > 0));
 
@@ -565,6 +566,7 @@ const handleMusicNoteUpdate = async (req, res) => {
       startTime: Number(song?.startTime) || 0,
       snippetDuration: Number(song?.snippetDuration) || 30,
       noteText: (noteText || '').trim(),
+      theme: chosenTheme,
       likes: [], // Likes reset on edit/delete so users can like the new vibe afresh
       updatedAt: new Date().toISOString()
     } : null;

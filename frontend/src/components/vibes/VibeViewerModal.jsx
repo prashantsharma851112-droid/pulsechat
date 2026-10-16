@@ -2789,8 +2789,11 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: '0.68rem', opacity: 0.95, display: 'flex', alignItems: 'center', gap: '4px', color: '#f59e0b', fontWeight: 600 }}>
-                <Music size={11} /> {currentVibe.songTitle ? `🎵 ${currentVibe.songTitle}` : currentVibe.soundtrack !== 'none' ? currentVibe.soundtrack : 'Vibe Story'}
+              <div style={{ fontSize: '0.68rem', opacity: 0.95, display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700 }}>
+                <Music size={11} color="#38bdf8" />
+                <span className="music-playing-shimmer" style={{ fontWeight: 700 }}>
+                  {currentVibe.songTitle ? `🎵 ${currentVibe.songTitle}` : currentVibe.soundtrack !== 'none' ? currentVibe.soundtrack : 'Vibe Story'}
+                </span>
               </div>
             </div>
           </div>
