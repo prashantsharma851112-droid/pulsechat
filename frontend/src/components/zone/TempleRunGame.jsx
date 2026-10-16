@@ -447,74 +447,66 @@ const createStonePathwayTexture = () => {
   return texture;
 };
 
-// Procedural Sunset Sky & Mountain Backdrop Texture
+// Ancient Tropical Misty Jungle Canopy & Aztec Pyramid Backdrop Texture (Image 1 Exact Match)
 const createSkyTexture = () => {
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 1024;
+  canvas.width = 512;
+  canvas.height = 512;
   const ctx = canvas.getContext('2d');
 
-  // Rich atmospheric golden-sunset sky gradient
-  const grad = ctx.createLinearGradient(0, 0, 0, 1024);
-  grad.addColorStop(0, '#c2410c');    // Deep sunset crimson-amber
-  grad.addColorStop(0.28, '#ea580c'); // Fiery orange
-  grad.addColorStop(0.55, '#f59e0b'); // Golden amber
-  grad.addColorStop(0.75, '#fde68a'); // Radiant horizon glow
-  grad.addColorStop(0.9, '#fef08a');
-  grad.addColorStop(1, '#fed7aa');
+  // Deep mysterious jungle swamp mist gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, 512);
+  grad.addColorStop(0, '#064e3b');    // Deep rainforest emerald canopy
+  grad.addColorStop(0.35, '#0d5a49'); // Tropical mist
+  grad.addColorStop(0.65, '#115e59'); // Ancient swamp lagoon horizon
+  grad.addColorStop(0.85, '#134e4a'); // Water mist line
+  grad.addColorStop(1, '#042f2e');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 1024, 1024);
+  ctx.fillRect(0, 0, 512, 512);
 
-  // Radiant Sun Disc & Golden Corona Lens Glow
-  const sunGrad = ctx.createRadialGradient(512, 620, 0, 512, 620, 260);
-  sunGrad.addColorStop(0, '#ffffff');
-  sunGrad.addColorStop(0.18, 'rgba(254, 240, 138, 0.95)');
-  sunGrad.addColorStop(0.45, 'rgba(245, 158, 11, 0.55)');
-  sunGrad.addColorStop(1, 'rgba(234, 88, 12, 0)');
-  ctx.fillStyle = sunGrad;
-  ctx.beginPath();
-  ctx.arc(512, 620, 260, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Distant Mountain Ridges & Peaks Silhouette
-  ctx.fillStyle = 'rgba(120, 53, 15, 0.35)';
-  ctx.beginPath();
-  ctx.moveTo(0, 720);
-  for (let x = 0; x <= 1024; x += 32) {
-    const y = 640 + Math.sin(x * 0.008) * 60 + Math.cos(x * 0.02) * 30;
-    ctx.lineTo(x, y);
-  }
-  ctx.lineTo(1024, 1024);
-  ctx.lineTo(0, 1024);
-  ctx.closePath();
-  ctx.fill();
-
-  // Foreground Mountain Jungle Ridges
-  ctx.fillStyle = 'rgba(69, 26, 3, 0.55)';
-  ctx.beginPath();
-  ctx.moveTo(0, 780);
-  for (let x = 0; x <= 1024; x += 24) {
-    const y = 720 + Math.sin(x * 0.012 + 2) * 55 + Math.cos(x * 0.025) * 25;
-    ctx.lineTo(x, y);
-  }
-  ctx.lineTo(1024, 1024);
-  ctx.lineTo(0, 1024);
-  ctx.closePath();
-  ctx.fill();
-
-  // Soft Drifting Sunset Cloud Strata
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.32)';
-  for (let i = 0; i < 8; i++) {
+  // Soft jungle atmospheric light shafts / god rays
+  ctx.fillStyle = 'rgba(254, 240, 138, 0.08)';
+  for (let r = 0; r < 5; r++) {
     ctx.beginPath();
-    ctx.ellipse(
-      120 + i * 120,
-      380 + (i % 3) * 60,
-      140 + (i % 4) * 40,
-      22 + (i % 3) * 8,
-      0,
-      0,
-      Math.PI * 2
-    );
+    ctx.moveTo(80 + r * 90, 0);
+    ctx.lineTo(130 + r * 90, 0);
+    ctx.lineTo(210 + r * 90, 512);
+    ctx.lineTo(120 + r * 90, 512);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Distant Ancient Aztec Pyramid Silhouettes
+  ctx.fillStyle = 'rgba(4, 47, 46, 0.45)';
+  // Left Temple Pyramid
+  ctx.beginPath();
+  ctx.moveTo(40, 360);
+  ctx.lineTo(85, 290);
+  ctx.lineTo(105, 290);
+  ctx.lineTo(150, 360);
+  ctx.closePath();
+  ctx.fill();
+  // Temple top shrine
+  ctx.fillRect(88, 276, 14, 14);
+
+  // Center-Right Grand Mayan Pyramid
+  ctx.beginPath();
+  ctx.moveTo(330, 380);
+  ctx.lineTo(390, 275);
+  ctx.lineTo(418, 275);
+  ctx.lineTo(478, 380);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillRect(396, 258, 16, 17);
+
+  // Sprawling ancient giant jungle kapok trees
+  ctx.fillStyle = 'rgba(6, 78, 59, 0.65)';
+  for (let t = 0; t < 12; t++) {
+    const tx = t * 45 + 10;
+    const ty = 340 + Math.sin(t * 1.5) * 20;
+    const rad = 25 + (t % 3) * 10;
+    ctx.beginPath();
+    ctx.arc(tx, ty, rad, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -522,133 +514,184 @@ const createSkyTexture = () => {
 };
 
 // =========================================================================
-// REALISTIC HUMAN RUNNER MODEL (PRO ATHLETE ANATOMY & GEAR)
-// Real face, athletic headband, runner jersey, watch, sneakers, ground shadow
+// AUTHENTIC TEMPLE RUN GOLDEN DIAMOND COIN GENERATOR (IMAGE 1 EXACT MATCH)
+// Diamond outer bevel, raised inner gold rim, etched Aztec center
+// =========================================================================
+const createDiamondCoinMesh = () => {
+  const coinGroup = new THREE.Group();
+
+  // Outer Diamond Body (Rotated 45 degrees around Z)
+  const outerGeo = new THREE.BoxGeometry(0.48, 0.48, 0.08);
+  const outerMat = new THREE.MeshStandardMaterial({
+    color: 0xfacc15, // Radiant Temple Run golden yellow
+    emissive: 0xb45309,
+    emissiveIntensity: 0.35,
+    metalness: 0.9,
+    roughness: 0.18
+  });
+  const outerMesh = new THREE.Mesh(outerGeo, outerMat);
+  outerMesh.rotation.z = Math.PI / 4;
+  coinGroup.add(outerMesh);
+
+  // Raised Inner Aztec Stepped Gold Rim
+  const rimGeo = new THREE.BoxGeometry(0.32, 0.32, 0.095);
+  const rimMat = new THREE.MeshStandardMaterial({
+    color: 0xfef08a, // Brilliant highlight gold
+    metalness: 0.95,
+    roughness: 0.12
+  });
+  const rimMesh = new THREE.Mesh(rimGeo, rimMat);
+  rimMesh.rotation.z = Math.PI / 4;
+  coinGroup.add(rimMesh);
+
+  // Inner Dark Aztec Center Square
+  const holeGeo = new THREE.BoxGeometry(0.14, 0.14, 0.11);
+  const holeMat = new THREE.MeshStandardMaterial({
+    color: 0x78350f, // Deep dark gold etched recess
+    metalness: 0.5,
+    roughness: 0.7
+  });
+  const holeMesh = new THREE.Mesh(holeGeo, holeMat);
+  holeMesh.rotation.z = Math.PI / 4;
+  coinGroup.add(holeMesh);
+
+  return coinGroup;
+};
+
+// =========================================================================
+// =========================================================================
+// AUTHENTIC TEMPLE RUN RUNNER (GUY DANGEROUS - EXACT MATCH TO IMAGE 1)
+// Safari explorer shirt, muscular arms, fingerless gloves, cargo pants, tall boots, spiked hair
 // =========================================================================
 const buildGuyDangerous = () => {
   const root = new THREE.Group();
 
-  // High-fidelity materials with specular highlights
+  // High-fidelity explorer materials
   const skinMat = new THREE.MeshStandardMaterial({
-    color: 0xfed7aa,
-    roughness: 0.52,
-    metalness: 0.08
+    color: 0xdf9b7e, // Natural sun-tanned explorer skin tone
+    roughness: 0.6,
+    metalness: 0.05
   });
 
   const hairMat = new THREE.MeshStandardMaterial({
-    color: 0x451a03, // Dark espresso brown athletic hair
+    color: 0xc2410c, // Reddish-ginger spiked explorer hair
     roughness: 0.85
   });
 
-  const headbandMat = new THREE.MeshStandardMaterial({
-    color: 0xd97706, // Athletic gold runner headband
-    roughness: 0.5,
-    metalness: 0.2
-  });
-
-  const jerseyMat = new THREE.MeshStandardMaterial({
-    color: 0x0284c7, // Royal athletic cyan/blue compression tank
-    roughness: 0.65,
-    metalness: 0.1
-  });
-
-  const jerseyTrimMat = new THREE.MeshStandardMaterial({
-    color: 0xf59e0b, // Amber neon racing trim
-    roughness: 0.4
-  });
-
-  const shortsMat = new THREE.MeshStandardMaterial({
-    color: 0x0f172a, // Dark athletic compression shorts
-    roughness: 0.75
-  });
-
-  const sockMat = new THREE.MeshStandardMaterial({
-    color: 0xf8fafc, // White compression socks
+  const shirtMat = new THREE.MeshStandardMaterial({
+    color: 0xf4f4f5, // Off-white / light cream safari explorer shirt
     roughness: 0.8
   });
 
-  const shoeUpperMat = new THREE.MeshStandardMaterial({
-    color: 0x0ea5e9, // Electric cyan sneaker mesh
+  const shirtFoldMat = new THREE.MeshStandardMaterial({
+    color: 0xe4e4e7, // Collar & pocket tab shading
+    roughness: 0.85
+  });
+
+  const beltMat = new THREE.MeshStandardMaterial({
+    color: 0x451a03, // Dark brown rugged explorer leather belt
+    roughness: 0.55
+  });
+
+  const buckleMat = new THREE.MeshStandardMaterial({
+    color: 0xf59e0b, // Golden brass buckle
+    roughness: 0.3,
+    metalness: 0.8
+  });
+
+  const pouchMat = new THREE.MeshStandardMaterial({
+    color: 0x78350f, // Brown leather utility pouch / canteen
+    roughness: 0.7
+  });
+
+  const trousersMat = new THREE.MeshStandardMaterial({
+    color: 0x2e4318, // Dark olive / forest green explorer cargo pants
+    roughness: 0.8
+  });
+
+  const kneePatchMat = new THREE.MeshStandardMaterial({
+    color: 0x223312, // Reinforced knee patches
+    roughness: 0.85
+  });
+
+  const bootLeatherMat = new THREE.MeshStandardMaterial({
+    color: 0x5c2b0c, // Tall rich brown adventurer leather boots
     roughness: 0.6
   });
 
-  const shoeSoleMat = new THREE.MeshStandardMaterial({
-    color: 0xffffff, // Thick cushioned white running foam sole
-    roughness: 0.45
+  const bootCuffMat = new THREE.MeshStandardMaterial({
+    color: 0x78350f, // Folded boot top collar / cuffs
+    roughness: 0.65
   });
 
-  const shoeTreadMat = new THREE.MeshStandardMaterial({
-    color: 0x0f172a, // Black rubber outsole
+  const bootSoleMat = new THREE.MeshStandardMaterial({
+    color: 0x1c1917, // Sturdy dark lugged rubber soles
     roughness: 0.9
   });
 
-  const watchBandMat = new THREE.MeshStandardMaterial({
-    color: 0x1e293b,
-    roughness: 0.6
+  const gloveMat = new THREE.MeshStandardMaterial({
+    color: 0x602e12, // Fingerless brown explorer leather gloves
+    roughness: 0.65
   });
 
-  const watchScreenMat = new THREE.MeshBasicMaterial({
-    color: 0x06b6d4 // Glowing cyan GPS running watch face
-  });
-
-  // 1. Torso: Anatomical athletic runner chest & waist
+  // 1. Torso: Athletic explorer chest with safari shirt & utility belt
   const torso = new THREE.Group();
   torso.position.y = 1.35;
 
-  // Chest & ribcage (broad athletic shoulders tapering down)
-  const chestGeo = new THREE.CylinderGeometry(0.38, 0.32, 0.55, 24);
+  // Chest & ribcage (safari shirt with broad athletic shoulders)
+  const chestGeo = new THREE.CylinderGeometry(0.38, 0.32, 0.55, 20);
   chestGeo.computeVertexNormals();
-  const chest = new THREE.Mesh(chestGeo, jerseyMat);
+  const chest = new THREE.Mesh(chestGeo, shirtMat);
   chest.position.y = 0.22;
-  chest.castShadow = true;
   torso.add(chest);
 
-  // Chest race emblem / bib
-  const bibGeo = new THREE.PlaneGeometry(0.24, 0.16);
-  const bibMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
-  const bib = new THREE.Mesh(bibGeo, bibMat);
-  bib.position.set(0, 0.26, 0.35);
-  torso.add(bib);
+  // Folded safari shirt collar
+  const collarGeo = new THREE.CylinderGeometry(0.19, 0.23, 0.1, 16);
+  const collar = new THREE.Mesh(collarGeo, shirtFoldMat);
+  collar.position.set(0, 0.48, 0.02);
+  torso.add(collar);
 
-  // Gold racing side stripes on jersey
-  const stripeGeo = new THREE.CylinderGeometry(0.385, 0.325, 0.55, 24, 1, true, -Math.PI / 6, Math.PI / 10);
-  const stripeL = new THREE.Mesh(stripeGeo, jerseyTrimMat);
-  stripeL.position.y = 0.22;
-  torso.add(stripeL);
+  // Twin Safari Chest Pockets with button flaps
+  const pocketGeo = new THREE.PlaneGeometry(0.12, 0.14);
+  const pocketL = new THREE.Mesh(pocketGeo, shirtFoldMat);
+  pocketL.position.set(-0.14, 0.26, 0.33);
+  const pocketR = new THREE.Mesh(pocketGeo, shirtFoldMat);
+  pocketR.position.set(0.14, 0.26, 0.33);
+  torso.add(pocketL);
+  torso.add(pocketR);
 
-  // Tapered waist & abdomen
-  const waistGeo = new THREE.CylinderGeometry(0.32, 0.29, 0.4, 24);
+  // Explorer button placket down shirt front
+  const placketGeo = new THREE.PlaneGeometry(0.05, 0.48);
+  const placket = new THREE.Mesh(placketGeo, shirtFoldMat);
+  placket.position.set(0, 0.22, 0.335);
+  torso.add(placket);
+
+  // Tapered waist & lower shirt tucked into pants
+  const waistGeo = new THREE.CylinderGeometry(0.32, 0.29, 0.4, 20);
   waistGeo.computeVertexNormals();
-  const waist = new THREE.Mesh(waistGeo, jerseyMat);
+  const waist = new THREE.Mesh(waistGeo, shirtMat);
   waist.position.y = -0.2;
-  waist.castShadow = true;
   torso.add(waist);
 
-  // Athletic runner utility belt with buckle & hydration flasks
-  const beltMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 });
-  const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.31, 0.1, 24), beltMat);
+  // Explorer Leather Belt with Golden Brass Buckle
+  const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.31, 0.1, 20), beltMat);
   belt.position.y = -0.38;
   torso.add(belt);
 
-  const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.09, 0.05), jerseyTrimMat);
+  const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.09, 0.05), buckleMat);
   buckle.position.set(0, -0.38, 0.32);
   torso.add(buckle);
 
-  // Twin mini hydration flasks on back of belt
-  const flaskMat = new THREE.MeshStandardMaterial({ color: 0x06b6d4, roughness: 0.3, metalness: 0.6 });
-  const flaskGeo = new THREE.CylinderGeometry(0.06, 0.05, 0.2, 12);
-  const flaskL = new THREE.Mesh(flaskGeo, flaskMat);
-  flaskL.position.set(-0.2, -0.36, -0.3);
-  flaskL.rotation.z = 0.25;
-  const flaskR = new THREE.Mesh(flaskGeo, flaskMat);
-  flaskR.position.set(0.2, -0.36, -0.3);
-  flaskR.rotation.z = -0.25;
-  torso.add(flaskL);
-  torso.add(flaskR);
+  // Explorer side utility pouch on right hip
+  const pouchGeo = new THREE.BoxGeometry(0.12, 0.18, 0.14);
+  const pouch = new THREE.Mesh(pouchGeo, pouchMat);
+  pouch.position.set(0.32, -0.4, 0.05);
+  pouch.rotation.z = -0.15;
+  torso.add(pouch);
 
   root.add(torso);
 
-  // 2. Realistic Athletic Head, Face & Headband
+  // 2. Realistic Athletic Head, Neck & Spiked Explorer Hair
   const headGroup = new THREE.Group();
   headGroup.position.y = 2.08;
 
@@ -660,11 +703,10 @@ const buildGuyDangerous = () => {
   headGroup.add(neck);
 
   // Head skull with facial contour
-  const skullGeo = new THREE.SphereGeometry(0.25, 24, 24);
+  const skullGeo = new THREE.SphereGeometry(0.25, 20, 20);
   skullGeo.scale(1.0, 1.15, 1.05);
   skullGeo.computeVertexNormals();
   const skull = new THREE.Mesh(skullGeo, skinMat);
-  skull.castShadow = true;
   headGroup.add(skull);
 
   // Athletic Jaw / Chin definition
@@ -682,7 +724,7 @@ const buildGuyDangerous = () => {
   headGroup.add(nose);
 
   // Ears on left and right
-  const earGeo = new THREE.SphereGeometry(0.06, 12, 12);
+  const earGeo = new THREE.SphereGeometry(0.06, 10, 10);
   earGeo.scale(0.4, 1.2, 0.8);
   const earL = new THREE.Mesh(earGeo, skinMat);
   earL.position.set(-0.26, 0.02, 0);
@@ -701,87 +743,94 @@ const buildGuyDangerous = () => {
   headGroup.add(leftEye);
   headGroup.add(rightEye);
 
-  // Athletic Runner Headband (Gold with front badge)
-  const headbandGeo = new THREE.CylinderGeometry(0.27, 0.27, 0.09, 24);
-  const headband = new THREE.Mesh(headbandGeo, headbandMat);
-  headband.position.set(0, 0.13, 0);
-  headGroup.add(headband);
+  // Iconic Reddish-Ginger Spiked Explorer Hair (swept-up adventurer peaks matching Image 1!)
+  const hairBase = new THREE.Mesh(new THREE.SphereGeometry(0.27, 16, 16), hairMat);
+  hairBase.scale.set(1.02, 0.95, 1.15);
+  hairBase.position.set(0, 0.15, -0.05);
+  headGroup.add(hairBase);
 
-  // Wind-swept layered athletic hair flowing back
-  const hairGeo = new THREE.SphereGeometry(0.28, 20, 20);
-  hairGeo.scale(1.02, 0.9, 1.25);
-  const hair = new THREE.Mesh(hairGeo, hairMat);
-  hair.position.set(0, 0.17, -0.06);
-  headGroup.add(hair);
+  // 5 Spiked hair tufts swept backwards and up
+  const spikeGeo = new THREE.ConeGeometry(0.08, 0.24, 8);
+  const spikesPos = [
+    { x: 0, y: 0.35, z: 0.08, rx: -0.4, rz: 0 },
+    { x: -0.1, y: 0.34, z: -0.02, rx: -0.5, rz: 0.25 },
+    { x: 0.1, y: 0.34, z: -0.02, rx: -0.5, rz: -0.25 },
+    { x: -0.06, y: 0.32, z: -0.14, rx: -0.8, rz: 0.15 },
+    { x: 0.06, y: 0.32, z: -0.14, rx: -0.8, rz: -0.15 }
+  ];
+  spikesPos.forEach(sp => {
+    const spike = new THREE.Mesh(spikeGeo, hairMat);
+    spike.position.set(sp.x, sp.y, sp.z);
+    spike.rotation.set(sp.rx, 0, sp.rz);
+    headGroup.add(spike);
+  });
 
   root.add(headGroup);
 
-  // 3. Articulated Legs (Compression shorts, knee joints, socks, pro running sneakers)
+  // 3. Articulated Legs: Olive Cargo Pants & Tall Brown Leather Explorer Boots
   const createLeg = (isLeft) => {
     const hip = new THREE.Group();
     hip.position.set(isLeft ? -0.22 : 0.22, 0.85, 0);
 
-    // Thigh with compression shorts & side neon racing stripe
-    const thighGeo = new THREE.CylinderGeometry(0.16, 0.12, 0.52, 16);
+    // Thigh with olive green cargo trousers
+    const thighGeo = new THREE.CylinderGeometry(0.16, 0.125, 0.52, 16);
     thighGeo.computeVertexNormals();
-    const thigh = new THREE.Mesh(thighGeo, shortsMat);
+    const thigh = new THREE.Mesh(thighGeo, trousersMat);
     thigh.position.y = -0.26;
-    thigh.castShadow = true;
     hip.add(thigh);
+
+    // Side cargo flap pocket
+    const cargoPocket = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.15, 0.14), kneePatchMat);
+    cargoPocket.position.set(isLeft ? -0.16 : 0.16, -0.24, 0);
+    thigh.add(cargoPocket);
 
     // Knee Pivot
     const knee = new THREE.Group();
     knee.position.y = -0.52;
     hip.add(knee);
 
-    // Sculpted kneecap
-    const kneecap = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), skinMat);
+    // Sculpted knee with protective explorer patch
+    const kneecap = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), kneePatchMat);
     kneecap.position.set(0, 0, 0.08);
     knee.add(kneecap);
 
-    // Shin/Calf (tapered athletic calf)
-    const calfGeo = new THREE.CylinderGeometry(0.12, 0.095, 0.48, 16);
+    // Shin/Calf encased in high leather explorer boot
+    const calfGeo = new THREE.CylinderGeometry(0.13, 0.11, 0.48, 16);
     calfGeo.computeVertexNormals();
-    const calf = new THREE.Mesh(calfGeo, skinMat);
+    const calf = new THREE.Mesh(calfGeo, bootLeatherMat);
     calf.position.y = -0.24;
-    calf.castShadow = true;
     knee.add(calf);
 
-    // White athletic compression sock
-    const sockGeo = new THREE.CylinderGeometry(0.105, 0.095, 0.22, 16);
-    const sock = new THREE.Mesh(sockGeo, sockMat);
-    sock.position.y = -0.38;
-    knee.add(sock);
+    // Folded Leather Boot Cuff / Collar at top of boot
+    const cuffGeo = new THREE.CylinderGeometry(0.145, 0.135, 0.1, 16);
+    const cuff = new THREE.Mesh(cuffGeo, bootCuffMat);
+    cuff.position.y = -0.06;
+    knee.add(cuff);
 
-    // PRO RUNNING SHOE (SNEAKER)
-    const shoe = new THREE.Group();
-    shoe.position.set(0, -0.52, 0.08);
+    // Rugged Explorer Boot Foot & Sole
+    const foot = new THREE.Group();
+    foot.position.set(0, -0.52, 0.08);
 
-    // Thick cushioned white running foam midsole
-    const soleGeo = new THREE.BoxGeometry(0.2, 0.09, 0.4);
-    const sole = new THREE.Mesh(soleGeo, shoeSoleMat);
-    sole.position.y = -0.02;
-    shoe.add(sole);
+    // Rugged lugged rubber outsole
+    const soleGeo = new THREE.BoxGeometry(0.21, 0.08, 0.42);
+    const sole = new THREE.Mesh(soleGeo, bootSoleMat);
+    sole.position.y = -0.04;
+    foot.add(sole);
 
-    // Grippy rubber outsole
-    const treadGeo = new THREE.BoxGeometry(0.205, 0.025, 0.405);
-    const tread = new THREE.Mesh(treadGeo, shoeTreadMat);
-    tread.position.y = -0.06;
-    shoe.add(tread);
+    // Leather boot upper
+    const upperGeo = new THREE.BoxGeometry(0.2, 0.13, 0.38);
+    const upper = new THREE.Mesh(upperGeo, bootLeatherMat);
+    upper.position.set(0, 0.06, 0.01);
+    foot.add(upper);
 
-    // Colored breathable mesh upper
-    const upperGeo = new THREE.BoxGeometry(0.19, 0.11, 0.36);
-    const upper = new THREE.Mesh(upperGeo, shoeUpperMat);
-    upper.position.set(0, 0.05, 0.01);
-    shoe.add(upper);
+    // Boot toe cap with reinforced leather
+    const toeGeo = new THREE.SphereGeometry(0.1, 10, 10);
+    toeGeo.scale(1, 0.7, 1.2);
+    const toe = new THREE.Mesh(toeGeo, bootCuffMat);
+    toe.position.set(0, 0.04, 0.16);
+    foot.add(toe);
 
-    // Shoe collar / ankle opening
-    const collarGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.06, 12);
-    const collar = new THREE.Mesh(collarGeo, sockMat);
-    collar.position.set(0, 0.1, -0.05);
-    shoe.add(collar);
-
-    knee.add(shoe);
+    knee.add(foot);
 
     root.add(hip);
     return { hip, knee };
@@ -790,21 +839,22 @@ const buildGuyDangerous = () => {
   const leftLeg = createLeg(true);
   const rightLeg = createLeg(false);
 
-  // 4. Articulated Muscular Arms (Deltoid, bicep, running GPS watch, running fist)
+  // 4. Articulated Muscular Arms (Folded shirt sleeve, muscular arm, fingerless leather glove)
   const createArm = (isLeft) => {
     const shoulder = new THREE.Group();
     shoulder.position.set(isLeft ? -0.46 : 0.46, 1.7, 0);
 
-    // Muscular shoulder deltoid
-    const deltoidGeo = new THREE.SphereGeometry(0.16, 16, 16);
-    const deltoid = new THREE.Mesh(deltoidGeo, skinMat);
-    shoulder.add(deltoid);
+    // Folded short shirt sleeve at shoulder
+    const sleeveGeo = new THREE.CylinderGeometry(0.17, 0.16, 0.22, 16);
+    const sleeve = new THREE.Mesh(sleeveGeo, shirtMat);
+    sleeve.position.y = -0.08;
+    shoulder.add(sleeve);
 
-    // Athletic bicep & tricep
-    const bicepGeo = new THREE.CylinderGeometry(0.13, 0.11, 0.42, 16);
+    // Muscular sun-tanned bicep & tricep
+    const bicepGeo = new THREE.CylinderGeometry(0.13, 0.11, 0.38, 16);
     bicepGeo.computeVertexNormals();
     const bicep = new THREE.Mesh(bicepGeo, skinMat);
-    bicep.position.y = -0.22;
+    bicep.position.y = -0.26;
     shoulder.add(bicep);
 
     // Elbow Pivot
@@ -812,35 +862,29 @@ const buildGuyDangerous = () => {
     elbow.position.y = -0.42;
     shoulder.add(elbow);
 
-    // Forearm
-    const forearmGeo = new THREE.CylinderGeometry(0.1, 0.08, 0.42, 16);
+    // Muscular Forearm
+    const forearmGeo = new THREE.CylinderGeometry(0.105, 0.085, 0.38, 16);
     forearmGeo.computeVertexNormals();
     const forearm = new THREE.Mesh(forearmGeo, skinMat);
-    forearm.position.y = -0.21;
+    forearm.position.y = -0.19;
     elbow.add(forearm);
 
-    if (isLeft) {
-      // Left Wrist: SLEEK DIGITAL RUNNING SPORTS GPS WATCH
-      const watchBand = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.07, 16), watchBandMat);
-      watchBand.position.y = -0.32;
-      elbow.add(watchBand);
+    // Leather wrist wrap
+    const wristWrap = new THREE.Mesh(new THREE.CylinderGeometry(0.092, 0.092, 0.08, 16), gloveMat);
+    wristWrap.position.y = -0.32;
+    elbow.add(wristWrap);
 
-      const watchScreen = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.05, 0.03), watchScreenMat);
-      watchScreen.position.set(0, -0.32, 0.09);
-      elbow.add(watchScreen);
-    } else {
-      // Right Wrist: Athletic runner sweatband
-      const sweatband = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.08, 16), headbandMat);
-      sweatband.position.y = -0.32;
-      elbow.add(sweatband);
-    }
-
-    // Aerodynamic Running Fist
+    // Fingerless Adventurer Glove & Running Fist
     const fistGeo = new THREE.SphereGeometry(0.085, 12, 12);
     fistGeo.scale(1, 1.2, 0.85);
-    const fist = new THREE.Mesh(fistGeo, skinMat);
-    fist.position.y = -0.45;
+    const fist = new THREE.Mesh(fistGeo, gloveMat);
+    fist.position.y = -0.42;
     elbow.add(fist);
+
+    // Bare knuckles exposed
+    const knuckle = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), skinMat);
+    knuckle.position.set(0, -0.47, 0.04);
+    elbow.add(knuckle);
 
     root.add(shoulder);
     return { shoulder, elbow };
@@ -874,75 +918,104 @@ const buildGuyDangerous = () => {
   };
 };
 
-// Build Demon Ape (Organic massive gorilla beast matching Screenshot 1)
+// =========================================================================
+// MONSTER PURSUER: DEMON APE WITH WHITE SKULL BONE MASK (IMAGE 2 EXACT MATCH)
+// =========================================================================
 const buildDemonApe = () => {
   const root = new THREE.Group();
 
   const furMat = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.95 }); // Pitch charcoal fur
-  const crestMat = new THREE.MeshStandardMaterial({ color: 0xa1a1aa, roughness: 0.7 }); // Silver crest
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xef4444 }); // Crimson glowing eyes
-  const hornMat = new THREE.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.5 }); // Dark red horns
+  const crestMat = new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.8 }); // Silver spine crest
+  const boneMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.45 }); // White skull bone mask!
+  const socketMat = new THREE.MeshBasicMaterial({ color: 0x09090b }); // Dark eye sockets
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x10b981 }); // Glowing emerald eyes inside mask!
+  const toothMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.4 }); // Sharp fangs
 
-  // 1. Massive Hunched Gorilla Back / Scapula
-  const backGeo = new THREE.SphereGeometry(1.2, 24, 24);
+  // 1. Massive Hunched Gorilla Back & Torso
+  const backGeo = new THREE.SphereGeometry(1.2, 20, 20);
   backGeo.scale(1.2, 1.1, 0.95);
   backGeo.computeVertexNormals();
   const back = new THREE.Mesh(backGeo, furMat);
   back.position.set(0, 1.6, -0.2);
   root.add(back);
 
-  // 2. Heavy Ape Head with Silver Crest
-  const headGeo = new THREE.SphereGeometry(0.7, 20, 20);
-  headGeo.scale(1, 0.9, 1.15);
-  const head = new THREE.Mesh(headGeo, furMat);
-  head.position.set(0, 2.45, 0.55);
-  root.add(head);
-
-  // Silver fur mane / crest running down head & neck (Exact match to Screenshot 1!)
-  const crestGeo = new THREE.CylinderGeometry(0.2, 0.35, 1.2, 16);
+  // Silver fur spine crest
+  const crestGeo = new THREE.CylinderGeometry(0.2, 0.35, 1.2, 14);
   crestGeo.scale(0.8, 1, 1.3);
   const crest = new THREE.Mesh(crestGeo, crestMat);
   crest.rotation.x = Math.PI / 4;
   crest.position.set(0, 2.75, 0.45);
   root.add(crest);
 
-  // Glowing Crimson Eyes
-  const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 12), eyeMat);
-  leftEye.position.set(-0.25, 2.5, 1.15);
-  const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 12), eyeMat);
-  rightEye.position.set(0.25, 2.5, 1.15);
-  root.add(leftEye);
-  root.add(rightEye);
+  // 2. Heavy Ape Head with Skull Bone Mask
+  const headGeo = new THREE.SphereGeometry(0.7, 18, 18);
+  headGeo.scale(1, 0.9, 1.15);
+  const head = new THREE.Mesh(headGeo, furMat);
+  head.position.set(0, 2.45, 0.55);
+  root.add(head);
 
-  // Curved Demonic Horns
-  const hornGeo = new THREE.ConeGeometry(0.14, 0.75, 16);
-  const leftHorn = new THREE.Mesh(hornGeo, hornMat);
-  leftHorn.position.set(-0.55, 3.0, 0.4);
-  leftHorn.rotation.z = -0.6;
-  const rightHorn = new THREE.Mesh(hornGeo, hornMat);
-  rightHorn.position.set(0.55, 3.0, 0.4);
-  rightHorn.rotation.z = 0.6;
-  root.add(leftHorn);
-  root.add(rightHorn);
+  // 3. ICONIC WHITE SKULL BONE MASK (Exact match to Image 2!)
+  const skullMaskGroup = new THREE.Group();
+  skullMaskGroup.position.set(0, 2.45, 1.05);
 
-  // 3. Huge Muscular Pounding Gorilla Arms
+  // Bone forehead & cranium
+  const bonePlateGeo = new THREE.SphereGeometry(0.55, 16, 16);
+  bonePlateGeo.scale(0.95, 1.1, 0.5);
+  const bonePlate = new THREE.Mesh(bonePlateGeo, boneMat);
+  skullMaskGroup.add(bonePlate);
+
+  // Bone Snout & Upper Jaw
+  const snoutGeo = new THREE.BoxGeometry(0.42, 0.35, 0.4);
+  const snout = new THREE.Mesh(snoutGeo, boneMat);
+  snout.position.set(0, -0.22, 0.16);
+  skullMaskGroup.add(snout);
+
+  // Deep hollow eye sockets with glowing emerald eyes
+  const socketL = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.1, 12), socketMat);
+  socketL.rotation.x = Math.PI / 2;
+  socketL.position.set(-0.2, 0.08, 0.22);
+  const socketR = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.1, 12), socketMat);
+  socketR.rotation.x = Math.PI / 2;
+  socketR.position.set(0.2, 0.08, 0.22);
+  skullMaskGroup.add(socketL);
+  skullMaskGroup.add(socketR);
+
+  // Glowing Emerald Green Eyes
+  const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 8), eyeMat);
+  eyeL.position.set(-0.2, 0.08, 0.26);
+  const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 8), eyeMat);
+  eyeR.position.set(0.2, 0.08, 0.26);
+  skullMaskGroup.add(eyeL);
+  skullMaskGroup.add(eyeR);
+
+  // Sharp beast skull fangs
+  const fangGeo = new THREE.ConeGeometry(0.05, 0.22, 8);
+  const fangL = new THREE.Mesh(fangGeo, toothMat);
+  fangL.position.set(-0.16, -0.4, 0.28);
+  fangL.rotation.x = Math.PI;
+  const fangR = new THREE.Mesh(fangGeo, toothMat);
+  fangR.position.set(0.16, -0.4, 0.28);
+  fangR.rotation.x = Math.PI;
+  skullMaskGroup.add(fangL);
+  skullMaskGroup.add(fangR);
+
+  root.add(skullMaskGroup);
+
+  // 4. Huge Muscular Pounding Gorilla Arms
   const createApeArm = (isLeft) => {
     const shoulder = new THREE.Group();
     shoulder.position.set(isLeft ? -1.25 : 1.25, 1.8, 0.2);
 
-    // Massive Deltoid Boulder
-    const deltoid = new THREE.Mesh(new THREE.SphereGeometry(0.48, 16, 16), furMat);
+    const deltoid = new THREE.Mesh(new THREE.SphereGeometry(0.48, 14, 14), furMat);
     shoulder.add(deltoid);
 
-    // Thick Upper Arm
-    const bicepGeo = new THREE.CylinderGeometry(0.36, 0.28, 0.9, 16);
+    const bicepGeo = new THREE.CylinderGeometry(0.36, 0.28, 0.9, 14);
     bicepGeo.computeVertexNormals();
     const bicep = new THREE.Mesh(bicepGeo, furMat);
     bicep.position.y = -0.45;
     shoulder.add(bicep);
 
-    // Forearm & Heavy Fist
-    const forearmGeo = new THREE.CylinderGeometry(0.32, 0.22, 0.95, 16);
+    const forearmGeo = new THREE.CylinderGeometry(0.32, 0.22, 0.95, 14);
     forearmGeo.computeVertexNormals();
     const forearm = new THREE.Mesh(forearmGeo, furMat);
     forearm.position.set(0, -0.9, 0.2);
@@ -1340,7 +1413,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     const scene = new THREE.Scene();
     const skyTex = createSkyTexture();
     scene.background = skyTex;
-    scene.fog = new THREE.FogExp2(0xfed7aa, 0.009);
+    scene.fog = new THREE.FogExp2(0x064e3b, 0.0075);
 
     // 2. Perspective Camera (Over-the-shoulder third-person camera matching screenshots)
     const camera = new THREE.PerspectiveCamera(62, width / height, 0.1, 400);
@@ -1357,12 +1430,12 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    // 4. Dramatic Golden Sunset Lighting
-    const ambientLight = new THREE.AmbientLight(0xffedd5, 0.95);
+    // 4. Dramatic Tropical Jungle Sunlight (God Rays & Sunken River Reflection)
+    const ambientLight = new THREE.AmbientLight(0xd1fae5, 0.95);
     scene.add(ambientLight);
 
-    const sunLight = new THREE.DirectionalLight(0xf59e0b, 1.35);
-    sunLight.position.set(25, 45, 20);
+    const sunLight = new THREE.DirectionalLight(0xfef08a, 1.3);
+    sunLight.position.set(22, 42, 18);
     scene.add(sunLight);
 
     // 5. Materials
@@ -1396,25 +1469,40 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     monkeyObj.group.position.set(0, 0, 4.5);
     scene.add(monkeyObj.group);
 
-    // 8. FLOATING MOUNTAIN CLOUDS DECK (Beneath Floating Stone Bridge)
-    const cloudsList = [];
-    const cloudMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
+    // 8. TROPICAL SWAMP LAGOON WATER & MIST (Beneath Ancient Stone Bridge - 1:1 Image 1)
+    const swampWaterGeo = new THREE.PlaneGeometry(160, 480, 1, 1);
+    swampWaterGeo.rotateX(-Math.PI / 2);
+    const swampWaterMat = new THREE.MeshStandardMaterial({
+      color: 0x042f2e,
+      roughness: 0.18,
+      metalness: 0.82,
       transparent: true,
-      opacity: 0.78,
+      opacity: 0.94
+    });
+    const swampWater = new THREE.Mesh(swampWaterGeo, swampWaterMat);
+    swampWater.position.set(0, -4.8, -120);
+    scene.add(swampWater);
+    gameRef.current.swampWater = swampWater;
+
+    // Atmospheric Canopy Mist Spheres
+    const cloudsList = [];
+    const mistMat = new THREE.MeshStandardMaterial({
+      color: 0x064e3b,
+      transparent: true,
+      opacity: 0.35,
       roughness: 1.0
     });
 
-    for (let c = 0; c < 28; c++) {
-      const cloudGeo = new THREE.SphereGeometry(Math.random() * 8 + 6, 8, 8);
-      const cloud = new THREE.Mesh(cloudGeo, cloudMat);
-      cloud.position.set(
-        (Math.random() - 0.5) * 65,
-        -12 - Math.random() * 8,
+    for (let c = 0; c < 18; c++) {
+      const mistGeo = new THREE.SphereGeometry(Math.random() * 8 + 8, 8, 8);
+      const mist = new THREE.Mesh(mistGeo, mistMat);
+      mist.position.set(
+        (Math.random() - 0.5) * 80,
+        -4.2 - Math.random() * 3,
         -Math.random() * 220
       );
-      scene.add(cloud);
-      cloudsList.push(cloud);
+      scene.add(mist);
+      cloudsList.push(mist);
     }
 
     // 9. PROCEDURAL 3D ENDLESS TRACK GENERATOR (Smooth rounded curbs, carved spiral slabs)
@@ -1444,6 +1532,26 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       floor.receiveShadow = true;
       chunk.add(floor);
 
+      // Massive Stone Foundation Pier extending down into murky swamp water (1:1 with Image 1)
+      const pierGeo = new THREE.BoxGeometry(5.8, 8.5, CHUNK_LENGTH * 0.95);
+      const pier = new THREE.Mesh(pierGeo, carvedWallMat);
+      pier.position.y = -5.4;
+      chunk.add(pier);
+
+      // Submerged Mangrove Tree Roots branching into swamp lagoon
+      const rootMat = new THREE.MeshStandardMaterial({ color: 0x27170a, roughness: 0.9 });
+      for (let r = 0; r < 3; r++) {
+        const rootL = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.32, 4.8, 8), rootMat);
+        rootL.position.set(-3.2 - Math.random() * 0.8, -3.2, (r - 1) * 7);
+        rootL.rotation.z = 0.45;
+        chunk.add(rootL);
+
+        const rootR = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.32, 4.8, 8), rootMat);
+        rootR.position.set(3.2 + Math.random() * 0.8, -3.2, (r - 1) * 7);
+        rootR.rotation.z = -0.45;
+        chunk.add(rootR);
+      }
+
       // Rounded Weathered Stone Balustrades / Curbs
       const railGeo = new THREE.CylinderGeometry(0.4, 0.45, CHUNK_LENGTH, 16);
       railGeo.rotateX(Math.PI / 2);
@@ -1464,14 +1572,20 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       chunk.add(pL);
       chunk.add(pR);
 
-      // Glowing Green Emerald Totems on Top of Pillars
-      const gemGeo = new THREE.OctahedronGeometry(0.38, 0);
-      const gemL = new THREE.Mesh(gemGeo, emeraldGemMat);
-      gemL.position.set(-3.4, 4.1, 0);
-      const gemR = new THREE.Mesh(gemGeo, emeraldGemMat);
-      gemR.position.set(3.4, 4.1, 0);
-      chunk.add(gemL);
-      chunk.add(gemR);
+      // Mayan Carved Totem Heads on Top of Pillars (1:1 with Temple Run)
+      const totemHeadGeo = new THREE.BoxGeometry(0.65, 0.75, 0.65);
+      const totemL = new THREE.Mesh(totemHeadGeo, carvedWallMat);
+      totemL.position.set(-3.4, 4.25, 0);
+      const eyeGeo = new THREE.BoxGeometry(0.7, 0.16, 0.7);
+      const eyeL = new THREE.Mesh(eyeGeo, emeraldGemMat);
+      totemL.add(eyeL);
+      chunk.add(totemL);
+
+      const totemR = new THREE.Mesh(totemHeadGeo, carvedWallMat);
+      totemR.position.set(3.4, 4.25, 0);
+      const eyeR = new THREE.Mesh(eyeGeo, emeraldGemMat);
+      totemR.add(eyeR);
+      chunk.add(totemR);
 
       // 3D Ancient Stone Fire Torches on Left & Right
       const addTorchToPillar = (xPos) => {
@@ -2171,21 +2285,16 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       }
     }
 
-    // 2. 3D Golden Coins (45% chance)
-    if (Math.random() < 0.45) {
+    // 2. 3D Golden Diamond Aztec Coins (1:1 with Temple Run Image 1)
+    if (Math.random() < 0.52) {
       const lane = Math.floor(Math.random() * 3);
       const laneX = (lane - 1) * 1.85;
-      const coinGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.08, 20);
-      const coinMat = new THREE.MeshStandardMaterial({
-        color: 0xfbbf24,
-        metalness: 0.95,
-        roughness: 0.15
-      });
+      const isArch = Math.random() < 0.4; // 40% chance of arched jump trail
 
-      for (let c = 0; c < 4; c++) {
-        const cMesh = new THREE.Mesh(coinGeo, coinMat);
-        cMesh.rotation.x = Math.PI / 2;
-        cMesh.position.set(laneX, 0.75, zPos + (c * 2.5));
+      for (let c = 0; c < 5; c++) {
+        const cMesh = createDiamondCoinMesh();
+        const archY = isArch ? (0.75 + Math.sin((c / 4) * Math.PI) * 1.7) : 0.75;
+        cMesh.position.set(laneX, archY, zPos + (c * 2.4));
         g.scene.add(cMesh);
         g.coinsList.push({ mesh: cMesh, value: 1 });
       }
@@ -2345,35 +2454,218 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         </div>
       </div>
 
-      {/* BOTTOM RIGHT: Carved Stone Pause Button (Exact match to Screenshots) */}
+      {/* LEFT SIDE: Vertical Golden Idol Multiplier Bar (1:1 with Images 1 & 2) */}
+      <div style={{
+        position: 'absolute',
+        top: 80,
+        left: 20,
+        zIndex: 25,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '4px',
+        pointerEvents: 'none'
+      }}>
+        {/* Golden Mask Idol Head */}
+        <div style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, #fde047 0%, #d97706 70%, #78350f 100%)',
+          border: '2px solid #fef08a',
+          boxShadow: '0 0 12px rgba(245, 158, 11, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '1.05rem'
+        }}>
+          🗿
+        </div>
+        {/* Vertical Vine Filling Tube */}
+        <div style={{
+          width: '14px',
+          height: '140px',
+          borderRadius: '8px',
+          background: 'rgba(20, 20, 20, 0.75)',
+          border: '1.5px solid #78716c',
+          boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.8)',
+          position: 'relative',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-end'
+        }}>
+          <div style={{
+            width: '100%',
+            height: `${Math.min(100, powerMeter)}%`,
+            background: 'linear-gradient(180deg, #34d399 0%, #059669 50%, #047857 100%)',
+            boxShadow: '0 0 8px #10b981',
+            borderRadius: '6px',
+            transition: 'height 0.15s ease'
+          }} />
+        </div>
+        <span style={{
+          fontSize: '0.72rem',
+          fontWeight: 900,
+          color: '#fbbf24',
+          fontFamily: 'monospace',
+          textShadow: '0 1px 4px rgba(0,0,0,0.9)'
+        }}>
+          {powerMeter >= 80 ? '4X' : powerMeter >= 50 ? '3X' : powerMeter >= 25 ? '2X' : '1X'}
+        </span>
+      </div>
+
+      {/* TOP CENTER: Carved Stone Pause Button */}
       {gameState === 'playing' && (
         <button
-          onClick={() => setGameState('paused')}
+          onClick={(e) => { e.stopPropagation(); setGameState('paused'); }}
           style={{
             position: 'absolute',
-            bottom: 18,
-            right: 18,
+            top: 14,
+            left: '50%',
+            transform: 'translateX(-50%)',
             zIndex: 25,
-            width: '54px',
-            height: '54px',
-            borderRadius: '16px',
+            width: '42px',
+            height: '42px',
+            borderRadius: '12px',
             background: 'linear-gradient(180deg, #44403c 0%, #292524 100%)',
-            border: '2.5px solid #78716c',
+            border: '2px solid #78716c',
             boxShadow: '0 4px 15px rgba(0,0,0,0.6)',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            flexDirection: 'column',
-            gap: '2px'
+            gap: '3px'
           }}
+          aria-label="Pause"
         >
-          <div style={{ display: 'flex', gap: '4px' }}>
-            <div style={{ width: '5px', height: '18px', background: '#fbbf24', borderRadius: '2px' }} />
-            <div style={{ width: '5px', height: '18px', background: '#fbbf24', borderRadius: '2px' }} />
-          </div>
-          <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 4px #10b981' }} />
+          <div style={{ width: '4px', height: '14px', background: '#fbbf24', borderRadius: '2px' }} />
+          <div style={{ width: '4px', height: '14px', background: '#fbbf24', borderRadius: '2px' }} />
         </button>
+      )}
+
+      {/* ON-SCREEN ACTION CONTROLS (TACTILE TOUCH & CLICK BUTTONS) */}
+      {gameState === 'playing' && (
+        <>
+          {/* Bottom Left: Steer ◀ and ▶ */}
+          <div style={{
+            position: 'absolute',
+            bottom: 18,
+            left: 18,
+            zIndex: 30,
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'center'
+          }}>
+            <button
+              onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); moveLeft(); }}
+              style={{
+                width: '54px',
+                height: '54px',
+                borderRadius: '50%',
+                background: 'linear-gradient(145deg, #292524 0%, #1c1917 100%)',
+                border: '2.5px solid #78716c',
+                color: '#10b981',
+                fontSize: '1.35rem',
+                fontWeight: 900,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 6px 18px rgba(0,0,0,0.7), inset 0 2px 4px rgba(255,255,255,0.1)',
+                cursor: 'pointer',
+                userSelect: 'none',
+                touchAction: 'none'
+              }}
+              aria-label="Steer Left"
+            >
+              ◀
+            </button>
+            <button
+              onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); moveRight(); }}
+              style={{
+                width: '54px',
+                height: '54px',
+                borderRadius: '50%',
+                background: 'linear-gradient(145deg, #292524 0%, #1c1917 100%)',
+                border: '2.5px solid #78716c',
+                color: '#10b981',
+                fontSize: '1.35rem',
+                fontWeight: 900,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 6px 18px rgba(0,0,0,0.7), inset 0 2px 4px rgba(255,255,255,0.1)',
+                cursor: 'pointer',
+                userSelect: 'none',
+                touchAction: 'none'
+              }}
+              aria-label="Steer Right"
+            >
+              ▶
+            </button>
+          </div>
+
+          {/* Bottom Right: Tactile JUMP & SLIDE Action Buttons (Exact User Match) */}
+          <div style={{
+            position: 'absolute',
+            bottom: 18,
+            right: 18,
+            zIndex: 30,
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'center'
+          }}>
+            {/* SLIDE BUTTON */}
+            <button
+              onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); slide(); }}
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                background: 'linear-gradient(145deg, #065f46 0%, #064e3b 100%)',
+                border: '2.5px solid #34d399',
+                color: '#ecfdf5',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 6px 20px rgba(6, 95, 70, 0.7), 0 0 14px rgba(52, 211, 153, 0.4)',
+                cursor: 'pointer',
+                userSelect: 'none',
+                touchAction: 'none'
+              }}
+              aria-label="Slide"
+            >
+              <span style={{ fontSize: '1.15rem', lineHeight: 1 }}>▼</span>
+              <span style={{ fontSize: '0.62rem', fontWeight: 900, letterSpacing: '0.5px' }}>SLIDE</span>
+            </button>
+
+            {/* JUMP BUTTON */}
+            <button
+              onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); jump(); }}
+              style={{
+                width: '72px',
+                height: '72px',
+                borderRadius: '50%',
+                background: 'linear-gradient(145deg, #ea580c 0%, #c2410c 100%)',
+                border: '3px solid #fde047',
+                color: '#fff',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 8px 24px rgba(234, 88, 12, 0.8), 0 0 18px rgba(253, 224, 71, 0.5)',
+                cursor: 'pointer',
+                userSelect: 'none',
+                touchAction: 'none'
+              }}
+              aria-label="Jump"
+            >
+              <span style={{ fontSize: '1.35rem', lineHeight: 1 }}>▲</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 900, letterSpacing: '0.5px' }}>JUMP</span>
+            </button>
+          </div>
+        </>
       )}
 
       {/* DEMON MONKEY DANGER RED VIGNETTE PULSE OVERLAY */}
@@ -2418,6 +2710,32 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         >
           <span style={{ fontSize: '1.4rem' }}>{turnWarning === 'left' ? '⬅️' : '➡️'}</span>
           <span>{turnWarning === 'left' ? 'SWIPE LEFT TO TURN!' : 'SWIPE RIGHT TO TURN!'}</span>
+        </div>
+      )}
+
+      {/* FLOATING ACTION HINT FOR NEW RUN (Disappears as runner gets moving) */}
+      {gameState === 'playing' && distance < 25 && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 100,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 25,
+            pointerEvents: 'none',
+            background: 'rgba(0,0,0,0.7)',
+            border: '1.5px solid rgba(251, 191, 36, 0.5)',
+            borderRadius: '20px',
+            padding: '6px 20px',
+            color: '#fef08a',
+            fontSize: '0.82rem',
+            fontWeight: 800,
+            letterSpacing: '0.5px',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.6)',
+            animation: 'templeTurnPulse 0.8s infinite alternate'
+          }}
+        >
+          SWIPE OR TAP BUTTONS • JUMP, SLIDE & TURN
         </div>
       )}
 

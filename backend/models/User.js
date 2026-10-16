@@ -56,6 +56,13 @@ const userSchema = new mongoose.Schema({
   lastVibeDate: { type: String, default: '' },
   // Instagram-style Profile/App Music Note
   musicNote: { type: Object, default: null }, // { songTitle: String, artistName: String, audioUrl: String, artworkUrl: String, duration: Number, noteText: String, updatedAt: String }
+  // Refer & Earn (200 Sparks for Referrer, 50 Sparks for New User)
+  referralCode: { type: String, default: null, index: true },
+  pendingReferralCode: { type: String, default: null },
+  referredBy: { type: String, default: null },
+  hasClaimedReferral: { type: Boolean, default: false },
+  referralCount: { type: Number, default: 0 },
+  referralEarnings: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
 });
 

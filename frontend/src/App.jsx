@@ -134,6 +134,23 @@ export default function App() {
     return () => window.removeEventListener('pulsechat_app_lock_changed', handleAppLockChanged);
   }, []);
 
+  // Capture Referral Code from URL (?ref=CODE or ?referral=CODE)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const refCode = urlParams.get('ref') || urlParams.get('referral');
+        if (refCode && refCode.trim()) {
+          const cleanRef = refCode.trim().toUpperCase();
+          localStorage.setItem('pulsechat_pending_referral', cleanRef);
+          // Clean URL without reload so user experience stays clean
+          const cleanUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+      } catch (e) {}
+    }
+  }, []);
+
   // Compliance & Legal Pages Direct Route Support (/privacy, /terms, /refund, /pricing, /contact)
   const [standaloneLegalTab, setStandaloneLegalTab] = useState(() => {
     if (typeof window !== 'undefined') {

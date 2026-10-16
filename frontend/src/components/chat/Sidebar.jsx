@@ -25,6 +25,7 @@ const SparksWalletModal = lazyWithRetry(() => import('./SparksWalletModal'));
 const VibeAuraSelectorModal = lazyWithRetry(() => import('./VibeAuraSelectorModal'));
 const MusicPickerModal = lazyWithRetry(() => import('../vibes/MusicPickerModal'));
 const PinLockModal = lazyWithRetry(() => import('../common/PinLockModal'));
+const ReferEarnModal = lazyWithRetry(() => import('./ReferEarnModal'));
 import { isChatLocked, isChatMuted, getLockedChats, getMutedChats } from '../../utils/securityLock';
 import { BACKEND_URL } from '../../utils/config';
 import { preloadMediaUrls } from '../../utils/mediaCache';
@@ -254,6 +255,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [showTopMenu, setShowTopMenu] = useState(false);
   const [showSwitchAccountMenu, setShowSwitchAccountMenu] = useState(false);
   const [showMusicPickerModal, setShowMusicPickerModal] = useState(false);
+  const [showReferEarnModal, setShowReferEarnModal] = useState(false);
+
+  useEffect(() => {
+    const handleOpenReferral = () => setShowReferEarnModal(true);
+    window.addEventListener('pulsechat_open_referral', handleOpenReferral);
+    return () => window.removeEventListener('pulsechat_open_referral', handleOpenReferral);
+  }, []);
 
   useEffect(() => {
     const handleOpenWallet = () => setShowSparksWallet(true);
@@ -307,6 +315,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   useBackHandler(() => setShowProModal(false), showProModal);
   useBackHandler(() => setShowVibeSelector(false), showVibeSelector);
   useBackHandler(() => setShowFeatureTourModal(false), showFeatureTourModal);
+  useBackHandler(() => setShowReferEarnModal(false), showReferEarnModal);
   useBackHandler(() => setShowMusicPickerModal(false), showMusicPickerModal);
   useBackHandler(() => setShowTopMenu(false), showTopMenu);
   useBackHandler(() => setShowSwitchAccountMenu(false), showSwitchAccountMenu);
@@ -2280,6 +2289,34 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 <span>Feature Tour Guide</span>
               </button>
 
+              {/* Refer & Earn (Directly below Feature Tour Guide, heading name only, no description) */}
+              <button
+                onClick={() => {
+                  setShowTopMenu(false);
+                  setShowReferEarnModal(true);
+                }}
+                className="dropdown-menu-item"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text-main)',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  width: '100%',
+                  transition: 'background 0.15s ease'
+                }}
+              >
+                <Sparkles size={17} color="#f59e0b" />
+                <span>Refer & Earn</span>
+              </button>
+
               <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
 
               {/* Settings & Profile */}
@@ -3313,6 +3350,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       {showSparksWallet && (
         <SparksWalletModal
           onClose={() => setShowSparksWallet(false)}
+        />
+      )}
+
+      {showReferEarnModal && (
+        <ReferEarnModal
+          onClose={() => setShowReferEarnModal(false)}
         />
       )}
 

@@ -86,6 +86,31 @@ export function AuthProvider({ children }) {
     setToken(data.token);
     setUser(data.user);
     updateSavedAccountsList(data.user, data.token);
+
+    // Auto-claim pending referral if user joined via link
+    try {
+      const pendingRef = localStorage.getItem('pulsechat_pending_referral');
+      if (pendingRef && data.token && !data.user?.hasClaimedReferral) {
+        fetch(`${BACKEND_URL}/api/sparks/claim-referral`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${data.token}`
+          },
+          body: JSON.stringify({ referralCode: pendingRef })
+        })
+          .then(res => res.json())
+          .then(resData => {
+            if (resData.success) {
+              localStorage.removeItem('pulsechat_pending_referral');
+              if (resData.newBalance !== undefined) {
+                setUser(prev => prev ? { ...prev, pulseSparks: resData.newBalance, hasClaimedReferral: true } : prev);
+              }
+            }
+          })
+          .catch(() => {});
+      }
+    } catch (e) {}
   };
 
   const logout = () => {

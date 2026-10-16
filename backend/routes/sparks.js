@@ -399,4 +399,192 @@ router.post('/use-feature', authMiddleware, async (req, res) => {
   }
 });
 
+// Helper function to execute referral reward
+async function processReferralReward(newUserId, referralCodeInput, io = null) {
+  if (!newUserId || !referralCodeInput) return null;
+
+  const isObjId = mongoose.Types.ObjectId.isValid(newUserId);
+  const newUser = await User.findOne({
+    $or: [{ id: newUserId }, ...(isObjId ? [{ _id: newUserId }] : [])]
+  });
+
+  if (!newUser || newUser.hasClaimedReferral) return null;
+
+  const cleanCode = referralCodeInput.trim().toUpperCase();
+  // Find referrer by referralCode OR username
+  const referrer = await User.findOne({
+    $or: [
+      { referralCode: cleanCode },
+      { username: cleanCode.toLowerCase() },
+      { username: referralCodeInput.trim().toLowerCase() }
+    ]
+  });
+
+  if (!referrer) return null;
+  const canonicalNewId = newUser.id || newUser._id.toString();
+  const canonicalRefId = referrer.id || referrer._id.toString();
+
+  // Cannot refer oneself!
+  if (canonicalNewId === canonicalRefId || newUser.username === referrer.username) {
+    return null;
+  }
+
+  // Credit Referrer +200 Sparks
+  const refOldSparks = typeof referrer.pulseSparks === 'number' ? referrer.pulseSparks : 50;
+  const refNewBalance = refOldSparks + 200;
+  referrer.pulseSparks = refNewBalance;
+  referrer.referralCount = (referrer.referralCount || 0) + 1;
+  referrer.referralEarnings = (referrer.referralEarnings || 0) + 200;
+  await referrer.save();
+
+  // Credit New User +50 Sparks
+  const newOldSparks = typeof newUser.pulseSparks === 'number' ? newUser.pulseSparks : 50;
+  const newBalance = newOldSparks + 50;
+  newUser.pulseSparks = newBalance;
+  newUser.hasClaimedReferral = true;
+  newUser.referredBy = canonicalRefId;
+  await newUser.save();
+
+  // Record Transactions
+  try {
+    await SparksTransaction.create({
+      userId: canonicalRefId,
+      type: 'credit',
+      amount: 200,
+      reason: 'referral_bonus',
+      title: '🎁 Referral Bonus (+200 Sparks)',
+      description: `@${newUser.username || 'friend'} joined PulseChat using your referral code!`,
+      relatedUserId: canonicalNewId,
+      relatedUserName: newUser.username || 'friend',
+      balanceAfter: refNewBalance
+    });
+
+    await SparksTransaction.create({
+      userId: canonicalNewId,
+      type: 'credit',
+      amount: 50,
+      reason: 'referral_welcome',
+      title: '🎉 Welcome Referral Bonus (+50 Sparks)',
+      description: `Welcome bonus for joining via @${referrer.username || 'friend'}'s referral!`,
+      relatedUserId: canonicalRefId,
+      relatedUserName: referrer.username || 'friend',
+      balanceAfter: newBalance
+    });
+  } catch (txErr) {
+    console.warn('Referral SparksTransaction error:', txErr);
+  }
+
+  // Real-time socket broadcast
+  if (io) {
+    io.to(`user_${canonicalRefId}`).emit('sparks_updated', {
+      pulseSparks: refNewBalance,
+      earnedAmount: 200,
+      type: 'credit',
+      title: `🎁 +200 Sparks! @${newUser.username || 'friend'} joined via your referral link!`
+    });
+    io.to(`user_${canonicalRefId}`).emit('user_profile_updated', {
+      userId: canonicalRefId,
+      pulseSparks: refNewBalance
+    });
+    io.to(`user_${canonicalNewId}`).emit('sparks_updated', {
+      pulseSparks: newBalance,
+      earnedAmount: 50,
+      type: 'credit',
+      title: `🎉 +50 Sparks Welcome Bonus credited!`
+    });
+    io.to(`user_${canonicalNewId}`).emit('user_profile_updated', {
+      userId: canonicalNewId,
+      pulseSparks: newBalance
+    });
+  }
+
+  return { referrer, newUser, refNewBalance, newBalance };
+}
+
+// 7. Get User's Referral Code, Link, Stats, and History
+router.get('/referral-info', authMiddleware, async (req, res) => {
+  try {
+    const userId = resolveCanonicalUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized user' });
+
+    const isObjId = mongoose.Types.ObjectId.isValid(userId);
+    let userDoc = await User.findOne({
+      $or: [{ id: userId }, ...(isObjId ? [{ _id: userId }] : [])]
+    });
+
+    if (!userDoc) return res.status(404).json({ error: 'User not found' });
+
+    // Ensure user has a clean referral code
+    if (!userDoc.referralCode) {
+      const cleanUsername = (userDoc.username || 'PULSE').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+      userDoc.referralCode = `${cleanUsername}${Math.floor(1000 + Math.random() * 9000)}`;
+      await userDoc.save();
+    }
+
+    const host = req.get('host') || 'localhost:5173';
+    const protocol = req.protocol === 'https' || req.get('x-forwarded-proto') === 'https' ? 'https' : 'http';
+    const origin = `${protocol}://${host}`;
+    const referralLink = `${origin}/?ref=${encodeURIComponent(userDoc.referralCode)}`;
+
+    const canonicalId = userDoc.id || userDoc._id.toString();
+    const referralHistory = await SparksTransaction.find({
+      userId: canonicalId,
+      reason: 'referral_bonus'
+    })
+      .sort({ createdAt: -1 })
+      .limit(25)
+      .lean();
+
+    res.json({
+      success: true,
+      referralCode: userDoc.referralCode,
+      referralLink,
+      referralCount: userDoc.referralCount || 0,
+      referralEarnings: userDoc.referralEarnings || 0,
+      hasClaimedReferral: !!userDoc.hasClaimedReferral,
+      referredBy: userDoc.referredBy || null,
+      history: referralHistory.map(h => ({
+        id: h._id,
+        relatedUserName: h.relatedUserName || 'Friend',
+        amount: h.amount || 200,
+        createdAt: h.createdAt
+      }))
+    });
+  } catch (err) {
+    console.error('Error fetching referral info:', err);
+    res.status(500).json({ error: 'Failed to fetch referral details' });
+  }
+});
+
+// 8. Claim Referral Code (Manual entry by new user)
+router.post('/claim-referral', authMiddleware, async (req, res) => {
+  try {
+    const userId = resolveCanonicalUserId(req);
+    const { referralCode } = req.body;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized user' });
+    if (!referralCode || !referralCode.trim()) {
+      return res.status(400).json({ error: 'Referral code is required' });
+    }
+
+    const io = req.app.get('io');
+    const result = await processReferralReward(userId, referralCode.trim(), io);
+
+    if (!result) {
+      return res.status(400).json({ error: 'Invalid referral code, already claimed, or cannot refer yourself.' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Referral code applied! +50 Sparks welcome bonus added to your wallet!',
+      bonusSparks: 50,
+      newBalance: result.newBalance,
+      referredBy: result.referrer.username
+    });
+  } catch (err) {
+    console.error('Error claiming referral:', err);
+    res.status(500).json({ error: err.message || 'Failed to claim referral' });
+  }
+});
+
 module.exports = router;
+module.exports.processReferralReward = processReferralReward;

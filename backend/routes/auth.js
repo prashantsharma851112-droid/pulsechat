@@ -64,7 +64,7 @@ router.get('/google-client-id', (req, res) => {
 // Register with Email, Password & Unique @username
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, username, displayName } = req.body;
+    const { email, password, username, displayName, referralCode } = req.body;
 
     if (!email || !password || !username || !displayName) {
       return res.status(400).json({ error: 'All fields are required.' });
@@ -151,6 +151,7 @@ router.post('/register', async (req, res) => {
         otpCode: otp,
         otpExpires,
         pulseSparks: 50,
+        pendingReferralCode: referralCode ? referralCode.trim() : null,
         hasUsed3DTrial: false,
         claimedFreeSparks: {},
         createdAt: new Date().toISOString()
@@ -202,7 +203,7 @@ router.post('/register', async (req, res) => {
 // Login via Email OR Username + Password
 router.post('/login', async (req, res) => {
   try {
-    const { identifier, password } = req.body;
+    const { identifier, password, referralCode } = req.body;
     if (!identifier || !password) {
       return res.status(400).json({ error: 'Please enter Email/Username and Password.' });
     }
@@ -278,6 +279,21 @@ router.post('/login', async (req, res) => {
     delete userObj.passwordHash;
     delete userObj.otpCode;
     delete userObj.otpExpires;
+
+    // Automatic Refer & Earn Grant for Login
+    try {
+      const { processReferralReward } = require('./sparks');
+      if (referralCode && !user.hasClaimedReferral) {
+        const refResult = await processReferralReward(user.id || user._id, referralCode, req.app.get('io'));
+        if (refResult) {
+          userObj.pulseSparks = refResult.newBalance;
+          userObj.hasClaimedReferral = true;
+          userObj.referredBy = refResult.referrer.id || refResult.referrer._id.toString();
+        }
+      }
+    } catch (refErr) {
+      console.warn('Login referral grant warning:', refErr);
+    }
 
     res.json({ token, user: userObj });
   } catch (err) {
@@ -470,6 +486,22 @@ router.post('/verify-otp', async (req, res) => {
     delete safeUser.otpExpires;
     safeUser.isEmailVerified = true;
 
+    // Automatic Refer & Earn Grant (200 Sparks to Referrer, 50 Sparks to New User)
+    try {
+      const { processReferralReward } = require('./sparks');
+      const refCodeToUse = user.pendingReferralCode || req.body.referralCode;
+      if (refCodeToUse && !user.hasClaimedReferral) {
+        const refResult = await processReferralReward(user.id || user._id, refCodeToUse, req.app.get('io'));
+        if (refResult) {
+          safeUser.pulseSparks = refResult.newBalance;
+          safeUser.hasClaimedReferral = true;
+          safeUser.referredBy = refResult.referrer.id || refResult.referrer._id.toString();
+        }
+      }
+    } catch (refErr) {
+      console.warn('Referral reward grant error in verify-otp:', refErr);
+    }
+
     // Invalidate Redis RAM caches so Discover Pulses and suggestions refresh immediately
     try {
       const redis = require('../utils/redis');
@@ -606,7 +638,7 @@ router.post('/reset-password', async (req, res) => {
 // Directly validates real Google accounts (already verified by Google)
 router.post('/google', async (req, res) => {
   try {
-    const { credential } = req.body;
+    const { credential, referralCode } = req.body;
     if (!credential) {
       return res.status(400).json({ error: 'Google credential token is required.' });
     }
@@ -698,6 +730,22 @@ router.post('/google', async (req, res) => {
     );
 
     const { passwordHash: _, otpCode: __, ...safeUser } = user.toObject ? user.toObject() : user;
+
+    // Automatic Refer & Earn Grant for Google Logins
+    try {
+      const { processReferralReward } = require('./sparks');
+      if (referralCode && !user.hasClaimedReferral) {
+        const refResult = await processReferralReward(user.id || user._id, referralCode, req.app.get('io'));
+        if (refResult) {
+          safeUser.pulseSparks = refResult.newBalance;
+          safeUser.hasClaimedReferral = true;
+          safeUser.referredBy = refResult.referrer.id || refResult.referrer._id.toString();
+        }
+      }
+    } catch (refErr) {
+      console.warn('Google referral grant warning:', refErr);
+    }
+
     res.json({
       success: true,
       token,
