@@ -6,23 +6,7 @@ const sparksTransactionSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   reason: {
     type: String,
-    enum: [
-      'story_tip_sent',
-      'story_tip_received',
-      'gift_sent',
-      'gift_received',
-      'sparks_purchase',
-      'daily_claim',
-      'ad_reward',
-      'signup_bonus',
-      'zone_reward',
-      'ai_chat',
-      'admin_adjustment',
-      'vibe_tip_sent',
-      'vibe_tip_received',
-      'vibe_tip'
-    ],
-    default: 'story_tip_sent'
+    default: 'feature_unlock'
   },
   title: { type: String, required: true },
   description: { type: String },

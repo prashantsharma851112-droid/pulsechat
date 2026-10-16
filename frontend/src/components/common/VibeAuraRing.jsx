@@ -109,15 +109,25 @@ export default function VibeAuraRing({
           borderRadius: isGroup ? '14px' : '50%',
           border: auraType === 'dragon_glow'
             ? '2.5px solid #f59e0b'
-            : (auraType === 'neon_flame' ? '2.5px solid #ff0055' : `2px solid ${ringColor}`),
+            : (auraType === 'neon_flame'
+              ? '2.5px solid #ff0055'
+              : (auraType === 'cyber_neon'
+                ? '2.5px solid #a855f7'
+                : `2px solid ${ringColor}`)),
           boxShadow: auraType === 'dragon_glow'
             ? '0 0 14px #f59e0b, 0 0 28px #ef4444, inset 0 0 6px #ffd700'
             : (auraType === 'neon_flame'
               ? '0 0 14px #ff0055, 0 0 28px #ff5500, inset 0 0 6px #ffaa00'
-              : `0 0 10px ${ringColor}, inset 0 0 5px ${ringColor}`),
+              : (auraType === 'cyber_neon'
+                ? '0 0 14px #ec4899, 0 0 28px #06b6d4, inset 0 0 6px #a855f7'
+                : `0 0 10px ${ringColor}, inset 0 0 5px ${ringColor}`)),
           animation: auraType === 'dragon_glow'
             ? 'dragonGlowFlicker 1.4s infinite ease-in-out'
-            : (auraType === 'neon_flame' ? 'neonFlameFlicker 1.4s infinite ease-in-out' : 'vibeAuraPulse 2s infinite ease-in-out'),
+            : (auraType === 'neon_flame'
+              ? 'neonFlameFlicker 1.4s infinite ease-in-out'
+              : (auraType === 'cyber_neon'
+                ? 'cyberNeonRainbow 2s infinite ease-in-out'
+                : 'vibeAuraPulse 2s infinite ease-in-out')),
           pointerEvents: 'none',
           zIndex: 1
         }}
@@ -196,6 +206,12 @@ export default function VibeAuraRing({
           0% { transform: scale(1.0); box-shadow: 0 0 12px #f59e0b, 0 0 24px #ef4444; opacity: 0.85; }
           50% { transform: scale(1.07); box-shadow: 0 0 18px #ffd700, 0 0 32px #f59e0b, 0 0 42px #ef4444; opacity: 1.0; }
           100% { transform: scale(1.0); box-shadow: 0 0 12px #f59e0b, 0 0 24px #ef4444; opacity: 0.85; }
+        }
+        @keyframes cyberNeonRainbow {
+          0% { transform: scale(1.0); box-shadow: 0 0 12px #ec4899, 0 0 24px #06b6d4; border-color: #ec4899; opacity: 0.9; }
+          33% { transform: scale(1.06); box-shadow: 0 0 18px #06b6d4, 0 0 30px #a855f7; border-color: #06b6d4; opacity: 1.0; }
+          66% { transform: scale(1.04); box-shadow: 0 0 18px #a855f7, 0 0 32px #10b981; border-color: #a855f7; opacity: 1.0; }
+          100% { transform: scale(1.0); box-shadow: 0 0 12px #ec4899, 0 0 24px #06b6d4; border-color: #ec4899; opacity: 0.9; }
         }
         @keyframes instaThoughtFloat {
           0% { transform: translateX(-50%) translateY(0px); }

@@ -9,8 +9,9 @@ import SparksFeaturePromptModal from '../common/SparksFeaturePromptModal';
 import { updateUserProfileInStorage } from '../../utils/offlineStorage';
 
 const PRESET_AURAS = [
-  { id: 'neon_flame', mood: 'Neon Flame Streak', emoji: '🔥', auraColor: '#ff0055', auraType: 'neon_flame', isExclusive: true, desc: '3-Day Streak Unlock' },
-  { id: 'dragon_aura', mood: 'Dragon Fury VIP', emoji: '🐉', auraColor: '#f59e0b', auraType: 'dragon_glow', isExclusive: true, desc: 'VIP Dragon Aura' },
+  { id: 'dragon_aura', mood: 'Dragon Fury VIP', emoji: '🐉', auraColor: '#f59e0b', auraType: 'dragon_glow', isExclusive: true, isPro: true, desc: 'VIP Dragon Aura' },
+  { id: 'neon_circle', mood: 'Cyber Neon Pulse', emoji: '🌈', auraColor: '#a855f7', auraType: 'cyber_neon', isExclusive: true, isPro: true, desc: 'VIP Neon Circle' },
+  { id: 'neon_flame', mood: 'Neon Flame Streak', emoji: '🔥', auraColor: '#ff0055', auraType: 'neon_flame', isExclusive: true, isStreak: true, desc: '3-Day Streak Unlock' },
   { id: 'lofi', mood: 'Listening to Lofi', emoji: '🎧', auraColor: '#a855f7', auraType: 'violet_wave' },
   { id: 'gaming', mood: 'Temple Run 3D', emoji: '🎮', auraColor: '#06b6d4', auraType: 'cyan_neon', inGame: 'Temple Run 3D' },
   { id: 'chai', mood: 'Chai Break', emoji: '☕', auraColor: '#f59e0b', auraType: 'amber_glow' },
@@ -92,15 +93,16 @@ export default function VibeAuraSelectorModal({
   }, []);
 
   const isUserPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
-  const isFlameUnlocked = Boolean(isUserPro || user?.hasNeonFlameAura || user?.streakCount >= 3 || user?.vibeStreakCount >= 3);
-  const isDragonUnlocked = Boolean(isUserPro);
+  const isStreakUnlocked = Boolean(user?.streakCount >= 3 || user?.vibeStreakCount >= 3);
+  const isProAuraUnlocked = Boolean(isUserPro);
 
   const handleSelectPreset = (preset) => {
-    if (preset.id === 'neon_flame' && !isFlameUnlocked) {
-      setPendingTrialAura(preset);
-      return;
-    }
-    if (preset.id === 'dragon_aura' && !isDragonUnlocked) {
+    if (preset.isStreak) {
+      if (!isStreakUnlocked) {
+        alert("🔥 'Neon Flame Aura' Sirf 3-Day Streak Par Unlock Hota Hai!\n\nLagaataar 3 din chat ya story update karein to unlock. Streak tootne par ye aura lock ho jata hai.");
+        return;
+      }
+    } else if (preset.isPro && !isProAuraUnlocked) {
       setPendingTrialAura(preset);
       return;
     }
@@ -126,12 +128,13 @@ export default function VibeAuraSelectorModal({
     const isActuallyLow = hasBattery && detectedBattery && detectedBattery <= 20;
     const isFlame = selectedColor === '#ff0055' || selectedEmoji === '🔥';
     const isDragon = selectedEmoji === '🐉' || (trimmedMood && trimmedMood.toLowerCase().includes('dragon'));
+    const isCyberNeon = selectedEmoji === '🌈' || (trimmedMood && trimmedMood.toLowerCase().includes('cyber'));
     const auraData = {
       userId: effectiveUserId,
       mood: trimmedMood,
       emoji: selectedEmoji || '⚡',
       auraColor: isActuallyLow ? '#ef4444' : selectedColor,
-      auraType: isActuallyLow ? 'low_battery' : (isDragon ? 'dragon_glow' : (isFlame ? 'neon_flame' : 'neon_pulse')),
+      auraType: isActuallyLow ? 'low_battery' : (isDragon ? 'dragon_glow' : (isCyberNeon ? 'cyber_neon' : (isFlame ? 'neon_flame' : 'neon_pulse'))),
       isLowBattery: hasBattery,
       batteryLevel: hasBattery ? (detectedBattery !== null ? detectedBattery : 20) : null,
       inGame: trimmedMood.includes('Temple Run') ? 'Temple Run 3D' : '',
@@ -307,7 +310,7 @@ export default function VibeAuraSelectorModal({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '18px' }}>
           {PRESET_AURAS.map(preset => {
             const isSelected = selectedMood === preset.mood && !isLowBattery;
-            const isLocked = (preset.id === 'neon_flame' && !isFlameUnlocked) || (preset.id === 'dragon_aura' && !isDragonUnlocked);
+            const isLocked = preset.isStreak ? !isStreakUnlocked : (preset.isPro ? !isProAuraUnlocked : false);
             return (
               <button
                 key={preset.id}
@@ -341,7 +344,9 @@ export default function VibeAuraSelectorModal({
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: preset.auraColor }} />
                     {preset.isExclusive && (
                       <span style={{ fontSize: '0.62rem', fontWeight: 700, color: isLocked ? '#f59e0b' : '#10b981' }}>
-                        {isLocked ? '⚡ 10 (5m)' : (preset.id === 'dragon_aura' ? '👑 VIP Pro' : '🔥 Unlocked')}
+                        {preset.isStreak
+                          ? (isLocked ? '🔒 3d Streak' : '🔥 Streak Active')
+                          : (isLocked ? '⚡ 10 (5m)' : '👑 VIP Unlocked')}
                       </span>
                     )}
                   </div>
@@ -598,12 +603,13 @@ export default function VibeAuraSelectorModal({
             setPendingTrialAura(null);
 
             const isDragon = auraToApply.id === 'dragon_aura';
+            const isCyberNeon = auraToApply.id === 'neon_circle';
             const trialAuraData = {
               userId: effectiveUserId,
               mood: auraToApply.mood,
               emoji: auraToApply.emoji,
               auraColor: auraToApply.auraColor,
-              auraType: isDragon ? 'dragon_glow' : 'neon_flame',
+              auraType: isDragon ? 'dragon_glow' : (isCyberNeon ? 'cyber_neon' : 'neon_pulse'),
               isLowBattery: false,
               batteryLevel: null,
               inGame: '',

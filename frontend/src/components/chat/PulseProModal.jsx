@@ -1,13 +1,70 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../../context/AuthContext';
+import { SocketContext } from '../../context/SocketContext';
 import { X, Sparkles, Check, Crown, Zap, ShieldCheck, Flame, Coffee, Heart, Rocket, Diamond, Award, ArrowRight, Loader2, Clock, Music, EyeOff, Palette, BarChart2, Type, Gamepad2 } from 'lucide-react';
 import PulseVipBadge from '../common/PulseVipBadge';
 import UpiCheckoutModal from './UpiCheckoutModal';
+import SparksFeaturePromptModal from '../common/SparksFeaturePromptModal';
+import { updateUserProfileInStorage } from '../../utils/offlineStorage';
 import { BACKEND_URL } from '../../utils/config';
 import { useBackHandler } from '../../utils/backNavigation';
+import { resolveUserAura } from '../common/VibeAuraRing';
+
+const VIP_AURA_OPTIONS = [
+  {
+    id: 'dragon_aura',
+    name: 'Dragon Fury VIP',
+    emoji: '🐉',
+    mood: 'Dragon Fury VIP',
+    auraColor: '#f59e0b',
+    auraType: 'dragon_glow',
+    isPro: true,
+    tag: 'Pulse VIP Member',
+    badgeText: '👑 VIP Free',
+    desc: 'Golden fiery dragon aura with mythical flicker animations',
+    iconBg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(239, 68, 68, 0.25))',
+    borderColor: '#f59e0b'
+  },
+  {
+    id: 'neon_circle',
+    name: 'Cyber Neon Pulse',
+    emoji: '🌈',
+    mood: 'Cyber Neon VIP',
+    auraColor: '#a855f7',
+    auraType: 'cyber_neon',
+    isPro: true,
+    tag: 'Pulse VIP Member',
+    badgeText: '👑 VIP Free',
+    desc: 'Radiant cycling glowing multi-color neon ring',
+    iconBg: 'linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(6, 182, 212, 0.25))',
+    borderColor: '#a855f7'
+  },
+  {
+    id: 'neon_flame',
+    name: 'Neon Flame',
+    emoji: '🔥',
+    mood: 'Neon Flame Streak',
+    auraColor: '#ff0055',
+    auraType: 'neon_flame',
+    isStreak: true,
+    tag: '3-Day Streak Only',
+    badgeText: '🔥 Streak Only',
+    desc: 'Pink/Neon flame ring (3-Day Streak par unlock, tootne par lock)',
+    iconBg: 'linear-gradient(135deg, rgba(255, 0, 85, 0.25), rgba(249, 115, 22, 0.25))',
+    borderColor: '#ff0055'
+  }
+];
 
 export default function PulseProModal({ onClose, initialTab = 'pro' }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
+  const { socket, vibeAuras } = useContext(SocketContext);
+  const myAura = resolveUserAura(user, vibeAuras);
+  const effectiveUserId = user?._id || user?.id;
+  const currentStreak = user?.streakCount || user?.vibeStreakCount || 0;
+  const isStreakUnlocked = currentStreak >= 3;
+  const activeAuraType = myAura?.auraType || user?.vibeAura?.auraType;
+
+  const [pendingTrialAura, setPendingTrialAura] = useState(null);
   const [activeTab, setActiveTab] = useState(initialTab === 'coins' ? 'sparks' : initialTab); // 'pro' | 'sparks'
   const [billingCycle, setBillingCycle] = useState('monthly'); // 'monthly' | 'yearly'
   const [selectedSparksPack, setSelectedSparksPack] = useState('sparks_300');
@@ -15,6 +72,81 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [razorpayConfig, setRazorpayConfig] = useState({ keyId: '', isLive: false });
   const [upiCheckoutPlan, setUpiCheckoutPlan] = useState(null);
+
+  const applyAuraDirectly = (auraItem) => {
+    if (!effectiveUserId) return;
+    const auraData = {
+      userId: effectiveUserId,
+      mood: auraItem.mood || '',
+      emoji: auraItem.emoji || '⚡',
+      auraColor: auraItem.auraColor || '#f59e0b',
+      auraType: auraItem.auraType,
+      isLowBattery: false,
+      batteryLevel: null,
+      inGame: ''
+    };
+    if (socket) socket.emit('update_vibe_aura', auraData);
+    if (typeof updateUserProfile === 'function') updateUserProfile({ ...user, vibeAura: auraData });
+    try { updateUserProfileInStorage(effectiveUserId, { vibeAura: auraData }, effectiveUserId); } catch (e) {}
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+        detail: { targetUserId: effectiveUserId, updates: { vibeAura: auraData } }
+      }));
+    }
+    setStatusMsg({
+      type: 'success',
+      text: `✨ ${auraItem.name} activated on your Avatar!`
+    });
+  };
+
+  const handleClearAura = () => {
+    if (!effectiveUserId) return;
+    const clearData = {
+      userId: effectiveUserId,
+      mood: '',
+      emoji: '',
+      auraColor: null,
+      auraType: 'none',
+      isLowBattery: false,
+      batteryLevel: null,
+      inGame: '',
+      cleared: true,
+      music: null
+    };
+    if (socket) socket.emit('update_vibe_aura', clearData);
+    if (typeof updateUserProfile === 'function') updateUserProfile({ ...user, vibeAura: null });
+    try { updateUserProfileInStorage(effectiveUserId, { vibeAura: null }, effectiveUserId); } catch (e) {}
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+        detail: { targetUserId: effectiveUserId, updates: { vibeAura: null } }
+      }));
+    }
+    setStatusMsg({
+      type: 'success',
+      text: 'Avatar aura removed.'
+    });
+  };
+
+  const handleSelectVipAura = (preset) => {
+    if (preset.isStreak) {
+      if (!isStreakUnlocked) {
+        setStatusMsg({
+          type: 'error',
+          text: `🔥 'Neon Flame' sirf continuous 3-day streak par unlock hota hai (${currentStreak}/3 days). Streak tootne par ye lock ho jayega.`
+        });
+        return;
+      }
+      applyAuraDirectly(preset);
+      return;
+    }
+
+    if (preset.isPro && !isUserPro) {
+      setPendingTrialAura(preset);
+      return;
+    }
+
+    applyAuraDirectly(preset);
+  };
 
   useBackHandler(() => setUpiCheckoutPlan(null), Boolean(upiCheckoutPlan));
   useBackHandler(onClose, !upiCheckoutPlan);
@@ -551,6 +683,150 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
         }}>
           {activeTab === 'pro' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              {/* VIP Avatar Auras & Glowing Rings */}
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(30, 27, 75, 0.7) 0%, rgba(49, 16, 66, 0.7) 100%)',
+                border: '1.5px solid rgba(245, 158, 11, 0.35)',
+                borderRadius: '16px',
+                padding: '16px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.35)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Sparkles size={18} color="#fbbf24" />
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#fff' }}>VIP Avatar Auras & Glowing Rings</div>
+                      <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)' }}>
+                        {isUserPro ? '👑 Pulse VIP Members get Dragon & Cyber Neon 100% Free!' : 'Free users can try for 5 mins (10 Sparks) • 100% Free with VIP Membership'}
+                      </div>
+                    </div>
+                  </div>
+                  {activeAuraType && activeAuraType !== 'none' && (
+                    <button
+                      onClick={handleClearAura}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        color: '#ef4444',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Clear Ring
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {VIP_AURA_OPTIONS.map((item) => {
+                    const isActive = activeAuraType === item.auraType;
+                    return (
+                      <div
+                        key={item.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 12px',
+                          borderRadius: '12px',
+                          background: isActive ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255,255,255,0.05)',
+                          border: isActive ? `1.5px solid ${item.borderColor}` : '1px solid rgba(255,255,255,0.1)',
+                          gap: '10px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                          <div style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '50%',
+                            background: item.iconBg,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '1.3rem',
+                            border: `1.5px solid ${item.borderColor}`,
+                            boxShadow: `0 0 12px ${item.auraColor}40`,
+                            flexShrink: 0
+                          }}>
+                            {item.emoji}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#fff' }}>{item.name}</span>
+                              <span style={{
+                                fontSize: '0.65rem',
+                                fontWeight: 700,
+                                padding: '2px 6px',
+                                borderRadius: '6px',
+                                background: item.isStreak ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.25)',
+                                color: item.isStreak ? '#f87171' : '#fbbf24',
+                                border: `1px solid ${item.isStreak ? '#ef444455' : '#f59e0b55'}`
+                              }}>
+                                {item.badgeText}
+                              </span>
+                              {isActive && (
+                                <span style={{
+                                  fontSize: '0.65rem',
+                                  fontWeight: 800,
+                                  padding: '2px 6px',
+                                  borderRadius: '6px',
+                                  background: '#10b981',
+                                  color: '#fff'
+                                }}>
+                                  Active Now
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.65)', marginTop: '2px' }}>
+                              {item.desc}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleSelectVipAura(item)}
+                          disabled={isActive}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            background: isActive
+                              ? 'rgba(16, 185, 129, 0.3)'
+                              : (item.isPro && isUserPro)
+                              ? 'linear-gradient(90deg, #f59e0b, #ef4444)'
+                              : item.isStreak
+                              ? (isStreakUnlocked ? 'linear-gradient(90deg, #ff0055, #f97316)' : 'rgba(255,255,255,0.1)')
+                              : 'linear-gradient(90deg, #6366f1, #a855f7)',
+                            color: isActive ? '#10b981' : (item.isStreak && !isStreakUnlocked ? 'rgba(255,255,255,0.4)' : '#fff'),
+                            fontWeight: 700,
+                            fontSize: '0.78rem',
+                            cursor: isActive ? 'default' : (item.isStreak && !isStreakUnlocked ? 'not-allowed' : 'pointer'),
+                            flexShrink: 0,
+                            boxShadow: isActive ? 'none' : '0 2px 8px rgba(0,0,0,0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          {isActive ? (
+                            <>✓ Active</>
+                          ) : item.isStreak ? (
+                            isStreakUnlocked ? '🔥 Activate' : '🔒 Streak Locked'
+                          ) : isUserPro ? (
+                            <>👑 Free Activate</>
+                          ) : (
+                            <>⚡ 10 Sparks Trial</>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Feature Grid - 12 Complete VIP Perks */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
                 <div style={{
@@ -1289,6 +1565,52 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
           onSuccess={() => {
             setUpiCheckoutPlan(null);
             onClose();
+          }}
+        />
+      )}
+
+      {/* Sparks Feature Prompt Modal for 5-minute Live Trial */}
+      {pendingTrialAura && (
+        <SparksFeaturePromptModal
+          isOpen={Boolean(pendingTrialAura)}
+          onClose={() => setPendingTrialAura(null)}
+          featureKey="vibe_aura_trial_5m"
+          featureName={`${pendingTrialAura.name} (5-Min Live Trial)`}
+          sparksCost={10}
+          icon={pendingTrialAura.emoji}
+          description={`Apne profile avatar par 5 minute ke liye ${pendingTrialAura.name} live trial activate karein.`}
+          onOpenProModal={() => {
+            setPendingTrialAura(null);
+          }}
+          onSuccess={() => {
+            applyAuraDirectly(pendingTrialAura);
+            setStatusMsg({
+              type: 'success',
+              text: `✨ ${pendingTrialAura.name} activated for 5-minute live trial! (10 Sparks used)`
+            });
+            setTimeout(() => {
+              const clearData = {
+                userId: effectiveUserId,
+                mood: '',
+                emoji: '',
+                auraColor: null,
+                auraType: 'none',
+                isLowBattery: false,
+                batteryLevel: null,
+                inGame: '',
+                cleared: true,
+                music: null
+              };
+              if (socket) socket.emit('update_vibe_aura', clearData);
+              if (typeof updateUserProfile === 'function') updateUserProfile({ ...user, vibeAura: null });
+              try { updateUserProfileInStorage(effectiveUserId, { vibeAura: null }, effectiveUserId); } catch (e) {}
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+                  detail: { targetUserId: effectiveUserId, updates: { vibeAura: null } }
+                }));
+              }
+            }, 5 * 60 * 1000);
+            setPendingTrialAura(null);
           }}
         />
       )}

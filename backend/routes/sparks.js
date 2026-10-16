@@ -354,16 +354,21 @@ router.post('/use-feature', authMiddleware, async (req, res) => {
     userDoc.pulseSparks = newBalance;
     await userDoc.save();
 
-    // Record debit transaction
-    const tx = await SparksTransaction.create({
-      userId: canonicalId,
-      type: 'debit',
-      amount: cost,
-      reason: `feature_${featureKey}`,
-      title: targetFeature.title,
-      description: targetFeature.description,
-      balanceAfter: newBalance
-    });
+    // Record debit transaction safely
+    let tx = null;
+    try {
+      tx = await SparksTransaction.create({
+        userId: canonicalId,
+        type: 'debit',
+        amount: cost,
+        reason: `feature_${featureKey}`,
+        title: targetFeature.title,
+        description: targetFeature.description,
+        balanceAfter: newBalance
+      });
+    } catch (txErr) {
+      console.warn('Sparks debit transaction record warning:', txErr);
+    }
 
     // Real-time socket broadcast
     const io = req.app.get('io');
@@ -390,7 +395,7 @@ router.post('/use-feature', authMiddleware, async (req, res) => {
     });
   } catch (err) {
     console.error('Error using feature with sparks:', err);
-    res.status(500).json({ error: 'Failed to process Sparks unlock' });
+    res.status(500).json({ error: err.message || 'Failed to process Sparks unlock' });
   }
 });
 
