@@ -10,9 +10,35 @@ export default function Register({ switchToLogin }) {
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState(() => {
+    try {
+      const pending = localStorage.getItem('pulsechat_pending_referral');
+      return pending ? pending.trim().toUpperCase() : '';
+    } catch (e) {
+      return '';
+    }
+  });
   const [isAvailable, setIsAvailable] = useState(null);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Auto-detect referral code from URL (?ref=... or ?referral=...) or stored invite
+  useEffect(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlRef = urlParams.get('ref') || urlParams.get('referral');
+      if (urlRef && urlRef.trim()) {
+        const clean = urlRef.trim().toUpperCase();
+        setReferralCode(clean);
+        localStorage.setItem('pulsechat_pending_referral', clean);
+      } else {
+        const stored = localStorage.getItem('pulsechat_pending_referral');
+        if (stored && stored.trim()) {
+          setReferralCode(stored.trim().toUpperCase());
+        }
+      }
+    } catch (e) {}
+  }, []);
 
   // Email verification state
   const [step, setStep] = useState('form'); // 'form' | 'otp'
@@ -130,14 +156,19 @@ export default function Register({ switchToLogin }) {
     setError('');
     setLoading(true);
     try {
+      const refToPass = referralCode ? referralCode.trim().toUpperCase() : (localStorage.getItem('pulsechat_pending_referral') || undefined);
       const res = await fetch(`${BACKEND_URL}/api/auth/google`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential: response.credential })
+        body: JSON.stringify({
+          credential: response.credential,
+          referralCode: refToPass
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Google Sign-In failed.');
 
+      localStorage.removeItem('pulsechat_pending_referral');
       login(data);
     } catch (err) {
       setError(err.message);
@@ -165,7 +196,13 @@ export default function Register({ switchToLogin }) {
       const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), displayName: displayName.trim(), username: username.trim(), password }),
+        body: JSON.stringify({
+          email: email.trim(),
+          displayName: displayName.trim(),
+          username: username.trim(),
+          password,
+          referralCode: referralCode ? referralCode.trim().toUpperCase() : undefined
+        }),
         signal: controller.signal
       });
       clearTimeout(timeoutId);
@@ -258,13 +295,16 @@ export default function Register({ switchToLogin }) {
         body: JSON.stringify({
           email: email.trim(),
           otp: otpCode.trim(),
-          userId: registeredData?.userId
+          userId: registeredData?.userId,
+          referralCode: referralCode ? referralCode.trim().toUpperCase() : undefined
         }),
         signal: controller.signal
       });
       clearTimeout(timeoutId);
       const data = await parseSafeJson(res);
       if (!res.ok) throw new Error(data.error || 'Invalid or expired OTP code.');
+
+      localStorage.removeItem('pulsechat_pending_referral');
 
       // Complete login with verified user data & token
       login({
@@ -429,6 +469,64 @@ export default function Register({ switchToLogin }) {
                   required
                   placeholder="••••••••"
                 />
+              </div>
+
+              {/* Referral Code (Auto-filled from invite link or friend's code) */}
+              <div style={{ marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                  <label className="form-label" style={{ margin: 0 }}>
+                    Referral Code <span style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontWeight: 400 }}>(Optional)</span>
+                  </label>
+                  {referralCode && (
+                    <span style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      color: '#10b981',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '3px'
+                    }}>
+                      <Check size={12} /> Auto-filled from invite link
+                    </span>
+                  )}
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={referralCode}
+                    onChange={e => {
+                      const val = e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '');
+                      setReferralCode(val);
+                      if (val) localStorage.setItem('pulsechat_pending_referral', val);
+                      else localStorage.removeItem('pulsechat_pending_referral');
+                    }}
+                    placeholder="e.g. ALEX4821"
+                    style={{
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      fontWeight: 600,
+                      borderColor: referralCode ? 'rgba(16, 185, 129, 0.6)' : undefined,
+                      paddingRight: referralCode ? '2.4rem' : undefined
+                    }}
+                  />
+                  {referralCode && (
+                    <span style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      fontSize: '0.95rem'
+                    }}>
+                      🎁
+                    </span>
+                  )}
+                </div>
+                {referralCode && (
+                  <p style={{ color: '#10b981', fontSize: '0.73rem', margin: '0.25rem 0 0 0', fontWeight: 600 }}>
+                    ✨ Bonus unlocked: You get +50 Sparks & your friend gets +200 Sparks on registration!
+                  </p>
+                )}
               </div>
 
               <button type="submit" className="btn-primary" style={{ width: '100%', padding: '0.7rem' }} disabled={loading}>

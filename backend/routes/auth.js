@@ -121,7 +121,8 @@ router.post('/register', async (req, res) => {
         displayName: displayName.trim(),
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${cleanUsername}`,
         otpCode: otp,
-        otpExpires
+        otpExpires,
+        pendingReferralCode: referralCode ? referralCode.trim().toUpperCase() : existingEmail.pendingReferralCode || null
       });
     }
     // 4. If unverified account with this username exists: update it with new email & fresh OTP
@@ -133,7 +134,8 @@ router.post('/register', async (req, res) => {
         displayName: displayName.trim(),
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${cleanUsername}`,
         otpCode: otp,
-        otpExpires
+        otpExpires,
+        pendingReferralCode: referralCode ? referralCode.trim().toUpperCase() : existingUsername.pendingReferralCode || null
       });
     }
     // 5. Fresh registration: create new user document
@@ -151,7 +153,7 @@ router.post('/register', async (req, res) => {
         otpCode: otp,
         otpExpires,
         pulseSparks: 50,
-        pendingReferralCode: referralCode ? referralCode.trim() : null,
+        pendingReferralCode: referralCode ? referralCode.trim().toUpperCase() : null,
         hasUsed3DTrial: false,
         claimedFreeSparks: {},
         createdAt: new Date().toISOString()
@@ -203,7 +205,7 @@ router.post('/register', async (req, res) => {
 // Login via Email OR Username + Password
 router.post('/login', async (req, res) => {
   try {
-    const { identifier, password, referralCode } = req.body;
+    const { identifier, password } = req.body;
     if (!identifier || !password) {
       return res.status(400).json({ error: 'Please enter Email/Username and Password.' });
     }
@@ -279,21 +281,6 @@ router.post('/login', async (req, res) => {
     delete userObj.passwordHash;
     delete userObj.otpCode;
     delete userObj.otpExpires;
-
-    // Automatic Refer & Earn Grant for Login
-    try {
-      const { processReferralReward } = require('./sparks');
-      if (referralCode && !user.hasClaimedReferral) {
-        const refResult = await processReferralReward(user.id || user._id, referralCode, req.app.get('io'));
-        if (refResult) {
-          userObj.pulseSparks = refResult.newBalance;
-          userObj.hasClaimedReferral = true;
-          userObj.referredBy = refResult.referrer.id || refResult.referrer._id.toString();
-        }
-      }
-    } catch (refErr) {
-      console.warn('Login referral grant warning:', refErr);
-    }
 
     res.json({ token, user: userObj });
   } catch (err) {
@@ -653,6 +640,7 @@ router.post('/google', async (req, res) => {
       return res.status(400).json({ error: 'Google account does not have a verified email address.' });
     }
 
+    let isNewUser = false;
     let user = await User.findOne({ email: googleEmail });
 
     if (user) {
@@ -665,6 +653,7 @@ router.post('/google', async (req, res) => {
         user = await db.updateUser(user.id, updates);
       }
     } else {
+      isNewUser = true;
       // New user registering via Google: create account immediately with verified status
       const cleanBase = (googleEmail.split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '');
       let candidateUsername = cleanBase;
@@ -731,10 +720,10 @@ router.post('/google', async (req, res) => {
 
     const { passwordHash: _, otpCode: __, ...safeUser } = user.toObject ? user.toObject() : user;
 
-    // Automatic Refer & Earn Grant for Google Logins
+    // Automatic Refer & Earn Grant for Brand New Google Registrations ONLY
     try {
       const { processReferralReward } = require('./sparks');
-      if (referralCode && !user.hasClaimedReferral) {
+      if (isNewUser && referralCode && !user.hasClaimedReferral) {
         const refResult = await processReferralReward(user.id || user._id, referralCode, req.app.get('io'));
         if (refResult) {
           safeUser.pulseSparks = refResult.newBalance;

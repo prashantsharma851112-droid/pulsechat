@@ -566,6 +566,20 @@ router.post('/claim-referral', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Referral code is required' });
     }
 
+    const isObjId = mongoose.Types.ObjectId.isValid(userId);
+    const existingUser = await User.findOne({
+      $or: [{ id: userId }, ...(isObjId ? [{ _id: userId }] : [])]
+    });
+    if (!existingUser) return res.status(404).json({ error: 'User not found' });
+
+    // Strict Rule: Referral bonuses are strictly for newly registered users
+    if (existingUser.createdAt) {
+      const ageMs = Date.now() - new Date(existingUser.createdAt).getTime();
+      if (ageMs > 2 * 60 * 60 * 1000) {
+        return res.status(400).json({ error: 'Referral codes can only be claimed by new users during account registration.' });
+      }
+    }
+
     const io = req.app.get('io');
     const result = await processReferralReward(userId, referralCode.trim(), io);
 

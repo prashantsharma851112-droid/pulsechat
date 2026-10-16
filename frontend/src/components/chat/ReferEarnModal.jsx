@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { X, Sparkles, Copy, Check, Share2, Users, Gift, ArrowRight } from 'lucide-react';
+import { X, Sparkles, Copy, Check, Share2, Users, Gift } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 import { useBackHandler } from '../../utils/backNavigation';
@@ -21,9 +21,6 @@ export default function ReferEarnModal({ onClose }) {
 
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [inputCode, setInputCode] = useState('');
-  const [claiming, setClaiming] = useState(false);
-  const [claimMsg, setClaimMsg] = useState(null);
 
   useBackHandler(onClose, true);
 
@@ -85,48 +82,6 @@ export default function ReferEarnModal({ onClose }) {
       }
     } else {
       window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`, '_blank');
-    }
-  };
-
-  // Claim a friend's referral code
-  const handleClaimCode = async (e) => {
-    e.preventDefault();
-    if (!inputCode.trim() || claiming) return;
-
-    setClaiming(true);
-    setClaimMsg(null);
-
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/sparks/claim-referral`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ referralCode: inputCode.trim() })
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        playSound('success');
-        setClaimMsg({ type: 'success', text: `🎉 ${data.message}` });
-        setReferralData(prev => ({
-          ...prev,
-          hasClaimedReferral: true,
-          referredBy: data.referredBy
-        }));
-        if (data.newBalance !== undefined && updateUserProfile) {
-          updateUserProfile({ ...user, pulseSparks: data.newBalance, hasClaimedReferral: true });
-        }
-      } else {
-        playSound('error');
-        setClaimMsg({ type: 'error', text: data.error || 'Failed to claim referral code.' });
-      }
-    } catch (err) {
-      playSound('error');
-      setClaimMsg({ type: 'error', text: 'Network error. Please try again.' });
-    } finally {
-      setClaiming(false);
     }
   };
 
@@ -452,72 +407,34 @@ export default function ReferEarnModal({ onClose }) {
             Share Invite Link Now
           </button>
 
-          {/* Have a referral code? (Claim Bonus) */}
-          {!referralData.hasClaimedReferral && (
-            <div
-              style={{
-                background: 'rgba(255, 255, 255, 0.02)',
-                border: '1px dashed rgba(255, 255, 255, 0.14)',
-                borderRadius: '14px',
-                padding: '12px 14px'
-              }}
-            >
-              <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#e5e7eb', marginBottom: '8px' }}>
-                Invited by a friend? Claim 50 Sparks:
-              </div>
-              <form onSubmit={handleClaimCode} style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="text"
-                  placeholder="Enter Friend's Code"
-                  value={inputCode}
-                  onChange={e => setInputCode(e.target.value)}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    borderRadius: '10px',
-                    padding: '8px 12px',
-                    color: '#ffffff',
-                    fontSize: '0.82rem',
-                    flex: 1,
-                    outline: 'none',
-                    textTransform: 'uppercase'
-                  }}
-                />
-                <button
-                  type="submit"
-                  disabled={claiming || !inputCode.trim()}
-                  style={{
-                    background: 'rgba(245, 158, 11, 0.25)',
-                    color: '#fbbf24',
-                    border: '1px solid rgba(245, 158, 11, 0.4)',
-                    borderRadius: '10px',
-                    padding: '8px 14px',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    cursor: claiming || !inputCode.trim() ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  {claiming ? '...' : 'Claim'}
-                  <ArrowRight size={14} />
-                </button>
-              </form>
-              {claimMsg && (
-                <div
-                  style={{
-                    fontSize: '0.74rem',
-                    fontWeight: 600,
-                    marginTop: '8px',
-                    color: claimMsg.type === 'success' ? '#34d399' : '#f87171'
-                  }}
-                >
-                  {claimMsg.text}
-                </div>
-              )}
+          {/* How Refer & Earn Works (Automated on account creation) */}
+          <div
+            style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '16px',
+              padding: '14px 16px'
+            }}
+          >
+            <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#fbbf24', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Sparkles size={14} color="#f59e0b" />
+              HOW REFER & EARN WORKS
             </div>
-          )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.78rem', color: '#d1d5db' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 900, flexShrink: 0 }}>1</span>
+                <span>Share your invite link or code with friends.</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 900, flexShrink: 0 }}>2</span>
+                <span>Friend opens your link & the code is <b>auto-filled</b> on their Create Account screen.</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 900, flexShrink: 0 }}>3</span>
+                <span>Once they register, you receive <b>+200 Sparks</b> and they receive <b>+50 Sparks</b> in their wallet history!</span>
+              </div>
+            </div>
+          </div>
 
         </div>
       </div>
