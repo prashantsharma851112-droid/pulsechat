@@ -559,12 +559,9 @@ export default function ChatThemeModal({
           onSuccess={() => {
             const chosenId = pendingTrialWallpaper.id;
             setPendingTrialWallpaper(null);
+            const trialExpiresAt = Date.now() + 5 * 60 * 1000;
             if (onSelectWallpaper) {
-              onSelectWallpaper(chosenId);
-              // Auto revert after 5 minutes
-              setTimeout(() => {
-                onSelectWallpaper('none');
-              }, 5 * 60 * 1000);
+              onSelectWallpaper(chosenId, null, true, trialExpiresAt);
             }
             onClose();
           }}

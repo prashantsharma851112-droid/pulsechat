@@ -73,8 +73,9 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
   const [razorpayConfig, setRazorpayConfig] = useState({ keyId: '', isLive: false });
   const [upiCheckoutPlan, setUpiCheckoutPlan] = useState(null);
 
-  const applyAuraDirectly = (auraItem) => {
+  const applyAuraDirectly = (auraItem, isTrial = false, trialExpiresAt = null) => {
     if (!effectiveUserId) return;
+    const finalExpiresAt = isTrial ? (trialExpiresAt || (Date.now() + 5 * 60 * 1000)) : null;
     const auraData = {
       userId: effectiveUserId,
       mood: auraItem.mood || '',
@@ -83,8 +84,22 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
       auraType: auraItem.auraType,
       isLowBattery: false,
       batteryLevel: null,
-      inGame: ''
+      inGame: '',
+      isTrial: Boolean(isTrial),
+      trialExpiresAt: finalExpiresAt
     };
+
+    if (isTrial) {
+      try {
+        localStorage.setItem('pulsechat_aura_trial', JSON.stringify({
+          auraType: auraItem.auraType,
+          expiresAt: finalExpiresAt
+        }));
+      } catch (e) {}
+    } else {
+      localStorage.removeItem('pulsechat_aura_trial');
+    }
+
     if (socket) socket.emit('update_vibe_aura', auraData);
     if (typeof updateUserProfile === 'function') updateUserProfile({ ...user, vibeAura: auraData });
     try { updateUserProfileInStorage(effectiveUserId, { vibeAura: auraData }, effectiveUserId); } catch (e) {}
@@ -95,11 +110,14 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
     }
     setStatusMsg({
       type: 'success',
-      text: `✨ ${auraItem.name} activated on your Avatar!`
+      text: isTrial
+        ? `✨ ${auraItem.name} activated for 5-minute live trial!`
+        : `✨ ${auraItem.name} activated on your Avatar!`
     });
   };
 
   const handleClearAura = () => {
+    localStorage.removeItem('pulsechat_aura_trial');
     if (!effectiveUserId) return;
     const clearData = {
       userId: effectiveUserId,
@@ -1583,33 +1601,8 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
             setPendingTrialAura(null);
           }}
           onSuccess={() => {
-            applyAuraDirectly(pendingTrialAura);
-            setStatusMsg({
-              type: 'success',
-              text: `✨ ${pendingTrialAura.name} activated for 5-minute live trial! (10 Sparks used)`
-            });
-            setTimeout(() => {
-              const clearData = {
-                userId: effectiveUserId,
-                mood: '',
-                emoji: '',
-                auraColor: null,
-                auraType: 'none',
-                isLowBattery: false,
-                batteryLevel: null,
-                inGame: '',
-                cleared: true,
-                music: null
-              };
-              if (socket) socket.emit('update_vibe_aura', clearData);
-              if (typeof updateUserProfile === 'function') updateUserProfile({ ...user, vibeAura: null });
-              try { updateUserProfileInStorage(effectiveUserId, { vibeAura: null }, effectiveUserId); } catch (e) {}
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
-                  detail: { targetUserId: effectiveUserId, updates: { vibeAura: null } }
-                }));
-              }
-            }, 5 * 60 * 1000);
+            const expiresAt = Date.now() + 5 * 60 * 1000;
+            applyAuraDirectly(pendingTrialAura, true, expiresAt);
             setPendingTrialAura(null);
           }}
         />

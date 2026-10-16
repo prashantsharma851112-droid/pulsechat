@@ -1465,6 +1465,40 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Helper to clear a user's vibe aura across memory, MongoDB, Redis, and all connected clients
+  const clearUserAura = async (targetId) => {
+    if (!targetId) return;
+    const strId = String(targetId);
+    userVibeAuras.delete(strId);
+    if (socket.userId) userVibeAuras.delete(String(socket.userId));
+    if (socket.userMongoId) userVibeAuras.delete(String(socket.userMongoId));
+    if (socket.userUsername) userVibeAuras.delete(String(socket.userUsername));
+    try {
+      await User.updateOne({ $or: [{ id: strId }, { username: strId }] }, { $unset: { vibeAura: 1 } });
+    } catch (e) {}
+
+    redis.invalidateUser(strId).catch(() => {});
+    if (socket.userMongoId) redis.invalidateUser(socket.userMongoId).catch(() => {});
+    if (socket.userUsername) redis.invalidateUser(socket.userUsername).catch(() => {});
+
+    io.emit('user_profile_updated', {
+      userId: strId,
+      vibeAura: null
+    });
+
+    io.emit('vibe_aura_updated', {
+      userId: strId,
+      username: socket.userUsername || '',
+      cleared: true,
+      mood: '',
+      isLowBattery: false,
+      batteryLevel: null,
+      inGame: '',
+      auraType: 'none',
+      auraColor: null
+    });
+  };
+
   // =========================================================================
   // OPTION 3: PULSE VIBE RADAR & LIVE AURA SYNCHRONIZATION
   // =========================================================================
@@ -1477,40 +1511,27 @@ io.on('connection', (socket) => {
     );
 
     if (isCleared) {
-      userVibeAuras.delete(String(auraData.userId));
-      if (socket.userId) userVibeAuras.delete(String(socket.userId));
-      if (socket.userMongoId) userVibeAuras.delete(String(socket.userMongoId));
-      if (socket.userUsername) userVibeAuras.delete(String(socket.userUsername));
-      try {
-        await User.updateOne({ $or: [{ id: auraData.userId }, { username: auraData.userId }] }, { $unset: { vibeAura: 1 } });
-      } catch (e) {}
-
-      // Invalidate Redis user profile cache so GET /api/users/:id never returns stale vibe
-      redis.invalidateUser(auraData.userId).catch(() => {});
-      if (socket.userMongoId) redis.invalidateUser(socket.userMongoId).catch(() => {});
-      if (socket.userUsername) redis.invalidateUser(socket.userUsername).catch(() => {});
-
-      io.emit('user_profile_updated', {
-        userId: auraData.userId,
-        vibeAura: null
-      });
-
-      io.emit('vibe_aura_updated', {
-        userId: auraData.userId,
-        username: socket.userUsername || '',
-        cleared: true,
-        mood: '',
-        isLowBattery: false,
-        batteryLevel: null,
-        inGame: '',
-        auraType: 'none',
-        auraColor: null
-      });
+      await clearUserAura(auraData.userId);
       return;
     }
 
     const hasLowBattery = Boolean(auraData.isLowBattery);
     const resolvedUsername = socket.userUsername || auraData.username || '';
+
+    // Check if user is Pro
+    let userIsPro = false;
+    try {
+      const uDoc = await User.findOne({ $or: [{ id: auraData.userId }, { username: auraData.userId }] }).select('isPro proExpiresAt').lean();
+      if (uDoc && uDoc.isPro && (!uDoc.proExpiresAt || new Date(uDoc.proExpiresAt) > new Date())) {
+        userIsPro = true;
+      }
+    } catch (e) {}
+
+    // VIP auras (dragon_glow, cyber_neon) for non-pro users are ALWAYS 5-min trials!
+    const isVipAura = auraData.auraType === 'dragon_glow' || auraData.auraType === 'cyber_neon';
+    const isTrial = Boolean(auraData.isTrial || auraData.trialExpiresAt || (isVipAura && !userIsPro));
+    const trialExpiresAt = isTrial ? (Number(auraData.trialExpiresAt) || (Date.now() + 5 * 60 * 1000)) : null;
+
     const clean = {
       userId: auraData.userId,
       username: resolvedUsername,
@@ -1521,6 +1542,8 @@ io.on('connection', (socket) => {
       isLowBattery: hasLowBattery,
       batteryLevel: hasLowBattery && typeof auraData.batteryLevel === 'number' ? auraData.batteryLevel : null,
       inGame: auraData.inGame || '',
+      isTrial: Boolean(isTrial),
+      trialExpiresAt: trialExpiresAt,
       updatedAt: new Date().toISOString()
     };
     userVibeAuras.set(String(auraData.userId), clean);
@@ -1543,9 +1566,26 @@ io.on('connection', (socket) => {
     });
 
     io.emit('vibe_aura_updated', clean);
+
+    // If trial, schedule exact server-side expiration timer
+    if (clean.isTrial && clean.trialExpiresAt) {
+      const waitMs = Math.max(1000, clean.trialExpiresAt - Date.now());
+      setTimeout(async () => {
+        const cur = userVibeAuras.get(String(auraData.userId));
+        if (cur && cur.isTrial && cur.trialExpiresAt && Date.now() >= cur.trialExpiresAt - 1000) {
+          await clearUserAura(auraData.userId);
+        }
+      }, waitMs);
+    }
   });
 
   socket.on('get_vibe_auras', () => {
+    const now = Date.now();
+    for (const [k, v] of userVibeAuras.entries()) {
+      if (v && v.isTrial && v.trialExpiresAt && now > Number(v.trialExpiresAt)) {
+        userVibeAuras.delete(k);
+      }
+    }
     socket.emit('vibe_auras_list', Object.fromEntries(userVibeAuras.entries()));
   });
 
@@ -2077,11 +2117,13 @@ mongoose.connect(config.MONGO_URI)
 
     // Hydrate userVibeAuras from MongoDB on startup so active vibes survive server restarts
     try {
-      const usersWithVibes = await User.find({ vibeAura: { $exists: true, $ne: null } })
-        .select('id username vibeAura')
-        .lean();
-      usersWithVibes.forEach(u => {
+      const now = Date.now();
+      for (const u of usersWithVibes) {
         if (u.vibeAura && !u.vibeAura.cleared && u.vibeAura.auraType !== 'none') {
+          if (u.vibeAura.trialExpiresAt && now > Number(u.vibeAura.trialExpiresAt)) {
+            User.updateOne({ _id: u._id }, { $unset: { vibeAura: 1 } }).catch(() => {});
+            continue;
+          }
           const clean = {
             ...u.vibeAura,
             userId: u.id || u.username,
@@ -2091,8 +2133,37 @@ mongoose.connect(config.MONGO_URI)
           if (u._id) userVibeAuras.set(String(u._id), clean);
           if (u.username) userVibeAuras.set(String(u.username), clean);
         }
-      });
+      }
       console.log(`[VibeRadar] Hydrated ${userVibeAuras.size} user vibe auras from DB`);
+
+      // Server-wide background sweeper every 5 seconds for aura trial expiration
+      setInterval(async () => {
+        const curTime = Date.now();
+        const expiredUserIds = new Set();
+        for (const [k, val] of userVibeAuras.entries()) {
+          if (val && val.isTrial && val.trialExpiresAt && curTime >= Number(val.trialExpiresAt)) {
+            expiredUserIds.add(String(val.userId || k));
+          }
+        }
+        for (const uid of expiredUserIds) {
+          userVibeAuras.delete(uid);
+          try {
+            await User.updateOne({ $or: [{ id: uid }, { username: uid }] }, { $unset: { vibeAura: 1 } });
+          } catch (e) {}
+          redis.invalidateUser(uid).catch(() => {});
+          io.emit('user_profile_updated', { userId: uid, vibeAura: null });
+          io.emit('vibe_aura_updated', {
+            userId: uid,
+            cleared: true,
+            mood: '',
+            isLowBattery: false,
+            batteryLevel: null,
+            inGame: '',
+            auraType: 'none',
+            auraColor: null
+          });
+        }
+      }, 5000);
     } catch (vhErr) {
       console.warn('[VibeRadar] Vibe hydration warning:', vhErr.message);
     }

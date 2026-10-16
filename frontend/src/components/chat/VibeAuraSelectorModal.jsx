@@ -168,6 +168,7 @@ export default function VibeAuraSelectorModal({
   };
 
   const handleClear = () => {
+    try { localStorage.removeItem('pulsechat_aura_trial'); } catch (e) {}
     if (!effectiveUserId) return;
     stopPreview();
 
@@ -604,6 +605,7 @@ export default function VibeAuraSelectorModal({
 
             const isDragon = auraToApply.id === 'dragon_aura';
             const isCyberNeon = auraToApply.id === 'neon_circle';
+            const trialExpiresAt = Date.now() + 5 * 60 * 1000;
             const trialAuraData = {
               userId: effectiveUserId,
               mood: auraToApply.mood,
@@ -613,8 +615,17 @@ export default function VibeAuraSelectorModal({
               isLowBattery: false,
               batteryLevel: null,
               inGame: '',
-              music: attachedSong || null
+              music: attachedSong || null,
+              isTrial: true,
+              trialExpiresAt
             };
+
+            try {
+              localStorage.setItem('pulsechat_aura_trial', JSON.stringify({
+                auraType: trialAuraData.auraType,
+                expiresAt: trialExpiresAt
+              }));
+            } catch (e) {}
 
             if (socket) {
               socket.emit('update_vibe_aura', trialAuraData);
@@ -632,31 +643,6 @@ export default function VibeAuraSelectorModal({
             }
 
             if (onAuraUpdated) onAuraUpdated(trialAuraData);
-
-            // Revert after 5 minutes
-            setTimeout(() => {
-              const clearData = {
-                userId: effectiveUserId,
-                mood: '',
-                emoji: '',
-                auraColor: null,
-                auraType: 'none',
-                isLowBattery: false,
-                batteryLevel: null,
-                inGame: '',
-                cleared: true,
-                music: null
-              };
-              if (socket) socket.emit('update_vibe_aura', clearData);
-              if (typeof updateUserProfile === 'function') updateUserProfile({ ...user, vibeAura: null });
-              try { updateUserProfileInStorage(effectiveUserId, { vibeAura: null }, effectiveUserId); } catch (e) {}
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
-                  detail: { targetUserId: effectiveUserId, updates: { vibeAura: null } }
-                }));
-              }
-            }, 5 * 60 * 1000);
-
             onClose();
           }}
         />

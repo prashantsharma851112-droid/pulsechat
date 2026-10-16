@@ -928,10 +928,35 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'midnight_amoled';
-    setChatTheme(savedTheme);
-    const savedWall = localStorage.getItem(`pulsechat_chat_wallpaper_${chatId}`) || 'none';
-    setChatWallpaper(savedWall);
+    // Check if previous trial expired
+    let effectiveTheme = localStorage.getItem(`pulsechat_chat_theme_${chatId}`) || localStorage.getItem('pulsechat_chat_default_theme') || 'midnight_amoled';
+    try {
+      const themeTrialStr = localStorage.getItem(`pulsechat_theme_trial_${chatId}`);
+      if (themeTrialStr) {
+        const trial = JSON.parse(themeTrialStr);
+        if (trial && trial.expiresAt && Date.now() >= Number(trial.expiresAt)) {
+          localStorage.removeItem(`pulsechat_theme_trial_${chatId}`);
+          localStorage.removeItem(`pulsechat_chat_theme_${chatId}`);
+          effectiveTheme = 'midnight_amoled';
+        }
+      }
+    } catch (e) {}
+    setChatTheme(effectiveTheme);
+
+    let effectiveWall = localStorage.getItem(`pulsechat_chat_wallpaper_${chatId}`) || 'none';
+    try {
+      const wallTrialStr = localStorage.getItem(`pulsechat_wallpaper_trial_${chatId}`);
+      if (wallTrialStr) {
+        const trial = JSON.parse(wallTrialStr);
+        if (trial && trial.expiresAt && Date.now() >= Number(trial.expiresAt)) {
+          localStorage.removeItem(`pulsechat_wallpaper_trial_${chatId}`);
+          localStorage.removeItem(`pulsechat_chat_wallpaper_${chatId}`);
+          effectiveWall = 'none';
+        }
+      }
+    } catch (e) {}
+    setChatWallpaper(effectiveWall);
+
     const savedCustom = localStorage.getItem(`pulsechat_custom_wallpaper_${chatId}`);
     setCustomWallpaper(savedCustom || null);
 
@@ -987,12 +1012,62 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
   }, [chatId, activeChat, isGroup, user]);
 
-  const handleSelectChatTheme = (newTheme) => {
+  // Persistent 5-Minute Theme & Wallpaper Trial Watchdog (runs every 3 seconds)
+  useEffect(() => {
+    if (!chatId) return;
+
+    const checkTrials = () => {
+      const now = Date.now();
+
+      // 1. Check Theme Trial
+      try {
+        const themeTrialStr = localStorage.getItem(`pulsechat_theme_trial_${chatId}`);
+        if (themeTrialStr) {
+          const trial = JSON.parse(themeTrialStr);
+          if (trial && trial.expiresAt && now >= Number(trial.expiresAt)) {
+            localStorage.removeItem(`pulsechat_theme_trial_${chatId}`);
+            handleSelectChatTheme('midnight_amoled');
+            setActionToast('⏰ 5-Minute VIP Theme Trial Expired! Reverted to default.');
+            setTimeout(() => setActionToast(''), 3500);
+          }
+        }
+      } catch (e) {}
+
+      // 2. Check Wallpaper Trial
+      try {
+        const wallTrialStr = localStorage.getItem(`pulsechat_wallpaper_trial_${chatId}`);
+        if (wallTrialStr) {
+          const trial = JSON.parse(wallTrialStr);
+          if (trial && trial.expiresAt && now >= Number(trial.expiresAt)) {
+            localStorage.removeItem(`pulsechat_wallpaper_trial_${chatId}`);
+            handleSelectChatWallpaper('none');
+            setActionToast('⏰ 5-Minute VIP Live Wallpaper Trial Expired! Reverted to default.');
+            setTimeout(() => setActionToast(''), 3500);
+          }
+        }
+      } catch (e) {}
+    };
+
+    checkTrials();
+    const interval = setInterval(checkTrials, 3000);
+    return () => clearInterval(interval);
+  }, [chatId]);
+
+  const handleSelectChatTheme = (newTheme, isTrial = false, trialExpiresAt = null) => {
     setChatTheme(newTheme);
     if (newTheme === 'default' || newTheme === 'midnight_amoled') {
       localStorage.removeItem(`pulsechat_chat_theme_${chatId}`);
+      localStorage.removeItem(`pulsechat_theme_trial_${chatId}`);
     } else {
       localStorage.setItem(`pulsechat_chat_theme_${chatId}`, newTheme);
+      if (isTrial) {
+        localStorage.setItem(`pulsechat_theme_trial_${chatId}`, JSON.stringify({
+          themeId: newTheme,
+          expiresAt: trialExpiresAt || (Date.now() + 5 * 60 * 1000)
+        }));
+      } else {
+        localStorage.removeItem(`pulsechat_theme_trial_${chatId}`);
+      }
     }
     if (socket) {
       socket.emit('set_chat_theme', { chatId, themeId: newTheme, userId: user?.id, setBy: user?.id });
@@ -1009,7 +1084,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   };
 
-  const handleSelectChatWallpaper = (newWall, customUrl = null) => {
+  const handleSelectChatWallpaper = (newWall, customUrl = null, isTrial = false, trialExpiresAt = null) => {
     lastWallpaperUpdateTimestamp.current = Date.now();
     const finalCustom = newWall === 'custom_image' ? (customUrl || customWallpaper) : null;
     setChatWallpaper(newWall);
@@ -1018,8 +1093,17 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (newWall === 'none') {
       localStorage.removeItem(`pulsechat_chat_wallpaper_${chatId}`);
       localStorage.removeItem(`pulsechat_custom_wallpaper_${chatId}`);
+      localStorage.removeItem(`pulsechat_wallpaper_trial_${chatId}`);
     } else {
       localStorage.setItem(`pulsechat_chat_wallpaper_${chatId}`, newWall);
+      if (isTrial) {
+        localStorage.setItem(`pulsechat_wallpaper_trial_${chatId}`, JSON.stringify({
+          wallpaperId: newWall,
+          expiresAt: trialExpiresAt || (Date.now() + 5 * 60 * 1000)
+        }));
+      } else {
+        localStorage.removeItem(`pulsechat_wallpaper_trial_${chatId}`);
+      }
       if (newWall === 'custom_image' && finalCustom) {
         localStorage.setItem(`pulsechat_custom_wallpaper_${chatId}`, finalCustom);
       } else {

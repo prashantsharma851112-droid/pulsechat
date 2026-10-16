@@ -9,12 +9,17 @@ export function resolveUserAura(userObj, vibeAuras) {
   if (!userObj) return null;
   const uid = userObj.id || userObj._id;
   const uname = userObj.username;
+  const now = Date.now();
 
   // 1. Check live real-time vibeAuras dictionary
   if (vibeAuras && typeof vibeAuras === 'object') {
     const live = (uid && vibeAuras[uid]) || (uname && vibeAuras[uname]);
     if (live) {
       if (live.cleared || live.auraType === 'none') {
+        return null;
+      }
+      // If 5-minute trial has expired, drop it immediately!
+      if (live.trialExpiresAt && now > Number(live.trialExpiresAt)) {
         return null;
       }
       if (
@@ -30,12 +35,18 @@ export function resolveUserAura(userObj, vibeAuras) {
 
   // 2. Fallback to userObj.vibeAura (from MongoDB / props / cache)
   const fallback = userObj.vibeAura;
-  if (fallback && !fallback.cleared && fallback.auraType !== 'none' && (
-    (fallback.mood && fallback.mood.trim() !== '') ||
-    (fallback.inGame && fallback.inGame.trim() !== '') ||
-    Boolean(fallback.isLowBattery)
-  )) {
-    return fallback;
+  if (fallback && !fallback.cleared && fallback.auraType !== 'none') {
+    // If 5-minute trial has expired, drop it immediately!
+    if (fallback.trialExpiresAt && now > Number(fallback.trialExpiresAt)) {
+      return null;
+    }
+    if (
+      (fallback.mood && fallback.mood.trim() !== '') ||
+      (fallback.inGame && fallback.inGame.trim() !== '') ||
+      Boolean(fallback.isLowBattery)
+    ) {
+      return fallback;
+    }
   }
   return null;
 }
@@ -51,8 +62,10 @@ export default function VibeAuraRing({
   isGroup = false
 }) {
   const effectiveAura = auraData || aura;
+  const isExpired = effectiveAura?.trialExpiresAt && Date.now() > Number(effectiveAura.trialExpiresAt);
 
   const hasActiveVibe = Boolean(
+    !isExpired &&
     effectiveAura &&
     !effectiveAura.cleared &&
     effectiveAura.auraType !== 'none' &&

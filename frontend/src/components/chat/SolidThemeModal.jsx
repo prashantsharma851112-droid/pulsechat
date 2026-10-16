@@ -153,12 +153,9 @@ export default function SolidThemeModal({ onClose, onSelectTheme, currentTheme }
           onSuccess={() => {
             const chosenId = pendingTrialTheme.id;
             setPendingTrialTheme(null);
+            const trialExpiresAt = Date.now() + 5 * 60 * 1000;
             if (onSelectTheme) {
-              onSelectTheme(chosenId);
-              // Auto revert after 5 minutes
-              setTimeout(() => {
-                onSelectTheme('midnight_amoled');
-              }, 5 * 60 * 1000);
+              onSelectTheme(chosenId, true, trialExpiresAt);
             }
             onClose();
           }}

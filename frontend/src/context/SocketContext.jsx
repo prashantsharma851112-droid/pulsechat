@@ -36,6 +36,59 @@ export function SocketProvider({ children }) {
     }
   }, [user?.id, token]);
 
+  // Persistent VIP Aura Trial Expiration Watchdog (checks every 3 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      try {
+        const storedTrial = localStorage.getItem('pulsechat_aura_trial');
+        if (storedTrial) {
+          const parsed = JSON.parse(storedTrial);
+          if (parsed && parsed.expiresAt && now >= Number(parsed.expiresAt)) {
+            localStorage.removeItem('pulsechat_aura_trial');
+            const uid = userRef.current?.id || user?.id;
+            if (uid && socket) {
+              const clearData = {
+                userId: uid,
+                mood: '',
+                emoji: '',
+                auraColor: null,
+                auraType: 'none',
+                isLowBattery: false,
+                batteryLevel: null,
+                inGame: '',
+                cleared: true,
+                music: null
+              };
+              socket.emit('update_vibe_aura', clearData);
+            }
+            if (uid) {
+              try { updateUserProfileInStorage(uid, { vibeAura: null }, uid); } catch (e) {}
+              window.dispatchEvent(new CustomEvent('pulsechat_user_profile_updated', {
+                detail: { targetUserId: uid, updates: { vibeAura: null } }
+              }));
+            }
+          }
+        }
+      } catch (e) {}
+
+      // Sweep live vibeAuras state to purge any expired trial aura
+      setVibeAuras(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const k in next) {
+          const item = next[k];
+          if (item?.trialExpiresAt && now >= Number(item.trialExpiresAt)) {
+            delete next[k];
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [socket, user?.id]);
+
   useEffect(() => {
     if (user?.id) {
       const newSocket = io(BACKEND_URL, {
@@ -94,13 +147,22 @@ export function SocketProvider({ children }) {
 
       newSocket.on('vibe_auras_list', (aurasList) => {
         if (aurasList) {
-          setVibeAuras(aurasList);
+          const now = Date.now();
+          const filtered = {};
+          for (const k in aurasList) {
+            const item = aurasList[k];
+            if (!item?.trialExpiresAt || now <= Number(item.trialExpiresAt)) {
+              filtered[k] = item;
+            }
+          }
+          setVibeAuras(filtered);
         }
       });
 
       newSocket.on('vibe_aura_updated', (cleanAura) => {
         if (cleanAura) {
-          const isCleared = Boolean(cleanAura.cleared || cleanAura.auraType === 'none' || (!cleanAura.mood && !cleanAura.isLowBattery && !cleanAura.inGame));
+          const isExpired = cleanAura.trialExpiresAt && Date.now() > Number(cleanAura.trialExpiresAt);
+          const isCleared = Boolean(isExpired || cleanAura.cleared || cleanAura.auraType === 'none' || (!cleanAura.mood && !cleanAura.isLowBattery && !cleanAura.inGame));
           setVibeAuras(prev => {
             const next = { ...prev };
             const uId = cleanAura.userId ? String(cleanAura.userId) : null;
