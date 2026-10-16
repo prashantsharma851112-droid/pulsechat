@@ -1,4 +1,6 @@
 const CACHE_NAME = 'pulsechat-v5';
+const MEDIA_CACHE_NAME = 'pulsechat-media-v1';
+const AUDIO_CACHE_NAME = 'pulsechat-audio-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -24,7 +26,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME) {
+          if (key !== CACHE_NAME && key !== MEDIA_CACHE_NAME && key !== AUDIO_CACHE_NAME) {
             return caches.delete(key);
           }
         })
@@ -45,6 +47,58 @@ self.addEventListener('fetch', (event) => {
 
   if (isDev && (event.request.url.includes('/@') || event.request.url.includes('/src/'))) {
     // Never cache Vite dev modules so HMR and code edits refresh instantly
+    return;
+  }
+
+  const reqUrl = event.request.url || '';
+
+  // 1. Audio Cache: Spotify-Style Cache-First (0 bytes internet on repeat play, full offline support)
+  const isAudio = event.request.destination === 'audio' ||
+    reqUrl.endsWith('.mp3') || reqUrl.endsWith('.m4a') || reqUrl.endsWith('.aac') || reqUrl.endsWith('.ogg') ||
+    reqUrl.includes('/audio/') || reqUrl.includes('freemusicarchive') || reqUrl.includes('saavncdn') || reqUrl.includes('jamendo');
+
+  if (isAudio && event.request.method === 'GET') {
+    event.respondWith(
+      caches.open(AUDIO_CACHE_NAME).then((cache) => {
+        return cache.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) return cachedResponse;
+          return fetch(event.request).then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              cache.put(event.request, networkResponse.clone()).catch(() => {});
+            }
+            return networkResponse;
+          }).catch((err) => {
+            return cachedResponse || Promise.reject(err);
+          });
+        });
+      })
+    );
+    return;
+  }
+
+  // 2. Cloudinary & CDN Media Cache: WhatsApp-Style Cache-First (0 MB repeat downloads from CDN)
+  const isCdnMedia = event.request.destination === 'image' ||
+    reqUrl.includes('res.cloudinary.com') ||
+    reqUrl.includes('images.unsplash.com') ||
+    reqUrl.includes('/uploads/') ||
+    /\.(jpg|jpeg|png|webp|gif|svg)($|\?)/i.test(reqUrl);
+
+  if (isCdnMedia && event.request.method === 'GET' && !reqUrl.includes('/api/')) {
+    event.respondWith(
+      caches.open(MEDIA_CACHE_NAME).then((cache) => {
+        return cache.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) return cachedResponse;
+          return fetch(event.request).then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              cache.put(event.request, networkResponse.clone()).catch(() => {});
+            }
+            return networkResponse;
+          }).catch(() => {
+            return cachedResponse || caches.match('/icon-192.png');
+          });
+        });
+      })
+    );
     return;
   }
 

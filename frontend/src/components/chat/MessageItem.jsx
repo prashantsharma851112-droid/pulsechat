@@ -17,6 +17,7 @@ import GiftUnboxModal from './GiftUnboxModal';
 import AnonymousStoryReplyModal from './AnonymousStoryReplyModal';
 import { getSavedQuickReactions, recordRecentReaction } from '../../utils/quickReactions';
 import { getCachedMediaUrl, getSyncCachedMediaUrl, getOrCacheAudioBlobUrl, getSyncCachedAudioUrl } from '../../utils/mediaCache';
+import CachedImage from '../common/CachedImage';
 
 // In-memory set of loaded media URLs so images never flash or reload when scrolling
 const loadedMediaUrlsGlobal = new Set();
@@ -2223,7 +2224,7 @@ function MessageItem({
                       transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
                     }}
                   >
-                    <img
+                    <CachedImage
                       src={url}
                       alt={`Photo ${idx + 1}`}
                       style={{
@@ -2333,7 +2334,7 @@ function MessageItem({
                 }}
                 onClick={() => setShowImagePreview(true)}
               >
-                <img
+                <CachedImage
                   src={message.mediaUrl}
                   alt={message.fileName || "Attached Media"}
                   loading="eager"
@@ -3191,7 +3192,7 @@ function MessageItem({
             onTouchMove={handleImageTouchMove}
             onTouchEnd={handleImageTouchEnd}
           >
-            <img
+            <CachedImage
               src={message.mediaUrl}
               alt="Fullscreen View"
               draggable={false}

@@ -73,6 +73,7 @@ import {
   addDeletedForMeId
 } from '../../utils/offlineStorage';
 import { deleteMessagesFromLocalDb, clearChatFromLocalDb } from '../../utils/localDatabase';
+import { getSyncCachedAudioUrl, getOrCacheAudioBlobUrl } from '../../utils/mediaCache';
 
 export const GLOBAL_LANGUAGES = [
   { code: 'hi', name: 'Hindi', flag: '🇮🇳' },
@@ -585,8 +586,17 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setSongDuration(chatMusicSong?.duration || 0);
 
     if (chatMusicSong?.audioUrl && !chatMusicSong.audioUrl.includes('youtube')) {
-      const audio = new Audio(chatMusicSong.audioUrl);
+      const cachedImmediate = getSyncCachedAudioUrl(chatMusicSong.audioUrl);
+      const audio = new Audio(cachedImmediate || chatMusicSong.audioUrl);
       audio.volume = isChatMusicMuted ? 0 : auraVolume;
+
+      if (!cachedImmediate) {
+        getOrCacheAudioBlobUrl(chatMusicSong.audioUrl).then(blobUrl => {
+          if (blobUrl && blobUrl !== chatMusicSong.audioUrl && chatAudioRef.current === audio && audio.paused) {
+            audio.src = blobUrl;
+          }
+        }).catch(() => {});
+      }
 
       audio.addEventListener('loadedmetadata', () => {
         if (audio.duration && !isNaN(audio.duration)) {

@@ -1,19 +1,26 @@
 /**
- * Ultra-Fast Local Media Cache for PulseChat
- * Uses standard CacheStorage API (supported natively across all Android/iOS WebViews & browsers).
+ * Ultra-Fast Dual-Layer Local Media & Audio Cache for PulseChat
+ * Uses CacheStorage API + IndexedDB Local Storage.
+ *
+ * 100% Native on Web, PWA, and Mobile (Android / Capacitor WebView).
  *
  * BENEFITS:
- * 1. 0 MB repeat downloads from Cloudinary CDN (protects user data & network).
- * 2. 0 ms instant image display on revisit (buttery smooth 120fps chat scroll).
- * 3. Offline access: photos & avatars already seen open instantly without internet!
+ * 1. 0 MB repeat downloads from Cloudinary CDN & Audio servers (protects user data & server bandwidth).
+ * 2. 0 ms instant image display on revisit (buttery smooth 120fps chat scroll & instant music start).
+ * 3. Works 100% offline: photos, avatars, and songs already played open and play without internet!
  */
 
-const CACHE_NAME = 'pulsechat-media-v1';
+import { saveMediaBlobToLocalDb, getMediaBlobFromLocalDb } from './localDatabase';
+
+const MEDIA_CACHE_NAME = 'pulsechat-media-v1';
+const AUDIO_CACHE_NAME = 'pulsechat-audio-v1';
+
 const inMemoryBlobUrlCache = new Map();
+const inMemoryAudioBlobCache = new Map();
+const pendingFetches = new Set();
 
 /**
- * Synchronously checks if a blob URL is already available in memory.
- * Returns the blob URL if available, or the original URL if local/data, or empty string.
+ * Synchronously checks if a media blob URL is already available in memory (0ms).
  */
 export function getSyncCachedMediaUrl(remoteUrl) {
   if (!remoteUrl || typeof remoteUrl !== 'string') return '';
@@ -25,8 +32,7 @@ export function getSyncCachedMediaUrl(remoteUrl) {
 
 /**
  * Retrieves a cached Blob URL for a given remote image/media URL.
-
- * If not cached, fetches in background, caches to device storage, and returns.
+ * Checks: Memory Cache -> CacheStorage -> IndexedDB -> Remote Fetch (with auto background caching).
  *
  * @param {string} remoteUrl
  * @returns {Promise<string>} Blob URL or original URL as fallback
@@ -44,35 +50,69 @@ export async function getCachedMediaUrl(remoteUrl) {
     return inMemoryBlobUrlCache.get(remoteUrl);
   }
 
-  // 2. Check CacheStorage on device
+  // 2. Check standard CacheStorage on device
   if (typeof window !== 'undefined' && 'caches' in window) {
     try {
-      const cache = await window.caches.open(CACHE_NAME);
+      const cache = await window.caches.open(MEDIA_CACHE_NAME);
       const match = await cache.match(remoteUrl);
       if (match) {
         const blob = await match.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        inMemoryBlobUrlCache.set(remoteUrl, blobUrl);
-        return blobUrl;
+        if (blob && blob.size > 0) {
+          const blobUrl = URL.createObjectURL(blob);
+          inMemoryBlobUrlCache.set(remoteUrl, blobUrl);
+          return blobUrl;
+        }
       }
-
-      // If not in cache, fetch and store
-      fetch(remoteUrl, { mode: 'cors' })
-        .then(async (response) => {
-          if (response && response.ok) {
-            try {
-              await cache.put(remoteUrl, response.clone());
-              const blob = await response.blob();
-              const blobUrl = URL.createObjectURL(blob);
-              inMemoryBlobUrlCache.set(remoteUrl, blobUrl);
-            } catch (_) {}
-          }
-        })
-        .catch(() => {});
     } catch (_) {}
   }
 
-  // Default to remoteUrl if caching fails or is loading
+  // 3. Check local IndexedDB storage (offline disk backup)
+  try {
+    const dbBlob = await getMediaBlobFromLocalDb(remoteUrl);
+    if (dbBlob && dbBlob.size > 0) {
+      const blobUrl = URL.createObjectURL(dbBlob);
+      inMemoryBlobUrlCache.set(remoteUrl, blobUrl);
+      return blobUrl;
+    }
+  } catch (_) {}
+
+  // 4. If not yet cached, fetch once in background and save to both CacheStorage & IndexedDB
+  if (!pendingFetches.has(remoteUrl)) {
+    pendingFetches.add(remoteUrl);
+    fetch(remoteUrl, { mode: 'cors' })
+      .then(async (response) => {
+        if (response && response.ok) {
+          try {
+            // Save to CacheStorage
+            if (typeof window !== 'undefined' && 'caches' in window) {
+              const cache = await window.caches.open(MEDIA_CACHE_NAME);
+              await cache.put(remoteUrl, response.clone());
+            }
+
+            // Save to IndexedDB
+            const blob = await response.blob();
+            if (blob && blob.size > 0) {
+              await saveMediaBlobToLocalDb(remoteUrl, blob);
+              const blobUrl = URL.createObjectURL(blob);
+              inMemoryBlobUrlCache.set(remoteUrl, blobUrl);
+
+              // Notify listeners that this media is now cached
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('pulsechat_media_cached', {
+                  detail: { remoteUrl, blobUrl }
+                }));
+              }
+            }
+          } catch (_) {}
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        pendingFetches.delete(remoteUrl);
+      });
+  }
+
+  // Return remoteUrl while downloading
   return remoteUrl;
 }
 
@@ -80,34 +120,19 @@ export async function getCachedMediaUrl(remoteUrl) {
  * Preload and cache a batch of avatar/media URLs in the background.
  */
 export function preloadMediaUrls(urls = []) {
-  if (typeof window === 'undefined' || !('caches' in window) || !Array.isArray(urls)) return;
-
-  window.caches.open(CACHE_NAME).then((cache) => {
-    urls.forEach((url) => {
-      if (url && typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
-        if (!inMemoryBlobUrlCache.has(url)) {
-          cache.match(url).then((matched) => {
-            if (!matched) {
-              fetch(url, { mode: 'cors' })
-                .then((res) => {
-                  if (res && res.ok) cache.put(url, res);
-                })
-                .catch(() => {});
-            }
-          }).catch(() => {});
-        }
-      }
-    });
-  }).catch(() => {});
+  if (!Array.isArray(urls)) return;
+  urls.forEach((url) => {
+    if (url && typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+      getCachedMediaUrl(url).catch(() => {});
+    }
+  });
 }
 
 // ==========================================
-// Spotify-Style Audio Disk Cache (CacheStorage)
+// Spotify-Style Audio Disk Cache (CacheStorage + IndexedDB)
 // 1. First play streams and caches audio to disk in background.
 // 2. All subsequent plays load 100% offline from phone disk with 0 bytes internet!
 // ==========================================
-const AUDIO_CACHE_NAME = 'pulsechat-audio-v1';
-const inMemoryAudioBlobCache = new Map();
 
 /**
  * Synchronously checks if an audio blob URL is already in fast memory cache.
@@ -143,25 +168,58 @@ export async function getOrCacheAudioBlobUrl(remoteUrl) {
       const match = await cache.match(remoteUrl);
       if (match) {
         const blob = await match.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        inMemoryAudioBlobCache.set(remoteUrl, blobUrl);
-        return blobUrl;
+        if (blob && blob.size > 0) {
+          const blobUrl = URL.createObjectURL(blob);
+          inMemoryAudioBlobCache.set(remoteUrl, blobUrl);
+          return blobUrl;
+        }
       }
+    } catch (_) {}
+  }
 
-      // 3. Not in disk cache: Stream remote URL now & cache in background for future plays
-      fetch(remoteUrl, { mode: 'cors' })
-        .then(async (response) => {
-          if (response && response.ok) {
-            try {
+  // 3. Check IndexedDB storage (offline disk backup)
+  try {
+    const dbBlob = await getMediaBlobFromLocalDb(remoteUrl);
+    if (dbBlob && dbBlob.size > 0) {
+      const blobUrl = URL.createObjectURL(dbBlob);
+      inMemoryAudioBlobCache.set(remoteUrl, blobUrl);
+      return blobUrl;
+    }
+  } catch (_) {}
+
+  // 4. Not in disk cache: Stream remote URL now & cache in background for future plays
+  if (!pendingFetches.has(remoteUrl)) {
+    pendingFetches.add(remoteUrl);
+    fetch(remoteUrl, { mode: 'cors' })
+      .then(async (response) => {
+        if (response && response.ok) {
+          try {
+            // Save to CacheStorage
+            if (typeof window !== 'undefined' && 'caches' in window) {
+              const cache = await window.caches.open(AUDIO_CACHE_NAME);
               await cache.put(remoteUrl, response.clone());
-              const blob = await response.blob();
+            }
+
+            // Save to IndexedDB
+            const blob = await response.blob();
+            if (blob && blob.size > 0) {
+              await saveMediaBlobToLocalDb(remoteUrl, blob);
               const blobUrl = URL.createObjectURL(blob);
               inMemoryAudioBlobCache.set(remoteUrl, blobUrl);
-            } catch (_) {}
-          }
-        })
-        .catch(() => {});
-    } catch (_) {}
+
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('pulsechat_audio_cached', {
+                  detail: { remoteUrl, blobUrl }
+                }));
+              }
+            }
+          } catch (_) {}
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        pendingFetches.delete(remoteUrl);
+      });
   }
 
   return remoteUrl;
@@ -171,29 +229,10 @@ export async function getOrCacheAudioBlobUrl(remoteUrl) {
  * Background preloads audio files into local disk cache (Spotify offline download style).
  */
 export function preloadAudioUrls(urls = []) {
-  if (typeof window === 'undefined' || !('caches' in window) || !Array.isArray(urls)) return;
-
-  window.caches.open(AUDIO_CACHE_NAME).then((cache) => {
-    urls.forEach((url) => {
-      if (url && typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
-        if (!inMemoryAudioBlobCache.has(url)) {
-          cache.match(url).then((matched) => {
-            if (!matched) {
-              fetch(url, { mode: 'cors' })
-                .then(async (res) => {
-                  if (res && res.ok) {
-                    try {
-                      await cache.put(url, res.clone());
-                      const blob = await res.blob();
-                      inMemoryAudioBlobCache.set(url, URL.createObjectURL(blob));
-                    } catch (_) {}
-                  }
-                })
-                .catch(() => {});
-            }
-          }).catch(() => {});
-        }
-      }
-    });
-  }).catch(() => {});
+  if (!Array.isArray(urls)) return;
+  urls.forEach((url) => {
+    if (url && typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+      getOrCacheAudioBlobUrl(url).catch(() => {});
+    }
+  });
 }
