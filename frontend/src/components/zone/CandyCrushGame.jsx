@@ -355,23 +355,104 @@ const findHintMove = (board) => {
   return null;
 };
 
-function CandyVisual({ candy }) {
+// Global Shared SVG Defs - Defined once for the entire game board to eliminate DOM thrashing & achieve 60fps
+const CandyGlobalSvgDefs = React.memo(function CandyGlobalSvgDefs() {
+  return (
+    <svg style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', pointerEvents: 'none' }} aria-hidden="true">
+      <defs>
+        {/* Color Bomb Choco Grad */}
+        <radialGradient id="candy-choco-grad" cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#5c3826" />
+          <stop offset="45%" stopColor="#3d2314" />
+          <stop offset="90%" stopColor="#221207" />
+          <stop offset="100%" stopColor="#0f0703" />
+        </radialGradient>
+
+        {/* Red Jelly Bean */}
+        <radialGradient id="candy-red-grad" cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#ff5a5a" />
+          <stop offset="30%" stopColor="#e50914" />
+          <stop offset="75%" stopColor="#b30006" />
+          <stop offset="100%" stopColor="#660000" />
+        </radialGradient>
+        <linearGradient id="candy-red-gloss" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.85" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+        </linearGradient>
+        <clipPath id="candy-clip-red">
+          <path d="M 17 20 C 21 10, 36 8, 45 16 C 54 24, 52 38, 44 46 C 35 53, 23 49, 21 38 C 19 28, 12 26, 17 20 Z" />
+        </clipPath>
+
+        {/* Orange Lozenge */}
+        <radialGradient id="candy-orange-grad" cx="40%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#ffb347" />
+          <stop offset="35%" stopColor="#ff7b00" />
+          <stop offset="80%" stopColor="#d35400" />
+          <stop offset="100%" stopColor="#7a2e00" />
+        </radialGradient>
+        <clipPath id="candy-clip-orange">
+          <ellipse cx="30" cy="30" rx="16" ry="23" />
+        </clipPath>
+
+        {/* Yellow Lemon Drop */}
+        <radialGradient id="candy-yellow-grad" cx="40%" cy="35%" r="65%">
+          <stop offset="0%" stopColor="#fffab3" />
+          <stop offset="35%" stopColor="#ffd000" />
+          <stop offset="80%" stopColor="#e69100" />
+          <stop offset="100%" stopColor="#8a4f00" />
+        </radialGradient>
+        <clipPath id="candy-clip-yellow">
+          <path d="M 30 7 C 30 7, 48 26, 48 37 C 48 47, 40 52, 30 52 C 20 52, 12 47, 12 37 C 12 26, 30 7, 30 7 Z" />
+        </clipPath>
+
+        {/* Green Apple Chiclet */}
+        <radialGradient id="candy-green-grad" cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#8aff73" />
+          <stop offset="35%" stopColor="#22c50e" />
+          <stop offset="80%" stopColor="#15803d" />
+          <stop offset="100%" stopColor="#052e16" />
+        </radialGradient>
+        <clipPath id="candy-clip-green">
+          <rect x="9" y="9" width="42" height="42" rx="12" ry="12" />
+        </clipPath>
+
+        {/* Blue Sphere Lollipop */}
+        <radialGradient id="candy-blue-grad" cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#82ebff" />
+          <stop offset="30%" stopColor="#0284c7" />
+          <stop offset="80%" stopColor="#0369a1" />
+          <stop offset="100%" stopColor="#082f49" />
+        </radialGradient>
+        <clipPath id="candy-clip-blue">
+          <circle cx="30" cy="30" r="22" />
+        </clipPath>
+
+        {/* Purple Scalloped Flower */}
+        <radialGradient id="candy-purple-grad" cx="40%" cy="35%" r="65%">
+          <stop offset="0%" stopColor="#f594ff" />
+          <stop offset="35%" stopColor="#c026d3" />
+          <stop offset="80%" stopColor="#86198f" />
+          <stop offset="100%" stopColor="#4a044e" />
+        </radialGradient>
+        <clipPath id="candy-clip-purple">
+          <path
+            d="M 30 7 C 34 7, 36 11, 40 12 C 44 13, 47 11, 50 14 C 53 17, 51 20, 52 24 C 53 28, 57 30, 57 34 C 57 38, 53 40, 52 44 C 51 48, 53 51, 50 54 C 47 57, 44 55, 40 56 C 36 57, 34 61, 30 61 C 26 61, 24 57, 20 56 C 16 55, 13 57, 10 54 C 7 51, 9 48, 8 44 C 7 40, 3 38, 3 34 C 3 30, 7 28, 8 24 C 9 20, 7 17, 10 14 C 13 11, 16 13, 20 12 C 24 11, 26 7, 30 7 Z"
+            transform="scale(0.85) translate(5, 5)"
+          />
+        </clipPath>
+      </defs>
+    </svg>
+  );
+});
+
+const CandyVisual = React.memo(function CandyVisual({ candy }) {
   if (!candy) return null;
-  const { type, special, id } = candy;
-  const uid = id || Math.random().toString(36).substr(2, 6);
+  const { type, special } = candy;
 
   if (type === 'color_bomb') {
     return (
       <svg viewBox="0 0 60 60" width="88%" height="88%" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.65))' }}>
-        <defs>
-          <radialGradient id={`choco-grad-${uid}`} cx="35%" cy="30%" r="70%">
-            <stop offset="0%" stopColor="#5c3826" />
-            <stop offset="45%" stopColor="#3d2314" />
-            <stop offset="90%" stopColor="#221207" />
-            <stop offset="100%" stopColor="#0f0703" />
-          </radialGradient>
-        </defs>
-        <circle cx="30" cy="30" r="23" fill={`url(#choco-grad-${uid})`} />
+        <circle cx="30" cy="30" r="23" fill="url(#candy-choco-grad)" />
         {/* Colorful Rainbow Sprinkles */}
         <circle cx="22" cy="18" r="3" fill="#ef4444" />
         <circle cx="36" cy="17" r="2.8" fill="#eab308" />
@@ -424,25 +505,10 @@ function CandyVisual({ candy }) {
     case 'red': // Curved Red Jelly Bean (iconic kidney bean)
       return (
         <svg viewBox="0 0 60 60" width="88%" height="88%" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.5))' }}>
-          <defs>
-            <radialGradient id={`red-grad-${uid}`} cx="35%" cy="30%" r="70%">
-              <stop offset="0%" stopColor="#ff5a5a" />
-              <stop offset="30%" stopColor="#e50914" />
-              <stop offset="75%" stopColor="#b30006" />
-              <stop offset="100%" stopColor="#660000" />
-            </radialGradient>
-            <linearGradient id={`red-gloss-${uid}`} x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.85" />
-              <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-            </linearGradient>
-            <clipPath id={`clip-red-${uid}`}>
-              <path d="M 17 20 C 21 10, 36 8, 45 16 C 54 24, 52 38, 44 46 C 35 53, 23 49, 21 38 C 19 28, 12 26, 17 20 Z" />
-            </clipPath>
-          </defs>
-          <g clipPath={`url(#clip-red-${uid})`}>
+          <g clipPath="url(#candy-clip-red)">
             <path
               d="M 17 20 C 21 10, 36 8, 45 16 C 54 24, 52 38, 44 46 C 35 53, 23 49, 21 38 C 19 28, 12 26, 17 20 Z"
-              fill={`url(#red-grad-${uid})`}
+              fill="url(#candy-red-grad)"
             />
             {renderStripes()}
           </g>
@@ -456,7 +522,7 @@ function CandyVisual({ candy }) {
           {/* Top Curved Specular Highlight */}
           <path
             d="M 23 15 C 29 11, 39 12, 43 18 C 38 15, 27 15, 23 19 Z"
-            fill={`url(#red-gloss-${uid})`}
+            fill="url(#candy-red-gloss)"
           />
           <ellipse cx="25" cy="22" rx="4" ry="2.2" transform="rotate(-30 25 22)" fill="#ffffff" opacity="0.75" />
           {renderWrappedBadge()}
@@ -466,19 +532,8 @@ function CandyVisual({ candy }) {
     case 'orange': // Vertical Oval Lozenge
       return (
         <svg viewBox="0 0 60 60" width="88%" height="88%" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.5))' }}>
-          <defs>
-            <radialGradient id={`orange-grad-${uid}`} cx="40%" cy="30%" r="70%">
-              <stop offset="0%" stopColor="#ffb347" />
-              <stop offset="35%" stopColor="#ff7b00" />
-              <stop offset="80%" stopColor="#d35400" />
-              <stop offset="100%" stopColor="#7a2e00" />
-            </radialGradient>
-            <clipPath id={`clip-orange-${uid}`}>
-              <ellipse cx="30" cy="30" rx="16" ry="23" />
-            </clipPath>
-          </defs>
-          <g clipPath={`url(#clip-orange-${uid})`}>
-            <ellipse cx="30" cy="30" rx="16" ry="23" fill={`url(#orange-grad-${uid})`} />
+          <g clipPath="url(#candy-clip-orange)">
+            <ellipse cx="30" cy="30" rx="16" ry="23" fill="url(#candy-orange-grad)" />
             {renderStripes()}
           </g>
           <ellipse cx="30" cy="30" rx="16" ry="23" fill="none" stroke="#ffa34d" strokeWidth="1.2" opacity="0.55" />
@@ -496,21 +551,10 @@ function CandyVisual({ candy }) {
     case 'yellow': // Teardrop / Lemon Drop
       return (
         <svg viewBox="0 0 60 60" width="88%" height="88%" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.5))' }}>
-          <defs>
-            <radialGradient id={`yellow-grad-${uid}`} cx="40%" cy="35%" r="65%">
-              <stop offset="0%" stopColor="#fffab3" />
-              <stop offset="35%" stopColor="#ffd000" />
-              <stop offset="80%" stopColor="#e69100" />
-              <stop offset="100%" stopColor="#8a4f00" />
-            </radialGradient>
-            <clipPath id={`clip-yellow-${uid}`}>
-              <path d="M 30 7 C 30 7, 48 26, 48 37 C 48 47, 40 52, 30 52 C 20 52, 12 47, 12 37 C 12 26, 30 7, 30 7 Z" />
-            </clipPath>
-          </defs>
-          <g clipPath={`url(#clip-yellow-${uid})`}>
+          <g clipPath="url(#candy-clip-yellow)">
             <path
               d="M 30 7 C 30 7, 48 26, 48 37 C 48 47, 40 52, 30 52 C 20 52, 12 47, 12 37 C 12 26, 30 7, 30 7 Z"
-              fill={`url(#yellow-grad-${uid})`}
+              fill="url(#candy-yellow-grad)"
             />
             {/* Inner Pear Accent */}
             <path
@@ -537,19 +581,8 @@ function CandyVisual({ candy }) {
     case 'green': // Rounded Square / Pillow Chiclet
       return (
         <svg viewBox="0 0 60 60" width="88%" height="88%" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.5))' }}>
-          <defs>
-            <radialGradient id={`green-grad-${uid}`} cx="35%" cy="30%" r="70%">
-              <stop offset="0%" stopColor="#8aff73" />
-              <stop offset="35%" stopColor="#22c50e" />
-              <stop offset="80%" stopColor="#15803d" />
-              <stop offset="100%" stopColor="#052e16" />
-            </radialGradient>
-            <clipPath id={`clip-green-${uid}`}>
-              <rect x="9" y="9" width="42" height="42" rx="12" ry="12" />
-            </clipPath>
-          </defs>
-          <g clipPath={`url(#clip-green-${uid})`}>
-            <rect x="9" y="9" width="42" height="42" rx="12" ry="12" fill={`url(#green-grad-${uid})`} />
+          <g clipPath="url(#candy-clip-green)">
+            <rect x="9" y="9" width="42" height="42" rx="12" ry="12" fill="url(#candy-green-grad)" />
             {renderStripes()}
           </g>
           {/* Inner Highlight Border */}
@@ -567,19 +600,8 @@ function CandyVisual({ candy }) {
     case 'blue': // Blue Sphere Lollipop with Ring
       return (
         <svg viewBox="0 0 60 60" width="88%" height="88%" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.5))' }}>
-          <defs>
-            <radialGradient id={`blue-grad-${uid}`} cx="35%" cy="30%" r="70%">
-              <stop offset="0%" stopColor="#82ebff" />
-              <stop offset="30%" stopColor="#0284c7" />
-              <stop offset="80%" stopColor="#0369a1" />
-              <stop offset="100%" stopColor="#082f49" />
-            </radialGradient>
-            <clipPath id={`clip-blue-${uid}`}>
-              <circle cx="30" cy="30" r="22" />
-            </clipPath>
-          </defs>
-          <g clipPath={`url(#clip-blue-${uid})`}>
-            <circle cx="30" cy="30" r="22" fill={`url(#blue-grad-${uid})`} />
+          <g clipPath="url(#candy-clip-blue)">
+            <circle cx="30" cy="30" r="22" fill="url(#candy-blue-grad)" />
             {renderStripes()}
           </g>
           {/* Equatorial Disc Ring */}
@@ -595,25 +617,11 @@ function CandyVisual({ candy }) {
     case 'purple': // Scalloped 8-Petal Flower Cluster
       return (
         <svg viewBox="0 0 60 60" width="88%" height="88%" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.5))' }}>
-          <defs>
-            <radialGradient id={`purple-grad-${uid}`} cx="40%" cy="35%" r="65%">
-              <stop offset="0%" stopColor="#f594ff" />
-              <stop offset="35%" stopColor="#c026d3" />
-              <stop offset="80%" stopColor="#86198f" />
-              <stop offset="100%" stopColor="#4a044e" />
-            </radialGradient>
-            <clipPath id={`clip-purple-${uid}`}>
-              <path
-                d="M 30 7 C 34 7, 36 11, 40 12 C 44 13, 47 11, 50 14 C 53 17, 51 20, 52 24 C 53 28, 57 30, 57 34 C 57 38, 53 40, 52 44 C 51 48, 53 51, 50 54 C 47 57, 44 55, 40 56 C 36 57, 34 61, 30 61 C 26 61, 24 57, 20 56 C 16 55, 13 57, 10 54 C 7 51, 9 48, 8 44 C 7 40, 3 38, 3 34 C 3 30, 7 28, 8 24 C 9 20, 7 17, 10 14 C 13 11, 16 13, 20 12 C 24 11, 26 7, 30 7 Z"
-                transform="scale(0.85) translate(5, 5)"
-              />
-            </clipPath>
-          </defs>
-          <g clipPath={`url(#clip-purple-${uid})`}>
+          <g clipPath="url(#candy-clip-purple)">
             <path
               d="M 30 7 C 34 7, 36 11, 40 12 C 44 13, 47 11, 50 14 C 53 17, 51 20, 52 24 C 53 28, 57 30, 57 34 C 57 38, 53 40, 52 44 C 51 48, 53 51, 50 54 C 47 57, 44 55, 40 56 C 36 57, 34 61, 30 61 C 26 61, 24 57, 20 56 C 16 55, 13 57, 10 54 C 7 51, 9 48, 8 44 C 7 40, 3 38, 3 34 C 3 30, 7 28, 8 24 C 9 20, 7 17, 10 14 C 13 11, 16 13, 20 12 C 24 11, 26 7, 30 7 Z"
               transform="scale(0.85) translate(5, 5)"
-              fill={`url(#purple-grad-${uid})`}
+              fill="url(#candy-purple-grad)"
             />
             {renderStripes()}
           </g>
@@ -631,7 +639,7 @@ function CandyVisual({ candy }) {
     default:
       return null;
   }
-}
+});
 
 export default function CandyCrushGame({ onScoreUpdate, onBack }) {
   const [level, setLevel] = useState(() => {
@@ -1072,6 +1080,9 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
         position: 'relative'
       }}
     >
+      {/* Shared Global SVG Defs for 60fps Rendering */}
+      <CandyGlobalSvgDefs />
+
       {/* Game Header Bar */}
       <div
         style={{
@@ -1287,8 +1298,8 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  cursor: 'pointer',
-                  transform: isSelected ? 'scale(1.12)' : (isHint ? 'scale(1.06)' : 'scale(1)'),
+                  willChange: 'transform',
+                  transform: isSelected ? 'scale(1.12) translateZ(0)' : (isHint ? 'scale(1.06) translateZ(0)' : 'scale(1) translateZ(0)'),
                   transition: 'transform 0.15s ease, background 0.15s ease',
                   boxShadow: isSelected ? '0 0 16px rgba(251, 191, 36, 0.9)' : 'none',
                   padding: '2px'

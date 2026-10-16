@@ -366,6 +366,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showSolidThemeModal, setShowSolidThemeModal] = useState(false);
   const [showAppsFolderModal, setShowAppsFolderModal] = useState(false);
+  const [appsFolderView, setAppsFolderView] = useState('main'); // 'main' | 'games'
   const [showChatMusicPicker, setShowChatMusicPicker] = useState(false);
   const [chatMusicSong, setChatMusicSong] = useState(() => {
     try {
@@ -1847,6 +1848,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       updateUserProfile({ ...user, pulseSparks: Math.max(0, sparksBalance - 5) });
     }
 
+    const isOnlineNow = isDeviceOnline() && Boolean(socket?.connected);
     const tempMsgId = 'msg_stealth_' + Date.now();
     const msgData = {
       ...getSenderPayload(),
@@ -1858,12 +1860,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       isGroup,
       content: dustText.trim(),
       type: 'stealth_dust',
-      status: 'sent',
+      status: isOnlineNow ? 'sent' : 'pending',
       timestamp: new Date().toISOString()
     };
 
     setMessages(prev => [...prev, msgData]);
+    appendCachedMessage(chatId, msgData);
+    updateRecentChatSnippet(user.id, chatId, msgData, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
+    window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
     playSound('sent');
+
+    if (!isOnlineNow) {
+      addToOutbox(user.id, msgData);
+      return;
+    }
+
     if (socket) {
       socket.emit('send_message', msgData);
     }
@@ -2000,7 +2011,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 fileName: pendingMsg.fileName,
                 fileSize: pendingMsg.fileSize,
                 clientTempId: msgKey,
-                replyTo: pendingMsg.replyTo
+                replyTo: pendingMsg.replyTo,
+                isFogSnap: pendingMsg.isFogSnap,
+                isDustImage: pendingMsg.isDustImage,
+                fogSnapDuration: pendingMsg.fogSnapDuration,
+                fogSnapStatus: pendingMsg.fogSnapStatus,
+                isViewOnce: pendingMsg.isViewOnce,
+                isViewTwice: pendingMsg.isViewTwice,
+                viewLimit: pendingMsg.viewLimit,
+                content: pendingMsg.content
               });
               if (pendingMsg.chatId && msgKey) {
                 updateCachedMessageStatus(pendingMsg.chatId, msgKey, { status: 'sent', mediaUrl: finalMedia });
@@ -2041,6 +2060,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           fileSize: pendingMsg.fileSize,
           pollData: pendingMsg.pollData,
           replyTo: pendingMsg.replyTo,
+          isFogSnap: pendingMsg.isFogSnap,
+          isDustImage: pendingMsg.isDustImage,
+          fogSnapDuration: pendingMsg.fogSnapDuration,
+          fogSnapStatus: pendingMsg.fogSnapStatus,
+          isViewOnce: pendingMsg.isViewOnce,
+          isViewTwice: pendingMsg.isViewTwice,
+          viewLimit: pendingMsg.viewLimit,
           clientTempId: pendingMsg.clientTempId || pendingMsg.tempId || pendingMsg.id
         });
 
@@ -2102,6 +2128,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
         due.forEach(item => {
           const clientTempId = 'sched_sent_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+          const isOnlineNow = isDeviceOnline() && Boolean(socket?.connected);
           const newMsg = {
             id: clientTempId,
             clientTempId,
@@ -2111,7 +2138,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             isGroup: item.isGroup,
             content: item.text,
             type: 'text',
-            status: 'sent',
+            status: isOnlineNow ? 'sent' : 'pending',
             timestamp: new Date().toISOString(),
             reactions: {}
           };
@@ -2120,6 +2147,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             setMessages(prev => [...prev, newMsg]);
             appendCachedMessage(chatId, newMsg);
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          } else {
+            appendCachedMessage(item.chatId, newMsg);
+          }
+
+          if (!isOnlineNow) {
+            addToOutbox(user?.id || item.senderId, newMsg);
+            playSound('sent');
+            setActionToast(`⏰ Scheduled message ready in Outbox (Offline): "${item.text.slice(0, 22)}..."`);
+            setTimeout(() => setActionToast(''), 3500);
+            return;
           }
 
           if (socket) {
@@ -4900,7 +4937,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           <div className="chat-header-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
             {/* Position 2: Mobile App Folder Button (Animated Cyber-Neon Glassmorphic Folder) */}
             <button
-              onClick={() => setShowAppsFolderModal(true)}
+              onClick={() => {
+                setAppsFolderView('main');
+                setShowAppsFolderModal(true);
+              }}
               className="chat-apps-folder-btn chat-neon-app-folder"
               title="Apps & Games (Arrow Battle, Drawboard, Music)"
               style={{
@@ -7771,28 +7811,62 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               paddingBottom: '0.65rem',
               borderBottom: '1px solid var(--border)'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '9px',
-                  background: 'rgba(99, 102, 241, 0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--accent)'
-                }}>
-                  <Sparkles size={16} />
+              {appsFolderView === 'games' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setAppsFolderView('main')}
+                    className="icon-btn-ghost"
+                    style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '50%',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--text-main)',
+                      padding: 0
+                    }}
+                    title="Back to Apps"
+                  >
+                    <ArrowLeft size={16} />
+                  </button>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                      Games
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      Choose a game to play
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                    Chat Apps
-                  </h4>
-                  <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    Instant live features
-                  </p>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '9px',
+                    background: 'rgba(99, 102, 241, 0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--accent)'
+                  }}>
+                    <Sparkles size={16} />
+                  </div>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                      Chat Apps
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      Instant live features
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
               <button
                 onClick={() => setShowAppsFolderModal(false)}
                 className="icon-btn-ghost"
@@ -7803,172 +7877,243 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </div>
 
             {/* Folder App Grid (Mobile App Icon Style) */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '14px 10px',
-              textAlign: 'center'
-            }}>
-              {/* App 1: Live Arrow Battle */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAppsFolderModal(false);
-                  handleOpenArrowGame();
-                }}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '6px 4px',
-                  borderRadius: '16px',
-                  transition: 'transform 0.18s ease'
-                }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-              >
-                <div style={{
-                  width: '54px',
-                  height: '54px',
-                  borderRadius: '17px',
-                  background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 6px 16px rgba(236, 72, 153, 0.42)',
-                  marginBottom: '7px'
-                }}>
-                  <Gamepad2 size={27} />
-                </div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.2 }}>
-                  Arrow Battle
-                </span>
-              </button>
+            {appsFolderView === 'main' ? (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '14px 10px',
+                textAlign: 'center'
+              }}>
+                {/* App 1: Unified Games Button */}
+                <button
+                  type="button"
+                  onClick={() => setAppsFolderView('games')}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '6px 4px',
+                    borderRadius: '16px',
+                    transition: 'transform 0.18s ease'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <div style={{
+                    width: '54px',
+                    height: '54px',
+                    borderRadius: '17px',
+                    background: 'linear-gradient(135deg, #ec4899, #8b5cf6)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    boxShadow: '0 6px 16px rgba(236, 72, 153, 0.42)',
+                    marginBottom: '7px',
+                    position: 'relative'
+                  }}>
+                    <Gamepad2 size={27} />
+                    <span style={{
+                      position: 'absolute',
+                      top: '-4px',
+                      right: '-4px',
+                      background: '#10b981',
+                      color: '#fff',
+                      fontSize: '0.62rem',
+                      fontWeight: 800,
+                      padding: '1px 5px',
+                      borderRadius: '8px',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                    }}>
+                      2
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                    Games
+                  </span>
+                </button>
 
-              {/* App 2: Live Drawboard */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAppsFolderModal(false);
-                  handleOpenWhiteboard();
-                }}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '6px 4px',
-                  borderRadius: '16px',
-                  transition: 'transform 0.18s ease'
-                }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-              >
-                <div style={{
-                  width: '54px',
-                  height: '54px',
-                  borderRadius: '17px',
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 6px 16px rgba(16, 185, 129, 0.42)',
-                  marginBottom: '7px'
-                }}>
-                  <Presentation size={26} />
-                </div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.2 }}>
-                  Drawboard
-                </span>
-              </button>
+                {/* App 2: Live Drawboard */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAppsFolderModal(false);
+                    handleOpenWhiteboard();
+                  }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '6px 4px',
+                    borderRadius: '16px',
+                    transition: 'transform 0.18s ease'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <div style={{
+                    width: '54px',
+                    height: '54px',
+                    borderRadius: '17px',
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    boxShadow: '0 6px 16px rgba(16, 185, 129, 0.42)',
+                    marginBottom: '7px'
+                  }}>
+                    <Presentation size={26} />
+                  </div>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                    Drawboard
+                  </span>
+                </button>
 
-              {/* App 3: Background Music */}
-              <button
-                type="button"
-                onClick={handleOpenMusic}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '6px 4px',
-                  borderRadius: '16px',
-                  transition: 'transform 0.18s ease'
-                }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-              >
-                <div style={{
-                  width: '54px',
-                  height: '54px',
-                  borderRadius: '17px',
-                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 6px 16px rgba(245, 158, 11, 0.42)',
-                  marginBottom: '7px',
-                  position: 'relative'
-                }}>
-                  <Music size={26} />
-                  {!user?.isPro && (
-                    <span style={{ position: 'absolute', top: -4, right: -4, fontSize: '0.8rem' }}>👑</span>
-                  )}
-                </div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.2 }}>
-                  Music {!user?.isPro ? '👑' : ''}
-                </span>
-              </button>
+                {/* App 3: Background Music */}
+                <button
+                  type="button"
+                  onClick={handleOpenMusic}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '6px 4px',
+                    borderRadius: '16px',
+                    transition: 'transform 0.18s ease'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <div style={{
+                    width: '54px',
+                    height: '54px',
+                    borderRadius: '17px',
+                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    boxShadow: '0 6px 16px rgba(245, 158, 11, 0.42)',
+                    marginBottom: '7px',
+                    position: 'relative'
+                  }}>
+                    <Music size={26} />
+                    {!user?.isPro && (
+                      <span style={{ position: 'absolute', top: -4, right: -4, fontSize: '0.8rem' }}>👑</span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                    Music {!user?.isPro ? '👑' : ''}
+                  </span>
+                </button>
+              </div>
+            ) : (
+              /* Games Sub-View */
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '14px 16px',
+                textAlign: 'center',
+                padding: '4px 6px'
+              }}>
+                {/* Game 1: Live Arrow Battle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAppsFolderModal(false);
+                    handleOpenArrowGame();
+                  }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '6px 4px',
+                    borderRadius: '16px',
+                    transition: 'transform 0.18s ease'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <div style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '17px',
+                    background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    boxShadow: '0 6px 16px rgba(236, 72, 153, 0.42)',
+                    marginBottom: '7px'
+                  }}>
+                    <Gamepad2 size={28} />
+                  </div>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                    Arrow Battle
+                  </span>
+                  <span style={{ fontSize: '0.64rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    Multiplayer
+                  </span>
+                </button>
 
-              {/* App 4: Tic-Tac-Toe Arena */}
-              <button
-                type="button"
-                onClick={handleOpenTicTacToe}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '6px 4px',
-                  borderRadius: '16px',
-                  transition: 'transform 0.18s ease'
-                }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-              >
-                <div style={{
-                  width: '54px',
-                  height: '54px',
-                  borderRadius: '17px',
-                  background: 'linear-gradient(135deg, #38bdf8, #ec4899)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 6px 16px rgba(56, 189, 248, 0.4)',
-                  marginBottom: '7px',
-                  position: 'relative',
-                  fontSize: '1.6rem'
-                }}>
-                  🎮
-                </div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.2 }}>
-                  Tic-Tac-Toe
-                </span>
-              </button>
-            </div>
+                {/* Game 2: Tic-Tac-Toe Arena */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAppsFolderModal(false);
+                    handleOpenTicTacToe();
+                  }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '6px 4px',
+                    borderRadius: '16px',
+                    transition: 'transform 0.18s ease'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <div style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '17px',
+                    background: 'linear-gradient(135deg, #38bdf8, #ec4899)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    boxShadow: '0 6px 16px rgba(56, 189, 248, 0.4)',
+                    marginBottom: '7px',
+                    fontSize: '1.65rem'
+                  }}>
+                    🎮
+                  </div>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                    Tic-Tac-Toe
+                  </span>
+                  <span style={{ fontSize: '0.64rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    1v1 Arena
+                  </span>
+                </button>
+              </div>
+            )}
             <style>{`
               @keyframes folderPopIn {
                 0% { transform: scale(0.88); opacity: 0; }

@@ -1363,8 +1363,8 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     // 4. Slide Physics & Rotation
     if (g.isSliding) {
       g.slideTimer -= dt;
-      g.playerObj.group.rotation.x = -1.25; // Lean backwards flat
-      g.playerObj.group.position.y = -0.35;
+      g.playerObj.group.rotation.x = 0.22; // Low forward duck/slide (never blocks camera!)
+      g.playerObj.group.position.y = -0.62; // Drop low to smoothly glide under obstacles
       if (g.slideTimer <= 0) {
         g.isSliding = false;
         g.playerObj.group.rotation.x = 0;
@@ -1400,6 +1400,14 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       rightLeg.knee.rotation.x = 1.2;
       leftArm.shoulder.rotation.x = -2.2;
       rightArm.shoulder.rotation.x = -2.2;
+    } else if (g.isSliding) {
+      // Streamlined slide crouch
+      leftLeg.hip.rotation.x = -1.1;
+      rightLeg.hip.rotation.x = 0.4;
+      leftLeg.knee.rotation.x = 1.3;
+      rightLeg.knee.rotation.x = 0.3;
+      leftArm.shoulder.rotation.x = 0.3;
+      rightArm.shoulder.rotation.x = -0.5;
     }
 
     // 6. Demon Ape Pursuit Dynamics & Visceral Threat
@@ -1619,10 +1627,10 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       // - Rises when jumping (tracking airborne apex)
       // - Subtle natural human head-bob while grounded
       const headBob = (!g.isJumping && !g.isSliding) ? Math.sin(g.runAnimTime * 2) * 0.08 : 0;
-      const targetCamY = (g.isSliding ? 2.15 : (4.3 + g.jumpY * 0.45)) + headBob;
+      const targetCamY = (g.isSliding ? 3.85 : (4.3 + g.jumpY * 0.45)) + headBob;
 
-      // Depth tracking with high-speed pushback
-      const targetCamZ = 7.6 + (currentSpeed > 65 ? 0.7 : 0);
+      // Depth tracking with high-speed pushback (slightly pulled back during slide for crystal clear visibility)
+      const targetCamZ = (g.isSliding ? 8.2 : 7.6) + (currentSpeed > 65 ? 0.7 : 0);
 
       // Screen trauma / stumble impact jitter shake
       let shakeX = 0;

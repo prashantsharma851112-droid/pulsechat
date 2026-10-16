@@ -353,28 +353,22 @@ export default function PulseZoneModal({ onClose }) {
               })}
             </div>
 
-            <div style={{
-              fontSize: '0.78rem',
-              color: dailyTask?.taskCompletedToday ? '#10b981' : '#fbbf24',
-              fontWeight: 800,
-              background: 'rgba(0,0,0,0.3)',
-              padding: '8px 12px',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <span>
-                {dailyTask?.taskCompletedToday
-                  ? '✅ Daily Task Complete (Streak Maintained!)'
-                  : '🔥 Play 1 game today to keep your 7-Day Streak & unlock the Streak Crown!'}
-              </span>
-              {dailyTask?.hasKingCrown && (
-                <span style={{ color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 900 }}>
-                  👑 King Crown Active!
-                </span>
-              )}
-            </div>
+            {dailyTask?.hasKingCrown && (
+              <div style={{
+                fontSize: '0.78rem',
+                color: '#fbbf24',
+                fontWeight: 900,
+                background: 'rgba(0,0,0,0.3)',
+                padding: '6px 12px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px'
+              }}>
+                👑 King Crown Active!
+              </div>
+            )}
           </div>
 
           {activeTab === 'games' && (
@@ -417,9 +411,6 @@ export default function PulseZoneModal({ onClose }) {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Candy Crush Saga</span>
                           <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #ec4899, #f43f5e)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>NEW • HIT</span>
-                        </div>
-                        <div style={{ fontSize: '0.74rem', color: '#fbcfe8', fontWeight: 600 }}>
-                          Match 3 Candies, Combos & Sugar Crush
                         </div>
                       </div>
                     </div>
