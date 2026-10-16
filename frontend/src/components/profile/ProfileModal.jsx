@@ -415,7 +415,7 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
                   transition: 'all 0.15s ease'
                 }}
               >
-                <Sparkles size={16} color="#fbbf24" /> VIP Avatar Rings ✨
+                <Sparkles size={16} color="#fbbf24" /> Customize Ring
               </button>
 
               <div style={{

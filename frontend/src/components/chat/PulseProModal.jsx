@@ -593,7 +593,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   </div>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      VIP Avatar Rings ✨
+                      Customize Ring
                       <span style={{ fontSize: '0.62rem', fontWeight: 800, padding: '2px 5px', borderRadius: '5px', background: 'rgba(245, 158, 11, 0.25)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
                         3 Styles
                       </span>

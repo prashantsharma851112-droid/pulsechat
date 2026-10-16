@@ -190,7 +190,7 @@ export default function VipAuraSelectorModal({ isOpen, onClose }) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Sparkles size={18} color="#fbbf24" />
-            <span style={{ fontWeight: 800, fontSize: '1rem', color: '#fff' }}>VIP Avatar Rings</span>
+            <span style={{ fontWeight: 800, fontSize: '1rem', color: '#fff' }}>Customize Ring</span>
           </div>
           <button
             onClick={onClose}
