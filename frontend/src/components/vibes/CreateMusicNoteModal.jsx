@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { useAppMusic } from '../../context/AppMusicContext';
-import { X, Music, Disc, Sparkles, Play, Pause, Trash2, SlidersHorizontal, FastForward, Rewind, Crown, Check } from 'lucide-react';
+import { X, Music, Disc, Sparkles, Play, Pause, Trash2, Crown, Check, Palette } from 'lucide-react';
 import MusicPickerModal from './MusicPickerModal';
 import PulseProModal from '../chat/PulseProModal';
 
@@ -20,12 +20,12 @@ const NOTE_THEMES = [
 
 export default function CreateMusicNoteModal({ isOpen, onClose }) {
   const { user } = useContext(AuthContext);
-  const { currentTrack, musicNoteText, saveMusicNote, deleteMusicNote } = useAppMusic();
+  const { musicNoteText, saveMusicNote, deleteMusicNote } = useAppMusic();
 
   const [noteText, setNoteText] = useState('');
   const [selectedSong, setSelectedSong] = useState(null);
   const [selectedTheme, setSelectedTheme] = useState('default');
-  const [themeTab, setThemeTab] = useState('all'); // 'all' | 'live' | 'static'
+  const [showThemes, setShowThemes] = useState(false);
   const [showProModal, setShowProModal] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [previewAudio, setPreviewAudio] = useState(null);
@@ -186,12 +186,6 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
     setSelectedTheme(th.id);
   };
 
-  const filteredThemes = NOTE_THEMES.filter(th => {
-    if (themeTab === 'live') return th.isLive;
-    if (themeTab === 'static') return !th.isLive;
-    return true;
-  });
-
   const getPreviewTailColor = () => {
     if (selectedTheme === 'live-aurora') return 'rgba(168, 85, 247, 0.95)';
     if (selectedTheme === 'live-dragon-flame') return 'rgba(217, 119, 6, 0.95)';
@@ -226,8 +220,8 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
       <div
         className="modal-card modal-responsive"
         style={{
-          maxWidth: '390px',
-          padding: '20px',
+          maxWidth: '380px',
+          padding: '18px 20px',
           background: 'var(--bg-card)',
           borderRadius: '24px',
           border: '1px solid var(--border)',
@@ -239,9 +233,9 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
+        {/* Clean Header (No description) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
             <div style={{
               width: '32px',
               height: '32px',
@@ -254,323 +248,27 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
             }}>
               <Music size={17} />
             </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                Music Note ✨
-              </h3>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                Insta-style music note across your app
-              </span>
-            </div>
+            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)' }}>
+              Music Note ✨
+            </h3>
           </div>
-          <button className="icon-btn-ghost" onClick={handleCleanClose}>
+          <button className="icon-btn-ghost" onClick={handleCleanClose} style={{ padding: '6px' }}>
             <X size={18} />
           </button>
         </div>
 
-        {/* Note Thought Bubble Input */}
-        <div>
-          <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '6px' }}>
-            💭 Share a thought / vibe
-          </label>
-          <input
-            type="text"
-            className="form-input"
-            placeholder="e.g. Chai Break ☕, Vibing 🎧, Late Night 🌙"
-            value={noteText}
-            onChange={(e) => setNoteText(e.target.value)}
-            maxLength={60}
-            style={{ fontSize: '0.85rem' }}
-          />
-
-          {/* Quick Vibe Chips */}
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '6px',
-            marginTop: '8px'
-          }}>
-            {['☕ Chai Break', '🎧 Vibing', '⚡ Energy', '🌙 Night Owl', '🔥 On Fire', '💪 Gym Beast', '💖 In Love'].map(chip => (
-              <button
-                key={chip}
-                type="button"
-                onClick={() => setNoteText(chip)}
-                style={{
-                  background: noteText === chip ? 'rgba(168, 85, 247, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                  border: noteText === chip ? '1px solid #a855f7' : '1px solid var(--border)',
-                  borderRadius: '12px',
-                  padding: '3px 8px',
-                  fontSize: '0.70rem',
-                  fontWeight: 600,
-                  color: noteText === chip ? '#c084fc' : 'var(--text-muted)',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                {chip}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Selected Song Box / Attach Button */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-            <label className="form-label" style={{ fontSize: '0.78rem', margin: 0 }}>
-              🎵 Attach Music (Optional)
-            </label>
-            {selectedSong && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (previewAudio) {
-                    try {
-                      previewAudio.pause();
-                      previewAudio.currentTime = 0;
-                    } catch (e) {}
-                  }
-                  setIsPlayingPreview(false);
-                  setSelectedSong(null);
-                }}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-muted)',
-                  fontSize: '0.70rem',
-                  cursor: 'pointer',
-                  textDecoration: 'underline'
-                }}
-              >
-                Remove Song
-              </button>
-            )}
-          </div>
-
-          {selectedSong ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {/* Song Card */}
-              <div style={{
-                background: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '14px',
-                padding: '10px 12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '10px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                  <div style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '10px',
-                    overflow: 'hidden',
-                    background: '#181824',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0
-                  }}>
-                    {selectedSong.artworkUrl ? (
-                      <img
-                        src={selectedSong.artworkUrl}
-                        alt={selectedSong.songTitle}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <Disc size={20} color="#a855f7" />
-                    )}
-                  </div>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{
-                      fontSize: '0.84rem',
-                      fontWeight: 700,
-                      color: 'var(--text-main)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {selectedSong.songTitle}
-                    </div>
-                    <div style={{
-                      fontSize: '0.72rem',
-                      color: 'var(--text-muted)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {selectedSong.artistName}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                  {/* Preview Play/Pause button */}
-                  <button
-                    type="button"
-                    onClick={handleTogglePreview}
-                    style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      background: isPlayingPreview ? 'var(--accent)' : 'rgba(99, 102, 241, 0.15)',
-                      border: '1px solid var(--accent)',
-                      color: isPlayingPreview ? '#ffffff' : 'var(--accent)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer'
-                    }}
-                    title={isPlayingPreview ? "Pause Snippet" : "Preview Snippet"}
-                  >
-                    {isPlayingPreview ? <Pause size={15} /> : <Play size={15} style={{ marginLeft: '1px' }} />}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowPicker(true)}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: '8px',
-                      background: 'var(--hover-bg)',
-                      border: '1px solid var(--border)',
-                      color: 'var(--text-main)',
-                      fontSize: '0.72rem',
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Change
-                  </button>
-                </div>
-              </div>
-
-              {/* Instagram-style Music Snippet & Duration Adjuster */}
-              <div style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '14px',
-                padding: '10px 12px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                    <SlidersHorizontal size={13} color="var(--accent)" />
-                    <span>Adjust Segment & Duration</span>
-                  </div>
-                  <span style={{ fontSize: '0.70rem', fontWeight: 700, color: '#38bdf8' }}>
-                    {formatTimeStr(startTime)} – {formatTimeStr(startTime + snippetDuration)}
-                  </span>
-                </div>
-
-                {/* Timeline Range Scrubber */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <input
-                    type="range"
-                    min="0"
-                    max={Math.max(1, trackTotalDuration - snippetDuration)}
-                    step="1"
-                    value={startTime}
-                    onChange={(e) => handleStartTimeChange(Number(e.target.value))}
-                    style={{
-                      width: '100%',
-                      cursor: 'pointer',
-                      accentColor: 'var(--accent)',
-                      height: '6px'
-                    }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.64rem', color: 'var(--text-muted)' }}>
-                    <span>Start: {formatTimeStr(startTime)}</span>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <button
-                        type="button"
-                        onClick={() => handleStartTimeChange(startTime - 5)}
-                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
-                        title="Rewind 5s"
-                      >
-                        <Rewind size={11} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleStartTimeChange(startTime + 5)}
-                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
-                        title="Forward 5s"
-                      >
-                        <FastForward size={11} />
-                      </button>
-                    </div>
-                    <span>Total: {formatTimeStr(trackTotalDuration)}</span>
-                  </div>
-                </div>
-
-                {/* Duration Selector Chips: 15s, 30s, 45s, 60s */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '2px' }}>
-                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Snippet Length:</span>
-                  <div style={{ display: 'flex', gap: '5px' }}>
-                    {[15, 30, 45, 60].map(sec => (
-                      <button
-                        key={sec}
-                        type="button"
-                        onClick={() => handleDurationChange(sec)}
-                        style={{
-                          background: snippetDuration === sec ? 'var(--accent)' : 'rgba(255, 255, 255, 0.05)',
-                          border: snippetDuration === sec ? '1px solid var(--accent)' : '1px solid var(--border)',
-                          borderRadius: '8px',
-                          padding: '2px 7px',
-                          fontSize: '0.68rem',
-                          fontWeight: 700,
-                          color: snippetDuration === sec ? '#ffffff' : 'var(--text-muted)',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        {sec}s
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowPicker(true)}
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '14px',
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.12))',
-                border: '1.5px dashed rgba(99, 102, 241, 0.4)',
-                color: 'var(--accent)',
-                fontWeight: 700,
-                fontSize: '0.85rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <Music size={16} /> Choose Music Track (Bollywood / Trending)
-            </button>
-          )}
-        </div>
-
-        {/* Live Note Bubble Preview */}
+        {/* Live DP Bubble Preview */}
         <div style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          padding: '10px 12px',
+          padding: '14px 12px',
           background: 'rgba(0, 0, 0, 0.28)',
-          borderRadius: '16px',
+          borderRadius: '18px',
           border: '1px dashed rgba(255, 255, 255, 0.15)',
-          gap: '6px'
+          gap: '8px'
         }}>
-          <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: '0.70rem', fontWeight: 600, color: 'var(--text-muted)' }}>
             Live DP Bubble Preview
           </span>
           <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -645,93 +343,147 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
           </div>
         </div>
 
-        {/* Note Theme & Live Theme Selector */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <label className="form-label" style={{ fontSize: '0.78rem', margin: 0, display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <Sparkles size={14} color="#a855f7" /> Note Theme & Glow
-            </label>
-            
-            {/* Category Filter Pills */}
-            <div style={{ display: 'flex', gap: '3px', background: 'rgba(255, 255, 255, 0.05)', padding: '2px', borderRadius: '10px' }}>
-              {[
-                { id: 'all', label: 'All' },
-                { id: 'live', label: '✨ Live' },
-                { id: 'static', label: '🎨 Static' }
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setThemeTab(tab.id)}
-                  style={{
-                    padding: '2px 8px',
-                    borderRadius: '8px',
-                    fontSize: '0.68rem',
-                    fontWeight: 700,
-                    border: 'none',
-                    background: themeTab === tab.id ? 'var(--accent)' : 'transparent',
-                    color: themeTab === tab.id ? '#ffffff' : 'var(--text-muted)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
+        {/* Typing Box + Music Button + Theme Button (Clean UI Row) */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <input
+            type="text"
+            className="form-input"
+            placeholder="Share a thought / vibe..."
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            maxLength={60}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              margin: 0,
+              padding: '10px 14px',
+              borderRadius: '14px',
+              fontSize: '0.86rem',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid var(--border)'
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPicker(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '10px 12px',
+              borderRadius: '14px',
+              background: selectedSong ? 'rgba(99, 102, 241, 0.22)' : 'rgba(255, 255, 255, 0.06)',
+              border: selectedSong ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+              color: selectedSong ? 'var(--accent)' : 'var(--text-main)',
+              fontSize: '0.80rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'all 0.15s ease',
+              flexShrink: 0
+            }}
+            title={selectedSong ? selectedSong.songTitle : "Attach Music"}
+          >
+            <Music size={15} />
+            <span>Music</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowThemes(prev => !prev)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '10px 12px',
+              borderRadius: '14px',
+              background: showThemes ? 'rgba(168, 85, 247, 0.22)' : 'rgba(255, 255, 255, 0.06)',
+              border: showThemes ? '1.5px solid #a855f7' : '1px solid var(--border)',
+              color: showThemes ? '#c084fc' : 'var(--text-main)',
+              fontSize: '0.80rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'all 0.15s ease',
+              flexShrink: 0
+            }}
+            title="Choose Theme"
+          >
+            <Palette size={15} />
+            <span>Theme</span>
+          </button>
+        </div>
 
-          {/* Themes Grid */}
+        {/* Theme Options (Shown when Theme button is clicked: Only Name, No Description, Clean UI) */}
+        {showThemes && (
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '8px',
-            maxHeight: '160px',
-            overflowY: 'auto',
-            padding: '2px',
-            boxSizing: 'border-box'
+            background: 'rgba(0, 0, 0, 0.25)',
+            borderRadius: '16px',
+            border: '1px solid var(--border)',
+            padding: '10px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
           }}>
-            {filteredThemes.map(th => {
-              const isSelected = selectedTheme === th.id;
-              return (
-                <button
-                  key={th.id}
-                  type="button"
-                  onClick={() => handleSelectTheme(th)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '7px',
-                    padding: '7px 9px',
-                    borderRadius: '12px',
-                    background: isSelected ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.04)',
-                    border: isSelected ? '1.8px solid #a855f7' : '1px solid var(--border)',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  {/* Theme Preview Dot */}
-                  <div style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    background: th.bgPreview,
-                    boxShadow: th.isLive ? '0 0 8px rgba(168, 85, 247, 0.6)' : 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.74rem',
-                    flexShrink: 0
-                  }}>
-                    {th.icon}
-                  </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
+              <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                Select Theme
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowThemes(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
+              >
+                <X size={14} />
+              </button>
+            </div>
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '8px',
+              maxHeight: '170px',
+              overflowY: 'auto',
+              padding: '2px'
+            }}>
+              {NOTE_THEMES.map(th => {
+                const isSelected = selectedTheme === th.id;
+                return (
+                  <button
+                    key={th.id}
+                    type="button"
+                    onClick={() => handleSelectTheme(th)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 10px',
+                      borderRadius: '12px',
+                      background: isSelected ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                      border: isSelected ? '1.8px solid #a855f7' : '1px solid var(--border)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
                     <div style={{
-                      fontSize: '0.73rem',
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      background: th.bgPreview,
+                      boxShadow: th.isLive ? '0 0 8px rgba(168, 85, 247, 0.6)' : 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.74rem',
+                      flexShrink: 0
+                    }}>
+                      {th.icon}
+                    </div>
+
+                    <div style={{
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: '0.78rem',
                       fontWeight: 700,
                       color: isSelected ? '#ffffff' : 'var(--text-main)',
                       whiteSpace: 'nowrap',
@@ -740,52 +492,178 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
                     }}>
                       {th.name}
                     </div>
-                    <div style={{ fontSize: '0.62rem', color: th.isLive ? '#38bdf8' : 'var(--text-muted)' }}>
-                      {th.isLive ? '✨ Live Theme' : '🎨 Static'}
-                    </div>
-                  </div>
 
-                  {/* Pro VIP Tag */}
-                  {th.isPro && (
-                    <div style={{
-                      background: 'linear-gradient(135deg, #d97706, #f59e0b)',
-                      color: '#ffffff',
-                      borderRadius: '6px',
-                      padding: '1.5px 4px',
-                      fontSize: '0.56rem',
-                      fontWeight: 800,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '2px',
-                      flexShrink: 0
-                    }}>
-                      <Crown size={8} /> VIP
-                    </div>
-                  )}
+                    {th.isPro && (
+                      <Crown size={12} color="#f59e0b" style={{ flexShrink: 0 }} />
+                    )}
 
-                  {isSelected && (
-                    <div style={{
-                      width: '14px',
-                      height: '14px',
-                      borderRadius: '50%',
-                      background: '#a855f7',
-                      color: '#fff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0
-                    }}>
-                      <Check size={9} strokeWidth={3} />
-                    </div>
-                  )}
-                </button>
-              );
-            })}
+                    {isSelected && (
+                      <Check size={14} color="#a855f7" strokeWidth={3} style={{ flexShrink: 0 }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Attached Music Card (Sleek and compact, shown only when song is attached) */}
+        {selectedSong && (
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.04)',
+            border: '1px solid rgba(255, 255, 255, 0.09)',
+            borderRadius: '14px',
+            padding: '8px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  background: '#181824',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  {selectedSong.artworkUrl ? (
+                    <img src={selectedSong.artworkUrl} alt={selectedSong.songTitle} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <Disc size={18} color="#a855f7" />
+                  )}
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: '0.80rem', fontWeight: 700, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {selectedSong.songTitle}
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {selectedSong.artistName}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={handleTogglePreview}
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    background: isPlayingPreview ? 'var(--accent)' : 'rgba(99, 102, 241, 0.15)',
+                    border: '1px solid var(--accent)',
+                    color: isPlayingPreview ? '#ffffff' : 'var(--accent)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}
+                  title={isPlayingPreview ? "Pause" : "Play"}
+                >
+                  {isPlayingPreview ? <Pause size={13} /> : <Play size={13} style={{ marginLeft: '1px' }} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPicker(true)}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '8px',
+                    background: 'var(--hover-bg)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.70rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Change
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (previewAudio) {
+                      try {
+                        previewAudio.pause();
+                        previewAudio.currentTime = 0;
+                      } catch (e) {}
+                    }
+                    setIsPlayingPreview(false);
+                    setSelectedSong(null);
+                  }}
+                  style={{
+                    width: '26px',
+                    height: '26px',
+                    borderRadius: '50%',
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    color: '#ef4444',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}
+                  title="Remove song"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* Compact Snippet Scrubber & Duration */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              background: 'rgba(0,0,0,0.2)',
+              borderRadius: '10px',
+              padding: '6px 8px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.68rem' }}>
+                <span style={{ color: 'var(--text-muted)' }}>
+                  Segment: {formatTimeStr(startTime)} – {formatTimeStr(startTime + snippetDuration)}
+                </span>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {[15, 30, 60].map(sec => (
+                    <button
+                      key={sec}
+                      type="button"
+                      onClick={() => handleDurationChange(sec)}
+                      style={{
+                        background: snippetDuration === sec ? 'var(--accent)' : 'rgba(255, 255, 255, 0.05)',
+                        border: snippetDuration === sec ? '1px solid var(--accent)' : '1px solid var(--border)',
+                        borderRadius: '6px',
+                        padding: '1px 5px',
+                        fontSize: '0.64rem',
+                        fontWeight: 700,
+                        color: snippetDuration === sec ? '#fff' : 'var(--text-muted)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {sec}s
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max={Math.max(1, trackTotalDuration - snippetDuration)}
+                step="1"
+                value={startTime}
+                onChange={(e) => handleStartTimeChange(Number(e.target.value))}
+                style={{ width: '100%', cursor: 'pointer', accentColor: 'var(--accent)', height: '4px' }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons */}
-        <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+        <div style={{ display: 'flex', gap: '8px', marginTop: '2px' }}>
           {Boolean(musicNoteText || user?.musicNote) && (
             <button
               type="button"
