@@ -667,7 +667,6 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
   const [comboBanner, setComboBanner] = useState(null); // e.g. "Tasty! x2"
   const [gameState, setGameState] = useState('playing'); // 'playing' | 'won' | 'gameover'
   const [hintCells, setHintCells] = useState(null);
-  const [particles, setParticles] = useState([]);
   const [isMuted, setIsMuted] = useState(false);
 
   const idleTimerRef = useRef(null);
@@ -725,20 +724,9 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
     }
   }, []);
 
-  // Trigger burst particles on matches
+  // Trigger burst sound & effects on matches
   const triggerParticles = (r, c, color) => {
-    const newParticles = Array.from({ length: 6 }).map((_, i) => ({
-      id: Math.random(),
-      r,
-      c,
-      color,
-      angle: (i / 6) * Math.PI * 2,
-      dist: Math.random() * 24 + 16
-    }));
-    setParticles(prev => [...prev.slice(-18), ...newParticles]);
-    setTimeout(() => {
-      setParticles(prev => prev.filter(p => !newParticles.includes(p)));
-    }, 400);
+    // Pure sound and visual feedback without state thrashing
   };
 
   // Process Cascades and Matches
@@ -1021,42 +1009,54 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
 
   // Check Win / Game Over conditions
   useEffect(() => {
-    if (isProcessing) return;
+    if (gameState !== 'playing' || isProcessing) return;
 
-    if (score >= levelConfig.targetScore) {
+    if (score >= levelConfig.targetScore && score > 0) {
       setGameState('won');
       soundEngine.playWinFanfare();
       if (onScoreUpdate) {
         onScoreUpdate('Candy Crush Saga', score, level);
       }
-      try {
-        const nextLevel = level + 1;
-        localStorage.setItem('pulsechat_candy_crush_level', String(nextLevel));
-      } catch (e) {}
     } else if (movesLeft <= 0) {
       setGameState('gameover');
       if (onScoreUpdate) {
         onScoreUpdate('Candy Crush Saga', score, level);
       }
     }
-  }, [score, movesLeft, isProcessing, level, levelConfig.targetScore, onScoreUpdate]);
+  }, [score, movesLeft, isProcessing, gameState, level, levelConfig.targetScore, onScoreUpdate]);
 
   // Next Level or Restart
   const startNextLevel = () => {
     const nextLvl = level + 1;
+    try {
+      localStorage.setItem('pulsechat_candy_crush_level', String(nextLvl));
+    } catch (e) {}
+    setScore(0);
     setLevel(nextLvl);
     const nextCfg = getLevelConfig(nextLvl);
     setMovesLeft(nextCfg.moves);
     setBoard(createInitialBoard());
-    setScore(0);
     setGameState('playing');
     setSelectedCell(null);
   };
 
   const restartLevel = () => {
+    setScore(0);
     setMovesLeft(levelConfig.moves);
     setBoard(createInitialBoard());
+    setGameState('playing');
+    setSelectedCell(null);
+  };
+
+  const resetToLevelOne = () => {
+    try {
+      localStorage.setItem('pulsechat_candy_crush_level', '1');
+    } catch (e) {}
     setScore(0);
+    setLevel(1);
+    const firstCfg = getLevelConfig(1);
+    setMovesLeft(firstCfg.moves);
+    setBoard(createInitialBoard());
     setGameState('playing');
     setSelectedCell(null);
   };
@@ -1147,6 +1147,27 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
           >
             {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
           </button>
+          {level > 1 && (
+            <button
+              onClick={resetToLevelOne}
+              style={{
+                background: 'rgba(255, 255, 255, 0.12)',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '4px 8px',
+                color: '#fbcfe8',
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                cursor: 'pointer'
+              }}
+              title="Reset progress to Level 1"
+            >
+              Lvl 1
+            </button>
+          )}
           <button
             onClick={restartLevel}
             style={{
@@ -1278,7 +1299,7 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
 
             return (
               <div
-                key={`${r}-${c}-${candy?.id || 'empty'}`}
+                key={`${r}-${c}`}
                 onClick={() => handleCellClick(r, c)}
                 onTouchStart={(e) => handleTouchStart(r, c, e)}
                 onTouchEnd={handleTouchEnd}

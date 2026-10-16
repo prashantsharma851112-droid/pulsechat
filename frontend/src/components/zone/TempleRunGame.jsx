@@ -317,40 +317,94 @@ const createTempleAudio = () => {
 // HIGH-RES PROCEDURAL TEXTURE GENERATOR: AUTHENTIC TEMPLE RUN STONE SLABS
 // Carved concentric spirals, golden flagstones, weathered moss & mortar
 // =========================================================================
+// Soft Ground Shadow Radial Texture
+const createShadowTexture = () => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
+  grad.addColorStop(0.45, 'rgba(0, 0, 0, 0.4)');
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(canvas);
+};
+
+// =========================================================================
+// HIGH-RES PROCEDURAL TEXTURE GENERATOR: AUTHENTIC REALISTIC TEMPLE STONE SLABS
+// Carved concentric spirals, golden flagstones, weathered moss, chisel highlights
+// =========================================================================
 const createStonePathwayTexture = () => {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
   canvas.height = 1024;
   const ctx = canvas.getContext('2d');
 
-  // Golden Sandstone Flagstones Base
+  // Multi-tone golden sandstone base with natural color gradation
   const baseGrad = ctx.createLinearGradient(0, 0, 1024, 1024);
-  baseGrad.addColorStop(0, '#eab308');
-  baseGrad.addColorStop(0.3, '#d97706');
-  baseGrad.addColorStop(0.7, '#ca8a04');
-  baseGrad.addColorStop(1, '#92400e');
+  baseGrad.addColorStop(0, '#f59e0b');
+  baseGrad.addColorStop(0.25, '#d97706');
+  baseGrad.addColorStop(0.55, '#b45309');
+  baseGrad.addColorStop(0.85, '#92400e');
+  baseGrad.addColorStop(1, '#78350f');
   ctx.fillStyle = baseGrad;
   ctx.fillRect(0, 0, 1024, 1024);
 
-  // Weathered Flagstone Grid Mortar
-  ctx.strokeStyle = '#451a03';
-  ctx.lineWidth = 6;
+  // Weathered Stone Grain Noise
+  for (let i = 0; i < 18000; i++) {
+    const nx = Math.random() * 1024;
+    const ny = Math.random() * 1024;
+    const radius = Math.random() * 2 + 0.5;
+    ctx.fillStyle = Math.random() < 0.5 ? 'rgba(254, 240, 138, 0.14)' : 'rgba(69, 26, 3, 0.18)';
+    ctx.beginPath();
+    ctx.arc(nx, ny, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Weathered Flagstone Grid Mortar with 3D Chiseled Bevels
+  ctx.strokeStyle = '#3b1704';
+  ctx.lineWidth = 7;
   for (let y = 0; y < 1024; y += 128) {
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(1024, y);
     ctx.stroke();
+
+    // Top edge highlight for 3D bevel depth
+    ctx.strokeStyle = 'rgba(254, 240, 138, 0.45)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(0, y + 4);
+    ctx.lineTo(1024, y + 4);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#3b1704';
+    ctx.lineWidth = 7;
+
     for (let x = (y % 256 === 0 ? 0 : 64); x < 1024; x += 128) {
       ctx.beginPath();
       ctx.moveTo(x, y);
       ctx.lineTo(x, y + 128);
       ctx.stroke();
+
+      // Stone vertical bevel highlight
+      ctx.strokeStyle = 'rgba(254, 240, 138, 0.35)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + 3, y);
+      ctx.lineTo(x + 3, y + 128);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#3b1704';
+      ctx.lineWidth = 7;
     }
   }
 
-  // Ancient Concentric Stone Spirals (Exact match to User Screenshot 2)
+  // Ancient Concentric Stone Spirals with Sacred Golden Inlay
   const drawCarvedSpiral = (cx, cy, maxR) => {
-    ctx.strokeStyle = '#5c2406';
+    ctx.strokeStyle = '#451a03';
     ctx.lineWidth = 14;
     ctx.beginPath();
     for (let a = 0; a < Math.PI * 6; a += 0.08) {
@@ -363,23 +417,36 @@ const createStonePathwayTexture = () => {
     ctx.stroke();
 
     // Golden Rune Inner Chisel Highlight
-    ctx.strokeStyle = 'rgba(254, 240, 138, 0.55)';
+    ctx.strokeStyle = 'rgba(254, 240, 138, 0.75)';
     ctx.lineWidth = 4;
     ctx.stroke();
+
+    // Inner glowing core
+    ctx.fillStyle = 'rgba(251, 191, 36, 0.45)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+    ctx.fill();
   };
 
-  drawCarvedSpiral(512, 256, 110);
-  drawCarvedSpiral(512, 768, 110);
-  drawCarvedSpiral(200, 512, 80);
-  drawCarvedSpiral(824, 512, 80);
+  drawCarvedSpiral(512, 256, 115);
+  drawCarvedSpiral(512, 768, 115);
+  drawCarvedSpiral(200, 512, 85);
+  drawCarvedSpiral(824, 512, 85);
 
-  // Wild Moss & Mountain Lichen on Outer Edges
-  ctx.fillStyle = '#15803d';
-  for (let i = 0; i < 1024; i += 12) {
-    const mossW1 = Math.random() * 60 + 20;
-    const mossW2 = Math.random() * 60 + 20;
-    ctx.fillRect(0, i, mossW1, 12);
-    ctx.fillRect(1024 - mossW2, i, mossW2, 12);
+  // Wild Creeping Moss & Mountain Lichen on Outer Edges
+  for (let i = 0; i < 1024; i += 10) {
+    const mossW1 = Math.random() * 70 + 25;
+    const mossW2 = Math.random() * 70 + 25;
+    ctx.fillStyle = i % 20 === 0 ? '#166534' : (i % 30 === 0 ? '#22c55e' : '#15803d');
+    ctx.fillRect(0, i, mossW1, 10);
+    ctx.fillRect(1024 - mossW2, i, mossW2, 10);
+
+    // Moss spore dots
+    ctx.fillStyle = '#4ade80';
+    ctx.beginPath();
+    ctx.arc(mossW1 + Math.random() * 6, i + 5, Math.random() * 3 + 1, 0, Math.PI * 2);
+    ctx.arc(1024 - mossW2 - Math.random() * 6, i + 5, Math.random() * 3 + 1, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -389,27 +456,74 @@ const createStonePathwayTexture = () => {
   return texture;
 };
 
-// Procedural Sunset Sky Canvas Texture (Golden-Orange Sunset matching Image 1)
+// Procedural Sunset Sky & Mountain Backdrop Texture
 const createSkyTexture = () => {
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
+  canvas.width = 1024;
+  canvas.height = 1024;
   const ctx = canvas.getContext('2d');
 
-  const grad = ctx.createLinearGradient(0, 0, 0, 512);
-  grad.addColorStop(0, '#ea580c');   // Deep fiery sunset orange
-  grad.addColorStop(0.35, '#f97316');
-  grad.addColorStop(0.65, '#fed7aa'); // Golden Horizon
-  grad.addColorStop(0.85, '#ffffff'); // Cloud Deck
-  grad.addColorStop(1, '#e2e8f0');
+  // Rich atmospheric golden-sunset sky gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, 1024);
+  grad.addColorStop(0, '#c2410c');    // Deep sunset crimson-amber
+  grad.addColorStop(0.28, '#ea580c'); // Fiery orange
+  grad.addColorStop(0.55, '#f59e0b'); // Golden amber
+  grad.addColorStop(0.75, '#fde68a'); // Radiant horizon glow
+  grad.addColorStop(0.9, '#fef08a');
+  grad.addColorStop(1, '#fed7aa');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 512, 512);
+  ctx.fillRect(0, 0, 1024, 1024);
 
-  // Soft Cloud Strata
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-  for (let i = 0; i < 6; i++) {
+  // Radiant Sun Disc & Golden Corona Lens Glow
+  const sunGrad = ctx.createRadialGradient(512, 620, 0, 512, 620, 260);
+  sunGrad.addColorStop(0, '#ffffff');
+  sunGrad.addColorStop(0.18, 'rgba(254, 240, 138, 0.95)');
+  sunGrad.addColorStop(0.45, 'rgba(245, 158, 11, 0.55)');
+  sunGrad.addColorStop(1, 'rgba(234, 88, 12, 0)');
+  ctx.fillStyle = sunGrad;
+  ctx.beginPath();
+  ctx.arc(512, 620, 260, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Distant Mountain Ridges & Peaks Silhouette
+  ctx.fillStyle = 'rgba(120, 53, 15, 0.35)';
+  ctx.beginPath();
+  ctx.moveTo(0, 720);
+  for (let x = 0; x <= 1024; x += 32) {
+    const y = 640 + Math.sin(x * 0.008) * 60 + Math.cos(x * 0.02) * 30;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(1024, 1024);
+  ctx.lineTo(0, 1024);
+  ctx.closePath();
+  ctx.fill();
+
+  // Foreground Mountain Jungle Ridges
+  ctx.fillStyle = 'rgba(69, 26, 3, 0.55)';
+  ctx.beginPath();
+  ctx.moveTo(0, 780);
+  for (let x = 0; x <= 1024; x += 24) {
+    const y = 720 + Math.sin(x * 0.012 + 2) * 55 + Math.cos(x * 0.025) * 25;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(1024, 1024);
+  ctx.lineTo(0, 1024);
+  ctx.closePath();
+  ctx.fill();
+
+  // Soft Drifting Sunset Cloud Strata
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.32)';
+  for (let i = 0; i < 8; i++) {
     ctx.beginPath();
-    ctx.ellipse(Math.random() * 512, 300 + i * 25, 180 + Math.random() * 80, 20 + Math.random() * 10, 0, 0, Math.PI * 2);
+    ctx.ellipse(
+      120 + i * 120,
+      380 + (i % 3) * 60,
+      140 + (i % 4) * 40,
+      22 + (i % 3) * 8,
+      0,
+      0,
+      Math.PI * 2
+    );
     ctx.fill();
   }
 
@@ -417,88 +531,266 @@ const createSkyTexture = () => {
 };
 
 // =========================================================================
-// ORGANIC HUMAN & CREATURE MODEL SCULPTORS (ZERO MINECRAFT BOXES)
+// REALISTIC HUMAN RUNNER MODEL (PRO ATHLETE ANATOMY & GEAR)
+// Real face, athletic headband, runner jersey, watch, sneakers, ground shadow
 // =========================================================================
-
-// Build Guy Dangerous (Realistic humanoid explorer with natural anatomy & articulation)
 const buildGuyDangerous = () => {
   const root = new THREE.Group();
 
-  // Materials
-  const skinMat = new THREE.MeshStandardMaterial({ color: 0xfed7aa, roughness: 0.6 });
-  const shirtMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.75 }); // Cream safari shirt
-  const pantsMat = new THREE.MeshStandardMaterial({ color: 0x3f6212, roughness: 0.7 }); // Olive pants
-  const leatherMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.5 }); // Leather belt/boots
-  const hairMat = new THREE.MeshStandardMaterial({ color: 0xc2410c, roughness: 0.8 }); // Red-auburn hair
+  // High-fidelity materials with specular highlights
+  const skinMat = new THREE.MeshStandardMaterial({
+    color: 0xfed7aa,
+    roughness: 0.52,
+    metalness: 0.08
+  });
 
-  // 1. Torso: Tapered anatomical chest to waist (smooth cylinder)
-  const torsoGeo = new THREE.CylinderGeometry(0.38, 0.28, 0.95, 24);
-  torsoGeo.computeVertexNormals();
-  const torso = new THREE.Mesh(torsoGeo, shirtMat);
+  const hairMat = new THREE.MeshStandardMaterial({
+    color: 0x451a03, // Dark espresso brown athletic hair
+    roughness: 0.85
+  });
+
+  const headbandMat = new THREE.MeshStandardMaterial({
+    color: 0xd97706, // Athletic gold runner headband
+    roughness: 0.5,
+    metalness: 0.2
+  });
+
+  const jerseyMat = new THREE.MeshStandardMaterial({
+    color: 0x0284c7, // Royal athletic cyan/blue compression tank
+    roughness: 0.65,
+    metalness: 0.1
+  });
+
+  const jerseyTrimMat = new THREE.MeshStandardMaterial({
+    color: 0xf59e0b, // Amber neon racing trim
+    roughness: 0.4
+  });
+
+  const shortsMat = new THREE.MeshStandardMaterial({
+    color: 0x0f172a, // Dark athletic compression shorts
+    roughness: 0.75
+  });
+
+  const sockMat = new THREE.MeshStandardMaterial({
+    color: 0xf8fafc, // White compression socks
+    roughness: 0.8
+  });
+
+  const shoeUpperMat = new THREE.MeshStandardMaterial({
+    color: 0x0ea5e9, // Electric cyan sneaker mesh
+    roughness: 0.6
+  });
+
+  const shoeSoleMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff, // Thick cushioned white running foam sole
+    roughness: 0.45
+  });
+
+  const shoeTreadMat = new THREE.MeshStandardMaterial({
+    color: 0x0f172a, // Black rubber outsole
+    roughness: 0.9
+  });
+
+  const watchBandMat = new THREE.MeshStandardMaterial({
+    color: 0x1e293b,
+    roughness: 0.6
+  });
+
+  const watchScreenMat = new THREE.MeshBasicMaterial({
+    color: 0x06b6d4 // Glowing cyan GPS running watch face
+  });
+
+  // 1. Torso: Anatomical athletic runner chest & waist
+  const torso = new THREE.Group();
   torso.position.y = 1.35;
-  torso.castShadow = true;
+
+  // Chest & ribcage (broad athletic shoulders tapering down)
+  const chestGeo = new THREE.CylinderGeometry(0.38, 0.32, 0.55, 24);
+  chestGeo.computeVertexNormals();
+  const chest = new THREE.Mesh(chestGeo, jerseyMat);
+  chest.position.y = 0.22;
+  chest.castShadow = true;
+  torso.add(chest);
+
+  // Chest race emblem / bib
+  const bibGeo = new THREE.PlaneGeometry(0.24, 0.16);
+  const bibMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+  const bib = new THREE.Mesh(bibGeo, bibMat);
+  bib.position.set(0, 0.26, 0.35);
+  torso.add(bib);
+
+  // Gold racing side stripes on jersey
+  const stripeGeo = new THREE.CylinderGeometry(0.385, 0.325, 0.55, 24, 1, true, -Math.PI / 6, Math.PI / 10);
+  const stripeL = new THREE.Mesh(stripeGeo, jerseyTrimMat);
+  stripeL.position.y = 0.22;
+  torso.add(stripeL);
+
+  // Tapered waist & abdomen
+  const waistGeo = new THREE.CylinderGeometry(0.32, 0.29, 0.4, 24);
+  waistGeo.computeVertexNormals();
+  const waist = new THREE.Mesh(waistGeo, jerseyMat);
+  waist.position.y = -0.2;
+  waist.castShadow = true;
+  torso.add(waist);
+
+  // Athletic runner utility belt with buckle & hydration flasks
+  const beltMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 });
+  const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.31, 0.1, 24), beltMat);
+  belt.position.y = -0.38;
+  torso.add(belt);
+
+  const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.09, 0.05), jerseyTrimMat);
+  buckle.position.set(0, -0.38, 0.32);
+  torso.add(buckle);
+
+  // Twin mini hydration flasks on back of belt
+  const flaskMat = new THREE.MeshStandardMaterial({ color: 0x06b6d4, roughness: 0.3, metalness: 0.6 });
+  const flaskGeo = new THREE.CylinderGeometry(0.06, 0.05, 0.2, 12);
+  const flaskL = new THREE.Mesh(flaskGeo, flaskMat);
+  flaskL.position.set(-0.2, -0.36, -0.3);
+  flaskL.rotation.z = 0.25;
+  const flaskR = new THREE.Mesh(flaskGeo, flaskMat);
+  flaskR.position.set(0.2, -0.36, -0.3);
+  flaskR.rotation.z = -0.25;
+  torso.add(flaskL);
+  torso.add(flaskR);
+
   root.add(torso);
 
-  // Leather Holster & Belt with Brass Buckle
-  const beltGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.1, 24);
-  const belt = new THREE.Mesh(beltGeo, leatherMat);
-  belt.position.y = 0.9;
-  root.add(belt);
+  // 2. Realistic Athletic Head, Face & Headband
+  const headGroup = new THREE.Group();
+  headGroup.position.y = 2.08;
 
-  // 2. Neck & Head
-  const neckGeo = new THREE.CylinderGeometry(0.12, 0.14, 0.2, 16);
+  // Athletic muscular neck
+  const neckGeo = new THREE.CylinderGeometry(0.13, 0.16, 0.24, 16);
+  neckGeo.computeVertexNormals();
   const neck = new THREE.Mesh(neckGeo, skinMat);
-  neck.position.y = 1.9;
-  root.add(neck);
+  neck.position.y = -0.16;
+  headGroup.add(neck);
 
-  const headGeo = new THREE.SphereGeometry(0.26, 20, 20);
-  headGeo.computeVertexNormals();
-  const head = new THREE.Mesh(headGeo, skinMat);
-  head.position.y = 2.08;
-  root.add(head);
+  // Head skull with facial contour
+  const skullGeo = new THREE.SphereGeometry(0.25, 24, 24);
+  skullGeo.scale(1.0, 1.15, 1.05);
+  skullGeo.computeVertexNormals();
+  const skull = new THREE.Mesh(skullGeo, skinMat);
+  skull.castShadow = true;
+  headGroup.add(skull);
 
-  // Red/Auburn Hair with organic volume
+  // Athletic Jaw / Chin definition
+  const chinGeo = new THREE.ConeGeometry(0.14, 0.18, 16);
+  chinGeo.rotateX(Math.PI);
+  const chin = new THREE.Mesh(chinGeo, skinMat);
+  chin.position.set(0, -0.16, 0.12);
+  headGroup.add(chin);
+
+  // Nose bridge
+  const noseGeo = new THREE.ConeGeometry(0.045, 0.12, 8);
+  noseGeo.rotateX(Math.PI / 2);
+  const nose = new THREE.Mesh(noseGeo, skinMat);
+  nose.position.set(0, 0.02, 0.28);
+  headGroup.add(nose);
+
+  // Ears on left and right
+  const earGeo = new THREE.SphereGeometry(0.06, 12, 12);
+  earGeo.scale(0.4, 1.2, 0.8);
+  const earL = new THREE.Mesh(earGeo, skinMat);
+  earL.position.set(-0.26, 0.02, 0);
+  const earR = new THREE.Mesh(earGeo, skinMat);
+  earR.position.set(0.26, 0.02, 0);
+  headGroup.add(earL);
+  headGroup.add(earR);
+
+  // Runner Eyes (dark irises)
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x1e1b4b });
+  const eyeGeo = new THREE.SphereGeometry(0.028, 8, 8);
+  const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+  leftEye.position.set(-0.09, 0.07, 0.245);
+  const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+  rightEye.position.set(0.09, 0.07, 0.245);
+  headGroup.add(leftEye);
+  headGroup.add(rightEye);
+
+  // Athletic Runner Headband (Gold with front badge)
+  const headbandGeo = new THREE.CylinderGeometry(0.27, 0.27, 0.09, 24);
+  const headband = new THREE.Mesh(headbandGeo, headbandMat);
+  headband.position.set(0, 0.13, 0);
+  headGroup.add(headband);
+
+  // Wind-swept layered athletic hair flowing back
   const hairGeo = new THREE.SphereGeometry(0.28, 20, 20);
-  hairGeo.scale(1, 0.85, 1.1);
+  hairGeo.scale(1.02, 0.9, 1.25);
   const hair = new THREE.Mesh(hairGeo, hairMat);
-  hair.position.set(0, 2.18, -0.04);
-  root.add(hair);
+  hair.position.set(0, 0.17, -0.06);
+  headGroup.add(hair);
 
-  // 3. Articulated Legs (Two-segment thighs + shins + realistic boots)
+  root.add(headGroup);
+
+  // 3. Articulated Legs (Compression shorts, knee joints, socks, pro running sneakers)
   const createLeg = (isLeft) => {
     const hip = new THREE.Group();
     hip.position.set(isLeft ? -0.22 : 0.22, 0.85, 0);
 
-    // Thigh (tapered organic cylinder)
-    const thighGeo = new THREE.CylinderGeometry(0.16, 0.12, 0.55, 16);
+    // Thigh with compression shorts & side neon racing stripe
+    const thighGeo = new THREE.CylinderGeometry(0.16, 0.12, 0.52, 16);
     thighGeo.computeVertexNormals();
-    const thigh = new THREE.Mesh(thighGeo, pantsMat);
-    thigh.position.y = -0.27;
+    const thigh = new THREE.Mesh(thighGeo, shortsMat);
+    thigh.position.y = -0.26;
     thigh.castShadow = true;
     hip.add(thigh);
 
     // Knee Pivot
     const knee = new THREE.Group();
-    knee.position.y = -0.55;
+    knee.position.y = -0.52;
     hip.add(knee);
 
-    // Shin/Calf (tapered organic cylinder)
-    const calfGeo = new THREE.CylinderGeometry(0.12, 0.1, 0.5, 16);
+    // Sculpted kneecap
+    const kneecap = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), skinMat);
+    kneecap.position.set(0, 0, 0.08);
+    knee.add(kneecap);
+
+    // Shin/Calf (tapered athletic calf)
+    const calfGeo = new THREE.CylinderGeometry(0.12, 0.095, 0.48, 16);
     calfGeo.computeVertexNormals();
-    const calf = new THREE.Mesh(calfGeo, pantsMat);
-    calf.position.y = -0.25;
+    const calf = new THREE.Mesh(calfGeo, skinMat);
+    calf.position.y = -0.24;
     calf.castShadow = true;
     knee.add(calf);
 
-    // Explorer Boot
-    const bootGeo = new THREE.CylinderGeometry(0.11, 0.13, 0.25, 16);
-    const boot = new THREE.Mesh(bootGeo, leatherMat);
-    boot.position.y = -0.48;
-    const footGeo = new THREE.BoxGeometry(0.18, 0.12, 0.32);
-    const foot = new THREE.Mesh(footGeo, leatherMat);
-    foot.position.set(0, -0.55, 0.08);
-    knee.add(boot);
-    knee.add(foot);
+    // White athletic compression sock
+    const sockGeo = new THREE.CylinderGeometry(0.105, 0.095, 0.22, 16);
+    const sock = new THREE.Mesh(sockGeo, sockMat);
+    sock.position.y = -0.38;
+    knee.add(sock);
+
+    // PRO RUNNING SHOE (SNEAKER)
+    const shoe = new THREE.Group();
+    shoe.position.set(0, -0.52, 0.08);
+
+    // Thick cushioned white running foam midsole
+    const soleGeo = new THREE.BoxGeometry(0.2, 0.09, 0.4);
+    const sole = new THREE.Mesh(soleGeo, shoeSoleMat);
+    sole.position.y = -0.02;
+    shoe.add(sole);
+
+    // Grippy rubber outsole
+    const treadGeo = new THREE.BoxGeometry(0.205, 0.025, 0.405);
+    const tread = new THREE.Mesh(treadGeo, shoeTreadMat);
+    tread.position.y = -0.06;
+    shoe.add(tread);
+
+    // Colored breathable mesh upper
+    const upperGeo = new THREE.BoxGeometry(0.19, 0.11, 0.36);
+    const upper = new THREE.Mesh(upperGeo, shoeUpperMat);
+    upper.position.set(0, 0.05, 0.01);
+    shoe.add(upper);
+
+    // Shoe collar / ankle opening
+    const collarGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.06, 12);
+    const collar = new THREE.Mesh(collarGeo, sockMat);
+    collar.position.set(0, 0.1, -0.05);
+    shoe.add(collar);
+
+    knee.add(shoe);
 
     root.add(hip);
     return { hip, knee };
@@ -507,20 +799,20 @@ const buildGuyDangerous = () => {
   const leftLeg = createLeg(true);
   const rightLeg = createLeg(false);
 
-  // 4. Articulated Arms (Shoulder deltoid + bicep + elbow + forearm + hand)
+  // 4. Articulated Muscular Arms (Deltoid, bicep, running GPS watch, running fist)
   const createArm = (isLeft) => {
     const shoulder = new THREE.Group();
     shoulder.position.set(isLeft ? -0.46 : 0.46, 1.7, 0);
 
-    // Deltoid muscle
+    // Muscular shoulder deltoid
     const deltoidGeo = new THREE.SphereGeometry(0.16, 16, 16);
-    const deltoid = new THREE.Mesh(deltoidGeo, shirtMat);
+    const deltoid = new THREE.Mesh(deltoidGeo, skinMat);
     shoulder.add(deltoid);
 
-    // Bicep (rolled-up sleeve)
+    // Athletic bicep & tricep
     const bicepGeo = new THREE.CylinderGeometry(0.13, 0.11, 0.42, 16);
     bicepGeo.computeVertexNormals();
-    const bicep = new THREE.Mesh(bicepGeo, shirtMat);
+    const bicep = new THREE.Mesh(bicepGeo, skinMat);
     bicep.position.y = -0.22;
     shoulder.add(bicep);
 
@@ -529,18 +821,35 @@ const buildGuyDangerous = () => {
     elbow.position.y = -0.42;
     shoulder.add(elbow);
 
-    // Forearm (skin tone)
+    // Forearm
     const forearmGeo = new THREE.CylinderGeometry(0.1, 0.08, 0.42, 16);
     forearmGeo.computeVertexNormals();
     const forearm = new THREE.Mesh(forearmGeo, skinMat);
     forearm.position.y = -0.21;
     elbow.add(forearm);
 
-    // Hand Fist
-    const handGeo = new THREE.SphereGeometry(0.09, 12, 12);
-    const hand = new THREE.Mesh(handGeo, skinMat);
-    hand.position.y = -0.44;
-    elbow.add(hand);
+    if (isLeft) {
+      // Left Wrist: SLEEK DIGITAL RUNNING SPORTS GPS WATCH
+      const watchBand = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.07, 16), watchBandMat);
+      watchBand.position.y = -0.32;
+      elbow.add(watchBand);
+
+      const watchScreen = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.05, 0.03), watchScreenMat);
+      watchScreen.position.set(0, -0.32, 0.09);
+      elbow.add(watchScreen);
+    } else {
+      // Right Wrist: Athletic runner sweatband
+      const sweatband = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.08, 16), headbandMat);
+      sweatband.position.y = -0.32;
+      elbow.add(sweatband);
+    }
+
+    // Aerodynamic Running Fist
+    const fistGeo = new THREE.SphereGeometry(0.085, 12, 12);
+    fistGeo.scale(1, 1.2, 0.85);
+    const fist = new THREE.Mesh(fistGeo, skinMat);
+    fist.position.y = -0.45;
+    elbow.add(fist);
 
     root.add(shoulder);
     return { shoulder, elbow };
@@ -549,12 +858,28 @@ const buildGuyDangerous = () => {
   const leftArm = createArm(true);
   const rightArm = createArm(false);
 
+  // 5. Dynamic Ground Contact Shadow (Soft oval planar shadow)
+  const shadowGeo = new THREE.PlaneGeometry(1.6, 2.2);
+  shadowGeo.rotateX(-Math.PI / 2);
+  const shadowMat = new THREE.MeshBasicMaterial({
+    map: createShadowTexture(),
+    transparent: true,
+    opacity: 0.65,
+    depthWrite: false
+  });
+  const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+  shadow.position.y = 0.04;
+  root.add(shadow);
+
   return {
     group: root,
+    torso,
+    head: headGroup,
     leftLeg,
     rightLeg,
     leftArm,
-    rightArm
+    rightArm,
+    shadow
   };
 };
 
@@ -1109,10 +1434,22 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     const CHUNK_LENGTH = 24;
     const CHUNK_COUNT = 14;
     const trackChunks = [];
+    const torchesList = [];
+
+    // Realistic Torch Materials
+    const torchBrazierMat = new THREE.MeshStandardMaterial({ color: 0x292524, roughness: 0.6, metalness: 0.8 });
+    const torchFlameOuterMat = new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.88 });
+    const torchFlameInnerMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+
+    // Realistic Jungle Palm & Vine Materials
+    const palmTrunkMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.85 });
+    const palmLeafMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.6 });
+    const vineMat = new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.8 });
 
     const createTrackChunk = (zPos) => {
       const chunk = new THREE.Group();
       chunk.position.z = zPos;
+      const chunkIndex = Math.abs(Math.round(zPos / CHUNK_LENGTH));
 
       // Stone Bridge Runway (Width 6.6 units)
       const floorGeo = new THREE.BoxGeometry(6.6, 1.2, CHUNK_LENGTH);
@@ -1131,7 +1468,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       chunk.add(leftRail);
       chunk.add(rightRail);
 
-      // Ancient Stone Pillars with Emerald Gems at intervals (Exact match to Screenshot 1 & 2)
+      // Ancient Stone Pillars with Emerald Gems & 3D Real Flickering Fire Torches
       const pillarGeo = new THREE.CylinderGeometry(0.45, 0.55, 4.2, 16);
       pillarGeo.computeVertexNormals();
       const pL = new THREE.Mesh(pillarGeo, carvedWallMat);
@@ -1141,7 +1478,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       chunk.add(pL);
       chunk.add(pR);
 
-      // Glowing Green Emerald Gems on Top of Pillars
+      // Glowing Green Emerald Totems on Top of Pillars
       const gemGeo = new THREE.OctahedronGeometry(0.38, 0);
       const gemL = new THREE.Mesh(gemGeo, emeraldGemMat);
       gemL.position.set(-3.4, 4.1, 0);
@@ -1150,22 +1487,99 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       chunk.add(gemL);
       chunk.add(gemR);
 
-      // Floating Mountain Rocks & Pine Trees in Distance
+      // 3D Ancient Stone Fire Torches on Left & Right
+      const addTorchToPillar = (xPos) => {
+        const torchGroup = new THREE.Group();
+        torchGroup.position.set(xPos > 0 ? xPos - 0.35 : xPos + 0.35, 2.3, 0);
+
+        // Bronze Brazier Bowl
+        const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.12, 0.22, 12), torchBrazierMat);
+        torchGroup.add(bowl);
+
+        // Outer Flame Cone
+        const flameOuter = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.55, 10), torchFlameOuterMat);
+        flameOuter.position.y = 0.32;
+        torchGroup.add(flameOuter);
+
+        // Inner Bright Core
+        const flameInner = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.38, 8), torchFlameInnerMat);
+        flameInner.position.y = 0.24;
+        torchGroup.add(flameInner);
+
+        chunk.add(torchGroup);
+        torchesList.push({ outerFlame: flameOuter });
+      };
+
+      addTorchToPillar(-3.4);
+      addTorchToPillar(3.4);
+
+      // Warm Dancing Torch Light along the Stone Pathway
+      const torchLight = new THREE.PointLight(0xf59e0b, 0.9, 14, 2);
+      torchLight.position.set(0, 3.2, 0);
+      chunk.add(torchLight);
+
+      // Hanging Jungle Vines / Lianas draped from bridge balustrades
+      const vineL = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.04, 3.5, 8), vineMat);
+      vineL.position.set(-3.6, -1.6, 2.5);
+      vineL.rotation.z = 0.15;
+      chunk.add(vineL);
+
+      const vineR = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.04, 3.5, 8), vineMat);
+      vineR.position.set(3.6, -1.6, -2.5);
+      vineR.rotation.z = -0.15;
+      chunk.add(vineR);
+
+      // Floating Mountain Rocks & Lush Tropical Palm Trees in Distance
       const rockGeo = new THREE.DodecahedronGeometry(5 + Math.random() * 4, 1);
       const rock = new THREE.Mesh(rockGeo, carvedWallMat);
       const rockSide = Math.random() < 0.5 ? -18 : 18;
       rock.position.set(rockSide, -4, 0);
       chunk.add(rock);
 
-      // 3D Pine Tree on Mountain (Exact match to Screenshot 1)
-      const treeTrunkGeo = new THREE.CylinderGeometry(0.2, 0.3, 2.5, 12);
-      const treeTrunk = new THREE.Mesh(treeTrunkGeo, new THREE.MeshStandardMaterial({ color: 0x45230e }));
-      treeTrunk.position.set(rockSide * 0.7, 0, 0);
-      const treeLeavesGeo = new THREE.ConeGeometry(1.6, 4.5, 12);
-      const treeLeaves = new THREE.Mesh(treeLeavesGeo, new THREE.MeshStandardMaterial({ color: 0x166534 }));
-      treeLeaves.position.set(rockSide * 0.7, 2.8, 0);
-      chunk.add(treeTrunk);
-      chunk.add(treeLeaves);
+      // 3D Tropical Palm Tree (Realistic curved trunk & radiating palm fronds)
+      const palmGroup = new THREE.Group();
+      palmGroup.position.set(rockSide * 0.72, -1, 0);
+
+      const palmTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.38, 4.2, 12), palmTrunkMat);
+      palmTrunk.position.y = 2.1;
+      palmTrunk.rotation.z = rockSide > 0 ? -0.18 : 0.18;
+      palmGroup.add(palmTrunk);
+
+      // 7 Radiating Lush Palm Fronds
+      for (let f = 0; f < 7; f++) {
+        const frondAngle = (f / 7) * Math.PI * 2;
+        const frondGeo = new THREE.ConeGeometry(0.7, 2.8, 6);
+        frondGeo.scale(1, 0.2, 1);
+        const frond = new THREE.Mesh(frondGeo, palmLeafMat);
+        frond.position.set(
+          Math.cos(frondAngle) * 0.9,
+          4.1,
+          Math.sin(frondAngle) * 0.9
+        );
+        frond.rotation.set(0.6 * Math.sin(frondAngle), frondAngle, 0.6 * Math.cos(frondAngle));
+        palmGroup.add(frond);
+      }
+      chunk.add(palmGroup);
+
+      // Ancient Carved Temple Stone Archway Portal (Spans overhead every 4th chunk)
+      if (chunkIndex % 4 === 0) {
+        const archPortal = new THREE.Group();
+        archPortal.position.set(0, 0, 0);
+
+        // Massive Ancient Carved Stone Header Beam
+        const archBeam = new THREE.Mesh(new THREE.BoxGeometry(8.2, 1.2, 1.4), carvedWallMat);
+        archBeam.position.y = 5.2;
+        archBeam.castShadow = true;
+        archPortal.add(archBeam);
+
+        // Glowing Ancient Aztec/Indian Golden Emblem on Archway
+        const archEmblem = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.15, 16), emeraldGemMat);
+        archEmblem.rotation.x = Math.PI / 2;
+        archEmblem.position.set(0, 5.2, 0.78);
+        archPortal.add(archEmblem);
+
+        chunk.add(archPortal);
+      }
 
       scene.add(chunk);
       return chunk;
@@ -1225,6 +1639,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     gameRef.current.monkeyObj = monkeyObj;
     gameRef.current.trackChunks = trackChunks;
     gameRef.current.cloudsList = cloudsList;
+    gameRef.current.torchesList = torchesList;
 
     // Resize handler
     const handleResize = () => {
@@ -1374,9 +1789,9 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       g.playerObj.group.rotation.x = 0;
     }
 
-    // 5. Articulated Runner Kinematics (Natural human running gait)
+    // 5. Articulated Runner Kinematics (Natural human running gait & torso dynamics)
     g.runAnimTime += dt * (currentSpeed * 0.35);
-    const { leftLeg, rightLeg, leftArm, rightArm } = g.playerObj;
+    const { leftLeg, rightLeg, leftArm, rightArm, torso, head, shadow } = g.playerObj;
 
     if (!g.isJumping && !g.isSliding) {
       const legAngle = Math.sin(g.runAnimTime) * 0.85;
@@ -1384,14 +1799,27 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       leftLeg.hip.rotation.x = legAngle;
       rightLeg.hip.rotation.x = -legAngle;
       // Knee natural bending: bend backwards when leg kicks back!
-      leftLeg.knee.rotation.x = Math.max(0, -legAngle * 1.1);
-      rightLeg.knee.rotation.x = Math.max(0, legAngle * 1.1);
+      leftLeg.knee.rotation.x = Math.max(0, -legAngle * 1.15);
+      rightLeg.knee.rotation.x = Math.max(0, legAngle * 1.15);
 
       // Arm swing with bent elbows
-      leftArm.shoulder.rotation.x = -legAngle * 0.8;
-      rightArm.shoulder.rotation.x = legAngle * 0.8;
-      leftArm.elbow.rotation.x = -0.4;
-      rightArm.elbow.rotation.x = -0.4;
+      leftArm.shoulder.rotation.x = -legAngle * 0.85;
+      rightArm.shoulder.rotation.x = legAngle * 0.85;
+      leftArm.elbow.rotation.x = -0.45;
+      rightArm.elbow.rotation.x = -0.45;
+
+      // Realistic running bounce & torso twist
+      if (torso) {
+        torso.position.y = 1.35 + Math.abs(Math.sin(g.runAnimTime)) * 0.08;
+        torso.rotation.y = Math.sin(g.runAnimTime) * 0.08;
+      }
+      if (head) {
+        head.rotation.y = -Math.sin(g.runAnimTime) * 0.06;
+      }
+      if (shadow) {
+        shadow.scale.set(1, 1, 1);
+        shadow.material.opacity = 0.65;
+      }
     } else if (g.isJumping) {
       // Tucked knees & raised arms
       leftLeg.hip.rotation.x = -0.8;
@@ -1400,6 +1828,13 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       rightLeg.knee.rotation.x = 1.2;
       leftArm.shoulder.rotation.x = -2.2;
       rightArm.shoulder.rotation.x = -2.2;
+
+      // Dynamic ground shadow shrink and fade when leaping in air
+      if (shadow) {
+        const shadowScale = Math.max(0.4, 1 - g.jumpY * 0.16);
+        shadow.scale.set(shadowScale, shadowScale, 1);
+        shadow.material.opacity = Math.max(0.12, 0.65 - g.jumpY * 0.18);
+      }
     } else if (g.isSliding) {
       // Streamlined slide crouch
       leftLeg.hip.rotation.x = -1.1;
@@ -1408,6 +1843,23 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       rightLeg.knee.rotation.x = 0.3;
       leftArm.shoulder.rotation.x = 0.3;
       rightArm.shoulder.rotation.x = -0.5;
+
+      if (shadow) {
+        shadow.scale.set(1.2, 0.9, 1);
+        shadow.material.opacity = 0.75;
+      }
+    }
+
+    // 3D Torch Flame Flicker Animation (Warm natural torchlight dance)
+    if (g.torchesList && g.torchesList.length > 0) {
+      const torchTime = Date.now() * 0.009;
+      for (let t = 0; t < g.torchesList.length; t++) {
+        const torch = g.torchesList[t];
+        if (torch.outerFlame) {
+          torch.outerFlame.scale.y = 1 + Math.sin(torchTime * 2.8 + t * 0.7) * 0.15;
+          torch.outerFlame.scale.x = 1 + Math.cos(torchTime * 2.4 + t * 0.5) * 0.09;
+        }
+      }
     }
 
     // 6. Demon Ape Pursuit Dynamics & Visceral Threat
