@@ -4,11 +4,19 @@ import { Heart } from 'lucide-react';
 export default function EmojiParticleBurst() {
   const [activePopup, setActivePopup] = useState(null);
   const timerRef = useRef(null);
+  const lastTriggerTimeRef = useRef(0);
 
   useEffect(() => {
     const handleTriggerBurst = (e) => {
+      const now = Date.now();
+      // Enforce strictly 1 single popup: ignore duplicate calls within 500ms
+      if (now - lastTriggerTimeRef.current < 500) {
+        return;
+      }
+      lastTriggerTimeRef.current = now;
+
       const emoji = e.detail?.emoji || '❤️';
-      const pId = `pop_${Date.now()}_${Math.random()}`;
+      const pId = `pop_${now}`;
 
       if (timerRef.current) {
         clearTimeout(timerRef.current);
@@ -17,10 +25,10 @@ export default function EmojiParticleBurst() {
       // Display the big centered Instagram-story-like reaction popup for the reacted emoji
       setActivePopup({ id: pId, emoji });
 
-      // Clean up after animation finishes (0.85s)
+      // Clean up after animation finishes (0.8s)
       timerRef.current = setTimeout(() => {
         setActivePopup(null);
-      }, 850);
+      }, 800);
     };
 
     window.addEventListener('pulsechat_trigger_emoji_burst', handleTriggerBurst);

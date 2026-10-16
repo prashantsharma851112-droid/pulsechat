@@ -338,76 +338,74 @@ const createShadowTexture = () => {
 // =========================================================================
 const createStonePathwayTexture = () => {
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 1024;
+  canvas.width = 512;
+  canvas.height = 512;
   const ctx = canvas.getContext('2d');
 
   // Multi-tone golden sandstone base with natural color gradation
-  const baseGrad = ctx.createLinearGradient(0, 0, 1024, 1024);
+  const baseGrad = ctx.createLinearGradient(0, 0, 512, 512);
   baseGrad.addColorStop(0, '#f59e0b');
   baseGrad.addColorStop(0.25, '#d97706');
   baseGrad.addColorStop(0.55, '#b45309');
   baseGrad.addColorStop(0.85, '#92400e');
   baseGrad.addColorStop(1, '#78350f');
   ctx.fillStyle = baseGrad;
-  ctx.fillRect(0, 0, 1024, 1024);
+  ctx.fillRect(0, 0, 512, 512);
 
-  // Weathered Stone Grain Noise
-  for (let i = 0; i < 18000; i++) {
-    const nx = Math.random() * 1024;
-    const ny = Math.random() * 1024;
-    const radius = Math.random() * 2 + 0.5;
-    ctx.fillStyle = Math.random() < 0.5 ? 'rgba(254, 240, 138, 0.14)' : 'rgba(69, 26, 3, 0.18)';
-    ctx.beginPath();
-    ctx.arc(nx, ny, radius, 0, Math.PI * 2);
-    ctx.fill();
+  // Weathered Stone Grain Noise (Fast lightweight flecks)
+  for (let i = 0; i < 400; i++) {
+    const nx = Math.random() * 512;
+    const ny = Math.random() * 512;
+    const size = Math.random() * 2.5 + 1;
+    ctx.fillStyle = Math.random() < 0.5 ? 'rgba(254, 240, 138, 0.16)' : 'rgba(69, 26, 3, 0.2)';
+    ctx.fillRect(nx, ny, size, size);
   }
 
   // Weathered Flagstone Grid Mortar with 3D Chiseled Bevels
   ctx.strokeStyle = '#3b1704';
-  ctx.lineWidth = 7;
-  for (let y = 0; y < 1024; y += 128) {
+  ctx.lineWidth = 5;
+  for (let y = 0; y < 512; y += 64) {
     ctx.beginPath();
     ctx.moveTo(0, y);
-    ctx.lineTo(1024, y);
+    ctx.lineTo(512, y);
     ctx.stroke();
 
     // Top edge highlight for 3D bevel depth
     ctx.strokeStyle = 'rgba(254, 240, 138, 0.45)';
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(0, y + 4);
-    ctx.lineTo(1024, y + 4);
+    ctx.moveTo(0, y + 2);
+    ctx.lineTo(512, y + 2);
     ctx.stroke();
 
     ctx.strokeStyle = '#3b1704';
-    ctx.lineWidth = 7;
+    ctx.lineWidth = 5;
 
-    for (let x = (y % 256 === 0 ? 0 : 64); x < 1024; x += 128) {
+    for (let x = (y % 128 === 0 ? 0 : 32); x < 512; x += 64) {
       ctx.beginPath();
       ctx.moveTo(x, y);
-      ctx.lineTo(x, y + 128);
+      ctx.lineTo(x, y + 64);
       ctx.stroke();
 
       // Stone vertical bevel highlight
       ctx.strokeStyle = 'rgba(254, 240, 138, 0.35)';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(x + 3, y);
-      ctx.lineTo(x + 3, y + 128);
+      ctx.moveTo(x + 2, y);
+      ctx.lineTo(x + 2, y + 64);
       ctx.stroke();
 
       ctx.strokeStyle = '#3b1704';
-      ctx.lineWidth = 7;
+      ctx.lineWidth = 5;
     }
   }
 
   // Ancient Concentric Stone Spirals with Sacred Golden Inlay
   const drawCarvedSpiral = (cx, cy, maxR) => {
     ctx.strokeStyle = '#451a03';
-    ctx.lineWidth = 14;
+    ctx.lineWidth = 8;
     ctx.beginPath();
-    for (let a = 0; a < Math.PI * 6; a += 0.08) {
+    for (let a = 0; a < Math.PI * 6; a += 0.15) {
       const r = (a / (Math.PI * 6)) * maxR;
       const x = cx + Math.cos(a) * r;
       const y = cy + Math.sin(a) * r;
@@ -418,35 +416,28 @@ const createStonePathwayTexture = () => {
 
     // Golden Rune Inner Chisel Highlight
     ctx.strokeStyle = 'rgba(254, 240, 138, 0.75)';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 2.5;
     ctx.stroke();
 
     // Inner glowing core
     ctx.fillStyle = 'rgba(251, 191, 36, 0.45)';
     ctx.beginPath();
-    ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 8, 0, Math.PI * 2);
     ctx.fill();
   };
 
-  drawCarvedSpiral(512, 256, 115);
-  drawCarvedSpiral(512, 768, 115);
-  drawCarvedSpiral(200, 512, 85);
-  drawCarvedSpiral(824, 512, 85);
+  drawCarvedSpiral(256, 128, 55);
+  drawCarvedSpiral(256, 384, 55);
+  drawCarvedSpiral(100, 256, 42);
+  drawCarvedSpiral(412, 256, 42);
 
-  // Wild Creeping Moss & Mountain Lichen on Outer Edges
-  for (let i = 0; i < 1024; i += 10) {
-    const mossW1 = Math.random() * 70 + 25;
-    const mossW2 = Math.random() * 70 + 25;
-    ctx.fillStyle = i % 20 === 0 ? '#166534' : (i % 30 === 0 ? '#22c55e' : '#15803d');
-    ctx.fillRect(0, i, mossW1, 10);
-    ctx.fillRect(1024 - mossW2, i, mossW2, 10);
-
-    // Moss spore dots
-    ctx.fillStyle = '#4ade80';
-    ctx.beginPath();
-    ctx.arc(mossW1 + Math.random() * 6, i + 5, Math.random() * 3 + 1, 0, Math.PI * 2);
-    ctx.arc(1024 - mossW2 - Math.random() * 6, i + 5, Math.random() * 3 + 1, 0, Math.PI * 2);
-    ctx.fill();
+  // Wild Creeping Moss on Outer Edges
+  for (let i = 0; i < 512; i += 12) {
+    const mossW1 = Math.random() * 35 + 12;
+    const mossW2 = Math.random() * 35 + 12;
+    ctx.fillStyle = i % 24 === 0 ? '#166534' : (i % 36 === 0 ? '#22c55e' : '#15803d');
+    ctx.fillRect(0, i, mossW1, 12);
+    ctx.fillRect(512 - mossW2, i, mossW2, 12);
   }
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -1356,26 +1347,22 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     camera.position.set(0, 4.3, 7.6);
     camera.lookAt(0, 2.1, -14);
 
-    // 3. WebGL Renderer
+    // 3. WebGL Renderer (Optimized for silky 60 FPS)
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.shadowMap.enabled = false;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.18;
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
     // 4. Dramatic Golden Sunset Lighting
-    const ambientLight = new THREE.AmbientLight(0xffedd5, 0.85);
+    const ambientLight = new THREE.AmbientLight(0xffedd5, 0.95);
     scene.add(ambientLight);
 
-    const sunLight = new THREE.DirectionalLight(0xf59e0b, 1.4);
+    const sunLight = new THREE.DirectionalLight(0xf59e0b, 1.35);
     sunLight.position.set(25, 45, 20);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 1024;
-    sunLight.shadow.mapSize.height = 1024;
     scene.add(sunLight);
 
     // 5. Materials
@@ -1434,7 +1421,6 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     const CHUNK_LENGTH = 24;
     const CHUNK_COUNT = 14;
     const trackChunks = [];
-    const torchesList = [];
 
     // Realistic Torch Materials
     const torchBrazierMat = new THREE.MeshStandardMaterial({ color: 0x292524, roughness: 0.6, metalness: 0.8 });
@@ -1507,16 +1493,10 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         torchGroup.add(flameInner);
 
         chunk.add(torchGroup);
-        torchesList.push({ outerFlame: flameOuter });
       };
 
       addTorchToPillar(-3.4);
       addTorchToPillar(3.4);
-
-      // Warm Dancing Torch Light along the Stone Pathway
-      const torchLight = new THREE.PointLight(0xf59e0b, 0.9, 14, 2);
-      torchLight.position.set(0, 3.2, 0);
-      chunk.add(torchLight);
 
       // Hanging Jungle Vines / Lianas draped from bridge balustrades
       const vineL = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.04, 3.5, 8), vineMat);
@@ -1639,7 +1619,6 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     gameRef.current.monkeyObj = monkeyObj;
     gameRef.current.trackChunks = trackChunks;
     gameRef.current.cloudsList = cloudsList;
-    gameRef.current.torchesList = torchesList;
 
     // Resize handler
     const handleResize = () => {
@@ -1847,18 +1826,6 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       if (shadow) {
         shadow.scale.set(1.2, 0.9, 1);
         shadow.material.opacity = 0.75;
-      }
-    }
-
-    // 3D Torch Flame Flicker Animation (Warm natural torchlight dance)
-    if (g.torchesList && g.torchesList.length > 0) {
-      const torchTime = Date.now() * 0.009;
-      for (let t = 0; t < g.torchesList.length; t++) {
-        const torch = g.torchesList[t];
-        if (torch.outerFlame) {
-          torch.outerFlame.scale.y = 1 + Math.sin(torchTime * 2.8 + t * 0.7) * 0.15;
-          torch.outerFlame.scale.x = 1 + Math.cos(torchTime * 2.4 + t * 0.5) * 0.09;
-        }
       }
     }
 

@@ -308,9 +308,11 @@ export function SocketProvider({ children }) {
 
       newSocket.on('reaction_updated', (data) => {
         try {
-          if (data && data.isAdded) {
+          const myId = userRef.current?.id || userRef.current?._id || user?.id || user?._id;
+          // Sender already saw immediate 0ms local reaction popup; only trigger for other room members
+          if (data && data.isAdded && String(data.userId) !== String(myId)) {
             window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
-              detail: { emoji: data.emoji || '❤️', mode: 'reaction', duration: 3 }
+              detail: { emoji: data.emoji || '❤️', mode: 'reaction', duration: 1 }
             }));
           }
         } catch (e) {}

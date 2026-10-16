@@ -1397,10 +1397,8 @@ function MessageItem({
     if (onDismissAction) onDismissAction();
     setShowContextMenu(false);
 
-    // Always add heart reaction on double tap
+    // Always add heart reaction on double tap (triggers single Instagram Story popup)
     handleReact('❤️', true);
-    setShowHeartBurst(true);
-    setTimeout(() => setShowHeartBurst(false), 750);
   };
 
   // Touch Long-Press Selection & Swipe-to-Reply Detection
@@ -1854,14 +1852,6 @@ function MessageItem({
           opacity: 1
         }}
       >
-        {/* Double-Tap Heart Burst Animation */}
-        {showHeartBurst && (
-          <div className="heart-burst-overlay">
-            <span style={{ fontSize: '2.8rem', filter: 'drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4))' }}>
-              ❤️
-            </span>
-          </div>
-        )}
         {/* Forwarded Message Header (WhatsApp Style) */}
         {message.isForwarded && (
           <div style={{
