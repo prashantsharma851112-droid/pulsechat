@@ -5176,20 +5176,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {/* Header Bar */}
       {!isActionSelectionMode ? (
         <div style={{
-        padding: 'calc(24px + env(safe-area-inset-top, 0px)) 1rem 0.75rem 1rem',
+        padding: 'calc(6px + env(safe-area-inset-top, 0px)) 0.75rem 6px 0.75rem',
         borderBottom: '1px solid var(--border)',
         background: (chatWallpaper && chatWallpaper !== 'none') ? 'color-mix(in srgb, var(--bg-sidebar) 85%, transparent)' : 'var(--bg-sidebar)',
         backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
         WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
         display: 'flex',
         flexDirection: 'column',
-        gap: '4px',
+        gap: '2px',
         position: 'relative',
         zIndex: 150,
         overflow: 'visible'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', flex: 1, minWidth: 0 }}>
             {onBack && (
               <button
                 className="chat-back-btn icon-btn-ghost"
@@ -5205,22 +5205,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   if (onBack) onBack();
                 }}
                 title="Back to Home / Chats"
+                style={{ width: '32px', height: '32px' }}
               >
-                <ArrowLeft size={22} />
+                <ArrowLeft size={20} />
               </button>
             )}
 
-            <VibeAuraRing aura={partnerAura} size={42} isGroup={isGroup} hasCrown={Boolean(!isGroup && (chatHasKingCrown || chatHasSilverCrown || chatHasStreakCrown))}>
+            <VibeAuraRing aura={partnerAura} size={38} isGroup={isGroup} hasCrown={Boolean(!isGroup && (chatHasKingCrown || chatHasSilverCrown || chatHasStreakCrown))}>
               <div
                 className={!isGroup ? getProAuraRingClass(partnerAura, chatIsPro) : ''}
                 style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}
               >
                 {!isGroup && chatHasKingCrown ? (
-                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+                  <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
                 ) : !isGroup && chatHasSilverCrown ? (
-                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+                  <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
                 ) : !isGroup && chatHasStreakCrown ? (
-                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+                  <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
                 ) : null}
                 <img
                   src={chatAvatar || activeChat.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeChat.username || 'pulse'}`}
@@ -5232,18 +5233,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                       : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(activeChat.username || chatDisplayName || 'User')}`;
                   }}
                   style={{
-                    width: '42px',
-                    height: '42px',
-                    borderRadius: isGroup ? '12px' : '50%',
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: isGroup ? '10px' : '50%',
                     cursor: 'pointer',
                     objectFit: 'cover',
                     flexShrink: 0,
                     border: !isGroup && chatHasKingCrown
-                      ? '2.5px solid #fbbf24'
+                      ? '2px solid #fbbf24'
                       : !isGroup && chatHasSilverCrown
-                      ? '2.5px solid #cbd5e1'
+                      ? '2px solid #cbd5e1'
                       : !isGroup && chatHasStreakCrown
-                      ? '2.5px solid #f97316'
+                      ? '2px solid #f97316'
                       : (!isGroup && chatIsPro ? 'none' : 'none')
                   }}
                   title={isGroup ? 'Click for group details & members' : 'Click to view full screen DP'}
@@ -5257,14 +5258,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
               title={isGroup ? 'Click to view group bio, members & edit info' : (partnerNickname ? `Nickname: ${partnerNickname} (Real: ${chatDisplayName || activeChat.displayName}) · Click for profile` : 'Click to view profile & bio')}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap' }}>
-                <h3 style={{ fontSize: '1.06rem', fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'nowrap' }}>
+                <h3 style={{ fontSize: '0.96rem', fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
                   {partnerNickname || chatDisplayName || activeChat.displayName}
                 </h3>
                 {!isGroup && chatIsPro && (
-                  <PulseVipBadge size={16} showLabel={false} />
+                  <PulseVipBadge size={15} showLabel={false} />
                 )}
-                {isGroup && <span className="group-pill-badge"><Users size={12} /> Group</span>}
+                {isGroup && <span className="group-pill-badge"><Users size={11} /> Group</span>}
                 {chatSetting?.disappearingEnabled && (
                   <span
                     style={{
@@ -5305,7 +5306,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   </span>
                 )}
               </div>
-              <p style={{ fontSize: '0.8rem', color: isTyping ? '#22c55e' : 'var(--text-muted)', fontWeight: isTyping ? 600 : 400, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: '0.74rem', color: isTyping ? '#22c55e' : 'var(--text-muted)', fontWeight: isTyping ? 600 : 400, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {isGroup
                   ? (isTyping ? `✍️ ${typingUser} is typing...` : `${activeChat.members?.length || 0} members`)
                   : isAnonymousBot
@@ -5319,7 +5320,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </div>
           </div>
 
-          <div className="chat-header-actions" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+          <div className="chat-header-actions" style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
             {/* Position 2: Mobile App Folder Button (Animated Cyber-Neon Glassmorphic Folder) */}
             <button
               onClick={() => {
@@ -5329,16 +5330,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               className="chat-apps-folder-btn chat-neon-app-folder"
               title="Apps & Games (Arrow Battle, Drawboard, Music)"
               style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '12px',
+                width: '34px',
+                height: '34px',
+                borderRadius: '11px',
                 background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(236, 72, 153, 0.16))',
                 border: '1.5px solid rgba(168, 85, 247, 0.6)',
                 backdropFilter: 'blur(12px)',
                 display: 'grid',
                 gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: '3px',
-                padding: '4.5px',
+                gap: '2.5px',
+                padding: '3.5px',
                 cursor: 'pointer',
                 flexShrink: 0,
                 alignItems: 'center',
@@ -5347,55 +5348,55 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             >
               {/* Mini App 1: Game */}
               <div style={{
-                width: '12.5px',
-                height: '12.5px',
-                borderRadius: '4px',
+                width: '11px',
+                height: '11px',
+                borderRadius: '3px',
                 background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 0 6px rgba(236, 72, 153, 0.6)'
+                boxShadow: '0 0 5px rgba(236, 72, 153, 0.6)'
               }}>
-                <Gamepad2 size={8} color="#fff" />
+                <Gamepad2 size={7} color="#fff" />
               </div>
               {/* Mini App 2: Drawboard */}
               <div style={{
-                width: '12.5px',
-                height: '12.5px',
-                borderRadius: '4px',
+                width: '11px',
+                height: '11px',
+                borderRadius: '3px',
                 background: 'linear-gradient(135deg, #10b981, #06b6d4)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 0 6px rgba(16, 185, 129, 0.6)'
+                boxShadow: '0 0 5px rgba(16, 185, 129, 0.6)'
               }}>
-                <Presentation size={8} color="#fff" />
+                <Presentation size={7} color="#fff" />
               </div>
               {/* Mini App 3: Music */}
               <div style={{
-                width: '12.5px',
-                height: '12.5px',
-                borderRadius: '4px',
+                width: '11px',
+                height: '11px',
+                borderRadius: '3px',
                 background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 0 6px rgba(245, 158, 11, 0.6)'
+                boxShadow: '0 0 5px rgba(245, 158, 11, 0.6)'
               }}>
-                <Music size={8} color="#fff" />
+                <Music size={7} color="#fff" />
               </div>
               {/* Mini App 4: Sparks / Live */}
               <div style={{
-                width: '12.5px',
-                height: '12.5px',
-                borderRadius: '4px',
+                width: '11px',
+                height: '11px',
+                borderRadius: '3px',
                 background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 0 6px rgba(139, 92, 246, 0.6)'
+                boxShadow: '0 0 5px rgba(139, 92, 246, 0.6)'
               }}>
-                <Sparkles size={8} color="#fff" />
+                <Sparkles size={7} color="#fff" />
               </div>
             </button>
 
@@ -5417,9 +5418,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 }}
                 className="icon-btn-ghost"
                 title="More Options"
-                style={{ width: '38px', height: '38px', borderRadius: '50%', background: showMoreMenu ? 'var(--hover-bg)' : 'transparent' }}
+                style={{ width: '34px', height: '34px', borderRadius: '50%', background: showMoreMenu ? 'var(--hover-bg)' : 'transparent' }}
               >
-                <MoreVertical size={20} />
+                <MoreVertical size={18} />
               </button>
 
               {showMoreMenu && (
@@ -5729,7 +5730,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       </div>
       ) : (
         <div style={{
-          padding: 'calc(24px + env(safe-area-inset-top, 0px)) 1rem 0.75rem 1rem',
+          padding: 'calc(6px + env(safe-area-inset-top, 0px)) 0.75rem 6px 0.75rem',
           borderBottom: '2px solid var(--accent)',
           background: (chatWallpaper && chatWallpaper !== 'none')
             ? 'color-mix(in srgb, var(--bg-card) 92%, transparent)'
@@ -5744,23 +5745,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           zIndex: 50
         }}>
           {/* Left: Close Button + Dynamic Count */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
               type="button"
               onClick={handleDismissActionMessage}
               className="icon-btn-ghost"
-              style={{ width: '38px', height: '38px', borderRadius: '50%', color: 'var(--text-main)' }}
+              style={{ width: '34px', height: '34px', borderRadius: '50%', color: 'var(--text-main)' }}
               title="Unselect messages"
             >
-              <ArrowLeft size={20} />
+              <ArrowLeft size={18} />
             </button>
-            <span style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '0.02em' }}>
+            <span style={{ fontSize: '0.98rem', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '0.02em' }}>
               {selectedActionMessages.length}
             </span>
           </div>
 
           {/* Right: Action Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
             {/* Reply - only visible when exactly 1 message is selected */}
             {selectedActionMessages.length === 1 && (
               <button
@@ -5779,13 +5780,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 }}
                 className="icon-btn-ghost"
                 title="Reply"
-                style={{ width: '38px', height: '38px', borderRadius: '50%', color: 'var(--text-main)' }}
+                style={{ width: '34px', height: '34px', borderRadius: '50%', color: 'var(--text-main)' }}
               >
-                <CornerUpLeft size={19} />
+                <CornerUpLeft size={17} />
               </button>
             )}
 
-            {/* Select All Button (Replaces Star button as requested) */}
+            {/* Select All Button */}
             <button
               type="button"
               onClick={() => {
@@ -5804,15 +5805,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   : "Select all"
               }
               style={{
-                width: '38px',
-                height: '38px',
+                width: '34px',
+                height: '34px',
                 borderRadius: '50%',
                 color: (messages.filter(m => m.type !== 'deleted' && m.type !== 'system').length > 0 && messages.filter(m => m.type !== 'deleted' && m.type !== 'system').every(m => selectedActionMessages.some(sm => sm.id === m.id)))
                   ? 'var(--accent)'
                   : 'var(--text-main)'
               }}
             >
-              <CheckSquare size={19} />
+              <CheckSquare size={17} />
             </button>
 
             {/* Copy */}
@@ -5821,9 +5822,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               onClick={() => handleCopyMessages(selectedActionMessages)}
               className="icon-btn-ghost"
               title="Copy message(s)"
-              style={{ width: '38px', height: '38px', borderRadius: '50%', color: 'var(--text-main)' }}
+              style={{ width: '34px', height: '34px', borderRadius: '50%', color: 'var(--text-main)' }}
             >
-              <Copy size={19} />
+              <Copy size={17} />
             </button>
 
             {/* Forward */}
@@ -5832,9 +5833,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               onClick={() => setShowForwardModal(true)}
               className="icon-btn-ghost"
               title="Forward message(s)"
-              style={{ width: '38px', height: '38px', borderRadius: '50%', color: 'var(--text-main)' }}
+              style={{ width: '34px', height: '34px', borderRadius: '50%', color: 'var(--text-main)' }}
             >
-              <Forward size={19} />
+              <Forward size={17} />
             </button>
 
             {/* Delete */}
@@ -5843,9 +5844,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               onClick={() => handleDeleteActionMessage(selectedActionMessages)}
               className="icon-btn-ghost"
               title="Delete message(s)"
-              style={{ width: '38px', height: '38px', borderRadius: '50%', color: '#ef4444' }}
+              style={{ width: '34px', height: '34px', borderRadius: '50%', color: '#ef4444' }}
             >
-              <Trash2 size={19} />
+              <Trash2 size={17} />
             </button>
 
             {/* 3-Dots More Options Menu */}
@@ -5856,9 +5857,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   onClick={() => setShowActionMoreMenu(prev => !prev)}
                   className="icon-btn-ghost"
                   title="More options"
-                  style={{ width: '38px', height: '38px', borderRadius: '50%', color: 'var(--text-main)' }}
+                  style={{ width: '34px', height: '34px', borderRadius: '50%', color: 'var(--text-main)' }}
                 >
-                  <MoreVertical size={19} />
+                  <MoreVertical size={17} />
                 </button>
 
                 {showActionMoreMenu && (

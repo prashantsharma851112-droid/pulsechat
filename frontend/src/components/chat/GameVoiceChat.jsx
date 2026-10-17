@@ -409,43 +409,53 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
           {isDeafened ? <VolumeX size={compact ? 14 : 16} /> : <Volume2 size={compact ? 14 : 16} />}
         </button>
 
-        {/* Real-time Status / Voice Indicator */}
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: compact ? '68px' : '88px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{
-              width: '7px',
-              height: '7px',
-              borderRadius: '50%',
-              background: isMicOn ? '#10b981' : (voiceConnected ? '#38bdf8' : '#64748b'),
-              boxShadow: isMicOn ? '0 0 6px #10b981' : 'none'
-            }} />
-            <span style={{
-              fontSize: compact ? '0.7rem' : '0.74rem',
-              fontWeight: 900,
-              color: isMicOn ? '#34d399' : '#cbd5e1',
-              letterSpacing: '0.4px',
-              textTransform: 'uppercase'
-            }}>
-              {isMicOn ? (isSpeaking ? 'Talking...' : 'Mic ON') : 'Mic OFF'}
-            </span>
-          </div>
-
-          {/* Partner voice activity readout */}
-          {isPartnerSpeaking ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '1px' }}>
-              <div style={{ width: '3px', height: '10px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.4s infinite alternate' }} />
-              <div style={{ width: '3px', height: '14px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.3s infinite alternate 0.1s' }} />
-              <div style={{ width: '3px', height: '8px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.5s infinite alternate 0.2s' }} />
-              <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#38bdf8', marginLeft: '2px' }}>
-                {partnerName} Talking
+        {/* Status / Voice Indicator */}
+        {!compact ? (
+          <div style={{ display: 'flex', flexDirection: 'column', minWidth: '85px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                background: isMicOn ? '#10b981' : (voiceConnected ? '#38bdf8' : '#64748b'),
+                boxShadow: isMicOn ? '0 0 6px #10b981' : 'none'
+              }} />
+              <span style={{
+                fontSize: '0.74rem',
+                fontWeight: 900,
+                color: isMicOn ? '#34d399' : '#cbd5e1',
+                letterSpacing: '0.4px',
+                textTransform: 'uppercase'
+              }}>
+                {isMicOn ? (isSpeaking ? 'Talking...' : 'Mic ON') : 'Mic OFF'}
               </span>
             </div>
-          ) : (
-            <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700 }}>
-              {partnerVoiceState.isMuted ? `${partnerName}: Muted` : `${partnerName}: In Game`}
-            </span>
-          )}
-        </div>
+
+            {/* Partner voice activity readout */}
+            {isPartnerSpeaking ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '1px' }}>
+                <div style={{ width: '3px', height: '10px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.4s infinite alternate' }} />
+                <div style={{ width: '3px', height: '14px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.3s infinite alternate 0.1s' }} />
+                <div style={{ width: '3px', height: '8px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.5s infinite alternate 0.2s' }} />
+                <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#38bdf8', marginLeft: '2px' }}>
+                  {partnerName} Talking
+                </span>
+              </div>
+            ) : (
+              <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700 }}>
+                {partnerVoiceState.isMuted ? `${partnerName}: Muted` : `${partnerName}: In Game`}
+              </span>
+            )}
+          </div>
+        ) : (
+          isPartnerSpeaking ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '0 4px' }} title={`${partnerName} is talking`}>
+              <div style={{ width: '2.5px', height: '9px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.4s infinite alternate' }} />
+              <div style={{ width: '2.5px', height: '13px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.3s infinite alternate 0.1s' }} />
+              <div style={{ width: '2.5px', height: '7px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.5s infinite alternate 0.2s' }} />
+            </div>
+          ) : null
+        )}
       </div>
     </>
   );

@@ -1775,16 +1775,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       onTouchEnd={handleSidebarTouchEnd}
     >
       {/* WhatsApp-Style Top App Header */}
-      <div className="sidebar-header" style={{ padding: 'calc(24px + env(safe-area-inset-top, 0px)) 1rem 0.85rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)', overflow: 'visible' }}>
+      <div className="sidebar-header" style={{ padding: 'calc(6px + env(safe-area-inset-top, 0px)) 0.75rem 6px 0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)', overflow: 'visible' }}>
         {/* Brand & User Chip */}
         <div
           className="user-profile-badge"
           onClick={openProfileModal}
-          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0, cursor: 'pointer', overflow: 'visible' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flex: 1, minWidth: 0, cursor: 'pointer', overflow: 'visible' }}
           title="Click to view & edit your profile"
         >
-          <div style={{ position: 'relative', flexShrink: 0, padding: '4px 3px 3px 4px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', overflow: 'visible' }}>
-            <VibeAuraRing aura={myAura} size={44} hasCrown={Boolean(user?.hasKingCrown || user?.hasSilverCrown || user?.hasStreakCrown)}>
+          <div style={{ position: 'relative', flexShrink: 0, padding: '2px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', overflow: 'visible' }}>
+            <VibeAuraRing aura={myAura} size={40} hasCrown={Boolean(user?.hasKingCrown || user?.hasSilverCrown || user?.hasStreakCrown)}>
               <div
                 className={getProAuraRingClass(myAura, user?.isPro)}
                 style={{ position: 'relative', flexShrink: 0 }}
@@ -1798,10 +1798,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 <div
                   style={{
                     position: 'absolute',
-                    top: '-12px',
+                    top: '-10px',
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    fontSize: '1.2rem',
+                    fontSize: '1.05rem',
                     filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))',
                     zIndex: 10,
                     pointerEvents: 'none'
@@ -1814,10 +1814,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 <div
                   style={{
                     position: 'absolute',
-                    top: '-12px',
+                    top: '-10px',
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    fontSize: '1.2rem',
+                    fontSize: '1.05rem',
                     filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))',
                     zIndex: 10,
                     pointerEvents: 'none'
@@ -1830,10 +1830,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 <div
                   style={{
                     position: 'absolute',
-                    top: '-12px',
+                    top: '-10px',
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    fontSize: '1.2rem',
+                    fontSize: '1.05rem',
                     filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))',
                     zIndex: 10,
                     pointerEvents: 'none'
@@ -1851,8 +1851,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                   e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.username || 'Pulse')}`;
                 }}
                 style={{
-                  width: '44px',
-                  height: '44px',
+                  width: '40px',
+                  height: '40px',
                   borderRadius: '50%',
                   objectFit: 'cover',
                   border: user?.hasKingCrown
@@ -1867,7 +1867,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               />
               {user?.isEmailVerified && (
                 <CheckCircle2
-                  size={14}
+                  size={13}
                   color="#10b981"
                   style={{ position: 'absolute', bottom: 0, right: 0, background: '#fff', borderRadius: '50%', zIndex: 4 }}
                 />
@@ -1875,23 +1875,23 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             </div>
           </VibeAuraRing>
         </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap' }}>
-              <h3 style={{ fontSize: '1.02rem', fontWeight: 700, margin: 0, color: 'var(--text-main)', letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ flex: 1, minWidth: 0, paddingRight: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'nowrap' }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, color: 'var(--text-main)', letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
                 {user?.displayName || user?.username || 'PulseChat'}
               </h3>
               {user?.isPro && (
-                <PulseVipBadge size={16} showLabel={false} />
+                <PulseVipBadge size={15} showLabel={false} />
               )}
             </div>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <p style={{ fontSize: '0.76rem', color: 'var(--text-muted)', margin: 0, whiteSpace: 'nowrap' }}>
               @{user?.username}
             </p>
           </div>
         </div>
 
-        {/* Topbar Actions: Switch Account + Hub (Music & Games) + 3-Dot More Menu */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {/* Topbar Actions: Switch Account + Hub (Mini-Games) + 3-Dot More Menu */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           {/* Quick Switch Account Button */}
           <div style={{ position: 'relative' }} ref={switchAccountMenuRef}>
             <button
@@ -1902,8 +1902,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               title="Switch Account"
               className="icon-btn-ghost"
               style={{
-                width: '38px',
-                height: '38px',
+                width: '34px',
+                height: '34px',
                 borderRadius: '50%',
                 background: showSwitchAccountMenu ? 'var(--hover-bg)' : 'var(--bg-card)',
                 color: showSwitchAccountMenu ? 'var(--accent)' : 'var(--text-main)',
@@ -1915,7 +1915,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 position: 'relative'
               }}
             >
-              <ArrowRightLeft size={17} />
+              <ArrowRightLeft size={16} />
               {savedAccounts && savedAccounts.length > 1 && (
                 <span
                   style={{
@@ -2108,8 +2108,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             title="Pulse Zone (Mini-Games & Leaderboard)"
             className="icon-btn-ghost"
             style={{
-              width: '38px',
-              height: '38px',
+              width: '34px',
+              height: '34px',
               borderRadius: '50%',
               background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(239, 68, 68, 0.18))',
               border: '1px solid rgba(245, 158, 11, 0.4)',
@@ -2124,7 +2124,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
             onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
           >
-            <Gamepad2 size={18} />
+            <Gamepad2 size={16} />
           </button>
 
           {/* Topbar Single 3-Dot More Menu */}
@@ -2134,8 +2134,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             title="Menu & Pulse Sparks"
             className="icon-btn-ghost"
             style={{
-              width: '38px',
-              height: '38px',
+              width: '34px',
+              height: '34px',
               borderRadius: '50%',
               background: showTopMenu ? 'var(--hover-bg)' : 'var(--bg-card)',
               color: 'var(--text-main)',
@@ -2146,7 +2146,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               transition: 'all 0.2s ease'
             }}
           >
-            <MoreVertical size={20} />
+            <MoreVertical size={18} />
           </button>
 
           {showTopMenu && (

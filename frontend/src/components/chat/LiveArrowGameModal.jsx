@@ -712,7 +712,10 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                 </span>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {chatId && (
+                <GameVoiceChat chatId={chatId} partnerName={partnerName} compact={true} />
+              )}
               <button
                 onClick={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')}
                 style={{
@@ -781,39 +784,37 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
 
         {/* Scoreboard & Timer Bar */}
         <div style={{
-          padding: '10px 16px',
+          padding: '8px 14px',
           background: 'rgba(15, 23, 42, 0.95)',
           borderBottom: '1px solid rgba(255,255,255,0.1)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           color: '#fff',
-          flexShrink: 0
+          flexShrink: 0,
+          gap: '10px'
         }}>
           {mode === 'versus' ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '0.88rem', fontWeight: 800 }}>
-              <div style={{ color: '#ec4899' }}>
-                {myName}: <strong>{myScore}</strong> pts
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.86rem', fontWeight: 800 }}>
+              <div style={{ color: '#ec4899', whiteSpace: 'nowrap' }}>
+                You: <strong>{myScore}</strong> pts
               </div>
               <span style={{ opacity: 0.4 }}>VS</span>
-              <div style={{ color: '#38bdf8' }}>
+              <div style={{ color: '#38bdf8', whiteSpace: 'nowrap' }}>
                 {partnerName}: <strong>{partnerScore}</strong> pts
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ fontSize: '0.86rem', fontWeight: 800, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Sparkles size={16} /> Team Score: <strong>{coopScore}</strong> pts
             </div>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            {chatId && (
-              <GameVoiceChat chatId={chatId} partnerName={partnerName} compact={true} />
-            )}
-            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', background: 'rgba(56,189,248,0.15)', padding: '3px 8px', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#38bdf8', background: 'rgba(56,189,248,0.15)', padding: '3px 8px', borderRadius: '8px', whiteSpace: 'nowrap' }}>
               🎯 {clearedIds.size}/{totalArrows}
             </span>
-            <span style={{ fontSize: '0.86rem', fontWeight: 900, color: !gameStarted ? '#fbbf24' : (timeLeft <= 10 ? '#ef4444' : '#10b981') }}>
+            <span style={{ fontSize: '0.84rem', fontWeight: 900, color: !gameStarted ? '#fbbf24' : (timeLeft <= 10 ? '#ef4444' : '#10b981'), whiteSpace: 'nowrap' }}>
               {!gameStarted ? '⏸️ Ready' : `⏳ ${timeLeft}s`}
             </span>
             <button
@@ -823,13 +824,14 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                 color: '#fff',
                 border: 'none',
                 borderRadius: '8px',
-                padding: '5px 12px',
+                padding: '4px 10px',
                 fontSize: '0.74rem',
                 fontWeight: 700,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px'
+                gap: '4px',
+                whiteSpace: 'nowrap'
               }}
             >
               <RefreshCw size={13} /> Reset
