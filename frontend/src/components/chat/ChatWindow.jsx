@@ -141,6 +141,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   }, [vibeAuras, user]);
   const [showVibeSelector, setShowVibeSelector] = useState(false);
   const [showTicTacToeModal, setShowTicTacToeModal] = useState(false);
+  const [tictactoeHostId, setTictactoeHostId] = useState(null);
   const [sparksPromptConfig, setSparksPromptConfig] = useState(null);
 
   // Scheduled Messages (Send Later) State
@@ -2766,6 +2767,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
     const handleAutoOpenTicTacToe = (data) => {
       if (isMatchingChat(data) && data.senderId !== user?.id) {
+        setTictactoeHostId(data.senderId);
         setShowTicTacToeModal(true);
         const inviter = data.senderName || activeChat?.displayName || 'Friend';
         setActionToast(`🎮 ${inviter} ne Tic-Tac-Toe Game shuru kiya!`);
@@ -4086,6 +4088,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const launchTicTacToe = () => {
     setShowAppsFolderModal(false);
+    setTictactoeHostId(user?.id);
     setShowTicTacToeModal(true);
     if (socket && chatId) {
       socket.emit('request_open_tictactoe', {
@@ -8503,7 +8506,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         <TicTacToeModal
           chatId={chatId}
           partnerName={chatDisplayName || activeChat?.displayName}
-          onClose={() => setShowTicTacToeModal(false)}
+          hostId={tictactoeHostId}
+          onClose={() => {
+            setShowTicTacToeModal(false);
+            setTictactoeHostId(null);
+          }}
           onOpenSparksWallet={() => setShowSparksWallet(true)}
         />
       )}

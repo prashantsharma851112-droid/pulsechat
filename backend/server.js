@@ -1986,25 +1986,24 @@ io.on('connection', (socket) => {
   });
 
   // Real-Time Tic-Tac-Toe Arena Handlers
-  socket.on('tictactoe_move', (data) => {
-    if (data && data.chatId) {
-      socket.to(data.chatId).emit('tictactoe_move', data);
-      if (data.chatId.includes('_')) {
-        const canonical = data.chatId.split('_').sort().join('_');
-        if (canonical !== data.chatId) socket.to(canonical).emit('tictactoe_move', data);
-      }
+  const relayTicTacToeEvent = (eventName, data) => {
+    if (!data || !data.chatId) return;
+    socket.to(data.chatId).emit(eventName, data);
+    if (data.chatId.includes('_')) {
+      const parts = data.chatId.split('_');
+      const canonical = parts.slice().sort().join('_');
+      if (canonical !== data.chatId) socket.to(canonical).emit(eventName, data);
+      parts.forEach(pId => {
+        socket.to(`user_${pId}`).emit(eventName, data);
+        socket.to(pId).emit(eventName, data);
+      });
     }
-  });
+  };
 
-  socket.on('tictactoe_reset', (data) => {
-    if (data && data.chatId) {
-      socket.to(data.chatId).emit('tictactoe_reset', data);
-      if (data.chatId.includes('_')) {
-        const canonical = data.chatId.split('_').sort().join('_');
-        if (canonical !== data.chatId) socket.to(canonical).emit('tictactoe_reset', data);
-      }
-    }
-  });
+  socket.on('tictactoe_join', (data) => relayTicTacToeEvent('tictactoe_join', data));
+  socket.on('tictactoe_state', (data) => relayTicTacToeEvent('tictactoe_state', data));
+  socket.on('tictactoe_move', (data) => relayTicTacToeEvent('tictactoe_move', data));
+  socket.on('tictactoe_reset', (data) => relayTicTacToeEvent('tictactoe_reset', data));
 
   // Audio/Video Call WebRTC Signaling (1-to-1)
   socket.on('call_user', async ({ userToCall, signalData, from, callerName, callerAvatar, isVideo }) => {
