@@ -557,6 +557,44 @@ const createDiamondCoinMesh = () => {
 };
 
 // =========================================================================
+// PRE-ALLOCATED STATIC SHARED GEOMETRIES & MATERIALS FOR 60 FPS ZERO-GC
+// =========================================================================
+const sharedLogGeo = new THREE.CylinderGeometry(0.36, 0.42, 2.3, 14);
+sharedLogGeo.rotateZ(Math.PI / 2);
+const sharedBranchGeo = new THREE.CylinderGeometry(0.12, 0.16, 0.4, 8);
+const sharedLogMat = new THREE.MeshStandardMaterial({ color: 0x542c11, roughness: 0.85 });
+
+const sharedSpikeBaseGeo = new THREE.BoxGeometry(2.1, 0.45, 0.6);
+const sharedSpikeConeGeo = new THREE.ConeGeometry(0.14, 0.65, 8);
+const sharedSpikeBaseMat = new THREE.MeshStandardMaterial({ color: 0x374151 });
+const sharedSpikeConeMat = new THREE.MeshStandardMaterial({ color: 0xe5e7eb, metalness: 0.8 });
+
+const sharedFireArchGeo = new THREE.BoxGeometry(6.0, 0.6, 0.6);
+const sharedFireTorusGeo = new THREE.TorusGeometry(1.4, 0.22, 10, 20);
+const sharedFireArchMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.9 });
+const sharedFireTorusMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+
+const sharedVoidGeo = new THREE.BoxGeometry(6.6, 0.5, 4.8);
+const sharedVoidMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
+const sharedGapEdgeGeo = new THREE.ConeGeometry(0.35, 1.1, 4);
+sharedGapEdgeGeo.rotateX(Math.PI / 2);
+const sharedGapStoneMat = new THREE.MeshStandardMaterial({ color: 0x44403c, roughness: 0.9 });
+const sharedGapRopeGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.8, 6);
+const sharedGapRopeMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.8 });
+
+const sharedCornerWallGeo = new THREE.BoxGeometry(7.4, 5.8, 1.2);
+const sharedCornerWallMat = new THREE.MeshStandardMaterial({ color: 0x44403c, roughness: 0.9, metalness: 0.1 });
+const sharedCornerArrowGeo = new THREE.BoxGeometry(1.6, 0.44, 0.3);
+const sharedCornerArrowMat = new THREE.MeshStandardMaterial({
+  color: 0x10b981,
+  emissive: 0x059669,
+  emissiveIntensity: 1.5,
+  roughness: 0.15
+});
+const sharedCornerBranchGeo = new THREE.BoxGeometry(14, 1.2, 6.6);
+const sharedCornerBranchMat = new THREE.MeshStandardMaterial({ color: 0xca8a04, roughness: 0.8 });
+
+// =========================================================================
 // =========================================================================
 // AUTHENTIC TEMPLE RUN RUNNER (GUY DANGEROUS - EXACT MATCH TO IMAGE 1)
 // Safari explorer shirt, muscular arms, fingerless gloves, cargo pants, tall boots, spiked hair
@@ -1041,31 +1079,17 @@ const buildCornerTurnChunk = (direction = 'right') => {
   const group = new THREE.Group();
 
   // 1. Ancient Stone Temple Wall Blocking Forward Runway
-  const wallGeo = new THREE.BoxGeometry(7.4, 5.8, 1.2);
-  const wallMat = new THREE.MeshStandardMaterial({
-    color: 0x44403c,
-    roughness: 0.9,
-    metalness: 0.1
-  });
-  const wall = new THREE.Mesh(wallGeo, wallMat);
+  const wall = new THREE.Mesh(sharedCornerWallGeo, sharedCornerWallMat);
   wall.position.set(0, 2.3, 0.6);
-  wall.castShadow = true;
   group.add(wall);
 
   // 2. Giant Glowing Emerald Aztec Turn Chevron Arrow
-  const arrowMat = new THREE.MeshStandardMaterial({
-    color: 0x10b981,
-    emissive: 0x059669,
-    emissiveIntensity: 1.5,
-    roughness: 0.15
-  });
-
   const arrowGroup = new THREE.Group();
-  const b1 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.44, 0.3), arrowMat);
+  const b1 = new THREE.Mesh(sharedCornerArrowGeo, sharedCornerArrowMat);
   b1.rotation.z = direction === 'right' ? Math.PI / 4 : -Math.PI / 4;
   b1.position.y = 0.5;
 
-  const b2 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.44, 0.3), arrowMat);
+  const b2 = new THREE.Mesh(sharedCornerArrowGeo, sharedCornerArrowMat);
   b2.rotation.z = direction === 'right' ? -Math.PI / 4 : Math.PI / 4;
   b2.position.y = -0.5;
 
@@ -1075,9 +1099,7 @@ const buildCornerTurnChunk = (direction = 'right') => {
   group.add(arrowGroup);
 
   // 3. Side Runway Branch Extending 90 degrees
-  const branchGeo = new THREE.BoxGeometry(14, 1.2, 6.6);
-  const branchMat = new THREE.MeshStandardMaterial({ color: 0xca8a04, roughness: 0.8 });
-  const branch = new THREE.Mesh(branchGeo, branchMat);
+  const branch = new THREE.Mesh(sharedCornerBranchGeo, sharedCornerBranchMat);
   const branchOffsetX = direction === 'right' ? 7.0 : -7.0;
   branch.position.set(branchOffsetX, -0.6, 0);
   group.add(branch);
@@ -1092,35 +1114,28 @@ const buildBrokenGapMesh = () => {
   const group = new THREE.Group();
 
   // Dark bottomless chasm void
-  const voidGeo = new THREE.BoxGeometry(6.6, 0.5, 4.8);
-  const voidMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
-  const abyssVoid = new THREE.Mesh(voidGeo, voidMat);
+  const abyssVoid = new THREE.Mesh(sharedVoidGeo, sharedVoidMat);
   abyssVoid.position.y = -0.55;
   group.add(abyssVoid);
 
   // Jagged stone edge teeth
-  const edgeGeo = new THREE.ConeGeometry(0.35, 1.1, 5);
-  edgeGeo.rotateX(Math.PI / 2);
-  const stoneMat = new THREE.MeshStandardMaterial({ color: 0x44403c, roughness: 0.9 });
   for (let x = -2.6; x <= 2.6; x += 1.3) {
-    const t1 = new THREE.Mesh(edgeGeo, stoneMat);
-    t1.position.set(x + (Math.random() - 0.5) * 0.2, -0.35, -2.2);
+    const t1 = new THREE.Mesh(sharedGapEdgeGeo, sharedGapStoneMat);
+    t1.position.set(x, -0.35, -2.2);
     group.add(t1);
 
-    const t2 = new THREE.Mesh(edgeGeo, stoneMat);
-    t2.position.set(x + (Math.random() - 0.5) * 0.2, -0.35, 2.2);
+    const t2 = new THREE.Mesh(sharedGapEdgeGeo, sharedGapStoneMat);
+    t2.position.set(x, -0.35, 2.2);
     group.add(t2);
   }
 
   // Dangling broken frayed rope bridge remnants
-  const ropeMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.8 });
-  const ropeGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.8, 8);
-  const rL = new THREE.Mesh(ropeGeo, ropeMat);
+  const rL = new THREE.Mesh(sharedGapRopeGeo, sharedGapRopeMat);
   rL.position.set(-3.1, -0.7, 0);
   rL.rotation.z = 0.3;
   group.add(rL);
 
-  const rR = new THREE.Mesh(ropeGeo, ropeMat);
+  const rR = new THREE.Mesh(sharedGapRopeGeo, sharedGapRopeMat);
   rR.position.set(3.1, -0.7, 0);
   rR.rotation.z = -0.3;
   group.add(rR);
@@ -1337,7 +1352,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     const g = gameRef.current;
     if (!g.isJumping && !g.isSliding) {
       g.isJumping = true;
-      g.jumpVelocity = 16.0;
+      g.jumpVelocity = 18.5;
       if (audioRef.current) audioRef.current.playJumpWhoosh();
     }
   }, []);
@@ -1384,22 +1399,24 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [gameState, moveLeft, moveRight, jump, slide]);
 
-  // Touch Swipe Handlers (Full screen natural touch interaction)
-  const handleTouchStart = (e) => {
-    if (!e.touches || e.touches.length === 0) return;
-    const t = e.touches[0];
+  // Touch & Pointer Swipe Handlers (Zero-latency swipe detection)
+  const handleTouchStart = useCallback((e) => {
+    if (e.cancelable) e.preventDefault();
+    const t = e.touches ? e.touches[0] : e;
     touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
     isDraggingRef.current = true;
-  };
+  }, []);
 
-  const handleTouchMove = (e) => {
-    if (!isDraggingRef.current || !e.touches || e.touches.length === 0) return;
-    const t = e.touches[0];
+  const handleTouchMove = useCallback((e) => {
+    if (!isDraggingRef.current) return;
+    if (e.cancelable) e.preventDefault();
+    const t = e.touches ? e.touches[0] : e;
     const dx = t.clientX - touchStartRef.current.x;
     const dy = t.clientY - touchStartRef.current.y;
 
-    // Detect immediate swipe gesture
-    if (Math.abs(dx) > 28 || Math.abs(dy) > 28) {
+    // Detect immediate swipe gesture with snappy 14px threshold
+    const minSwipe = 14;
+    if (Math.abs(dx) > minSwipe || Math.abs(dy) > minSwipe) {
       if (Math.abs(dx) > Math.abs(dy)) {
         if (dx > 0) moveRight();
         else moveLeft();
@@ -1410,11 +1427,11 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
       isDraggingRef.current = false;
     }
-  };
+  }, [moveRight, moveLeft, slide, jump]);
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = useCallback(() => {
     isDraggingRef.current = false;
-  };
+  }, []);
 
   // =========================================================================
   // THREE.JS SCENE SETUP & PROCEDURAL ASSETS
@@ -1437,9 +1454,15 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     camera.lookAt(0, 2.1, -14);
 
     // 3. WebGL Renderer (Optimized for silky 60 FPS)
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: (window.devicePixelRatio || 1) <= 1.5,
+      powerPreference: 'high-performance',
+      precision: 'mediump',
+      stencil: false,
+      depth: true
+    });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
     renderer.shadowMap.enabled = false;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.18;
@@ -1762,12 +1785,23 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
 
     window.addEventListener('resize', handleResize);
 
+    const onTouchStart = (e) => handleTouchStart(e);
+    const onTouchMove = (e) => handleTouchMove(e);
+    const onTouchEnd = (e) => handleTouchEnd(e);
+
+    container.addEventListener('touchstart', onTouchStart, { passive: false });
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    container.addEventListener('touchend', onTouchEnd, { passive: false });
+
     return () => {
       window.removeEventListener('resize', handleResize);
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchmove', onTouchMove);
+      container.removeEventListener('touchend', onTouchEnd);
       renderer.dispose();
       if (container) container.innerHTML = '';
     };
-  }, []);
+  }, [handleTouchStart, handleTouchMove, handleTouchEnd]);
 
   // =========================================================================
   // GAME START / RESET
@@ -1876,8 +1910,8 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       actionHintRef.current.style.display = 'none';
     }
 
-    // 2. Smooth Lateral Lane Movement & Natural Runner Banking
-    g.currentX += (g.targetX - g.currentX) * (dt * 14);
+    // 2. Smooth Lateral Lane Movement & Natural Runner Banking (Snappy 60 FPS Response)
+    g.currentX += (g.targetX - g.currentX) * Math.min(1, dt * 26);
     g.playerObj.group.position.x = g.currentX;
     // Dynamic runner tilt into turns
     const laneBank = (g.targetX - g.currentX) * -0.28;
@@ -1887,7 +1921,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     // 3. Jump Physics (Authentic Parabolic Arc with Air Gravity)
     if (g.isJumping) {
       g.jumpY += g.jumpVelocity * dt;
-      g.jumpVelocity -= 36 * dt; // Gravity
+      g.jumpVelocity -= 46 * dt; // Crisper, responsive gravity
       if (g.jumpY <= 0) {
         g.jumpY = 0;
         g.jumpVelocity = 0;
@@ -2238,12 +2272,14 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
 
       // Dynamic FOV based on speed and slide rush (wider lens at speed!)
       const targetFov = 62 + ((currentSpeed - 42) / 46) * 12 + (g.isSliding ? 10 : 0);
-      g.camera.fov += (targetFov - g.camera.fov) * (dt * 6);
+      if (Math.abs(g.camera.fov - targetFov) > 0.05) {
+        g.camera.fov += (targetFov - g.camera.fov) * (dt * 6);
+        g.camera.updateProjectionMatrix();
+      }
 
       // Camera roll / bank during lane changes and turns
       const turnCameraRoll = g.turnAnimProgress > 0 ? (g.lastTurnDir === 'left' ? -0.15 : 0.15) * Math.sin(g.turnAnimProgress * Math.PI) : 0;
       g.camera.rotation.z = (g.targetX - g.currentX) * -0.04 + turnCameraRoll;
-      g.camera.updateProjectionMatrix();
 
       // Camera dynamically tracks ahead down the runway
       g.camera.lookAt(g.currentX * 0.35, 2.1 + g.jumpY * 0.3, -16);
@@ -2280,35 +2316,25 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       if (chosenType === 'log') {
         // Gnarly Organic Fallen Tree Trunk with Bark & Branch Stubs
         mesh = new THREE.Group();
-        const logGeo = new THREE.CylinderGeometry(0.36, 0.42, 2.3, 20);
-        logGeo.computeVertexNormals();
-        const logMat = new THREE.MeshStandardMaterial({ color: 0x542c11, roughness: 0.85 });
-        const logBody = new THREE.Mesh(logGeo, logMat);
-        logBody.rotation.z = Math.PI / 2;
+        const logBody = new THREE.Mesh(sharedLogGeo, sharedLogMat);
         mesh.add(logBody);
 
         // Branch stub
-        const branchGeo = new THREE.CylinderGeometry(0.12, 0.16, 0.4, 12);
-        const branch = new THREE.Mesh(branchGeo, logMat);
+        const branch = new THREE.Mesh(sharedBranchGeo, sharedLogMat);
         branch.position.set(0.3, 0.28, 0);
         branch.rotation.z = 0.4;
         mesh.add(branch);
 
         mesh.position.set(laneX, 0.35, zPos);
-        mesh.castShadow = true;
       } else if (chosenType === 'spikes') {
         // Ancient Stone Base with Sharp Bone/Steel Spikes
         mesh = new THREE.Group();
-        const baseGeo = new THREE.BoxGeometry(2.1, 0.45, 0.6);
-        const baseMat = new THREE.MeshStandardMaterial({ color: 0x374151 });
-        const base = new THREE.Mesh(baseGeo, baseMat);
+        const base = new THREE.Mesh(sharedSpikeBaseGeo, sharedSpikeBaseMat);
         base.position.y = 0.22;
         mesh.add(base);
 
-        const spikeGeo = new THREE.ConeGeometry(0.14, 0.65, 12);
-        const spikeMat = new THREE.MeshStandardMaterial({ color: 0xe5e7eb, metalness: 0.8 });
         for (let s = -3; s <= 3; s += 2) {
-          const sp = new THREE.Mesh(spikeGeo, spikeMat);
+          const sp = new THREE.Mesh(sharedSpikeConeGeo, sharedSpikeConeMat);
           sp.position.set(s * 0.25, 0.68, 0);
           mesh.add(sp);
         }
@@ -2316,15 +2342,11 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       } else if (chosenType === 'fire_ring') {
         // Low Flaming Fire Ring Arch (Slide Underneath!)
         mesh = new THREE.Group();
-        const archMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.9 });
-        const archTop = new THREE.Mesh(new THREE.BoxGeometry(6.0, 0.6, 0.6), archMat);
+        const archTop = new THREE.Mesh(sharedFireArchGeo, sharedFireArchMat);
         archTop.position.set(0, 1.45, 0);
         mesh.add(archTop);
 
-        const fireTorus = new THREE.Mesh(
-          new THREE.TorusGeometry(1.4, 0.22, 16, 32),
-          new THREE.MeshBasicMaterial({ color: 0xf59e0b })
-        );
+        const fireTorus = new THREE.Mesh(sharedFireTorusGeo, sharedFireTorusMat);
         fireTorus.position.set(0, 1.6, 0);
         mesh.add(fireTorus);
 
@@ -2408,6 +2430,9 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onPointerDown={handleTouchStart}
+      onPointerMove={handleTouchMove}
+      onPointerUp={handleTouchEnd}
     >
       {/* =========================================================================
           AUTHENTIC TEMPLE RUN HUD (EXACT REPLICA OF USER SCREENSHOTS)

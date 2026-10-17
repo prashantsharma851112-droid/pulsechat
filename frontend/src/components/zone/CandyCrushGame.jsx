@@ -24,22 +24,39 @@ class CandyAudio {
       this.init();
       if (!this.ctx) return;
       const ctx = this.ctx;
-      const freqs = [330, 392, 494, 587, 659, 784, 880, 1046];
-      const baseFreq = freqs[Math.min(combo - 1, freqs.length - 1)] || 440;
+      const freqs = [440, 523, 587, 659, 784, 880, 1046, 1175];
+      const baseFreq = freqs[Math.min(combo - 1, freqs.length - 1)] || 523;
 
+      // 1. Resonant juicy bubble "bloop" oscillator (frequency sweep up and drop)
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(baseFreq, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, ctx.currentTime + 0.08);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(baseFreq * 0.75, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.8, ctx.currentTime + 0.05);
+      osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.2, ctx.currentTime + 0.12);
 
-      gain.gain.setValueAtTime(0.28, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.32, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
-      osc.stop(ctx.currentTime + 0.12);
+      osc.stop(ctx.currentTime + 0.14);
+
+      // 2. High-frequency bubble pop click
+      const popOsc = ctx.createOscillator();
+      const popGain = ctx.createGain();
+      popOsc.type = 'triangle';
+      popOsc.frequency.setValueAtTime(baseFreq * 3.0, ctx.currentTime);
+      popOsc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.04);
+
+      popGain.gain.setValueAtTime(0.2, ctx.currentTime);
+      popGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+
+      popOsc.connect(popGain);
+      popGain.connect(ctx.destination);
+      popOsc.start();
+      popOsc.stop(ctx.currentTime + 0.04);
     } catch (e) {}
   }
 
@@ -666,6 +683,7 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [comboBanner, setComboBanner] = useState(null); // e.g. "Tasty! x2"
   const [gameState, setGameState] = useState('playing'); // 'playing' | 'won' | 'gameover'
+  const [burstingCells, setBurstingCells] = useState(null); // Map of `${r},${c}` -> { candy, color }
   const [hintCells, setHintCells] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
 
@@ -825,7 +843,28 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
     earnedThisStep = finalDestroyCoords.size * 50 * comboMultiplier;
     setScore(prev => prev + earnedThisStep);
 
-    // Clear matched cells
+    // 1. Juicy Bubble Burst Pop Phase! (Authentic bubble burst and popping droplets)
+    const burstMap = {};
+    finalDestroyCoords.forEach(coord => {
+      const [r, c] = coord.split(',').map(Number);
+      const candy = workingBoard[r][c];
+      if (candy) {
+        const candyConf = CANDY_TYPES.find(t => t.id === candy.type);
+        burstMap[coord] = {
+          candy,
+          color: candyConf?.color || '#fbbf24'
+        };
+      }
+    });
+
+    setBurstingCells(burstMap);
+    soundEngine.playPop(comboMultiplier);
+
+    // Wait for the juicy bubble burst and pop particles to animate!
+    await new Promise(res => setTimeout(res, 240));
+    setBurstingCells(null);
+
+    // 2. Clear matched cells
     finalDestroyCoords.forEach(coord => {
       const [r, c] = coord.split(',').map(Number);
       workingBoard[r][c] = null;
@@ -838,33 +877,58 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
 
     setBoard([...workingBoard.map(row => [...row])]);
 
-    // Animate falling candies (gravity)
-    await new Promise(res => setTimeout(res, 220));
+    // 3. Drop down candies visibly with spring bounce
+    const droppedBoard = await dropCandiesWithBounce(workingBoard);
+
+    // Chain reaction cascade
+    return processBoardMatches(droppedBoard, comboMultiplier + 1, null);
+  }, [checkReshuffle]);
+
+  // Visibly drop candies from above with spring bounce (Solves candy drop visibility & eliminates lag)
+  const dropCandiesWithBounce = async (workingBoard) => {
+    let hasFalling = false;
+    const nextBoard = workingBoard.map(row => [...row]);
 
     for (let c = 0; c < GRID_SIZE; c++) {
       let emptyRow = GRID_SIZE - 1;
       for (let r = GRID_SIZE - 1; r >= 0; r--) {
-        if (workingBoard[r][c] !== null) {
+        if (nextBoard[r][c] !== null) {
           if (emptyRow !== r) {
-            workingBoard[emptyRow][c] = workingBoard[r][c];
-            workingBoard[r][c] = null;
+            const dropRows = emptyRow - r;
+            nextBoard[emptyRow][c] = {
+              ...nextBoard[r][c],
+              dropRows,
+              dropKey: `${emptyRow}-${c}-${Date.now()}-${Math.random()}`
+            };
+            nextBoard[r][c] = null;
+            hasFalling = true;
           }
           emptyRow -= 1;
         }
       }
-      // Fill from top
+      // Fill from top with newly spawned candies dropping into view
+      let spawnIndex = 0;
       for (let r = emptyRow; r >= 0; r--) {
-        workingBoard[r][c] = createRandomCandy();
+        const dropRows = (emptyRow + 1) + spawnIndex;
+        nextBoard[r][c] = {
+          ...createRandomCandy(),
+          dropRows,
+          dropKey: `spawn-${r}-${c}-${Date.now()}-${Math.random()}`
+        };
+        hasFalling = true;
+        spawnIndex += 1;
       }
     }
 
-    setBoard([...workingBoard.map(row => [...row])]);
+    setBoard([...nextBoard.map(row => [...row])]);
 
-    await new Promise(res => setTimeout(res, 180));
+    if (hasFalling) {
+      // Let the player clearly see and enjoy the candies dropping and bouncing!
+      await new Promise(res => setTimeout(res, 340));
+    }
 
-    // Chain reaction cascade
-    return processBoardMatches(workingBoard, comboMultiplier + 1, null);
-  }, [checkReshuffle]);
+    return nextBoard;
+  };
 
   // Execute Swap between two cells
   const executeSwap = async (cellA, cellB) => {
@@ -890,40 +954,38 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
       newBoard[cellA.r][cellA.c] = null;
       newBoard[cellB.r][cellB.c] = null;
 
-      let blastCount = 2;
+      const blastList = [];
       for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
           if (isBoth || newBoard[r][c]?.type === targetColor) {
-            triggerParticles(r, c, '#f59e0b');
-            newBoard[r][c] = null;
-            blastCount += 1;
-          }
-        }
-      }
-
-      setScore(prev => prev + blastCount * 80);
-      setBoard(newBoard);
-
-      // Drop down candies
-      await new Promise(res => setTimeout(res, 220));
-      for (let c = 0; c < GRID_SIZE; c++) {
-        let emptyRow = GRID_SIZE - 1;
-        for (let r = GRID_SIZE - 1; r >= 0; r--) {
-          if (newBoard[r][c] !== null) {
-            if (emptyRow !== r) {
-              newBoard[emptyRow][c] = newBoard[r][c];
-              newBoard[r][c] = null;
+            const candy = newBoard[r][c];
+            if (candy) {
+              const candyConf = CANDY_TYPES.find(t => t.id === candy.type);
+              blastList.push({ r, c, candy, color: candyConf?.color || '#fbbf24' });
             }
-            emptyRow -= 1;
           }
         }
-        for (let r = emptyRow; r >= 0; r--) {
-          newBoard[r][c] = createRandomCandy();
-        }
       }
-      setBoard([...newBoard]);
-      await new Promise(res => setTimeout(res, 180));
-      await processBoardMatches(newBoard, 2);
+
+      // Juicy bubble burst on blasted cells
+      const burstMap = {};
+      blastList.forEach(({ r, c, candy, color }) => {
+        burstMap[`${r},${c}`] = { candy, color };
+      });
+      setBurstingCells(burstMap);
+      soundEngine.playPop(2);
+      await new Promise(res => setTimeout(res, 240));
+      setBurstingCells(null);
+
+      blastList.forEach(({ r, c }) => {
+        newBoard[r][c] = null;
+      });
+
+      setScore(prev => prev + (blastList.length + 2) * 80);
+      setBoard([...newBoard.map(row => [...row])]);
+
+      const droppedBoard = await dropCandiesWithBounce(newBoard);
+      await processBoardMatches(droppedBoard, 2);
       return;
     }
 
@@ -983,10 +1045,11 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
 
   const handleTouchEnd = (e) => {
     if (!touchStartRef.current || isProcessing) return;
+    if (e.cancelable) e.preventDefault();
     const touch = e.changedTouches ? e.changedTouches[0] : e;
     const dx = touch.clientX - touchStartRef.current.x;
     const dy = touch.clientY - touchStartRef.current.y;
-    const minSwipe = 24;
+    const minSwipe = 15;
 
     const { r, c } = touchStartRef.current;
     touchStartRef.current = null;
@@ -1082,6 +1145,124 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
     >
       {/* Shared Global SVG Defs for 60fps Rendering */}
       <CandyGlobalSvgDefs />
+
+      {/* 60 FPS GPU Keyframes for Bubble Burst & Candy Drops */}
+      <style>{`
+        @keyframes candyDropBounceAnim {
+          0% {
+            transform: translateY(calc(-100% * var(--drop-rows))) scale(0.92);
+            opacity: 0.85;
+          }
+          68% {
+            transform: translateY(6px) scale(1.12, 0.88);
+            opacity: 1;
+          }
+          86% {
+            transform: translateY(-3px) scale(0.96, 1.04);
+          }
+          100% {
+            transform: translateY(0) scale(1, 1);
+            opacity: 1;
+          }
+        }
+
+        .candy-dropping {
+          animation: candyDropBounceAnim 0.34s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+          will-change: transform;
+        }
+
+        @keyframes candyBubbleExpand {
+          0% {
+            transform: scale(0.5);
+            opacity: 0.95;
+            border-width: 3px;
+          }
+          60% {
+            transform: scale(1.35);
+            opacity: 1;
+            border-width: 2px;
+          }
+          100% {
+            transform: scale(1.6);
+            opacity: 0;
+            border-width: 1px;
+          }
+        }
+
+        @keyframes candyPopVanishAnim {
+          0% {
+            transform: scale(1);
+            filter: brightness(1.1);
+          }
+          35% {
+            transform: scale(1.3) rotate(-6deg);
+            filter: brightness(1.7);
+          }
+          100% {
+            transform: scale(0);
+            opacity: 0;
+          }
+        }
+
+        @keyframes candyDropletBurst {
+          0% {
+            transform: translate(0, 0) scale(1.1);
+            opacity: 1;
+          }
+          100% {
+            transform: translate(var(--dx), var(--dy)) scale(0);
+            opacity: 0;
+          }
+        }
+
+        .candy-bubble-pop-cell {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          pointer-events: none;
+          z-index: 10;
+        }
+
+        .candy-bubble-sphere {
+          position: absolute;
+          width: 84%;
+          height: 84%;
+          border-radius: 50%;
+          border: 2px solid rgba(255, 255, 255, 0.95);
+          background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.18) 60%, rgba(255, 255, 255, 0) 75%);
+          animation: candyBubbleExpand 0.25s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+          will-change: transform, opacity;
+        }
+
+        .candy-pop-mesh {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          animation: candyPopVanishAnim 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+          will-change: transform, opacity;
+        }
+
+        .candy-bubble-droplets {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .candy-droplet-dot {
+          position: absolute;
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          animation: candyDropletBurst 0.26s cubic-bezier(0.15, 0.9, 0.3, 1) forwards;
+          will-change: transform, opacity;
+        }
+      `}</style>
 
       {/* Game Header Bar */}
       <div
@@ -1296,6 +1477,8 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
             const isSelected = selectedCell?.r === r && selectedCell?.c === c;
             const isHint = hintCells?.some(h => h.r === r && h.c === c);
             const isEven = (r + c) % 2 === 0;
+            const coordKey = `${r},${c}`;
+            const isBursting = burstingCells && burstingCells[coordKey];
 
             return (
               <div
@@ -1323,10 +1506,61 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
                   transform: isSelected ? 'scale(1.12) translateZ(0)' : (isHint ? 'scale(1.06) translateZ(0)' : 'scale(1) translateZ(0)'),
                   transition: 'transform 0.15s ease, background 0.15s ease',
                   boxShadow: isSelected ? '0 0 16px rgba(251, 191, 36, 0.9)' : 'none',
-                  padding: '2px'
+                  padding: '2px',
+                  overflow: 'visible'
                 }}
               >
-                <CandyVisual candy={candy} />
+                {isBursting ? (
+                  <div key={`burst-${coordKey}`} className="candy-bubble-pop-cell">
+                    {/* 1. Expanding iridescent soap bubble */}
+                    <div
+                      className="candy-bubble-sphere"
+                      style={{
+                        boxShadow: `0 0 14px ${isBursting.color}, inset 0 0 10px rgba(255,255,255,0.9)`
+                      }}
+                    />
+                    {/* 2. Squashing & popping vanishing candy visual */}
+                    <div className="candy-pop-mesh">
+                      <CandyVisual candy={isBursting.candy} />
+                    </div>
+                    {/* 3. 8 Radiant sparkling droplet particles bursting outwards */}
+                    <div className="candy-bubble-droplets">
+                      {[0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => {
+                        const rad = (deg * Math.PI) / 180;
+                        const dx = Math.round(Math.cos(rad) * 26);
+                        const dy = Math.round(Math.sin(rad) * 26);
+                        return (
+                          <span
+                            key={i}
+                            className="candy-droplet-dot"
+                            style={{
+                              '--dx': `${dx}px`,
+                              '--dy': `${dy}px`,
+                              background: isBursting.color,
+                              boxShadow: `0 0 8px ${isBursting.color}`
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    key={candy?.dropKey || `cell-${r}-${c}-${candy?.id}`}
+                    className={`candy-cell-content ${candy?.dropRows ? 'candy-dropping' : ''}`}
+                    style={{
+                      '--drop-rows': candy?.dropRows || 0,
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      willChange: 'transform'
+                    }}
+                  >
+                    <CandyVisual candy={candy} />
+                  </div>
+                )}
               </div>
             );
           })
