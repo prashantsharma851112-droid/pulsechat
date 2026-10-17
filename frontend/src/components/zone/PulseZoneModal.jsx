@@ -377,12 +377,12 @@ export default function PulseZoneModal({ onClose }) {
               {/* When no game is selected: Clean Arcade Launcher Cards */}
               {selectedGame === null ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {/* Candy Crush Saga Card */}
+                  {/* Arrow Puzzle Card (TOP #1 GAME) */}
                   <div
-                    onClick={() => setSelectedGame('candy')}
+                    onClick={() => setSelectedGame('arrow')}
                     style={{
-                      background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.22), rgba(168, 85, 247, 0.16))',
-                      border: '1.5px solid rgba(236, 72, 153, 0.55)',
+                      background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(139, 92, 246, 0.16))',
+                      border: '1.5px solid rgba(59, 130, 246, 0.55)',
                       borderRadius: '16px',
                       padding: '14px 16px',
                       display: 'flex',
@@ -390,7 +390,7 @@ export default function PulseZoneModal({ onClose }) {
                       justifyContent: 'space-between',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
-                      boxShadow: '0 4px 16px rgba(236, 72, 153, 0.25)'
+                      boxShadow: '0 4px 16px rgba(59, 130, 246, 0.25)'
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -398,26 +398,26 @@ export default function PulseZoneModal({ onClose }) {
                         width: '52px',
                         height: '52px',
                         borderRadius: '14px',
-                        background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
+                        background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontSize: '1.8rem',
-                        boxShadow: '0 4px 14px rgba(236, 72, 153, 0.45)'
+                        boxShadow: '0 4px 14px rgba(59, 130, 246, 0.45)'
                       }}>
-                        🍬
+                        🎯
                       </div>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Candy Crush Saga</span>
-                          <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #ec4899, #f43f5e)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>NEW • HIT</span>
+                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Arrow Puzzle</span>
+                          <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>RANKED • #1</span>
                         </div>
                       </div>
                     </div>
                     <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedGame('candy'); }}
+                      onClick={(e) => { e.stopPropagation(); setSelectedGame('arrow'); }}
                       style={{
-                        background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
+                        background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
                         color: '#fff',
                         border: 'none',
                         borderRadius: '12px',
@@ -428,7 +428,7 @@ export default function PulseZoneModal({ onClose }) {
                         display: 'flex',
                         alignItems: 'center',
                         gap: '5px',
-                        boxShadow: '0 4px 12px rgba(236, 72, 153, 0.4)'
+                        boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)'
                       }}
                     >
                       <Play size={14} fill="#fff" /> PLAY
@@ -493,12 +493,12 @@ export default function PulseZoneModal({ onClose }) {
                     </button>
                   </div>
 
-                  {/* Arrow Puzzle Card */}
+                  {/* Candy Crush Saga Card */}
                   <div
-                    onClick={() => setSelectedGame('arrow')}
+                    onClick={() => setSelectedGame('candy')}
                     style={{
-                      background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.1))',
-                      border: '1.5px solid rgba(59, 130, 246, 0.35)',
+                      background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.22), rgba(168, 85, 247, 0.16))',
+                      border: '1.5px solid rgba(236, 72, 153, 0.55)',
                       borderRadius: '16px',
                       padding: '14px 16px',
                       display: 'flex',
@@ -506,7 +506,7 @@ export default function PulseZoneModal({ onClose }) {
                       justifyContent: 'space-between',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
-                      boxShadow: '0 4px 16px rgba(59, 130, 246, 0.12)'
+                      boxShadow: '0 4px 16px rgba(236, 72, 153, 0.25)'
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -514,26 +514,26 @@ export default function PulseZoneModal({ onClose }) {
                         width: '52px',
                         height: '52px',
                         borderRadius: '14px',
-                        background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                        background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontSize: '1.8rem',
-                        boxShadow: '0 4px 14px rgba(59, 130, 246, 0.4)'
+                        boxShadow: '0 4px 14px rgba(236, 72, 153, 0.45)'
                       }}>
-                        🎯
+                        🍬
                       </div>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Arrow Puzzle</span>
-                          <span style={{ fontSize: '0.62rem', background: '#3b82f6', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>BRAIN</span>
+                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Candy Crush Saga</span>
+                          <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #ec4899, #f43f5e)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>NEW • HIT</span>
                         </div>
                       </div>
                     </div>
                     <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedGame('arrow'); }}
+                      onClick={(e) => { e.stopPropagation(); setSelectedGame('candy'); }}
                       style={{
-                        background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                        background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
                         color: '#fff',
                         border: 'none',
                         borderRadius: '12px',
@@ -544,7 +544,7 @@ export default function PulseZoneModal({ onClose }) {
                         display: 'flex',
                         alignItems: 'center',
                         gap: '5px',
-                        boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)'
+                        boxShadow: '0 4px 12px rgba(236, 72, 153, 0.4)'
                       }}
                     >
                       <Play size={14} fill="#fff" /> PLAY
@@ -974,8 +974,8 @@ export default function PulseZoneModal({ onClose }) {
                           <span style={{ color: '#38bdf8', fontWeight: 800, background: 'rgba(56, 189, 248, 0.15)', padding: '1px 6px', borderRadius: '6px' }}>
                             Level {item.level || 1}
                           </span>
-                          <span>• {item.gamesPlayed || 1} Played</span>
-                          <span>• {item.gameName}</span>
+                          <span style={{ fontWeight: 600 }}>• {item.gamesPlayed === 1 ? '1 Play' : `${item.gamesPlayed || 0} Plays`}</span>
+                          <span style={{ color: '#fbbf24', fontWeight: 700 }}>• {item.gameName || 'Arrow Puzzle'}</span>
                         </div>
                       </div>
                     </div>

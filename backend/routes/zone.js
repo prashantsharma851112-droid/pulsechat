@@ -342,20 +342,32 @@ router.post('/game-score', authMiddleware, async (req, res) => {
     // Save/Update Cumulative Score & Level per user in MongoDB GameScore collection
     const existingScoreDoc = await GameScore.findOne({ userId: resolvedUserId }).lean();
 
+    // Strict Rule: Level on the leaderboard is EXCLUSIVELY determined by the Arrow game!
+    const isArrowGame = /arrow/i.test(gameName || '');
+
     let newTotalScore = rawScore;
-    let newLevel = Math.max(1, rawLevel);
+    let newLevel = 1;
+    let newMax = 1;
     let newGamesCount = 1;
 
     if (existingScoreDoc) {
       const currentMax = Math.max(existingScoreDoc.maxUnlockedLevel || 1, existingScoreDoc.level || 1);
-      // Anti-cheat verification: Player can at most advance by 1 level per completed game
-      const maxAllowedLevel = currentMax + 1;
-      newLevel = Math.min(Math.max(existingScoreDoc.level || 1, rawLevel), maxAllowedLevel);
-      const newMax = Math.max(currentMax, newLevel);
       
-      // Cumulative score progression: Add earned game score to existing total score (score never drops)
+      if (isArrowGame) {
+        // Arrow game advances the player's level (anti-cheat: max 1 level per completion)
+        const maxAllowedLevel = currentMax + 1;
+        newLevel = Math.min(Math.max(existingScoreDoc.level || 1, rawLevel), maxAllowedLevel);
+        newMax = Math.max(currentMax, newLevel);
+      } else {
+        // Any other game (Temple Run, Candy Crush, etc.) preserves the player's Arrow level!
+        newLevel = existingScoreDoc.level || 1;
+        newMax = currentMax;
+      }
+      
+      // Cumulative score progression: Add earned game score to existing total score
       newTotalScore = (existingScoreDoc.score || 0) + (rawScore > 0 ? rawScore : 0);
-      newGamesCount = (existingScoreDoc.gamesPlayed || 1) + (rawScore > 0 ? 1 : 0);
+      const currentPlayed = typeof existingScoreDoc.gamesPlayed === 'number' ? existingScoreDoc.gamesPlayed : 0;
+      newGamesCount = currentPlayed + 1;
 
       await GameScore.findOneAndUpdate(
         { userId: resolvedUserId },
@@ -373,6 +385,10 @@ router.post('/game-score', authMiddleware, async (req, res) => {
 
       await GameScore.deleteMany({ userId: resolvedUserId, _id: { $ne: existingScoreDoc._id } });
     } else {
+      newLevel = isArrowGame ? Math.max(1, rawLevel) : 1;
+      newMax = newLevel;
+      newGamesCount = 1;
+
       await GameScore.create({
         userId: resolvedUserId,
         displayName: user.displayName || user.username,
@@ -380,6 +396,7 @@ router.post('/game-score', authMiddleware, async (req, res) => {
         gameName: gameName || 'Arrow Puzzle',
         score: newTotalScore,
         level: newLevel,
+        maxUnlockedLevel: newMax,
         gamesPlayed: 1,
         updatedAt: new Date()
       });

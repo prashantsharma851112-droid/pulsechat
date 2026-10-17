@@ -517,41 +517,39 @@ const createSkyTexture = () => {
 // AUTHENTIC TEMPLE RUN GOLDEN DIAMOND COIN GENERATOR (IMAGE 1 EXACT MATCH)
 // Diamond outer bevel, raised inner gold rim, etched Aztec center
 // =========================================================================
+// Pre-allocated static shared coin geometries and materials for zero runtime GC overhead
+const sharedCoinOuterGeo = new THREE.BoxGeometry(0.48, 0.48, 0.08);
+const sharedCoinRimGeo = new THREE.BoxGeometry(0.32, 0.32, 0.095);
+const sharedCoinHoleGeo = new THREE.BoxGeometry(0.14, 0.14, 0.11);
+const sharedCoinOuterMat = new THREE.MeshStandardMaterial({
+  color: 0xfacc15, // Radiant Temple Run golden yellow
+  emissive: 0xb45309,
+  emissiveIntensity: 0.35,
+  metalness: 0.9,
+  roughness: 0.18
+});
+const sharedCoinRimMat = new THREE.MeshStandardMaterial({
+  color: 0xfef08a, // Brilliant highlight gold
+  metalness: 0.95,
+  roughness: 0.12
+});
+const sharedCoinHoleMat = new THREE.MeshStandardMaterial({
+  color: 0x78350f, // Deep dark gold etched recess
+  metalness: 0.5,
+  roughness: 0.7
+});
+
 const createDiamondCoinMesh = () => {
   const coinGroup = new THREE.Group();
-
-  // Outer Diamond Body (Rotated 45 degrees around Z)
-  const outerGeo = new THREE.BoxGeometry(0.48, 0.48, 0.08);
-  const outerMat = new THREE.MeshStandardMaterial({
-    color: 0xfacc15, // Radiant Temple Run golden yellow
-    emissive: 0xb45309,
-    emissiveIntensity: 0.35,
-    metalness: 0.9,
-    roughness: 0.18
-  });
-  const outerMesh = new THREE.Mesh(outerGeo, outerMat);
+  const outerMesh = new THREE.Mesh(sharedCoinOuterGeo, sharedCoinOuterMat);
   outerMesh.rotation.z = Math.PI / 4;
   coinGroup.add(outerMesh);
 
-  // Raised Inner Aztec Stepped Gold Rim
-  const rimGeo = new THREE.BoxGeometry(0.32, 0.32, 0.095);
-  const rimMat = new THREE.MeshStandardMaterial({
-    color: 0xfef08a, // Brilliant highlight gold
-    metalness: 0.95,
-    roughness: 0.12
-  });
-  const rimMesh = new THREE.Mesh(rimGeo, rimMat);
+  const rimMesh = new THREE.Mesh(sharedCoinRimGeo, sharedCoinRimMat);
   rimMesh.rotation.z = Math.PI / 4;
   coinGroup.add(rimMesh);
 
-  // Inner Dark Aztec Center Square
-  const holeGeo = new THREE.BoxGeometry(0.14, 0.14, 0.11);
-  const holeMat = new THREE.MeshStandardMaterial({
-    color: 0x78350f, // Deep dark gold etched recess
-    metalness: 0.5,
-    roughness: 0.7
-  });
-  const holeMesh = new THREE.Mesh(holeGeo, holeMat);
+  const holeMesh = new THREE.Mesh(sharedCoinHoleGeo, sharedCoinHoleMat);
   holeMesh.rotation.z = Math.PI / 4;
   coinGroup.add(holeMesh);
 
@@ -1134,7 +1132,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
   const containerRef = useRef(null);
   const audioRef = useRef(null);
 
-  // HUD & Game States
+  // HUD & Game States (Only used for Menu, Paused, GameOver transitions)
   const [gameState, setGameState] = useState('menu'); // 'menu' | 'playing' | 'paused' | 'gameover'
   const [distance, setDistance] = useState(0);
   const [coins, setCoins] = useState(0);
@@ -1148,20 +1146,38 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
   });
   const [isMuted, setIsMuted] = useState(false);
   const [powerMeter, setPowerMeter] = useState(0); // 0 to 100%
-  const [dangerOpacity, setDangerOpacity] = useState(0); // 0 to 1 for red danger vignette pulse
-  const [turnWarning, setTurnWarning] = useState(null); // 'left' | 'right' | null
-  const [popups, setPopups] = useState([]); // Floating score & combo popups
 
-  // Helper for floating score popups
+  // DIRECT DOM REFS FOR 60 FPS SILKY SMOOTH GAMEPLAY (ZERO REACT RE-RENDERS)
+  const scoreTextRef = useRef(null);
+  const coinsTextRef = useRef(null);
+  const powerCircleRef = useRef(null);
+  const powerFillRef = useRef(null);
+  const powerMultRef = useRef(null);
+  const dangerOverlayRef = useRef(null);
+  const turnWarningRef = useRef(null);
+  const turnWarningArrowRef = useRef(null);
+  const turnWarningTextRef = useRef(null);
+  const actionHintRef = useRef(null);
+  const popupsContainerRef = useRef(null);
+
+  // Helper for floating score popups (direct DOM injection: 0% React re-render overhead)
   const addPopup = useCallback((text, color = '#fbbf24') => {
-    const id = Date.now() + Math.random();
-    setPopups(prev => [...prev.slice(-3), { id, text, color }]);
+    if (!popupsContainerRef.current) return;
+    const el = document.createElement('div');
+    el.style.fontFamily = 'serif, monospace';
+    el.style.fontSize = '1.5rem';
+    el.style.fontWeight = '900';
+    el.style.color = color;
+    el.style.textShadow = '0 2px 10px rgba(0,0,0,0.9), 0 0 16px currentColor';
+    el.style.animation = 'templeFloatUp 0.85s ease-out forwards';
+    el.textContent = text;
+    popupsContainerRef.current.appendChild(el);
     setTimeout(() => {
-      setPopups(prev => prev.filter(p => p.id !== id));
-    }, 900);
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }, 850);
   }, []);
 
-  // 100% Natural Touch Swipe Gestures (ZERO BUTTONS)
+  // 100% Natural Touch Swipe Gestures (ZERO ON-SCREEN BUTTONS)
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
   const isDraggingRef = useRef(false);
 
@@ -1273,8 +1289,8 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         g.targetX = 0;
         g.currentX = 0;
         g.score += 50;
-        setScore(g.score);
-        setTurnWarning(null);
+        if (scoreTextRef.current) scoreTextRef.current.textContent = g.score;
+        if (turnWarningRef.current) turnWarningRef.current.style.display = 'none';
         addPopup('PERFECT TURN! +50', '#10b981');
         if (audioRef.current) audioRef.current.playTurnWhoosh();
         return;
@@ -1302,8 +1318,8 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         g.targetX = 0;
         g.currentX = 0;
         g.score += 50;
-        setScore(g.score);
-        setTurnWarning(null);
+        if (scoreTextRef.current) scoreTextRef.current.textContent = g.score;
+        if (turnWarningRef.current) turnWarningRef.current.style.display = 'none';
         addPopup('PERFECT TURN! +50', '#10b981');
         if (audioRef.current) audioRef.current.playTurnWhoosh();
         return;
@@ -1793,9 +1809,17 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     setCoins(0);
     setScore(0);
     setPowerMeter(0);
-    setDangerOpacity(0);
-    setTurnWarning(null);
-    setPopups([]);
+
+    if (scoreTextRef.current) scoreTextRef.current.textContent = '0';
+    if (coinsTextRef.current) coinsTextRef.current.textContent = '0';
+    if (powerCircleRef.current) powerCircleRef.current.setAttribute('stroke-dashoffset', '163');
+    if (powerFillRef.current) powerFillRef.current.style.height = '0%';
+    if (powerMultRef.current) powerMultRef.current.textContent = '1X';
+    if (dangerOverlayRef.current) dangerOverlayRef.current.style.display = 'none';
+    if (turnWarningRef.current) turnWarningRef.current.style.display = 'none';
+    if (actionHintRef.current) actionHintRef.current.style.display = 'block';
+    if (popupsContainerRef.current) popupsContainerRef.current.innerHTML = '';
+
     setGameState('playing');
 
     if (audioRef.current) {
@@ -1843,10 +1867,14 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
     g.distance += currentSpeed * dt;
     g.speed = Math.min(88, 42 + g.distance * 0.035);
 
-    setDistance(Math.floor(g.distance));
     const computedScore = Math.floor(g.distance * 2 + g.coins * 15);
     g.score = computedScore;
-    setScore(computedScore);
+    if (scoreTextRef.current) {
+      scoreTextRef.current.textContent = computedScore;
+    }
+    if (actionHintRef.current && g.distance >= 25 && actionHintRef.current.style.display !== 'none') {
+      actionHintRef.current.style.display = 'none';
+    }
 
     // 2. Smooth Lateral Lane Movement & Natural Runner Banking
     g.currentX += (g.targetX - g.currentX) * (dt * 14);
@@ -1953,7 +1981,15 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
 
     // Threat danger level (0 = far away, 1 = right behind runner)
     const danger = Math.max(0, Math.min(1, (52 - g.monkeyDist) / 42));
-    setDangerOpacity(danger);
+    if (dangerOverlayRef.current) {
+      if (danger > 0.05) {
+        dangerOverlayRef.current.style.display = 'block';
+        dangerOverlayRef.current.style.boxShadow = `inset 0 0 ${Math.floor(danger * 110)}px rgba(220, 38, 38, ${danger * 0.9})`;
+        dangerOverlayRef.current.style.border = `${Math.floor(danger * 6)}px solid rgba(239, 68, 68, ${danger * 0.75})`;
+      } else if (dangerOverlayRef.current.style.display !== 'none') {
+        dangerOverlayRef.current.style.display = 'none';
+      }
+    }
 
     // Deep pounding heartbeat pulse when Demon Monkey is close
     if (g.monkeyDist < 52) {
@@ -1997,9 +2033,19 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
 
       // Display warning banner when approaching intersection
       if (cz > -24 && cz < 5.0 && !g.upcomingCorner.handled) {
-        setTurnWarning(g.upcomingCorner.direction);
+        if (turnWarningRef.current && turnWarningRef.current.style.display !== 'flex') {
+          turnWarningRef.current.style.display = 'flex';
+          if (turnWarningArrowRef.current) {
+            turnWarningArrowRef.current.textContent = g.upcomingCorner.direction === 'left' ? '⬅️' : '➡️';
+          }
+          if (turnWarningTextRef.current) {
+            turnWarningTextRef.current.textContent = g.upcomingCorner.direction === 'left' ? 'SWIPE LEFT TO TURN!' : 'SWIPE RIGHT TO TURN!';
+          }
+        }
       } else {
-        setTurnWarning(null);
+        if (turnWarningRef.current && turnWarningRef.current.style.display !== 'none') {
+          turnWarningRef.current.style.display = 'none';
+        }
       }
 
       // Check if runner failed to turn in time (crashed into Mayan wall!)
@@ -2117,9 +2163,20 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
 
       if (inZ && inX && inY) {
         g.coins += 1;
-        setCoins(g.coins);
+        if (coinsTextRef.current) {
+          coinsTextRef.current.textContent = g.coins;
+        }
         g.powerMeter = Math.min(100, g.powerMeter + 2.5);
-        setPowerMeter(g.powerMeter);
+        if (powerCircleRef.current) {
+          powerCircleRef.current.setAttribute('stroke-dashoffset', `${163 - (163 * g.powerMeter) / 100}`);
+        }
+        if (powerFillRef.current) {
+          powerFillRef.current.style.height = `${Math.min(100, g.powerMeter)}%`;
+        }
+        if (powerMultRef.current) {
+          const mult = g.powerMeter >= 80 ? '4X' : g.powerMeter >= 50 ? '3X' : g.powerMeter >= 25 ? '2X' : '1X';
+          if (powerMultRef.current.textContent !== mult) powerMultRef.current.textContent = mult;
+        }
 
         // Play Ascending Pentatonic Dopamine Bell
         let streak = 1;
@@ -2306,13 +2363,17 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
   // =========================================================================
   const triggerGameOver = () => {
     const g = gameRef.current;
+    const finalScore = g.score;
+    const finalDist = Math.floor(g.distance);
+    const finalCoins = g.coins;
+    setScore(finalScore);
+    setDistance(finalDist);
+    setCoins(finalCoins);
     setGameState('gameover');
 
     if (audioRef.current) {
       audioRef.current.playGameOver();
     }
-
-    const finalScore = g.score;
     if (finalScore > highScore) {
       setHighScore(finalScore);
       try {
@@ -2383,6 +2444,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
 
           <svg style={{ position: 'absolute', inset: -3, width: '62px', height: '62px', transform: 'rotate(-90deg)' }}>
             <circle
+              ref={powerCircleRef}
               cx="31"
               cy="31"
               r="26"
@@ -2420,13 +2482,16 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
           boxShadow: '0 4px 15px rgba(0,0,0,0.6)'
         }}>
           <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
-          <span style={{
-            fontFamily: 'serif, monospace',
-            fontSize: '1.25rem',
-            fontWeight: 900,
-            color: '#fbbf24',
-            letterSpacing: '1px'
-          }}>
+          <span
+            ref={scoreTextRef}
+            style={{
+              fontFamily: 'serif, monospace',
+              fontSize: '1.25rem',
+              fontWeight: 900,
+              color: '#fbbf24',
+              letterSpacing: '1px'
+            }}
+          >
             {score}
           </span>
         </div>
@@ -2443,12 +2508,15 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
           boxShadow: '0 4px 15px rgba(0,0,0,0.6)'
         }}>
           <span style={{ color: '#fbbf24', fontSize: '1rem' }}>◆</span>
-          <span style={{
-            fontFamily: 'serif, monospace',
-            fontSize: '1.15rem',
-            fontWeight: 900,
-            color: '#fef08a'
-          }}>
+          <span
+            ref={coinsTextRef}
+            style={{
+              fontFamily: 'serif, monospace',
+              fontSize: '1.15rem',
+              fontWeight: 900,
+              color: '#fef08a'
+            }}
+          >
             {coins}
           </span>
         </div>
@@ -2495,22 +2563,28 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
           flexDirection: 'column',
           justifyContent: 'flex-end'
         }}>
-          <div style={{
-            width: '100%',
-            height: `${Math.min(100, powerMeter)}%`,
-            background: 'linear-gradient(180deg, #34d399 0%, #059669 50%, #047857 100%)',
-            boxShadow: '0 0 8px #10b981',
-            borderRadius: '6px',
-            transition: 'height 0.15s ease'
-          }} />
+          <div
+            ref={powerFillRef}
+            style={{
+              width: '100%',
+              height: `${Math.min(100, powerMeter)}%`,
+              background: 'linear-gradient(180deg, #34d399 0%, #059669 50%, #047857 100%)',
+              boxShadow: '0 0 8px #10b981',
+              borderRadius: '6px',
+              transition: 'height 0.15s ease'
+            }}
+          />
         </div>
-        <span style={{
-          fontSize: '0.72rem',
-          fontWeight: 900,
-          color: '#fbbf24',
-          fontFamily: 'monospace',
-          textShadow: '0 1px 4px rgba(0,0,0,0.9)'
-        }}>
+        <span
+          ref={powerMultRef}
+          style={{
+            fontSize: '0.72rem',
+            fontWeight: 900,
+            color: '#fbbf24',
+            fontFamily: 'monospace',
+            textShadow: '0 1px 4px rgba(0,0,0,0.9)'
+          }}
+        >
           {powerMeter >= 80 ? '4X' : powerMeter >= 50 ? '3X' : powerMeter >= 25 ? '2X' : '1X'}
         </span>
       </div>
@@ -2518,7 +2592,14 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       {/* TOP CENTER: Carved Stone Pause Button */}
       {gameState === 'playing' && (
         <button
-          onClick={(e) => { e.stopPropagation(); setGameState('paused'); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            const g = gameRef.current;
+            setScore(g.score);
+            setDistance(Math.floor(g.distance));
+            setCoins(g.coins);
+            setGameState('paused');
+          }}
           style={{
             position: 'absolute',
             top: 14,
@@ -2544,140 +2625,16 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         </button>
       )}
 
-      {/* ON-SCREEN ACTION CONTROLS (TACTILE TOUCH & CLICK BUTTONS) */}
+      {/* DEMON MONKEY DANGER RED VIGNETTE PULSE OVERLAY (Zero React State Lag) */}
       {gameState === 'playing' && (
-        <>
-          {/* Bottom Left: Steer ◀ and ▶ */}
-          <div style={{
-            position: 'absolute',
-            bottom: 18,
-            left: 18,
-            zIndex: 30,
-            display: 'flex',
-            gap: '12px',
-            alignItems: 'center'
-          }}>
-            <button
-              onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); moveLeft(); }}
-              style={{
-                width: '54px',
-                height: '54px',
-                borderRadius: '50%',
-                background: 'linear-gradient(145deg, #292524 0%, #1c1917 100%)',
-                border: '2.5px solid #78716c',
-                color: '#10b981',
-                fontSize: '1.35rem',
-                fontWeight: 900,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 6px 18px rgba(0,0,0,0.7), inset 0 2px 4px rgba(255,255,255,0.1)',
-                cursor: 'pointer',
-                userSelect: 'none',
-                touchAction: 'none'
-              }}
-              aria-label="Steer Left"
-            >
-              ◀
-            </button>
-            <button
-              onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); moveRight(); }}
-              style={{
-                width: '54px',
-                height: '54px',
-                borderRadius: '50%',
-                background: 'linear-gradient(145deg, #292524 0%, #1c1917 100%)',
-                border: '2.5px solid #78716c',
-                color: '#10b981',
-                fontSize: '1.35rem',
-                fontWeight: 900,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 6px 18px rgba(0,0,0,0.7), inset 0 2px 4px rgba(255,255,255,0.1)',
-                cursor: 'pointer',
-                userSelect: 'none',
-                touchAction: 'none'
-              }}
-              aria-label="Steer Right"
-            >
-              ▶
-            </button>
-          </div>
-
-          {/* Bottom Right: Tactile JUMP & SLIDE Action Buttons (Exact User Match) */}
-          <div style={{
-            position: 'absolute',
-            bottom: 18,
-            right: 18,
-            zIndex: 30,
-            display: 'flex',
-            gap: '12px',
-            alignItems: 'center'
-          }}>
-            {/* SLIDE BUTTON */}
-            <button
-              onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); slide(); }}
-              style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '50%',
-                background: 'linear-gradient(145deg, #065f46 0%, #064e3b 100%)',
-                border: '2.5px solid #34d399',
-                color: '#ecfdf5',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 6px 20px rgba(6, 95, 70, 0.7), 0 0 14px rgba(52, 211, 153, 0.4)',
-                cursor: 'pointer',
-                userSelect: 'none',
-                touchAction: 'none'
-              }}
-              aria-label="Slide"
-            >
-              <span style={{ fontSize: '1.15rem', lineHeight: 1 }}>▼</span>
-              <span style={{ fontSize: '0.62rem', fontWeight: 900, letterSpacing: '0.5px' }}>SLIDE</span>
-            </button>
-
-            {/* JUMP BUTTON */}
-            <button
-              onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); jump(); }}
-              style={{
-                width: '72px',
-                height: '72px',
-                borderRadius: '50%',
-                background: 'linear-gradient(145deg, #ea580c 0%, #c2410c 100%)',
-                border: '3px solid #fde047',
-                color: '#fff',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 8px 24px rgba(234, 88, 12, 0.8), 0 0 18px rgba(253, 224, 71, 0.5)',
-                cursor: 'pointer',
-                userSelect: 'none',
-                touchAction: 'none'
-              }}
-              aria-label="Jump"
-            >
-              <span style={{ fontSize: '1.35rem', lineHeight: 1 }}>▲</span>
-              <span style={{ fontSize: '0.72rem', fontWeight: 900, letterSpacing: '0.5px' }}>JUMP</span>
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* DEMON MONKEY DANGER RED VIGNETTE PULSE OVERLAY */}
-      {dangerOpacity > 0 && gameState === 'playing' && (
         <div
+          ref={dangerOverlayRef}
           style={{
             position: 'absolute',
             inset: 0,
             pointerEvents: 'none',
             zIndex: 20,
-            boxShadow: `inset 0 0 ${Math.floor(dangerOpacity * 110)}px rgba(220, 38, 38, ${dangerOpacity * 0.9})`,
-            border: `${Math.floor(dangerOpacity * 6)}px solid rgba(239, 68, 68, ${dangerOpacity * 0.75})`,
+            display: 'none',
             borderRadius: '24px',
             transition: 'box-shadow 0.12s ease'
           }}
@@ -2685,8 +2642,9 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       )}
 
       {/* 90-DEGREE CORNER TURN WARNING BANNER */}
-      {turnWarning && gameState === 'playing' && (
+      {gameState === 'playing' && (
         <div
+          ref={turnWarningRef}
           style={{
             position: 'absolute',
             top: 75,
@@ -2697,7 +2655,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
             border: '2px solid #10b981',
             borderRadius: '24px',
             padding: '8px 24px',
-            display: 'flex',
+            display: 'none',
             alignItems: 'center',
             gap: '10px',
             boxShadow: '0 0 25px rgba(16, 185, 129, 0.9), 0 4px 15px rgba(0,0,0,0.8)',
@@ -2708,17 +2666,18 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
             letterSpacing: '1px'
           }}
         >
-          <span style={{ fontSize: '1.4rem' }}>{turnWarning === 'left' ? '⬅️' : '➡️'}</span>
-          <span>{turnWarning === 'left' ? 'SWIPE LEFT TO TURN!' : 'SWIPE RIGHT TO TURN!'}</span>
+          <span ref={turnWarningArrowRef} style={{ fontSize: '1.4rem' }}>⬅️</span>
+          <span ref={turnWarningTextRef}>SWIPE LEFT TO TURN!</span>
         </div>
       )}
 
-      {/* FLOATING ACTION HINT FOR NEW RUN (Disappears as runner gets moving) */}
-      {gameState === 'playing' && distance < 25 && (
+      {/* FLOATING ACTION HINT FOR RUNNER */}
+      {gameState === 'playing' && (
         <div
+          ref={actionHintRef}
           style={{
             position: 'absolute',
-            bottom: 100,
+            bottom: 24,
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 25,
@@ -2726,21 +2685,22 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
             background: 'rgba(0,0,0,0.7)',
             border: '1.5px solid rgba(251, 191, 36, 0.5)',
             borderRadius: '20px',
-            padding: '6px 20px',
+            padding: '8px 24px',
             color: '#fef08a',
-            fontSize: '0.82rem',
+            fontSize: '0.85rem',
             fontWeight: 800,
             letterSpacing: '0.5px',
             boxShadow: '0 4px 15px rgba(0,0,0,0.6)',
             animation: 'templeTurnPulse 0.8s infinite alternate'
           }}
         >
-          SWIPE OR TAP BUTTONS • JUMP, SLIDE & TURN
+          SWIPE TO JUMP, SLIDE & TURN
         </div>
       )}
 
-      {/* FLOATING COMBO & SCORE POPUPS */}
+      {/* FLOATING COMBO & SCORE POPUPS (High Performance DOM Container) */}
       <div
+        ref={popupsContainerRef}
         style={{
           position: 'absolute',
           top: '38%',
@@ -2753,23 +2713,7 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
           alignItems: 'center',
           gap: '8px'
         }}
-      >
-        {popups.map(p => (
-          <div
-            key={p.id}
-            style={{
-              fontFamily: 'serif, monospace',
-              fontSize: '1.5rem',
-              fontWeight: 900,
-              color: p.color,
-              textShadow: '0 2px 10px rgba(0,0,0,0.9), 0 0 16px currentColor',
-              animation: 'templeFloatUp 0.85s ease-out forwards'
-            }}
-          >
-            {p.text}
-          </div>
-        ))}
-      </div>
+      />
 
       <style>{`
         @keyframes templeFloatUp {
