@@ -479,6 +479,11 @@ input, textarea {
   border-radius: 12px;
   cursor: pointer;
   transition: background 0.15s ease;
+  contain: layout style;
+  content-visibility: auto;
+  contain-intrinsic-size: 72px;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 .chat-item-row:hover, .chat-item-row.active {
@@ -2912,10 +2917,17 @@ a,
 }
 
 .message-item-contain {
+  contain: layout style;
+  content-visibility: auto;
+  contain-intrinsic-size: 58px;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
   will-change: transform;
 }
 
 .message-item-contain.selected-for-action {
+  contain: none !important;
+  content-visibility: visible !important;
   z-index: 100 !important;
 }
 

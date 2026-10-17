@@ -145,7 +145,14 @@ export function SocketProvider({ children }) {
       window.addEventListener('offline', handleOffline);
 
       newSocket.on('online_users_list', (users) => {
-        setOnlineUsers(users);
+        if (Array.isArray(users)) {
+          setOnlineUsers(prev => {
+            if (prev.length === users.length && prev.every((u, i) => u === users[i])) {
+              return prev;
+            }
+            return users;
+          });
+        }
         try {
           newSocket.emit('get_vibe_auras');
         } catch (e) {}
