@@ -646,7 +646,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   <div style={{ color: '#06b6d4', flexShrink: 0 }}><Type size={20} /></div>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>Zero Sparks Needed (0 ⚡)</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Unlimited 3D Text, Dust Notes, Emoji Bursts & Polls with 0 Sparks deducted.</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Unlimited 3D Text, Dust Notes, Emoji Rain & Polls with 0 Sparks deducted.</div>
                   </div>
                 </div>
 
@@ -659,10 +659,10 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   gap: '10px',
                   boxSizing: 'border-box'
                 }}>
-                  <div style={{ color: '#f43f5e', flexShrink: 0 }}><Zap size={20} /></div>
+                  <div style={{ color: '#0ea5e9', flexShrink: 0 }}><Zap size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>3D Burst Emoji Reactions</div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Floating 3D emoji particle bursts & interactive reactions.</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-main)' }}>3D Emoji Rain (Unlimited)</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Floating 3D emoji particle rain & interactive reactions.</div>
                   </div>
                 </div>
 
@@ -954,7 +954,7 @@ export default function PulseProModal({ onClose, initialTab = 'pro' }) {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />
-                    <span>💥 3D Emoji Particle Bursts (No Sparks)</span>
+                    <span>🌧️ 3D Emoji Particle Rain (No Sparks)</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Check size={14} color="#10b981" style={{ flexShrink: 0 }} />

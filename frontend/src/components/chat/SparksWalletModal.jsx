@@ -779,7 +779,7 @@ export default function SparksWalletModal({ onClose }) {
                 Pulse Sparks & VIP
               </h3>
               <p style={{ margin: 0, fontSize: '0.8rem', color: '#cbd5e1', lineHeight: 1.4 }}>
-                Earn 15 free Sparks to send 3D Texts, Emoji Bursts, Dust Notes & create interactive polls!
+                Earn 15 free Sparks to send 3D Texts, Emoji Rain, Dust Notes & create interactive polls!
               </p>
             </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useContext, useCallback, useMemo, startTransition, useDeferredValue } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Camera, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3, Ghost, Search, Globe, ChevronUp, ChevronDown, ArrowDown, Lock, Unlock, ChevronLeft, ChevronRight, Bell, BellOff } from 'lucide-react';
+import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Camera, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3, Ghost, Search, Globe, ChevronUp, ChevronDown, ArrowDown, Lock, Unlock, ChevronLeft, ChevronRight, Bell, BellOff, CloudRain } from 'lucide-react';
 import MessageItem from './MessageItem';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
@@ -2146,6 +2146,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const isPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
     const sparksBalance = user?.pulseSparks ?? 0;
 
+    if (!isPro && sparksBalance < 5) {
+      alert(`⚡ Insufficient Sparks\nEmoji Rain requires 5 Sparks.\nYour balance: ${sparksBalance} Sparks.\n\nEarn free Sparks by watching Ads in Sparks Wallet, or upgrade to Pulse Pro!`);
+      setShowSparksWallet(true);
+      return;
+    }
+
     if (!isPro && updateUserProfile && sparksBalance >= 5) {
       updateUserProfile({ ...user, pulseSparks: Math.max(0, sparksBalance - 5) });
     }
@@ -2154,7 +2160,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.emit('trigger_emoji_burst', { chatId, emoji: cleanEmoji, userId: user?.id });
     }
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji: cleanEmoji, mode: 'burst', duration: 7 } }));
+      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji: cleanEmoji, mode: 'burst', duration: 7, chatId } }));
     }
   };
 
@@ -7635,7 +7641,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 </span>
               </button>
 
-              {/* 6. Emoji Particle Burst */}
+              {/* 6. Emoji Rain */}
               <button
                 type="button"
                 onClick={() => {
@@ -7660,18 +7666,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   width: '46px',
                   height: '46px',
                   borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  background: 'linear-gradient(135deg, #0284c7, #0369a1)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#fff',
-                  boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)'
+                  boxShadow: '0 4px 12px rgba(2, 132, 199, 0.4)'
                 }}>
-                  <Flame size={20} />
+                  <CloudRain size={20} />
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ef4444', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                  <span>Emoji Burst</span>
-                  <Crown size={12} color="#ef4444" />
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>Emoji Rain</span>
+                  <Crown size={12} color="#38bdf8" />
                 </span>
               </button>
 
@@ -7805,7 +7811,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             </div>
           )}
 
-          {/* 3D Emoji Particle Burst Selector */}
+          {/* 3D Emoji Particle Rain Selector */}
           {showEmojiBurstPicker && (
             <div
               style={{
@@ -7829,7 +7835,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <span style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  💥 3D Floating Emoji Burst
+                  🌧️ 3D Floating Emoji Rain
                 </span>
                 <button
                   type="button"
@@ -7853,8 +7859,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 borderRadius: '10px',
                 border: '1px solid rgba(255, 255, 255, 0.08)'
               }}>
-                <span style={{ color: user?.isPro ? '#10b981' : '#f59e0b', fontWeight: 700 }}>
-                  {user?.isPro ? '👑 VIP: FREE (0 Sparks)' : '⚡ Cost: 5 Sparks / burst'}
+                <span style={{ color: user?.isPro ? '#10b981' : '#38bdf8', fontWeight: 700 }}>
+                  {user?.isPro ? '👑 VIP: FREE (0 Sparks)' : '⚡ Cost: 5 Sparks / rain'}
                 </span>
                 <span>Balance: <strong>{user?.pulseSparks ?? 0} ⚡</strong></span>
               </div>
@@ -7874,7 +7880,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   type="text"
                   value={customBurstEmoji}
                   onChange={(e) => setCustomBurstEmoji(e.target.value)}
-                  placeholder="Type or paste ANY emoji..."
+                  placeholder="Type or paste ANY emoji to rain..."
                   maxLength={10}
                   style={{
                     flex: 1,
@@ -7891,7 +7897,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   type="submit"
                   disabled={!customBurstEmoji.trim()}
                   style={{
-                    background: 'linear-gradient(135deg, #f43f5e, #fb7185)',
+                    background: 'linear-gradient(135deg, #0284c7, #0ea5e9)',
                     color: '#fff',
                     border: 'none',
                     borderRadius: '12px',
@@ -7900,10 +7906,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     fontWeight: 800,
                     cursor: customBurstEmoji.trim() ? 'pointer' : 'default',
                     opacity: customBurstEmoji.trim() ? 1 : 0.6,
-                    boxShadow: '0 2px 8px rgba(244, 63, 94, 0.4)'
+                    boxShadow: '0 2px 8px rgba(14, 165, 233, 0.4)'
                   }}
                 >
-                  Burst 💥
+                  Rain 🌧️
                 </button>
               </form>
 

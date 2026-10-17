@@ -1600,12 +1600,17 @@ io.on('connection', (socket) => {
         if (!isPro) {
           const SPARKS_COST = 5;
           const currentSparks = u.pulseSparks || 0;
-          if (currentSparks >= SPARKS_COST) {
-            u.pulseSparks = currentSparks - SPARKS_COST;
-            await u.save();
-            socket.emit('sparks_updated', { pulseSparks: u.pulseSparks });
-            socket.emit('user_profile_updated', { userId, pulseSparks: u.pulseSparks });
+          if (currentSparks < SPARKS_COST) {
+            socket.emit('message_blocked', {
+              chatId,
+              reason: `Sparks kam hain! Emoji Rain ke liye 5 Sparks lagte hain. Sparks Wallet se Ad dekh kar free Sparks lein.`
+            });
+            return;
           }
+          u.pulseSparks = currentSparks - SPARKS_COST;
+          await u.save();
+          socket.emit('sparks_updated', { pulseSparks: u.pulseSparks });
+          socket.emit('user_profile_updated', { userId, pulseSparks: u.pulseSparks });
         }
       }
     } catch (e) {
