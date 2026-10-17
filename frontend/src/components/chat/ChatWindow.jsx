@@ -2070,7 +2070,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.emit('trigger_emoji_burst', { chatId, emoji: cleanEmoji, userId: user?.id });
     }
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji: cleanEmoji, mode: 'burst', duration: 5 } }));
+      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji: cleanEmoji, mode: 'burst', duration: 3 } }));
     }
   };
 
@@ -4874,6 +4874,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const moodInfo = moodTimeline.currentMood;
   const moodSteps = moodTimeline.timelineSteps;
 
+  const moodTimelineRef = useRef(null);
+  useEffect(() => {
+    if (moodTimelineRef.current) {
+      moodTimelineRef.current.scrollLeft = moodTimelineRef.current.scrollWidth;
+    }
+  }, [chatId, moodSteps]);
+
   // AI Smart Suggested Replies
   const smartReplies = ["Sounds great! 👍", "I'll check and reply soon.", "Let's call! 📞", "Thanks! 🔥"];
 
@@ -6291,19 +6298,22 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {/* Top Mood Timeline: Ultra-Slim Pencil Line with Micro Typography */}
       {!blockStatus.isBlockedByMe && !blockStatus.isBlockedByThem && (
-        <div style={{
-          padding: '2px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          background: 'transparent',
-          position: 'relative',
-          zIndex: 1,
-          overflowX: 'auto',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-          lineHeight: 1
-        }}>
+        <div
+          ref={moodTimelineRef}
+          style={{
+            padding: '2px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            background: 'transparent',
+            position: 'relative',
+            zIndex: 1,
+            overflowX: 'auto',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+            lineHeight: 1
+          }}
+        >
           {/* Left Pencil Line */}
           <div style={{
             width: '20px',
@@ -7194,12 +7204,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         )}
 
         <div style={{
-          padding: '0.5rem 0.5rem',
-          paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))',
-          background: (chatWallpaper && chatWallpaper !== 'none') ? 'color-mix(in srgb, var(--bg-sidebar) 85%, transparent)' : 'var(--bg-sidebar)',
-          backdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
-          WebkitBackdropFilter: (chatWallpaper && chatWallpaper !== 'none') ? 'blur(16px)' : 'none',
-          borderTop: '1px solid var(--border)',
+          padding: '0.35rem 0.5rem',
+          paddingBottom: 'calc(0.45rem + env(safe-area-inset-bottom, 0px))',
+          background: 'transparent',
+          borderTop: 'none',
+          backdropFilter: 'none',
+          WebkitBackdropFilter: 'none',
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
