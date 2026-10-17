@@ -192,11 +192,13 @@ export function SocketProvider({ children }) {
       });
 
       newSocket.on('typing_start', ({ chatId, username }) => {
-        setTypingMap(prev => ({ ...prev, [chatId]: username || 'Someone' }));
+        const val = username || 'Someone';
+        setTypingMap(prev => (prev[chatId] === val ? prev : { ...prev, [chatId]: val }));
       });
 
       newSocket.on('typing_stop', ({ chatId }) => {
         setTypingMap(prev => {
+          if (!prev[chatId]) return prev;
           const next = { ...prev };
           delete next[chatId];
           return next;

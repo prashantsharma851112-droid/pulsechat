@@ -297,6 +297,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const showScrollBottomRef = useRef(false);
   const [newScrolledMessagesCount, setNewScrolledMessagesCount] = useState(0);
   const newScrolledMessagesCountRef = useRef(0);
+  const scrollRafRef = useRef(null);
 
 
   // Instagram-style Story preview modal state
@@ -3423,12 +3424,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   };
 
-  const handleTriggerUndoToast = (msgId) => {
+  const handleTriggerUndoToast = useCallback((msgId) => {
     setUndoMessageId(msgId);
     setTimeout(() => {
       setUndoMessageId(prev => (prev === msgId ? null : prev));
     }, 6000);
-  };
+  }, []);
 
   // Seamless scroll anchoring when older messages are loaded at top
   useLayoutEffect(() => {
@@ -3565,11 +3566,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   // Multi-Select Message Operations
-  const handleToggleSelectMsg = (msgId) => {
+  const handleToggleSelectMsg = useCallback((msgId) => {
     setSelectedMsgIds(prev =>
       prev.includes(msgId) ? prev.filter(id => id !== msgId) : [...prev, msgId]
     );
-  };
+  }, []);
 
   const handleDeleteSelectedMessages = () => {
     if (selectedMsgIds.length === 0) return;
@@ -3681,22 +3682,30 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleChatContainerScroll = (e) => {
     const target = e.currentTarget;
-    // Smart Prefetching: Only trigger when there is genuine scrollable history and user scrolls near top
-    if (target.scrollHeight > target.clientHeight + 200 && target.scrollTop <= 150 && hasMoreOlderMessages && !isLoadingOlderRef.current) {
-      handleLoadOlderMessages();
-    }
+    const scrollHeight = target.scrollHeight;
+    const scrollTop = target.scrollTop;
+    const clientHeight = target.clientHeight;
 
-    // Track if user has scrolled away from the latest messages (> 250px)
-    const distFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
-    const isScrolledUp = distFromBottom > 250;
-    if (showScrollBottomRef.current !== isScrolledUp) {
-      setShowScrollBottom(isScrolledUp);
-      showScrollBottomRef.current = isScrolledUp;
-    }
-    if (!isScrolledUp && newScrolledMessagesCountRef.current > 0) {
-      newScrolledMessagesCountRef.current = 0;
-      setNewScrolledMessagesCount(0);
-    }
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      // Smart Prefetching: Only trigger when there is genuine scrollable history and user scrolls near top
+      if (scrollHeight > clientHeight + 200 && scrollTop <= 150 && hasMoreOlderMessages && !isLoadingOlderRef.current) {
+        handleLoadOlderMessages();
+      }
+
+      // Track if user has scrolled away from the latest messages (> 250px)
+      const distFromBottom = scrollHeight - scrollTop - clientHeight;
+      const isScrolledUp = distFromBottom > 250;
+      if (showScrollBottomRef.current !== isScrolledUp) {
+        setShowScrollBottom(isScrolledUp);
+        showScrollBottomRef.current = isScrolledUp;
+      }
+      if (!isScrolledUp && newScrolledMessagesCountRef.current > 0) {
+        newScrolledMessagesCountRef.current = 0;
+        setNewScrolledMessagesCount(0);
+      }
+    });
   };
 
   const dispatchMessage = (msgContent) => {
@@ -4155,11 +4164,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     });
   };
 
-  const handleOpenWhiteboardForEdit = (drawingUrl, whiteboardData) => {
+  const handleOpenWhiteboardForEdit = useCallback((drawingUrl, whiteboardData) => {
     setWhiteboardInitialImage(drawingUrl);
     setWhiteboardInitialData(whiteboardData || null);
     setShowWhiteboard(true);
-  };
+  }, []);
 
   const handleSendDrawing = async (mediaUrl) => {
     setShowWhiteboard(false);
@@ -4577,7 +4586,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     })();
   };
 
-  const handleDeleteLocalMessage = (msgId) => {
+  const handleDeleteLocalMessage = useCallback((msgId) => {
     if (!msgId) return;
     setMessages(prev => {
       const next = prev.filter(m => m.id !== msgId && m._id !== msgId && m.clientTempId !== msgId);
@@ -4589,7 +4598,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (socket && user?.id) {
       socket.emit('delete_message_for_me', { messageId: msgId, chatId, userId: user.id });
     }
-  };
+  }, [chatId, socket, user?.id]);
 
   const lastActionSelectTimeRef = useRef(0);
 
@@ -4874,6 +4883,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   useEffect(() => {
     return () => {
+      if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
       if (socket && user?.id && chatId) {
@@ -4951,9 +4961,111 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setShowSparksWallet(true);
   }, []);
 
-  const handleJoinGroupCallCallback = useCallback((isVideo) => {
-    if (onStartGroupCall) onStartGroupCall(activeChat, isVideo);
-  }, [onStartGroupCall, activeChat]);
+  // Memoized Messages List: Prevents entire message history and DOM nodes from re-evaluating when typing in the input box
+  const renderedMessagesList = useMemo(() => {
+    return deduplicatedMessages.map((msg, index) => {
+      const senderObj = groupMembersMap[msg.senderId];
+      const prevMsg = index > 0 ? deduplicatedMessages[index - 1] : null;
+      const showDateHeader = index === 0 || isDifferentDay(prevMsg?.timestamp, msg.timestamp);
+      const dateLabel = formatMessageDateHeader(msg.timestamp);
+
+      return (
+        <React.Fragment key={msg.clientTempId || msg.id || index}>
+          {showDateHeader && (
+            <div style={{ display: 'flex', justifyContent: 'center', margin: '0.5rem 0' }}>
+              <div
+                style={{
+                  background: 'var(--bg-card)',
+                  color: 'var(--text-muted)',
+                  border: '1px solid var(--border)',
+                  fontSize: '0.74rem',
+                  fontWeight: 600,
+                  padding: '4px 12px',
+                  borderRadius: '10px',
+                  boxShadow: '0 2px 5px rgba(0,0,0,0.12)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em'
+                }}
+              >
+                {dateLabel}
+              </div>
+            </div>
+          )}
+          <MessageItem
+            message={msg}
+            isMine={String(msg.senderId) === String(user?.id || user?._id || '')}
+            chatId={chatId}
+            socket={socket}
+            currentUser={user}
+            senderName={
+              msg.senderId === user.id
+                ? (myNicknameInChat || user?.displayName || user?.username)
+                : (isGroup ? (senderObj?.displayName || senderObj?.username) : (partnerNickname || senderObj?.displayName || activeChat?.displayName || senderObj?.username))
+            }
+            senderIsPro={msg.senderId === user.id ? user?.isPro : (isGroup ? senderObj?.isPro : chatIsPro)}
+            onDeleteLocal={handleDeleteLocalMessage}
+            onDeleteTrigger={handleTriggerUndoToast}
+            isMultiSelectMode={isMultiSelectMode}
+            isSelected={selectedMsgIds.includes(msg.id)}
+            onToggleSelect={handleToggleSelectMsg}
+            onJoinGroupCall={handleJoinGroupCallCallback}
+            isSelectedForAction={selectedActionMessages.some(m => m.id === msg.id)}
+            isInActionSelectionMode={selectedActionMessages.length > 0}
+            actionSelectedCount={selectedActionMessages.length}
+            onToggleActionSelect={handleToggleActionSelect}
+            onSelectForAction={handleSelectForAction}
+            isStarred={starredMsgIds.includes(msg.id)}
+            onOpenUnlimitedEmoji={handleOpenUnlimitedEmojiCallback}
+            onOpenCustomizeReactions={handleOpenCustomizeReactionsCallback}
+            onDismissAction={handleDismissActionMessage}
+            onReply={handleReplyCallback}
+            onOpenStory={handleOpenStory}
+            onOpenSparksWallet={handleOpenSparksWalletCallback}
+            onEditDrawing={handleOpenWhiteboardForEdit}
+            highlightSearchTerm={showInChatSearch ? inChatSearchQuery : ''}
+            translationData={translationsByMsgId[msg.id]}
+            onTranslateMessage={handleTranslateMessage}
+            onToggleTranslation={handleToggleTranslation}
+            targetLang={targetLang}
+          />
+        </React.Fragment>
+      );
+    });
+  }, [
+    deduplicatedMessages,
+    groupMembersMap,
+    user,
+    chatId,
+    socket,
+    myNicknameInChat,
+    partnerNickname,
+    activeChat?.displayName,
+    isGroup,
+    chatIsPro,
+    handleDeleteLocalMessage,
+    handleTriggerUndoToast,
+    isMultiSelectMode,
+    selectedMsgIds,
+    handleToggleSelectMsg,
+    handleJoinGroupCallCallback,
+    selectedActionMessages,
+    handleToggleActionSelect,
+    handleSelectForAction,
+    starredMsgIds,
+    handleOpenUnlimitedEmojiCallback,
+    handleOpenCustomizeReactionsCallback,
+    handleDismissActionMessage,
+    handleReplyCallback,
+    handleOpenStory,
+    handleOpenSparksWalletCallback,
+    handleOpenWhiteboardForEdit,
+    showInChatSearch,
+    inChatSearchQuery,
+    translationsByMsgId,
+    handleTranslateMessage,
+    handleToggleTranslation,
+    targetLang
+  ]);
 
   return (
     <div
@@ -6619,74 +6731,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
         )}
 
-        {deduplicatedMessages.map((msg, index) => {
-          const senderObj = groupMembersMap[msg.senderId];
-          const prevMsg = index > 0 ? deduplicatedMessages[index - 1] : null;
-          const showDateHeader = index === 0 || isDifferentDay(prevMsg?.timestamp, msg.timestamp);
-          const dateLabel = formatMessageDateHeader(msg.timestamp);
-
-          return (
-            <React.Fragment key={msg.clientTempId || msg.id || index}>
-              {showDateHeader && (
-                <div style={{ display: 'flex', justifyContent: 'center', margin: '0.5rem 0' }}>
-                  <div
-                    style={{
-                      background: 'var(--bg-card)',
-                      color: 'var(--text-muted)',
-                      border: '1px solid var(--border)',
-                      fontSize: '0.74rem',
-                      fontWeight: 600,
-                      padding: '4px 12px',
-                      borderRadius: '10px',
-                      boxShadow: '0 2px 5px rgba(0,0,0,0.12)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em'
-                    }}
-                  >
-                    {dateLabel}
-                  </div>
-                </div>
-              )}
-              <MessageItem
-                message={msg}
-                isMine={String(msg.senderId) === String(user?.id || user?._id || '')}
-                chatId={chatId}
-                socket={socket}
-                currentUser={user}
-                senderName={
-                  msg.senderId === user.id
-                    ? (myNicknameInChat || user?.displayName || user?.username)
-                    : (isGroup ? (senderObj?.displayName || senderObj?.username) : (partnerNickname || senderObj?.displayName || activeChat?.displayName || senderObj?.username))
-                }
-                senderIsPro={msg.senderId === user.id ? user?.isPro : (isGroup ? senderObj?.isPro : chatIsPro)}
-                onDeleteLocal={handleDeleteLocalMessage}
-                onDeleteTrigger={handleTriggerUndoToast}
-                isMultiSelectMode={isMultiSelectMode}
-                isSelected={selectedMsgIds.includes(msg.id)}
-                onToggleSelect={handleToggleSelectMsg}
-                onJoinGroupCall={handleJoinGroupCallCallback}
-                isSelectedForAction={selectedActionMessages.some(m => m.id === msg.id)}
-                isInActionSelectionMode={selectedActionMessages.length > 0}
-                actionSelectedCount={selectedActionMessages.length}
-                onToggleActionSelect={handleToggleActionSelect}
-                onSelectForAction={handleSelectForAction}
-                isStarred={starredMsgIds.includes(msg.id)}
-                onOpenUnlimitedEmoji={handleOpenUnlimitedEmojiCallback}
-                onOpenCustomizeReactions={handleOpenCustomizeReactionsCallback}
-                onDismissAction={handleDismissActionMessage}
-                onReply={handleReplyCallback}
-                onOpenStory={handleOpenStory}
-                onOpenSparksWallet={handleOpenSparksWalletCallback}
-                onEditDrawing={handleOpenWhiteboardForEdit}
-                highlightSearchTerm={showInChatSearch ? inChatSearchQuery : ''}
-                translationData={translationsByMsgId[msg.id]}
-                onTranslateMessage={handleTranslateMessage}
-                onToggleTranslation={handleToggleTranslation}
-                targetLang={targetLang}
-              />
-            </React.Fragment>
-          );
-        })}
+        {renderedMessagesList}
         <div ref={messagesEndRef} style={{ overflowAnchor: 'none', height: '1px' }} />
       </div>
 
