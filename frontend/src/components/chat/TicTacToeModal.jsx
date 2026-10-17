@@ -65,9 +65,45 @@ const WINNING_COMBINATIONS = [
   [0, 4, 8], [2, 4, 6]             // Diagonals
 ];
 
+// Offline AI Move Generator (Minimax-lite: Win > Block > Center > Corners > Random)
+const getBestBotMove = (currentBoard, botSymbol = 'O', humanSymbol = 'X') => {
+  // 1. Can Bot win in 1 move?
+  for (const combo of WINNING_COMBINATIONS) {
+    const [a, b, c] = combo;
+    const line = [currentBoard[a], currentBoard[b], currentBoard[c]];
+    if (line.filter(s => s === botSymbol).length === 2 && line.includes(null)) {
+      if (currentBoard[a] === null) return a;
+      if (currentBoard[b] === null) return b;
+      if (currentBoard[c] === null) return c;
+    }
+  }
+  // 2. Can Human win in 1 move? Block them!
+  for (const combo of WINNING_COMBINATIONS) {
+    const [a, b, c] = combo;
+    const line = [currentBoard[a], currentBoard[b], currentBoard[c]];
+    if (line.filter(s => s === humanSymbol).length === 2 && line.includes(null)) {
+      if (currentBoard[a] === null) return a;
+      if (currentBoard[b] === null) return b;
+      if (currentBoard[c] === null) return c;
+    }
+  }
+  // 3. Take center
+  if (currentBoard[4] === null) return 4;
+  // 4. Take corners
+  const corners = [0, 2, 6, 8].filter(i => currentBoard[i] === null);
+  if (corners.length > 0) return corners[Math.floor(Math.random() * corners.length)];
+  // 5. Take any remaining empty cell
+  const empty = currentBoard.map((c, i) => c === null ? i : null).filter(i => i !== null);
+  if (empty.length > 0) return empty[Math.floor(Math.random() * empty.length)];
+  return null;
+};
+
 export default function TicTacToeModal({ chatId, partnerName, hostId, onClose, onOpenSparksWallet }) {
   const { socket } = useContext(SocketContext);
   const { user } = useContext(AuthContext);
+
+  const isSocketConnected = Boolean(socket && socket.connected);
+  const [gameMode, setGameMode] = useState(() => (isSocketConnected ? 'multiplayer' : 'bot'));
 
   const currentUserId = user?.id || user?._id || '';
   const [resolvedHostId, setResolvedHostId] = useState(() => {
@@ -78,8 +114,11 @@ export default function TicTacToeModal({ chatId, partnerName, hostId, onClose, o
 
   // Host is assigned 'X' (goes first), Guest is assigned 'O'
   const isHost = resolvedHostId ? String(currentUserId) === String(resolvedHostId) : true;
-  const mySymbol = isHost ? 'X' : 'O';
-  const partnerSymbol = isHost ? 'O' : 'X';
+  const mySymbol = gameMode === 'bot' ? 'X' : (isHost ? 'X' : 'O');
+  const partnerSymbol = mySymbol === 'X' ? 'O' : 'X';
+  const displayPartnerName = gameMode === 'bot'
+    ? 'Pulse AI Bot 🤖'
+    : (gameMode === 'pass_and_play' ? (turn === 'X' ? 'Player 1 (X)' : 'Player 2 (O)') : (partnerName || 'Friend'));
 
   const [board, setBoard] = useState(Array(9).fill(null));
   const [turn, setTurn] = useState('X'); // 'X' always starts
@@ -97,7 +136,9 @@ export default function TicTacToeModal({ chatId, partnerName, hostId, onClose, o
   const scoresRef = useRef(scores);
   scoresRef.current = scores;
 
-  const isMyTurn = turn === mySymbol && !winnerInfo;
+  const isMyTurn = gameMode === 'bot'
+    ? (turn === 'X' && !winnerInfo)
+    : (gameMode === 'pass_and_play' ? !winnerInfo : (turn === mySymbol && !winnerInfo));
 
   // Check winner algorithm
   const checkWinner = (currentBoard) => {
@@ -115,7 +156,7 @@ export default function TicTacToeModal({ chatId, partnerName, hostId, onClose, o
 
   // Socket sync for real-time multiplayer
   useEffect(() => {
-    if (!socket || !chatId) return;
+    if (!socket || !chatId || gameMode !== 'multiplayer') return;
 
     // Join room & announce presence to sync state if partner already started
     socket.emit('tictactoe_join', { chatId, userId: currentUserId, hostId: resolvedHostId });
@@ -198,7 +239,32 @@ export default function TicTacToeModal({ chatId, partnerName, hostId, onClose, o
       socket.off('tictactoe_move', handleRemoteMove);
       socket.off('tictactoe_reset', handleRemoteReset);
     };
-  }, [socket, chatId, currentUserId, resolvedHostId, hostId, mySymbol, partnerSymbol]);
+  }, [socket, chatId, currentUserId, resolvedHostId, hostId, mySymbol, partnerSymbol, gameMode]);
+
+  const triggerBotMove = (currentBoard) => {
+    const botIdx = getBestBotMove(currentBoard, 'O', 'X');
+    if (botIdx === null || botIdx === undefined || currentBoard[botIdx] !== null) return;
+
+    const nextBoard = [...currentBoard];
+    nextBoard[botIdx] = 'O';
+    setBoard(nextBoard);
+    playMoveSound(false);
+
+    const result = checkWinner(nextBoard);
+    const nextTurn = 'X';
+    setTurn(nextTurn);
+
+    let updatedScores = { ...scoresRef.current };
+    if (result) {
+      setWinnerInfo(result);
+      if (result.winner === 'X') updatedScores.x += 1;
+      else if (result.winner === 'O') updatedScores.o += 1;
+      else if (result.winner === 'draw') updatedScores.draws += 1;
+      setScores(updatedScores);
+      if (result.winner === 'O') playLoseSound();
+      else if (result.winner === 'X') playWinSound();
+    }
+  };
 
   const makeMove = (index, mark) => {
     if (board[index] || winnerInfo || !isMyTurn) return;
@@ -225,7 +291,10 @@ export default function TicTacToeModal({ chatId, partnerName, hostId, onClose, o
       }
       setScores(updatedScores);
 
-      if (result.winner === mySymbol) {
+      const isHumanWin = (gameMode === 'bot' && result.winner === 'X') || (gameMode !== 'bot' && result.winner === mySymbol);
+      const isBotOrPartnerWin = (gameMode === 'bot' && result.winner === 'O') || (gameMode !== 'bot' && result.winner === partnerSymbol);
+
+      if (isHumanWin) {
         setSparksEarned(prev => prev + 10);
         playWinSound();
         if (typeof window !== 'undefined') {
@@ -233,11 +302,11 @@ export default function TicTacToeModal({ chatId, partnerName, hostId, onClose, o
             detail: { emoji: '🏆', count: 20 }
           }));
         }
-      } else if (result.winner === partnerSymbol) {
+      } else if (isBotOrPartnerWin) {
         playLoseSound();
       }
 
-      if (socket) {
+      if (gameMode === 'multiplayer' && socket) {
         socket.emit('tictactoe_move', {
           chatId,
           nextBoard,
@@ -251,7 +320,14 @@ export default function TicTacToeModal({ chatId, partnerName, hostId, onClose, o
       return;
     }
 
-    if (socket) {
+    if (gameMode === 'bot' && mark === 'X') {
+      setTimeout(() => {
+        triggerBotMove(nextBoard);
+      }, 400);
+      return;
+    }
+
+    if (gameMode === 'multiplayer' && socket) {
       socket.emit('tictactoe_move', {
         chatId,
         nextBoard,
@@ -266,14 +342,20 @@ export default function TicTacToeModal({ chatId, partnerName, hostId, onClose, o
 
   const handleCellClick = (index) => {
     if (board[index] || winnerInfo || !isMyTurn) return;
-    makeMove(index, mySymbol);
+    if (gameMode === 'bot') {
+      makeMove(index, 'X');
+    } else if (gameMode === 'pass_and_play') {
+      makeMove(index, turn);
+    } else {
+      makeMove(index, mySymbol);
+    }
   };
 
   const handleReset = () => {
     setBoard(Array(9).fill(null));
     setTurn('X');
     setWinnerInfo(null);
-    if (socket) {
+    if (gameMode === 'multiplayer' && socket) {
       socket.emit('tictactoe_reset', { chatId, scores, hostId: resolvedHostId });
     }
   };
@@ -325,7 +407,7 @@ export default function TicTacToeModal({ chatId, partnerName, hostId, onClose, o
                 Tic-Tac-Toe Arena
               </h3>
               <p style={{ margin: 0, fontSize: '0.72rem', color: '#94a3b8' }}>
-                You are <strong style={{ color: myColor }}>{mySymbol}</strong> • Partner is <strong style={{ color: partnerColor }}>{partnerSymbol}</strong>
+                You are <strong style={{ color: myColor }}>{mySymbol}</strong> • Opponent is <strong style={{ color: partnerColor }}>{partnerSymbol}</strong>
               </p>
             </div>
           </div>
@@ -338,8 +420,88 @@ export default function TicTacToeModal({ chatId, partnerName, hostId, onClose, o
           </button>
         </div>
 
+        {/* Game Mode Tabs: vs Bot (Offline), Pass & Play, Online */}
+        <div style={{
+          display: 'flex',
+          gap: '6px',
+          background: 'rgba(0,0,0,0.35)',
+          padding: '4px',
+          borderRadius: '14px',
+          marginBottom: '14px',
+          border: '1px solid rgba(255,255,255,0.08)',
+          width: '100%',
+          justifyContent: 'center'
+        }}>
+          <button
+            type="button"
+            onClick={() => { setGameMode('bot'); handleReset(); }}
+            style={{
+              flex: 1,
+              padding: '6px 8px',
+              borderRadius: '10px',
+              border: 'none',
+              background: gameMode === 'bot' ? 'rgba(168, 85, 247, 0.4)' : 'transparent',
+              color: gameMode === 'bot' ? '#f3e8ff' : '#94a3b8',
+              fontWeight: gameMode === 'bot' ? 700 : 500,
+              fontSize: '0.72rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <span>🤖 vs Bot</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { setGameMode('pass_and_play'); handleReset(); }}
+            style={{
+              flex: 1,
+              padding: '6px 8px',
+              borderRadius: '10px',
+              border: 'none',
+              background: gameMode === 'pass_and_play' ? 'rgba(56, 189, 248, 0.4)' : 'transparent',
+              color: gameMode === 'pass_and_play' ? '#e0f2fe' : '#94a3b8',
+              fontWeight: gameMode === 'pass_and_play' ? 700 : 500,
+              fontSize: '0.72rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <span>👥 Pass & Play</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { setGameMode('multiplayer'); handleReset(); }}
+            style={{
+              flex: 1,
+              padding: '6px 8px',
+              borderRadius: '10px',
+              border: 'none',
+              background: gameMode === 'multiplayer' ? 'rgba(16, 185, 129, 0.4)' : 'transparent',
+              color: gameMode === 'multiplayer' ? '#d1fae5' : '#94a3b8',
+              fontWeight: gameMode === 'multiplayer' ? 700 : 500,
+              fontSize: '0.72rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <span>🌐 Online</span>
+          </button>
+        </div>
+
         {/* Live In-Game Voice Chat */}
-        {chatId && (
+        {chatId && gameMode === 'multiplayer' && isSocketConnected && (
           <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
             <GameVoiceChat chatId={chatId} partnerName={partnerName || 'Friend'} compact={false} />
           </div>
@@ -356,7 +518,7 @@ export default function TicTacToeModal({ chatId, partnerName, hostId, onClose, o
             <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#cbd5e1' }}>{scores.draws}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <span style={{ fontSize: '0.74rem', color: partnerColor, fontWeight: 800 }}>{partnerName || 'Friend'} ({partnerSymbol})</span>
+            <span style={{ fontSize: '0.74rem', color: partnerColor, fontWeight: 800 }}>{displayPartnerName} ({partnerSymbol})</span>
             <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f8fafc' }}>{partnerWins}</div>
           </div>
         </div>

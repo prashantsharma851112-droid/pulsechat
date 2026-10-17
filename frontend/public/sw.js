@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pulsechat-v5';
+const CACHE_NAME = 'pulsechat-v6';
 const MEDIA_CACHE_NAME = 'pulsechat-media-v1';
 const AUDIO_CACHE_NAME = 'pulsechat-audio-v1';
 const STATIC_ASSETS = [
@@ -104,6 +104,16 @@ self.addEventListener('fetch', (event) => {
 
   // Navigation requests (opening app / refreshing page)
   if (event.request.mode === 'navigate') {
+    // If device is strictly offline, immediately serve cached shell without waiting for network timeout
+    if (self.navigator && self.navigator.onLine === false) {
+      event.respondWith(
+        caches.match(event.request).then((cached) => {
+          return cached || caches.match('/') || caches.match('/index.html');
+        })
+      );
+      return;
+    }
+
     event.respondWith(
       fetch(event.request)
         .then((response) => {
@@ -114,11 +124,32 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => {
-          // If offline, serve cached index.html
+          // If offline or fetch failed, serve cached index.html
           return caches.match(event.request).then((cached) => {
             return cached || caches.match('/') || caches.match('/index.html');
           });
         })
+    );
+    return;
+  }
+
+  // 3. Vite Hashed Static Assets (/assets/): Cache-First for 0ms Instant Offline Startup
+  const isHashedAsset = reqUrl.includes('/assets/') && (reqUrl.endsWith('.js') || reqUrl.endsWith('.css') || reqUrl.endsWith('.woff2') || reqUrl.endsWith('.ttf') || reqUrl.endsWith('.png') || reqUrl.endsWith('.svg'));
+  if (isHashedAsset && event.request.method === 'GET' && !isReload) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then((cache) => {
+        return cache.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) return cachedResponse;
+          return fetch(event.request).then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              cache.put(event.request, networkResponse.clone()).catch(() => {});
+            }
+            return networkResponse;
+          }).catch(() => {
+            return cachedResponse || Promise.reject('Asset not found');
+          });
+        });
+      })
     );
     return;
   }
