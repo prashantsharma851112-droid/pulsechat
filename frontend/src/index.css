@@ -2900,7 +2900,7 @@ a,
   -webkit-backface-visibility: hidden;
 }
 
-/* 3. Native touch-momentum physics strictly for scrollable containers */
+/* 3. Native touch-momentum physics & GPU Compositor hardware acceleration for scrollable containers */
 .chat-messages-scroll-area,
 .chat-scroll-stream,
 .chat-window-container,
@@ -2908,12 +2908,18 @@ a,
 [style*="overflowY: auto"] {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: scroll-position;
+  contain: layout style;
 }
 
 .message-item-contain {
   contain: layout style;
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
+  content-visibility: auto;
+  contain-intrinsic-size: 0 60px;
 }
 
 /* 4. Snappy native tactile response on mobile taps */

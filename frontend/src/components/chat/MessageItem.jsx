@@ -1698,6 +1698,7 @@ function MessageItem({
   return (
     <div
       id={`msg-${message.id || message._id || message.clientTempId}`}
+      className="message-item-contain"
       onClick={(e) => {
         if (isInActionSelectionMode) {
           e.stopPropagation();

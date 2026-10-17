@@ -15,6 +15,7 @@ import { BACKEND_URL } from '../../utils/config';
 import { executeTranslation } from '../../utils/translator';
 import { isEmotionalTriggerMessage, calculateConversationMoodTimeline } from '../../utils/sentiment';
 import { useBackHandler } from '../../utils/backNavigation';
+import { runWorkerTask } from '../../workers/pulseWorkerBridge';
 
 // Core 4-Dot Drawer Modals imported directly to ensure 100% offline availability with ZERO chunk reload errors
 import CreatePollModal from './CreatePollModal';
@@ -4701,18 +4702,31 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   }, []);
 
-  // Compute matched message IDs for In-Chat Search
-  const matchedMessageIds = useMemo(() => {
-    if (!inChatSearchQuery.trim()) return [];
-    const q = inChatSearchQuery.trim().toLowerCase();
-    return messages
-      .filter(m => {
-        if (!m || m.type === 'deleted') return false;
-        const c = (m.content || '').toLowerCase();
-        const fn = (m.fileName || '').toLowerCase();
-        return c.includes(q) || fn.includes(q);
-      })
-      .map(m => m.id);
+  // Compute matched message IDs for In-Chat Search on dedicated Web Worker thread
+  const [matchedMessageIds, setMatchedMessageIds] = useState([]);
+
+  useEffect(() => {
+    if (!inChatSearchQuery.trim()) {
+      setMatchedMessageIds([]);
+      return;
+    }
+    let isCancelled = false;
+    runWorkerTask('SEARCH_MESSAGES', {
+      messages: messages.map(m => ({
+        id: m.id || m._id || m.clientTempId,
+        text: m.content || '',
+        mediaName: m.fileName || ''
+      })),
+      query: inChatSearchQuery
+    }).then((ids) => {
+      if (!isCancelled && Array.isArray(ids)) {
+        setMatchedMessageIds(ids);
+      }
+    }).catch(() => {});
+
+    return () => {
+      isCancelled = true;
+    };
   }, [messages, inChatSearchQuery]);
 
   useEffect(() => {
