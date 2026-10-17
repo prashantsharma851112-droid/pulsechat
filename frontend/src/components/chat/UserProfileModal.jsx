@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
-import { X, CheckCircle2, Phone, Video, Eye, Info, User, ShieldCheck, Clock, Ban, Unlock, UserPlus, UserCheck, Loader2, Sparkles, Zap, Image as ImageIcon, FileText, Link2, Film, Download, ExternalLink, Edit3, ChevronRight, Lock, HardDrive, Bell, BellOff } from 'lucide-react';
+import { X, CheckCircle2, Phone, Video, Eye, EyeOff, Info, User, ShieldCheck, Clock, Ban, Unlock, UserPlus, UserCheck, Loader2, Sparkles, Zap, Image as ImageIcon, FileText, Link2, Film, Download, ExternalLink, Edit3, ChevronRight, Lock, HardDrive, Bell, BellOff } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { BACKEND_URL } from '../../utils/config';
@@ -8,7 +8,7 @@ import VibeAuraRing, { resolveUserAura, getProAuraRingClass } from '../common/Vi
 import { getCachedAllUsers, getCachedFriends, setCachedFriends, getCachedMessages } from '../../utils/offlineStorage';
 import ChatManageStorageModal, { formatStorageSize, estimateMessageSize } from './ChatManageStorageModal';
 import PinLockModal from '../common/PinLockModal';
-import { isChatLocked, setChatLocked, getSecurityPin, isChatMuted, setChatMuted } from '../../utils/securityLock';
+import { isChatLocked, setChatLocked, isChatHidden, setChatHidden, getSecurityPin, isChatMuted, setChatMuted } from '../../utils/securityLock';
 
 export default function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp, messages: propMessages, onDeleteMessages, onForwardMessages }) {
   const { user, token, blockUser, unblockUser } = useContext(AuthContext);
@@ -26,6 +26,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
   // Manage Storage, Chat Lock & Mute States
   const [showManageStorage, setShowManageStorage] = useState(false);
   const [isLocked, setIsLocked] = useState(() => chatId ? isChatLocked(chatId) : false);
+  const [isHidden, setIsHidden] = useState(() => chatId ? isChatHidden(chatId) : false);
   const [isMuted, setIsMuted] = useState(() => chatId ? isChatMuted(chatId) : false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinModalMode, setPinModalMode] = useState('verify');
@@ -91,11 +92,21 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
     }
   };
 
+  const handleToggleChatHidden = (e) => {
+    e.stopPropagation();
+    if (!chatId || !isLocked) return;
+    const next = !isHidden;
+    setChatHidden(chatId, next);
+    setIsHidden(next);
+    window.dispatchEvent(new CustomEvent('pulsechat_chat_lock_updated', { detail: { chatId, locked: isLocked, hidden: next } }));
+  };
+
   const handlePinSuccess = () => {
     if (!chatId) return;
     if (pinModalMode === 'verify') {
       setChatLocked(chatId, false);
       setIsLocked(false);
+      setIsHidden(false);
       window.dispatchEvent(new CustomEvent('pulsechat_chat_lock_updated', { detail: { chatId, locked: false } }));
     } else {
       setChatLocked(chatId, true);
@@ -1139,6 +1150,67 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
                 }} />
               </div>
             </div>
+
+            {/* Sub-option: Hide from chat list when locked */}
+            {isLocked && (
+              <div
+                onClick={handleToggleChatHidden}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  marginTop: '12px',
+                  paddingTop: '12px',
+                  borderTop: '1px solid var(--border)',
+                  userSelect: 'none'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    background: isHidden ? 'rgba(239, 68, 68, 0.15)' : 'var(--hover-bg)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <EyeOff size={16} color={isHidden ? '#ef4444' : 'var(--text-muted)'} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                      Hide from chat list
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      {isHidden ? 'Hidden from recent chats (search to reveal)' : 'Show in recent chats'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sub Toggle Switch */}
+                <div style={{
+                  width: '38px',
+                  height: '22px',
+                  borderRadius: '11px',
+                  background: isHidden ? '#ef4444' : 'var(--border)',
+                  position: 'relative',
+                  transition: 'all 0.2s ease',
+                  flexShrink: 0
+                }}>
+                  <div style={{
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '50%',
+                    background: '#fff',
+                    position: 'absolute',
+                    top: '2px',
+                    left: isHidden ? '18px' : '2px',
+                    transition: 'all 0.2s ease'
+                  }} />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Bio / About Info Box */}

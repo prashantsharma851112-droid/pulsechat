@@ -26,7 +26,7 @@ const VibeAuraSelectorModal = lazyWithRetry(() => import('./VibeAuraSelectorModa
 const MusicPickerModal = lazyWithRetry(() => import('../vibes/MusicPickerModal'));
 const PinLockModal = lazyWithRetry(() => import('../common/PinLockModal'));
 const ReferEarnModal = lazyWithRetry(() => import('./ReferEarnModal'));
-import { isChatLocked, isChatMuted, getLockedChats, getMutedChats } from '../../utils/securityLock';
+import { isChatLocked, isChatMuted, getLockedChats, getMutedChats, isChatHidden, getHiddenLockedChats } from '../../utils/securityLock';
 import { BACKEND_URL } from '../../utils/config';
 import { preloadMediaUrls } from '../../utils/mediaCache';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
@@ -159,10 +159,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [pendingLockedChat, setPendingLockedChat] = useState(null);
   const [lockedChatIdsState, setLockedChatIdsState] = useState(() => getLockedChats());
   const [mutedChatIdsState, setMutedChatIdsState] = useState(() => getMutedChats());
+  const [hiddenChatIdsState, setHiddenChatIdsState] = useState(() => getHiddenLockedChats());
 
   useEffect(() => {
     const handleLockUpdated = () => {
       setLockedChatIdsState(getLockedChats());
+      setHiddenChatIdsState(getHiddenLockedChats());
     };
     const handleMuteUpdated = () => {
       setMutedChatIdsState(getMutedChats());
@@ -200,11 +202,17 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   };
 
   const sortedRecentChats = useMemo(() => {
-    if (!pinnedChatIds.length) return recentChats;
+    const hiddenSet = new Set(hiddenChatIdsState);
+    const visibleRecent = recentChats.filter(c => {
+      const cid = c.isGroup ? (c.id || c._id) : (user?.id ? [user.id, c.id || c._id].sort().join('_') : (c.id || c._id));
+      return !hiddenSet.has(cid) && !isChatHidden(cid);
+    });
+
+    if (!pinnedChatIds.length) return visibleRecent;
     const pinnedSet = new Set(pinnedChatIds);
     const pinned = [];
     const unpinned = [];
-    recentChats.forEach(c => {
+    visibleRecent.forEach(c => {
       const cid = c.id || c._id;
       if (pinnedSet.has(cid)) {
         pinned.push(c);
@@ -214,7 +222,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     });
     pinned.sort((a, b) => pinnedChatIds.indexOf(a.id || a._id) - pinnedChatIds.indexOf(b.id || b._id));
     return [...pinned, ...unpinned];
-  }, [recentChats, pinnedChatIds]);
+  }, [recentChats, pinnedChatIds, hiddenChatIdsState, user?.id]);
 
   const sortedGroups = useMemo(() => {
     if (!pinnedChatIds.length) return groups;
@@ -1630,11 +1638,29 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       candidatePool.push(u);
     }
 
-    const localMatches = candidatePool.filter(u => {
+    const localMatches = candidatePool.map(u => {
+      // Find private nickname set by current user for this contact
+      const recentMatch = recentChats.find(r =>
+        (r.id && u.id && r.id === u.id) ||
+        (r._id && u._id && r._id === u._id) ||
+        (r.username && u.username && r.username === u.username)
+      ) || localRecent.find(r =>
+        (r.id && u.id && r.id === u.id) ||
+        (r._id && u._id && r._id === u._id) ||
+        (r.username && u.username && r.username === u.username)
+      );
+
+      const privateNickname = (typeof u.nickname === 'string' && u.nickname.trim())
+        ? u.nickname.trim()
+        : (recentMatch && typeof recentMatch.nickname === 'string' && recentMatch.nickname.trim() ? recentMatch.nickname.trim() : '');
+
+      return privateNickname ? { ...u, nickname: privateNickname } : u;
+    }).filter(u => {
       const nameMatch = (u.displayName || '').toLowerCase().includes(q);
       const usernameMatch = (u.username || '').toLowerCase().includes(q);
       const emailMatch = (u.email || '').toLowerCase().includes(q);
-      return nameMatch || usernameMatch || emailMatch;
+      const nicknameMatch = (u.nickname || '').toLowerCase().includes(q);
+      return nameMatch || usernameMatch || emailMatch || nicknameMatch;
     });
 
     setSearchResults(localMatches);
@@ -1659,7 +1685,19 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               if (user?.id && data.length > 0) mergeIntoAllUsersCache(user.id, data);
               const serverKeys = new Set(data.map(u => u.id || u.username));
               const merged = [
-                ...data,
+                ...data.map(u => {
+                  const recentMatch = recentChats.find(r =>
+                    (r.id && u.id && r.id === u.id) ||
+                    (r.username && u.username && r.username === u.username)
+                  ) || localRecent.find(r =>
+                    (r.id && u.id && r.id === u.id) ||
+                    (r.username && u.username && r.username === u.username)
+                  );
+                  if (recentMatch && recentMatch.nickname) {
+                    return { ...u, nickname: recentMatch.nickname };
+                  }
+                  return u;
+                }),
                 ...localMatches.filter(u => !serverKeys.has(u.id || u.username))
               ];
               setSearchResults(merged);
@@ -1740,10 +1778,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   // Contacts to show when no search query: all registered users not yet in recent chats
   const contactsNotInRecent = useMemo(() => {
     if (!Array.isArray(allUsers)) return [];
+    const hiddenSet = new Set(hiddenChatIdsState);
     return allUsers.filter(u => {
       if (!u) return false;
       // Exclude logged in user themselves
       if (u.id === user?.id || (user?.username && u.username === user.username)) return false;
+      // Exclude if hidden
+      const cid = user?.id ? [user.id, u.id || u._id].sort().join('_') : (u.id || u._id);
+      if (hiddenSet.has(cid) || isChatHidden(cid)) return false;
       // Exclude if already present in recent chats
       return !recentChats.some(r =>
         r.id === u.id ||
@@ -1751,7 +1793,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         (r.username && u.username && r.username === u.username)
       );
     });
-  }, [allUsers, recentChats, user?.id, user?.username]);
+  }, [allUsers, recentChats, user?.id, user?.username, hiddenChatIdsState]);
 
   // Instagram-style swipe right from left edge to open Story camera
   const swipeStartXRef = useRef(0);
@@ -2669,7 +2711,21 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <span>{u.displayName || u.name}</span>
+                        <span>
+                          {(typeof u.nickname === 'string' && u.nickname.trim()) ? (
+                            <>
+                              <span>{u.nickname}</span>
+                              <span style={{ fontSize: '0.8rem', opacity: 0.7, marginLeft: '6px' }}>({u.displayName || u.name})</span>
+                            </>
+                          ) : (
+                            u.displayName || u.name
+                          )}
+                        </span>
+                        {isChatLocked(u.isGroup ? u.id : (user?.id ? [user.id, u.id].sort().join('_') : u.id)) && (
+                          <span title="Locked Chat" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center' }}>
+                            🔒
+                          </span>
+                        )}
                         {!u.isGroup && u.isPro && (
                           <PulseVipBadge size={14} showLabel={false} />
                         )}

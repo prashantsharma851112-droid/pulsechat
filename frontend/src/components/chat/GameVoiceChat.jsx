@@ -42,11 +42,27 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
   const vadIntervalRef = useRef(null);
   const remoteVadIntervalRef = useRef(null);
   const isInitiatorRef = useRef(false);
+  const pendingCandidatesRef = useRef([]);
 
   const myUserId = String(user?.id || user?._id || 'user');
   const myUserName = user?.displayName || user?.username || 'Player';
 
-  // 1. Initialize PeerConnection
+  // Ensure Audio Playback (Bypasses mobile autoplay blocks)
+  const ensureAudioPlayback = useCallback(() => {
+    if (remoteAudioRef.current) {
+      if (remoteStreamRef.current && remoteAudioRef.current.srcObject !== remoteStreamRef.current) {
+        remoteAudioRef.current.srcObject = remoteStreamRef.current;
+      }
+      remoteAudioRef.current.muted = isDeafened;
+      remoteAudioRef.current.volume = 1.0;
+      remoteAudioRef.current.play().catch(() => {});
+    }
+    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume().catch(() => {});
+    }
+  }, [isDeafened]);
+
+  // 1. Initialize PeerConnection with Pre-allocated Audio Transceiver & Candidate Queuing
   const createPeerConnection = useCallback((targetPeerId) => {
     if (pcRef.current) {
       try { pcRef.current.close(); } catch (e) {}
@@ -54,6 +70,26 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
     pcRef.current = pc;
+    pendingCandidatesRef.current = [];
+
+    // Pre-allocate bidirectional audio channel in SDP
+    try {
+      pc.addTransceiver('audio', { direction: 'sendrecv' });
+    } catch (e) {}
+
+    // If local microphone track is already active, attach it immediately
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        const senders = pc.getSenders();
+        const audioSender = senders.find(s => s.track && s.track.kind === 'audio') || senders.find(s => !s.track);
+        if (audioSender) {
+          audioSender.replaceTrack(audioTrack).catch(() => {});
+        } else {
+          try { pc.addTrack(audioTrack, localStreamRef.current); } catch (e) {}
+        }
+      }
+    }
 
     pc.onicecandidate = (event) => {
       if (event.candidate && socket && targetPeerId) {
@@ -72,6 +108,8 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
         remoteStreamRef.current = event.streams[0];
         if (remoteAudioRef.current) {
           remoteAudioRef.current.srcObject = event.streams[0];
+          remoteAudioRef.current.muted = isDeafened;
+          remoteAudioRef.current.volume = 1.0;
           remoteAudioRef.current.play().catch(() => {});
         }
         setupRemoteVAD(event.streams[0]);
@@ -83,20 +121,16 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'connected') {
         setVoiceConnected(true);
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.play().catch(() => {});
+        }
       } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
         setVoiceConnected(false);
       }
     };
 
-    // Add local tracks if stream already active
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => {
-        pc.addTrack(track, localStreamRef.current);
-      });
-    }
-
     return pc;
-  }, [chatId, myUserId, socket]);
+  }, [chatId, myUserId, socket, isDeafened]);
 
   // Voice Activity Detection (VAD) for glowing soundwave ring
   const setupLocalVAD = (stream) => {
@@ -105,6 +139,9 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
         audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
       }
       const ctx = audioContextRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
@@ -130,6 +167,9 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
   const setupRemoteVAD = (stream) => {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
@@ -153,6 +193,7 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
   // 2. Start Microphone Audio Capture
   const startMicAudio = async () => {
     try {
+      ensureAudioPlayback();
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -165,11 +206,18 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
       localStreamRef.current = stream;
       setupLocalVAD(stream);
 
-      // Add tracks to PeerConnection if active
+      // Attach audio track to PeerConnection via replaceTrack or addTrack
       if (pcRef.current) {
-        stream.getTracks().forEach(track => {
-          pcRef.current.addTrack(track, stream);
-        });
+        const audioTrack = stream.getAudioTracks()[0];
+        if (audioTrack) {
+          const senders = pcRef.current.getSenders();
+          const audioSender = senders.find(s => s.track && s.track.kind === 'audio') || senders.find(s => !s.track);
+          if (audioSender) {
+            await audioSender.replaceTrack(audioTrack);
+          } else {
+            pcRef.current.addTrack(audioTrack, stream);
+          }
+        }
       }
 
       setIsMicOn(true);
@@ -191,11 +239,20 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
 
   // 3. Toggle Mic ON / Mute (Free Fire Style One-Tap Control)
   const toggleMic = async () => {
+    ensureAudioPlayback();
     if (!isMicOn) {
       if (!localStreamRef.current) {
         await startMicAudio();
       } else {
         localStreamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
+        if (pcRef.current) {
+          const audioTrack = localStreamRef.current.getAudioTracks()[0];
+          const senders = pcRef.current.getSenders();
+          const audioSender = senders.find(s => s.track && s.track.kind === 'audio') || senders.find(s => !s.track);
+          if (audioSender && audioTrack) {
+            audioSender.replaceTrack(audioTrack).catch(() => {});
+          }
+        }
         setIsMicOn(true);
         if (socket && chatId) {
           socket.emit('game_voice_state', { chatId, userId: myUserId, isMuted: false, isDeafened });
@@ -219,6 +276,9 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
     setIsDeafened(next);
     if (remoteAudioRef.current) {
       remoteAudioRef.current.muted = next;
+      if (!next) {
+        remoteAudioRef.current.play().catch(() => {});
+      }
     }
     if (socket && chatId) {
       socket.emit('game_voice_state', { chatId, userId: myUserId, isMuted: !isMicOn, isDeafened: next });
@@ -238,7 +298,7 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
     });
 
     // When another peer enters the game voice chat
-    const handlePeerJoined = async ({ userId, userName }) => {
+    const handlePeerJoined = async ({ userId, userName, socketId }) => {
       setPartnerVoiceState(prev => ({ ...prev, isConnected: true }));
       isInitiatorRef.current = true;
       const pc = createPeerConnection(userId);
@@ -249,6 +309,7 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
         socket.emit('game_voice_signal', {
           chatId,
           toUserId: userId,
+          toSocketId: socketId,
           fromUserId: myUserId,
           signal: offer,
           type: 'offer'
@@ -258,17 +319,51 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
       }
     };
 
+    // When server returns peers already present in the room upon joining
+    const handleRoomUsers = async ({ peers }) => {
+      if (!Array.isArray(peers) || peers.length === 0) return;
+      const partner = peers[0];
+      if (partner && partner.userId !== myUserId) {
+        setPartnerVoiceState(prev => ({ ...prev, isConnected: true }));
+        isInitiatorRef.current = true;
+        const pc = createPeerConnection(partner.userId);
+        try {
+          const offer = await pc.createOffer({ offerToReceiveAudio: true });
+          await pc.setLocalDescription(offer);
+          socket.emit('game_voice_signal', {
+            chatId,
+            toUserId: partner.userId,
+            toSocketId: partner.socketId,
+            fromUserId: myUserId,
+            signal: offer,
+            type: 'offer'
+          });
+        } catch (e) {
+          console.warn('Game voice room user offer error:', e);
+        }
+      }
+    };
+
     // When receiving WebRTC signals (offer / answer / candidate)
-    const handleSignal = async ({ fromUserId, signal, type }) => {
+    const handleSignal = async ({ fromUserId, fromSocketId, signal, type }) => {
+      if (String(fromUserId) === myUserId) return;
       try {
         if (type === 'offer') {
           const pc = createPeerConnection(fromUserId);
           await pc.setRemoteDescription(new RTCSessionDescription(signal));
+
+          // Drain queued ICE candidates
+          for (const cand of pendingCandidatesRef.current) {
+            try { await pc.addIceCandidate(new RTCIceCandidate(cand)); } catch (e) {}
+          }
+          pendingCandidatesRef.current = [];
+
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           socket.emit('game_voice_signal', {
             chatId,
             toUserId: fromUserId,
+            toSocketId: fromSocketId,
             fromUserId: myUserId,
             signal: answer,
             type: 'answer'
@@ -276,10 +371,19 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
         } else if (type === 'answer') {
           if (pcRef.current) {
             await pcRef.current.setRemoteDescription(new RTCSessionDescription(signal));
+            // Drain queued ICE candidates
+            for (const cand of pendingCandidatesRef.current) {
+              try { await pcRef.current.addIceCandidate(new RTCIceCandidate(cand)); } catch (e) {}
+            }
+            pendingCandidatesRef.current = [];
           }
         } else if (type === 'candidate') {
-          if (pcRef.current && signal) {
-            await pcRef.current.addIceCandidate(new RTCIceCandidate(signal));
+          if (pcRef.current && pcRef.current.remoteDescription && pcRef.current.remoteDescription.type) {
+            try {
+              await pcRef.current.addIceCandidate(new RTCIceCandidate(signal));
+            } catch (e) {}
+          } else {
+            pendingCandidatesRef.current.push(signal);
           }
         }
       } catch (e) {
@@ -302,12 +406,14 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
     };
 
     socket.on('game_voice_peer_joined', handlePeerJoined);
+    socket.on('game_voice_room_users', handleRoomUsers);
     socket.on('game_voice_signal', handleSignal);
     socket.on('game_voice_state_changed', handleStateChanged);
     socket.on('game_voice_peer_left', handlePeerLeft);
 
     return () => {
       socket.off('game_voice_peer_joined', handlePeerJoined);
+      socket.off('game_voice_room_users', handleRoomUsers);
       socket.off('game_voice_signal', handleSignal);
       socket.off('game_voice_state_changed', handleStateChanged);
       socket.off('game_voice_peer_left', handlePeerLeft);
@@ -326,7 +432,7 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
         try { audioContextRef.current.close(); } catch (e) {}
       }
     };
-  }, [chatId, myUserId, myUserName, socket, user?.avatar, createPeerConnection]);
+  }, [chatId, myUserId, myUserName, socket, user?.avatar, createPeerConnection, ensureAudioPlayback]);
 
   return (
     <>

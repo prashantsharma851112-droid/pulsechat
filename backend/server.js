@@ -2262,22 +2262,51 @@ io.on('connection', (socket) => {
     const room = `game_voice_${chatId}`;
     socket.join(room);
     socket.gameVoiceChatId = chatId;
-    socket.gameVoiceUserId = userId;
+    socket.gameVoiceUserId = String(userId);
+
+    // Get any existing peers already in this game voice room
+    const roomSet = io.sockets.adapter.rooms.get(room);
+    const existingPeerSockets = Array.from(roomSet || []).filter(sId => sId !== socket.id);
+
+    // Inform existing room peers that a new player joined
     socket.to(room).emit('game_voice_peer_joined', {
-      userId,
+      userId: String(userId),
       userName,
       userAvatar,
       socketId: socket.id
     });
+
+    // Inform the joining player about existing peers in the room
+    if (existingPeerSockets.length > 0) {
+      const existingPeers = existingPeerSockets.map(sId => {
+        const peerSock = io.sockets.sockets.get(sId);
+        return {
+          socketId: sId,
+          userId: peerSock?.gameVoiceUserId || ''
+        };
+      }).filter(p => Boolean(p.userId));
+
+      socket.emit('game_voice_room_users', { peers: existingPeers });
+    }
   });
 
-  socket.on('game_voice_signal', ({ chatId, toUserId, fromUserId, signal, type }) => {
-    if (!chatId || !toUserId) return;
-    io.to(`user_${toUserId}`).to(toUserId).emit('game_voice_signal', {
-      fromUserId,
+  socket.on('game_voice_signal', ({ chatId, toUserId, fromUserId, signal, type, toSocketId }) => {
+    if (!chatId) return;
+    const payload = {
+      fromUserId: String(fromUserId || socket.gameVoiceUserId || ''),
+      fromSocketId: socket.id,
       signal,
       type
-    });
+    };
+
+    if (toSocketId) {
+      io.to(toSocketId).emit('game_voice_signal', payload);
+    }
+    if (toUserId) {
+      io.to(`user_${toUserId}`).to(String(toUserId)).emit('game_voice_signal', payload);
+    }
+    // Reliable room fallback so game partner always receives the WebRTC signal
+    socket.to(`game_voice_${chatId}`).emit('game_voice_signal', payload);
   });
 
   socket.on('game_voice_state', ({ chatId, userId, isMuted, isDeafened }) => {

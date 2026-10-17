@@ -69,9 +69,45 @@ export function setChatLocked(chatId, locked) {
       nextList = Array.from(set);
     } else {
       nextList = list.filter(id => id !== chatId && id !== canonical);
+      setChatHidden(chatId, false);
     }
     localStorage.setItem('pulsechat_locked_chats', JSON.stringify(nextList));
     window.dispatchEvent(new CustomEvent('pulsechat_chat_lock_updated', { detail: { chatId, locked: !!locked } }));
+  } catch (e) {}
+}
+
+// Hidden Locked Chats (Secret Mode: locked chat hidden from recent list, revealed when searched in search bar)
+export function getHiddenLockedChats() {
+  try {
+    const raw = localStorage.getItem('pulsechat_hidden_locked_chats');
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function isChatHidden(chatId) {
+  if (!chatId) return false;
+  if (!isChatLocked(chatId)) return false;
+  const list = getHiddenLockedChats();
+  const canonical = chatId.includes('_') ? chatId.split('_').sort().join('_') : chatId;
+  return list.includes(chatId) || list.includes(canonical);
+}
+
+export function setChatHidden(chatId, hidden) {
+  if (!chatId) return;
+  try {
+    const list = getHiddenLockedChats();
+    const canonical = chatId.includes('_') ? chatId.split('_').sort().join('_') : chatId;
+    let nextList;
+    if (hidden) {
+      const set = new Set([...list, chatId, canonical]);
+      nextList = Array.from(set);
+    } else {
+      nextList = list.filter(id => id !== chatId && id !== canonical);
+    }
+    localStorage.setItem('pulsechat_hidden_locked_chats', JSON.stringify(nextList));
+    window.dispatchEvent(new CustomEvent('pulsechat_chat_lock_updated', { detail: { chatId, hidden: !!hidden } }));
   } catch (e) {}
 }
 
