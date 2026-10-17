@@ -2057,12 +2057,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const isPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
     const sparksBalance = user?.pulseSparks ?? 0;
 
-    if (!isPro && sparksBalance < 5) {
-      alert(`⚡ Insufficient Sparks\nEmoji particle burst requires 5 Sparks.\nYour balance: ${sparksBalance} Sparks.\n\nEarn Sparks via Daily Bonus or Sparks Wallet.`);
-      return;
-    }
-
-    if (!isPro && updateUserProfile) {
+    if (!isPro && updateUserProfile && sparksBalance >= 5) {
       updateUserProfile({ ...user, pulseSparks: Math.max(0, sparksBalance - 5) });
     }
 
@@ -7472,11 +7467,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 type="button"
                 onClick={() => {
                   setShowActionGrid(false);
-                  if (!user?.isPro) {
-                    setShowProModal(true);
-                    return;
-                  }
-                  setShowEmojiBurstPicker(prev => !prev);
+                  setShowEmojiBurstPicker(true);
                 }}
                 className="action-grid-item"
                 style={{

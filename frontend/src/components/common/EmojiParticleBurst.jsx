@@ -9,7 +9,7 @@ export default function EmojiParticleBurst() {
   const canvasRef = useRef(null);
   const animFrameIdRef = useRef(null);
 
-  const startEmojiRain = (emoji) => {
+  const startEmojiRain = (emoji = '🔥', durationMs = 7000) => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -22,16 +22,21 @@ export default function EmojiParticleBurst() {
     const width = (canvas.width = window.innerWidth);
     const height = (canvas.height = window.innerHeight);
 
-    const count = Math.min(55, Math.max(35, Math.floor(width / 9)));
+    const count = Math.min(60, Math.max(40, Math.floor(width / 8)));
     const particles = [];
 
     for (let i = 0; i < count; i++) {
+      // 45% start immediately in the viewport, rest shower from above
+      const startY = i < count * 0.45
+        ? Math.random() * (height * 0.75)
+        : -Math.random() * height * 0.8 - 30;
+
       particles.push({
         x: Math.random() * width,
-        y: Math.random() * -height * 0.9 - 20,
-        vy: Math.random() * 4.2 + 3.8,
+        y: startY,
+        vy: Math.random() * 3.5 + 3.5,
         vx: (Math.random() - 0.5) * 1.5,
-        size: Math.floor(Math.random() * 14 + 28),
+        size: Math.floor(Math.random() * 16 + 28),
         rotation: Math.random() * Math.PI * 2,
         rotSpeed: (Math.random() - 0.5) * 0.04
       });
