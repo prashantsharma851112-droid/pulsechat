@@ -2985,35 +2985,3 @@ button:active:not(:disabled),
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
 }
-
-/* 4-Dot Drawer Neon Action Buttons (Theme Adaptive + Message Selection Glow Style) */
-.action-grid-neon-btn {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 6px !important;
-  background: rgba(15, 23, 42, 0.7) !important;
-  background: color-mix(in srgb, var(--accent) 15%, rgba(15, 23, 42, 0.65)) !important;
-  backdrop-filter: blur(14px) !important;
-  -webkit-backdrop-filter: blur(14px) !important;
-  border: 1.5px solid var(--accent) !important;
-  border-radius: 16px !important;
-  box-shadow: 0 0 16px var(--accent), 0 4px 14px rgba(0, 0, 0, 0.35) !important;
-  box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 60%, transparent), 0 4px 14px rgba(0, 0, 0, 0.35) !important;
-  cursor: pointer !important;
-  padding: 10px 4px 8px 4px !important;
-  transition: transform 0.18s cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 0.18s ease, background 0.18s ease !important;
-  box-sizing: border-box !important;
-  width: 100% !important;
-}
-
-.action-grid-neon-btn:hover {
-  transform: translateY(-2px) scale(1.03) !important;
-  background: color-mix(in srgb, var(--accent) 24%, rgba(15, 23, 42, 0.75)) !important;
-  box-shadow: 0 0 24px var(--accent), 0 6px 18px rgba(0, 0, 0, 0.45) !important;
-}
-
-.action-grid-neon-btn:active {
-  transform: scale(0.97) !important;
-}
