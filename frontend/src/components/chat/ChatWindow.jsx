@@ -551,6 +551,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (chatAudioRef.current) {
       chatAudioRef.current.currentTime = newTime;
     }
+    if (socket && chatId) {
+      socket.emit('chat_music_action', {
+        chatId,
+        action: 'seek',
+        currentTime: newTime,
+        senderId: user?.id
+      });
+    }
   };
 
   const handleSkipTime = (seconds) => {
@@ -560,19 +568,45 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const newTime = Math.max(0, Math.min(dur, current + seconds));
     chatAudioRef.current.currentTime = newTime;
     setSongProgress(newTime);
+    if (socket && chatId) {
+      socket.emit('chat_music_action', {
+        chatId,
+        action: 'seek',
+        currentTime: newTime,
+        senderId: user?.id
+      });
+    }
   };
 
   const handleTogglePlayPause = () => {
     if (!chatAudioRef.current) return;
     if (chatAudioRef.current.paused) {
+      const cur = chatAudioRef.current.currentTime || 0;
       chatAudioRef.current.play().then(() => {
         setIsSongPlaying(true);
         window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: true } }));
+        if (socket && chatId) {
+          socket.emit('chat_music_action', {
+            chatId,
+            action: 'play',
+            currentTime: cur,
+            senderId: user?.id
+          });
+        }
       }).catch(() => {});
     } else {
+      const cur = chatAudioRef.current.currentTime || 0;
       chatAudioRef.current.pause();
       setIsSongPlaying(false);
       window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: false } }));
+      if (socket && chatId) {
+        socket.emit('chat_music_action', {
+          chatId,
+          action: 'pause',
+          currentTime: cur,
+          senderId: user?.id
+        });
+      }
     }
   };
 
@@ -638,9 +672,25 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         setIsSongPlaying(true);
         window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: true } }));
       }).catch(e => {
-        console.warn('Chat music playback prevented:', e);
+        console.warn('Chat music playback prevented by browser autoplay policy:', e);
         setIsSongPlaying(false);
         window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: false } }));
+
+        // Auto-unlock music on partner's first interaction with document (typing, tapping screen)
+        const autoUnlockPlayback = () => {
+          if (chatAudioRef.current && chatAudioRef.current.paused) {
+            chatAudioRef.current.play().then(() => {
+              setIsSongPlaying(true);
+              window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: true } }));
+            }).catch(() => {});
+          }
+          window.removeEventListener('click', autoUnlockPlayback);
+          window.removeEventListener('touchstart', autoUnlockPlayback);
+          window.removeEventListener('pointerdown', autoUnlockPlayback);
+        };
+        window.addEventListener('click', autoUnlockPlayback, { once: true });
+        window.addEventListener('touchstart', autoUnlockPlayback, { once: true, passive: true });
+        window.addEventListener('pointerdown', autoUnlockPlayback, { once: true, passive: true });
       });
       chatAudioRef.current = audio;
 
@@ -1956,7 +2006,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     const handleChatMusicUpdated = (e) => {
-      if (e.detail?.chatId === chatId) {
+      if (isMatchingChatId(e.detail?.chatId, chatId)) {
         const song = e.detail.song || null;
         setChatMusicSong(song);
         try {
@@ -1969,17 +2019,53 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     };
 
+    const handleChatMusicAction = (e) => {
+      const data = e.detail;
+      if (!data || !isMatchingChatId(data.chatId, chatId)) return;
+      if (String(data.senderId) === String(user?.id)) return;
+
+      if (data.action === 'play') {
+        if (chatAudioRef.current) {
+          if (typeof data.currentTime === 'number' && Math.abs(chatAudioRef.current.currentTime - data.currentTime) > 1.5) {
+            chatAudioRef.current.currentTime = data.currentTime;
+            setSongProgress(data.currentTime);
+          }
+          chatAudioRef.current.play().then(() => {
+            setIsSongPlaying(true);
+            window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: true } }));
+          }).catch(() => {});
+        }
+      } else if (data.action === 'pause') {
+        if (chatAudioRef.current) {
+          chatAudioRef.current.pause();
+          if (typeof data.currentTime === 'number') {
+            chatAudioRef.current.currentTime = data.currentTime;
+            setSongProgress(data.currentTime);
+          }
+          setIsSongPlaying(false);
+          window.dispatchEvent(new CustomEvent('pulsechat_chat_music_playing', { detail: { isPlaying: false } }));
+        }
+      } else if (data.action === 'seek') {
+        if (chatAudioRef.current && typeof data.currentTime === 'number') {
+          chatAudioRef.current.currentTime = data.currentTime;
+          setSongProgress(data.currentTime);
+        }
+      }
+    };
+
     window.addEventListener('pulsechat_aura_changed', handleAuraChange);
     window.addEventListener('pulsechat_stealth_dust_dissolved', handleStealthDissolved);
     window.addEventListener('pulsechat_music_updated', handleChatMusicUpdated);
+    window.addEventListener('pulsechat_music_action', handleChatMusicAction);
 
     return () => {
       window.removeEventListener('pulsechat_aura_changed', handleAuraChange);
       window.removeEventListener('pulsechat_stealth_dust_dissolved', handleStealthDissolved);
       window.removeEventListener('pulsechat_music_updated', handleChatMusicUpdated);
+      window.removeEventListener('pulsechat_music_action', handleChatMusicAction);
       stopPulseAuraSound();
     };
-  }, [chatId, auraVolume]);
+  }, [chatId, auraVolume, user?.id]);
 
   useEffect(() => {
     const handleOpenWallet = () => setShowSparksWallet(true);

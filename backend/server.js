@@ -1551,11 +1551,38 @@ io.on('connection', (socket) => {
     io.to(chatId).emit('chat_music_updated', payload);
     if (chatId && chatId.includes('_')) {
       const parts = chatId.split('_');
-      parts.forEach(uId => io.to(`user_${uId}`).emit('chat_music_updated', payload));
+      const canonical = parts.slice().sort().join('_');
+      const reversed = parts.slice().reverse().join('_');
+      io.to(canonical).emit('chat_music_updated', payload);
+      io.to(reversed).emit('chat_music_updated', payload);
+      parts.forEach(uId => {
+        io.to(`user_${uId}`).emit('chat_music_updated', payload);
+        io.to(String(uId)).emit('chat_music_updated', payload);
+      });
     }
   });
 
-  // 3D Live Emoji Particle Burst Handler
+  // Dual-Sided Real-Time Chat Music Play/Pause/Seek Playback Synchronization
+  socket.on('chat_music_action', ({ chatId, action, currentTime, senderId }) => {
+    if (!chatId) return;
+    const payload = { chatId, action, currentTime, senderId };
+    socket.to(chatId).emit('chat_music_action', payload);
+    if (chatId.includes('_')) {
+      const parts = chatId.split('_');
+      const canonical = parts.slice().sort().join('_');
+      const reversed = parts.slice().reverse().join('_');
+      socket.to(canonical).emit('chat_music_action', payload);
+      socket.to(reversed).emit('chat_music_action', payload);
+      parts.forEach(uId => {
+        if (String(uId) !== String(senderId)) {
+          io.to(`user_${uId}`).emit('chat_music_action', payload);
+          io.to(String(uId)).emit('chat_music_action', payload);
+        }
+      });
+    }
+  });
+
+  // 3D Live Emoji Particle Burst Handler - Dual-Sided Broadcast
   socket.on('trigger_emoji_burst', async ({ chatId, emoji, userId }) => {
     if (!userId || !emoji) return;
 
@@ -1573,27 +1600,30 @@ io.on('connection', (socket) => {
         if (!isPro) {
           const SPARKS_COST = 5;
           const currentSparks = u.pulseSparks || 0;
-          if (currentSparks < SPARKS_COST) {
-            socket.emit('message_blocked', {
-              chatId,
-              reason: `Sparks kam hain! Emoji particle burst ke liye 5 Sparks lagte hain. Sparks Wallet se Ad dekh kar free Sparks lein.`
-            });
-            return;
+          if (currentSparks >= SPARKS_COST) {
+            u.pulseSparks = currentSparks - SPARKS_COST;
+            await u.save();
+            socket.emit('sparks_updated', { pulseSparks: u.pulseSparks });
+            socket.emit('user_profile_updated', { userId, pulseSparks: u.pulseSparks });
           }
-          u.pulseSparks = currentSparks - SPARKS_COST;
-          await u.save();
-          socket.emit('sparks_updated', { pulseSparks: u.pulseSparks });
-          socket.emit('user_profile_updated', { userId, pulseSparks: u.pulseSparks });
         }
       }
     } catch (e) {
       console.error('Error handling sparks for emoji burst:', e);
     }
 
-    io.to(chatId).emit('emoji_burst_received', { chatId, emoji, userId });
+    const payload = { chatId, emoji, userId };
+    io.to(chatId).emit('emoji_burst_received', payload);
     if (chatId && chatId.includes('_')) {
       const parts = chatId.split('_');
-      parts.forEach(uId => io.to(`user_${uId}`).emit('emoji_burst_received', { chatId, emoji, userId }));
+      const canonical = parts.slice().sort().join('_');
+      const reversed = parts.slice().reverse().join('_');
+      io.to(canonical).emit('emoji_burst_received', payload);
+      io.to(reversed).emit('emoji_burst_received', payload);
+      parts.forEach(uId => {
+        io.to(`user_${uId}`).emit('emoji_burst_received', payload);
+        io.to(String(uId)).emit('emoji_burst_received', payload);
+      });
     }
   });
 
@@ -2301,12 +2331,11 @@ io.on('connection', (socket) => {
 
     if (toSocketId) {
       io.to(toSocketId).emit('game_voice_signal', payload);
-    }
-    if (toUserId) {
+    } else if (toUserId) {
       io.to(`user_${toUserId}`).to(String(toUserId)).emit('game_voice_signal', payload);
+    } else {
+      socket.to(`game_voice_${chatId}`).emit('game_voice_signal', payload);
     }
-    // Reliable room fallback so game partner always receives the WebRTC signal
-    socket.to(`game_voice_${chatId}`).emit('game_voice_signal', payload);
   });
 
   socket.on('game_voice_state', ({ chatId, userId, isMuted, isDeafened }) => {

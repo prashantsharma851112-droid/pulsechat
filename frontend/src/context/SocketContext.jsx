@@ -285,6 +285,12 @@ export function SocketProvider({ children }) {
         } catch (e) {}
       });
 
+      newSocket.on('chat_music_action', (data) => {
+        try {
+          window.dispatchEvent(new CustomEvent('pulsechat_music_action', { detail: data }));
+        } catch (e) {}
+      });
+
       newSocket.on('stealth_dust_dissolved', (data) => {
         try {
           window.dispatchEvent(new CustomEvent('pulsechat_stealth_dust_dissolved', { detail: data }));
@@ -331,7 +337,9 @@ export function SocketProvider({ children }) {
 
       newSocket.on('emoji_burst_received', (data) => {
         try {
-          window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji: data.emoji || '❤️', mode: 'burst', duration: 7 } }));
+          window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
+            detail: { emoji: data.emoji || '❤️', mode: 'burst', duration: 7, chatId: data.chatId, userId: data.userId }
+          }));
         } catch (e) {}
       });
 
