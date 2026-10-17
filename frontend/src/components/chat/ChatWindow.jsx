@@ -4617,10 +4617,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const lastActionSelectTimeRef = useRef(0);
 
   const handleSelectForAction = useCallback((msg) => {
-    if (!msg?.id) return;
+    if (!msg) return;
+    const msgId = msg.id || msg._id || msg.clientTempId;
+    if (!msgId) return;
     lastActionSelectTimeRef.current = Date.now();
     setSelectedActionMessages(prev => {
-      const exists = prev.some(m => m.id === msg.id);
+      const exists = prev.some(m => (m.id || m._id || m.clientTempId) === msgId);
       if (exists) {
         return prev;
       } else {
@@ -4631,14 +4633,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   }, []);
 
   const handleToggleActionSelect = useCallback((msg) => {
-    if (!msg?.id) return;
+    if (!msg) return;
+    const msgId = msg.id || msg._id || msg.clientTempId;
+    if (!msgId) return;
     if (Date.now() - lastActionSelectTimeRef.current < 450) {
       return;
     }
     setSelectedActionMessages(prev => {
-      const exists = prev.some(m => m.id === msg.id);
+      const exists = prev.some(m => (m.id || m._id || m.clientTempId) === msgId);
       if (exists) {
-        return prev.filter(m => m.id !== msg.id);
+        return prev.filter(m => (m.id || m._id || m.clientTempId) !== msgId);
       } else {
         return [...prev, msg];
       }
@@ -5026,15 +5030,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             onDeleteLocal={handleDeleteLocalMessage}
             onDeleteTrigger={handleTriggerUndoToast}
             isMultiSelectMode={isMultiSelectMode}
-            isSelected={selectedMsgIds.includes(msg.id)}
+            isSelected={selectedMsgIds.includes(msg.id || msg._id || msg.clientTempId)}
             onToggleSelect={handleToggleSelectMsg}
             onJoinGroupCall={handleJoinGroupCallCallback}
-            isSelectedForAction={selectedActionMessages.some(m => m.id === msg.id)}
+            isSelectedForAction={selectedActionMessages.some(m => (m.id || m._id || m.clientTempId) === (msg.id || msg._id || msg.clientTempId))}
             isInActionSelectionMode={selectedActionMessages.length > 0}
             actionSelectedCount={selectedActionMessages.length}
             onToggleActionSelect={handleToggleActionSelect}
             onSelectForAction={handleSelectForAction}
-            isStarred={starredMsgIds.includes(msg.id)}
+            isStarred={starredMsgIds.includes(msg.id || msg._id || msg.clientTempId)}
             onOpenUnlimitedEmoji={handleOpenUnlimitedEmojiCallback}
             onOpenCustomizeReactions={handleOpenCustomizeReactionsCallback}
             onDismissAction={handleDismissActionMessage}

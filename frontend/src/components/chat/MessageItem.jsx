@@ -1680,7 +1680,7 @@ function MessageItem({
   return (
     <div
       id={`msg-${message.id || message._id || message.clientTempId}`}
-      className="message-item-contain"
+      className={`message-item-contain ${isSelectedForAction ? 'selected-for-action' : ''}`}
       onClick={(e) => {
         if (isInActionSelectionMode) {
           e.stopPropagation();
@@ -2889,7 +2889,7 @@ function MessageItem({
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            zIndex: 9999,
+            zIndex: 99999,
             boxShadow: '0 12px 36px rgba(0,0,0,0.7)',
             userSelect: 'none',
             pointerEvents: 'auto',

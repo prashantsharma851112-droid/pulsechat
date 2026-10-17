@@ -2908,18 +2908,23 @@ a,
 [style*="overflowY: auto"] {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
   will-change: scroll-position;
-  contain: layout style;
 }
 
 .message-item-contain {
-  contain: layout style;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-  content-visibility: auto;
-  contain-intrinsic-size: 0 60px;
+  will-change: transform;
+}
+
+.message-item-contain.selected-for-action {
+  z-index: 100 !important;
+}
+
+.floating-reaction-bar {
+  z-index: 99999 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  display: flex !important;
 }
 
 /* 4. Snappy native tactile response on mobile taps */
