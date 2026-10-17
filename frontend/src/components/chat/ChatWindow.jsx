@@ -4054,10 +4054,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   const checkCanOpenActivity = (activityName) => {
-    return isGroup || isOnline;
+    const isDeviceConn = isDeviceOnline() && socket?.connected;
+    if (!isDeviceConn) {
+      alert("⚠️ Live match requires an active internet connection! To play games offline, open the Games Zone from the sidebar.");
+      return false;
+    }
+    if (!isGroup && !isOnline) {
+      alert(`⚠️ ${activeChat?.displayName || 'Partner'} is currently offline! Live chat games require both players to be online together. To play offline vs AI or Pass & Play, open the Games Zone.`);
+      return false;
+    }
+    return true;
   };
 
   const launchArrowGame = () => {
+    if (!checkCanOpenActivity('Arrow Battle')) return;
     setShowAppsFolderModal(false);
     setShowArrowGameModal(true);
     if (socket && chatId) {
@@ -4071,6 +4081,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   const handleOpenArrowGame = () => {
+    if (!checkCanOpenActivity('Arrow Battle')) return;
     verifyRealPresenceAndProceed('Game (Arrow Battle)', () => {
       const isUserPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
 
@@ -4092,6 +4103,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   const launchTicTacToe = () => {
+    if (!checkCanOpenActivity('Tic-Tac-Toe')) return;
     setShowAppsFolderModal(false);
     setTictactoeHostId(user?.id);
     setShowTicTacToeModal(true);
@@ -4106,6 +4118,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   const handleOpenTicTacToe = () => {
+    if (!checkCanOpenActivity('Tic-Tac-Toe')) return;
     verifyRealPresenceAndProceed('Game (Tic-Tac-Toe)', () => {
       const isUserPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
 

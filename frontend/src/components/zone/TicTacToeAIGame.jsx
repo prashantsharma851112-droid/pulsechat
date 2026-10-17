@@ -97,6 +97,7 @@ export default function TicTacToeAIGame({ onScoreUpdate }) {
   const [board, setBoard] = useState(Array(9).fill(null));
   const [isXNext, setIsXNext] = useState(true);
   const [winnerInfo, setWinnerInfo] = useState(null);
+  const [gameMode, setGameMode] = useState('ai'); // 'ai' | 'pass_and_play'
   const [difficulty, setDifficulty] = useState('medium'); // 'easy' | 'medium' | 'hard'
   const [scores, setScores] = useState({ wins: 0, losses: 0, draws: 0 });
   const [isThinking, setIsThinking] = useState(false);
@@ -185,7 +186,36 @@ export default function TicTacToeAIGame({ onScoreUpdate }) {
   };
 
   const handleCellClick = (index) => {
-    if (board[index] || winnerInfo || isThinking || !isXNext) return;
+    if (board[index] || winnerInfo || isThinking) return;
+
+    if (gameMode === 'pass_and_play') {
+      const mark = isXNext ? 'X' : 'O';
+      const nextBoard = [...board];
+      nextBoard[index] = mark;
+      setBoard(nextBoard);
+      playMoveSound(mark === 'X');
+
+      const result = checkWinner(nextBoard);
+      if (result) {
+        setWinnerInfo(result);
+        if (result.winner === 'X') {
+          setScores(s => ({ ...s, wins: s.wins + 1 }));
+          playWinSound();
+        } else if (result.winner === 'O') {
+          setScores(s => ({ ...s, losses: s.losses + 1 }));
+          playWinSound();
+        } else {
+          setScores(s => ({ ...s, draws: s.draws + 1 }));
+        }
+        return;
+      }
+
+      setIsXNext(!isXNext);
+      return;
+    }
+
+    // AI Mode
+    if (!isXNext) return;
 
     const nextBoard = [...board];
     nextBoard[index] = 'X';
@@ -259,13 +289,15 @@ export default function TicTacToeAIGame({ onScoreUpdate }) {
           </div>
           <div>
             <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#f8fafc' }}>
-              Tic-Tac-Toe AI Arena
+              Tic-Tac-Toe Arena
             </h3>
-            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Play & Earn Pulse Sparks</span>
+            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+              {gameMode === 'ai' ? 'Play vs AI & Earn Pulse Sparks' : '2 Players on Same Device'}
+            </span>
           </div>
         </div>
 
-        {streak > 0 && (
+        {streak > 0 && gameMode === 'ai' && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -283,42 +315,119 @@ export default function TicTacToeAIGame({ onScoreUpdate }) {
         )}
       </div>
 
-      {/* Difficulty Switcher */}
+      {/* Mode Switcher: vs AI Bot / Pass & Play */}
       <div style={{
         display: 'flex',
+        gap: '6px',
         background: 'rgba(0,0,0,0.35)',
         padding: '3px',
         borderRadius: '14px',
         border: '1px solid rgba(255,255,255,0.08)',
         width: '100%',
-        marginBottom: '14px'
+        marginBottom: '12px'
       }}>
-        {[
-          { key: 'easy', label: 'Casual', color: '#10b981' },
-          { key: 'medium', label: 'Smart AI', color: '#38bdf8' },
-          { key: 'hard', label: 'Master AI', color: '#ec4899' }
-        ].map(diff => (
-          <button
-            key={diff.key}
-            type="button"
-            onClick={() => { setDifficulty(diff.key); handleReset(); }}
-            style={{
-              flex: 1,
-              padding: '6px 4px',
-              borderRadius: '11px',
-              border: 'none',
-              background: difficulty === diff.key ? `linear-gradient(135deg, ${diff.color}, #6366f1)` : 'transparent',
-              color: '#fff',
-              fontSize: '0.78rem',
-              fontWeight: 800,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            {diff.label}
-          </button>
-        ))}
+        <button
+          type="button"
+          onClick={() => { setGameMode('ai'); handleReset(); }}
+          style={{
+            flex: 1,
+            padding: '7px 10px',
+            borderRadius: '10px',
+            border: 'none',
+            background: gameMode === 'ai' ? 'rgba(168, 85, 247, 0.45)' : 'transparent',
+            color: gameMode === 'ai' ? '#f3e8ff' : '#94a3b8',
+            fontWeight: gameMode === 'ai' ? 800 : 500,
+            fontSize: '0.76rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '5px',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <span>🤖 vs AI Bot</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => { setGameMode('pass_and_play'); handleReset(); }}
+          style={{
+            flex: 1,
+            padding: '7px 10px',
+            borderRadius: '10px',
+            border: 'none',
+            background: gameMode === 'pass_and_play' ? 'rgba(56, 189, 248, 0.45)' : 'transparent',
+            color: gameMode === 'pass_and_play' ? '#e0f2fe' : '#94a3b8',
+            fontWeight: gameMode === 'pass_and_play' ? 800 : 500,
+            fontSize: '0.76rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '5px',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <span>👥 Pass & Play (2P)</span>
+        </button>
       </div>
+
+      {/* Difficulty Switcher (only for AI mode) */}
+      {gameMode === 'ai' && (
+        <div style={{
+          display: 'flex',
+          background: 'rgba(0,0,0,0.35)',
+          padding: '3px',
+          borderRadius: '14px',
+          border: '1px solid rgba(255,255,255,0.08)',
+          width: '100%',
+          marginBottom: '14px'
+        }}>
+          {[
+            { key: 'easy', label: 'Casual', color: '#10b981' },
+            { key: 'medium', label: 'Smart AI', color: '#38bdf8' },
+            { key: 'hard', label: 'Master AI', color: '#ec4899' }
+          ].map(diff => (
+            <button
+              key={diff.key}
+              type="button"
+              onClick={() => { setDifficulty(diff.key); handleReset(); }}
+              style={{
+                flex: 1,
+                padding: '6px',
+                borderRadius: '10px',
+                border: 'none',
+                background: difficulty === diff.key ? 'rgba(255,255,255,0.1)' : 'transparent',
+                color: difficulty === diff.key ? diff.color : '#94a3b8',
+                fontWeight: difficulty === diff.key ? 800 : 600,
+                fontSize: '0.76rem',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              {diff.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Pass and Play Turn Indicator */}
+      {gameMode === 'pass_and_play' && (
+        <div style={{
+          width: '100%',
+          textAlign: 'center',
+          padding: '5px 12px',
+          borderRadius: '12px',
+          background: 'rgba(56, 189, 248, 0.1)',
+          border: '1px solid rgba(56, 189, 248, 0.25)',
+          marginBottom: '14px',
+          fontSize: '0.76rem',
+          color: '#38bdf8',
+          fontWeight: 700
+        }}>
+          Current Turn: <strong style={{ color: isXNext ? '#38bdf8' : '#ec4899' }}>{isXNext ? 'Player 1 (X)' : 'Player 2 (O)'}</strong>
+        </div>
+      )}
 
       {/* Scoreboard */}
       <div style={{

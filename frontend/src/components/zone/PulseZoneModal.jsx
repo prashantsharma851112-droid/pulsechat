@@ -8,6 +8,7 @@ import ArrowPuzzleGame from './ArrowPuzzleGame';
 import TempleRunGame from './TempleRunGame';
 import TicTacToeAIGame from './TicTacToeAIGame';
 import CandyCrushGame from './CandyCrushGame';
+import OfflineWhiteboardGame from './OfflineWhiteboardGame';
 import { useBackHandler } from '../../utils/backNavigation';
 
 export default function PulseZoneModal({ onClose }) {
@@ -186,7 +187,7 @@ export default function PulseZoneModal({ onClose }) {
         className="modal-card modal-responsive"
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: (selectedGame === 'temple' || selectedGame === 'racer') ? '960px' : (selectedGame === 'candy' ? '580px' : '540px'),
+          maxWidth: (selectedGame === 'temple' || selectedGame === 'racer' || selectedGame === 'draw') ? '960px' : (selectedGame === 'candy' ? '580px' : '540px'),
           width: '100%',
           maxHeight: '94dvh',
           display: 'flex',
@@ -670,6 +671,67 @@ export default function PulseZoneModal({ onClose }) {
                       <Play size={14} fill="#fff" /> PLAY
                     </button>
                   </div>
+
+                  {/* Creative Whiteboard Studio Card (100% Offline) */}
+                  <div
+                    onClick={() => setSelectedGame('draw')}
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(99, 102, 241, 0.14))',
+                      border: '1.5px solid rgba(56, 189, 248, 0.45)',
+                      borderRadius: '16px',
+                      padding: '14px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 4px 16px rgba(56, 189, 248, 0.2)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div style={{
+                        width: '52px',
+                        height: '52px',
+                        borderRadius: '14px',
+                        background: 'linear-gradient(135deg, #38bdf8, #6366f1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.8rem',
+                        boxShadow: '0 4px 14px rgba(56, 189, 248, 0.4)'
+                      }}>
+                        🎨
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Whiteboard Studio</span>
+                          <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #38bdf8, #6366f1)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>OFFLINE • DRAW & SAVE</span>
+                        </div>
+                        <p style={{ margin: '3px 0 0 0', fontSize: '0.74rem', color: '#94a3b8' }}>
+                          Sketch freely & download PNG art directly to your phone/PC!
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedGame('draw'); }}
+                      style={{
+                        background: 'linear-gradient(135deg, #38bdf8, #6366f1)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '8px 16px',
+                        fontWeight: 900,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        boxShadow: '0 4px 12px rgba(56, 189, 248, 0.4)'
+                      }}
+                    >
+                      <Play size={14} fill="#fff" /> DRAW
+                    </button>
+                  </div>
                 </div>
               ) : (
                 /* When a game is selected: Top Back Bar + Active Game */
@@ -699,7 +761,8 @@ export default function PulseZoneModal({ onClose }) {
                       {selectedGame === 'temple' && <span>🗿 Temple Run 3D</span>}
                       {selectedGame === 'arrow' && <span>🎯 Arrow Puzzle</span>}
                       {selectedGame === 'tapper' && <span>⚡ Speed Tapper</span>}
-                      {selectedGame === 'tictactoe' && <span>❌⭕ Tic-Tac-Toe vs Computer</span>}
+                      {selectedGame === 'tictactoe' && <span>❌⭕ Tic-Tac-Toe Arena</span>}
+                      {selectedGame === 'draw' && <span>🎨 Whiteboard Studio (Offline)</span>}
                     </div>
                   </div>
 
@@ -713,6 +776,13 @@ export default function PulseZoneModal({ onClose }) {
                   {selectedGame === 'tictactoe' && (
                     <TicTacToeAIGame
                       onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
+                    />
+                  )}
+
+                  {selectedGame === 'draw' && (
+                    <OfflineWhiteboardGame
+                      onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
+                      onBack={() => setSelectedGame(null)}
                     />
                   )}
 
