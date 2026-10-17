@@ -80,6 +80,7 @@ self.addEventListener('fetch', (event) => {
   const isCdnMedia = event.request.destination === 'image' ||
     reqUrl.includes('res.cloudinary.com') ||
     reqUrl.includes('images.unsplash.com') ||
+    reqUrl.includes('api.qrserver.com') ||
     reqUrl.includes('/uploads/') ||
     /\.(jpg|jpeg|png|webp|gif|svg)($|\?)/i.test(reqUrl);
 
