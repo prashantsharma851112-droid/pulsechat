@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useContext, useEffect, useCallback, useMemo, useRef, useDeferredValue, startTransition } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, CheckCheck, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass, Edit3, Pin, Music, Disc, Play, Pause, Headphones } from 'lucide-react';
@@ -142,6 +142,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   }, [vibeAuras, user]);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [searchResults, setSearchResults] = useState([]);
   const [recentChats, setRecentChats] = useState(() => getCachedRecentChats(currentUid));
   const [groups, setGroups] = useState(() => getCachedGroups(currentUid));
@@ -1604,9 +1605,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     };
   }, [socket, user?.id, user?.username]);
 
-  // Search Users — instant 0ms local in-memory display + 120ms debounced server search
+  // Search Users — instant 0ms local in-memory display + 120ms debounced server search with React 18 Time-Slicing
   useEffect(() => {
-    const q = searchQuery.trim().toLowerCase().replace(/^@/, '');
+    const q = deferredSearchQuery.trim().toLowerCase().replace(/^@/, '');
     if (q.length === 0) {
       setSearchResults([]);
       return;
@@ -1674,7 +1675,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     };
 
     return () => clearTimeout(timer);
-  }, [searchQuery, token, user?.id]);
+  }, [deferredSearchQuery, token, user?.id]);
 
   const proceedSelectUser = (selectedUser) => {
     if (selectedUser?.id && user?.id) {
@@ -1684,7 +1685,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         (c.username && selectedUser.username && c.username === selectedUser.username)
       ) ? { ...c, unreadCount: 0 } : c));
     }
-    setActiveChat(selectedUser);
+    startTransition(() => {
+      setActiveChat(selectedUser);
+    });
     setSearchQuery('');
     setSearchResults([]);
   };
@@ -1704,11 +1707,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       clearUnreadCount(user.id, group.id);
       setRecentChats(prev => prev.map(c => c.id === group.id ? { ...c, unreadCount: 0 } : c));
     }
-    setActiveChat({
-      ...group,
-      isGroup: true,
-      displayName: group.name,
-      id: group.id
+    startTransition(() => {
+      setActiveChat({
+        ...group,
+        isGroup: true,
+        displayName: group.name,
+        id: group.id
+      });
     });
     setSearchQuery('');
     setSearchResults([]);

@@ -91,6 +91,24 @@ self.onmessage = async (e) => {
         break;
       }
 
+      // 4. Off-thread contact & recent chats search
+      case 'SEARCH_CONTACTS': {
+        const { contacts = [], query = '' } = payload || {};
+        if (!query || !query.trim()) {
+          result = [];
+        } else {
+          const q = query.trim().toLowerCase().replace(/^@/, '');
+          result = contacts.filter((u) => {
+            if (!u) return false;
+            const nameMatch = typeof u.displayName === 'string' && u.displayName.toLowerCase().includes(q);
+            const usernameMatch = typeof u.username === 'string' && u.username.toLowerCase().includes(q);
+            const emailMatch = typeof u.email === 'string' && u.email.toLowerCase().includes(q);
+            return nameMatch || usernameMatch || emailMatch;
+          });
+        }
+        break;
+      }
+
       default:
         result = null;
     }

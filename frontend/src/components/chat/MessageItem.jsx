@@ -700,7 +700,6 @@ function VoiceNotePlayer({ audioUrl, isMine, voiceFilter }) {
   const [playbackRate, setPlaybackRate] = useState(1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [danceTick, setDanceTick] = useState(0);
   const audioRef = useRef(null);
 
   const bars = React.useMemo(() => {
@@ -714,19 +713,6 @@ function VoiceNotePlayer({ audioUrl, isMine, voiceFilter }) {
     }
     return res;
   }, [audioUrl]);
-
-  // Waveform dancing animation while playing (WhatsApp / Telegram frequency dance)
-  useEffect(() => {
-    if (isPlaying) {
-      let frame;
-      const loop = () => {
-        setDanceTick(t => (t + 1) % 360);
-        frame = requestAnimationFrame(loop);
-      };
-      frame = requestAnimationFrame(loop);
-      return () => cancelAnimationFrame(frame);
-    }
-  }, [isPlaying]);
 
   useEffect(() => {
     const initialSrc = getSyncCachedAudioUrl(audioUrl) || audioUrl;
@@ -846,16 +832,12 @@ function VoiceNotePlayer({ audioUrl, isMine, voiceFilter }) {
             const barProgress = idx / bars.length;
             const isPlayed = barProgress <= progressPct;
 
-            // Frequency oscillation wave formula for organic dancing bars
-            const waveOscillation = isPlaying
-              ? Math.sin((danceTick * 0.12) + (idx * 0.55)) * 0.28
-              : 0;
-            const currentHeightPct = Math.max(0.18, Math.min(1.0, barHeight + waveOscillation));
-            const barPixelHeight = Math.round(currentHeightPct * 30);
+            const barPixelHeight = Math.max(4, Math.round(barHeight * 28));
 
             return (
               <div
                 key={idx}
+                className={`pulse-audio-wave-bar ${isPlaying && isPlayed ? 'playing' : ''}`}
                 onClick={(e) => handleSeek(e, idx)}
                 style={{
                   flex: 1,
@@ -868,8 +850,8 @@ function VoiceNotePlayer({ audioUrl, isMine, voiceFilter }) {
                   boxShadow: (isPlaying && isPlayed)
                     ? (isMine ? '0 0 6px rgba(255,255,255,0.8)' : '0 0 8px rgba(56, 189, 248, 0.8)')
                     : 'none',
-                  transition: 'height 0.08s ease, background 0.15s ease',
-                  transform: isPlaying && isPlayed ? 'scaleY(1.06)' : 'scaleY(1.0)'
+                  animationDelay: `${(idx % 8) * 0.08}s`,
+                  transition: 'background 0.15s ease'
                 }}
               />
             );

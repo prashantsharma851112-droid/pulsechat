@@ -11,8 +11,63 @@ import { BACKEND_URL } from './config';
  * @returns {Promise<string>} Compressed Base64 Data URL
  */
 export async function compressImageOnDevice(fileOrDataUrl, maxWidth = 1280, quality = 0.8) {
-  return new Promise((resolve) => {
-    try {
+  // Yield to UI event loop first so touch/click animations remain buttery smooth
+  await new Promise((r) => setTimeout(r, 0));
+
+  try {
+    // 1. Off-Thread Fast Decode: createImageBitmap decodes images on background browser threads natively
+    if (typeof createImageBitmap === 'function' && (fileOrDataUrl instanceof File || fileOrDataUrl instanceof Blob)) {
+      try {
+        const bitmap = await createImageBitmap(fileOrDataUrl);
+        let width = bitmap.width;
+        let height = bitmap.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        // Try OffscreenCanvas if supported to stay completely off DOM layout
+        if (typeof OffscreenCanvas !== 'undefined') {
+          try {
+            const offCanvas = new OffscreenCanvas(width, height);
+            const ctx = offCanvas.getContext('2d');
+            ctx.drawImage(bitmap, 0, 0, width, height);
+            if (typeof offCanvas.convertToBlob === 'function') {
+              const blob = await offCanvas.convertToBlob({ type: 'image/webp', quality });
+              if (blob && blob.size > 0) {
+                if (typeof bitmap.close === 'function') bitmap.close();
+                return await new Promise((res) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => res(reader.result);
+                  reader.readAsDataURL(blob);
+                });
+              }
+            }
+          } catch (offErr) {
+            // Fallback to standard canvas
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        if (typeof bitmap.close === 'function') bitmap.close();
+
+        let compressedDataUrl = canvas.toDataURL('image/webp', quality);
+        if (!compressedDataUrl || !compressedDataUrl.startsWith('data:image/webp')) {
+          compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
+        return compressedDataUrl;
+      } catch (bitmapErr) {
+        // Fallback to Image() pipeline below
+      }
+    }
+
+    // 2. Standard Resilient Image() Pipeline
+    return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
         let width = img.width;
@@ -30,17 +85,14 @@ export async function compressImageOnDevice(fileOrDataUrl, maxWidth = 1280, qual
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Try modern high-efficiency WebP first (40% smaller than JPEG with superior clarity)
         let compressedDataUrl = canvas.toDataURL('image/webp', quality);
         if (!compressedDataUrl || !compressedDataUrl.startsWith('data:image/webp')) {
-          // Fallback to JPEG if browser doesn't support canvas WebP export
           compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
         }
         resolve(compressedDataUrl);
       };
 
       img.onerror = () => {
-        // Fallback to original if image fails to render on canvas
         resolve(typeof fileOrDataUrl === 'string' ? fileOrDataUrl : '');
       };
 
@@ -56,10 +108,10 @@ export async function compressImageOnDevice(fileOrDataUrl, maxWidth = 1280, qual
       } else {
         resolve('');
       }
-    } catch (e) {
-      resolve(typeof fileOrDataUrl === 'string' ? fileOrDataUrl : '');
-    }
-  });
+    });
+  } catch (e) {
+    return typeof fileOrDataUrl === 'string' ? fileOrDataUrl : '';
+  }
 }
 
 /**

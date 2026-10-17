@@ -4,21 +4,83 @@
  * Turns 8MB-15MB camera photos into ~20KB-40KB, uploading in milliseconds
  * and preventing HTML 413 Payload Too Large / DOCTYPE errors.
  */
-export const compressImage = (file, maxWidth = 360, maxHeight = 360, quality = 0.82) => {
+export const compressImage = async (file, maxWidth = 360, maxHeight = 360, quality = 0.82) => {
+  if (!file) {
+    throw new Error('No file provided');
+  }
+
+  // If already a small SVG or remote string
+  if (typeof file === 'string' && (file.startsWith('https://') || file.startsWith('data:image/svg'))) {
+    return file;
+  }
+
+  if (file.type && !file.type.startsWith('image/')) {
+    throw new Error('Selected file is not an image');
+  }
+
+  // Yield to UI thread first so modal opening/touch ripple remains instant
+  await new Promise((r) => setTimeout(r, 0));
+
+  // 1. Off-thread decoding via createImageBitmap when supported
+  if (typeof createImageBitmap === 'function' && (file instanceof File || file instanceof Blob)) {
+    try {
+      const bitmap = await createImageBitmap(file);
+      let width = bitmap.width;
+      let height = bitmap.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      if (typeof OffscreenCanvas !== 'undefined') {
+        try {
+          const offCanvas = new OffscreenCanvas(width, height);
+          const ctx = offCanvas.getContext('2d');
+          if (ctx) {
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(bitmap, 0, 0, width, height);
+            if (typeof offCanvas.convertToBlob === 'function') {
+              const blob = await offCanvas.convertToBlob({ type: 'image/jpeg', quality });
+              if (blob) {
+                if (typeof bitmap.close === 'function') bitmap.close();
+                return await new Promise((res) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => res(reader.result);
+                  reader.readAsDataURL(blob);
+                });
+              }
+            }
+          }
+        } catch (offErr) {}
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        if (typeof bitmap.close === 'function') bitmap.close();
+        return canvas.toDataURL('image/jpeg', quality);
+      }
+    } catch (bitmapErr) {
+      // Fallback to Image() pipeline below
+    }
+  }
+
+  // 2. Standard Resilient Image() pipeline
   return new Promise((resolve, reject) => {
-    if (!file) {
-      return reject(new Error('No file provided'));
-    }
-
-    // If already a small SVG or tiny string
-    if (typeof file === 'string' && file.startsWith('https://')) {
-      return resolve(file);
-    }
-
-    if (!file.type || !file.type.startsWith('image/')) {
-      return reject(new Error('Selected file is not an image'));
-    }
-
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
@@ -49,12 +111,10 @@ export const compressImage = (file, maxWidth = 360, maxHeight = 360, quality = 0
             return resolve(e.target.result); // Fallback to raw if canvas unsupported
           }
 
-          // High-quality downsampling smoothing
           ctx.imageSmoothingEnabled = true;
           ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
 
-          // Convert to efficient JPEG
           const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
           resolve(compressedDataUrl);
         } catch (err) {

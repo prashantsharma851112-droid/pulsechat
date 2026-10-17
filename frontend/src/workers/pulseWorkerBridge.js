@@ -118,6 +118,21 @@ function runFallback(type, payload) {
         return Promise.resolve({ dominantVibe: 'chill', scores: {} });
       }
 
+      case 'SEARCH_CONTACTS': {
+        const { contacts = [], query = '' } = payload || {};
+        if (!query || !query.trim()) return Promise.resolve([]);
+        const q = query.trim().toLowerCase().replace(/^@/, '');
+        const matches = contacts.filter((u) => {
+          if (!u) return false;
+          return (
+            (u.displayName && u.displayName.toLowerCase().includes(q)) ||
+            (u.username && u.username.toLowerCase().includes(q)) ||
+            (u.email && u.email.toLowerCase().includes(q))
+          );
+        });
+        return Promise.resolve(matches);
+      }
+
       default:
         return Promise.resolve(null);
     }

@@ -11,7 +11,6 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
   const [timer, setTimer] = useState(0);
   const [errorMsg, setErrorMsg] = useState(null);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
-  const [liveFrequencies, setLiveFrequencies] = useState([0.3, 0.5, 0.4, 0.7, 0.6, 0.4, 0.8, 0.5, 0.3, 0.6]);
 
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
@@ -21,6 +20,7 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
   const audioCtxRef = useRef(null);
   const analyserRef = useRef(null);
   const animFrameRef = useRef(null);
+  const canvasRef = useRef(null);
 
   const getSupportedMimeType = () => {
     if (typeof MediaRecorder === 'undefined') return '';
@@ -58,17 +58,46 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
           analyserRef.current = analyser;
 
           const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          const numBars = 14;
+
           const updateFrequencyBars = () => {
             if (!analyserRef.current) return;
             analyserRef.current.getByteFrequencyData(dataArray);
-            const bars = [];
-            const step = Math.max(1, Math.floor(dataArray.length / 12));
-            for (let i = 0; i < 12; i++) {
-              const val = dataArray[i * step] || 0;
-              const normalized = Math.max(0.18, Math.min(1.0, val / 255 * 1.5));
-              bars.push(normalized);
+
+            const canvas = canvasRef.current;
+            if (canvas) {
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                const w = canvas.width;
+                const h = canvas.height;
+                ctx.clearRect(0, 0, w, h);
+
+                const step = Math.max(1, Math.floor(dataArray.length / numBars));
+                const totalGaps = (numBars - 1) * 3;
+                const barWidth = Math.max(2, (w - totalGaps) / numBars);
+
+                for (let i = 0; i < numBars; i++) {
+                  const val = dataArray[i * step] || 0;
+                  const normalized = Math.max(0.18, Math.min(1.0, (val / 255) * 1.55));
+                  const barHeight = Math.max(4, Math.round(normalized * h));
+                  const x = i * (barWidth + 3);
+                  const y = Math.round((h - barHeight) / 2);
+
+                  const grad = ctx.createLinearGradient(0, y + barHeight, 0, y);
+                  grad.addColorStop(0, '#ef4444');
+                  grad.addColorStop(1, '#f97316');
+                  ctx.fillStyle = grad;
+
+                  ctx.beginPath();
+                  if (typeof ctx.roundRect === 'function') {
+                    ctx.roundRect(x, y, barWidth, barHeight, 2.5);
+                  } else {
+                    ctx.rect(x, y, barWidth, barHeight);
+                  }
+                  ctx.fill();
+                }
+              }
             }
-            setLiveFrequencies(bars);
             animFrameRef.current = requestAnimationFrame(updateFrequencyBars);
           };
           animFrameRef.current = requestAnimationFrame(updateFrequencyBars);
@@ -338,23 +367,15 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
           {Math.floor(timer / 60)}:{('0' + (timer % 60)).slice(-2)}
         </span>
 
-        {/* Live Dancing Waveform when Recording */}
+        {/* Live Dancing Waveform Canvas when Recording (Zero React re-render, Web Audio GPU pipe) */}
         {recording ? (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '3px', height: '24px', minWidth: 0, overflow: 'hidden', padding: '0 4px' }}>
-            {liveFrequencies.map((freq, idx) => (
-              <div
-                key={idx}
-                style={{
-                  flex: 1,
-                  height: `${Math.round(freq * 22)}px`,
-                  minHeight: '4px',
-                  background: 'linear-gradient(to top, #ef4444, #f97316)',
-                  borderRadius: '3px',
-                  transition: 'height 0.08s ease',
-                  boxShadow: '0 0 6px rgba(239, 68, 68, 0.5)'
-                }}
-              />
-            ))}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', height: '24px', minWidth: 0, padding: '0 4px', overflow: 'hidden' }}>
+            <canvas
+              ref={canvasRef}
+              width={220}
+              height={24}
+              style={{ width: '100%', height: '24px', display: 'block' }}
+            />
           </div>
         ) : (
           <div style={{ flex: 1, minWidth: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-muted, #94a3b8)' }}>

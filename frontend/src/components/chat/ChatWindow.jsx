@@ -289,6 +289,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   // In-Chat Search Feature States
   const [showInChatSearch, setShowInChatSearch] = useState(false);
   const [inChatSearchQuery, setInChatSearchQuery] = useState('');
+  const deferredInChatSearchQuery = useDeferredValue(inChatSearchQuery);
   const [searchMatchIndex, setSearchMatchIndex] = useState(0);
   const inChatSearchInputRef = useRef(null);
 
@@ -4728,7 +4729,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const [matchedMessageIds, setMatchedMessageIds] = useState([]);
 
   useEffect(() => {
-    if (!inChatSearchQuery.trim()) {
+    if (!deferredInChatSearchQuery.trim()) {
       setMatchedMessageIds([]);
       return;
     }
@@ -4739,7 +4740,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         text: m.content || '',
         mediaName: m.fileName || ''
       })),
-      query: inChatSearchQuery
+      query: deferredInChatSearchQuery
     }).then((ids) => {
       if (!isCancelled && Array.isArray(ids)) {
         setMatchedMessageIds(ids);
@@ -4749,14 +4750,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     return () => {
       isCancelled = true;
     };
-  }, [messages, inChatSearchQuery]);
+  }, [messages, deferredInChatSearchQuery]);
 
   useEffect(() => {
     setSearchMatchIndex(0);
     if (matchedMessageIds.length > 0) {
       handleJumpToMessage(matchedMessageIds[0]);
     }
-  }, [inChatSearchQuery, matchedMessageIds.length, handleJumpToMessage]);
+  }, [deferredInChatSearchQuery, matchedMessageIds.length, handleJumpToMessage]);
 
   const handleNextSearchMatch = () => {
     if (matchedMessageIds.length === 0) return;
