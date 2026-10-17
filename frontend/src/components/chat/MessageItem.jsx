@@ -941,10 +941,10 @@ function MessageItem({
   translationData,
   onTranslateMessage,
   onToggleTranslation,
-  targetLang
+  targetLang,
+  socket,
+  currentUser
 }) {
-  const { socket } = useContext(SocketContext);
-  const { user: currentUser } = useContext(AuthContext);
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Stable direct media handling without re-rendering blob swaps
@@ -1106,7 +1106,7 @@ function MessageItem({
   const lastDoubleTapTimeRef = useRef(0);
 
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || (!message.isViewOnce && message.type !== 'viewOnce')) return;
     const handleViewOnceUpdate = ({ messageId, messageMongoId, viewedBy, viewCounts }) => {
       const isMatch = (
         messageId === message.id ||
@@ -3392,6 +3392,8 @@ function areMessagePropsEqual(prevProps, nextProps) {
   if (prevProps.senderIsPro !== nextProps.senderIsPro) return false;
   if (prevProps.isMine !== nextProps.isMine) return false;
   if (prevProps.chatId !== nextProps.chatId) return false;
+  if (prevProps.currentUser?.id !== nextProps.currentUser?.id) return false;
+  if (prevProps.socket !== nextProps.socket) return false;
 
   return true;
 }

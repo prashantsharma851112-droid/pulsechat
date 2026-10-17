@@ -4004,16 +4004,50 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     playSound('sent');
   };
 
-  const checkCanOpenActivity = (activityName) => {
-    if (isGroup) return true;
-    if (!isOnline) {
-      const name = activeChat?.displayName || activeChat?.username || 'User';
-      const msg = `${name} is currently offline`;
-      setActionToast(msg);
-      setTimeout(() => setActionToast(''), 3000);
-      return false;
+  // Real-time actual presence verification for live interactive features (Game, Whiteboard, Music)
+  // Allows friends to play/draw/sync music together even if the partner has stealth indicator on
+  const verifyRealPresenceAndProceed = (activityName, onProceed) => {
+    if (isGroup) {
+      onProceed?.();
+      return;
     }
-    return true;
+
+    // 1. If public indicator already confirms online, proceed immediately with 0ms delay!
+    if (isOnline) {
+      onProceed?.();
+      return;
+    }
+
+    // 2. If partner hid their indicator (Stealth mode) or socket connected, check real socket presence on server!
+    if (socket && socket.connected) {
+      socket.emit('check_real_presence', {
+        targetUserId: partnerId,
+        targetUsername: activeChat?.username,
+        targetMongoId: activeChat?._id || activeChat?.id
+      }, (res) => {
+        if (res && res.isOnline) {
+          // User is ACTUALLY online in app (just indicator is hidden) -> START ACTIVITY!
+          onProceed?.();
+        } else {
+          // Genuinely not in app / offline
+          const name = activeChat?.displayName || activeChat?.username || 'User';
+          const msg = `${name} is currently offline`;
+          setActionToast(msg);
+          setTimeout(() => setActionToast(''), 3000);
+        }
+      });
+      return;
+    }
+
+    // 3. Fallback if disconnected
+    const name = activeChat?.displayName || activeChat?.username || 'User';
+    const msg = `${name} is currently offline`;
+    setActionToast(msg);
+    setTimeout(() => setActionToast(''), 3000);
+  };
+
+  const checkCanOpenActivity = (activityName) => {
+    return isGroup || isOnline;
   };
 
   const launchArrowGame = () => {
@@ -4030,22 +4064,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   const handleOpenArrowGame = () => {
-    if (!checkCanOpenActivity('Game (Arrow Battle)')) return;
-    const isUserPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
+    verifyRealPresenceAndProceed('Game (Arrow Battle)', () => {
+      const isUserPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
 
-    if (isUserPro) {
-      launchArrowGame();
-      return;
-    }
+      if (isUserPro) {
+        launchArrowGame();
+        return;
+      }
 
-    setShowAppsFolderModal(false);
-    setSparksPromptConfig({
-      featureKey: 'chat_game',
-      featureName: 'Arrow Battle Arena',
-      sparksCost: 5,
-      icon: '🎯',
-      description: '👑 VIP Chat Game: Free with Pulse Pro, or unlock this session for 5 Sparks ⚡!',
-      onSuccess: () => launchArrowGame()
+      setShowAppsFolderModal(false);
+      setSparksPromptConfig({
+        featureKey: 'chat_game',
+        featureName: 'Arrow Battle Arena',
+        sparksCost: 5,
+        icon: '🎯',
+        description: '👑 VIP Chat Game: Free with Pulse Pro, or unlock this session for 5 Sparks ⚡!',
+        onSuccess: () => launchArrowGame()
+      });
     });
   };
 
@@ -4063,59 +4098,62 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   const handleOpenTicTacToe = () => {
-    if (!checkCanOpenActivity('Game (Tic-Tac-Toe)')) return;
-    const isUserPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
+    verifyRealPresenceAndProceed('Game (Tic-Tac-Toe)', () => {
+      const isUserPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
 
-    if (isUserPro) {
-      launchTicTacToe();
-      return;
-    }
+      if (isUserPro) {
+        launchTicTacToe();
+        return;
+      }
 
-    setShowAppsFolderModal(false);
-    setSparksPromptConfig({
-      featureKey: 'chat_game',
-      featureName: 'Tic-Tac-Toe Arena',
-      sparksCost: 5,
-      icon: '❌⭕',
-      description: '👑 VIP Chat Game: Free with Pulse Pro, or unlock this session for 5 Sparks ⚡!',
-      onSuccess: () => launchTicTacToe()
+      setShowAppsFolderModal(false);
+      setSparksPromptConfig({
+        featureKey: 'chat_game',
+        featureName: 'Tic-Tac-Toe Arena',
+        sparksCost: 5,
+        icon: '❌⭕',
+        description: '👑 VIP Chat Game: Free with Pulse Pro, or unlock this session for 5 Sparks ⚡!',
+        onSuccess: () => launchTicTacToe()
+      });
     });
   };
 
   const handleOpenWhiteboard = () => {
-    if (!checkCanOpenActivity('Live Drawboard')) return;
-    setShowAppsFolderModal(false);
-    setShowMoreMenu(false);
-    setWhiteboardInitialImage(null);
-    setWhiteboardInitialData(null);
-    setShowWhiteboard(true);
-    if (socket && chatId) {
-      socket.emit('request_open_whiteboard', {
-        chatId,
-        senderId: user?.id,
-        senderName: user?.displayName || user?.username,
-        receiverId: isGroup ? '' : (activeChat?.id || activeChat?._id)
-      });
-    }
+    verifyRealPresenceAndProceed('Live Drawboard', () => {
+      setShowAppsFolderModal(false);
+      setShowMoreMenu(false);
+      setWhiteboardInitialImage(null);
+      setWhiteboardInitialData(null);
+      setShowWhiteboard(true);
+      if (socket && chatId) {
+        socket.emit('request_open_whiteboard', {
+          chatId,
+          senderId: user?.id,
+          senderName: user?.displayName || user?.username,
+          receiverId: isGroup ? '' : (activeChat?.id || activeChat?._id)
+        });
+      }
+    });
   };
 
   const handleOpenMusic = () => {
-    if (!checkCanOpenActivity('Music')) return;
-    setShowAppsFolderModal(false);
-    if (!user?.isPro) {
-      setProModalTab('pro');
-      setShowProModal(true);
-      return;
-    }
-    setShowChatMusicPicker(true);
-    if (socket && chatId) {
-      socket.emit('request_open_music', {
-        chatId,
-        senderId: user?.id,
-        senderName: user?.displayName || user?.username,
-        receiverId: isGroup ? '' : (activeChat?.id || activeChat?._id)
-      });
-    }
+    verifyRealPresenceAndProceed('Music', () => {
+      setShowAppsFolderModal(false);
+      if (!user?.isPro) {
+        setProModalTab('pro');
+        setShowProModal(true);
+        return;
+      }
+      setShowChatMusicPicker(true);
+      if (socket && chatId) {
+        socket.emit('request_open_music', {
+          chatId,
+          senderId: user?.id,
+          senderName: user?.displayName || user?.username,
+          receiverId: isGroup ? '' : (activeChat?.id || activeChat?._id)
+        });
+      }
+    });
   };
 
   const handleOpenWhiteboardForEdit = (drawingUrl, whiteboardData) => {
@@ -4864,6 +4902,35 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return true;
     return d1.toDateString() !== d2.toDateString();
   };
+
+  // Memoized MessageItem callbacks to prevent list re-rendering lag
+  const handleOpenUnlimitedEmojiCallback = useCallback((targetMsg) => {
+    setActionMessageForEmoji(targetMsg);
+    setShowUnlimitedEmojiPicker(true);
+  }, []);
+
+  const handleOpenCustomizeReactionsCallback = useCallback(() => {
+    setShowCustomizeReactionsModal(true);
+  }, []);
+
+  const handleReplyCallback = useCallback((msg) => {
+    const senderInfo = groupMembersMap[msg.senderId];
+    setReplyTo({
+      ...msg,
+      senderName: msg.senderId === user?.id
+        ? (myNicknameInChat || 'You')
+        : (isGroup ? (senderInfo?.displayName || senderInfo?.username || activeChat?.displayName) : (partnerNickname || senderInfo?.displayName || activeChat?.displayName))
+    });
+    replyInputRef.current?.focus();
+  }, [groupMembersMap, user?.id, myNicknameInChat, isGroup, partnerNickname, activeChat?.displayName]);
+
+  const handleOpenSparksWalletCallback = useCallback(() => {
+    setShowSparksWallet(true);
+  }, []);
+
+  const handleJoinGroupCallCallback = useCallback((isVideo) => {
+    if (onStartGroupCall) onStartGroupCall(activeChat, isVideo);
+  }, [onStartGroupCall, activeChat]);
 
   return (
     <div
@@ -6557,6 +6624,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 message={msg}
                 isMine={String(msg.senderId) === String(user?.id || user?._id || '')}
                 chatId={chatId}
+                socket={socket}
+                currentUser={user}
                 senderName={
                   msg.senderId === user.id
                     ? (myNicknameInChat || user?.displayName || user?.username)
@@ -6568,36 +6637,24 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 isMultiSelectMode={isMultiSelectMode}
                 isSelected={selectedMsgIds.includes(msg.id)}
                 onToggleSelect={handleToggleSelectMsg}
-                onJoinGroupCall={(isVideo) => onStartGroupCall && onStartGroupCall(activeChat, isVideo)}
+                onJoinGroupCall={handleJoinGroupCallCallback}
                 isSelectedForAction={selectedActionMessages.some(m => m.id === msg.id)}
                 isInActionSelectionMode={selectedActionMessages.length > 0}
                 actionSelectedCount={selectedActionMessages.length}
                 onToggleActionSelect={handleToggleActionSelect}
                 onSelectForAction={handleSelectForAction}
                 isStarred={starredMsgIds.includes(msg.id)}
-                onOpenUnlimitedEmoji={(targetMsg) => {
-                  setActionMessageForEmoji(targetMsg);
-                  setShowUnlimitedEmojiPicker(true);
-                }}
-                onOpenCustomizeReactions={() => setShowCustomizeReactionsModal(true)}
+                onOpenUnlimitedEmoji={handleOpenUnlimitedEmojiCallback}
+                onOpenCustomizeReactions={handleOpenCustomizeReactionsCallback}
                 onDismissAction={handleDismissActionMessage}
-                onReply={(msg) => {
-                  const senderInfo = groupMembersMap[msg.senderId];
-                  setReplyTo({
-                    ...msg,
-                    senderName: msg.senderId === user.id
-                      ? (myNicknameInChat || 'You')
-                      : (isGroup ? (senderInfo?.displayName || senderInfo?.username || activeChat.displayName) : (partnerNickname || senderInfo?.displayName || activeChat.displayName))
-                  });
-                  replyInputRef.current?.focus();
-                }}
+                onReply={handleReplyCallback}
                 onOpenStory={handleOpenStory}
-                onOpenSparksWallet={() => setShowSparksWallet(true)}
+                onOpenSparksWallet={handleOpenSparksWalletCallback}
                 onEditDrawing={handleOpenWhiteboardForEdit}
                 highlightSearchTerm={showInChatSearch ? inChatSearchQuery : ''}
                 translationData={translationsByMsgId[msg.id]}
-                onTranslateMessage={() => handleTranslateMessage(msg)}
-                onToggleTranslation={() => handleToggleTranslation(msg.id)}
+                onTranslateMessage={handleTranslateMessage}
+                onToggleTranslation={handleToggleTranslation}
                 targetLang={targetLang}
               />
             </React.Fragment>

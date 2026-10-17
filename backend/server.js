@@ -334,6 +334,34 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Real-time actual presence check for interactive features (Games, Whiteboard, Music Sync)
+  // Allows multiplayer/interactive activities to function even if user has stealth indicator on
+  socket.on('check_real_presence', ({ targetUserId, targetUsername, targetMongoId }, callback) => {
+    if (typeof callback !== 'function') return;
+    const ids = [targetUserId, targetUsername, targetMongoId].filter(Boolean).map(String);
+    let isActuallyConnected = false;
+    for (const id of ids) {
+      if (onlineUsers.has(id)) {
+        isActuallyConnected = true;
+        break;
+      }
+    }
+    if (!isActuallyConnected && io && io.sockets && io.sockets.sockets) {
+      for (const [sId, s] of io.sockets.sockets) {
+        if (s.connected && (
+          ids.includes(String(s.userId)) ||
+          ids.includes(String(s.userCustomId)) ||
+          ids.includes(String(s.userMongoId)) ||
+          ids.includes(String(s.userUsername))
+        )) {
+          isActuallyConnected = true;
+          break;
+        }
+      }
+    }
+    callback({ isOnline: isActuallyConnected });
+  });
+
   // User comes online (mobile data ON / socket connected)
   socket.on('setup', async (userId) => {
     socket.userId = userId;

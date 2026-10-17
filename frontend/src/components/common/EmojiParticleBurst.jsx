@@ -9,8 +9,8 @@ export default function EmojiParticleBurst() {
   useEffect(() => {
     const handleTriggerBurst = (e) => {
       const now = Date.now();
-      // Enforce strictly 1 single popup: ignore duplicate calls within 500ms
-      if (now - lastTriggerTimeRef.current < 500) {
+      // Enforce strictly 1 single popup: ignore duplicate calls within 800ms
+      if (now - lastTriggerTimeRef.current < 800) {
         return;
       }
       lastTriggerTimeRef.current = now;
@@ -28,7 +28,7 @@ export default function EmojiParticleBurst() {
       // Clean up after animation finishes (0.8s)
       timerRef.current = setTimeout(() => {
         setActivePopup(null);
-      }, 800);
+      }, 820);
     };
 
     window.addEventListener('pulsechat_trigger_emoji_burst', handleTriggerBurst);
@@ -45,19 +45,19 @@ export default function EmojiParticleBurst() {
       <style>{`
         @keyframes instaStoryReactionPop {
           0% {
-            transform: translate(-50%, -50%) scale(0) rotate(-16deg);
+            transform: translate3d(-50%, -50%, 0) scale(0) rotate(-16deg);
             opacity: 0;
           }
           35% {
-            transform: translate(-50%, -50%) scale(1.36) rotate(0deg);
+            transform: translate3d(-50%, -50%, 0) scale(1.36) rotate(0deg);
             opacity: 1;
           }
           65% {
-            transform: translate(-50%, -50%) scale(1.12) rotate(6deg);
+            transform: translate3d(-50%, -50%, 0) scale(1.12) rotate(6deg);
             opacity: 1;
           }
           100% {
-            transform: translate(-50%, -50%) scale(0.85) translateY(-46px);
+            transform: translate3d(-50%, -50%, 0) scale(0.85) translateY(-46px);
             opacity: 0;
           }
         }
@@ -69,7 +69,7 @@ export default function EmojiParticleBurst() {
           position: 'fixed',
           top: '50%',
           left: '50%',
-          transform: 'translate(-50%, -50%)',
+          transform: 'translate3d(-50%, -50%, 0)',
           zIndex: 99999,
           pointerEvents: 'none',
           userSelect: 'none',
