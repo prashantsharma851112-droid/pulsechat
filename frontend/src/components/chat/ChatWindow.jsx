@@ -2070,7 +2070,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       socket.emit('trigger_emoji_burst', { chatId, emoji: cleanEmoji, userId: user?.id });
     }
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji: cleanEmoji, mode: 'burst', duration: 3 } }));
+      window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', { detail: { emoji: cleanEmoji, mode: 'burst', duration: 7 } }));
     }
   };
 

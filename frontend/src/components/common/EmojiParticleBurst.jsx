@@ -38,7 +38,8 @@ export default function EmojiParticleBurst() {
     }
 
     const startTime = performance.now();
-    const duration = 3000; // Exactly 3 seconds
+    const duration = durationMs || 7000; // 7 seconds
+    const fadeStart = Math.max(0, duration - 1000);
 
     const animate = (currentTime) => {
       const elapsed = currentTime - startTime;
@@ -49,10 +50,10 @@ export default function EmojiParticleBurst() {
 
       ctx.clearRect(0, 0, width, height);
 
-      // Smooth fade-out blend during the final 800ms
+      // Smooth fade-out blend during the final 1000ms
       let alpha = 1;
-      if (elapsed > 2200) {
-        alpha = Math.max(0, 1 - (elapsed - 2200) / 800);
+      if (elapsed > fadeStart) {
+        alpha = Math.max(0, 1 - (elapsed - fadeStart) / (duration - fadeStart));
       }
       ctx.globalAlpha = alpha;
 
@@ -65,8 +66,8 @@ export default function EmojiParticleBurst() {
         p.x += p.vx;
         p.rotation += p.rotSpeed;
 
-        // Loop back to top during the first 2 seconds to maintain continuous rain
-        if (p.y > height + 40 && elapsed < 2000) {
+        // Loop back to top until fade starts to maintain continuous rain
+        if (p.y > height + 40 && elapsed < fadeStart) {
           p.y = -40;
           p.x = Math.random() * width;
         }
@@ -93,8 +94,9 @@ export default function EmojiParticleBurst() {
       const isBurst = detail.mode === 'burst';
 
       if (isBurst) {
-        // 3-second Falling Emoji Rain (Barsaat) with smooth fade-out
-        startEmojiRain(emoji);
+        // 7-second Falling Emoji Rain (Barsaat) with smooth fade-out
+        const dur = (detail.duration ? detail.duration * 1000 : 7000);
+        startEmojiRain(emoji, dur);
         return;
       }
 
