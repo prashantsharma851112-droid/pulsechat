@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useContext, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useContext, useCallback, useMemo, startTransition, useDeferredValue } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Camera, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3, Ghost, Search, Globe, ChevronUp, ChevronDown, ArrowDown, Lock, Unlock, ChevronLeft, ChevronRight, Bell, BellOff } from 'lucide-react';
@@ -4821,51 +4821,55 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleTextChange = (e) => {
     const val = e.target.value;
+    // Urgent synchronous update for instant, zero-latency keystroke response
     setText(val);
 
-    // Debounce synchronous localStorage draft writes to eliminate keypress hitching
-    if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
-    draftSaveTimeoutRef.current = setTimeout(() => {
-      try {
-        if (chatId) {
-          if (val) {
-            localStorage.setItem(`pulsechat_draft_${chatId}`, val);
-          } else {
-            localStorage.removeItem(`pulsechat_draft_${chatId}`);
+    // React 18 Time-Slicing: Offload background tasks (draft save, typing socket emissions)
+    startTransition(() => {
+      // Debounce synchronous localStorage draft writes to eliminate keypress hitching
+      if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+      draftSaveTimeoutRef.current = setTimeout(() => {
+        try {
+          if (chatId) {
+            if (val) {
+              localStorage.setItem(`pulsechat_draft_${chatId}`, val);
+            } else {
+              localStorage.removeItem(`pulsechat_draft_${chatId}`);
+            }
           }
-        }
-      } catch {}
-    }, 300);
+        } catch {}
+      }, 300);
 
-    if (!socket) return;
-    const receiverId = isGroup ? '' : activeChat?.id;
+      if (!socket) return;
+      const receiverId = isGroup ? '' : activeChat?.id;
 
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
 
-    if (!val.trim()) {
-      socket.emit('typing_stop', { chatId, userId: user?.id, receiverId });
-      lastTypingEmitRef.current = 0;
-      return;
-    }
+      if (!val.trim()) {
+        socket.emit('typing_stop', { chatId, userId: user?.id, receiverId });
+        lastTypingEmitRef.current = 0;
+        return;
+      }
 
-    // Throttle socket typing_start emissions to at most once every 2 seconds
-    const now = Date.now();
-    if (now - lastTypingEmitRef.current > 2000) {
-      lastTypingEmitRef.current = now;
-      socket.emit('typing_start', {
-        chatId,
-        userId: user?.id,
-        username: user?.displayName || user?.username || 'User',
-        receiverId
-      });
-    }
+      // Throttle socket typing_start emissions to at most once every 2 seconds
+      const now = Date.now();
+      if (now - lastTypingEmitRef.current > 2000) {
+        lastTypingEmitRef.current = now;
+        socket.emit('typing_start', {
+          chatId,
+          userId: user?.id,
+          username: user?.displayName || user?.username || 'User',
+          receiverId
+        });
+      }
 
-    typingTimeoutRef.current = setTimeout(() => {
-      socket.emit('typing_stop', { chatId, userId: user?.id, receiverId });
-      lastTypingEmitRef.current = 0;
-    }, 2500);
+      typingTimeoutRef.current = setTimeout(() => {
+        socket.emit('typing_stop', { chatId, userId: user?.id, receiverId });
+        lastTypingEmitRef.current = 0;
+      }, 2500);
+    });
   };
 
   useEffect(() => {

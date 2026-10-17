@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 
-export default function ChatLiveWallpaper({ wallpaperId, customImage }) {
+function ChatLiveWallpaper({ wallpaperId, customImage }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -207,3 +207,5 @@ export default function ChatLiveWallpaper({ wallpaperId, customImage }) {
 
   return null;
 }
+
+export default React.memo(ChatLiveWallpaper);
