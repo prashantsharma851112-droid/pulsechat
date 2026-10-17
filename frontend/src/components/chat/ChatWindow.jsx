@@ -7247,6 +7247,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           />
 
           {/* 4-Dot Quick Action Drawer */}
+          {/* 4-Dot Quick Action Drawer (WhatsApp-Style Transparent Background + Theme Adaptive Neon Light Buttons) */}
           {showActionGrid && (
             <div
               ref={actionGridRef}
@@ -7254,14 +7255,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 position: 'absolute',
                 bottom: 'calc(100% + 10px)',
                 left: '12px',
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border)',
+                background: 'transparent',
+                border: 'none',
                 borderRadius: '20px',
-                padding: '14px',
-                boxShadow: '0 16px 40px rgba(0,0,0,0.5), 0 0 25px rgba(99, 102, 241, 0.2)',
+                padding: '10px 4px',
+                boxShadow: 'none',
+                backdropFilter: 'none',
+                WebkitBackdropFilter: 'none',
                 display: 'grid',
                 gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '12px',
+                gap: '10px',
                 zIndex: 1100,
                 width: 'min(330px, 92vw)',
                 maxHeight: 'min(440px, 80vh)',
@@ -7276,34 +7279,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   setShowActionGrid(false);
                   fileInputRef.current?.click();
                 }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
+                className="action-grid-neon-btn"
+                title="Files & Media"
               >
                 <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '13px',
                   background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#fff',
-                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.35)'
+                  boxShadow: '0 4px 10px rgba(59, 130, 246, 0.4)'
                 }}>
                   <Paperclip size={20} />
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Files & Media</span>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)', textShadow: '0 1px 3px rgba(0,0,0,0.85)' }}>Files & Media</span>
               </button>
 
               {/* 2. 3D Typography (VIP Pro) */}
@@ -7313,24 +7305,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   setShowActionGrid(false);
                   setShow3DTextModal(true);
                 }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
+                className="action-grid-neon-btn"
+                title="3D Text"
               >
                 <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '13px',
                   background: 'linear-gradient(135deg, #06b6d4, #a855f7)',
                   display: 'flex',
                   alignItems: 'center',
@@ -7338,11 +7319,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   color: '#fff',
                   fontWeight: 900,
                   fontSize: '0.92rem',
-                  boxShadow: '0 4px 14px rgba(6, 182, 212, 0.4)'
+                  boxShadow: '0 4px 12px rgba(6, 182, 212, 0.45)'
                 }}>
                   3D
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#06b6d4', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#06b6d4', display: 'flex', alignItems: 'center', gap: '3px', textShadow: '0 1px 3px rgba(0,0,0,0.85)' }}>
                   <span>3D Text</span>
                   <Crown size={12} color="#06b6d4" />
                 </span>
@@ -7355,35 +7336,24 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   setShowActionGrid(false);
                   setShowGiftPicker(true);
                 }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
+                className="action-grid-neon-btn"
+                title="Send Gift"
               >
                 <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '13px',
                   background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#fff',
-                  boxShadow: '0 4px 12px rgba(236, 72, 153, 0.35)',
+                  boxShadow: '0 4px 10px rgba(236, 72, 153, 0.4)',
                   fontSize: '1.25rem'
                 }}>
                   🎁
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ec4899' }}>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ec4899', textShadow: '0 1px 3px rgba(0,0,0,0.85)' }}>
                   Send Gift
                 </span>
               </button>
@@ -7392,34 +7362,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               <button
                 type="button"
                 onClick={handleSendStealthDust}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
+                className="action-grid-neon-btn"
+                title="Dust Text"
               >
                 <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '13px',
                   background: 'linear-gradient(135deg, #f59e0b, #d97706)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#fff',
-                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
+                  boxShadow: '0 4px 10px rgba(245, 158, 11, 0.45)'
                 }}>
                   <Zap size={20} />
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '3px', textShadow: '0 1px 3px rgba(0,0,0,0.85)' }}>
                   <span>Dust text</span>
                   <Crown size={12} color="#f59e0b" />
                 </span>
@@ -7432,41 +7391,29 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   setShowActionGrid(false);
                   dustImageInputRef.current?.click();
                 }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
+                className="action-grid-neon-btn"
+                title="Dust Image"
               >
                 <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '13px',
                   background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#fff',
-                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)',
+                  boxShadow: '0 4px 10px rgba(245, 158, 11, 0.45)',
                   fontSize: '1.25rem'
                 }}>
                   🌫️
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '3px', textShadow: '0 1px 3px rgba(0,0,0,0.85)' }}>
                   <span>Dust Image</span>
                 </span>
               </button>
 
-
-              {/* 5. Emoji Particle Burst */}
+              {/* 6. Emoji Particle Burst */}
               <button
                 type="button"
                 onClick={() => {
@@ -7477,77 +7424,53 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   }
                   setShowEmojiBurstPicker(prev => !prev);
                 }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
+                className="action-grid-neon-btn"
+                title="Emoji Burst"
               >
                 <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '13px',
                   background: 'linear-gradient(135deg, #ef4444, #dc2626)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#fff',
-                  boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)'
+                  boxShadow: '0 4px 10px rgba(239, 68, 68, 0.45)'
                 }}>
                   <Flame size={20} />
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ef4444', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ef4444', display: 'flex', alignItems: 'center', gap: '3px', textShadow: '0 1px 3px rgba(0,0,0,0.85)' }}>
                   <span>Emoji Burst</span>
                   <Crown size={12} color="#ef4444" />
                 </span>
               </button>
 
-              {/* 4. Create Poll */}
+              {/* 7. Create Poll */}
               <button
                 type="button"
                 onClick={() => {
                   setShowActionGrid(false);
                   setShowCreatePoll(true);
                 }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
+                className="action-grid-neon-btn"
+                title="Create Poll"
               >
                 <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '13px',
                   background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#fff',
-                  boxShadow: '0 4px 12px rgba(139, 92, 246, 0.35)'
+                  boxShadow: '0 4px 10px rgba(139, 92, 246, 0.4)'
                 }}>
                   <BarChart2 size={20} />
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Create Poll</span>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)', textShadow: '0 1px 3px rgba(0,0,0,0.85)' }}>Create Poll</span>
               </button>
-
-
 
               {/* 8. Schedule Message (Send Later / Birthday Wish) */}
               <button
@@ -7556,34 +7479,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   setShowActionGrid(false);
                   setShowScheduleModal(true);
                 }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
+                className="action-grid-neon-btn"
+                title="Schedule Message"
               >
                 <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '13px',
                   background: 'linear-gradient(135deg, #f59e0b, #d97706)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#fff',
-                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
+                  boxShadow: '0 4px 10px rgba(245, 158, 11, 0.45)'
                 }}>
                   <Clock size={20} />
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#f59e0b' }}>Schedule ⏰</span>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#f59e0b', textShadow: '0 1px 3px rgba(0,0,0,0.85)' }}>Schedule ⏰</span>
               </button>
 
               {/* 9. Live Translation 🌐 */}
@@ -7593,24 +7505,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   setShowActionGrid(false);
                   setShowTranslateBar(prev => !prev);
                 }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
+                className="action-grid-neon-btn"
+                title="Live Translation"
               >
                 <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '13px',
                   background: isAutoTranslateActive
                     ? 'linear-gradient(135deg, #06b6d4, #3b82f6)'
                     : 'linear-gradient(135deg, #0ea5e9, #0284c7)',
@@ -7618,7 +7519,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#fff',
-                  boxShadow: '0 4px 12px rgba(14, 165, 233, 0.4)',
+                  boxShadow: '0 4px 10px rgba(14, 165, 233, 0.45)',
                   position: 'relative'
                 }}>
                   <Globe size={20} />
@@ -7635,7 +7536,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     }} />
                   )}
                 </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#0ea5e9' }}>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#0ea5e9', textShadow: '0 1px 3px rgba(0,0,0,0.85)' }}>
                   Translate 🌐
                 </span>
               </button>
@@ -7649,11 +7550,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 position: 'absolute',
                 bottom: 'calc(100% + 10px)',
                 left: '12px',
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border)',
+                background: 'color-mix(in srgb, var(--accent) 14%, rgba(15, 23, 42, 0.78))',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1.5px solid var(--accent)',
                 borderRadius: '20px',
                 padding: '14px',
-                boxShadow: '0 16px 40px rgba(0,0,0,0.5), 0 0 25px rgba(239, 68, 68, 0.3)',
+                boxShadow: '0 0 22px color-mix(in srgb, var(--accent) 55%, transparent), 0 4px 14px rgba(0,0,0,0.3)',
                 zIndex: 1150,
                 width: 'min(330px, 92vw)',
                 maxHeight: '380px',
@@ -7801,16 +7704,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 width: '42px',
                 height: '42px',
                 borderRadius: '50%',
-                background: showActionGrid ? 'var(--accent, #6366f1)' : 'var(--bg-card, #202c33)',
-                color: showActionGrid ? '#fff' : 'var(--accent, #6366f1)',
-                border: showActionGrid ? '1px solid var(--accent, #6366f1)' : '1px solid var(--border)',
+                background: showActionGrid
+                  ? 'color-mix(in srgb, var(--accent) 30%, rgba(15, 23, 42, 0.75))'
+                  : 'color-mix(in srgb, var(--accent) 14%, rgba(15, 23, 42, 0.65))',
+                color: 'var(--accent)',
+                border: '1.5px solid var(--accent)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
                 transition: 'all 0.15s ease',
                 cursor: 'pointer',
-                boxShadow: showActionGrid ? '0 0 12px rgba(99, 102, 241, 0.4)' : 'none'
+                boxShadow: showActionGrid
+                  ? '0 0 16px var(--accent), 0 2px 8px rgba(0,0,0,0.3)'
+                  : '0 0 10px color-mix(in srgb, var(--accent) 50%, transparent)'
               }}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -7833,15 +7740,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 width: '42px',
                 height: '42px',
                 borderRadius: '50%',
-                background: 'var(--bg-card, #202c33)',
-                color: 'var(--text-muted, #8696a0)',
-                border: '1px solid var(--border)',
+                background: 'color-mix(in srgb, var(--accent) 14%, rgba(15, 23, 42, 0.65))',
+                color: 'var(--accent)',
+                border: '1.5px solid var(--accent)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
                 transition: 'all 0.15s ease',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                boxShadow: '0 0 10px color-mix(in srgb, var(--accent) 50%, transparent)'
               }}
             >
               <Camera size={20} />
