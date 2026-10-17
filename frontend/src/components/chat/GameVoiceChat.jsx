@@ -22,7 +22,7 @@ const RTC_CONFIG = {
   iceCandidatePoolSize: 10
 };
 
-export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact = false }) {
+function GameVoiceChat({ chatId, partnerName = 'Partner', compact = false }) {
   const { socket } = useContext(SocketContext);
   const { user } = useContext(AuthContext);
 
@@ -41,6 +41,8 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
   const analyserRef = useRef(null);
   const vadIntervalRef = useRef(null);
   const remoteVadIntervalRef = useRef(null);
+  const isSpeakingRef = useRef(false);
+  const isPartnerSpeakingRef = useRef(false);
   const isInitiatorRef = useRef(false);
   const pendingCandidatesRef = useRef([]);
 
@@ -159,8 +161,12 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
           sum += dataArray[i];
         }
         const avg = sum / dataArray.length;
-        setIsSpeaking(avg > 18);
-      }, 120);
+        const nextSpeaking = avg > 20;
+        if (nextSpeaking !== isSpeakingRef.current) {
+          isSpeakingRef.current = nextSpeaking;
+          setIsSpeaking(nextSpeaking);
+        }
+      }, 150);
     } catch (e) {}
   };
 
@@ -185,8 +191,12 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
           sum += dataArray[i];
         }
         const avg = sum / dataArray.length;
-        setIsPartnerSpeaking(avg > 18);
-      }, 120);
+        const nextPartnerSpeaking = avg > 20;
+        if (nextPartnerSpeaking !== isPartnerSpeakingRef.current) {
+          isPartnerSpeakingRef.current = nextPartnerSpeaking;
+          setIsPartnerSpeaking(nextPartnerSpeaking);
+        }
+      }, 150);
     } catch (e) {}
   };
 
@@ -566,3 +576,5 @@ export default function GameVoiceChat({ chatId, partnerName = 'Partner', compact
     </>
   );
 }
+
+export default React.memo(GameVoiceChat);

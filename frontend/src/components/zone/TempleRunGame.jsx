@@ -1401,21 +1401,21 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
 
   // Touch & Pointer Swipe Handlers (Zero-latency swipe detection)
   const handleTouchStart = useCallback((e) => {
-    if (e.cancelable) e.preventDefault();
-    const t = e.touches ? e.touches[0] : e;
-    touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
-    isDraggingRef.current = true;
+    if (e.touches && e.touches.length > 0) {
+      const t = e.touches[0];
+      touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
+      isDraggingRef.current = true;
+    }
   }, []);
 
   const handleTouchMove = useCallback((e) => {
-    if (!isDraggingRef.current) return;
-    if (e.cancelable) e.preventDefault();
-    const t = e.touches ? e.touches[0] : e;
+    if (!isDraggingRef.current || !e.touches || e.touches.length === 0) return;
+    const t = e.touches[0];
     const dx = t.clientX - touchStartRef.current.x;
     const dy = t.clientY - touchStartRef.current.y;
 
-    // Detect immediate swipe gesture with snappy 14px threshold
-    const minSwipe = 14;
+    // Responsive swipe gesture with 18px threshold
+    const minSwipe = 18;
     if (Math.abs(dx) > minSwipe || Math.abs(dy) > minSwipe) {
       if (Math.abs(dx) > Math.abs(dy)) {
         if (dx > 0) moveRight();
@@ -1425,6 +1425,31 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
         else jump();
       }
       touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
+      isDraggingRef.current = false;
+    }
+  }, [moveRight, moveLeft, slide, jump]);
+
+  const handlePointerDown = useCallback((e) => {
+    if (e.pointerType === 'touch') return; // Handled by onTouchStart
+    touchStartRef.current = { x: e.clientX, y: e.clientY, time: Date.now() };
+    isDraggingRef.current = true;
+  }, []);
+
+  const handlePointerMove = useCallback((e) => {
+    if (e.pointerType === 'touch' || !isDraggingRef.current) return;
+    const dx = e.clientX - touchStartRef.current.x;
+    const dy = e.clientY - touchStartRef.current.y;
+
+    const minSwipe = 18;
+    if (Math.abs(dx) > minSwipe || Math.abs(dy) > minSwipe) {
+      if (Math.abs(dx) > Math.abs(dy)) {
+        if (dx > 0) moveRight();
+        else moveLeft();
+      } else {
+        if (dy > 0) slide();
+        else jump();
+      }
+      touchStartRef.current = { x: e.clientX, y: e.clientY, time: Date.now() };
       isDraggingRef.current = false;
     }
   }, [moveRight, moveLeft, slide, jump]);
@@ -2430,8 +2455,8 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      onPointerDown={handleTouchStart}
-      onPointerMove={handleTouchMove}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
       onPointerUp={handleTouchEnd}
     >
       {/* =========================================================================
