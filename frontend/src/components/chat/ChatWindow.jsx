@@ -4975,6 +4975,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setShowSparksWallet(true);
   }, []);
 
+  const handleJoinGroupCallCallback = useCallback((isVideo = false) => {
+    if (onStartGroupCall && activeChat) {
+      onStartGroupCall(activeChat, Boolean(isVideo));
+    }
+  }, [onStartGroupCall, activeChat]);
+
   // Memoized Messages List: Prevents entire message history and DOM nodes from re-evaluating when typing in the input box
   const renderedMessagesList = useMemo(() => {
     return deduplicatedMessages.map((msg, index) => {
