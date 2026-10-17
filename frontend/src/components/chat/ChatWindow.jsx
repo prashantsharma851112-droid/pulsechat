@@ -2865,12 +2865,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     };
     const handleAutoOpenMusic = (data) => {
-      if (isMatchingChat(data) && data.senderId !== user?.id) {
-        setShowChatMusicPicker(true);
-        const inviter = data.senderName || activeChat?.displayName || 'Friend';
-        setActionToast(`🎵 ${inviter} ne Music Jam shuru kiya!`);
-        setTimeout(() => setActionToast(''), 4000);
-      }
+      // Do not open music popup on partner's screen; only the user who clicked gets the picker
     };
 
     socket.on('auto_open_arrow_game', handleAutoOpenGame);
@@ -4258,15 +4253,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         setShowProModal(true);
         return;
       }
+      // Open music picker only on sender's own screen; partner will not get popup
       setShowChatMusicPicker(true);
-      if (socket && chatId) {
-        socket.emit('request_open_music', {
-          chatId,
-          senderId: user?.id,
-          senderName: user?.displayName || user?.username,
-          receiverId: isGroup ? '' : (activeChat?.id || activeChat?._id)
-        });
-      }
     });
   };
 
