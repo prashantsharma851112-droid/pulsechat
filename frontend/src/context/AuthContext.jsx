@@ -451,26 +451,33 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const authValue = React.useMemo(() => ({
+    user,
+    token,
+    loading,
+    login,
+    logout,
+    deleteAccount,
+    savedAccounts,
+    switchAccount,
+    addAccount,
+    removeSavedAccount,
+    updateUserProfile,
+    blockUser,
+    unblockUser,
+    toggleHideReadReceipts,
+    toggleHideOnlineStatus,
+    toggleAutoCleanup,
+    runInstantCleanup
+  }), [
+    user,
+    token,
+    loading,
+    savedAccounts
+  ]);
+
   return (
-    <AuthContext.Provider value={{
-      user,
-      token,
-      loading,
-      login,
-      logout,
-      deleteAccount,
-      savedAccounts,
-      switchAccount,
-      addAccount,
-      removeSavedAccount,
-      updateUserProfile,
-      blockUser,
-      unblockUser,
-      toggleHideReadReceipts,
-      toggleHideOnlineStatus,
-      toggleAutoCleanup,
-      runInstantCleanup
-    }}>
+    <AuthContext.Provider value={authValue}>
       {children}
     </AuthContext.Provider>
   );

@@ -398,8 +398,16 @@ export function SocketProvider({ children }) {
     }
   }, [user?.id]);
 
+  const contextValue = React.useMemo(() => ({
+    socket,
+    onlineUsers,
+    typingMap,
+    lastNotification,
+    vibeAuras
+  }), [socket, onlineUsers, typingMap, lastNotification, vibeAuras]);
+
   return (
-    <SocketContext.Provider value={{ socket, onlineUsers, typingMap, lastNotification, vibeAuras }}>
+    <SocketContext.Provider value={contextValue}>
       {children}
     </SocketContext.Provider>
   );

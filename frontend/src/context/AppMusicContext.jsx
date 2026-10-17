@@ -122,15 +122,13 @@ export function AppMusicProvider({ children }) {
 
     let lastSecondStamp = -1;
     const handleTimeUpdate = () => {
-      setProgress(audio.currentTime);
-      if (audio.duration && !isNaN(audio.duration)) {
-        setDuration(audio.duration);
-      }
-
-      // Check daily listening limit for Free tier users (30 mins = 1800s)
       const curSec = Math.floor(audio.currentTime);
       if (curSec !== lastSecondStamp && !audio.paused) {
         lastSecondStamp = curSec;
+        setProgress(curSec);
+        if (audio.duration && !isNaN(audio.duration)) {
+          setDuration(audio.duration);
+        }
 
         const isUserPro = Boolean(userRef.current?.isPro && (!userRef.current?.proExpiresAt || new Date(userRef.current.proExpiresAt) > new Date()));
         if (!isUserPro) {
@@ -446,7 +444,7 @@ export function AppMusicProvider({ children }) {
     };
   }, [socket, user?.id, user?._id, user?.username, updateUserProfile]);
 
-  const value = {
+  const value = React.useMemo(() => ({
     currentTrack,
     musicNoteText,
     isPlaying,
@@ -473,7 +471,30 @@ export function AppMusicProvider({ children }) {
     saveMusicNote,
     deleteMusicNote,
     openMusicLimitModal: () => setShowMusicLimitModal(true)
-  };
+  }), [
+    currentTrack,
+    musicNoteText,
+    isPlaying,
+    isDucked,
+    progress,
+    duration,
+    isMuted,
+    volume,
+    dailyListenedSec,
+    bonusListeningSec,
+    user?.isPro,
+    isPickerOpen,
+    playTrack,
+    pauseTrack,
+    resumeTrack,
+    togglePlayPause,
+    seek,
+    setVolume,
+    toggleMute,
+    clearTrack,
+    saveMusicNote,
+    deleteMusicNote
+  ]);
 
   return (
     <AppMusicContext.Provider value={value}>
