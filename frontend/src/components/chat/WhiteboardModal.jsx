@@ -8,6 +8,7 @@ import {
 import { SocketContext } from '../../context/SocketContext';
 import { useBackHandler } from '../../utils/backNavigation';
 import { EMOJI_CATEGORIES, ALL_EMOJIS } from './EmojiPicker';
+import GameVoiceChat from './GameVoiceChat';
 
 const PALETTE_COLORS = [
   '#6366f1', '#3b82f6', '#06b6d4', '#10b981', '#84cc16',
@@ -1480,15 +1481,20 @@ export default function WhiteboardModal({
               </span>
             </div>
           </div>
-          <button
-            className="icon-btn-ghost"
-            onClick={() => {
-              saveDraft();
-              onClose();
-            }}
-          >
-            <X size={20} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {chatId && (
+              <GameVoiceChat chatId={chatId} partnerName={chatTitle || 'Friend'} compact={true} />
+            )}
+            <button
+              className="icon-btn-ghost"
+              onClick={() => {
+                saveDraft();
+                onClose();
+              }}
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div style={{ padding: '0.65rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, overflowY: 'auto' }}>

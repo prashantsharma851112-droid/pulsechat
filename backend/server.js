@@ -2255,8 +2255,54 @@ io.on('connection', (socket) => {
   socket.on('request_open_tictactoe', (data) => broadcastActivityOpen('auto_open_tictactoe', data));
   socket.on('request_open_music', (data) => broadcastActivityOpen('auto_open_music', data));
 
+  // =========================================================================
+  // REAL-TIME IN-GAME VOICE CHAT (FREE FIRE / DISCORD GAMING MIC & AUDIO)
+  // =========================================================================
+  socket.on('game_voice_join', ({ chatId, userId, userName, userAvatar }) => {
+    if (!chatId || !userId) return;
+    const room = `game_voice_${chatId}`;
+    socket.join(room);
+    socket.gameVoiceChatId = chatId;
+    socket.gameVoiceUserId = userId;
+    socket.to(room).emit('game_voice_peer_joined', {
+      userId,
+      userName,
+      userAvatar,
+      socketId: socket.id
+    });
+  });
+
+  socket.on('game_voice_signal', ({ chatId, toUserId, fromUserId, signal, type }) => {
+    if (!chatId || !toUserId) return;
+    io.to(`user_${toUserId}`).to(toUserId).emit('game_voice_signal', {
+      fromUserId,
+      signal,
+      type
+    });
+  });
+
+  socket.on('game_voice_state', ({ chatId, userId, isMuted, isDeafened }) => {
+    if (!chatId) return;
+    const room = `game_voice_${chatId}`;
+    socket.to(room).emit('game_voice_state_changed', {
+      userId,
+      isMuted,
+      isDeafened
+    });
+  });
+
+  socket.on('game_voice_leave', ({ chatId, userId }) => {
+    if (!chatId) return;
+    const room = `game_voice_${chatId}`;
+    socket.leave(room);
+    socket.to(room).emit('game_voice_peer_left', { userId });
+  });
+
   // Disconnect
   socket.on('disconnect', () => {
+    if (socket.gameVoiceChatId && socket.gameVoiceUserId) {
+      io.to(`game_voice_${socket.gameVoiceChatId}`).emit('game_voice_peer_left', { userId: socket.gameVoiceUserId });
+    }
     const toDelete = [socket.userId, socket.userCustomId, socket.userMongoId, socket.userUsername].filter(Boolean);
     toDelete.forEach(id => onlineUsers.delete(String(id)));
     if (socket.userId && !hiddenOnlineUsers.has(socket.userId)) {

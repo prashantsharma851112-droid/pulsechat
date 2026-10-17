@@ -4,6 +4,7 @@ import { SocketContext } from '../../context/SocketContext';
 import { X, RotateCcw, Award, Zap, Users, Swords, ShieldCheck, Sparkles, RefreshCw, Play } from 'lucide-react';
 import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
+import GameVoiceChat from './GameVoiceChat';
 
 // Web Audio API Sound Synthesizers for 0ms Instant Audio Feedback
 const playSwooshSound = () => {
@@ -805,7 +806,10 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
             </div>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {chatId && (
+              <GameVoiceChat chatId={chatId} partnerName={partnerName} compact={true} />
+            )}
             <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', background: 'rgba(56,189,248,0.15)', padding: '3px 8px', borderRadius: '8px' }}>
               🎯 {clearedIds.size}/{totalArrows}
             </span>

@@ -3,6 +3,7 @@ import { X, RotateCcw, Trophy, Sparkles, Bot, Users, Award, Play } from 'lucide-
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
 import { playSound } from '../../utils/audio';
+import GameVoiceChat from './GameVoiceChat';
 
 // Web Audio API Sound Synthesizer for high performance native audio
 const playMoveSound = (isX) => {
@@ -223,6 +224,13 @@ export default function TicTacToeModal({ chatId, partnerName, onClose, onOpenSpa
             <X size={18} />
           </button>
         </div>
+
+        {/* Live In-Game Voice Chat */}
+        {chatId && (
+          <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
+            <GameVoiceChat chatId={chatId} partnerName={partnerName || 'Friend'} compact={false} />
+          </div>
+        )}
 
         {/* Scoreboard */}
         <div style={{ width: '100%', display: 'flex', justifyContent: 'space-around', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px 12px', borderRadius: '16px', marginBottom: '16px', border: '1px solid rgba(255,255,255,0.08)' }}>
