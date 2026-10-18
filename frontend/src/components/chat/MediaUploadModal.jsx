@@ -30,7 +30,7 @@ export default function MediaUploadModal({ mediaFile, onSend, onClose }) {
       type: isVideo ? 'video' : 'image',
       isViewOnce: isOnce || isTwice || isDust,
       isViewTwice: isTwice,
-      viewLimit: isTwice ? 2 : 1,
+      viewLimit: isTwice ? 2 : (isOnce ? 1 : null),
       isFogSnap: isDust,
       isDustImage: isDust,
       fogSnapDuration: 10,

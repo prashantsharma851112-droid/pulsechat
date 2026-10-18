@@ -19,9 +19,16 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
   const [friendStatus, setFriendStatus] = useState({ status: 'none', requestId: null });
   const [friendLoading, setFriendLoading] = useState(false);
 
-  const isOnline = onlineUsers.includes(targetUser.id);
-  const isBlocked = Boolean(user?.blockedUsers && user.blockedUsers.includes(targetUser.id));
-  const chatId = user?.id && targetUser?.id ? [user.id, targetUser.id].sort().join('_') : null;
+  const currentUserId = user?.id || user?._id;
+  const targetUserId = targetUser?.id || targetUser?._id || targetUser?.userId;
+
+  const isOnline = Boolean(
+    targetUserId && onlineUsers.some(uId => String(uId) === String(targetUserId) || (targetUser?.username && String(uId) === String(targetUser.username)))
+  );
+  const isBlocked = Boolean(
+    user?.blockedUsers && targetUserId && (user.blockedUsers.includes(targetUserId) || (targetUser?.id && user.blockedUsers.includes(targetUser.id)))
+  );
+  const chatId = currentUserId && targetUserId ? [currentUserId, targetUserId].sort().join('_') : null;
 
   // Manage Storage, Chat Lock & Mute States
   const [showManageStorage, setShowManageStorage] = useState(false);
@@ -47,36 +54,39 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
 
   const isPrivateEphemeral = (m) => {
     if (!m) return false;
-    return Boolean(
-      m.isViewOnce ||
-      m.isViewTwice ||
-      m.viewLimit ||
-      m.isDustImage ||
-      m.isDust ||
-      m.isFogSnap ||
-      m.isDustText ||
-      m.type === 'stealth_dust' ||
-      m.type === 'viewOnce' ||
-      m.viewMode === 'once' ||
-      m.viewMode === 'twice' ||
-      m.viewMode === 'dust'
-    );
+    const isOnce = Boolean(m.isViewOnce || m.viewMode === 'once' || m.type === 'viewOnce');
+    const isTwice = Boolean(m.isViewTwice || m.viewMode === 'twice');
+    const isDust = Boolean(m.isDustImage || m.isDust || m.isFogSnap || m.isDustText || m.type === 'stealth_dust' || m.viewMode === 'dust');
+    return isOnce || isTwice || isDust;
   };
 
   const sharedMediaItems = useMemo(() => {
-    return (sharedMessages || []).filter(m =>
-      (m.type === 'image' || m.type === 'video') &&
-      m.mediaUrl &&
-      m.type !== 'deleted' &&
-      !m.isDeleted &&
-      !isPrivateEphemeral(m)
-    );
+    const items = [];
+    (sharedMessages || []).forEach(m => {
+      if (m.type === 'deleted' || m.isDeleted) return;
+      if (isPrivateEphemeral(m)) return;
+
+      if (m.type === 'image' || m.type === 'video' || m.type === 'media' || m.mediaType === 'image' || m.mediaType === 'video') {
+        if (m.mediaUrl) {
+          items.push(m);
+        } else if (Array.isArray(m.mediaUrls) && m.mediaUrls.length > 0) {
+          m.mediaUrls.forEach((url, i) => {
+            items.push({ ...m, id: `${m.id || 'm'}_${i}`, mediaUrl: url, type: 'image' });
+          });
+        }
+      } else if (m.type === 'image_group' && Array.isArray(m.mediaUrls)) {
+        m.mediaUrls.forEach((url, i) => {
+          items.push({ ...m, id: `${m.id || 'm'}_${i}`, mediaUrl: url, type: 'image' });
+        });
+      }
+    });
+    return items;
   }, [sharedMessages]);
 
   const sharedFilesItems = useMemo(() => {
     return (sharedMessages || []).filter(m =>
-      (m.type === 'document' || (m.fileName && m.type !== 'image' && m.type !== 'video' && m.type !== 'audio' && m.type !== 'stealth_dust')) &&
-      m.mediaUrl &&
+      (m.type === 'document' || m.type === 'file' || (m.fileName && m.type !== 'image' && m.type !== 'video' && m.type !== 'audio' && m.type !== 'stealth_dust')) &&
+      (m.mediaUrl || m.fileUrl) &&
       m.type !== 'deleted' &&
       !m.isDeleted &&
       !isPrivateEphemeral(m)
@@ -163,9 +173,9 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
   };
 
   const fetchFriendStatus = async () => {
-    if (!targetUser?.id || targetUser.id === user?.id) return;
+    if (!targetUserId || targetUserId === currentUserId) return;
     try {
-      const res = await fetch(`${BACKEND_URL}/api/friends/status/${targetUser.id}`, {
+      const res = await fetch(`${BACKEND_URL}/api/friends/status/${targetUserId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -178,9 +188,9 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
   };
 
   useEffect(() => {
-    if (targetUser?.id) {
+    if (targetUserId) {
       setLoading(true);
-      fetch(`${BACKEND_URL}/api/users/${targetUser.id}`, {
+      fetch(`${BACKEND_URL}/api/users/${targetUserId}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -224,7 +234,7 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
           .catch(() => {});
       }
     }
-  }, [targetUser?.id, token, chatId]);
+  }, [targetUserId, token, chatId]);
 
   // Real-time DP / Profile / Vibe sync
   useEffect(() => {

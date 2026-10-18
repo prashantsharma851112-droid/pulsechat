@@ -54,38 +54,41 @@ export default function ChatManageStorageModal({
 
   const isPrivateEphemeral = (m) => {
     if (!m) return false;
-    return Boolean(
-      m.isViewOnce ||
-      m.isViewTwice ||
-      m.viewLimit ||
-      m.isDustImage ||
-      m.isDust ||
-      m.isFogSnap ||
-      m.isDustText ||
-      m.type === 'stealth_dust' ||
-      m.type === 'viewOnce' ||
-      m.viewMode === 'once' ||
-      m.viewMode === 'twice' ||
-      m.viewMode === 'dust'
-    );
+    const isOnce = Boolean(m.isViewOnce || m.viewMode === 'once' || m.type === 'viewOnce');
+    const isTwice = Boolean(m.isViewTwice || m.viewMode === 'twice');
+    const isDust = Boolean(m.isDustImage || m.isDust || m.isFogSnap || m.isDustText || m.type === 'stealth_dust' || m.viewMode === 'dust');
+    return isOnce || isTwice || isDust;
   };
 
   // Filter media items (Only normal public images/videos, never view-once, twice-view, or dust images)
   const mediaItems = useMemo(() => {
-    return (messages || []).filter(m => 
-      (m.type === 'image' || m.type === 'video') && 
-      m.mediaUrl && 
-      m.type !== 'deleted' &&
-      !m.isDeleted &&
-      !isPrivateEphemeral(m)
-    );
+    const items = [];
+    (messages || []).forEach(m => {
+      if (m.type === 'deleted' || m.isDeleted) return;
+      if (isPrivateEphemeral(m)) return;
+
+      if (m.type === 'image' || m.type === 'video' || m.type === 'media' || m.mediaType === 'image' || m.mediaType === 'video') {
+        if (m.mediaUrl) {
+          items.push(m);
+        } else if (Array.isArray(m.mediaUrls) && m.mediaUrls.length > 0) {
+          m.mediaUrls.forEach((url, i) => {
+            items.push({ ...m, id: `${m.id || 'm'}_${i}`, mediaUrl: url, type: 'image' });
+          });
+        }
+      } else if (m.type === 'image_group' && Array.isArray(m.mediaUrls)) {
+        m.mediaUrls.forEach((url, i) => {
+          items.push({ ...m, id: `${m.id || 'm'}_${i}`, mediaUrl: url, type: 'image' });
+        });
+      }
+    });
+    return items;
   }, [messages]);
 
   // Filter doc items (Only genuine documents, never images, videos, audio, or private ephemeral media)
   const docItems = useMemo(() => {
     return (messages || []).filter(m => 
-      (m.type === 'document' || (m.fileName && m.type !== 'image' && m.type !== 'video' && m.type !== 'audio' && m.type !== 'stealth_dust')) && 
-      m.mediaUrl &&
+      (m.type === 'document' || m.type === 'file' || (m.fileName && m.type !== 'image' && m.type !== 'video' && m.type !== 'audio' && m.type !== 'stealth_dust')) && 
+      (m.mediaUrl || m.fileUrl) &&
       m.type !== 'deleted' &&
       !m.isDeleted &&
       !isPrivateEphemeral(m)

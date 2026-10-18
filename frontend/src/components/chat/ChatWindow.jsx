@@ -4553,10 +4553,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     const isDust = Boolean(isFogSnap || isDustImage);
     const isTwice = Boolean(isViewTwice);
-    const calculatedLimit = isTwice ? 2 : (viewLimit || (isViewOnce ? 1 : 1));
+    const isOnce = Boolean(isViewOnce);
+    const isEphemeralPhoto = Boolean(isOnce || isTwice || isDust);
+    const calculatedLimit = isTwice ? 2 : (isOnce ? 1 : null);
 
     // Deduplication Lock: drop rapid duplicate triggers within 1200ms
-    const mediaDedupeKey = `${fileName || rawFile?.name || ''}_${fileSize || rawFile?.size || ''}_${msgType}_${isDust ? 'dust' : (isTwice ? 'twice' : (isViewOnce ? 'once' : 'normal'))}`;
+    const mediaDedupeKey = `${fileName || rawFile?.name || ''}_${fileSize || rawFile?.size || ''}_${msgType}_${isDust ? 'dust' : (isTwice ? 'twice' : (isOnce ? 'once' : 'normal'))}`;
     const now = Date.now();
     if (now - lastMediaSentRef.current.time < 1200 && lastMediaSentRef.current.key === mediaDedupeKey) {
       console.warn('Blocked duplicate media send invocation:', mediaDedupeKey);
@@ -4577,9 +4579,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       isGroup,
       mediaUrl, // local preview instantly visible
       type: msgType,
-      isViewOnce: msgType === 'document' ? false : Boolean(isViewOnce || isTwice || isDust),
+      isViewOnce: msgType === 'document' ? false : isEphemeralPhoto,
       isViewTwice: isTwice,
-      viewLimit: calculatedLimit,
+      viewLimit: isEphemeralPhoto ? calculatedLimit : undefined,
       viewCounts: {},
       isFogSnap: isDust,
       isDustImage: Boolean(isDustImage || isDust),
@@ -4666,9 +4668,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         isGroup,
         mediaUrl: finalMediaUrl,
         type: msgType,
-        isViewOnce: msgType === 'document' ? false : Boolean(isViewOnce || isTwice || isDust),
+        isViewOnce: msgType === 'document' ? false : isEphemeralPhoto,
         isViewTwice: isTwice,
-        viewLimit: calculatedLimit,
+        viewLimit: isEphemeralPhoto ? calculatedLimit : undefined,
         isFogSnap: isDust,
         isDustImage: Boolean(isDustImage || isDust),
         fogSnapDuration: fogSnapDuration || 10,
