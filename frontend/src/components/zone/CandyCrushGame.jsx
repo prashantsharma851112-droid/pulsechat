@@ -658,7 +658,7 @@ const CandyVisual = React.memo(function CandyVisual({ candy }) {
   }
 });
 
-export default function CandyCrushGame({ onScoreUpdate, onBack }) {
+const CandyCrushGame = React.memo(function CandyCrushGame({ onScoreUpdate, onBack }) {
   const [level, setLevel] = useState(() => {
     try {
       return parseInt(localStorage.getItem('pulsechat_candy_crush_level') || '1', 10);
@@ -1747,4 +1747,6 @@ export default function CandyCrushGame({ onScoreUpdate, onBack }) {
       </div>
     </div>
   );
-}
+});
+
+export default CandyCrushGame;

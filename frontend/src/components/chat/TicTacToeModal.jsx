@@ -68,7 +68,7 @@ const WINNING_COMBINATIONS = [
   [0, 4, 8], [2, 4, 6]             // Diagonals
 ];
 
-export default function TicTacToeModal({ chatId, partnerName, hostId, onClose, onOpenSparksWallet }) {
+const TicTacToeModal = React.memo(function TicTacToeModal({ chatId, partnerName, hostId, onClose, onOpenSparksWallet }) {
   const { socket } = useContext(SocketContext);
   const { user } = useContext(AuthContext);
 
@@ -483,4 +483,6 @@ export default function TicTacToeModal({ chatId, partnerName, hostId, onClose, o
       </div>
     </div>
   );
-}
+});
+
+export default TicTacToeModal;

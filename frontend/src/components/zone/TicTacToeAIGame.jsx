@@ -92,7 +92,7 @@ const minimax = (tempBoard, isMaximizing) => {
   }
 };
 
-export default function TicTacToeAIGame({ onScoreUpdate }) {
+const TicTacToeAIGame = React.memo(function TicTacToeAIGame({ onScoreUpdate }) {
   const { user } = useContext(AuthContext);
   const [board, setBoard] = useState(Array(9).fill(null));
   const [isXNext, setIsXNext] = useState(true);
@@ -565,4 +565,6 @@ export default function TicTacToeAIGame({ onScoreUpdate }) {
       </button>
     </div>
   );
-}
+});
+
+export default TicTacToeAIGame;

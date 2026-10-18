@@ -1185,6 +1185,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   }, [socket, chatId, user?.id]);
 
+  const handleOpenSparksWallet = useCallback(() => setShowSparksWallet(true), []);
+
   // Universal Back Button registration for all submodals/pickers inside ChatWindow
   useBackHandler(() => setShowActionGrid(false), showActionGrid);
   useBackHandler(() => setShowEmoji(false), showEmoji);
@@ -7573,7 +7575,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {showWhiteboard && (
         <WhiteboardModal
-          onClose={() => handleCloseWhiteboard(true)}
+          onClose={handleCloseWhiteboard}
           chatTitle={activeChat.displayName}
           chatId={chatId}
           onSendDrawing={handleSendDrawing}
@@ -8050,15 +8052,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           chatId={chatId}
           partnerName={chatDisplayName || activeChat?.displayName}
           hostId={tictactoeHostId}
-          onClose={() => handleCloseTicTacToe(true)}
-          onOpenSparksWallet={() => setShowSparksWallet(true)}
+          onClose={handleCloseTicTacToe}
+          onOpenSparksWallet={handleOpenSparksWallet}
         />
       )}
 
       {showArrowGameModal && (
         <LiveArrowGameModal
           activeChat={activeChat}
-          onClose={() => handleCloseArrowGame(true)}
+          onClose={handleCloseArrowGame}
         />
       )}
 

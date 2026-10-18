@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, Suspense } from 'react';
+import React, { useState, useEffect, useContext, Suspense, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Sparkles, Award, ArrowLeft, Loader2 } from 'lucide-react';
@@ -13,7 +13,7 @@ const TicTacToeAIGame = lazyWithRetry(() => import('./TicTacToeAIGame'));
 const CandyCrushGame = lazyWithRetry(() => import('./CandyCrushGame'));
 const OfflineWhiteboardGame = lazyWithRetry(() => import('./OfflineWhiteboardGame'));
 
-export default function PulseZoneModal({ onClose }) {
+const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
   useBackHandler(onClose, true);
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
@@ -160,7 +160,7 @@ export default function PulseZoneModal({ onClose }) {
     fetchLeaderboard();
   };
 
-  const handleGameScoreUpdate = async (gameName, pts, lvl = 1) => {
+  const handleGameScoreUpdate = useCallback(async (gameName, pts, lvl = 1) => {
     if (token) {
       try {
         const res = await fetch(`${BACKEND_URL}/api/zone/game-score`, {
@@ -181,7 +181,9 @@ export default function PulseZoneModal({ onClose }) {
       } catch (e) {}
     }
     fetchLeaderboard();
-  };
+  }, [token, user, updateUserProfile]);
+
+  const handleBackFromGame = useCallback(() => setSelectedGame(null), []);
 
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1300 }}>
@@ -790,34 +792,34 @@ export default function PulseZoneModal({ onClose }) {
                   }>
                     {selectedGame === 'candy' && (
                       <CandyCrushGame
-                        onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
-                        onBack={() => setSelectedGame(null)}
+                        onScoreUpdate={handleGameScoreUpdate}
+                        onBack={handleBackFromGame}
                       />
                     )}
 
                     {selectedGame === 'tictactoe' && (
                       <TicTacToeAIGame
-                        onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
+                        onScoreUpdate={handleGameScoreUpdate}
                       />
                     )}
 
                     {selectedGame === 'draw' && (
                       <OfflineWhiteboardGame
-                        onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
-                        onBack={() => setSelectedGame(null)}
+                        onScoreUpdate={handleGameScoreUpdate}
+                        onBack={handleBackFromGame}
                       />
                     )}
 
                     {selectedGame === 'arrow' && (
                       <ArrowPuzzleGame
-                        onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
+                        onScoreUpdate={handleGameScoreUpdate}
                       />
                     )}
 
                     {selectedGame === 'temple' && (
                       <TempleRunGame
-                        onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
-                        onBack={() => setSelectedGame(null)}
+                        onScoreUpdate={handleGameScoreUpdate}
+                        onBack={handleBackFromGame}
                       />
                     )}
                   </Suspense>
@@ -1092,4 +1094,6 @@ export default function PulseZoneModal({ onClose }) {
       </div>
     </div>
   );
-}
+});
+
+export default PulseZoneModal;

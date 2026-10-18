@@ -19,7 +19,7 @@ const STROKE_WIDTHS = [
   { label: 'XL', size: 22 }
 ];
 
-export default function OfflineWhiteboardGame({ onScoreUpdate, onBack }) {
+const OfflineWhiteboardGame = React.memo(function OfflineWhiteboardGame({ onScoreUpdate, onBack }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const isDrawingRef = useRef(false);
@@ -410,4 +410,6 @@ export default function OfflineWhiteboardGame({ onScoreUpdate, onBack }) {
       </div>
     </div>
   );
-}
+});
+
+export default OfflineWhiteboardGame;

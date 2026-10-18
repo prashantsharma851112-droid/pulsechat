@@ -82,7 +82,7 @@ const ALL_SHAPES = [
   { id: 'cube', name: '3D Box / Cube 📦', category: 'diagram', icon: Box }
 ];
 
-export default function WhiteboardModal({
+const WhiteboardModal = React.memo(function WhiteboardModal({
   onClose,
   chatTitle,
   chatId,
@@ -2659,4 +2659,6 @@ export default function WhiteboardModal({
       </div>
     </div>
   );
-}
+});
+
+export default WhiteboardModal;

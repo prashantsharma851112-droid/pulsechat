@@ -60,7 +60,7 @@ const getGridConfig = (lvl) => {
   return { rows: 12, cols: 12, countMultiplier: 0.88, gap: '2px' };
 };
 
-export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
+const ArrowPuzzleGame = React.memo(function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
   const { user, updateUserProfile } = useContext(AuthContext);
 
   // Screen view: 'main' | 'playing' | 'win' | 'gameover'
@@ -926,4 +926,6 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
 
     </div>
   );
-}
+});
+
+export default ArrowPuzzleGame;

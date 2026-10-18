@@ -7,6 +7,7 @@ import SparksFeaturePromptModal from '../components/common/SparksFeaturePromptMo
 import PulseProModal from '../components/chat/PulseProModal';
 
 export const AppMusicContext = createContext(null);
+export const AppMusicProgressContext = createContext({ progress: 0, duration: 0, dailyListenedSec: 0 });
 
 export function AppMusicProvider({ children }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
@@ -444,16 +445,13 @@ export function AppMusicProvider({ children }) {
     };
   }, [socket, user?.id, user?._id, user?.username, updateUserProfile]);
 
-  const value = React.useMemo(() => ({
+  const stableValue = React.useMemo(() => ({
     currentTrack,
     musicNoteText,
     isPlaying,
     isDucked,
-    progress,
-    duration,
     isMuted,
     volume,
-    dailyListenedSec,
     bonusListeningSec,
     dailyLimitSec: 1800 + bonusListeningSec,
     isDailyLimitReached: !user?.isPro && dailyListenedSec >= (1800 + bonusListeningSec),
@@ -476,13 +474,11 @@ export function AppMusicProvider({ children }) {
     musicNoteText,
     isPlaying,
     isDucked,
-    progress,
-    duration,
     isMuted,
     volume,
-    dailyListenedSec,
     bonusListeningSec,
     user?.isPro,
+    dailyListenedSec >= (1800 + bonusListeningSec),
     isPickerOpen,
     playTrack,
     pauseTrack,
@@ -496,31 +492,39 @@ export function AppMusicProvider({ children }) {
     deleteMusicNote
   ]);
 
+  const progressValue = React.useMemo(() => ({
+    progress,
+    duration,
+    dailyListenedSec
+  }), [progress, duration, dailyListenedSec]);
+
   return (
-    <AppMusicContext.Provider value={value}>
-      {children}
-      {showMusicLimitModal && (
-        <SparksFeaturePromptModal
-          isOpen={showMusicLimitModal}
-          onClose={() => setShowMusicLimitModal(false)}
-          featureKey="music_boost_5m"
-          featureName="5-Min Music Listening Boost"
-          sparksCost={10}
-          icon="🎵"
-          description="Free users get 30 minutes of music daily. Unlock 5 more minutes with 10 Sparks ⚡, or upgrade to Pulse Pro for unlimited listening!"
-          onSuccess={handleExtendMusicListening}
-          onOpenProModal={() => {
-            setShowMusicLimitModal(false);
-            setShowPulseProModal(true);
-          }}
-        />
-      )}
-      {showPulseProModal && (
-        <PulseProModal
-          onClose={() => setShowPulseProModal(false)}
-          initialTab="pro"
-        />
-      )}
+    <AppMusicContext.Provider value={stableValue}>
+      <AppMusicProgressContext.Provider value={progressValue}>
+        {children}
+        {showMusicLimitModal && (
+          <SparksFeaturePromptModal
+            isOpen={showMusicLimitModal}
+            onClose={() => setShowMusicLimitModal(false)}
+            featureKey="music_boost_5m"
+            featureName="5-Min Music Listening Boost"
+            sparksCost={10}
+            icon="🎵"
+            description="Free users get 30 minutes of music daily. Unlock 5 more minutes with 10 Sparks ⚡, or upgrade to Pulse Pro for unlimited listening!"
+            onSuccess={handleExtendMusicListening}
+            onOpenProModal={() => {
+              setShowMusicLimitModal(false);
+              setShowPulseProModal(true);
+            }}
+          />
+        )}
+        {showPulseProModal && (
+          <PulseProModal
+            onClose={() => setShowPulseProModal(false)}
+            initialTab="pro"
+          />
+        )}
+      </AppMusicProgressContext.Provider>
     </AppMusicContext.Provider>
   );
 }
@@ -531,4 +535,8 @@ export function useAppMusic() {
     throw new Error('useAppMusic must be used within an AppMusicProvider');
   }
   return context;
+}
+
+export function useAppMusicProgress() {
+  return useContext(AppMusicProgressContext);
 }

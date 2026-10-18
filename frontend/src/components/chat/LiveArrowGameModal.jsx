@@ -155,7 +155,7 @@ const DIRS = {
 
 const DIR_KEYS = ['UP', 'RIGHT', 'DOWN', 'LEFT'];
 
-export default function LiveArrowGameModal({ activeChat, onClose }) {
+const LiveArrowGameModal = React.memo(function LiveArrowGameModal({ activeChat, onClose }) {
   const { user, updateUserProfile } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
 
@@ -1110,5 +1110,7 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
       </div>
     </div>
   );
-}
+});
+
+export default LiveArrowGameModal;
 

@@ -1143,7 +1143,7 @@ const buildBrokenGapMesh = () => {
   return group;
 };
 
-export default function TempleRunGame({ onScoreUpdate, onBack }) {
+const TempleRunGame = React.memo(function TempleRunGame({ onScoreUpdate, onBack }) {
   const containerRef = useRef(null);
   const audioRef = useRef(null);
 
@@ -3014,4 +3014,6 @@ export default function TempleRunGame({ onScoreUpdate, onBack }) {
       )}
     </div>
   );
-}
+});
+
+export default TempleRunGame;

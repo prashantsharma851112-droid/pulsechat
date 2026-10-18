@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useAppMusic } from '../../context/AppMusicContext';
+import { useAppMusic, useAppMusicProgress } from '../../context/AppMusicContext';
 import {
   Play,
   Pause,
@@ -16,14 +16,12 @@ import {
   Expand
 } from 'lucide-react';
 
-export default function GlobalAppMusicPlayer() {
+const GlobalAppMusicPlayer = React.memo(function GlobalAppMusicPlayer() {
   const {
     currentTrack,
     musicNoteText,
     isPlaying,
     isDucked,
-    progress,
-    duration,
     isMuted,
     togglePlayPause,
     toggleMute,
@@ -31,6 +29,7 @@ export default function GlobalAppMusicPlayer() {
     openMusicPicker,
     seek
   } = useAppMusic();
+  const { progress, duration } = useAppMusicProgress();
 
   // Hide / Minimize State
   const [isMinimized, setIsMinimized] = useState(() => {
@@ -787,4 +786,6 @@ export default function GlobalAppMusicPlayer() {
       </div>
     </div>
   );
-}
+});
+
+export default GlobalAppMusicPlayer;
