@@ -2,14 +2,15 @@ import React, { useState, useEffect, useRef, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { X, RotateCcw, Award, Zap, Users, Swords, ShieldCheck, Sparkles, RefreshCw, Play } from 'lucide-react';
-import { playSound } from '../../utils/audio';
+import { playSound, getSharedAudioContext } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import GameVoiceChat from './GameVoiceChat';
 
 // Web Audio API Sound Synthesizers for 0ms Instant Audio Feedback
 const playSwooshSound = () => {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
@@ -26,7 +27,8 @@ const playSwooshSound = () => {
 
 const playBumpSound = () => {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'triangle';

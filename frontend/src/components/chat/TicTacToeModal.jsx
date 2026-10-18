@@ -2,13 +2,14 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { X, RotateCcw, Trophy, Sparkles, Award, Play } from 'lucide-react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
-import { playSound } from '../../utils/audio';
+import { playSound, getSharedAudioContext } from '../../utils/audio';
 import GameVoiceChat from './GameVoiceChat';
 
 // Web Audio API Sound Synthesizers for high performance native audio
 const playMoveSound = (isX) => {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = isX ? 'triangle' : 'sine';
@@ -25,7 +26,8 @@ const playMoveSound = (isX) => {
 
 const playWinSound = () => {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
     const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
     notes.forEach((freq, idx) => {
       const osc = ctx.createOscillator();
@@ -44,7 +46,8 @@ const playWinSound = () => {
 
 const playLoseSound = () => {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sawtooth';

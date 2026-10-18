@@ -1,18 +1,20 @@
 import React, { useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { AuthContext } from './context/AuthContext';
 import { SocketContext } from './context/SocketContext';
-import Login from './components/auth/Login';
-import Register from './components/auth/Register';
 import Sidebar from './components/chat/Sidebar';
-import ChatWindow from './components/chat/ChatWindow';
 import EntranceAnimation from './components/common/EntranceAnimation';
 import PandaHero from './components/common/PandaHero';
+
+import { lazyWithRetry } from './utils/lazyRetry';
+
+// Code-Splitting: Lazy load heavy views & modals for instant app cold start
+const Login = lazyWithRetry(() => import('./components/auth/Login'));
+const Register = lazyWithRetry(() => import('./components/auth/Register'));
+const ChatWindow = lazyWithRetry(() => import('./components/chat/ChatWindow'));
 import FullDpModal from './components/common/FullDpModal';
 import Toast from './components/common/Toast';
 import EmojiParticleBurst from './components/common/EmojiParticleBurst';
 import GlobalAppMusicPlayer from './components/common/GlobalAppMusicPlayer';
-
-import { lazyWithRetry } from './utils/lazyRetry';
 
 // Code-Splitting: Lazy load heavy modals with automatic retry & reload resilience
 const ProfileModal = lazyWithRetry(() => import('./components/profile/ProfileModal'));
@@ -123,6 +125,23 @@ export default function App() {
 
   // App Lock Authentication State
   const [isAppUnlocked, setIsAppUnlocked] = useState(() => !isAppLockEnabled());
+
+  // Idle Preload ChatWindow so opening any chat is instantaneous (0ms)
+  useEffect(() => {
+    if (user) {
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        const id = window.requestIdleCallback(() => {
+          import('./components/chat/ChatWindow');
+        });
+        return () => window.cancelIdleCallback && window.cancelIdleCallback(id);
+      } else {
+        const timer = setTimeout(() => {
+          import('./components/chat/ChatWindow');
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [user]);
 
   useEffect(() => {
     const handleAppLockChanged = (e) => {
@@ -797,22 +816,24 @@ export default function App() {
       {/* WHATSAPP-STYLE RESPONSIVE NAVIGATION: Mobile shows ONLY 1 screen at a time, Desktop shows split view */}
       {isMobile ? (
         activeChat ? (
-          <ChatWindow
-            activeChat={activeChat}
-            onBack={handleCloseChat}
-            onStartCall={(isVideo, targetMember) => setActiveCall({
-              targetUser: targetMember || activeChat,
-              isVideo,
-              isCaller: true,
-              incomingSignal: null
-            })}
-            onStartGroupCall={(group, isVideo) => setActiveGroupCall({
-              group,
-              isVideo,
-              isCaller: true
-            })}
-            onOpenFullDp={handleOpenFullDp}
-          />
+          <React.Suspense fallback={<div style={{ flex: 1, height: '100dvh', background: '#000000' }} />}>
+            <ChatWindow
+              activeChat={activeChat}
+              onBack={handleCloseChat}
+              onStartCall={(isVideo, targetMember) => setActiveCall({
+                targetUser: targetMember || activeChat,
+                isVideo,
+                isCaller: true,
+                incomingSignal: null
+              })}
+              onStartGroupCall={(group, isVideo) => setActiveGroupCall({
+                group,
+                isVideo,
+                isCaller: true
+              })}
+              onOpenFullDp={handleOpenFullDp}
+            />
+          </React.Suspense>
         ) : (
           <Sidebar
             activeChat={activeChat}
@@ -834,22 +855,24 @@ export default function App() {
           />
 
           {activeChat ? (
-            <ChatWindow
-              activeChat={activeChat}
-              onBack={handleCloseChat}
-              onStartCall={(isVideo, targetMember) => setActiveCall({
-                targetUser: targetMember || activeChat,
-                isVideo,
-                isCaller: true,
-                incomingSignal: null
-              })}
-              onStartGroupCall={(group, isVideo) => setActiveGroupCall({
-                group,
-                isVideo,
-                isCaller: true
-              })}
-              onOpenFullDp={handleOpenFullDp}
-            />
+            <React.Suspense fallback={<div style={{ flex: 1, height: '100dvh', background: '#000000' }} />}>
+              <ChatWindow
+                activeChat={activeChat}
+                onBack={handleCloseChat}
+                onStartCall={(isVideo, targetMember) => setActiveCall({
+                  targetUser: targetMember || activeChat,
+                  isVideo,
+                  isCaller: true,
+                  incomingSignal: null
+                })}
+                onStartGroupCall={(group, isVideo) => setActiveGroupCall({
+                  group,
+                  isVideo,
+                  isCaller: true
+                })}
+                onOpenFullDp={handleOpenFullDp}
+              />
+            </React.Suspense>
           ) : (
             <div className="empty-chat-placeholder">
               <PandaHero />

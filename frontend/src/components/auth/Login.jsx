@@ -497,7 +497,7 @@ export default function Login({ switchToRegister }) {
                     value={identifier}
                     onChange={e => setIdentifier(e.target.value)}
                     required
-                    placeholder="alex_dev or alex@gmail.com"
+                    placeholder="alex_dev or name@example.com"
                   />
                 </div>
               </div>

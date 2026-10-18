@@ -1,10 +1,30 @@
+let sharedAudioCtx = null;
+
+export function getSharedAudioContext() {
+  if (typeof window === 'undefined') return null;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  try {
+    if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
+      sharedAudioCtx = new AudioCtx();
+    }
+    if (sharedAudioCtx.state === 'suspended') {
+      sharedAudioCtx.resume().catch(() => {});
+    }
+    return sharedAudioCtx;
+  } catch (e) {
+    return null;
+  }
+}
+
 export function playSound(type = 'received') {
   if (typeof window !== 'undefined') {
     if (localStorage.getItem('pulsechat_notifications_enabled') === 'false') return;
     if (localStorage.getItem('pulsechat_chat_sounds') === 'false') return;
   }
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
 
     if (type === 'sent' || type === 'pop') {
       // Crisp satisfying iOS/Telegram pop

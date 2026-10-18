@@ -417,7 +417,7 @@ export default function Register({ switchToLogin }) {
                   value={displayName}
                   onChange={e => setDisplayName(e.target.value)}
                   required
-                  placeholder="e.g. Prashant Kumar"
+                  placeholder="e.g. Alex Morgan"
                 />
               </div>
 
@@ -430,7 +430,7 @@ export default function Register({ switchToLogin }) {
                     value={username}
                     onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                     required
-                    placeholder="prashant_dev"
+                    placeholder="alex_dev"
                     style={{ paddingRight: '2.4rem' }}
                   />
                   {isAvailable === true && <Check size={16} color="#10b981" style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }} />}

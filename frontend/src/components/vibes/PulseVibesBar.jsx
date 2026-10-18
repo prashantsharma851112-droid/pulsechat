@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { Plus } from 'lucide-react';
@@ -242,27 +242,39 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
   const myVibesGroup = groupedVibes.find(g => isMyId(g.userId));
   const otherVibesGroups = groupedVibes.filter(g => !isMyId(g.userId));
 
+  const cachedUsersMap = useMemo(() => {
+    const currentUserId = user?.id || user?._id;
+    if (!currentUserId) return {};
+    try {
+      const cachedUsers = getCachedAllUsers(currentUserId);
+      if (!Array.isArray(cachedUsers)) return {};
+      const map = {};
+      for (let i = 0; i < cachedUsers.length; i++) {
+        const u = cachedUsers[i];
+        if (u.id) map[String(u.id)] = u;
+        if (u._id) map[String(u._id)] = u;
+        if (u.username) map[String(u.username).toLowerCase()] = u;
+      }
+      return map;
+    } catch (e) {
+      return {};
+    }
+  }, [user?.id, user?._id]);
+
   const getGroupCrowns = (group) => {
     let king = Boolean(group?.hasKingCrown);
     let silver = Boolean(group?.hasSilverCrown);
     let streak = Boolean(group?.hasStreakCrown);
 
-    if (!king && !silver && !streak && user?.id) {
-      try {
-        const cachedUsers = getCachedAllUsers(user.id || user._id);
-        if (Array.isArray(cachedUsers)) {
-          const matched = cachedUsers.find(u =>
-            u.id === group?.userId ||
-            u._id === group?.userId ||
-            (u.username && group?.username && u.username.toLowerCase() === group.username.toLowerCase())
-          );
-          if (matched) {
-            king = Boolean(matched.hasKingCrown);
-            silver = Boolean(matched.hasSilverCrown);
-            streak = Boolean(matched.hasStreakCrown);
-          }
-        }
-      } catch (e) {}
+    if (!king && !silver && !streak && group) {
+      const gId = group.userId ? String(group.userId) : null;
+      const gUser = group.username ? String(group.username).toLowerCase() : null;
+      const matched = (gId && cachedUsersMap[gId]) || (gUser && cachedUsersMap[gUser]);
+      if (matched) {
+        king = Boolean(matched.hasKingCrown);
+        silver = Boolean(matched.hasSilverCrown);
+        streak = Boolean(matched.hasStreakCrown);
+      }
     }
     return { king, silver, streak };
   };
