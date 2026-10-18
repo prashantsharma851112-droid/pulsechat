@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useContext, useCallback, useMemo, startTransition, useDeferredValue } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useContext, useCallback, useMemo, useImperativeHandle, useDeferredValue } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush, Clock, Sparkles, Image as ImageIcon, Camera, Paperclip, CheckSquare, Trash2, X, Check, MoreVertical, Info, CornerUpLeft, FileText, Ban, ShieldAlert, WifiOff, Palette, UserPlus, Presentation, Music, Flame, Zap, Volume2, VolumeX, Disc, Crown, Gamepad2, Play, Pause, SkipForward, Loader2, Star, Copy, Forward, Pin, PinOff, SlidersHorizontal, Edit3, Ghost, Search, Globe, ChevronUp, ChevronDown, ArrowDown, Lock, Unlock, ChevronLeft, ChevronRight, Bell, BellOff, CloudRain } from 'lucide-react';
@@ -111,6 +111,324 @@ const sanitizeFogSnapMessage = (m) => {
   return m;
 };
 
+// Ultra-optimized, zero-latency Chat Input Capsule
+// Isolates keystroke state to eliminate ChatWindow re-renders and input lag completely
+const ChatInputCapsule = React.memo(React.forwardRef(function ChatInputCapsule({
+  chatId,
+  isGroup,
+  user,
+  activeChat,
+  socket,
+  token,
+  targetLang,
+  replyInputRef,
+  onSendText,
+  onOpenScheduleModal,
+  showEmoji,
+  setShowEmoji,
+  setShowActionGrid,
+  setShowRecorder,
+  setActionToast
+}, ref) {
+  const [text, setText] = useState(() => {
+    try {
+      return (chatId ? localStorage.getItem(`pulsechat_draft_${chatId}`) : '') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [isTranslatingDraft, setIsTranslatingDraft] = useState(false);
+  const draftSaveTimeoutRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const lastTypingEmitRef = useRef(0);
+  const sendBtnHoldTimerRef = useRef(null);
+
+  // Synchronize draft on chatId change
+  useEffect(() => {
+    if (!chatId) return;
+    try {
+      const savedDraft = localStorage.getItem(`pulsechat_draft_${chatId}`) || '';
+      setText(savedDraft);
+    } catch {}
+  }, [chatId]);
+
+  useImperativeHandle(ref, () => ({
+    setText: (newText) => {
+      setText(newText);
+    },
+    getText: () => text,
+    insertEmoji: (emoji) => {
+      setText(prev => (prev || '') + emoji);
+    },
+    clear: () => {
+      setText('');
+      try {
+        if (chatId) localStorage.removeItem(`pulsechat_draft_${chatId}`);
+      } catch {}
+    }
+  }), [text, chatId]);
+
+  const handleTextChange = (e) => {
+    const val = e.target.value;
+    setText(val);
+
+    if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+    draftSaveTimeoutRef.current = setTimeout(() => {
+      try {
+        if (chatId) {
+          if (val) {
+            localStorage.setItem(`pulsechat_draft_${chatId}`, val);
+          } else {
+            localStorage.removeItem(`pulsechat_draft_${chatId}`);
+          }
+        }
+      } catch {}
+    }, 300);
+
+    if (!socket) return;
+    const receiverId = isGroup ? '' : activeChat?.id;
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    if (!val.trim()) {
+      socket.emit('typing_stop', { chatId, userId: user?.id, receiverId });
+      lastTypingEmitRef.current = 0;
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastTypingEmitRef.current > 2000) {
+      lastTypingEmitRef.current = now;
+      socket.emit('typing_start', {
+        chatId,
+        userId: user?.id,
+        username: user?.displayName || user?.username || 'User',
+        receiverId
+      });
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit('typing_stop', { chatId, userId: user?.id, receiverId });
+      lastTypingEmitRef.current = 0;
+    }, 2500);
+  };
+
+  const handleTranslateDraft = async () => {
+    if (!text || !text.trim() || isTranslatingDraft) return;
+    setIsTranslatingDraft(true);
+    try {
+      const result = await executeTranslation(text.trim(), targetLang, token);
+      if (result && result.translatedText) {
+        setText(result.translatedText);
+        if (setActionToast) {
+          setActionToast(`Draft translated to ${targetLang.toUpperCase()} ✨`);
+          setTimeout(() => setActionToast(''), 2500);
+        }
+      }
+    } catch (err) {
+      console.error('Draft translation error:', err);
+    } finally {
+      setIsTranslatingDraft(false);
+    }
+  };
+
+  const handleSendBtnMouseDown = () => {
+    sendBtnHoldTimerRef.current = setTimeout(() => {
+      if (onOpenScheduleModal) {
+        onOpenScheduleModal(text);
+      }
+    }, 520);
+  };
+
+  const handleSendBtnMouseUp = () => {
+    if (sendBtnHoldTimerRef.current) {
+      clearTimeout(sendBtnHoldTimerRef.current);
+      sendBtnHoldTimerRef.current = null;
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (sendBtnHoldTimerRef.current) {
+      clearTimeout(sendBtnHoldTimerRef.current);
+      sendBtnHoldTimerRef.current = null;
+    }
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    onSendText(text);
+    setText('');
+
+    if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+    lastTypingEmitRef.current = 0;
+    try {
+      if (chatId) localStorage.removeItem(`pulsechat_draft_${chatId}`);
+    } catch {}
+
+    if (replyInputRef?.current) {
+      replyInputRef.current.focus({ preventScroll: true });
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ flex: 1, minWidth: 0, display: 'flex', gap: '6px', alignItems: 'center' }}>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          alignItems: 'center',
+          background: 'var(--bg-card, #202c33)',
+          borderRadius: '26px',
+          padding: '4px 8px 4px 10px',
+          border: '1px solid var(--border)',
+          minHeight: '44px',
+          gap: '4px',
+          boxSizing: 'border-box'
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setShowEmoji(prev => !prev);
+            setShowActionGrid(false);
+          }}
+          className="icon-btn-ghost interactive-action"
+          title="Emoji Picker"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: showEmoji ? '#f59e0b' : 'var(--text-muted, #8696a0)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '4px',
+            borderRadius: '50%',
+            cursor: 'pointer',
+            flexShrink: 0,
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <Smile size={22} />
+        </button>
+
+        <input
+          type="text"
+          value={text}
+          onChange={handleTextChange}
+          placeholder={isGroup ? 'Message group...' : 'Type a message'}
+          ref={replyInputRef}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            color: 'var(--text-main, #ffffff)',
+            fontSize: '0.94rem',
+            padding: '6px 4px'
+          }}
+        />
+
+        {text.trim().length > 0 && (
+          <button
+            type="button"
+            onClick={handleTranslateDraft}
+            disabled={isTranslatingDraft}
+            title={`Translate draft to ${targetLang.toUpperCase()} before sending`}
+            style={{
+              background: 'rgba(6, 182, 212, 0.16)',
+              border: '1px solid rgba(6, 182, 212, 0.45)',
+              color: '#06b6d4',
+              borderRadius: '16px',
+              padding: '4px 6px',
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '3px',
+              cursor: isTranslatingDraft ? 'wait' : 'pointer',
+              flexShrink: 0,
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <Globe size={11} />
+            <span>{isTranslatingDraft ? '...' : `➔ ${targetLang.toUpperCase()}`}</span>
+          </button>
+        )}
+      </div>
+
+      {text.trim().length === 0 ? (
+        <button
+          type="button"
+          onClick={() => {
+            setShowActionGrid(false);
+            setShowEmoji(false);
+            setShowRecorder(true);
+          }}
+          className="interactive-action"
+          title="Record Voice Note"
+          style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '50%',
+            background: 'var(--bg-card, #202c33)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-muted, #8696a0)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <Mic size={20} />
+        </button>
+      ) : (
+        <button
+          type="submit"
+          tabIndex={-1}
+          className="interactive-action"
+          title="Send Message (Hold to Schedule ⏰)"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            handleSendBtnMouseDown(e);
+          }}
+          onMouseUp={handleSendBtnMouseUp}
+          onTouchStart={handleSendBtnMouseDown}
+          onTouchEnd={() => {
+            handleSendBtnMouseUp();
+            replyInputRef?.current?.focus({ preventScroll: true });
+          }}
+          style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '50%',
+            background: '#25d366',
+            border: 'none',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            cursor: 'pointer',
+            boxShadow: '0 2px 10px rgba(37, 211, 102, 0.45)',
+            transition: 'transform 0.15s ease, background 0.15s ease'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+        >
+          <Send size={18} style={{ marginLeft: '2px' }} />
+        </button>
+      )}
+    </form>
+  );
+}));
+
 export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGroupCall, onOpenFullDp }) {
   const { user, token, blockUser, unblockUser, updateUserProfile } = useContext(AuthContext);
   const { socket, onlineUsers, typingMap, lastNotification, vibeAuras } = useContext(SocketContext);
@@ -175,7 +493,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setScheduledList(nextList);
     localStorage.setItem('pulsechat_scheduled_messages', JSON.stringify(nextList));
     setShowScheduleModal(false);
-    setText('');
+    inputCapsuleRef.current?.clear();
     try {
       if (chatId) localStorage.removeItem(`pulsechat_draft_${chatId}`);
     } catch {}
@@ -296,9 +614,41 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   // Floating Scroll-to-Bottom Button States
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const showScrollBottomRef = useRef(false);
+  const isPinnedToBottomRef = useRef(true);
+  const inputCapsuleRef = useRef(null);
+  const [scheduleInitialText, setScheduleInitialText] = useState('');
   const [newScrolledMessagesCount, setNewScrolledMessagesCount] = useState(0);
   const newScrolledMessagesCountRef = useRef(0);
   const scrollRafRef = useRef(null);
+
+  // Pure container scroll helper — never shifts document body or moves input bar
+  const scrollToBottom = useCallback((behavior = 'instant') => {
+    if (chatContainerRef.current) {
+      if (behavior === 'smooth') {
+        chatContainerRef.current.scrollTo({
+          top: chatContainerRef.current.scrollHeight,
+          behavior: 'smooth'
+        });
+      } else {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      }
+    }
+  }, []);
+
+  // WhatsApp-style ResizeObserver: pins chat strictly to the bottom when opening or loading media
+  useEffect(() => {
+    const container = chatContainerRef.current;
+    if (!container) return;
+
+    const ro = new ResizeObserver(() => {
+      if (isPinnedToBottomRef.current && !scrollPositionRef.current?.isPrepending) {
+        container.scrollTop = container.scrollHeight;
+      }
+    });
+
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [chatId]);
 
 
   // Instagram-style Story preview modal state
@@ -1319,14 +1669,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const [isNetConnected, setIsNetConnected] = useState(() => isDeviceOnline());
 
-  // Draft text support (Instagram / WhatsApp style persistent drafts)
-  const [text, setText] = useState(() => {
-    try {
-      return (chatId ? localStorage.getItem(`pulsechat_draft_${chatId}`) : '') || '';
-    } catch {
-      return '';
-    }
-  });
+  // Forwarding helper for inputCapsuleRef (isolated typing state avoids ChatWindow re-renders)
+  const setText = useCallback((val) => {
+    inputCapsuleRef.current?.setText(val);
+  }, []);
+  const text = inputCapsuleRef.current?.getText() || '';
 
   // Instagram-style Vanish Mode Swipe Up Gesture State
   const [swipeUpDist, setSwipeUpDist] = useState(0);
@@ -1718,11 +2065,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   };
 
-  // Instagram-style swipe up to toggle Vanish Mode
+  // Instagram-style swipe up to toggle Vanish Mode (Deliberate deep swipe only)
   const handleVanishTouchStart = (e) => {
     if (!chatContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
-    const isAtBottom = scrollHeight - scrollTop - clientHeight <= 45;
+    // Strictly at the very bottom (<= 5px) to prevent triggering during normal message browsing
+    const isAtBottom = scrollHeight - scrollTop - clientHeight <= 5;
     if (isAtBottom && e.touches && e.touches[0]) {
       vanishTouchStartYRef.current = e.touches[0].clientY;
       vanishTouchLastYRef.current = e.touches[0].clientY;
@@ -1735,11 +2083,22 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleVanishTouchMove = (e) => {
     if (!isVanishSwipeActiveRef.current || !vanishTouchStartYRef.current || !e.touches || !e.touches[0]) return;
+    if (!chatContainerRef.current) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    // If user is actually scrolling upwards through messages history, cancel vanish swipe immediately!
+    if (scrollHeight - scrollTop - clientHeight > 15) {
+      isVanishSwipeActiveRef.current = false;
+      vanishTouchStartYRef.current = null;
+      setSwipeUpDist(0);
+      return;
+    }
+
     const curY = e.touches[0].clientY;
     vanishTouchLastYRef.current = curY;
     const deltaY = vanishTouchStartYRef.current - curY; // positive = dragging UP
-    if (deltaY > 10) {
-      setSwipeUpDist(Math.min(deltaY, 110));
+    if (deltaY > 35) {
+      setSwipeUpDist(Math.min(deltaY, 160));
     } else {
       setSwipeUpDist(0);
     }
@@ -1748,7 +2107,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const handleVanishTouchEnd = () => {
     if (isVanishSwipeActiveRef.current && vanishTouchStartYRef.current && vanishTouchLastYRef.current) {
       const deltaY = vanishTouchStartYRef.current - vanishTouchLastYRef.current;
-      if (deltaY >= 65) {
+      // High deliberate swipe threshold (140px) matching Instagram Vanish mode
+      if (deltaY >= 140) {
         handleToggleVanishMode();
       }
     }
@@ -2405,7 +2765,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           if (item.chatId === chatId) {
             setMessages(prev => [...prev, newMsg]);
             appendCachedMessage(chatId, newMsg);
-            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            scrollToBottom('smooth');
           } else {
             appendCachedMessage(item.chatId, newMsg);
           }
@@ -2493,6 +2853,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (isDifferentChat) {
       // Chat badle toh reply aur initial scroll flag reset karo
       isInitialLoad.current = true;
+      isPinnedToBottomRef.current = true;
+      setShowScrollBottom(false);
+      showScrollBottomRef.current = false;
       lastRenderedLastMsgIdRef.current = null;
       scrollPositionRef.current = { prevScrollHeight: 0, prevScrollTop: 0, isPrepending: false };
       setReplyTo(null);
@@ -2662,23 +3025,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 });
                 if (isIdentical) return prev;
               }
-              // If user was near bottom before server sync or on initial load, ensure bottom anchor
-              if (chatContainerRef.current) {
-                const distFromBtm = chatContainerRef.current.scrollHeight - chatContainerRef.current.scrollTop - chatContainerRef.current.clientHeight;
-                if (!showScrollBottomRef.current || distFromBtm < 350) {
-                  const doScroll = () => {
-                    if (chatContainerRef.current) {
-                      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-                    }
-                    messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
-                  };
-                  doScroll();
-                  requestAnimationFrame(doScroll);
-                  setTimeout(doScroll, 40);
-                }
-              }
               return merged;
             });
+            // If user was pinned to bottom before server sync or on initial load, ensure bottom anchor
+            if (isPinnedToBottomRef.current || isInitialLoad.current) {
+              scrollToBottom('instant');
+              requestAnimationFrame(() => scrollToBottom('instant'));
+            }
             setCachedMessages(chatId, merged);
           }
         })
@@ -3543,20 +3896,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const lastMsgId = lastMsg?.id || lastMsg?._id || lastMsg?.clientTempId;
     const prevLastId = lastRenderedLastMsgIdRef.current;
 
-    const scrollToBottom = (behavior = 'instant') => {
-      if (chatContainerRef.current) {
-        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-      }
-      messagesEndRef.current?.scrollIntoView({ behavior });
-    };
-
-    // Initial load: instant jump to the last message at bottom
-    if (isInitialLoad.current) {
+    // Initial load or user pinned to bottom: keep bottom anchor cleanly
+    if (isInitialLoad.current || isPinnedToBottomRef.current) {
       scrollToBottom('instant');
       requestAnimationFrame(() => scrollToBottom('instant'));
-      setTimeout(() => scrollToBottom('instant'), 40);
+      setTimeout(() => scrollToBottom('instant'), 50);
       setTimeout(() => scrollToBottom('instant'), 150);
-      setTimeout(() => { isInitialLoad.current = false; }, 300);
+      setTimeout(() => scrollToBottom('instant'), 350);
+      if (isInitialLoad.current) {
+        setTimeout(() => { isInitialLoad.current = false; }, 400);
+      }
       lastRenderedLastMsgIdRef.current = lastMsgId;
       return;
     }
@@ -3581,19 +3930,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       scrollToBottom('smooth');
       setShowScrollBottom(false);
       showScrollBottomRef.current = false;
+      isPinnedToBottomRef.current = true;
     } else {
-      // Someone else sent a message -> auto scroll if near bottom (< 450px) during active chat
-      const distFromBottom = chatContainerRef.current
-        ? (chatContainerRef.current.scrollHeight - chatContainerRef.current.scrollTop - chatContainerRef.current.clientHeight)
-        : 0;
-
-      if (distFromBottom < 450) {
+      // Someone else sent a message -> auto scroll if user is pinned near bottom
+      if (isPinnedToBottomRef.current) {
         scrollToBottom('smooth');
         setShowScrollBottom(false);
         showScrollBottomRef.current = false;
       }
     }
-  }, [messages, user?.id]);
+  }, [messages, user?.id, scrollToBottom]);
 
   // Clear Chat Undo Timer
   useEffect(() => {
@@ -3782,9 +4128,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         handleLoadOlderMessages();
       }
 
-      // Track if user has scrolled away from the latest messages (> 250px)
+      // Track if user has scrolled away from the latest messages (> 120px)
       const distFromBottom = scrollHeight - scrollTop - clientHeight;
-      const isScrolledUp = distFromBottom > 250;
+      const isScrolledUp = distFromBottom > 120;
+      isPinnedToBottomRef.current = !isScrolledUp;
       if (showScrollBottomRef.current !== isScrolledUp) {
         setShowScrollBottom(isScrolledUp);
         showScrollBottomRef.current = isScrolledUp;
@@ -3934,9 +4281,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     playSound('sent');
   };
 
-  const handleSendText = (e, forceInstant = false) => {
-    e?.preventDefault();
-    if (!text.trim()) return;
+  const handleSendText = (incomingText, forceInstant = false) => {
+    const textToSend = typeof incomingText === 'string' ? incomingText : (inputCapsuleRef.current?.getText() || '');
+    if (!textToSend || !textToSend.trim()) return;
 
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     if (socket && user?.id) {
@@ -3944,33 +4291,34 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
 
     // Check emotional trigger words for 3s cooldown using sentiment utility
-    if (isEmotionalTriggerMessage(text) && !forceInstant) {
-      setCooldownMsg(text);
+    if (isEmotionalTriggerMessage(textToSend) && !forceInstant) {
+      setCooldownMsg(textToSend);
       setCooldownSecs(3);
-      setText('');
+      inputCapsuleRef.current?.clear();
       if (replyInputRef.current) {
         replyInputRef.current.focus({ preventScroll: true });
       }
       return;
     }
 
-    dispatchMessage(text);
-    setText('');
+    dispatchMessage(textToSend);
+    inputCapsuleRef.current?.clear();
     if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
     lastTypingEmitRef.current = 0;
     try {
       if (chatId) localStorage.removeItem(`pulsechat_draft_${chatId}`);
     } catch {}
 
-    // Keep mobile virtual keyboard open continuously until user presses back
+    // Clean container scroll to bottom without jumping or moving window
+    isPinnedToBottomRef.current = true;
+    setShowScrollBottom(false);
+    showScrollBottomRef.current = false;
+    scrollToBottom('smooth');
+    requestAnimationFrame(() => scrollToBottom('smooth'));
+
+    // Keep mobile virtual keyboard open continuously
     if (replyInputRef.current) {
       replyInputRef.current.focus({ preventScroll: true });
-      setTimeout(() => {
-        replyInputRef.current?.focus({ preventScroll: true });
-      }, 10);
-      setTimeout(() => {
-        replyInputRef.current?.focus({ preventScroll: true });
-      }, 50);
     }
   };
 
@@ -4004,7 +4352,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const cancelCooldown = () => {
     // Cancel karne par text wapas input box mein daal do taaki edit kar sake
     if (cooldownMsg) {
-      setText(cooldownMsg);
+      inputCapsuleRef.current?.setText(cooldownMsg);
     }
     setCooldownSecs(0);
     setCooldownMsg(null);
@@ -4043,7 +4391,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     appendCachedMessage(chatId, pendingVoiceMsg);
     updateRecentChatSnippet(user.id, chatId, pendingVoiceMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
     window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    isPinnedToBottomRef.current = true;
+    setShowScrollBottom(false);
+    showScrollBottomRef.current = false;
+    scrollToBottom('smooth');
     playSound('sent');
 
     if (!isOnlineNow) {
@@ -4381,7 +4732,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       });
       updateRecentChatSnippet(user.id, chatId, offlineMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
       window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      isPinnedToBottomRef.current = true;
+      setShowScrollBottom(false);
+      showScrollBottomRef.current = false;
+      scrollToBottom('smooth');
       playSound('sent');
       return;
     }
@@ -4390,7 +4744,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     appendCachedMessage(chatId, optimisticMsg);
     updateRecentChatSnippet(user.id, chatId, optimisticMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
     window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    isPinnedToBottomRef.current = true;
+    setShowScrollBottom(false);
+    showScrollBottomRef.current = false;
+    scrollToBottom('smooth');
     playSound('sent');
 
     // Background upload all photos concurrently
@@ -4634,7 +4991,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       });
       updateRecentChatSnippet(user.id, chatId, offlineMediaMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
       window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      isPinnedToBottomRef.current = true;
+      setShowScrollBottom(false);
+      showScrollBottomRef.current = false;
+      scrollToBottom('smooth');
       playSound('sent');
       return;
     }
@@ -4643,7 +5003,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     appendCachedMessage(chatId, optimisticMediaMsg);
     updateRecentChatSnippet(user.id, chatId, optimisticMediaMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
     window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    isPinnedToBottomRef.current = true;
+    setShowScrollBottom(false);
+    showScrollBottomRef.current = false;
+    scrollToBottom('smooth');
     playSound('sent');
 
     // Direct background upload to Cloudinary Edge CDN (bypasses Render Node.js bandwidth!)
@@ -4928,58 +5291,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   }, []);
 
-  const handleTextChange = (e) => {
-    const val = e.target.value;
-    // Urgent synchronous update for instant, zero-latency keystroke response
-    setText(val);
-
-    // React 18 Time-Slicing: Offload background tasks (draft save, typing socket emissions)
-    startTransition(() => {
-      // Debounce synchronous localStorage draft writes to eliminate keypress hitching
-      if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
-      draftSaveTimeoutRef.current = setTimeout(() => {
-        try {
-          if (chatId) {
-            if (val) {
-              localStorage.setItem(`pulsechat_draft_${chatId}`, val);
-            } else {
-              localStorage.removeItem(`pulsechat_draft_${chatId}`);
-            }
-          }
-        } catch {}
-      }, 300);
-
-      if (!socket) return;
-      const receiverId = isGroup ? '' : activeChat?.id;
-
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-
-      if (!val.trim()) {
-        socket.emit('typing_stop', { chatId, userId: user?.id, receiverId });
-        lastTypingEmitRef.current = 0;
-        return;
-      }
-
-      // Throttle socket typing_start emissions to at most once every 2 seconds
-      const now = Date.now();
-      if (now - lastTypingEmitRef.current > 2000) {
-        lastTypingEmitRef.current = now;
-        socket.emit('typing_start', {
-          chatId,
-          userId: user?.id,
-          username: user?.displayName || user?.username || 'User',
-          receiverId
-        });
-      }
-
-      typingTimeoutRef.current = setTimeout(() => {
-        socket.emit('typing_stop', { chatId, userId: user?.id, receiverId });
-        lastTypingEmitRef.current = 0;
-      }, 2500);
-    });
-  };
+  const handleTextChange = useCallback((e) => {
+    const val = typeof e === 'string' ? e : e?.target?.value;
+    inputCapsuleRef.current?.setText(val);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -6681,7 +6996,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         style={{
           flex: 1,
           overflowY: 'auto',
-          overflowAnchor: 'auto',
+          overflowAnchor: 'none',
           padding: '1rem',
           display: 'flex',
           flexDirection: 'column',
@@ -6693,18 +7008,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         }}
       >
         {/* Instagram-style Vanish Mode Swipe-Up Gesture Indicator */}
-        {swipeUpDist > 15 && (
+        {swipeUpDist > 35 && (
           <div
             className="vanish-swipe-indicator"
             style={{
               position: 'fixed',
               bottom: '90px',
               left: '50%',
-              transform: `translateX(-50%) translateY(-${Math.min(swipeUpDist * 0.4, 40)}px)`,
-              background: swipeUpDist >= 65
+              transform: `translateX(-50%) translateY(-${Math.min(swipeUpDist * 0.3, 35)}px)`,
+              background: swipeUpDist >= 140
                 ? 'linear-gradient(135deg, #a855f7, #c084fc)'
                 : 'rgba(15, 23, 42, 0.92)',
-              border: `1.5px solid ${swipeUpDist >= 65 ? '#e9d5ff' : 'rgba(168, 85, 247, 0.6)'}`,
+              border: `1.5px solid ${swipeUpDist >= 140 ? '#e9d5ff' : 'rgba(168, 85, 247, 0.6)'}`,
               borderRadius: '24px',
               padding: '8px 18px',
               color: '#ffffff',
@@ -6713,16 +7028,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              boxShadow: swipeUpDist >= 65
+              boxShadow: swipeUpDist >= 140
                 ? '0 0 24px rgba(168, 85, 247, 0.8), 0 4px 16px rgba(0,0,0,0.5)'
                 : '0 4px 16px rgba(0,0,0,0.5)',
               zIndex: 9999,
               pointerEvents: 'none'
             }}
           >
-            <Ghost size={16} color={swipeUpDist >= 65 ? '#ffffff' : '#c084fc'} />
+            <Ghost size={16} color={swipeUpDist >= 140 ? '#ffffff' : '#c084fc'} />
             <span>
-              {swipeUpDist >= 65
+              {swipeUpDist >= 140
                 ? (isVanishMode ? 'Release to turn off Vanish Mode' : 'Release to turn on Vanish Mode')
                 : (isVanishMode ? 'Swipe up to turn off Vanish Mode' : 'Swipe up to turn on Vanish Mode')}
             </span>
@@ -6846,9 +7161,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         <button
           type="button"
           onClick={() => {
-            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            scrollToBottom('smooth');
             setShowScrollBottom(false);
             showScrollBottomRef.current = false;
+            isPinnedToBottomRef.current = true;
             setNewScrolledMessagesCount(0);
           }}
           style={{
@@ -7383,7 +7699,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           boxSizing: 'border-box'
         }}>
           {showEmoji && (
-            <EmojiPicker onSelectEmoji={(emoji) => setText(prev => prev + emoji)} onClose={() => setShowEmoji(false)} />
+            <EmojiPicker onSelectEmoji={(emoji) => inputCapsuleRef.current?.insertEmoji(emoji)} onClose={() => setShowEmoji(false)} />
           )}
 
           <input
@@ -8012,163 +8328,27 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           {showRecorder ? (
             <VoiceRecorder onSendVoice={handleSendVoice} onCancel={() => setShowRecorder(false)} />
           ) : (
-            <form onSubmit={handleSendText} style={{ flex: 1, minWidth: 0, display: 'flex', gap: '6px', alignItems: 'center' }}>
-              {/* WhatsApp-Style Unified Capsule / Pill Container */}
-              <div
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  background: 'var(--bg-card, #202c33)',
-                  borderRadius: '26px',
-                  padding: '4px 8px 4px 10px',
-                  border: '1px solid var(--border)',
-                  minHeight: '44px',
-                  gap: '4px',
-                  boxSizing: 'border-box'
-                }}
-              >
-                {/* Emoji Button INSIDE on the left */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEmoji(prev => !prev);
-                    setShowActionGrid(false);
-                  }}
-                  className="icon-btn-ghost interactive-action"
-                  title="Emoji Picker"
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: showEmoji ? '#f59e0b' : 'var(--text-muted, #8696a0)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '4px',
-                    borderRadius: '50%',
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <Smile size={22} />
-                </button>
-
-                {/* Input text field in the middle */}
-                <input
-                  type="text"
-                  value={text}
-                  onChange={handleTextChange}
-                  placeholder={isGroup ? 'Message group...' : 'Type a message'}
-                  ref={replyInputRef}
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    background: 'transparent',
-                    border: 'none',
-                    outline: 'none',
-                    color: 'var(--text-main, #ffffff)',
-                    fontSize: '0.94rem',
-                    padding: '6px 4px'
-                  }}
-                />
-
-                {/* Draft Translate Button if text is present */}
-                {text.trim().length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleTranslateDraft}
-                    disabled={isTranslatingDraft}
-                    title={`Translate draft to ${targetLang.toUpperCase()} before sending`}
-                    style={{
-                      background: 'rgba(6, 182, 212, 0.16)',
-                      border: '1px solid rgba(6, 182, 212, 0.45)',
-                      color: '#06b6d4',
-                      borderRadius: '16px',
-                      padding: '4px 6px',
-                      fontSize: '0.7rem',
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '3px',
-                      cursor: isTranslatingDraft ? 'wait' : 'pointer',
-                      flexShrink: 0,
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    <Globe size={11} />
-                    <span>{isTranslatingDraft ? '...' : `➔ ${targetLang.toUpperCase()}`}</span>
-                  </button>
-                )}
-              </div>
-
-              {/* WhatsApp-Style Circular Action Button (Mic when empty, Vibrant Green Send when typed) */}
-              {text.trim().length === 0 ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowActionGrid(false);
-                    setShowEmoji(false);
-                    setShowRecorder(true);
-                  }}
-                  className="interactive-action"
-                  title="Record Voice Note"
-                  style={{
-                    width: '42px',
-                    height: '42px',
-                    borderRadius: '50%',
-                    background: 'var(--bg-card, #202c33)',
-                    border: '1px solid var(--border)',
-                    color: 'var(--text-muted, #8696a0)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <Mic size={20} />
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  tabIndex={-1}
-                  className="interactive-action"
-                  title="Send Message (Hold to Schedule ⏰)"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    handleSendBtnMouseDown(e);
-                  }}
-                  onMouseUp={handleSendBtnMouseUp}
-                  onTouchStart={handleSendBtnMouseDown}
-                  onTouchEnd={() => {
-                    handleSendBtnMouseUp();
-                    replyInputRef.current?.focus({ preventScroll: true });
-                  }}
-                  style={{
-                    width: '42px',
-                    height: '42px',
-                    borderRadius: '50%',
-                    background: '#25d366',
-                    border: 'none',
-                    color: '#ffffff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 10px rgba(37, 211, 102, 0.45)',
-                    transition: 'transform 0.15s ease, background 0.15s ease'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                >
-                  <Send size={18} style={{ marginLeft: '2px' }} />
-                </button>
-              )}
-            </form>
+            <ChatInputCapsule
+              ref={inputCapsuleRef}
+              chatId={chatId}
+              isGroup={isGroup}
+              user={user}
+              activeChat={activeChat}
+              socket={socket}
+              token={token}
+              targetLang={targetLang}
+              replyInputRef={replyInputRef}
+              onSendText={handleSendText}
+              onOpenScheduleModal={(schedText) => {
+                setScheduleInitialText(schedText);
+                setShowScheduleModal(true);
+              }}
+              showEmoji={showEmoji}
+              setShowEmoji={setShowEmoji}
+              setShowActionGrid={setShowActionGrid}
+              setShowRecorder={setShowRecorder}
+              setActionToast={setActionToast}
+            />
           )}
         </div>
         </>
@@ -9065,7 +9245,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {/* Schedule Message Modal (Send Later / Birthday Wish) */}
       {showScheduleModal && (
         <ScheduleMessageModal
-          initialText={text}
+          initialText={scheduleInitialText || text || ''}
           onSchedule={handleScheduleMessage}
           onClose={() => setShowScheduleModal(false)}
         />
