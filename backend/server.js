@@ -2289,14 +2289,23 @@ io.on('connection', (socket) => {
   socket.on('request_open_tictactoe', (data) => broadcastActivityOpen('auto_open_tictactoe', data));
   socket.on('request_open_music', (data) => broadcastActivityOpen('auto_open_music', data));
 
+  // Symmetrical two-way close synchronization for live activities
+  socket.on('request_close_arrow_game', (data) => broadcastActivityOpen('auto_close_arrow_game', data));
+  socket.on('request_close_whiteboard', (data) => broadcastActivityOpen('auto_close_whiteboard', data));
+  socket.on('request_close_tictactoe', (data) => broadcastActivityOpen('auto_close_tictactoe', data));
+
   // =========================================================================
   // REAL-TIME IN-GAME VOICE CHAT (FREE FIRE / DISCORD GAMING MIC & AUDIO)
   // =========================================================================
   socket.on('game_voice_join', ({ chatId, userId, userName, userAvatar }) => {
     if (!chatId || !userId) return;
-    const room = `game_voice_${chatId}`;
+    const canonicalChatId = String(chatId).includes('_') ? String(chatId).split('_').sort().join('_') : String(chatId);
+    const room = `game_voice_${canonicalChatId}`;
     socket.join(room);
-    socket.gameVoiceChatId = chatId;
+    if (room !== `game_voice_${chatId}`) {
+      socket.join(`game_voice_${chatId}`);
+    }
+    socket.gameVoiceChatId = canonicalChatId;
     socket.gameVoiceUserId = String(userId);
 
     // Get any existing peers already in this game voice room
@@ -2304,7 +2313,7 @@ io.on('connection', (socket) => {
     const existingPeerSockets = Array.from(roomSet || []).filter(sId => sId !== socket.id);
 
     // Inform existing room peers that a new player joined
-    socket.to(room).emit('game_voice_peer_joined', {
+    socket.to(room).to(`game_voice_${chatId}`).emit('game_voice_peer_joined', {
       userId: String(userId),
       userName,
       userAvatar,
@@ -2327,6 +2336,7 @@ io.on('connection', (socket) => {
 
   socket.on('game_voice_signal', ({ chatId, toUserId, fromUserId, signal, type, toSocketId }) => {
     if (!chatId) return;
+    const canonical = String(chatId).includes('_') ? String(chatId).split('_').sort().join('_') : String(chatId);
     const payload = {
       fromUserId: String(fromUserId || socket.gameVoiceUserId || ''),
       fromSocketId: socket.id,
@@ -2339,14 +2349,15 @@ io.on('connection', (socket) => {
     } else if (toUserId) {
       io.to(`user_${toUserId}`).to(String(toUserId)).emit('game_voice_signal', payload);
     } else {
-      socket.to(`game_voice_${chatId}`).emit('game_voice_signal', payload);
+      socket.to(`game_voice_${canonical}`).to(`game_voice_${chatId}`).emit('game_voice_signal', payload);
     }
   });
 
   socket.on('game_voice_state', ({ chatId, userId, isMuted, isDeafened }) => {
     if (!chatId) return;
-    const room = `game_voice_${chatId}`;
-    socket.to(room).emit('game_voice_state_changed', {
+    const canonical = String(chatId).includes('_') ? String(chatId).split('_').sort().join('_') : String(chatId);
+    const room = `game_voice_${canonical}`;
+    socket.to(room).to(`game_voice_${chatId}`).emit('game_voice_state_changed', {
       userId,
       isMuted,
       isDeafened
@@ -2355,9 +2366,11 @@ io.on('connection', (socket) => {
 
   socket.on('game_voice_leave', ({ chatId, userId }) => {
     if (!chatId) return;
-    const room = `game_voice_${chatId}`;
+    const canonical = String(chatId).includes('_') ? String(chatId).split('_').sort().join('_') : String(chatId);
+    const room = `game_voice_${canonical}`;
     socket.leave(room);
-    socket.to(room).emit('game_voice_peer_left', { userId });
+    socket.leave(`game_voice_${chatId}`);
+    socket.to(room).to(`game_voice_${chatId}`).emit('game_voice_peer_left', { userId });
   });
 
   // Disconnect

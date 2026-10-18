@@ -1776,19 +1776,44 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setTimeout(() => setActionToast(''), 2500);
   };
 
+  const handleCloseArrowGame = useCallback((broadcast = true) => {
+    setShowArrowGameModal(false);
+    if (broadcast && socket && chatId) {
+      socket.emit('request_close_arrow_game', { chatId, senderId: user?.id });
+    }
+  }, [socket, chatId, user?.id]);
+
+  const handleCloseWhiteboard = useCallback((broadcast = true) => {
+    setShowWhiteboard(false);
+    setWhiteboardInitialImage(null);
+    setWhiteboardInitialData(null);
+    if (broadcast && socket && chatId) {
+      socket.emit('request_close_whiteboard', { chatId, senderId: user?.id });
+    }
+  }, [socket, chatId, user?.id]);
+
+  const handleCloseTicTacToe = useCallback((broadcast = true) => {
+    setShowTicTacToeModal(false);
+    setTictactoeHostId(null);
+    if (broadcast && socket && chatId) {
+      socket.emit('request_close_tictactoe', { chatId, senderId: user?.id });
+    }
+  }, [socket, chatId, user?.id]);
+
   // Universal Back Button registration for all submodals/pickers inside ChatWindow
   useBackHandler(() => setShowActionGrid(false), showActionGrid);
   useBackHandler(() => setShowEmoji(false), showEmoji);
   useBackHandler(() => setShowRecorder(false), showRecorder);
   useBackHandler(() => setPendingMedia(null), Boolean(pendingMedia));
   useBackHandler(() => setShowCreatePoll(false), showCreatePoll);
-  useBackHandler(() => setShowWhiteboard(false), showWhiteboard);
+  useBackHandler(() => handleCloseWhiteboard(true), showWhiteboard);
   useBackHandler(() => setShowMoreMenu(false), showMoreMenu);
   useBackHandler(() => setShowUserProfileModal(false), showUserProfileModal);
   useBackHandler(() => setShowGroupProfileModal(false), showGroupProfileModal);
   useBackHandler(() => setShowGiftPicker(false), showGiftPicker);
   useBackHandler(() => setShow3DTextModal(false), show3DTextModal);
-  useBackHandler(() => setShowArrowGameModal(false), showArrowGameModal);
+  useBackHandler(() => handleCloseArrowGame(true), showArrowGameModal);
+  useBackHandler(() => handleCloseTicTacToe(true), showTicTacToeModal);
   useBackHandler(() => setShowEmojiBurstPicker(false), showEmojiBurstPicker);
   useBackHandler(() => setShowProModal(false), showProModal);
   const [groupMembersMap, setGroupMembersMap] = useState({});
@@ -2903,7 +2928,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       // If local cache already exists, only query messages sent AFTER latestCachedTime!
       const queryParam = latestCachedTime 
         ? `since=${encodeURIComponent(latestCachedTime)}` 
-        : 'limit=50';
+        : 'limit=100';
       const isCurrentGhost = checkGhostModeActive();
 
       fetch(`${BACKEND_URL}/api/messages/${chatId}?${queryParam}${isCurrentGhost ? '&ghost=true' : ''}`, {
@@ -3221,16 +3246,43 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       // Do not open music popup on partner's screen; only the user who clicked gets the picker
     };
 
+    const handleAutoCloseGame = (data) => {
+      if (isMatchingChat(data)) {
+        setShowArrowGameModal(false);
+      }
+    };
+    const handleAutoCloseWhiteboard = (data) => {
+      if (isMatchingChat(data)) {
+        setShowWhiteboard(false);
+        setWhiteboardInitialImage(null);
+        setWhiteboardInitialData(null);
+      }
+    };
+    const handleAutoCloseTicTacToe = (data) => {
+      if (isMatchingChat(data)) {
+        setShowTicTacToeModal(false);
+        setTictactoeHostId(null);
+      }
+    };
+
     socket.on('auto_open_arrow_game', handleAutoOpenGame);
     socket.on('auto_open_whiteboard', handleAutoOpenWhiteboard);
     socket.on('auto_open_tictactoe', handleAutoOpenTicTacToe);
     socket.on('auto_open_music', handleAutoOpenMusic);
+
+    socket.on('auto_close_arrow_game', handleAutoCloseGame);
+    socket.on('auto_close_whiteboard', handleAutoCloseWhiteboard);
+    socket.on('auto_close_tictactoe', handleAutoCloseTicTacToe);
 
     return () => {
       socket.off('auto_open_arrow_game', handleAutoOpenGame);
       socket.off('auto_open_whiteboard', handleAutoOpenWhiteboard);
       socket.off('auto_open_tictactoe', handleAutoOpenTicTacToe);
       socket.off('auto_open_music', handleAutoOpenMusic);
+
+      socket.off('auto_close_arrow_game', handleAutoCloseGame);
+      socket.off('auto_close_whiteboard', handleAutoCloseWhiteboard);
+      socket.off('auto_close_tictactoe', handleAutoCloseTicTacToe);
     };
   }, [socket, chatId, user?.id, activeChat?.displayName]);
 
@@ -4123,8 +4175,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (scrollRafRef.current) return;
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollRafRef.current = null;
-      // Smart Prefetching: Only trigger when there is genuine scrollable history and user scrolls near top
-      if (scrollHeight > clientHeight + 200 && scrollTop <= 150 && hasMoreOlderMessages && !isLoadingOlderRef.current) {
+      // Smart Seamless Prefetching: Trigger before user hits the ceiling (650px threshold for 0ms lag-free continuous scroll)
+      if (scrollHeight > clientHeight + 200 && scrollTop <= 650 && hasMoreOlderMessages && !isLoadingOlderRef.current) {
         handleLoadOlderMessages();
       }
 
@@ -7004,7 +7056,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           position: 'relative',
           zIndex: selectedActionMessages.length > 0 ? 45 : 1,
           WebkitOverflowScrolling: 'touch',
-          overscrollBehaviorY: 'contain'
+          overscrollBehaviorY: 'contain',
+          willChange: 'scroll-position',
+          contain: 'content'
         }}
       >
         {/* Instagram-style Vanish Mode Swipe-Up Gesture Indicator */}
@@ -8378,11 +8432,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       {showWhiteboard && (
         <WhiteboardModal
-          onClose={() => {
-            setShowWhiteboard(false);
-            setWhiteboardInitialImage(null);
-            setWhiteboardInitialData(null);
-          }}
+          onClose={() => handleCloseWhiteboard(true)}
           chatTitle={activeChat.displayName}
           chatId={chatId}
           onSendDrawing={handleSendDrawing}
@@ -8859,10 +8909,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           chatId={chatId}
           partnerName={chatDisplayName || activeChat?.displayName}
           hostId={tictactoeHostId}
-          onClose={() => {
-            setShowTicTacToeModal(false);
-            setTictactoeHostId(null);
-          }}
+          onClose={() => handleCloseTicTacToe(true)}
           onOpenSparksWallet={() => setShowSparksWallet(true)}
         />
       )}
@@ -8870,7 +8917,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {showArrowGameModal && (
         <LiveArrowGameModal
           activeChat={activeChat}
-          onClose={() => setShowArrowGameModal(false)}
+          onClose={() => handleCloseArrowGame(true)}
         />
       )}
 
