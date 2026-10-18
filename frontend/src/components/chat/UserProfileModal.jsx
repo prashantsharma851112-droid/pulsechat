@@ -45,13 +45,42 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
     }
   }, [propMessages]);
 
+  const isPrivateEphemeral = (m) => {
+    if (!m) return false;
+    return Boolean(
+      m.isViewOnce ||
+      m.isViewTwice ||
+      m.viewLimit ||
+      m.isDustImage ||
+      m.isDust ||
+      m.isFogSnap ||
+      m.isDustText ||
+      m.type === 'stealth_dust' ||
+      m.type === 'viewOnce' ||
+      m.viewMode === 'once' ||
+      m.viewMode === 'twice' ||
+      m.viewMode === 'dust'
+    );
+  };
+
   const sharedMediaItems = useMemo(() => {
-    return (sharedMessages || []).filter(m => (m.type === 'image' || m.type === 'video') && m.mediaUrl && !m.isFogSnap && !m.isViewOnce && m.type !== 'deleted');
+    return (sharedMessages || []).filter(m =>
+      (m.type === 'image' || m.type === 'video') &&
+      m.mediaUrl &&
+      m.type !== 'deleted' &&
+      !m.isDeleted &&
+      !isPrivateEphemeral(m)
+    );
   }, [sharedMessages]);
 
   const sharedFilesItems = useMemo(() => {
-    return (sharedMessages || []).filter(m => (m.type === 'document' || m.fileName) && m.mediaUrl && m.type !== 'deleted');
-
+    return (sharedMessages || []).filter(m =>
+      (m.type === 'document' || (m.fileName && m.type !== 'image' && m.type !== 'video' && m.type !== 'audio' && m.type !== 'stealth_dust')) &&
+      m.mediaUrl &&
+      m.type !== 'deleted' &&
+      !m.isDeleted &&
+      !isPrivateEphemeral(m)
+    );
   }, [sharedMessages]);
 
   const sharedLinksItems = useMemo(() => {

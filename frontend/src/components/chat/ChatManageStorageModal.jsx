@@ -52,23 +52,43 @@ export default function ChatManageStorageModal({
   const [selectedIds, setSelectedIds] = useState([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
 
-  // Filter media items
+  const isPrivateEphemeral = (m) => {
+    if (!m) return false;
+    return Boolean(
+      m.isViewOnce ||
+      m.isViewTwice ||
+      m.viewLimit ||
+      m.isDustImage ||
+      m.isDust ||
+      m.isFogSnap ||
+      m.isDustText ||
+      m.type === 'stealth_dust' ||
+      m.type === 'viewOnce' ||
+      m.viewMode === 'once' ||
+      m.viewMode === 'twice' ||
+      m.viewMode === 'dust'
+    );
+  };
+
+  // Filter media items (Only normal public images/videos, never view-once, twice-view, or dust images)
   const mediaItems = useMemo(() => {
     return (messages || []).filter(m => 
       (m.type === 'image' || m.type === 'video') && 
       m.mediaUrl && 
-      !m.isFogSnap && 
-      !m.isViewOnce &&
-      m.type !== 'deleted'
+      m.type !== 'deleted' &&
+      !m.isDeleted &&
+      !isPrivateEphemeral(m)
     );
   }, [messages]);
 
-  // Filter doc items
+  // Filter doc items (Only genuine documents, never images, videos, audio, or private ephemeral media)
   const docItems = useMemo(() => {
     return (messages || []).filter(m => 
-      (m.type === 'document' || m.fileName) && 
+      (m.type === 'document' || (m.fileName && m.type !== 'image' && m.type !== 'video' && m.type !== 'audio' && m.type !== 'stealth_dust')) && 
       m.mediaUrl &&
-      m.type !== 'deleted'
+      m.type !== 'deleted' &&
+      !m.isDeleted &&
+      !isPrivateEphemeral(m)
     );
   }, [messages]);
 
