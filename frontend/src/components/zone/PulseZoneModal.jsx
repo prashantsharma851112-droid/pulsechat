@@ -394,7 +394,9 @@ export default function PulseZoneModal({ onClose }) {
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       cursor: 'pointer',
-                      transition: 'all 0.2s ease',
+                      transform: 'translateZ(0)',
+                      willChange: 'transform',
+                      transition: 'transform 0.12s cubic-bezier(0.2, 0, 0, 1), opacity 0.12s ease',
                       boxShadow: '0 4px 16px rgba(59, 130, 246, 0.25)'
                     }}
                   >
@@ -452,7 +454,9 @@ export default function PulseZoneModal({ onClose }) {
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       cursor: 'pointer',
-                      transition: 'all 0.2s ease',
+                      transform: 'translateZ(0)',
+                      willChange: 'transform',
+                      transition: 'transform 0.12s cubic-bezier(0.2, 0, 0, 1), opacity 0.12s ease',
                       boxShadow: '0 4px 16px rgba(245, 158, 11, 0.2)'
                     }}
                   >
@@ -510,7 +514,9 @@ export default function PulseZoneModal({ onClose }) {
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       cursor: 'pointer',
-                      transition: 'all 0.2s ease',
+                      transform: 'translateZ(0)',
+                      willChange: 'transform',
+                      transition: 'transform 0.12s cubic-bezier(0.2, 0, 0, 1), opacity 0.12s ease',
                       boxShadow: '0 4px 16px rgba(236, 72, 153, 0.25)'
                     }}
                   >
@@ -568,7 +574,9 @@ export default function PulseZoneModal({ onClose }) {
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       cursor: 'pointer',
-                      transition: 'all 0.2s ease',
+                      transform: 'translateZ(0)',
+                      willChange: 'transform',
+                      transition: 'transform 0.12s cubic-bezier(0.2, 0, 0, 1), opacity 0.12s ease',
                       boxShadow: '0 4px 16px rgba(245, 158, 11, 0.12)'
                     }}
                   >
@@ -626,7 +634,9 @@ export default function PulseZoneModal({ onClose }) {
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       cursor: 'pointer',
-                      transition: 'all 0.2s ease',
+                      transform: 'translateZ(0)',
+                      willChange: 'transform',
+                      transition: 'transform 0.12s cubic-bezier(0.2, 0, 0, 1), opacity 0.12s ease',
                       boxShadow: '0 4px 16px rgba(168, 85, 247, 0.15)'
                     }}
                   >
@@ -688,7 +698,9 @@ export default function PulseZoneModal({ onClose }) {
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       cursor: 'pointer',
-                      transition: 'all 0.2s ease',
+                      transform: 'translateZ(0)',
+                      willChange: 'transform',
+                      transition: 'transform 0.12s cubic-bezier(0.2, 0, 0, 1), opacity 0.12s ease',
                       boxShadow: '0 4px 16px rgba(56, 189, 248, 0.2)'
                     }}
                   >
@@ -976,6 +988,9 @@ export default function PulseZoneModal({ onClose }) {
                         : idx === 1
                         ? 'linear-gradient(135deg, rgba(203, 213, 225, 0.2) 0%, rgba(148, 163, 184, 0.1) 100%)'
                         : 'var(--hover-bg)',
+                      contain: 'content',
+                      transform: 'translateZ(0)',
+                      willChange: 'transform',
                       border: idx === 0
                         ? '1.5px solid rgba(245, 158, 11, 0.6)'
                         : idx === 1

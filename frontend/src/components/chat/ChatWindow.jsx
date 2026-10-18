@@ -4333,7 +4333,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     playSound('sent');
   };
 
-  const handleSendText = (incomingText, forceInstant = false) => {
+  const handleOpenScheduleModal = useCallback((schedText) => {
+    setScheduleInitialText(schedText);
+    setShowScheduleModal(true);
+  }, []);
+
+  const handleSendText = useCallback((incomingText, forceInstant = false) => {
     const textToSend = typeof incomingText === 'string' ? incomingText : (inputCapsuleRef.current?.getText() || '');
     if (!textToSend || !textToSend.trim()) return;
 
@@ -4372,7 +4377,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (replyInputRef.current) {
       replyInputRef.current.focus({ preventScroll: true });
     }
-  };
+  }, [socket, user?.id, chatId, isGroup, activeChat?.id]);
 
   // Emotional Message Countdown Timer (3s -> auto send)
   useEffect(() => {
@@ -8393,10 +8398,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               targetLang={targetLang}
               replyInputRef={replyInputRef}
               onSendText={handleSendText}
-              onOpenScheduleModal={(schedText) => {
-                setScheduleInitialText(schedText);
-                setShowScheduleModal(true);
-              }}
+              onOpenScheduleModal={handleOpenScheduleModal}
               showEmoji={showEmoji}
               setShowEmoji={setShowEmoji}
               setShowActionGrid={setShowActionGrid}

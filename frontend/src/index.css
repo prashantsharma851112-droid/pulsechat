@@ -2939,11 +2939,44 @@ a,
   display: flex !important;
 }
 
-/* 4. Snappy native tactile response on mobile taps */
+/* 4. Instagram/WhatsApp-Grade 120 FPS GPU-Accelerated Hardware Tap Physics */
+button,
+[role="button"],
+.btn-primary,
+.btn-secondary,
+.btn-decline,
+.btn-accept,
+.icon-btn-ghost,
+.chat-tab-btn,
+.emoji-btn,
+.action-btn,
+.chat-neon-streak-pill,
+.bottom-round-vibe-btn,
+.mobile-fab-btn,
+.interactive-tap {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform;
+}
+
 button:active:not(:disabled),
-.icon-btn-ghost:active:not(:disabled) {
-  transform: scale(0.96);
-  transition: transform 0.08s cubic-bezier(0.2, 0, 0, 1) !important;
+[role="button"]:active,
+.btn-primary:active:not(:disabled),
+.btn-secondary:active:not(:disabled),
+.btn-decline:active:not(:disabled),
+.btn-accept:active:not(:disabled),
+.icon-btn-ghost:active:not(:disabled),
+.chat-tab-btn:active,
+.emoji-btn:active,
+.action-btn:active,
+.chat-neon-streak-pill:active,
+.bottom-round-vibe-btn:active,
+.mobile-fab-btn:active,
+.interactive-tap:active {
+  transform: scale(0.95) translateZ(0) !important;
+  transition: transform 0.06s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 /* Instagram Story Music Equalizer Visualizer Waves */
