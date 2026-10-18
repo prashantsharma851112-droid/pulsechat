@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, Suspense } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Sparkles, Award, ArrowLeft } from 'lucide-react';
+import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Sparkles, Award, ArrowLeft, Loader2 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
-import ArrowPuzzleGame from './ArrowPuzzleGame';
-import TempleRunGame from './TempleRunGame';
-import TicTacToeAIGame from './TicTacToeAIGame';
-import CandyCrushGame from './CandyCrushGame';
-import OfflineWhiteboardGame from './OfflineWhiteboardGame';
+import { lazyWithRetry } from '../../utils/lazyRetry';
 import { useBackHandler } from '../../utils/backNavigation';
+
+const ArrowPuzzleGame = lazyWithRetry(() => import('./ArrowPuzzleGame'));
+const TempleRunGame = lazyWithRetry(() => import('./TempleRunGame'));
+const TicTacToeAIGame = lazyWithRetry(() => import('./TicTacToeAIGame'));
+const CandyCrushGame = lazyWithRetry(() => import('./CandyCrushGame'));
+const OfflineWhiteboardGame = lazyWithRetry(() => import('./OfflineWhiteboardGame'));
 
 export default function PulseZoneModal({ onClose }) {
   useBackHandler(onClose, true);
@@ -85,7 +87,7 @@ export default function PulseZoneModal({ onClose }) {
         socket.off('leaderboard_updated', handleSocketLbUpdate);
       };
     }
-  }, [token, user, socket]);
+  }, [token, user?.id || user?._id, socket]);
 
   // Speed Tapper Game Loop
   useEffect(() => {
@@ -290,7 +292,9 @@ export default function PulseZoneModal({ onClose }) {
           flex: 1,
           minHeight: 0,
           overflowY: 'auto',
-          WebkitOverflowScrolling: 'touch'
+          WebkitOverflowScrolling: 'touch',
+          willChange: 'scroll-position',
+          transform: 'translateZ(0)'
         }}>
           {/* Daily Task & 7-Day Gaming Streak Card */}
           <div style={{
@@ -766,38 +770,45 @@ export default function PulseZoneModal({ onClose }) {
                     </div>
                   </div>
 
-                  {selectedGame === 'candy' && (
-                    <CandyCrushGame
-                      onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
-                      onBack={() => setSelectedGame(null)}
-                    />
-                  )}
+                  <Suspense fallback={
+                    <div style={{ textAlign: 'center', padding: '60px 20px', color: '#fff', fontSize: '0.9rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                      <Loader2 size={28} className="animate-spin" color="#38bdf8" />
+                      <span>Loading Game Engine...</span>
+                    </div>
+                  }>
+                    {selectedGame === 'candy' && (
+                      <CandyCrushGame
+                        onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
+                        onBack={() => setSelectedGame(null)}
+                      />
+                    )}
 
-                  {selectedGame === 'tictactoe' && (
-                    <TicTacToeAIGame
-                      onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
-                    />
-                  )}
+                    {selectedGame === 'tictactoe' && (
+                      <TicTacToeAIGame
+                        onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
+                      />
+                    )}
 
-                  {selectedGame === 'draw' && (
-                    <OfflineWhiteboardGame
-                      onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
-                      onBack={() => setSelectedGame(null)}
-                    />
-                  )}
+                    {selectedGame === 'draw' && (
+                      <OfflineWhiteboardGame
+                        onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
+                        onBack={() => setSelectedGame(null)}
+                      />
+                    )}
 
-                  {selectedGame === 'arrow' && (
-                    <ArrowPuzzleGame
-                      onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
-                    />
-                  )}
+                    {selectedGame === 'arrow' && (
+                      <ArrowPuzzleGame
+                        onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
+                      />
+                    )}
 
-                  {selectedGame === 'temple' && (
-                    <TempleRunGame
-                      onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
-                      onBack={() => setSelectedGame(null)}
-                    />
-                  )}
+                    {selectedGame === 'temple' && (
+                      <TempleRunGame
+                        onScoreUpdate={(gName, pts, lvl) => handleGameScoreUpdate(gName, pts, lvl)}
+                        onBack={() => setSelectedGame(null)}
+                      />
+                    )}
+                  </Suspense>
 
                   {selectedGame === 'tapper' && (
                 <div style={{
@@ -1012,6 +1023,8 @@ export default function PulseZoneModal({ onClose }) {
                         <img
                           src={item.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${item.displayName}`}
                           alt={item.displayName}
+                          loading="lazy"
+                          decoding="async"
                           style={{
                             width: '38px',
                             height: '38px',
