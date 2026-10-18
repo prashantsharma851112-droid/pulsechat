@@ -887,15 +887,15 @@ export default function LiveArrowGameModal({ activeChat, onClose }) {
                 }
 
                 const flightStyle = isFlying ? {
-                  transform: `translate(${dirInfo.flyX}px, ${dirInfo.flyY}px) rotate(${dirInfo.deg}deg) scale(0.6)`,
+                  transform: `translate3d(${dirInfo.flyX}px, ${dirInfo.flyY}px, 0) rotate(${dirInfo.deg}deg) scale(0.6)`,
                   opacity: 0,
-                  filter: 'blur(6px)',
-                  transition: 'transform 0.8s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.8s ease-out, filter 0.8s ease-out'
+                  willChange: 'transform, opacity',
+                  transition: 'transform 0.65s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.65s ease-out'
                 } : {
-                  transform: `rotate(${dirInfo.deg}deg) scale(1)`,
+                  transform: `translate3d(0, 0, 0) rotate(${dirInfo.deg}deg) scale(1)`,
                   opacity: 1,
-                  filter: 'blur(0px)',
-                  transition: 'transform 0.2s ease, opacity 0.2s ease'
+                  willChange: 'transform, opacity',
+                  transition: 'transform 0.15s ease, opacity 0.15s ease'
                 };
 
                 return (

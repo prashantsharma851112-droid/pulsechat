@@ -589,15 +589,15 @@ export default function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
                         padding: 0,
                         position: 'relative',
                         boxShadow: theme === 'light' ? '0 2px 6px rgba(0,0,0,0.06)' : '0 4px 10px rgba(0,0,0,0.4)',
+                        willChange: 'transform, opacity',
                         transform: isFlying
-                          ? `translate(${flyX}px, ${flyY}px) scale(0.4)`
+                          ? `translate3d(${flyX}px, ${flyY}px, 0) scale(0.4)`
                           : isShaking
                           ? 'scale(0.85)'
                           : 'scale(1)',
                         opacity: isFlying ? 0 : 1,
-                        filter: isFlying ? 'blur(6px)' : 'none',
                         transition: isFlying
-                          ? 'transform 0.75s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.75s cubic-bezier(0.5, 0, 1, 1), filter 0.75s ease'
+                          ? 'transform 0.65s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.65s cubic-bezier(0.5, 0, 1, 1)'
                           : 'transform 0.12s ease',
                         zIndex: isFlying ? 10 : 1
                       }}
