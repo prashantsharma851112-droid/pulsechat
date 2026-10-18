@@ -28,6 +28,7 @@ const PinLockModal = lazyWithRetry(() => import('../common/PinLockModal'));
 const ReferEarnModal = lazyWithRetry(() => import('./ReferEarnModal'));
 import { isChatLocked, isChatMuted, getLockedChats, getMutedChats, isChatHidden, getHiddenLockedChats } from '../../utils/securityLock';
 import { BACKEND_URL } from '../../utils/config';
+import { runWorkerTask } from '../../workers/pulseWorkerBridge';
 import { preloadMediaUrls } from '../../utils/mediaCache';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
 import {
@@ -1638,7 +1639,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       candidatePool.push(u);
     }
 
-    const localMatches = candidatePool.map(u => {
+    const candidateWithNicknames = candidatePool.map(u => {
       // Find private nickname set by current user for this contact
       const recentMatch = recentChats.find(r =>
         (r.id && u.id && r.id === u.id) ||
@@ -1655,15 +1656,29 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         : (recentMatch && typeof recentMatch.nickname === 'string' && recentMatch.nickname.trim() ? recentMatch.nickname.trim() : '');
 
       return privateNickname ? { ...u, nickname: privateNickname } : u;
-    }).filter(u => {
-      const nameMatch = (u.displayName || '').toLowerCase().includes(q);
-      const usernameMatch = (u.username || '').toLowerCase().includes(q);
-      const emailMatch = (u.email || '').toLowerCase().includes(q);
-      const nicknameMatch = (u.nickname || '').toLowerCase().includes(q);
-      return nameMatch || usernameMatch || emailMatch || nicknameMatch;
     });
 
-    setSearchResults(localMatches);
+    let isSubscribed = true;
+    let localMatches = [];
+
+    // Multithreaded Web Worker search off the UI thread (0ms Main-Thread Latency)
+    runWorkerTask('SEARCH_CONTACTS', { contacts: candidateWithNicknames, query: q })
+      .then(matches => {
+        if (!isSubscribed) return;
+        localMatches = Array.isArray(matches) ? matches : [];
+        setSearchResults(localMatches);
+      })
+      .catch(() => {
+        if (!isSubscribed) return;
+        localMatches = candidateWithNicknames.filter(u => {
+          const nameMatch = (u.displayName || '').toLowerCase().includes(q);
+          const usernameMatch = (u.username || '').toLowerCase().includes(q);
+          const emailMatch = (u.email || '').toLowerCase().includes(q);
+          const nicknameMatch = (u.nickname || '').toLowerCase().includes(q);
+          return nameMatch || usernameMatch || emailMatch || nicknameMatch;
+        });
+        setSearchResults(localMatches);
+      });
 
     // 2. Fast server search with AbortController to fetch any newly created users without race conditions
     const curToken = token || localStorage.getItem('pulsechat_token');
@@ -1677,7 +1692,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         signal: controller.signal
       })
         .then(async (res) => {
-          if (!res.ok) return;
+          if (!res.ok || !isSubscribed) return;
           const text = await res.text();
           try {
             const data = JSON.parse(text);
@@ -1700,7 +1715,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 }),
                 ...localMatches.filter(u => !serverKeys.has(u.id || u.username))
               ];
-              setSearchResults(merged);
+              if (isSubscribed) setSearchResults(merged);
             }
           } catch (e) {}
         })
@@ -1708,11 +1723,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     }, 120);
 
     return () => {
+      isSubscribed = false;
       clearTimeout(timer);
       controller.abort();
     };
-
-    return () => clearTimeout(timer);
   }, [deferredSearchQuery, token, user?.id]);
 
   const proceedSelectUser = (selectedUser) => {

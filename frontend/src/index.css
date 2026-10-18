@@ -2953,6 +2953,8 @@ button,
 .chat-neon-streak-pill,
 .bottom-round-vibe-btn,
 .mobile-fab-btn,
+.action-grid-item,
+.interactive-action,
 .interactive-tap {
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
@@ -2971,6 +2973,8 @@ button:active:not(:disabled),
 .chat-tab-btn:active,
 .emoji-btn:active,
 .action-btn:active,
+.action-grid-item:active,
+.interactive-action:active,
 .chat-neon-streak-pill:active,
 .bottom-round-vibe-btn:active,
 .mobile-fab-btn:active,
