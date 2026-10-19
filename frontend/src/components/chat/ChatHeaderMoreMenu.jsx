@@ -16,7 +16,8 @@ import {
   BellOff,
   Trash2,
   Ban,
-  Info
+  Info,
+  Download
 } from 'lucide-react';
 
 const menuItemGpuStyle = {
@@ -256,6 +257,22 @@ export const ClearChatMenuItem = React.memo(function ClearChatMenuItem({ onClear
 });
 
 /**
+ * Atomic SubMenu Item: Export Chat (WhatsApp style client-side export with 0 cloud bandwidth)
+ */
+export const ExportChatMenuItem = React.memo(function ExportChatMenuItem({ onExportChat }) {
+  return (
+    <button
+      type="button"
+      onClick={onExportChat}
+      style={menuItemGpuStyle}
+    >
+      <Download size={16} color="var(--accent)" />
+      <span>Export Chat (Device)</span>
+    </button>
+  );
+});
+
+/**
  * Atomic SubMenu Item: Block / Unblock Contact
  */
 export const BlockContactMenuItem = React.memo(function BlockContactMenuItem({ isBlocked, onToggleBlock }) {
@@ -313,6 +330,7 @@ const ChatHeaderMoreMenu = React.memo(function ChatHeaderMoreMenu({
   isChatMutedState,
   handleToggleChatMuteFromMenu,
   handleClearCurrentChat,
+  onExportChat,
   blockStatus,
   setBlockStatus,
   blockUser,
@@ -321,6 +339,12 @@ const ChatHeaderMoreMenu = React.memo(function ChatHeaderMoreMenu({
   if (!showMoreMenu) return null;
 
   const handleCloseMenu = () => setShowMoreMenu(false);
+
+  const handleExportChatAction = () => {
+    setShowMoreMenu(false);
+    setMoreSubMenuOpen(false);
+    onExportChat?.();
+  };
 
   const handleOpenSearch = () => {
     setShowInChatSearch(true);
@@ -443,10 +467,13 @@ const ChatHeaderMoreMenu = React.memo(function ChatHeaderMoreMenu({
             onToggleMute={handleToggleChatMuteFromMenu}
           />
 
-          {/* 3. Clear Chat */}
+          {/* 3. Export Chat (Zero Cloud Bandwidth) */}
+          <ExportChatMenuItem onExportChat={handleExportChatAction} />
+
+          {/* 4. Clear Chat */}
           <ClearChatMenuItem onClearChat={handleClearChatAction} />
 
-          {/* 4. Block Contact (if direct chat) */}
+          {/* 5. Block Contact (if direct chat) */}
           {!isGroup && (
             <BlockContactMenuItem
               isBlocked={Boolean(blockStatus?.isBlockedByMe)}
@@ -454,7 +481,7 @@ const ChatHeaderMoreMenu = React.memo(function ChatHeaderMoreMenu({
             />
           )}
 
-          {/* 5. Contact Info / Group Info (Placed LAST in the list!) */}
+          {/* 6. Contact Info / Group Info (Placed LAST in the list!) */}
           <ContactInfoMenuItem
             isGroup={isGroup}
             onOpenInfo={handleOpenInfoAction}

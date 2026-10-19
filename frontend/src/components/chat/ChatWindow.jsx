@@ -79,7 +79,7 @@ import {
   getDeletedForMeIds,
   addDeletedForMeId
 } from '../../utils/offlineStorage';
-import { deleteMessagesFromLocalDb, clearChatFromLocalDb } from '../../utils/localDatabase';
+import { deleteMessagesFromLocalDb, clearChatFromLocalDb, exportChatTranscript } from '../../utils/localDatabase';
 import { getSyncCachedAudioUrl, getOrCacheAudioBlobUrl } from '../../utils/mediaCache';
 
 export const GLOBAL_LANGUAGES = [
@@ -3529,6 +3529,33 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   };
 
+  // WhatsApp-Style Client-Side Chat Export (Zero Server Bandwidth)
+  const handleExportChat = useCallback(async () => {
+    try {
+      const chatTitle = activeChat?.displayName || activeChat?.name || activeChat?.username || 'Chat';
+      const result = await exportChatTranscript({
+        chatId,
+        chatTitle,
+        currentUserId: user?.id || user?._id,
+        currentUserName: user?.displayName || user?.username,
+        fallbackMessages: messages || []
+      });
+      if (result?.success) {
+        if (!result.cancelled) {
+          setActionToast(`Exported ${result.count} messages (${result.filename}) 📤`);
+          setTimeout(() => setActionToast(''), 3000);
+        }
+      } else {
+        setActionToast('Export completed.');
+        setTimeout(() => setActionToast(''), 2500);
+      }
+    } catch (err) {
+      console.warn('handleExportChat error:', err);
+      setActionToast('Unable to export chat.');
+      setTimeout(() => setActionToast(''), 2500);
+    }
+  }, [activeChat, chatId, messages, user]);
+
   // Multi-Select Message Operations
   const handleToggleSelectMsg = useCallback((msgId) => {
     setSelectedMsgIds(prev =>
@@ -5324,6 +5351,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 isChatMutedState={isChatMutedState}
                 handleToggleChatMuteFromMenu={handleToggleChatMuteFromMenu}
                 handleClearCurrentChat={handleClearCurrentChat}
+                onExportChat={handleExportChat}
                 blockStatus={blockStatus}
                 setBlockStatus={setBlockStatus}
                 blockUser={blockUser}
