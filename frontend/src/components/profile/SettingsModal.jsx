@@ -227,59 +227,6 @@ export const SettingsDisguiseButton = React.memo(function SettingsDisguiseButton
 });
 
 /**
- * Atomic Isolated Component: Profile Header Backup Toggle Pill
- * Shown directly on the profile card (Default: ON)
- */
-export const ProfileBackupPill = React.memo(function ProfileBackupPill({ userId }) {
-  const [enabled, setEnabled] = useState(() => isChatBackupEnabled(userId));
-
-  useEffect(() => {
-    const handleSettingChange = (e) => {
-      if (e.detail?.enabled !== undefined) {
-        setEnabled(Boolean(e.detail.enabled));
-      }
-    };
-    window.addEventListener('pulsechat_backup_setting_changed', handleSettingChange);
-    return () => window.removeEventListener('pulsechat_backup_setting_changed', handleSettingChange);
-  }, []);
-
-  const handleToggle = (e) => {
-    e?.stopPropagation?.();
-    const next = !enabled;
-    setEnabled(next);
-    setChatBackupEnabled(userId, next);
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={handleToggle}
-      className="interactive-tap"
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '5px',
-        padding: '3px 8px',
-        borderRadius: '8px',
-        background: enabled ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-        border: enabled ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)',
-        color: enabled ? '#10b981' : '#ef4444',
-        fontSize: '0.72rem',
-        fontWeight: 700,
-        cursor: 'pointer',
-        willChange: 'transform',
-        transform: 'translateZ(0)',
-        transition: 'all 0.15s ease'
-      }}
-      title={`Chat Backup is ${enabled ? 'ON' : 'OFF'} (Tap to toggle)`}
-    >
-      <Database size={11} color={enabled ? '#10b981' : '#ef4444'} />
-      <span>Backup: {enabled ? 'ON' : 'OFF'}</span>
-    </button>
-  );
-});
-
-/**
  * Atomic Isolated Component: Device Chat Backup & Restore
  * Clean, compact UI with toggle (DEFAULT ON) and expandable action options.
  * No wordy descriptions, no server hits stats, 100% clean.
@@ -619,7 +566,8 @@ export default function SettingsModal({
   // Storage Cleanup States
   const [cleaningStorage, setCleaningStorage] = useState(false);
   const [cleanupResult, setCleanupResult] = useState(null);
-  const [cleanupDays, setCleanupDays] = useState(30);
+  const [cleanupDays, setCleanupDays] = useState('');
+  const [isCustomCleanerOpen, setIsCustomCleanerOpen] = useState(false);
 
   // Notifications State
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
@@ -1199,9 +1147,8 @@ export default function SettingsModal({
                       </h4>
                       {user?.isPro && <PulseVipBadge size={14} showLabel={false} />}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                       <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>@{user?.username}</span>
-                      <ProfileBackupPill userId={user?.id} />
                     </div>
                   </div>
                 </div>
@@ -2435,138 +2382,193 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* Custom Storage Cleaner (User Enters Days & Cleans Storage) */}
+              {/* Custom Storage Cleaner (Collapsible: User Enters Days & Cleans Storage) */}
               <div style={{
                 background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(99, 102, 241, 0.08))',
                 border: '1px solid rgba(16, 185, 129, 0.3)',
                 borderRadius: '16px',
-                padding: '16px',
+                padding: '14px 16px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '12px'
+                gap: isCustomCleanerOpen ? '14px' : '0px',
+                transition: 'all 0.2s ease',
+                willChange: 'transform',
+                transform: 'translateZ(0)'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <HardDrive size={18} color="#10b981" />
-                  </div>
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '0.94rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                      Custom Storage Cleaner
-                    </h4>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                      Purge old messages & media from local storage and cache
-                    </p>
-                  </div>
-                </div>
-
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                  Enter the number of days below. All messages older than this threshold will be cleaned from your phone's storage and cache, freeing up space and speeding up the app.
-                </div>
-
-                {/* Days Input and Quick Chips */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                    Delete messages older than (in Days):
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input
-                      type="number"
-                      min="1"
-                      max="365"
-                      value={cleanupDays}
-                      onChange={(e) => setCleanupDays(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                      style={{
-                        width: '80px',
-                        padding: '8px 12px',
-                        borderRadius: '10px',
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        border: '1px solid var(--border)',
-                        color: 'var(--text-main)',
-                        fontWeight: 700,
-                        fontSize: '0.92rem',
-                        textAlign: 'center',
-                        outline: 'none'
-                      }}
-                    />
-                    <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                      Days
-                    </span>
-                  </div>
-
-                  {/* Preset Quick Chips */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
-                    {[7, 15, 30, 60, 90].map((d) => (
-                      <button
-                        key={d}
-                        type="button"
-                        onClick={() => setCleanupDays(d)}
-                        style={{
-                          padding: '4px 10px',
-                          fontSize: '0.74rem',
-                          borderRadius: '8px',
-                          border: cleanupDays === d ? '1px solid #10b981' : '1px solid var(--border)',
-                          background: cleanupDays === d ? '#10b981' : 'rgba(255, 255, 255, 0.05)',
-                          color: cleanupDays === d ? '#000' : 'var(--text-main)',
-                          cursor: 'pointer',
-                          fontWeight: cleanupDays === d ? 700 : 500,
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        {d} Days
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Clean Button */}
-                <button
-                  type="button"
-                  onClick={handleRunInstantCleanup}
-                  disabled={cleaningStorage}
+                {/* Header Row (Tap to expand/collapse) */}
+                <div
+                  onClick={() => setIsCustomCleanerOpen(prev => !prev)}
+                  className="interactive-tap"
                   style={{
-                    marginTop: '4px',
-                    border: 'none',
-                    outline: 'none',
-                    cursor: cleaningStorage ? 'wait' : 'pointer',
-                    fontSize: '0.84rem',
-                    fontWeight: 700,
-                    color: '#000',
-                    background: '#10b981',
-                    padding: '10px 16px',
-                    borderRadius: '10px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
-                    transition: 'all 0.15s ease'
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    userSelect: 'none'
                   }}
                 >
-                  {cleaningStorage ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      <span>Cleaning Local Storage & Cache...</span>
-                    </>
-                  ) : (
-                    <>
-                      <HardDrive size={16} />
-                      <span>Clean Storage Now ({cleanupDays}+ Days Old)</span>
-                    </>
-                  )}
-                </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '10px',
+                      background: 'rgba(16, 185, 129, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <HardDrive size={18} color="#10b981" />
+                    </div>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '0.94rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                        Custom Storage Cleaner
+                      </h4>
+                      <p style={{ margin: '2px 0 0 0', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                        Purge old messages & media from local storage and cache
+                      </p>
+                    </div>
+                  </div>
 
-                {cleanupResult && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ChevronRight
+                      size={18}
+                      color="var(--text-muted)"
+                      style={{
+                        transform: isCustomCleanerOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s ease'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Collapsible Content: Only opens when user clicks */}
+                {isCustomCleanerOpen && (
                   <div style={{
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    color: cleanupResult.type === 'success' ? '#10b981' : '#ef4444',
-                    background: cleanupResult.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    textAlign: 'center',
-                    border: cleanupResult.type === 'success' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)'
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    borderTop: '1px solid rgba(16, 185, 129, 0.15)',
+                    paddingTop: '12px'
                   }}>
-                    {cleanupResult.msg}
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                      Enter the number of days below. All messages older than this threshold will be cleaned from your phone's storage and cache, freeing up space and speeding up the app.
+                    </div>
+
+                    {/* Days Input and Quick Chips */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                        Delete messages older than (in Days):
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="number"
+                          min="1"
+                          max="365"
+                          value={cleanupDays}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              setCleanupDays('');
+                            } else {
+                              const num = parseInt(val, 10);
+                              setCleanupDays(isNaN(num) ? '' : String(Math.max(1, num)));
+                            }
+                          }}
+                          placeholder="Enter total days"
+                          style={{
+                            width: '160px',
+                            padding: '8px 12px',
+                            borderRadius: '10px',
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            border: '1px solid var(--border)',
+                            color: 'var(--text-main)',
+                            fontWeight: 600,
+                            fontSize: '0.86rem',
+                            outline: 'none'
+                          }}
+                        />
+                        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                          Days
+                        </span>
+                      </div>
+
+                      {/* Preset Quick Chips */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
+                        {[7, 15, 30, 60, 90].map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => setCleanupDays(String(d))}
+                            style={{
+                              padding: '5px 12px',
+                              fontSize: '0.74rem',
+                              borderRadius: '8px',
+                              border: Number(cleanupDays) === d ? '1px solid #10b981' : '1px solid var(--border)',
+                              background: Number(cleanupDays) === d ? '#10b981' : 'rgba(255, 255, 255, 0.05)',
+                              color: Number(cleanupDays) === d ? '#000' : 'var(--text-main)',
+                              cursor: 'pointer',
+                              fontWeight: Number(cleanupDays) === d ? 700 : 500,
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            {d} Days
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Clean Button */}
+                    <button
+                      type="button"
+                      onClick={handleRunInstantCleanup}
+                      disabled={cleaningStorage}
+                      style={{
+                        marginTop: '4px',
+                        border: 'none',
+                        outline: 'none',
+                        cursor: cleaningStorage ? 'wait' : 'pointer',
+                        fontSize: '0.84rem',
+                        fontWeight: 700,
+                        color: '#000',
+                        background: '#10b981',
+                        padding: '10px 16px',
+                        borderRadius: '10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {cleaningStorage ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          <span>Cleaning Local Storage & Cache...</span>
+                        </>
+                      ) : (
+                        <>
+                          <HardDrive size={16} />
+                          <span>Clean Storage Now {cleanupDays ? `(${cleanupDays}+ Days Old)` : ''}</span>
+                        </>
+                      )}
+                    </button>
+
+                    {cleanupResult && (
+                      <div style={{
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        color: cleanupResult.type === 'success' ? '#10b981' : '#ef4444',
+                        background: cleanupResult.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        textAlign: 'center',
+                        border: cleanupResult.type === 'success' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)'
+                      }}>
+                        {cleanupResult.msg}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
