@@ -10,7 +10,7 @@ import ChatManageStorageModal, { formatStorageSize, estimateMessageSize } from '
 import PinLockModal from '../common/PinLockModal';
 import { isChatLocked, setChatLocked, isChatHidden, setChatHidden, getSecurityPin, isChatMuted, setChatMuted } from '../../utils/securityLock';
 
-export default function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp, messages: propMessages, onDeleteMessages, onForwardMessages }) {
+function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp, messages: propMessages, onDeleteMessages, onForwardMessages }) {
   const { user, token, blockUser, unblockUser } = useContext(AuthContext);
   const { socket, onlineUsers, vibeAuras } = useContext(SocketContext);
   const [profileData, setProfileData] = useState(targetUser);
@@ -1460,3 +1460,5 @@ export default function UserProfileModal({ targetUser, onClose, onStartCall, onO
     </div>
   );
 }
+
+export default React.memo(UserProfileModal);

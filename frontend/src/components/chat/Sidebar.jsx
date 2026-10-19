@@ -178,7 +178,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     };
   }, []);
 
-  const togglePinChat = (e, targetId) => {
+  const togglePinChat = useCallback((e, targetId) => {
     if (e) {
       e.stopPropagation();
       e.preventDefault();
@@ -200,7 +200,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       } catch (err) {}
       return next;
     });
-  };
+  }, [currentUid]);
 
   const sortedRecentChats = useMemo(() => {
     const hiddenSet = new Set(hiddenChatIdsState);

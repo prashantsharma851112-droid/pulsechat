@@ -75,7 +75,7 @@ export const EMOJI_CATEGORIES = [
 
 export const ALL_EMOJIS = EMOJI_CATEGORIES.flatMap(cat => cat.emojis);
 
-export default function EmojiPicker({ onSelectEmoji, onClose, inline = false, style = {} }) {
+function EmojiPicker({ onSelectEmoji, onClose, inline = false, style = {} }) {
   const [activeCategory, setActiveCategory] = useState('smileys');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -271,3 +271,5 @@ export default function EmojiPicker({ onSelectEmoji, onClose, inline = false, st
     </div>
   );
 }
+
+export default React.memo(EmojiPicker);

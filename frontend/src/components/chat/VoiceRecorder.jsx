@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Square, Send, X, MicOff, Play, Pause, Sparkles, RefreshCw } from 'lucide-react';
 import { applyVoiceFilter, VOICE_FILTERS } from '../../utils/voiceFilters';
 
-export default function VoiceRecorder({ onSendVoice, onCancel }) {
+function VoiceRecorder({ onSendVoice, onCancel }) {
   const [recording, setRecording] = useState(false);
   const [rawAudioBlob, setRawAudioBlob] = useState(null);
   const [filteredAudioBlob, setFilteredAudioBlob] = useState(null);
@@ -443,3 +443,5 @@ export default function VoiceRecorder({ onSendVoice, onCancel }) {
     </div>
   );
 }
+
+export default React.memo(VoiceRecorder);

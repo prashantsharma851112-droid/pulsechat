@@ -5,6 +5,10 @@ import { Send, Mic, Phone, Video, Smile, BarChart2, ArrowLeft, Users, Paintbrush
 import MessageItem from './MessageItem';
 import ChatInputCapsule from './ChatInputCapsule';
 import ChatMusicPlayerBar from './ChatMusicPlayerBar';
+import ChatMoodTimeline from './ChatMoodTimeline';
+import ChatActionGridDrawer from './ChatActionGridDrawer';
+import ChatHeaderMoreMenu from './ChatHeaderMoreMenu';
+import ChatMessageActionBar from './ChatMessageActionBar';
 import VoiceRecorder from './VoiceRecorder';
 import EmojiPicker from './EmojiPicker';
 import ChatLiveWallpaper from './ChatLiveWallpaper';
@@ -3766,7 +3770,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     setCooldownMsg(null);
   };
 
-  const handleSendVoice = async (audioUrl, voiceFilter = 'normal') => {
+  const handleSendVoice = useCallback(async (audioUrl, voiceFilter = 'normal') => {
     setShowRecorder(false);
     const tempId = 'temp_voice_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     const isOnlineNow = isDeviceOnline() && Boolean(socket?.connected);
@@ -3831,7 +3835,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       voiceFilter: voiceFilter !== 'normal' ? voiceFilter : null,
       replyTo: pendingVoiceMsg.replyTo
     });
-  };
+  }, [chatId, user?.id, activeChat?.id, isGroup, replyTo, socket, token, chatAvatar]);
+
+  const handleCancelRecorder = useCallback(() => {
+    setShowRecorder(false);
+  }, []);
+
+  const handleSelectChatEmoji = useCallback((emoji) => {
+    inputCapsuleRef.current?.insertEmoji(emoji);
+  }, []);
+
+  const handleCloseChatEmoji = useCallback(() => {
+    setShowEmoji(false);
+  }, []);
 
   const handleCreatePoll = (pollData) => {
     const isPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
@@ -4715,18 +4731,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
   }, [chatId]);
 
-  // Calculate Mood Timeline using sentence + word sentiment from utility (Memoized to prevent work on keystrokes)
-  const moodTimeline = useMemo(() => calculateConversationMoodTimeline(messages, cooldownMsg), [messages, cooldownMsg]);
-  const moodInfo = moodTimeline.currentMood;
-  const moodSteps = moodTimeline.timelineSteps;
-
-  const moodTimelineRef = useRef(null);
-  useEffect(() => {
-    if (moodTimelineRef.current) {
-      moodTimelineRef.current.scrollLeft = moodTimelineRef.current.scrollWidth;
-    }
-  }, [chatId, moodSteps]);
-
   // AI Smart Suggested Replies
   const smartReplies = ["Sounds great! 👍", "I'll check and reply soon.", "Let's call! 📞", "Thanks! 🔥"];
 
@@ -5174,142 +5178,33 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 <MoreVertical size={18} />
               </button>
 
-              {showMoreMenu && (
-                <div
-                  className="chat-header-dropdown-menu"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {!moreSubMenuOpen ? (
-                    <>
-                      {/* Voice & Video Calls */}
-                      <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, false)) : onStartCall(false); }}>
-                        <Phone size={16} color="var(--accent)" />
-                        <span>{isGroup ? 'Group Voice Call' : 'Voice Call'}</span>
-                      </button>
-                      <button onClick={() => { setShowMoreMenu(false); isGroup ? (onStartGroupCall && onStartGroupCall(activeChat, true)) : onStartCall(true); }}>
-                        <Video size={16} color="var(--accent)" />
-                        <span>{isGroup ? 'Group Video Call' : 'Video Call'}</span>
-                      </button>
-
-                      {/* Search in chat */}
-                      <button onClick={() => {
-                        setShowMoreMenu(false);
-                        setShowInChatSearch(true);
-                        setTimeout(() => inChatSearchInputRef.current?.focus(), 120);
-                      }}>
-                        <Search size={16} color="var(--accent)" />
-                        <span>Search in chat</span>
-                      </button>
-
-                      <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
-                      <button onClick={() => { setShowMoreMenu(false); setShowThemeModal(true); }}>
-                        <ImageIcon size={16} color="var(--accent)" />
-                        <span>Chat background</span>
-                      </button>
-                      <button onClick={() => { setShowMoreMenu(false); setShowSolidThemeModal(true); }}>
-                        <Palette size={16} color="var(--accent)" />
-                        <span>Change Solid Theme</span>
-                      </button>
-                      <button onClick={() => {
-                        setShowMoreMenu(false);
-                        if (isGroup) {
-                          setShowGroupProfileModal(true);
-                        } else {
-                          setShowUserProfileModal(true);
-                        }
-                      }}>
-                        <Clock size={16} color="var(--accent)" />
-                        <span>Disappearing Messages {chatSetting?.disappearingEnabled ? '(On)' : '(Off)'}</span>
-                      </button>
-                      <button onClick={() => { setShowMoreMenu(false); handleToggleVanishMode(); }}>
-                        <Ghost size={16} color={isVanishMode ? '#c084fc' : 'var(--accent)'} />
-                        <span>Vanish Mode {isVanishMode ? '(On)' : '(Off)'}</span>
-                      </button>
-
-                      <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
-                      <button 
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMoreSubMenuOpen(true);
-                        }}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <MoreVertical size={16} color="var(--accent)" />
-                          <span>More</span>
-                        </div>
-                        <ChevronRight size={16} color="var(--text-muted)" />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button 
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMoreSubMenuOpen(false);
-                        }}
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, borderBottom: '1px solid var(--border)', paddingBottom: '8px', marginBottom: '4px', width: '100%' }}
-                      >
-                        <ChevronLeft size={16} color="var(--accent)" />
-                        <span>More</span>
-                      </button>
-
-                      {/* 1. Chat Lock */}
-                      <button onClick={handleToggleChatLockFromMenu}>
-                        {isChatLockedState ? <Unlock size={16} color="#10b981" /> : <Lock size={16} color="var(--accent)" />}
-                        <span>{isChatLockedState ? 'Unlock Chat' : 'Chat Lock 🔒'}</span>
-                      </button>
-
-                      {/* 2. Mute / Unmute Notifications */}
-                      <button onClick={handleToggleChatMuteFromMenu}>
-                        {isChatMutedState ? <Bell size={16} color="var(--accent)" /> : <BellOff size={16} color="#f59e0b" />}
-                        <span>{isChatMutedState ? 'Unmute Notifications' : 'Mute Notifications'}</span>
-                      </button>
-
-                      {/* 3. Clear Chat */}
-                      <button onClick={() => { setShowMoreMenu(false); setMoreSubMenuOpen(false); handleClearCurrentChat(); }} style={{ color: '#ef4444' }}>
-                        <Trash2 size={16} color="#ef4444" />
-                        <span>Clear Chat</span>
-                      </button>
-
-                      {/* 4. Block Contact (if direct chat) */}
-                      {!isGroup && (
-                        <button
-                          onClick={async () => {
-                            setShowMoreMenu(false);
-                            setMoreSubMenuOpen(false);
-                            const willBlock = !blockStatus.isBlockedByMe;
-                            const confirmMsg = willBlock
-                              ? `Are you sure you want to block ${activeChat.displayName}? You will no longer receive their messages or calls.`
-                              : `Unblock ${activeChat.displayName}?`;
-                            if (window.confirm(confirmMsg)) {
-                              if (willBlock) {
-                                await blockUser(activeChat.id);
-                                setBlockStatus(prev => ({ ...prev, isBlockedByMe: true }));
-                              } else {
-                                await unblockUser(activeChat.id);
-                                setBlockStatus(prev => ({ ...prev, isBlockedByMe: false }));
-                              }
-                            }
-                          }}
-                          style={{ color: blockStatus.isBlockedByMe ? 'var(--accent)' : '#ef4444' }}
-                        >
-                          <Ban size={16} color={blockStatus.isBlockedByMe ? 'var(--accent)' : '#ef4444'} />
-                          <span>{blockStatus.isBlockedByMe ? 'Unblock Contact' : 'Block Contact'}</span>
-                        </button>
-                      )}
-
-                      {/* 5. Contact Info / Group Info (Placed LAST in the list!) */}
-                      <button onClick={() => { setShowMoreMenu(false); setMoreSubMenuOpen(false); isGroup ? setShowGroupProfileModal(true) : setShowUserProfileModal(true); }}>
-                        <Info size={16} color="var(--accent)" />
-                        <span>{isGroup ? 'Group Info' : 'Contact Info'}</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
+              <ChatHeaderMoreMenu
+                showMoreMenu={showMoreMenu}
+                setShowMoreMenu={setShowMoreMenu}
+                moreSubMenuOpen={moreSubMenuOpen}
+                setMoreSubMenuOpen={setMoreSubMenuOpen}
+                isGroup={isGroup}
+                activeChat={activeChat}
+                onStartCall={onStartCall}
+                onStartGroupCall={onStartGroupCall}
+                setShowInChatSearch={setShowInChatSearch}
+                inChatSearchInputRef={inChatSearchInputRef}
+                setShowThemeModal={setShowThemeModal}
+                setShowSolidThemeModal={setShowSolidThemeModal}
+                setShowUserProfileModal={setShowUserProfileModal}
+                setShowGroupProfileModal={setShowGroupProfileModal}
+                chatSetting={chatSetting}
+                isVanishMode={isVanishMode}
+                handleToggleVanishMode={handleToggleVanishMode}
+                isChatLockedState={isChatLockedState}
+                handleToggleChatLockFromMenu={handleToggleChatLockFromMenu}
+                isChatMutedState={isChatMutedState}
+                handleToggleChatMuteFromMenu={handleToggleChatMuteFromMenu}
+                handleClearCurrentChat={handleClearCurrentChat}
+                blockStatus={blockStatus}
+                setBlockStatus={setBlockStatus}
+                blockUser={blockUser}
+              />
 
               {/* Pulse Aura Background Soundscape Dropdown Selector Card */}
               {showAuraMenu && (
@@ -5480,209 +5375,33 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         </div>
       </div>
       ) : (
-        <div style={{
-          padding: 'calc(6px + env(safe-area-inset-top, 0px)) 0.75rem 6px 0.75rem',
-          borderBottom: '2px solid var(--accent)',
-          background: (chatWallpaper && chatWallpaper !== 'none')
-            ? 'color-mix(in srgb, var(--bg-card) 92%, transparent)'
-            : 'var(--bg-card)',
-          backdropFilter: 'blur(16px)',
-          WebkitBackdropFilter: 'blur(16px)',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          position: 'relative',
-          zIndex: 50
-        }}>
-          {/* Left: Close Button + Dynamic Count */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <button
-              type="button"
-              onClick={handleDismissActionMessage}
-              className="icon-btn-ghost"
-              style={{ width: '34px', height: '34px', borderRadius: '50%', color: 'var(--text-main)' }}
-              title="Unselect messages"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <span style={{ fontSize: '0.98rem', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '0.02em' }}>
-              {selectedActionMessages.length}
-            </span>
-          </div>
-
-          {/* Right: Action Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-            {/* Reply - only visible when exactly 1 message is selected */}
-            {selectedActionMessages.length === 1 && (
-              <button
-                type="button"
-                onClick={() => {
-                  const targetMsg = selectedActionMessages[0];
-                  const senderInfo = groupMembersMap[targetMsg.senderId];
-                  setReplyTo({
-                    ...targetMsg,
-                    senderName: targetMsg.senderId === user.id
-                      ? 'You'
-                      : (senderInfo?.displayName || senderInfo?.username || activeChat.displayName)
-                  });
-                  handleDismissActionMessage();
-                  replyInputRef.current?.focus();
-                }}
-                className="icon-btn-ghost"
-                title="Reply"
-                style={{ width: '34px', height: '34px', borderRadius: '50%', color: 'var(--text-main)' }}
-              >
-                <CornerUpLeft size={17} />
-              </button>
-            )}
-
-            {/* Select All Button */}
-            <button
-              type="button"
-              onClick={() => {
-                const selectableMessages = messages.filter(m => m.type !== 'deleted' && m.type !== 'system');
-                const isAllSelected = selectableMessages.length > 0 && selectableMessages.every(m => selectedActionMessages.some(sm => sm.id === m.id));
-                if (isAllSelected) {
-                  handleDismissActionMessage();
-                } else {
-                  setSelectedActionMessages(selectableMessages.length > 0 ? selectableMessages : [...messages]);
-                }
-              }}
-              className="icon-btn-ghost"
-              title={
-                messages.filter(m => m.type !== 'deleted' && m.type !== 'system').every(m => selectedActionMessages.some(sm => sm.id === m.id))
-                  ? "Deselect all"
-                  : "Select all"
-              }
-              style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '50%',
-                color: (messages.filter(m => m.type !== 'deleted' && m.type !== 'system').length > 0 && messages.filter(m => m.type !== 'deleted' && m.type !== 'system').every(m => selectedActionMessages.some(sm => sm.id === m.id)))
-                  ? 'var(--accent)'
-                  : 'var(--text-main)'
-              }}
-            >
-              <CheckSquare size={17} />
-            </button>
-
-            {/* Copy */}
-            <button
-              type="button"
-              onClick={() => handleCopyMessages(selectedActionMessages)}
-              className="icon-btn-ghost"
-              title="Copy message(s)"
-              style={{ width: '34px', height: '34px', borderRadius: '50%', color: 'var(--text-main)' }}
-            >
-              <Copy size={17} />
-            </button>
-
-            {/* Forward */}
-            <button
-              type="button"
-              onClick={() => setShowForwardModal(true)}
-              className="icon-btn-ghost"
-              title="Forward message(s)"
-              style={{ width: '34px', height: '34px', borderRadius: '50%', color: 'var(--text-main)' }}
-            >
-              <Forward size={17} />
-            </button>
-
-            {/* Delete */}
-            <button
-              type="button"
-              onClick={() => handleDeleteActionMessage(selectedActionMessages)}
-              className="icon-btn-ghost"
-              title="Delete message(s)"
-              style={{ width: '34px', height: '34px', borderRadius: '50%', color: '#ef4444' }}
-            >
-              <Trash2 size={17} />
-            </button>
-
-            {/* 3-Dots More Options Menu */}
-            {selectedActionMessages.length >= 1 && (
-              <div style={{ position: 'relative' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowActionMoreMenu(prev => !prev)}
-                  className="icon-btn-ghost"
-                  title="More options"
-                  style={{ width: '34px', height: '34px', borderRadius: '50%', color: 'var(--text-main)' }}
-                >
-                  <MoreVertical size={17} />
-                </button>
-
-                {showActionMoreMenu && (
-                  <div className="chat-header-dropdown-menu" style={{ right: 0, minWidth: '190px', zIndex: 2000 }}>
-                    {/* Star / Unstar in 3-dots */}
-                    <button
-                      onClick={() => {
-                        setShowActionMoreMenu(false);
-                        handleToggleStarMessages(selectedActionMessages);
-                      }}
-                    >
-                      <Star
-                        size={16}
-                        color="#f59e0b"
-                        fill={(selectedActionMessages.length > 0 && selectedActionMessages.every(m => starredMsgIds.includes(m.id))) ? "#f59e0b" : "none"}
-                      />
-                      <span>{(selectedActionMessages.length > 0 && selectedActionMessages.every(m => starredMsgIds.includes(m.id))) ? 'Unstar message' : 'Star message'}</span>
-                    </button>
-
-                    {selectedActionMessages.length === 1 && (
-                      <button
-                        onClick={() => {
-                          setShowActionMoreMenu(false);
-                          const targetMsg = selectedActionMessages[0];
-                          if (pinnedMessage?.id === targetMsg?.id) {
-                            handleUnpinMessage();
-                          } else {
-                            handlePinMessage(targetMsg);
-                          }
-                        }}
-                      >
-                        <Pin size={16} color="var(--accent)" />
-                        <span>{pinnedMessage?.id === selectedActionMessages[0]?.id ? 'Unpin message' : 'Pin message'}</span>
-                      </button>
-                    )}
-
-                    {selectedActionMessages.length === 1 && (
-                      <button
-                        onClick={() => {
-                          setShowActionMoreMenu(false);
-                          setShowMessageInfoModal(true);
-                        }}
-                      >
-                        <Info size={16} color="var(--accent)" />
-                        <span>Message info</span>
-                      </button>
-                    )}
-
-                    {selectedActionMessages[0]?.senderId !== user.id && !isGroup && (
-                      <button
-                        onClick={async () => {
-                          setShowActionMoreMenu(false);
-                          if (window.confirm(`Report message and block ${activeChat.displayName}?`)) {
-                            await blockUser(activeChat.id);
-                            setBlockStatus(prev => ({ ...prev, isBlockedByMe: true }));
-                            setActionToast('User reported and blocked 🚨');
-                            setTimeout(() => setActionToast(''), 2500);
-                            handleDismissActionMessage();
-                          }
-                        }}
-                        style={{ color: '#ef4444' }}
-                      >
-                        <Ban size={16} color="#ef4444" />
-                        <span>Report & Block</span>
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        <ChatMessageActionBar
+          chatWallpaper={chatWallpaper}
+          handleDismissActionMessage={handleDismissActionMessage}
+          selectedActionMessages={selectedActionMessages}
+          setSelectedActionMessages={setSelectedActionMessages}
+          messages={messages}
+          groupMembersMap={groupMembersMap}
+          setReplyTo={setReplyTo}
+          replyInputRef={replyInputRef}
+          user={user}
+          activeChat={activeChat}
+          handleCopyMessages={handleCopyMessages}
+          setShowForwardModal={setShowForwardModal}
+          handleDeleteActionMessage={handleDeleteActionMessage}
+          showActionMoreMenu={showActionMoreMenu}
+          setShowActionMoreMenu={setShowActionMoreMenu}
+          handleToggleStarMessages={handleToggleStarMessages}
+          starredMsgIds={starredMsgIds}
+          pinnedMessage={pinnedMessage}
+          handlePinMessage={handlePinMessage}
+          handleUnpinMessage={handleUnpinMessage}
+          setShowMessageInfoModal={setShowMessageInfoModal}
+          isGroup={isGroup}
+          blockUser={blockUser}
+          setBlockStatus={setBlockStatus}
+          setActionToast={setActionToast}
+        />
       )}
 
       {/* Screenshot Alert Floating Banner */}
@@ -6040,101 +5759,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           </div>
         )}
 
-      {/* Top Mood Timeline: Ultra-Slim Pencil Line with Micro Typography */}
-      {!blockStatus.isBlockedByMe && !blockStatus.isBlockedByThem && (
-        <div
-          ref={moodTimelineRef}
-          style={{
-            padding: '2px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'transparent',
-            position: 'relative',
-            zIndex: 1,
-            overflowX: 'auto',
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-            lineHeight: 1
-          }}
-        >
-          {/* Left Pencil Line */}
-          <div style={{
-            width: '20px',
-            flexShrink: 0,
-            height: '1px',
-            background: 'linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.45))'
-          }} />
-
-          {/* Micro Mood Pill */}
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '2px 8px',
-              borderRadius: '12px',
-              border: '1px solid rgba(168, 85, 247, 0.35)',
-              background: 'rgba(168, 85, 247, 0.08)',
-              backdropFilter: 'blur(6px)',
-              WebkitBackdropFilter: 'blur(6px)',
-              whiteSpace: 'nowrap',
-              flexShrink: 0
-            }}
-            title="Conversation Mood Sentiment"
-          >
-            <span style={{ fontSize: '0.74rem', lineHeight: 1 }}>{moodInfo?.emoji || '💬'}</span>
-            <span style={{
-              color: '#c084fc',
-              fontWeight: 700,
-              fontSize: '0.67rem',
-              letterSpacing: '0.01em'
-            }}>
-              Mood: {moodInfo?.mood || 'Casual'}
-            </span>
-
-            {moodSteps.length > 0 && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginLeft: '3px' }}>
-                <span style={{ color: 'var(--text-muted)', opacity: 0.35, fontSize: '0.55rem' }}>|</span>
-                {moodSteps.map((step, idx) => (
-                  <React.Fragment key={step.id || idx}>
-                    <span
-                      style={{
-                        color: step.color,
-                        fontWeight: 600,
-                        fontSize: '0.62rem',
-                        background: step.bg,
-                        padding: '1px 5px',
-                        borderRadius: '6px',
-                        border: `0.5px solid ${step.border}`,
-                        whiteSpace: 'nowrap',
-                        opacity: step.isPending ? 0.6 : 1,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '2px'
-                      }}
-                      title={step.preview}
-                    >
-                      <span>{step.emoji}</span>
-                      <span>{step.mood}</span>
-                    </span>
-                    {idx < moodSteps.length - 1 && (
-                      <span style={{ color: 'var(--text-muted)', opacity: 0.35, fontSize: '0.55rem' }}>→</span>
-                    )}
-                  </React.Fragment>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Right Pencil Line stretching across */}
-          <div style={{
-            flex: 1,
-            height: '1px',
-            background: 'linear-gradient(90deg, rgba(168, 85, 247, 0.45), transparent)'
-          }} />
-        </div>
-      )}
+      {/* Top Mood Timeline: Ultra-Slim Pencil Line with Micro Typography (Isolated React.memo) */}
+      <ChatMoodTimeline
+        messages={messages}
+        cooldownMsg={cooldownMsg}
+        isBlockedByMe={blockStatus.isBlockedByMe}
+        isBlockedByThem={blockStatus.isBlockedByThem}
+        chatId={chatId}
+      />
 
       {/* Instagram-style Vanish Mode Alert Banner - Directly Below Mood Timeline */}
       {isVanishMode && (
@@ -6899,7 +6531,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           boxSizing: 'border-box'
         }}>
           {showEmoji && (
-            <EmojiPicker onSelectEmoji={(emoji) => inputCapsuleRef.current?.insertEmoji(emoji)} onClose={() => setShowEmoji(false)} />
+            <EmojiPicker onSelectEmoji={handleSelectChatEmoji} onClose={handleCloseChatEmoji} />
           )}
 
           <input
@@ -6926,396 +6558,22 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             style={{ display: 'none' }}
           />
 
-          {/* 4-Dot Quick Action Drawer (Transparent Glass Background + Theme Adaptive Neon Light Outline) */}
-          {showActionGrid && (
-            <div
-              ref={actionGridRef}
-              style={{
-                position: 'absolute',
-                bottom: 'calc(100% + 10px)',
-                left: '12px',
-                background: 'color-mix(in srgb, var(--accent) 26%, transparent)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                border: '1.5px solid var(--accent)',
-                borderRadius: '20px',
-                padding: '14px',
-                boxShadow: '0 0 22px color-mix(in srgb, var(--accent) 55%, transparent), 0 4px 14px rgba(0,0,0,0.3)',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '12px',
-                zIndex: 1100,
-                width: 'min(330px, 92vw)',
-                maxHeight: 'min(440px, 80vh)',
-                overflowY: 'auto',
-                animation: 'pulseModalPop 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
-              }}
-            >
-              {/* 1. Media & Files */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  fileInputRef.current?.click();
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.35)'
-                }}>
-                  <Paperclip size={20} />
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Files & Media</span>
-              </button>
-
-              {/* 2. 3D Typography (VIP Pro) */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  setShow3DTextModal(true);
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #06b6d4, #a855f7)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  fontWeight: 900,
-                  fontSize: '0.92rem',
-                  boxShadow: '0 4px 14px rgba(6, 182, 212, 0.4)'
-                }}>
-                  3D
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#06b6d4', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                  <span>3D Text</span>
-                  <Crown size={12} color="#06b6d4" />
-                </span>
-              </button>
-
-              {/* 3. Virtual Gift */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  setShowGiftPicker(true);
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(236, 72, 153, 0.35)',
-                  fontSize: '1.25rem'
-                }}>
-                  🎁
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ec4899' }}>
-                  Send Gift
-                </span>
-              </button>
-
-              {/* 4. Stealth Dust Note (Touch to Reveal Self-Destruct) */}
-              <button
-                type="button"
-                onClick={handleSendStealthDust}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
-                }}>
-                  <Zap size={20} />
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                  <span>Dust text</span>
-                  <Crown size={12} color="#f59e0b" />
-                </span>
-              </button>
-
-              {/* 5. Smooth Scratch Dust Image */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  dustImageInputRef.current?.click();
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)',
-                  fontSize: '1.25rem'
-                }}>
-                  🌫️
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                  <span>Dust Image</span>
-                </span>
-              </button>
-
-              {/* 6. Emoji Rain */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  setShowEmojiBurstPicker(true);
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #0284c7, #0369a1)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(2, 132, 199, 0.4)'
-                }}>
-                  <CloudRain size={20} />
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                  <span>Emoji Rain</span>
-                  <Crown size={12} color="#38bdf8" />
-                </span>
-              </button>
-
-              {/* 7. Create Poll */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  setShowCreatePoll(true);
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(139, 92, 246, 0.35)'
-                }}>
-                  <BarChart2 size={20} />
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-main)' }}>Create Poll</span>
-              </button>
-
-              {/* 8. Schedule Message (Send Later / Birthday Wish) */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  setShowScheduleModal(true);
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
-                }}>
-                  <Clock size={20} />
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#f59e0b' }}>Schedule ⏰</span>
-              </button>
-
-              {/* 9. Live Translation 🌐 */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActionGrid(false);
-                  setShowTranslateBar(prev => !prev);
-                }}
-                className="action-grid-item"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 4px',
-                  borderRadius: '12px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: isAutoTranslateActive
-                    ? 'linear-gradient(135deg, #06b6d4, #3b82f6)'
-                    : 'linear-gradient(135deg, #0ea5e9, #0284c7)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  boxShadow: '0 4px 12px rgba(14, 165, 233, 0.4)',
-                  position: 'relative'
-                }}>
-                  <Globe size={20} />
-                  {isAutoTranslateActive && (
-                    <span style={{
-                      position: 'absolute',
-                      top: '4px',
-                      right: '4px',
-                      width: '8px',
-                      height: '8px',
-                      borderRadius: '50%',
-                      background: '#22c55e',
-                      boxShadow: '0 0 6px #22c55e'
-                    }} />
-                  )}
-                </div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#0ea5e9' }}>
-                  Translate 🌐
-                </span>
-              </button>
-            </div>
-          )}
+          {/* 4-Dot Quick Action Drawer - Isolated Memoized Component */}
+          <ChatActionGridDrawer
+            ref={actionGridRef}
+            isOpen={showActionGrid}
+            onClose={() => setShowActionGrid(false)}
+            fileInputRef={fileInputRef}
+            dustImageInputRef={dustImageInputRef}
+            onOpen3DText={() => setShow3DTextModal(true)}
+            onOpenGiftPicker={() => setShowGiftPicker(true)}
+            onSendStealthDust={handleSendStealthDust}
+            onOpenEmojiBurst={() => setShowEmojiBurstPicker(true)}
+            onOpenCreatePoll={() => setShowCreatePoll(true)}
+            onOpenScheduleModal={() => setShowScheduleModal(true)}
+            onToggleTranslateBar={() => setShowTranslateBar(prev => !prev)}
+            isAutoTranslateActive={isAutoTranslateActive}
+          />
 
           {/* 3D Emoji Particle Rain Selector */}
           {showEmojiBurstPicker && (
@@ -7526,7 +6784,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           )}
 
           {showRecorder ? (
-            <VoiceRecorder onSendVoice={handleSendVoice} onCancel={() => setShowRecorder(false)} />
+            <VoiceRecorder onSendVoice={handleSendVoice} onCancel={handleCancelRecorder} />
           ) : (
             <ChatInputCapsule
               ref={inputCapsuleRef}

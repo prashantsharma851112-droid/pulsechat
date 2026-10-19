@@ -6,7 +6,7 @@ import { BACKEND_URL } from '../../utils/config';
 import { compressImage, parseSafeJson } from '../../utils/imageCompressor';
 import { updateGroupInStorage } from '../../utils/offlineStorage';
 
-export default function GroupProfileModal({ group, onClose, onGroupUpdated, onStartCall, onOpenFullDp }) {
+function GroupProfileModal({ group, onClose, onGroupUpdated, onStartCall, onOpenFullDp }) {
   const { user: currentUser, token } = useContext(AuthContext);
   const { socket, onlineUsers } = useContext(SocketContext);
 
@@ -547,3 +547,5 @@ export default function GroupProfileModal({ group, onClose, onGroupUpdated, onSt
     </div>
   );
 }
+
+export default React.memo(GroupProfileModal);
