@@ -17,8 +17,10 @@ import {
   Trash2,
   Ban,
   Info,
-  Download
+  Download,
+  Database
 } from 'lucide-react';
+import { isChatBackupEnabled, setChatBackupEnabled } from '../../utils/localDatabase';
 
 const menuItemGpuStyle = {
   willChange: 'transform',
@@ -273,6 +275,40 @@ export const ExportChatMenuItem = React.memo(function ExportChatMenuItem({ onExp
 });
 
 /**
+ * Atomic SubMenu Item: Chat Backup Toggle (ON / OFF)
+ */
+export const ChatBackupToggleMenuItem = React.memo(function ChatBackupToggleMenuItem({ isEnabled, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      style={{
+        ...menuItemGpuStyle,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        width: '100%'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <Database size={16} color={isEnabled ? '#10b981' : '#ef4444'} />
+        <span>Chat Backup</span>
+      </div>
+      <span style={{
+        fontSize: '0.68rem',
+        fontWeight: 800,
+        padding: '2px 6px',
+        borderRadius: '6px',
+        background: isEnabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+        color: isEnabled ? '#10b981' : '#ef4444'
+      }}>
+        {isEnabled ? 'ON' : 'OFF'}
+      </span>
+    </button>
+  );
+});
+
+/**
  * Atomic SubMenu Item: Block / Unblock Contact
  */
 export const BlockContactMenuItem = React.memo(function BlockContactMenuItem({ isBlocked, onToggleBlock }) {
@@ -331,12 +367,32 @@ const ChatHeaderMoreMenu = React.memo(function ChatHeaderMoreMenu({
   handleToggleChatMuteFromMenu,
   handleClearCurrentChat,
   onExportChat,
+  currentUserId,
   blockStatus,
   setBlockStatus,
   blockUser,
   unblockUser
 }) {
   if (!showMoreMenu) return null;
+
+  const [backupEnabled, setBackupEnabled] = React.useState(() => isChatBackupEnabled(currentUserId));
+
+  React.useEffect(() => {
+    const handleSettingChange = (e) => {
+      if (e.detail?.enabled !== undefined) {
+        setBackupEnabled(Boolean(e.detail.enabled));
+      }
+    };
+    window.addEventListener('pulsechat_backup_setting_changed', handleSettingChange);
+    return () => window.removeEventListener('pulsechat_backup_setting_changed', handleSettingChange);
+  }, []);
+
+  const handleToggleBackup = (e) => {
+    e?.stopPropagation?.();
+    const next = !backupEnabled;
+    setBackupEnabled(next);
+    setChatBackupEnabled(currentUserId, next);
+  };
 
   const handleCloseMenu = () => setShowMoreMenu(false);
 
@@ -467,10 +523,16 @@ const ChatHeaderMoreMenu = React.memo(function ChatHeaderMoreMenu({
             onToggleMute={handleToggleChatMuteFromMenu}
           />
 
-          {/* 3. Export Chat (Zero Cloud Bandwidth) */}
+          {/* 3. Chat Backup (ON / OFF - Default ON) */}
+          <ChatBackupToggleMenuItem
+            isEnabled={backupEnabled}
+            onToggle={handleToggleBackup}
+          />
+
+          {/* 4. Export Chat */}
           <ExportChatMenuItem onExportChat={handleExportChatAction} />
 
-          {/* 4. Clear Chat */}
+          {/* 5. Clear Chat */}
           <ClearChatMenuItem onClearChat={handleClearChatAction} />
 
           {/* 5. Block Contact (if direct chat) */}

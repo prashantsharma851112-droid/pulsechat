@@ -55,6 +55,31 @@ function getDb() {
 }
 
 /**
+ * Check if Chat Backup is enabled (DEFAULT ON for all users)
+ */
+export function isChatBackupEnabled(userId = '') {
+  try {
+    const key = `pulse_chat_backup_enabled_${userId || 'default'}`;
+    const val = localStorage.getItem(key);
+    if (val === null) return true; // Default is always ON
+    return val === 'true';
+  } catch (_) {
+    return true;
+  }
+}
+
+/**
+ * Set Chat Backup enabled / disabled
+ */
+export function setChatBackupEnabled(userId = '', enabled = true) {
+  try {
+    const key = `pulse_chat_backup_enabled_${userId || 'default'}`;
+    localStorage.setItem(key, String(enabled));
+    window.dispatchEvent(new CustomEvent('pulsechat_backup_setting_changed', { detail: { enabled, userId } }));
+  } catch (_) {}
+}
+
+/**
  * Save messages to local IndexedDB asynchronously in the background.
  * Uses a single readwrite transaction for maximum bulk speed.
  */
@@ -411,7 +436,7 @@ export async function createFullDeviceBackup(currentUser) {
   const backupObject = {
     app: 'PulseChat',
     version: 1,
-    type: 'whatsapp_style_full_device_backup',
+    type: 'device_backup',
     createdAt: now.toISOString(),
     user: {
       id: currentUser?.id || currentUser?._id,

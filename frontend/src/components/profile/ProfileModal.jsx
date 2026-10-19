@@ -1,7 +1,7 @@
 import React, { useState, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, Upload, Camera, Lock, User as UserIcon, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, Sparkles, Share2 } from 'lucide-react';
+import { X, Upload, Camera, Lock, User as UserIcon, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, Sparkles, Share2, Database } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { compressImage, parseSafeJson } from '../../utils/imageCompressor';
 import { useBackHandler } from '../../utils/backNavigation';
@@ -10,6 +10,7 @@ import PulseHandleCardModal from './PulseHandleCardModal';
 import ShareableStoryCardModal from './ShareableStoryCardModal';
 import VipAuraSelectorModal from '../common/VipAuraSelectorModal';
 import { updateUserProfileInStorage } from '../../utils/offlineStorage';
+import { isChatBackupEnabled, setChatBackupEnabled } from '../../utils/localDatabase';
 
 const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/bottts/svg?seed=alex',
@@ -303,6 +304,17 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
   const [profileError, setProfileError] = useState('');
   const [showStoryCardModal, setShowStoryCardModal] = useState(false);
   const [copiedAskToast, setCopiedAskToast] = useState(false);
+  const [backupEnabled, setBackupEnabled] = useState(() => isChatBackupEnabled(user?.id));
+
+  React.useEffect(() => {
+    const handleSettingChange = (e) => {
+      if (e.detail?.enabled !== undefined) {
+        setBackupEnabled(Boolean(e.detail.enabled));
+      }
+    };
+    window.addEventListener('pulsechat_backup_setting_changed', handleSettingChange);
+    return () => window.removeEventListener('pulsechat_backup_setting_changed', handleSettingChange);
+  }, []);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -561,6 +573,85 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
               onCopyNglLink={handleCopyNgl}
               copiedAskToast={copiedAskToast}
             />
+
+            {/* Chat Backup Toggle Card */}
+            <div
+              onClick={() => {
+                const next = !backupEnabled;
+                setBackupEnabled(next);
+                setChatBackupEnabled(user?.id, next);
+              }}
+              className="interactive-tap"
+              style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: '14px',
+                padding: '11px 14px',
+                marginBottom: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                willChange: 'transform',
+                transform: 'translateZ(0)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  background: backupEnabled ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Database size={16} color={backupEnabled ? '#10b981' : '#ef4444'} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    Chat Backup
+                    <span style={{
+                      fontSize: '0.62rem',
+                      fontWeight: 800,
+                      padding: '1px 5px',
+                      borderRadius: '5px',
+                      background: backupEnabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                      color: backupEnabled ? '#10b981' : '#ef4444'
+                    }}>
+                      {backupEnabled ? 'ON' : 'OFF'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    Auto-save chats locally (Default ON)
+                  </div>
+                </div>
+              </div>
+
+              {/* Toggle Switch */}
+              <div
+                style={{
+                  width: '36px',
+                  height: '20px',
+                  borderRadius: '10px',
+                  background: backupEnabled ? '#10b981' : 'var(--border)',
+                  position: 'relative',
+                  transition: 'all 0.2s ease',
+                  flexShrink: 0
+                }}
+              >
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  background: '#fff',
+                  position: 'absolute',
+                  top: '2px',
+                  left: backupEnabled ? '18px' : '2px',
+                  transition: 'all 0.2s ease'
+                }} />
+              </div>
+            </div>
 
             {/* Username Handle */}
             <div style={{ marginBottom: '1rem' }}>

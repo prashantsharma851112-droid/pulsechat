@@ -5352,6 +5352,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 handleToggleChatMuteFromMenu={handleToggleChatMuteFromMenu}
                 handleClearCurrentChat={handleClearCurrentChat}
                 onExportChat={handleExportChat}
+                currentUserId={user?.id || user?._id}
                 blockStatus={blockStatus}
                 setBlockStatus={setBlockStatus}
                 blockUser={blockUser}

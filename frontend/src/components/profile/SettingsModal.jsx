@@ -12,7 +12,7 @@ import { requestNotificationPermission, showPushNotification } from '../../utils
 import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { getCachedRecentChats, getCachedFriends, getCachedAllUsers } from '../../utils/offlineStorage';
-import { createFullDeviceBackup, restoreFullDeviceBackup, getLocalDatabaseStats } from '../../utils/localDatabase';
+import { createFullDeviceBackup, restoreFullDeviceBackup, getLocalDatabaseStats, isChatBackupEnabled, setChatBackupEnabled } from '../../utils/localDatabase';
 import PulseProModal from '../chat/PulseProModal';
 import PulseVipBadge from '../common/PulseVipBadge';
 import AppFeatureTourModal from '../common/AppFeatureTourModal';
@@ -227,16 +227,70 @@ export const SettingsDisguiseButton = React.memo(function SettingsDisguiseButton
 });
 
 /**
- * Atomic Isolated Component: WhatsApp-Style Device Backup & Restore
- * Zero server hits, zero Render bandwidth, 100% on-device IndexedDB architecture.
+ * Atomic Isolated Component: Profile Header Backup Toggle Pill
+ * Shown directly on the profile card (Default: ON)
+ */
+export const ProfileBackupPill = React.memo(function ProfileBackupPill({ userId }) {
+  const [enabled, setEnabled] = useState(() => isChatBackupEnabled(userId));
+
+  useEffect(() => {
+    const handleSettingChange = (e) => {
+      if (e.detail?.enabled !== undefined) {
+        setEnabled(Boolean(e.detail.enabled));
+      }
+    };
+    window.addEventListener('pulsechat_backup_setting_changed', handleSettingChange);
+    return () => window.removeEventListener('pulsechat_backup_setting_changed', handleSettingChange);
+  }, []);
+
+  const handleToggle = (e) => {
+    e?.stopPropagation?.();
+    const next = !enabled;
+    setEnabled(next);
+    setChatBackupEnabled(userId, next);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleToggle}
+      className="interactive-tap"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '5px',
+        padding: '3px 8px',
+        borderRadius: '8px',
+        background: enabled ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+        border: enabled ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)',
+        color: enabled ? '#10b981' : '#ef4444',
+        fontSize: '0.72rem',
+        fontWeight: 700,
+        cursor: 'pointer',
+        willChange: 'transform',
+        transform: 'translateZ(0)',
+        transition: 'all 0.15s ease'
+      }}
+      title={`Chat Backup is ${enabled ? 'ON' : 'OFF'} (Tap to toggle)`}
+    >
+      <Database size={11} color={enabled ? '#10b981' : '#ef4444'} />
+      <span>Backup: {enabled ? 'ON' : 'OFF'}</span>
+    </button>
+  );
+});
+
+/**
+ * Atomic Isolated Component: Device Chat Backup & Restore
+ * Clean, compact UI with toggle (DEFAULT ON) and expandable action options.
+ * No wordy descriptions, no server hits stats, 100% clean.
  */
 export const ChatBackupSection = React.memo(function ChatBackupSection({ currentUser }) {
+  const userId = currentUser?.id || currentUser?._id || '';
+  const [backupEnabled, setBackupEnabled] = useState(() => isChatBackupEnabled(userId));
+  const [isExpanded, setIsExpanded] = useState(false);
   const [stats, setStats] = useState({ count: 0, sizeEstimated: '0 KB' });
   const [lastBackup, setLastBackup] = useState(() => {
     try { return localStorage.getItem('pulse_last_backup_time'); } catch { return null; }
-  });
-  const [lastRestore, setLastRestore] = useState(() => {
-    try { return localStorage.getItem('pulse_last_restore_time'); } catch { return null; }
   });
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -244,14 +298,36 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    let active = true;
-    getLocalDatabaseStats().then((s) => {
-      if (active && s) setStats(s);
-    });
-    return () => { active = false; };
+    const handleSettingChange = (e) => {
+      if (e.detail?.enabled !== undefined) {
+        setBackupEnabled(Boolean(e.detail.enabled));
+      }
+    };
+    window.addEventListener('pulsechat_backup_setting_changed', handleSettingChange);
+    return () => window.removeEventListener('pulsechat_backup_setting_changed', handleSettingChange);
   }, []);
 
-  const handleBackupNow = async () => {
+  const handleToggle = (e) => {
+    e?.stopPropagation?.();
+    const next = !backupEnabled;
+    setBackupEnabled(next);
+    setChatBackupEnabled(userId, next);
+  };
+
+  const loadStats = useCallback(() => {
+    getLocalDatabaseStats().then((s) => {
+      if (s) setStats(s);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (isExpanded) {
+      loadStats();
+    }
+  }, [isExpanded, loadStats]);
+
+  const handleBackupNow = async (e) => {
+    e?.stopPropagation?.();
     setIsBackingUp(true);
     setStatusMsg(null);
     try {
@@ -260,10 +336,9 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
         setLastBackup(res.backupTime);
         setStatusMsg({
           type: 'success',
-          text: `Backup created! Saved ${res.totalMessages} messages (${res.size}) to device file.`
+          text: `Backup saved! ${res.totalMessages} messages (${res.size})`
         });
-        const newStats = await getLocalDatabaseStats();
-        setStats(newStats);
+        loadStats();
       }
     } catch (err) {
       console.warn('Backup error:', err);
@@ -282,18 +357,16 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
       const text = await file.text();
       const res = await restoreFullDeviceBackup(text);
       if (res?.success) {
-        setLastRestore(new Date().toISOString());
         setStatusMsg({
           type: 'success',
-          text: `Restored ${res.restoredMessages} messages to local device with 0 cloud bandwidth!`
+          text: `Restored ${res.restoredMessages} messages to device!`
         });
-        const newStats = await getLocalDatabaseStats();
-        setStats(newStats);
+        loadStats();
         window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
       }
     } catch (err) {
       console.warn('Restore error:', err);
-      setStatusMsg({ type: 'error', text: err?.message || 'Restore failed. Invalid backup file.' });
+      setStatusMsg({ type: 'error', text: err?.message || 'Restore failed.' });
     } finally {
       setIsRestoring(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -302,149 +375,213 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.08))',
-      border: '1px solid rgba(99, 102, 241, 0.25)',
-      borderRadius: '16px',
-      padding: '16px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '12px'
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border)',
+      borderRadius: '14px',
+      overflow: 'hidden',
+      transition: 'all 0.2s ease'
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <div style={{
-          width: '36px',
-          height: '36px',
-          borderRadius: '10px',
-          background: 'rgba(99, 102, 241, 0.2)',
+      {/* Clean Main Row with Toggle */}
+      <div
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="interactive-tap"
+        style={{
+          padding: '12px 14px',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0
-        }}>
-          <Database size={18} color="var(--accent)" />
-        </div>
-        <div>
-          <h4 style={{ margin: 0, fontSize: '0.94rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            WhatsApp-Style Device Backup
-            <span style={{ fontSize: '0.64rem', fontWeight: 800, padding: '1px 6px', borderRadius: '6px', background: 'rgba(99, 102, 241, 0.2)', color: 'var(--accent)' }}>
-              0 CLOUD BANDWIDTH
-            </span>
-          </h4>
-          <p style={{ margin: '2px 0 0 0', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-            Server is Post Office • Device is Warehouse
-          </p>
-        </div>
-      </div>
-
-      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-        Messages stay on the server temporarily (15 days auto-expiry) so MongoDB stays ultra-light. All your lifetime messages are stored securely inside your phone/PC local IndexedDB storage!
-      </div>
-
-      <div style={{
-        background: 'rgba(0, 0, 0, 0.2)',
-        borderRadius: '10px',
-        padding: '10px 12px',
-        display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
-        gap: '8px',
-        fontSize: '0.78rem'
-      }}>
-        <div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Device Messages</div>
-          <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.92rem' }}>{stats.count.toLocaleString()} msgs</div>
-        </div>
-        <div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Device Storage</div>
-          <div style={{ fontWeight: 700, color: '#10b981', fontSize: '0.92rem' }}>{stats.sizeEstimated}</div>
-        </div>
-        <div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Last Backup</div>
-          <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-            {lastBackup ? new Date(lastBackup).toLocaleDateString() : 'Never'}
+          justifyContent: 'space-between',
+          cursor: 'pointer',
+          willChange: 'transform',
+          transform: 'translateZ(0)'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
+            background: backupEnabled ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <Database size={18} color={backupEnabled ? '#10b981' : '#ef4444'} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              Chat Backup
+              <span style={{
+                fontSize: '0.66rem',
+                fontWeight: 800,
+                padding: '1px 6px',
+                borderRadius: '6px',
+                background: backupEnabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                color: backupEnabled ? '#10b981' : '#ef4444'
+              }}>
+                {backupEnabled ? 'ON' : 'OFF'}
+              </span>
+            </div>
+            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+              Auto-saves chats locally on phone (Default ON)
+            </div>
           </div>
         </div>
-        <div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Server Hits</div>
-          <div style={{ fontWeight: 700, color: '#38bdf8' }}>0 Bytes</div>
+
+        {/* Toggle Switch & Expand Chevron */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            onClick={handleToggle}
+            className="interactive-tap"
+            style={{
+              width: '38px',
+              height: '22px',
+              borderRadius: '11px',
+              background: backupEnabled ? '#10b981' : 'var(--border)',
+              position: 'relative',
+              transition: 'all 0.2s ease',
+              flexShrink: 0,
+              cursor: 'pointer'
+            }}
+          >
+            <div style={{
+              width: '18px',
+              height: '18px',
+              borderRadius: '50%',
+              background: '#fff',
+              position: 'absolute',
+              top: '2px',
+              left: backupEnabled ? '18px' : '2px',
+              transition: 'all 0.2s ease'
+            }} />
+          </div>
+          <ChevronRight
+            size={16}
+            color="var(--text-muted)"
+            style={{
+              transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s ease'
+            }}
+          />
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '2px' }}>
-        <button
-          type="button"
-          onClick={handleBackupNow}
-          disabled={isBackingUp}
-          className="interactive-tap"
-          style={{
-            border: 'none',
-            outline: 'none',
-            cursor: isBackingUp ? 'wait' : 'pointer',
-            fontSize: '0.82rem',
-            fontWeight: 700,
-            color: '#fff',
-            background: 'var(--accent)',
-            padding: '10px 12px',
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
-            willChange: 'transform',
-            transform: 'translateZ(0)'
-          }}
-        >
-          {isBackingUp ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-          <span>{isBackingUp ? 'Backing Up...' : 'Backup Now'}</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isRestoring}
-          className="interactive-tap"
-          style={{
-            border: '1px solid var(--border)',
-            outline: 'none',
-            cursor: isRestoring ? 'wait' : 'pointer',
-            fontSize: '0.82rem',
-            fontWeight: 700,
-            color: 'var(--text-main)',
-            background: 'rgba(255, 255, 255, 0.06)',
-            padding: '10px 12px',
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            willChange: 'transform',
-            transform: 'translateZ(0)'
-          }}
-        >
-          {isRestoring ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-          <span>{isRestoring ? 'Restoring...' : 'Restore File'}</span>
-        </button>
-        <input
-          type="file"
-          ref={fileInputRef}
-          accept=".pulse,.json"
-          style={{ display: 'none' }}
-          onChange={handleFilePicked}
-        />
-      </div>
-
-      {statusMsg && (
+      {/* Expandable Options (Only shown when user taps the row) */}
+      {isExpanded && (
         <div style={{
-          fontSize: '0.78rem',
-          fontWeight: 600,
-          color: statusMsg.type === 'success' ? '#10b981' : '#ef4444',
-          background: statusMsg.type === 'success' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-          padding: '8px 12px',
-          borderRadius: '8px',
-          textAlign: 'center',
-          border: statusMsg.type === 'success' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(239, 68, 68, 0.25)'
+          borderTop: '1px solid var(--border)',
+          padding: '14px',
+          background: 'rgba(0, 0, 0, 0.15)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px'
         }}>
-          {statusMsg.text}
+          {/* Compact Stats */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '8px',
+            background: 'var(--bg-card)',
+            padding: '10px',
+            borderRadius: '10px',
+            border: '1px solid var(--border)',
+            textAlign: 'center'
+          }}>
+            <div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Messages</div>
+              <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)' }}>{stats.count} msgs</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Storage</div>
+              <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#10b981' }}>{stats.sizeEstimated}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Last Backup</div>
+              <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                {lastBackup ? new Date(lastBackup).toLocaleDateString() : 'Never'}
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={handleBackupNow}
+              disabled={isBackingUp}
+              className="interactive-tap"
+              style={{
+                border: 'none',
+                outline: 'none',
+                cursor: isBackingUp ? 'wait' : 'pointer',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                color: '#fff',
+                background: 'var(--accent)',
+                padding: '10px 12px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
+                willChange: 'transform',
+                transform: 'translateZ(0)'
+              }}
+            >
+              {isBackingUp ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+              <span>{isBackingUp ? 'Backing Up...' : 'Backup Now'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isRestoring}
+              className="interactive-tap"
+              style={{
+                border: '1px solid var(--border)',
+                outline: 'none',
+                cursor: isRestoring ? 'wait' : 'pointer',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                color: 'var(--text-main)',
+                background: 'rgba(255, 255, 255, 0.06)',
+                padding: '10px 12px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                willChange: 'transform',
+                transform: 'translateZ(0)'
+              }}
+            >
+              {isRestoring ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+              <span>Restore File</span>
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".pulse,.json"
+              style={{ display: 'none' }}
+              onChange={handleFilePicked}
+            />
+          </div>
+
+          {statusMsg && (
+            <div style={{
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              color: statusMsg.type === 'success' ? '#10b981' : '#ef4444',
+              background: statusMsg.type === 'success' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+              padding: '7px 10px',
+              borderRadius: '8px',
+              textAlign: 'center',
+              border: statusMsg.type === 'success' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(239, 68, 68, 0.25)'
+            }}>
+              {statusMsg.text}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1062,7 +1199,10 @@ export default function SettingsModal({
                       </h4>
                       {user?.isPro && <PulseVipBadge size={14} showLabel={false} />}
                     </div>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>@{user?.username}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>@{user?.username}</span>
+                      <ProfileBackupPill userId={user?.id} />
+                    </div>
                   </div>
                 </div>
 
