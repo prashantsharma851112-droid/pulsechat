@@ -600,5 +600,50 @@ router.post('/claim-referral', authMiddleware, async (req, res) => {
   }
 });
 
+// 9. Permanently delete selected sparks transactions
+router.post('/delete-transactions', authMiddleware, async (req, res) => {
+  try {
+    const userId = resolveCanonicalUserId(req);
+    const { transactionIds } = req.body;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized user' });
+    if (!Array.isArray(transactionIds) || transactionIds.length === 0) {
+      return res.status(400).json({ error: 'No transaction IDs provided' });
+    }
+
+    const isObjId = mongoose.Types.ObjectId.isValid(userId);
+    const userDoc = await User.findOne({
+      $or: [{ id: userId }, ...(isObjId ? [{ _id: userId }] : [])]
+    }).select('id _id').lean();
+    if (!userDoc) return res.status(404).json({ error: 'User not found' });
+
+    const canonicalId = userDoc.id || userDoc._id.toString();
+    const userIds = [canonicalId];
+    if (userDoc._id && userDoc._id.toString() !== canonicalId) {
+      userIds.push(userDoc._id.toString());
+    }
+
+    const validObjectIds = transactionIds
+      .filter(id => mongoose.Types.ObjectId.isValid(id))
+      .map(id => new mongoose.Types.ObjectId(id));
+
+    const result = await SparksTransaction.deleteMany({
+      userId: { $in: userIds },
+      $or: [
+        { _id: { $in: validObjectIds } },
+        { id: { $in: transactionIds } }
+      ]
+    });
+
+    res.json({
+      success: true,
+      deletedCount: result.deletedCount || 0,
+      message: `${result.deletedCount || 0} transaction(s) permanently deleted.`
+    });
+  } catch (err) {
+    console.error('Error deleting sparks transactions:', err);
+    res.status(500).json({ error: 'Failed to delete transactions' });
+  }
+});
+
 module.exports = router;
 module.exports.processReferralReward = processReferralReward;
