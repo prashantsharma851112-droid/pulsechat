@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pulsechat-v6';
+const CACHE_NAME = 'pulsechat-v7';
 const MEDIA_CACHE_NAME = 'pulsechat-media-v1';
 const AUDIO_CACHE_NAME = 'pulsechat-audio-v1';
 const STATIC_ASSETS = [
@@ -187,6 +187,7 @@ self.addEventListener('fetch', (event) => {
           if (event.request.destination === 'image') {
             return caches.match('/icon-192.png');
           }
+          return new Response('Offline: Resource not cached', { status: 503, statusText: 'Service Unavailable' });
         });
       })
   );

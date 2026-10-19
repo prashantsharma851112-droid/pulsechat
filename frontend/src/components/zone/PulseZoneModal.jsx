@@ -7,9 +7,10 @@ import { playSound } from '../../utils/audio';
 import { lazyWithRetry } from '../../utils/lazyRetry';
 import { useBackHandler } from '../../utils/backNavigation';
 
-const ArrowPuzzleGame = lazyWithRetry(() => import('./ArrowPuzzleGame'));
+// Core arcade games imported directly for instant offline gameplay
+import ArrowPuzzleGame from './ArrowPuzzleGame';
+import TicTacToeAIGame from './TicTacToeAIGame';
 const TempleRunGame = lazyWithRetry(() => import('./TempleRunGame'));
-const TicTacToeAIGame = lazyWithRetry(() => import('./TicTacToeAIGame'));
 const CandyCrushGame = lazyWithRetry(() => import('./CandyCrushGame'));
 // =========================================================================
 // ATOMIC ISOLATED ARCADE & LEADERBOARD COMPONENTS (React.memo + 0ms GPU Tap Feedback)

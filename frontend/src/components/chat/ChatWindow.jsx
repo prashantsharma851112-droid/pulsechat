@@ -28,6 +28,10 @@ import CreatePollModal from './CreatePollModal';
 import MediaUploadModal from './MediaUploadModal';
 import Animated3DTextModal from './Animated3DTextModal';
 import ScheduleMessageModal from './ScheduleMessageModal';
+import GiftPickerModal from './GiftPickerModal';
+import LiveArrowGameModal from './LiveArrowGameModal';
+import TicTacToeModal from './TicTacToeModal';
+import SparksWalletModal from './SparksWalletModal';
 
 import { lazyWithRetry, scheduleIdlePreload } from '../../utils/lazyRetry';
 
@@ -38,9 +42,6 @@ const GroupProfileModal = lazyWithRetry(() => import('./GroupProfileModal'));
 const ChatThemeModal = lazyWithRetry(() => import('./ChatThemeModal'));
 const SolidThemeModal = lazyWithRetry(() => import('./SolidThemeModal'));
 const PulseProModal = lazyWithRetry(() => import('./PulseProModal'));
-const GiftPickerModal = lazyWithRetry(() => import('./GiftPickerModal'));
-const LiveArrowGameModal = lazyWithRetry(() => import('./LiveArrowGameModal'));
-const TicTacToeModal = lazyWithRetry(() => import('./TicTacToeModal'));
 const PulseStreakModal = lazyWithRetry(() => import('./PulseStreakModal'));
 const VibeAuraSelectorModal = lazyWithRetry(() => import('./VibeAuraSelectorModal'));
 const MusicPickerModal = lazyWithRetry(() => import('../vibes/MusicPickerModal'));
@@ -48,7 +49,6 @@ const ForwardModal = lazyWithRetry(() => import('./ForwardModal'));
 const MessageInfoModal = lazyWithRetry(() => import('./MessageInfoModal'));
 const SetDefaultReactionsModal = lazyWithRetry(() => import('./SetDefaultReactionsModal'));
 const VibeViewerModal = lazyWithRetry(() => import('../vibes/VibeViewerModal'));
-const SparksWalletModal = lazyWithRetry(() => import('./SparksWalletModal'));
 const ChatNicknameModal = lazyWithRetry(() => import('./ChatNicknameModal'));
 const ShareableStoryCardModal = lazyWithRetry(() => import('../profile/ShareableStoryCardModal'));
 const PinLockModal = lazyWithRetry(() => import('../common/PinLockModal'));
@@ -171,6 +171,54 @@ const sanitizeFogSnapMessage = (m) => {
   return m;
 };
 
+class ChatModalErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ChatModalErrorBoundary caught modal error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="modal-overlay" style={{ zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }} onClick={this.props.onReset}>
+          <div className="modal-card" style={{ maxWidth: '380px', width: '100%', padding: '24px', textAlign: 'center', background: 'var(--bg-card, #18181b)', border: '1px solid var(--border, rgba(255, 255, 255, 0.12))', borderRadius: '18px', color: '#fff' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: '2.2rem', marginBottom: '10px' }}>⚠️</div>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.15rem', fontWeight: 700, color: '#f8fafc' }}>
+              Modal Notice
+            </h3>
+            <p style={{ margin: '0 0 18px 0', color: '#94a3b8', fontSize: '0.86rem', lineHeight: 1.5 }}>
+              This modal encountered an issue or requires an internet connection.
+            </p>
+            <button
+              onClick={this.props.onReset}
+              className="interactive-tap action-btn"
+              style={{
+                width: '100%',
+                padding: '11px',
+                borderRadius: '12px',
+                fontWeight: 700,
+                background: 'var(--accent, #6366f1)',
+                color: '#fff',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '0.9rem'
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Standalone isolated ChatInputCapsule is imported above to eliminate typing lag and parent re-renders
 
 export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGroupCall, onOpenFullDp }) {
@@ -218,7 +266,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   });
   const sendBtnHoldTimerRef = useRef(null);
 
-  // Preload all modal bundles during idle time for 0ms instantaneous tap open
+  // Preload remaining lazy modal bundles during idle time for 0ms instantaneous tap open
   useEffect(() => {
     scheduleIdlePreload([
       WhiteboardModal,
@@ -227,16 +275,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       ChatThemeModal,
       SolidThemeModal,
       PulseProModal,
-      GiftPickerModal,
-      LiveArrowGameModal,
-      TicTacToeModal,
       PulseStreakModal,
       VibeAuraSelectorModal,
       MusicPickerModal,
       ForwardModal,
       MessageInfoModal,
       SetDefaultReactionsModal,
-      SparksWalletModal,
       ChatNicknameModal,
       ShareableStoryCardModal,
       PinLockModal
@@ -6855,6 +6899,25 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         </>
       )}
 
+      <ChatModalErrorBoundary onReset={() => {
+        setShowGiftPicker(false);
+        setShowTicTacToeModal(false);
+        setShowLiveArrow(false);
+        setShowSparksWallet(false);
+        setShowWhiteboard(false);
+        setShowThemeModal(false);
+        setShowSolidThemeModal(false);
+        setShowProModal(false);
+        setShowStreakModal(false);
+        setShowVibeSelector(false);
+        setShowMusicPickerModal(false);
+        setShowForwardModal(false);
+        setShowInfoModal(false);
+        setShowReactionCustomizer(false);
+        setShowNicknameModal(false);
+        setShowStoryCardModal(false);
+        setShowPinLock(false);
+      }}>
       <React.Suspense fallback={null}>
       {pendingMedia && (
         <MediaUploadModal
@@ -7774,6 +7837,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         />
       )}
       </React.Suspense>
+      </ChatModalErrorBoundary>
     </div>
   );
 }

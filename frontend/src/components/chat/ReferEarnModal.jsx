@@ -164,15 +164,23 @@ export const ReferralShareButton = React.memo(function ReferralShareButton({
 export default function ReferEarnModal({ onClose }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
 
-  const [loading, setLoading] = useState(true);
-  const [referralData, setReferralData] = useState({
-    referralCode: '',
-    referralLink: '',
-    referralCount: 0,
-    referralEarnings: 0,
-    hasClaimedReferral: false,
-    referredBy: null,
-    history: []
+  const [loading, setLoading] = useState(false);
+  const [referralData, setReferralData] = useState(() => {
+    try {
+      const cached = localStorage.getItem('pulse_cached_referral_info');
+      if (cached) return JSON.parse(cached);
+    } catch (_) {}
+    const defaultCode = user?.referralCode || (user?.username ? user.username.toUpperCase() : '');
+    const defaultLink = defaultCode ? `${typeof window !== 'undefined' ? window.location.origin : ''}/?ref=${defaultCode}` : '';
+    return {
+      referralCode: defaultCode,
+      referralLink: defaultLink,
+      referralCount: user?.referralCount || 0,
+      referralEarnings: user?.referralEarnings || 0,
+      hasClaimedReferral: false,
+      referredBy: null,
+      history: []
+    };
   });
 
   const [copiedCode, setCopiedCode] = useState(false);
@@ -192,9 +200,12 @@ export default function ReferEarnModal({ onClose }) {
       .then(data => {
         if (isMounted && data.success) {
           setReferralData(data);
+          try {
+            localStorage.setItem('pulse_cached_referral_info', JSON.stringify(data));
+          } catch (_) {}
         }
       })
-      .catch(err => console.warn('Referral info fetch warning:', err))
+      .catch(err => console.warn('Referral info fetch warning (offline mode):', err))
       .finally(() => {
         if (isMounted) setLoading(false);
       });

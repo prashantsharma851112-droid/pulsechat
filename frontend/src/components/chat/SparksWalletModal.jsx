@@ -128,17 +128,23 @@ export default function SparksWalletModal({ onClose }) {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [walletData, setWalletData] = useState({
-    balance: user?.pulseSparks || 50,
-    totalEarned: 0,
-    totalSpent: 0,
-    transactions: [],
-    canClaimDaily: false,
-    dailyRewardAmount: 15,
-    nextClaimInMs: 0,
-    adsWatchedToday: 0,
-    maxDailyAds: 3,
-    canWatchAd: true
+  const [walletData, setWalletData] = useState(() => {
+    try {
+      const cached = localStorage.getItem('pulse_cached_wallet_data');
+      if (cached) return JSON.parse(cached);
+    } catch (_) {}
+    return {
+      balance: user?.pulseSparks || 50,
+      totalEarned: 0,
+      totalSpent: 0,
+      transactions: [],
+      canClaimDaily: false,
+      dailyRewardAmount: 15,
+      nextClaimInMs: 0,
+      adsWatchedToday: 0,
+      maxDailyAds: 3,
+      canWatchAd: true
+    };
   });
   const [filterTab, setFilterTab] = useState('all'); // 'all' | 'credit' | 'debit'
   const [claimingDaily, setClaimingDaily] = useState(false);
@@ -185,7 +191,7 @@ export default function SparksWalletModal({ onClose }) {
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
-          setWalletData({
+          const newWalletData = {
             balance: typeof data.balance === 'number' ? data.balance : (userRef.current?.pulseSparks || 50),
             totalEarned: data.totalEarned || 0,
             totalSpent: data.totalSpent || 0,
@@ -196,7 +202,11 @@ export default function SparksWalletModal({ onClose }) {
             adsWatchedToday: typeof data.adsWatchedToday === 'number' ? data.adsWatchedToday : 0,
             maxDailyAds: data.maxDailyAds || 3,
             canWatchAd: data.adsWatchedToday < (data.maxDailyAds || 3)
-          });
+          };
+          setWalletData(newWalletData);
+          try {
+            localStorage.setItem('pulse_cached_wallet_data', JSON.stringify(newWalletData));
+          } catch (_) {}
           const currentUser = userRef.current;
           if (updateUserProfileRef.current && typeof data.balance === 'number' && currentUser && currentUser.pulseSparks !== data.balance) {
             updateUserProfileRef.current({ ...currentUser, pulseSparks: data.balance });

@@ -12,7 +12,12 @@ import { useAppMusic } from '../../context/AppMusicContext';
 
 import { lazyWithRetry, scheduleIdlePreload } from '../../utils/lazyRetry';
 
-// Code-Splitting: Lazy load heavy modals with automatic retry & reload resilience
+// Core Sidebar Modals imported directly for 100% offline availability
+import ReferEarnModal from './ReferEarnModal';
+import SparksWalletModal from './SparksWalletModal';
+import PulseZoneModal from '../zone/PulseZoneModal';
+
+// Code-Splitting: Lazy load remaining heavy modals with automatic retry & reload resilience
 const CreateGroupModal = lazyWithRetry(() => import('./CreateGroupModal'));
 const SettingsModal = lazyWithRetry(() => import('../profile/SettingsModal'));
 const AdminDashboardModal = lazyWithRetry(() => import('../admin/AdminDashboardModal'));
@@ -20,12 +25,9 @@ const PulseProModal = lazyWithRetry(() => import('./PulseProModal'));
 const AppFeatureTourModal = lazyWithRetry(() => import('../common/AppFeatureTourModal'));
 const CreateVibeModal = lazyWithRetry(() => import('../vibes/CreateVibeModal'));
 const VibeViewerModal = lazyWithRetry(() => import('../vibes/VibeViewerModal'));
-const PulseZoneModal = lazyWithRetry(() => import('../zone/PulseZoneModal'));
-const SparksWalletModal = lazyWithRetry(() => import('./SparksWalletModal'));
 const VibeAuraSelectorModal = lazyWithRetry(() => import('./VibeAuraSelectorModal'));
 const MusicPickerModal = lazyWithRetry(() => import('../vibes/MusicPickerModal'));
 const PinLockModal = lazyWithRetry(() => import('../common/PinLockModal'));
-const ReferEarnModal = lazyWithRetry(() => import('./ReferEarnModal'));
 import { isChatLocked, isChatMuted, getLockedChats, getMutedChats, isChatHidden, getHiddenLockedChats } from '../../utils/securityLock';
 import { BACKEND_URL } from '../../utils/config';
 import { runWorkerTask } from '../../workers/pulseWorkerBridge';
@@ -316,15 +318,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     };
   }, []);
 
-  // Preload all modal bundles during idle time for 0ms instantaneous tap open
+  // Preload remaining lazy modal bundles during idle time for 0ms instantaneous tap open
   useEffect(() => {
     scheduleIdlePreload([
       SettingsModal,
-      SparksWalletModal,
       PulseProModal,
-      ReferEarnModal,
       CreateGroupModal,
-      PulseZoneModal,
       CreateVibeModal,
       VibeViewerModal,
       VibeAuraSelectorModal,
@@ -3352,6 +3351,17 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         </button>
       </div>
 
+      <ModalErrorBoundary key="all_sidebar_modals_boundary" onReset={() => {
+        setShowCreateGroupModal(false);
+        setShowSettingsModal(false);
+        setShowProModal(false);
+        setShowPulseZone(false);
+        setShowSparksWallet(false);
+        setShowReferEarnModal(false);
+        setShowVibeSelector(false);
+        setShowMusicPickerModal(false);
+        setShowLockPinModal(false);
+      }}>
       <React.Suspense fallback={null}>
       {showCreateGroupModal && (
         <CreateGroupModal
@@ -3512,6 +3522,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         />
       )}
       </React.Suspense>
+      </ModalErrorBoundary>
     </div>
   );
 }
