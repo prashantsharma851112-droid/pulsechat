@@ -463,11 +463,11 @@ io.on('connection', (socket) => {
           }
         }
 
-        // 3. WhatsApp Post Office: Once delivered to recipient device, wipe out from MongoDB server DB!
-        const deliveredMsgIds = pendingMsgs.map(m => m.id).filter(Boolean);
-        if (deliveredMsgIds.length > 0) {
-          await Message.deleteMany({ id: { $in: deliveredMsgIds } });
-        }
+        // 3. Mark queued messages as delivered in MongoDB
+        await Message.updateMany(
+          { receiverId: { $in: allUserVariants }, status: 'sent' },
+          { $set: { status: 'delivered' } }
+        );
       }
     } catch (err) {
       console.error('Error delivering pending messages on setup:', err);
@@ -944,17 +944,15 @@ io.on('connection', (socket) => {
         ackCallback({ success: true, message: newMsg });
       }
 
-      // 2. Immediate zero-latency emission to chat room, canonical room, and participants' private rooms
-      io.to(chatId).emit('new_message', newMsg);
-      if (canonicalChatId && canonicalChatId !== chatId) {
-        io.to(canonicalChatId).emit('new_message', newMsg);
-      }
-      io.to(`user_${senderId}`).emit('new_message', newMsg);
-      io.to(senderId).emit('new_message', newMsg);
+      // 2. Immediate zero-latency emission to chat room and participants (deduplicated)
+      const targetRooms = new Set();
+      if (chatId) targetRooms.add(chatId);
+      if (canonicalChatId && canonicalChatId !== chatId) targetRooms.add(canonicalChatId);
+      if (senderId) targetRooms.add(`user_${senderId}`);
       if (resolvedReceiverId && resolvedReceiverId !== 'user') {
-        io.to(`user_${resolvedReceiverId}`).emit('new_message', newMsg);
-        io.to(resolvedReceiverId).emit('new_message', newMsg);
+        targetRooms.add(`user_${resolvedReceiverId}`);
       }
+      io.to(Array.from(targetRooms)).emit('new_message', newMsg);
 
       // Auto-update Pulse Streak for 1-on-1 chats
       if (!isGroup && resolvedReceiverId && senderId !== resolvedReceiverId) {
@@ -966,9 +964,7 @@ io.on('connection', (socket) => {
               io.to(canonicalChatId).emit('streak_updated', streakInfo);
             }
             io.to(`user_${senderId}`).emit('streak_updated', streakInfo);
-            io.to(senderId).emit('streak_updated', streakInfo);
             io.to(`user_${resolvedReceiverId}`).emit('streak_updated', streakInfo);
-            io.to(resolvedReceiverId).emit('streak_updated', streakInfo);
 
             if (streakInfo.bonusSparks > 0 || streakInfo.milestoneHit === 3) {
               const rewardPayload = {
@@ -979,8 +975,6 @@ io.on('connection', (socket) => {
               };
               io.to(`user_${senderId}`).emit('streak_sparks_reward', rewardPayload);
               io.to(`user_${resolvedReceiverId}`).emit('streak_sparks_reward', rewardPayload);
-              io.to(senderId).emit('streak_sparks_reward', rewardPayload);
-              io.to(resolvedReceiverId).emit('streak_sparks_reward', rewardPayload);
               // Fetch latest sparks and notify
               User.findOne({ $or: [{ id: senderId }, { username: senderId }] }).select('pulseSparks hasNeonFlameAura').lean().then(u => {
                 if (u) {
@@ -1001,12 +995,8 @@ io.on('connection', (socket) => {
         });
       }
 
-      // Notify recipient private room for badge/sound if they are outside the active chat room
+      // Invalidate Redis recent cache for real-time order update
       if (resolvedReceiverId && !isGroup) {
-        io.to(`user_${resolvedReceiverId}`).emit('new_message', newMsg);
-        io.to(resolvedReceiverId).emit('new_message', newMsg);
-        io.to(`user_${resolvedReceiverId}`).emit('message_notification', newMsg);
-        io.to(resolvedReceiverId).emit('message_notification', newMsg);
         redis.invalidateRecent(resolvedReceiverId).catch(() => {});
         redis.invalidateRecent(senderId).catch(() => {});
       } else if (isGroup) {
@@ -1072,10 +1062,9 @@ io.on('connection', (socket) => {
   socket.on('message_delivered', async ({ messageId, chatId, senderId }) => {
     try {
       if (!messageId) return;
-      // WhatsApp Post Office: Once recipient confirms delivery to their phone,
-      // wipe out the delivered message from server database immediately!
-      await Message.deleteOne(
-        { $or: [{ id: messageId }, { clientTempId: messageId }] }
+      await Message.findOneAndUpdate(
+        { $or: [{ id: messageId }, { clientTempId: messageId }] },
+        { status: 'delivered' }
       );
       const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
       const singlePayload = { messageId, chatId, canonicalChatId, status: 'delivered' };
@@ -1083,9 +1072,7 @@ io.on('connection', (socket) => {
 
       if (senderId) {
         io.to(`user_${senderId}`).emit('message_delivered_update', singlePayload);
-        io.to(senderId).emit('message_delivered_update', singlePayload);
         io.to(`user_${senderId}`).emit('messages_delivered', multiPayload);
-        io.to(senderId).emit('messages_delivered', multiPayload);
       }
       if (chatId) {
         io.to(chatId).emit('message_delivered_update', singlePayload);
@@ -1314,13 +1301,15 @@ io.on('connection', (socket) => {
     if (chatId) io.to(chatId).emit('message_read_update', readPayload);
     if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('message_read_update', readPayload);
 
-    if (updatedMsg && updatedMsg.senderId) {
-      io.to(`user_${updatedMsg.senderId}`).emit('message_read_update', readPayload);
-      io.to(updatedMsg.senderId).emit('message_read_update', readPayload);
+    const senderTarget = (updatedMsg && updatedMsg.senderId)
+      ? updatedMsg.senderId
+      : ((chatId && chatId.includes('_')) ? chatId.split('_').find(p => p !== readerId) : null);
+
+    if (senderTarget) {
+      io.to(`user_${senderTarget}`).emit('message_read_update', readPayload);
     }
     if (readerId) {
       io.to(`user_${readerId}`).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
-      io.to(readerId).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
     }
     socket.emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
   });

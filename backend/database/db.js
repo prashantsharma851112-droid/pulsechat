@@ -188,17 +188,6 @@ module.exports = {
       await Message.updateMany(filter, updateDoc);
     }
 
-    // WhatsApp Post Office: Once messages are delivered and read on recipient device,
-    // wipe them out from server database (they reside safely in users' IndexedDB)!
-    setImmediate(async () => {
-      try {
-        await Message.deleteMany({
-          ...filter,
-          $or: [{ status: 'read' }, { status: 'delivered' }]
-        });
-      } catch (delErr) {}
-    });
-
     // Invalidate Redis RAM caches so unread count updates immediately across rest endpoints
     try {
       const redis = require('../utils/redis');
@@ -1140,18 +1129,7 @@ module.exports = {
       // 1. Purge messages matching the 7-day auto-cleanup query
       const result = await Message.deleteMany(query);
 
-      // 2. WhatsApp Post Office: Purge any messages already delivered or read from server database
-      try {
-        const deliveredPurge = await Message.deleteMany({
-          status: { $in: ['delivered', 'read'] },
-          timestamp: { $lt: new Date(Date.now() - 30 * 60 * 1000).toISOString() }
-        });
-        if (deliveredPurge?.deletedCount > 0) {
-          console.log(`[Post Office Job] Wiped out ${deliveredPurge.deletedCount} delivered/read messages from server DB.`);
-        }
-      } catch (de) {}
-
-      // 3. Also purge expired 24h vibes automatically
+      // 2. Also purge expired 24h vibes automatically
       try {
         const Vibe = require('../models/Vibe');
         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);

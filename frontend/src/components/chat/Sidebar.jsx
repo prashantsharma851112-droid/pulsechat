@@ -52,7 +52,9 @@ import {
   clearUnreadCount,
   getDeletedChatIds,
   addDeletedChatId,
-  restoreDeletedChatId
+  restoreDeletedChatId,
+  clearCachedMessages,
+  updateRecentChatSnippet
 } from '../../utils/offlineStorage';
 import { parseSafeJson } from '../../utils/imageCompressor';
 class ModalErrorBoundary extends React.Component {
@@ -839,19 +841,55 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const handleClearSelectedChats = async () => {
     setShowSelectionMoreMenu(false);
     if (!selectedChatObjects.length) return;
-    if (!window.confirm(`Clear message history for ${selectedChatObjects.length} conversation(s)?`)) return;
+    const curToken = token || localStorage.getItem('pulsechat_token');
+
     for (const c of selectedChatObjects) {
-      const contactChatId = c.isGroup ? (c.id || c._id) : (user?.id ? [user.id, c.id || c._id].sort().join('_') : (c.id || c._id));
-      await clearChatFromLocalDb(contactChatId);
-      if (c.id) await clearChatFromLocalDb(c.id);
-      if (c._id) await clearChatFromLocalDb(c._id);
+      const cId = c.id || c._id;
+      const targetIds = new Set();
+      if (c.isGroup) {
+        if (c.id) targetIds.add(c.id);
+        if (c._id) targetIds.add(c._id);
+      } else if (user?.id) {
+        if (cId) targetIds.add([user.id, cId].sort().join('_'));
+        if (c.username) targetIds.add([user.id, c.username].sort().join('_'));
+        if (c.id) targetIds.add(c.id);
+        if (c._id) targetIds.add(c._id);
+      }
+
+      for (const targetChatId of targetIds) {
+        // 1. Wipe local memory/localStorage & IndexedDB
+        clearCachedMessages(targetChatId);
+        await clearChatFromLocalDb(targetChatId);
+
+        // 2. Clear server database
+        if (curToken) {
+          fetch(`${BACKEND_URL}/api/messages/clear/${encodeURIComponent(targetChatId)}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${curToken}` }
+          }).catch(() => {});
+        }
+
+        // 3. Emit socket event
+        if (socket) {
+          socket.emit('clear_chat', { chatId: targetChatId });
+        }
+
+        // 4. Update recent snippet & notify listeners
+        if (user?.id) {
+          updateRecentChatSnippet(user.id, targetChatId, null, c);
+        }
+        window.dispatchEvent(new CustomEvent('pulsechat_chat_cleared', { detail: { chatId: targetChatId } }));
+      }
     }
+
     setRecentChats(prev => prev.map(c => {
-      if (selectedChatIds.includes(c.id) || selectedChatIds.includes(c._id)) {
+      const isSelected = selectedChatIds.includes(c.id) || selectedChatIds.includes(c._id);
+      if (isSelected) {
         return { ...c, lastMessage: '', lastMessageTimestamp: null, lastMessageTime: null, unreadCount: 0 };
       }
       return c;
     }));
+
     window.dispatchEvent(new CustomEvent('pulsechat_messages_cleared'));
     window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
     setSelectedChatIds([]);
@@ -1715,10 +1753,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
     // Instant zero-latency chat list reordering on message send or receive (0ms)
     const handleSidebarNewMessage = (msg) => {
-      if (!msg) return;
-      if (msg.id) {
-        if (processedMsgIdsRef.current.has(msg.id)) return;
-        processedMsgIdsRef.current.add(msg.id);
+      const msgKey = msg.id || msg.clientTempId || msg._id || (msg.chatId + '_' + (msg.timestamp || ''));
+      if (msgKey) {
+        if (processedMsgIdsRef.current.has(msgKey)) return;
+        processedMsgIdsRef.current.add(msgKey);
         if (processedMsgIdsRef.current.size > 200) {
           const arr = Array.from(processedMsgIdsRef.current);
           processedMsgIdsRef.current = new Set(arr.slice(arr.length - 100));
@@ -1906,7 +1944,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     };
 
     socket.on('new_message', handleSidebarNewMessage);
-    socket.on('message_notification', handleSidebarNewMessage);
 
     // Emoji Reaction update in chat list
     const handleReactionUpdated = (data) => {
@@ -2224,7 +2261,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
     return () => {
       socket.off('new_message', handleSidebarNewMessage);
-      socket.off('message_notification', handleSidebarNewMessage);
       socket.off('reaction_updated', handleReactionUpdated);
       socket.off('message_delivered_update', handleDeliveryUpdate);
       socket.off('messages_delivered');
