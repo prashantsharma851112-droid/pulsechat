@@ -144,3 +144,37 @@ export function setChatMuted(chatId, muted) {
     window.dispatchEvent(new CustomEvent('pulsechat_muted_chats_updated', { detail: { chatId, muted: !!muted } }));
   } catch (e) {}
 }
+
+// Chat Archive (WhatsApp Style)
+export function getArchivedChats(userId) {
+  try {
+    const raw = localStorage.getItem(`pulsechat_archived_chats_${userId || 'default'}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function isChatArchived(userId, chatId) {
+  if (!chatId) return false;
+  const list = getArchivedChats(userId);
+  const canonical = chatId.includes('_') ? chatId.split('_').sort().join('_') : chatId;
+  return list.includes(chatId) || list.includes(canonical);
+}
+
+export function setChatArchived(userId, chatId, archived) {
+  if (!chatId) return;
+  try {
+    const list = getArchivedChats(userId);
+    const canonical = chatId.includes('_') ? chatId.split('_').sort().join('_') : chatId;
+    let nextList;
+    if (archived) {
+      const set = new Set([...list, chatId, canonical]);
+      nextList = Array.from(set);
+    } else {
+      nextList = list.filter(id => id !== chatId && id !== canonical);
+    }
+    localStorage.setItem(`pulsechat_archived_chats_${userId || 'default'}`, JSON.stringify(nextList));
+    window.dispatchEvent(new CustomEvent('pulsechat_archived_chats_updated', { detail: { chatId, archived: !!archived } }));
+  } catch (e) {}
+}

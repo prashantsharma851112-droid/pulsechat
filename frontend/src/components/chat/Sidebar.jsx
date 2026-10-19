@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect, useCallback, useMemo, useRef, useDeferredValue, startTransition } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, CheckCheck, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass, Edit3, Pin, Music, Disc, Play, Pause, Headphones } from 'lucide-react';
+import { Search, Settings, User, LogOut, Users, CheckCircle2, Plus, EyeOff, ShieldAlert, Bell, WifiOff, RotateCw, UserPlus, Clock, Check, CheckCheck, Sparkles, Crown, Zap, MoreVertical, ArrowRightLeft, Trash2, Compass, Edit3, Pin, Music, Disc, Play, Pause, Headphones, ArrowLeft, Archive, ArchiveRestore, BellOff, Lock, Info } from 'lucide-react';
 import FriendsTab from './FriendsTab';
 import { useBackHandler } from '../../utils/backNavigation';
 import PulseVipBadge from '../common/PulseVipBadge';
@@ -28,7 +28,10 @@ const VibeViewerModal = lazyWithRetry(() => import('../vibes/VibeViewerModal'));
 const VibeAuraSelectorModal = lazyWithRetry(() => import('./VibeAuraSelectorModal'));
 const MusicPickerModal = lazyWithRetry(() => import('../vibes/MusicPickerModal'));
 const PinLockModal = lazyWithRetry(() => import('../common/PinLockModal'));
-import { isChatLocked, isChatMuted, getLockedChats, getMutedChats, isChatHidden, getHiddenLockedChats } from '../../utils/securityLock';
+const UserProfileModal = lazyWithRetry(() => import('./UserProfileModal'));
+const GroupProfileModal = lazyWithRetry(() => import('./GroupProfileModal'));
+import { isChatLocked, isChatMuted, getLockedChats, getMutedChats, isChatHidden, getHiddenLockedChats, isChatArchived, setChatArchived, getArchivedChats, setChatMuted, setChatLocked, getSecurityPin } from '../../utils/securityLock';
+import { clearChatFromLocalDb } from '../../utils/localDatabase';
 import { BACKEND_URL } from '../../utils/config';
 import { runWorkerTask } from '../../workers/pulseWorkerBridge';
 import { preloadMediaUrls } from '../../utils/mediaCache';
@@ -273,7 +276,7 @@ export const SidebarMenuItem = React.memo(function SidebarMenuItem({
 });
 
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
-  const { user, logout, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
+  const { user, logout, token, savedAccounts, switchAccount, addAccount, removeSavedAccount, blockUser } = useContext(AuthContext);
   const { socket, onlineUsers, typingMap, lastNotification, vibeAuras } = useContext(SocketContext);
   const { currentTrack: appMusicTrack, isPlaying: isAppMusicPlaying, togglePlayPause: toggleAppMusic, playTrack: playAppMusicTrack } = useAppMusic();
   const currentUid = user?.id || getCachedUser()?.id;
@@ -302,6 +305,19 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [mutedChatIdsState, setMutedChatIdsState] = useState(() => getMutedChats());
   const [hiddenChatIdsState, setHiddenChatIdsState] = useState(() => getHiddenLockedChats());
 
+  // Multi-Select and Chat Archive (WhatsApp Style) States
+  const [selectedChatIds, setSelectedChatIds] = useState([]);
+  const [showSelectionMoreMenu, setShowSelectionMoreMenu] = useState(false);
+  const [isArchivedView, setIsArchivedView] = useState(false);
+  const [archivedChatIdsState, setArchivedChatIdsState] = useState(() => getArchivedChats(currentUid));
+  const [selectedUserForInfo, setSelectedUserForInfo] = useState(null);
+  const [selectedGroupForInfo, setSelectedGroupForInfo] = useState(null);
+
+  const selectionMoreMenuRef = useRef(null);
+  const longPressTimeoutRef = useRef(null);
+  const touchStartPosRef = useRef({ x: 0, y: 0 });
+  const isLongPressTriggeredRef = useRef(false);
+
   useEffect(() => {
     const handleLockUpdated = () => {
       setLockedChatIdsState(getLockedChats());
@@ -310,13 +326,58 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     const handleMuteUpdated = () => {
       setMutedChatIdsState(getMutedChats());
     };
+    const handleArchivedUpdated = () => {
+      setArchivedChatIdsState(getArchivedChats(currentUid));
+    };
     window.addEventListener('pulsechat_chat_lock_updated', handleLockUpdated);
     window.addEventListener('pulsechat_chat_mute_updated', handleMuteUpdated);
+    window.addEventListener('pulsechat_archived_chats_updated', handleArchivedUpdated);
     return () => {
       window.removeEventListener('pulsechat_chat_lock_updated', handleLockUpdated);
       window.removeEventListener('pulsechat_chat_mute_updated', handleMuteUpdated);
+      window.removeEventListener('pulsechat_archived_chats_updated', handleArchivedUpdated);
     };
-  }, []);
+  }, [currentUid]);
+
+  useEffect(() => {
+    if (currentUid) {
+      setArchivedChatIdsState(getArchivedChats(currentUid));
+    }
+  }, [currentUid]);
+
+  // Click outside to close 3-dot selection menu
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (selectionMoreMenuRef.current && !selectionMoreMenuRef.current.contains(e.target)) {
+        setShowSelectionMoreMenu(false);
+      }
+    };
+    if (showSelectionMoreMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [showSelectionMoreMenu]);
+
+  // Back button handling: exits selection mode first, or exits archived view
+  useBackHandler(() => {
+    if (selectedChatIds.length > 0) {
+      setSelectedChatIds([]);
+      setShowSelectionMoreMenu(false);
+      return true;
+    }
+    if (isArchivedView) {
+      setIsArchivedView(false);
+      return true;
+    }
+    return false;
+  }, selectedChatIds.length > 0 || isArchivedView);
+
+  useBackHandler(() => setSelectedUserForInfo(null), Boolean(selectedUserForInfo));
+  useBackHandler(() => setSelectedGroupForInfo(null), Boolean(selectedGroupForInfo));
 
   // Preload remaining lazy modal bundles during idle time for 0ms instantaneous tap open
   useEffect(() => {
@@ -328,7 +389,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       VibeViewerModal,
       VibeAuraSelectorModal,
       MusicPickerModal,
-      PinLockModal
+      PinLockModal,
+      UserProfileModal,
+      GroupProfileModal
     ]);
   }, []);
 
@@ -360,7 +423,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     const hiddenSet = new Set(hiddenChatIdsState);
     const visibleRecent = recentChats.filter(c => {
       const cid = c.isGroup ? (c.id || c._id) : (user?.id ? [user.id, c.id || c._id].sort().join('_') : (c.id || c._id));
-      return !hiddenSet.has(cid) && !isChatHidden(cid);
+      const rawId = c.id || c._id;
+      if (hiddenSet.has(cid) || isChatHidden(cid)) return false;
+      const isArchived = isChatArchived(currentUid, rawId) || isChatArchived(currentUid, cid);
+      if (isArchivedView) {
+        return isArchived;
+      } else {
+        return !isArchived;
+      }
     });
 
     if (!pinnedChatIds.length) return visibleRecent;
@@ -377,14 +447,24 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     });
     pinned.sort((a, b) => pinnedChatIds.indexOf(a.id || a._id) - pinnedChatIds.indexOf(b.id || b._id));
     return [...pinned, ...unpinned];
-  }, [recentChats, pinnedChatIds, hiddenChatIdsState, user?.id]);
+  }, [recentChats, pinnedChatIds, hiddenChatIdsState, user?.id, isArchivedView, archivedChatIdsState, currentUid]);
 
   const sortedGroups = useMemo(() => {
-    if (!pinnedChatIds.length) return groups;
+    const visibleGroups = groups.filter(g => {
+      const gid = g.id || g._id;
+      const isArchived = isChatArchived(currentUid, gid);
+      if (isArchivedView) {
+        return isArchived;
+      } else {
+        return !isArchived;
+      }
+    });
+
+    if (!pinnedChatIds.length) return visibleGroups;
     const pinnedSet = new Set(pinnedChatIds);
     const pinned = [];
     const unpinned = [];
-    groups.forEach(g => {
+    visibleGroups.forEach(g => {
       const gid = g.id || g._id;
       if (pinnedSet.has(gid)) {
         pinned.push(g);
@@ -394,7 +474,217 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     });
     pinned.sort((a, b) => pinnedChatIds.indexOf(a.id || a._id) - pinnedChatIds.indexOf(b.id || b._id));
     return [...pinned, ...unpinned];
-  }, [groups, pinnedChatIds]);
+  }, [groups, pinnedChatIds, isArchivedView, archivedChatIdsState, currentUid]);
+
+  // Touch and Long-Press Handlers for Chat Selection (WhatsApp style)
+  const handleChatTouchStart = (chatItem, e) => {
+    if (selectedChatIds.length > 0) return;
+    const touch = e.touches ? e.touches[0] : e;
+    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+    isLongPressTriggeredRef.current = false;
+
+    if (longPressTimeoutRef.current) clearTimeout(longPressTimeoutRef.current);
+    longPressTimeoutRef.current = setTimeout(() => {
+      isLongPressTriggeredRef.current = true;
+      try { navigator?.vibrate?.(45); } catch (_) {}
+      const cid = chatItem.id || chatItem._id;
+      setSelectedChatIds([cid]);
+    }, 420);
+  };
+
+  const handleChatTouchMove = (e) => {
+    if (!longPressTimeoutRef.current) return;
+    const touch = e.touches ? e.touches[0] : e;
+    const dx = Math.abs(touch.clientX - touchStartPosRef.current.x);
+    const dy = Math.abs(touch.clientY - touchStartPosRef.current.y);
+    if (dx > 10 || dy > 10) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+  };
+
+  const handleChatTouchEnd = () => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+  };
+
+  const handleChatItemClick = (chatItem, isGroupChat) => {
+    if (isLongPressTriggeredRef.current) {
+      isLongPressTriggeredRef.current = false;
+      return;
+    }
+    const cid = chatItem.id || chatItem._id;
+    if (selectedChatIds.length > 0) {
+      setSelectedChatIds(prev => prev.includes(cid) ? prev.filter(id => id !== cid) : [...prev, cid]);
+      return;
+    }
+    if (isGroupChat) {
+      handleSelectGroup(chatItem);
+    } else {
+      handleSelectUser(chatItem);
+    }
+  };
+
+  // Selected chat objects resolved from state
+  const selectedChatObjects = useMemo(() => {
+    if (!selectedChatIds.length) return [];
+    const map = new Map();
+    recentChats.forEach(c => map.set(c.id || c._id, c));
+    groups.forEach(g => map.set(g.id || g._id, g));
+    return selectedChatIds.map(id => map.get(id)).filter(Boolean);
+  }, [selectedChatIds, recentChats, groups]);
+
+  // Selection Action Bar Handlers
+  const handlePinSelected = () => {
+    if (!selectedChatIds.length) return;
+    const allArePinned = selectedChatIds.every(id => pinnedChatIds.includes(id));
+    setPinnedChatIds(prev => {
+      let next;
+      if (allArePinned) {
+        next = prev.filter(id => !selectedChatIds.includes(id));
+      } else {
+        const toAdd = selectedChatIds.filter(id => !prev.includes(id));
+        if (prev.length + toAdd.length > 5) {
+          alert('📌 You can pin up to 5 chats/groups at the top!');
+          return prev;
+        }
+        next = [...toAdd, ...prev];
+      }
+      try {
+        localStorage.setItem(`pulsechat_pinned_chats_${currentUid || 'default'}`, JSON.stringify(next));
+      } catch (err) {}
+      return next;
+    });
+    setSelectedChatIds([]);
+  };
+
+  const handleDeleteSelected = () => {
+    if (!selectedChatIds.length) return;
+    if (!window.confirm(`Delete ${selectedChatIds.length} conversation(s)?`)) return;
+    selectedChatIds.forEach(cid => {
+      if (currentUid) {
+        addDeletedChatId(currentUid, cid);
+      }
+    });
+    setRecentChats(prev => prev.filter(c => !selectedChatIds.includes(c.id) && !selectedChatIds.includes(c._id)));
+    if (activeChat && (selectedChatIds.includes(activeChat.id) || selectedChatIds.includes(activeChat._id))) {
+      setActiveChat(null);
+    }
+    window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+    setSelectedChatIds([]);
+  };
+
+  const handleMuteSelected = () => {
+    if (!selectedChatObjects.length) return;
+    const allAreMuted = selectedChatObjects.every(c => {
+      const cid = c.isGroup ? (c.id || c._id) : (user?.id ? [user.id, c.id || c._id].sort().join('_') : (c.id || c._id));
+      return isChatMuted(cid);
+    });
+    selectedChatObjects.forEach(c => {
+      const cid = c.isGroup ? (c.id || c._id) : (user?.id ? [user.id, c.id || c._id].sort().join('_') : (c.id || c._id));
+      setChatMuted(cid, !allAreMuted);
+    });
+    setMutedChatIdsState(getMutedChats());
+    setSelectedChatIds([]);
+  };
+
+  const handleArchiveSelected = () => {
+    if (!selectedChatObjects.length) return;
+    selectedChatObjects.forEach(c => {
+      const cid = c.isGroup ? (c.id || c._id) : (user?.id ? [user.id, c.id || c._id].sort().join('_') : (c.id || c._id));
+      const rawId = c.id || c._id;
+      if (isArchivedView) {
+        setChatArchived(currentUid, cid, false);
+        if (rawId) setChatArchived(currentUid, rawId, false);
+      } else {
+        setChatArchived(currentUid, cid, true);
+        if (rawId) setChatArchived(currentUid, rawId, true);
+      }
+    });
+    setArchivedChatIdsState(getArchivedChats(currentUid));
+    setSelectedChatIds([]);
+  };
+
+  const handleSelectAllChats = () => {
+    setShowSelectionMoreMenu(false);
+    if (activeTab === 'groups') {
+      const ids = sortedGroups.map(g => g.id || g._id);
+      setSelectedChatIds(ids);
+    } else {
+      const ids = sortedRecentChats.map(c => c.id || c._id);
+      setSelectedChatIds(ids);
+    }
+  };
+
+  const handleLockSelectedChats = () => {
+    setShowSelectionMoreMenu(false);
+    const pin = getSecurityPin();
+    if (!pin) {
+      setShowLockPinModal(true);
+      return;
+    }
+    selectedChatObjects.forEach(c => {
+      const cid = c.isGroup ? (c.id || c._id) : (user?.id ? [user.id, c.id || c._id].sort().join('_') : (c.id || c._id));
+      setChatLocked(cid, true);
+    });
+    setLockedChatIdsState(getLockedChats());
+    setSelectedChatIds([]);
+  };
+
+  const handleClearSelectedChats = async () => {
+    setShowSelectionMoreMenu(false);
+    if (!selectedChatObjects.length) return;
+    if (!window.confirm(`Clear message history for ${selectedChatObjects.length} conversation(s)?`)) return;
+    for (const c of selectedChatObjects) {
+      const contactChatId = c.isGroup ? (c.id || c._id) : (user?.id ? [user.id, c.id || c._id].sort().join('_') : (c.id || c._id));
+      await clearChatFromLocalDb(contactChatId);
+      if (c.id) await clearChatFromLocalDb(c.id);
+      if (c._id) await clearChatFromLocalDb(c._id);
+    }
+    setRecentChats(prev => prev.map(c => {
+      if (selectedChatIds.includes(c.id) || selectedChatIds.includes(c._id)) {
+        return { ...c, lastMessage: '', lastMessageTimestamp: null, lastMessageTime: null, unreadCount: 0 };
+      }
+      return c;
+    }));
+    window.dispatchEvent(new CustomEvent('pulsechat_messages_cleared'));
+    window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+    setSelectedChatIds([]);
+  };
+
+  const handleBlockSelectedUsers = async () => {
+    setShowSelectionMoreMenu(false);
+    const targets = selectedChatObjects.filter(c => !c.isGroup);
+    if (!targets.length) {
+      alert('Block user is only available for individual contacts, not groups.');
+      return;
+    }
+    if (!window.confirm(`Block ${targets.length} user(s)? They won't be able to send you messages.`)) return;
+    for (const t of targets) {
+      const uid = t.id || t._id;
+      if (uid && blockUser) {
+        await blockUser(uid);
+      }
+    }
+    setSelectedChatIds([]);
+  };
+
+  const handleViewUserInfo = () => {
+    setShowSelectionMoreMenu(false);
+    if (selectedChatObjects.length !== 1) {
+      alert('Please select exactly 1 chat to view info.');
+      return;
+    }
+    const item = selectedChatObjects[0];
+    if (item.isGroup) {
+      setSelectedGroupForInfo(item);
+    } else {
+      setSelectedUserForInfo(item);
+    }
+    setSelectedChatIds([]);
+  };
 
   const [allUsers, setAllUsers] = useState(() => getCachedAllUsers(currentUid));
   const [isOnline, setIsOnline] = useState(() => isDeviceOnline());
@@ -1989,8 +2279,348 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       onTouchStart={handleSidebarTouchStart}
       onTouchEnd={handleSidebarTouchEnd}
     >
-      {/* WhatsApp-Style Top App Header */}
-      <div className="sidebar-header" style={{ padding: 'calc(6px + env(safe-area-inset-top, 0px)) 0.75rem 6px 0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)', overflow: 'visible' }}>
+      {/* Top Header: Selection Action Bar OR Archived Header OR WhatsApp Standard Header */}
+      {selectedChatIds.length > 0 ? (
+        <div
+          className="sidebar-header"
+          style={{
+            padding: 'calc(6px + env(safe-area-inset-top, 0px)) 0.75rem 6px 0.75rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--bg-sidebar)',
+            color: 'var(--text-main)',
+            minHeight: '52px'
+          }}
+        >
+          {/* Left: Back button + Selected count */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              onClick={() => {
+                setSelectedChatIds([]);
+                setShowSelectionMoreMenu(false);
+              }}
+              className="icon-btn-ghost interactive-tap"
+              title="Close Selection"
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-main)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <ArrowLeft size={22} />
+            </button>
+            <span style={{ fontSize: '1.18rem', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
+              {selectedChatIds.length}
+            </span>
+          </div>
+
+          {/* Right: Pin, Delete, Mute, Archive, 3-dot */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+            {/* Pin Chat */}
+            <button
+              onClick={handlePinSelected}
+              className="icon-btn-ghost interactive-tap"
+              title="Pin / Unpin Chat"
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-main)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <Pin size={19} />
+            </button>
+
+            {/* Delete Chat */}
+            <button
+              onClick={handleDeleteSelected}
+              className="icon-btn-ghost interactive-tap"
+              title="Delete Chat"
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-main)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <Trash2 size={19} />
+            </button>
+
+            {/* Mute Chat */}
+            <button
+              onClick={handleMuteSelected}
+              className="icon-btn-ghost interactive-tap"
+              title="Mute / Unmute Notifications"
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-main)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <BellOff size={19} />
+            </button>
+
+            {/* Archive Chat */}
+            <button
+              onClick={handleArchiveSelected}
+              className="icon-btn-ghost interactive-tap"
+              title={isArchivedView ? "Unarchive Chat" : "Archive Chat"}
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-main)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              {isArchivedView ? <ArchiveRestore size={19} /> : <Archive size={19} />}
+            </button>
+
+            {/* 3-Dot More Menu */}
+            <div style={{ position: 'relative' }} ref={selectionMoreMenuRef}>
+              <button
+                onClick={() => setShowSelectionMoreMenu(prev => !prev)}
+                className="icon-btn-ghost interactive-tap"
+                title="More options"
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--text-main)',
+                  background: showSelectionMoreMenu ? 'var(--hover-bg)' : 'transparent',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <MoreVertical size={19} />
+              </button>
+
+              {showSelectionMoreMenu && (
+                <div
+                  className="topbar-dropdown-menu"
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    width: '180px',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '12px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+                    zIndex: 1200,
+                    padding: '6px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px',
+                    animation: 'pulseModalPop 0.16s cubic-bezier(0.16, 1, 0.3, 1)'
+                  }}
+                >
+                  {/* 1. Select all */}
+                  <button
+                    onClick={handleSelectAllChats}
+                    className="dropdown-menu-item interactive-tap"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-main)',
+                      fontSize: '0.88rem',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      width: '100%'
+                    }}
+                  >
+                    <CheckCheck size={16} color="var(--accent)" />
+                    <span>Select all</span>
+                  </button>
+
+                  {/* 2. Chat lock */}
+                  <button
+                    onClick={handleLockSelectedChats}
+                    className="dropdown-menu-item interactive-tap"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-main)',
+                      fontSize: '0.88rem',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      width: '100%'
+                    }}
+                  >
+                    <Lock size={16} color="var(--accent)" />
+                    <span>Chat lock</span>
+                  </button>
+
+                  {/* 3. Clear chat */}
+                  <button
+                    onClick={handleClearSelectedChats}
+                    className="dropdown-menu-item interactive-tap"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-main)',
+                      fontSize: '0.88rem',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      width: '100%'
+                    }}
+                  >
+                    <RotateCw size={16} color="var(--accent)" />
+                    <span>Clear chat</span>
+                  </button>
+
+                  {/* 4. Block user */}
+                  <button
+                    onClick={handleBlockSelectedUsers}
+                    className="dropdown-menu-item interactive-tap"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: '#ef4444',
+                      fontSize: '0.88rem',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      width: '100%'
+                    }}
+                  >
+                    <ShieldAlert size={16} color="#ef4444" />
+                    <span>Block user</span>
+                  </button>
+
+                  {/* 5. User info */}
+                  <button
+                    onClick={handleViewUserInfo}
+                    className="dropdown-menu-item interactive-tap"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-main)',
+                      fontSize: '0.88rem',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      width: '100%'
+                    }}
+                  >
+                    <Info size={16} color="var(--accent)" />
+                    <span>User info</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : isArchivedView ? (
+        <div
+          className="sidebar-header"
+          style={{
+            padding: 'calc(8px + env(safe-area-inset-top, 0px)) 0.85rem 8px 0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--bg-sidebar)',
+            color: 'var(--text-main)',
+            minHeight: '52px'
+          }}
+        >
+          <button
+            onClick={() => setIsArchivedView(false)}
+            className="icon-btn-ghost interactive-tap"
+            title="Back to chats"
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-main)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            <ArrowLeft size={22} />
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3 style={{ fontSize: '1.08rem', fontWeight: 700, margin: 0, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
+              Archived
+            </h3>
+            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+              {archivedChatIdsState.length} {archivedChatIdsState.length === 1 ? 'chat' : 'chats'}
+            </span>
+          </div>
+        </div>
+      ) : (
+        /* WhatsApp-Style Top App Header */
+        <div className="sidebar-header" style={{ padding: 'calc(6px + env(safe-area-inset-top, 0px)) 0.75rem 6px 0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', borderBottom: '1px solid var(--border)', background: 'var(--bg-sidebar)', overflow: 'visible' }}>
         {/* Brand & User Chip */}
         <div
           className="user-profile-badge"
@@ -2442,20 +3072,24 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         </div>
       </div>
     </div>
+    )}
 
       {/* Pulse Vibes ⚡ 24-Hour Stories Bar */}
-      <PulseVibesBar
-        onOpenCreateVibe={() => setShowCreateVibe(true)}
-        onOpenVibeViewer={(group, allGroups) => {
-          setSelectedVibeGroup(group);
-          if (allGroups) setAllVibeGroups(allGroups);
-        }}
-        onOpenVibeSelector={() => setShowVibeSelector(true)}
-        myAura={myAura}
-        recentChats={recentChats}
-      />
+      {!isArchivedView && (
+        <PulseVibesBar
+          onOpenCreateVibe={() => setShowCreateVibe(true)}
+          onOpenVibeViewer={(group, allGroups) => {
+            setSelectedVibeGroup(group);
+            if (allGroups) setAllVibeGroups(allGroups);
+          }}
+          onOpenVibeSelector={() => setShowVibeSelector(true)}
+          myAura={myAura}
+          recentChats={recentChats}
+        />
+      )}
 
-      {/* WhatsApp-Style Navigation Tabs: Chats vs Groups */}
+      {/* WhatsApp-Style Navigation Tabs: Chats vs Groups (Hidden in Archived View) */}
+      {!isArchivedView && (
       <div
         className="sidebar-tabs"
         onTouchStart={handleTouchStart}
@@ -2555,6 +3189,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           )}
         </button>
       </div>
+      )}
 
       {/* Offline Indicator Banner — only shows "Offline mode · Waiting for network" */}
       {!isOnline && (
@@ -2587,11 +3222,51 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search or start new chat..."
+              placeholder={isArchivedView ? "Search archived chats..." : "Search or start new chat..."}
               className="form-input input-with-icon"
               style={{ borderRadius: '24px', fontSize: '0.92rem', paddingBlock: '0.65rem' }}
             />
           </div>
+        </div>
+      )}
+
+      {/* WhatsApp-Style Archived Row — positioned right below Search Input */}
+      {!isArchivedView && archivedChatIdsState.length > 0 && activeTab !== 'friends' && (
+        <div
+          onClick={() => {
+            setSelectedChatIds([]);
+            setIsArchivedView(true);
+          }}
+          className="interactive-tap"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '11px 16px',
+            margin: '0.2rem 0.75rem 0.45rem 0.75rem',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            transform: 'translateZ(0)',
+            willChange: 'transform',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Archive size={19} color="var(--accent)" />
+            <span style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-main)' }}>Archived</span>
+          </div>
+          <span style={{
+            fontSize: '0.74rem',
+            fontWeight: 700,
+            color: 'var(--accent)',
+            background: 'rgba(99, 102, 241, 0.15)',
+            padding: '2px 8px',
+            borderRadius: '10px'
+          }}>
+            {archivedChatIdsState.length}
+          </span>
         </div>
       )}
 
@@ -2841,22 +3516,67 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
             {sortedGroups.length > 0 ? (
               sortedGroups.map(g => {
-                const isPinned = pinnedChatIds.includes(g.id || g._id);
+                const gid = g.id || g._id;
+                const isPinned = pinnedChatIds.includes(gid);
+                const isSelected = selectedChatIds.includes(gid);
                 return (
                 <div
-                  key={g.id}
-                  onClick={() => handleSelectGroup(g)}
-                  className={`chat-item-row ${activeChat?.id === g.id ? 'active' : ''}`}
-                  style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
+                  key={gid}
+                  onClick={() => handleChatItemClick(g, true)}
+                  onTouchStart={(e) => handleChatTouchStart(g, e)}
+                  onTouchMove={handleChatTouchMove}
+                  onTouchEnd={handleChatTouchEnd}
+                  onMouseDown={(e) => handleChatTouchStart(g, e)}
+                  onMouseMove={handleChatTouchMove}
+                  onMouseUp={handleChatTouchEnd}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setSelectedChatIds(prev => prev.includes(gid) ? prev.filter(id => id !== gid) : [...prev, gid]);
+                  }}
+                  className={`chat-item-row ${isSelected ? 'selected' : (activeChat?.id === g.id ? 'active' : '')}`}
+                  style={{
+                    padding: '0.85rem 0.75rem',
+                    gap: '0.85rem',
+                    background: isSelected ? 'rgba(99, 102, 241, 0.16)' : undefined,
+                    boxShadow: isSelected ? 'inset 3px 0 0 var(--accent)' : undefined,
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    willChange: 'transform',
+                    transform: 'translateZ(0)',
+                    transition: 'background 0.15s ease'
+                  }}
                 >
-                  <img
-                    src={g.avatar}
-                    alt="Group Avatar"
-                    onError={(e) => {
-                      e.target.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(g.name || 'Group')}`;
-                    }}
-                    style={{ width: '48px', height: '48px', borderRadius: '14px', objectFit: 'cover', flexShrink: 0 }}
-                  />
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <img
+                      src={g.avatar}
+                      alt="Group Avatar"
+                      onError={(e) => {
+                        e.target.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(g.name || 'Group')}`;
+                      }}
+                      style={{ width: '48px', height: '48px', borderRadius: '14px', objectFit: 'cover' }}
+                    />
+                    {isSelected && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          bottom: '-2px',
+                          right: '-2px',
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '50%',
+                          background: 'var(--accent)',
+                          color: '#ffffff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                          zIndex: 5
+                        }}
+                      >
+                        <Check size={12} strokeWidth={3.2} />
+                      </div>
+                    )}
+                  </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <h4 style={{ fontSize: '1rem', fontWeight: g.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -2873,23 +3593,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                             {g.unreadCount}
                           </span>
                         )}
-                        <button
-                          type="button"
-                          onClick={(e) => togglePinChat(e, g.id || g._id)}
-                          className="icon-btn-ghost"
-                          title={isPinned ? "Unpin Group" : "Pin Group to Top"}
-                          style={{
-                            padding: '5px',
-                            color: isPinned ? '#f59e0b' : 'var(--text-muted)',
-                            opacity: isPinned ? 1 : 0.45,
-                            borderRadius: '50%',
-                            flexShrink: 0
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; }}
-                          onMouseLeave={(e) => { if (!isPinned) e.currentTarget.style.opacity = 0.45; }}
-                        >
-                          <Pin size={15} style={{ transform: isPinned ? 'rotate(-45deg)' : 'none' }} fill={isPinned ? '#f59e0b' : 'none'} />
-                        </button>
                       </div>
                     </div>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -2921,13 +3624,35 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               <>
                 {sortedRecentChats.map(u => {
                   const friendAura = resolveUserAura(u, vibeAuras);
-                  const isPinned = pinnedChatIds.includes(u.id || u._id);
+                  const cid = u.id || u._id;
+                  const isPinned = pinnedChatIds.includes(cid);
+                  const isSelected = selectedChatIds.includes(cid);
                   return (
                   <div
                     key={u.id}
-                    onClick={() => u.isGroup ? handleSelectGroup(u) : handleSelectUser(u)}
-                    className={`chat-item-row ${activeChat?.id === u.id ? 'active' : ''}`}
-                    style={{ padding: '0.85rem 0.75rem', gap: '0.85rem' }}
+                    onClick={() => handleChatItemClick(u, u.isGroup)}
+                    onTouchStart={(e) => handleChatTouchStart(u, e)}
+                    onTouchMove={handleChatTouchMove}
+                    onTouchEnd={handleChatTouchEnd}
+                    onMouseDown={(e) => handleChatTouchStart(u, e)}
+                    onMouseMove={handleChatTouchMove}
+                    onMouseUp={handleChatTouchEnd}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setSelectedChatIds(prev => prev.includes(cid) ? prev.filter(id => id !== cid) : [...prev, cid]);
+                    }}
+                    className={`chat-item-row ${isSelected ? 'selected' : (activeChat?.id === u.id ? 'active' : '')}`}
+                    style={{
+                      padding: '0.85rem 0.75rem',
+                      gap: '0.85rem',
+                      background: isSelected ? 'rgba(99, 102, 241, 0.16)' : undefined,
+                      boxShadow: isSelected ? 'inset 3px 0 0 var(--accent)' : undefined,
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
+                      willChange: 'transform',
+                      transform: 'translateZ(0)',
+                      transition: 'background 0.15s ease'
+                    }}
                   >
                     <VibeAuraRing aura={friendAura} size={48} isGroup={u.isGroup} hasCrown={Boolean(u.hasKingCrown || u.hasSilverCrown || u.hasStreakCrown)}>
                       <div
@@ -2944,7 +3669,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                         <img
                           src={u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`}
                           alt="Avatar"
-                          onClick={(e) => handleAvatarStoryClick(e, u)}
+                          onClick={(e) => {
+                            if (selectedChatIds.length > 0) {
+                              e.stopPropagation();
+                              handleChatItemClick(u, u.isGroup);
+                              return;
+                            }
+                            handleAvatarStoryClick(e, u);
+                          }}
                           onError={(e) => {
                             e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
                           }}
@@ -2965,6 +3697,27 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                           title="Click to view full screen DP"
                         />
                         {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
+                        {isSelected && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: '-2px',
+                              right: '-2px',
+                              width: '20px',
+                              height: '20px',
+                              borderRadius: '50%',
+                              background: 'var(--accent)',
+                              color: '#ffffff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                              zIndex: 15
+                            }}
+                          >
+                            <Check size={12} strokeWidth={3.2} />
+                          </div>
+                        )}
                       </div>
                     </VibeAuraRing>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -3028,40 +3781,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                               {u.unreadCount}
                             </span>
                           )}
-                          <button
-                            type="button"
-                            onClick={(e) => togglePinChat(e, u.id || u._id)}
-                            className="icon-btn-ghost"
-                            title={isPinned ? "Unpin Chat" : "Pin Chat to Top"}
-                            style={{
-                              padding: '5px',
-                              color: isPinned ? '#f59e0b' : 'var(--text-muted)',
-                              opacity: isPinned ? 1 : 0.45,
-                              borderRadius: '50%',
-                              flexShrink: 0
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; }}
-                            onMouseLeave={(e) => { if (!isPinned) e.currentTarget.style.opacity = 0.45; }}
-                          >
-                            <Pin size={15} style={{ transform: isPinned ? 'rotate(-45deg)' : 'none' }} fill={isPinned ? '#f59e0b' : 'none'} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteChat(e, u)}
-                            className="icon-btn-ghost"
-                            title="Delete Chat"
-                            style={{
-                              padding: '5px',
-                              color: 'var(--text-muted)',
-                              opacity: 0.5,
-                              borderRadius: '50%',
-                              flexShrink: 0
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = '#ef4444'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.opacity = 0.5; e.currentTarget.style.color = 'var(--text-muted)'; }}
-                          >
-                            <Trash2 size={16} />
-                          </button>
                         </div>
                       </div>
                       <p style={{
@@ -3144,8 +3863,17 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               </>
             )}
 
-            {/* Contacts Section — shown when there are cached users to start a new chat */}
-            {contactsNotInRecent.length > 0 && (
+            {/* Empty state for Archived View */}
+            {isArchivedView && sortedRecentChats.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: 'var(--text-muted)' }}>
+                <Archive size={48} style={{ opacity: 0.3, marginBottom: '0.75rem' }} />
+                <h4 style={{ margin: '0 0 6px 0', fontSize: '1rem', color: 'var(--text-main)' }}>No archived chats</h4>
+                <p style={{ margin: 0, fontSize: '0.84rem' }}>Hold any chat to select and archive it.</p>
+              </div>
+            )}
+
+            {/* Contacts Section — shown when there are cached users to start a new chat (Hidden in Archived View) */}
+            {!isArchivedView && contactsNotInRecent.length > 0 && (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: recentChats.length > 0 ? '0.75rem 0.75rem 0.5rem' : '0.5rem 0.75rem' }}>
                   <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.03em', margin: 0 }}>
@@ -3519,6 +4247,20 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             setPendingLockedChat(null);
             setShowLockPinModal(false);
           }}
+        />
+      )}
+
+      {selectedUserForInfo && (
+        <UserProfileModal
+          targetUser={selectedUserForInfo}
+          onClose={() => setSelectedUserForInfo(null)}
+        />
+      )}
+
+      {selectedGroupForInfo && (
+        <GroupProfileModal
+          group={selectedGroupForInfo}
+          onClose={() => setSelectedGroupForInfo(null)}
         />
       )}
       </React.Suspense>
