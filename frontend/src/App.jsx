@@ -30,9 +30,11 @@ import LegalModal from './components/common/LegalModal';
 const PulseHandleCardModal = lazyWithRetry(() => import('./components/profile/PulseHandleCardModal'));
 const AnonymousAskView = lazyWithRetry(() => import('./components/profile/AnonymousAskView'));
 const PinLockModal = lazyWithRetry(() => import('./components/common/PinLockModal'));
+const ChatRestorePromptModal = lazyWithRetry(() => import('./components/common/ChatRestorePromptModal'));
 import { isAppLockEnabled, isChatMuted } from './utils/securityLock';
 import { BACKEND_URL } from './utils/config';
 import { updateUserProfileInStorage, clearUnreadCount, getCachedAllUsers } from './utils/offlineStorage';
+import { getLocalDatabaseStats } from './utils/localDatabase';
 import { initBackListeners, useBackHandler } from './utils/backNavigation';
 import { Zap, AlertTriangle } from 'lucide-react';
 
@@ -121,6 +123,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+  const [showRestorePromptModal, setShowRestorePromptModal] = useState(false);
   const [fullDpData, setFullDpData] = useState(null); // { imageUrl, name, username }
 
   // App Lock Authentication State
@@ -251,6 +254,35 @@ export default function App() {
     };
     window.addEventListener('pulsechat_open_onboarding', handleOpenOnboarding);
     return () => window.removeEventListener('pulsechat_open_onboarding', handleOpenOnboarding);
+  }, []);
+
+  // WhatsApp-Style Post-Login Chat Restore Prompt (For new device login or fresh app install)
+  useEffect(() => {
+    if (user?.id) {
+      const isDismissed = localStorage.getItem(`pulse_restore_prompt_dismissed_${user.id}`) === 'true';
+      if (!isDismissed) {
+        let active = true;
+        getLocalDatabaseStats().then(stats => {
+          if (!active) return;
+          // If 0 messages in local database, prompt to restore from device or Google Drive
+          if (stats && stats.count === 0) {
+            const timer = setTimeout(() => {
+              setShowRestorePromptModal(true);
+            }, 650);
+            return () => clearTimeout(timer);
+          }
+        }).catch(() => {});
+        return () => { active = false; };
+      }
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    const handleOpenRestorePrompt = () => {
+      setShowRestorePromptModal(true);
+    };
+    window.addEventListener('pulsechat_open_restore_prompt', handleOpenRestorePrompt);
+    return () => window.removeEventListener('pulsechat_open_restore_prompt', handleOpenRestorePrompt);
   }, []);
 
   // Entrance Animation state
@@ -474,6 +506,7 @@ export default function App() {
   useBackHandler(() => setFullDpData(null), Boolean(fullDpData));
   useBackHandler(() => setLegalModalTab(null), Boolean(legalModalTab));
   useBackHandler(() => setShowOnboardingModal(false), showOnboardingModal);
+  useBackHandler(() => setShowRestorePromptModal(false), showRestorePromptModal);
   useBackHandler(handleCloseChat, Boolean(activeChat));
 
   const handleSelectActiveChat = (chat) => {
@@ -985,6 +1018,27 @@ export default function App() {
               setShowOnboardingModal(false);
             }}
           />
+        )}
+
+        {/* WhatsApp-Style Post-Login Chat Restore Modal (New device login / reinstall) */}
+        {showRestorePromptModal && (
+          <React.Suspense fallback={null}>
+            <ChatRestorePromptModal
+              user={user}
+              onClose={() => {
+                if (user?.id) {
+                  localStorage.setItem(`pulse_restore_prompt_dismissed_${user.id}`, 'true');
+                }
+                setShowRestorePromptModal(false);
+              }}
+              onRestoreComplete={(res) => {
+                if (user?.id) {
+                  localStorage.setItem(`pulse_restore_prompt_dismissed_${user.id}`, 'true');
+                }
+                setShowRestorePromptModal(false);
+              }}
+            />
+          </React.Suspense>
         )}
 
         {/* Global 3D Floating Emoji Particle Burst Engine */}
