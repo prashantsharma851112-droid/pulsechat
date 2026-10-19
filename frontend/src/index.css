@@ -2965,7 +2965,12 @@ button,
 .arrow-grid-cell,
 .candy-grid-cell,
 .tictactoe-cell,
-.whiteboard-tool-btn {
+.whiteboard-tool-btn,
+.vibe-action-btn,
+.vibe-shutter-btn,
+.vibe-send-btn,
+.vibe-cancel-btn,
+.vibe-swatch-btn {
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
   backface-visibility: hidden;
@@ -2992,7 +2997,12 @@ button:active:not(:disabled),
 .arrow-grid-cell:active,
 .candy-grid-cell:active,
 .tictactoe-cell:active,
-.whiteboard-tool-btn:active {
+.whiteboard-tool-btn:active,
+.vibe-action-btn:active,
+.vibe-shutter-btn:active,
+.vibe-send-btn:active,
+.vibe-cancel-btn:active,
+.vibe-swatch-btn:active {
   transform: scale(0.95) translateZ(0) !important;
   transition: transform 0.06s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }

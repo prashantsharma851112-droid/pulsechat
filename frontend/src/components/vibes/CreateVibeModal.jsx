@@ -62,6 +62,289 @@ const LIVE_WALLPAPERS = [
   { id: 'firefly_night_live', label: 'Fireflies', icon: '✨' }
 ];
 
+// =========================================================================
+// ATOMIC ISOLATED VIBE STORY COMPONENTS (React.memo + 0ms GPU Hardware Tap Physics)
+// =========================================================================
+
+export const VibeTopCircleButton = React.memo(function VibeTopCircleButton({
+  onClick,
+  title,
+  isActive = false,
+  activeBg,
+  activeBorder,
+  activeShadow,
+  defaultBg = 'rgba(0, 0, 0, 0.45)',
+  defaultBorder = '1px solid rgba(255, 255, 255, 0.15)',
+  size = 38,
+  children,
+  style = {}
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className="interactive-tap vibe-action-btn"
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: '50%',
+        background: isActive ? (activeBg || 'rgba(99, 102, 241, 0.45)') : defaultBg,
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        border: isActive ? (activeBorder || '1.5px solid #818cf8') : defaultBorder,
+        color: '#ffffff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        boxShadow: isActive && activeShadow ? activeShadow : 'none',
+        padding: 0,
+        ...style
+      }}
+    >
+      {children}
+    </button>
+  );
+});
+
+export const VibeShutterButton = React.memo(function VibeShutterButton({
+  onCapture
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onCapture}
+      title="Take Photo"
+      className="interactive-tap vibe-shutter-btn"
+      style={{
+        width: '74px',
+        height: '74px',
+        borderRadius: '50%',
+        background: 'transparent',
+        border: '4px solid #ffffff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        padding: '4px'
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          borderRadius: '50%',
+          background: '#ffffff'
+        }}
+      />
+    </button>
+  );
+});
+
+export const VibeCancelButton = React.memo(function VibeCancelButton({
+  onCancel
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onCancel}
+      className="interactive-tap vibe-cancel-btn"
+      style={{
+        padding: '12px 22px',
+        borderRadius: '24px',
+        background: 'rgba(255, 255, 255, 0.16)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        border: 'none',
+        color: '#ffffff',
+        fontWeight: 700,
+        fontSize: '0.94rem',
+        cursor: 'pointer'
+      }}
+    >
+      Cancel
+    </button>
+  );
+});
+
+export const VibeSendButton = React.memo(function VibeSendButton({
+  onSubmit,
+  submitting,
+  user
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSubmit}
+      disabled={submitting}
+      className="interactive-tap vibe-send-btn"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '7px 18px 7px 7px',
+        borderRadius: '30px',
+        background: 'linear-gradient(90deg, #ec4899 0%, #f43f5e 50%, #f59e0b 100%)',
+        boxShadow: '0 6px 24px rgba(236, 72, 153, 0.55)',
+        border: 'none',
+        color: '#ffffff',
+        cursor: submitting ? 'wait' : 'pointer',
+        transform: submitting ? 'scale(0.96)' : 'scale(1)'
+      }}
+    >
+      {/* User Avatar Circle */}
+      {user?.avatar ? (
+        <img
+          src={user.avatar}
+          alt=""
+          style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '50%',
+            objectFit: 'cover',
+            border: '2px solid #ffffff'
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '50%',
+            background: '#ffffff',
+            color: '#ec4899',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 900,
+            fontSize: '0.9rem'
+          }}
+        >
+          {(user?.displayName || user?.username || 'U')[0].toUpperCase()}
+        </div>
+      )}
+
+      {/* Text & Icon */}
+      <span style={{ fontSize: '0.96rem', fontWeight: 800, letterSpacing: '0.2px' }}>
+        {submitting ? 'Sharing...' : 'Your Vibe ⚡'}
+      </span>
+
+      {/* Send Arrow / Paper plane icon */}
+      {submitting ? (
+        <Loader2 size={16} className="animate-spin" />
+      ) : (
+        <Send size={16} fill="#ffffff" style={{ transform: 'rotate(15deg)' }} />
+      )}
+    </button>
+  );
+});
+
+export const VibeFilterPill = React.memo(function VibeFilterPill({
+  filter,
+  isSelected,
+  onSelect
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(filter.id)}
+      className="interactive-tap vibe-action-btn"
+      style={{
+        padding: '8px 14px',
+        borderRadius: '16px',
+        background: isSelected ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'rgba(255, 255, 255, 0.1)',
+        border: isSelected ? '1.5px solid #c084fc' : 'none',
+        color: '#fff',
+        fontSize: '0.8rem',
+        fontWeight: 800,
+        whiteSpace: 'nowrap',
+        cursor: 'pointer'
+      }}
+    >
+      {filter.label}
+    </button>
+  );
+});
+
+export const VibeWallpaperPill = React.memo(function VibeWallpaperPill({
+  wallpaper,
+  isSelected,
+  onSelect
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(wallpaper.id)}
+      className="interactive-tap vibe-action-btn"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '5px',
+        padding: '7px 12px',
+        borderRadius: '16px',
+        background: isSelected ? 'linear-gradient(135deg, #06b6d4, #3b82f6)' : 'rgba(255, 255, 255, 0.1)',
+        border: isSelected ? '1.5px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.15)',
+        color: '#fff',
+        fontSize: '0.8rem',
+        fontWeight: 700,
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+        flexShrink: 0
+      }}
+    >
+      <span>{wallpaper.icon}</span>
+      <span>{wallpaper.label}</span>
+    </button>
+  );
+});
+
+export const VibeGradientSwatch = React.memo(function VibeGradientSwatch({
+  gradient,
+  isSelected,
+  onSelect
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(gradient.value)}
+      className="interactive-tap vibe-swatch-btn"
+      style={{
+        width: '36px',
+        height: '36px',
+        borderRadius: '50%',
+        background: gradient.value,
+        border: isSelected ? '2.5px solid #ffffff' : '1px solid rgba(255, 255, 255, 0.3)',
+        boxShadow: isSelected ? '0 0 12px rgba(255, 255, 255, 0.8)' : 'none',
+        cursor: 'pointer',
+        flexShrink: 0
+      }}
+    />
+  );
+});
+
+export const VibeStickerEmojiItem = React.memo(function VibeStickerEmojiItem({
+  emoji,
+  onSelect
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(emoji)}
+      className="interactive-tap vibe-action-btn"
+      style={{
+        fontSize: '1.6rem',
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        padding: '4px'
+      }}
+    >
+      {emoji}
+    </button>
+  );
+});
+
 export default function CreateVibeModal({ onClose, onCreated }) {
   const { user, token } = useContext(AuthContext);
 
@@ -957,131 +1240,64 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           transition: 'opacity 0.2s ease'
         }}
       >
-        {/* Left Side: Close and Flip Camera */}
+        {/* Left Side: Close and Flip Camera (Removed duplicate top gallery button) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button
-            type="button"
+          <VibeTopCircleButton
             onClick={onClose}
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              background: 'rgba(0, 0, 0, 0.45)',
-              backdropFilter: 'blur(12px)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
+            size={40}
+            title="Close"
           >
             <X size={20} />
-          </button>
+          </VibeTopCircleButton>
 
           {viewMode === 'camera' && (
-            <button
-              type="button"
+            <VibeTopCircleButton
               onClick={handleToggleCameraFacing}
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                background: 'rgba(0, 0, 0, 0.45)',
-                backdropFilter: 'blur(12px)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                color: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer'
-              }}
+              size={40}
               title="Flip Camera"
             >
               <SwitchCamera size={19} />
-            </button>
+            </VibeTopCircleButton>
           )}
-
-          {/* Media Picker / Gallery Shortcut Icon */}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              background: mediaUrl ? 'rgba(99, 102, 241, 0.45)' : 'rgba(0, 0, 0, 0.45)',
-              backdropFilter: 'blur(12px)',
-              border: mediaUrl ? '1.5px solid #818cf8' : '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
-            title="Upload Photo or Video"
-          >
-            <ImageIcon size={19} />
-          </button>
         </div>
 
         {/* Right Side: Circular Tools Row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {/* Sound / Volume Mute Toggle (Shown when a video is loaded, identical to Instagram Stories) */}
           {viewMode === 'media' && mediaType === 'video' && (
-            <button
-              type="button"
+            <VibeTopCircleButton
               onClick={toggleVideoMute}
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '50%',
-                background: isVideoMuted ? 'rgba(239, 68, 68, 0.45)' : 'rgba(16, 185, 129, 0.45)',
-                backdropFilter: 'blur(12px)',
-                border: isVideoMuted ? '1.5px solid #f87171' : '1.5px solid #34d399',
-                color: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                boxShadow: isVideoMuted ? 'none' : '0 0 12px rgba(16, 185, 129, 0.5)'
-              }}
+              size={38}
+              isActive={!isVideoMuted}
+              activeBg="rgba(16, 185, 129, 0.45)"
+              activeBorder="1.5px solid #34d399"
+              activeShadow="0 0 12px rgba(16, 185, 129, 0.5)"
+              defaultBg="rgba(239, 68, 68, 0.45)"
+              defaultBorder="1.5px solid #f87171"
               title={isVideoMuted ? 'Unmute Story Video' : 'Mute Story Video'}
             >
               {isVideoMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-            </button>
+            </VibeTopCircleButton>
           )}
 
           {/* Aa (Text) */}
-          <button
-            type="button"
+          <VibeTopCircleButton
             onClick={() => {
               setIsEditingText(true);
               setTimeout(() => textInputRef.current?.focus(), 50);
             }}
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              background: caption ? 'rgba(99, 102, 241, 0.45)' : 'rgba(0, 0, 0, 0.45)',
-              backdropFilter: 'blur(12px)',
-              border: caption ? '1.5px solid #818cf8' : '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontWeight: 800,
-              fontSize: '1rem'
-            }}
+            size={38}
+            isActive={Boolean(caption)}
+            activeBg="rgba(99, 102, 241, 0.45)"
+            activeBorder="1.5px solid #818cf8"
             title="Add Text"
+            style={{ fontWeight: 800, fontSize: '1rem' }}
           >
             Aa
-          </button>
+          </VibeTopCircleButton>
 
           {/* 🎵 (Music) */}
-          <button
-            type="button"
+          <VibeTopCircleButton
             onClick={() => {
               if (selectedSong) {
                 setShowMusicAdjuster(true);
@@ -1089,125 +1305,64 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                 setShowMusicPicker(true);
               }
             }}
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              background: selectedSong ? 'rgba(16, 185, 129, 0.45)' : 'rgba(0, 0, 0, 0.45)',
-              backdropFilter: 'blur(12px)',
-              border: selectedSong ? '1.5px solid #34d399' : '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
+            size={38}
+            isActive={Boolean(selectedSong)}
+            activeBg="rgba(16, 185, 129, 0.45)"
+            activeBorder="1.5px solid #34d399"
             title={selectedSong ? "Adjust / Trim Music" : "Add Music"}
           >
             <Music size={18} />
-          </button>
+          </VibeTopCircleButton>
 
           {/* 🎨 (Palette / Gradients) */}
-          <button
-            type="button"
+          <VibeTopCircleButton
             onClick={() => setActivePanel(activePanel === 'bg_color' ? null : 'bg_color')}
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              background: activePanel === 'bg_color' ? 'rgba(249, 115, 22, 0.45)' : 'rgba(0, 0, 0, 0.45)',
-              backdropFilter: 'blur(12px)',
-              border: activePanel === 'bg_color' ? '1.5px solid #fb923c' : '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
+            size={38}
+            isActive={activePanel === 'bg_color'}
+            activeBg="rgba(249, 115, 22, 0.45)"
+            activeBorder="1.5px solid #fb923c"
             title="Colors & Gradients"
           >
             <Palette size={18} />
-          </button>
+          </VibeTopCircleButton>
 
-          {/* ✨ (Filters / Effects - Glowing Violet Pill like Image 1) */}
-          <button
-            type="button"
+          {/* ✨ (Filters / Effects) */}
+          <VibeTopCircleButton
             onClick={() => setActivePanel(activePanel === 'filters' ? null : 'filters')}
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              background: imageFilter !== 'none' || activePanel === 'filters'
-                ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-                : 'rgba(0, 0, 0, 0.45)',
-              backdropFilter: 'blur(12px)',
-              border: imageFilter !== 'none' || activePanel === 'filters'
-                ? '2px solid #c084fc'
-                : '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: imageFilter !== 'none' || activePanel === 'filters'
-                ? '0 0 16px rgba(139, 92, 246, 0.65)'
-                : 'none'
-            }}
+            size={38}
+            isActive={imageFilter !== 'none' || activePanel === 'filters'}
+            activeBg="linear-gradient(135deg, #6366f1, #8b5cf6)"
+            activeBorder="2px solid #c084fc"
+            activeShadow="0 0 16px rgba(139, 92, 246, 0.65)"
             title="Filters & Effects"
           >
             <Sparkles size={18} />
-          </button>
+          </VibeTopCircleButton>
 
           {/* 😊 (Stickers / Emojis) */}
-          <button
-            type="button"
+          <VibeTopCircleButton
             onClick={() => setActivePanel(activePanel === 'stickers' ? null : 'stickers')}
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              background: activePanel === 'stickers' ? 'rgba(245, 158, 11, 0.45)' : 'rgba(0, 0, 0, 0.45)',
-              backdropFilter: 'blur(12px)',
-              border: activePanel === 'stickers' ? '1.5px solid #fbbf24' : '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
+            size={38}
+            isActive={activePanel === 'stickers'}
+            activeBg="rgba(245, 158, 11, 0.45)"
+            activeBorder="1.5px solid #fbbf24"
             title="Add Stickers"
           >
             <Smile size={18} />
-          </button>
+          </VibeTopCircleButton>
 
           {/* 🌌 (3D Live Animated Wallpaper & Opacity) */}
-          <button
-            type="button"
+          <VibeTopCircleButton
             onClick={() => setActivePanel(activePanel === 'live_bg' ? null : 'live_bg')}
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              background: (animatedBg !== 'none' || activePanel === 'live_bg')
-                ? 'linear-gradient(135deg, #06b6d4, #3b82f6)'
-                : 'rgba(0, 0, 0, 0.45)',
-              backdropFilter: 'blur(12px)',
-              border: (animatedBg !== 'none' || activePanel === 'live_bg')
-                ? '2px solid #38bdf8'
-                : '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: (animatedBg !== 'none' || activePanel === 'live_bg')
-                ? '0 0 16px rgba(56, 189, 248, 0.65)'
-                : 'none'
-            }}
+            size={38}
+            isActive={animatedBg !== 'none' || activePanel === 'live_bg'}
+            activeBg="linear-gradient(135deg, #06b6d4, #3b82f6)"
+            activeBorder="2px solid #38bdf8"
+            activeShadow="0 0 16px rgba(56, 189, 248, 0.65)"
             title="3D Live Animated Wallpaper & Opacity"
           >
             <Layers size={18} />
-          </button>
+          </VibeTopCircleButton>
         </div>
       </div>
 
@@ -1661,24 +1816,12 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           }}
         >
           {IMAGE_FILTERS.map((f) => (
-            <button
+            <VibeFilterPill
               key={f.id}
-              type="button"
-              onClick={() => setImageFilter(f.id)}
-              style={{
-                padding: '8px 14px',
-                borderRadius: '16px',
-                background: imageFilter === f.id ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'rgba(255, 255, 255, 0.1)',
-                border: imageFilter === f.id ? '1.5px solid #c084fc' : 'none',
-                color: '#fff',
-                fontSize: '0.8rem',
-                fontWeight: 800,
-                whiteSpace: 'nowrap',
-                cursor: 'pointer'
-              }}
-            >
-              {f.label}
-            </button>
+              filter={f}
+              isSelected={imageFilter === f.id}
+              onSelect={setImageFilter}
+            />
           ))}
         </div>
       )}
@@ -1719,35 +1862,18 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           {/* Wallpapers Horizontal Selector */}
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '4px' }}>
             {LIVE_WALLPAPERS.map((w) => (
-              <button
+              <VibeWallpaperPill
                 key={w.id}
-                type="button"
-                onClick={() => {
-                  setAnimatedBg(w.id);
+                wallpaper={w}
+                isSelected={animatedBg === w.id}
+                onSelect={(id) => {
+                  setAnimatedBg(id);
                   if (viewMode === 'camera') {
                     stopCameraStream();
                     setViewMode('canvas');
                   }
                 }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  padding: '7px 12px',
-                  borderRadius: '16px',
-                  background: animatedBg === w.id ? 'linear-gradient(135deg, #06b6d4, #3b82f6)' : 'rgba(255, 255, 255, 0.1)',
-                  border: animatedBg === w.id ? '1.5px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.15)',
-                  color: '#fff',
-                  fontSize: '0.8rem',
-                  fontWeight: 700,
-                  whiteSpace: 'nowrap',
-                  cursor: 'pointer',
-                  flexShrink: 0
-                }}
-              >
-                <span>{w.icon}</span>
-                <span>{w.label}</span>
-              </button>
+              />
             ))}
           </div>
 
@@ -1793,25 +1919,16 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           }}
         >
           {GRADIENTS.map((g) => (
-            <button
+            <VibeGradientSwatch
               key={g.id}
-              type="button"
-              onClick={() => {
-                setSelectedGradient(g.value);
+              gradient={g}
+              isSelected={selectedGradient === g.value}
+              onSelect={(val) => {
+                setSelectedGradient(val);
                 if (viewMode === 'camera') {
                   stopCameraStream();
                   setViewMode('canvas');
                 }
-              }}
-              style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '50%',
-                background: g.value,
-                border: selectedGradient === g.value ? '2.5px solid #ffffff' : '1px solid rgba(255, 255, 255, 0.3)',
-                boxShadow: selectedGradient === g.value ? '0 0 12px rgba(255, 255, 255, 0.8)' : 'none',
-                cursor: 'pointer',
-                flexShrink: 0
               }}
             />
           ))}
@@ -1857,20 +1974,11 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             }}
           >
             {ALL_EMOJIS.slice(0, 42).map((emoji, idx) => (
-              <button
+              <VibeStickerEmojiItem
                 key={idx}
-                type="button"
-                onClick={() => handleAddEmojiSticker(emoji)}
-                style={{
-                  fontSize: '1.6rem',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '4px'
-                }}
-              >
-                {emoji}
-              </button>
+                emoji={emoji}
+                onSelect={handleAddEmojiSticker}
+              />
             ))}
           </div>
         </div>
@@ -1907,85 +2015,35 @@ export default function CreateVibeModal({ onClose, onCreated }) {
             }}
           >
             {/* Gallery icon */}
-            <button
-              type="button"
+            <VibeTopCircleButton
               onClick={() => fileInputRef.current?.click()}
-              style={{
-                width: '46px',
-                height: '46px',
-                borderRadius: '50%',
-                background: 'rgba(0, 0, 0, 0.45)',
-                backdropFilter: 'blur(12px)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                color: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer'
-              }}
+              size={46}
               title="Gallery"
+              defaultBorder="1px solid rgba(255, 255, 255, 0.2)"
             >
               <ImageIcon size={22} />
-            </button>
+            </VibeTopCircleButton>
 
             {/* Instagram Shutter Button */}
-            <button
-              type="button"
-              onClick={handleCapturePhoto}
-              style={{
-                width: '74px',
-                height: '74px',
-                borderRadius: '50%',
-                background: 'transparent',
-                border: '4px solid #ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                padding: '4px'
-              }}
-              title="Take Photo"
-            >
-              <div
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '50%',
-                  background: '#ffffff'
-                }}
-              />
-            </button>
+            <VibeShutterButton onCapture={handleCapturePhoto} />
 
             {/* Flip Camera */}
-            <button
-              type="button"
+            <VibeTopCircleButton
               onClick={handleToggleCameraFacing}
-              style={{
-                width: '46px',
-                height: '46px',
-                borderRadius: '50%',
-                background: 'rgba(0, 0, 0, 0.45)',
-                backdropFilter: 'blur(12px)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                color: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer'
-              }}
+              size={46}
               title="Flip Camera"
+              defaultBorder="1px solid rgba(255, 255, 255, 0.2)"
             >
               <SwitchCamera size={22} />
-            </button>
+            </VibeTopCircleButton>
           </div>
         ) : (
           /* Normal State (Matching Screenshot 1): Cancel on left, Your Vibe ⚡ on right */
           <>
             {/* Left: Button Group (Cancel + Gallery) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <button
-                type="button"
-                onClick={() => {
+              <VibeCancelButton
+                onCancel={() => {
                   if (mediaUrl || caption) {
                     setMediaUrl('');
                     setSelectedMediaFile(null);
@@ -1997,109 +2055,25 @@ export default function CreateVibeModal({ onClose, onCreated }) {
                     onClose();
                   }
                 }}
-                style={{
-                  padding: '12px 22px',
-                  borderRadius: '24px',
-                  background: 'rgba(255, 255, 255, 0.16)',
-                  backdropFilter: 'blur(16px)',
-                  WebkitBackdropFilter: 'blur(16px)',
-                  border: 'none',
-                  color: '#ffffff',
-                  fontWeight: 700,
-                  fontSize: '0.94rem',
-                  cursor: 'pointer'
-                }}
-              >
-                Cancel
-              </button>
+              />
 
-              <button
-                type="button"
+              <VibeTopCircleButton
                 onClick={() => fileInputRef.current?.click()}
-                style={{
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '50%',
-                  background: 'rgba(255, 255, 255, 0.18)',
-                  backdropFilter: 'blur(16px)',
-                  WebkitBackdropFilter: 'blur(16px)',
-                  border: '1px solid rgba(255, 255, 255, 0.25)',
-                  color: '#ffffff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer'
-                }}
+                size={44}
+                defaultBg="rgba(255, 255, 255, 0.18)"
+                defaultBorder="1px solid rgba(255, 255, 255, 0.25)"
                 title="Choose from Gallery"
               >
                 <ImageIcon size={20} />
-              </button>
+              </VibeTopCircleButton>
             </div>
 
             {/* Right: Instagram Story Pill ("Your Vibe ⚡ ▷") */}
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '7px 18px 7px 7px',
-                borderRadius: '30px',
-                background: 'linear-gradient(90deg, #ec4899 0%, #f43f5e 50%, #f59e0b 100%)',
-                boxShadow: '0 6px 24px rgba(236, 72, 153, 0.55)',
-                border: 'none',
-                color: '#ffffff',
-                cursor: submitting ? 'wait' : 'pointer',
-                transform: submitting ? 'scale(0.96)' : 'scale(1)',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              {/* User Avatar Circle */}
-              {user?.avatar ? (
-                <img
-                  src={user.avatar}
-                  alt=""
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    objectFit: 'cover',
-                    border: '2px solid #ffffff'
-                  }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    background: '#ffffff',
-                    color: '#ec4899',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 900,
-                    fontSize: '0.9rem'
-                  }}
-                >
-                  {(user?.displayName || user?.username || 'U')[0].toUpperCase()}
-                </div>
-              )}
-
-              {/* Text & Icon */}
-              <span style={{ fontSize: '0.96rem', fontWeight: 800, letterSpacing: '0.2px' }}>
-                {submitting ? 'Sharing...' : 'Your Vibe ⚡'}
-              </span>
-
-              {/* Send Arrow / Paper plane icon */}
-              {submitting ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <Send size={16} fill="#ffffff" style={{ transform: 'rotate(15deg)' }} />
-              )}
-            </button>
+            <VibeSendButton
+              onSubmit={handleSubmit}
+              submitting={submitting}
+              user={user}
+            />
           </>
         )}
       </div>
