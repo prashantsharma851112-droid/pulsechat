@@ -3521,21 +3521,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const lastMsgId = lastMsg?.id || lastMsg?._id || lastMsg?.clientTempId;
     const prevLastId = lastRenderedLastMsgIdRef.current;
 
-    // Initial load or user pinned to bottom: keep bottom anchor cleanly
-    if (isInitialLoad.current || isPinnedToBottomRef.current) {
+    // 1. Initial Cold Load only: jump to bottom once
+    if (isInitialLoad.current) {
       scrollToBottom('instant');
       requestAnimationFrame(() => scrollToBottom('instant'));
-      setTimeout(() => scrollToBottom('instant'), 50);
-      setTimeout(() => scrollToBottom('instant'), 150);
-      setTimeout(() => scrollToBottom('instant'), 350);
-      if (isInitialLoad.current) {
-        setTimeout(() => { isInitialLoad.current = false; }, 400);
-      }
+      setTimeout(() => {
+        scrollToBottom('instant');
+        isInitialLoad.current = false;
+      }, 150);
       lastRenderedLastMsgIdRef.current = lastMsgId;
       return;
     }
 
-    // Check if the last message actually changed (a brand new message arrived at bottom)
+    // 2. Check if a genuinely new message arrived at the bottom
     const isTempResolution = (
       lastMsg?.clientTempId && (lastMsg.clientTempId === prevLastId || lastMsg.id === prevLastId)
     );
@@ -3543,7 +3541,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     lastRenderedLastMsgIdRef.current = lastMsgId;
 
     if (!isNewMessageAtBottom) {
-      // Existing messages updated (reaction, edit, status, avatar, temp resolution) -> DO NOT SCROLL!
+      // Existing messages updated (ticks, reactions, edits, prepended history) -> NEVER touch scroll position!
       return;
     }
 
@@ -3556,15 +3554,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       setShowScrollBottom(false);
       showScrollBottomRef.current = false;
       isPinnedToBottomRef.current = true;
-    } else {
-      // Someone else sent a message -> auto scroll if user is pinned near bottom
-      if (isPinnedToBottomRef.current) {
-        scrollToBottom('smooth');
-        setShowScrollBottom(false);
-        showScrollBottomRef.current = false;
-      }
+    } else if (isPinnedToBottomRef.current) {
+      // Someone else sent a message -> auto scroll only if user was already at bottom
+      scrollToBottom('smooth');
+      setShowScrollBottom(false);
+      showScrollBottomRef.current = false;
     }
-  }, [messages, user?.id, scrollToBottom]);
+  }, [messages, user?.id, user?._id]);
 
   // Clear Chat Undo Timer
   useEffect(() => {
@@ -3831,14 +3827,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (scrollRafRef.current) return;
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollRafRef.current = null;
-      // Scroll Horizon Threshold (Invisible Loading): Trigger before user hits ceiling (1000px threshold for 0ms lag-free continuous scroll)
-      if (scrollHeight > clientHeight + 100 && scrollTop <= 1000 && hasMoreOlderMessages && !isLoadingOlderRef.current) {
+      // Scroll Horizon Threshold: Trigger older messages ONLY when user scrolls near the top ceiling (<= 150px)
+      if (scrollHeight > clientHeight + 150 && scrollTop <= 150 && hasMoreOlderMessages && !isLoadingOlderRef.current) {
         handleLoadOlderMessages();
       }
 
-      // Track if user has scrolled away from the latest messages (> 120px)
+      // Track if user has scrolled away from the latest messages (> 50px)
       const distFromBottom = scrollHeight - scrollTop - clientHeight;
-      const isScrolledUp = distFromBottom > 120;
+      const isScrolledUp = distFromBottom > 50;
       isPinnedToBottomRef.current = !isScrolledUp;
       if (showScrollBottomRef.current !== isScrolledUp) {
         setShowScrollBottom(isScrolledUp);

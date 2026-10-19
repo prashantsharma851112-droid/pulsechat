@@ -1584,9 +1584,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               return tB - tA;
             });
 
-          setRecentChats(finalSorted);
-          if (user?.id) {
-            setCachedRecentChats(user.id, finalSorted);
+          if (finalSorted.length > 0 || cachedList.length === 0) {
+            setRecentChats(finalSorted);
+            if (user?.id) {
+              setCachedRecentChats(user.id, finalSorted);
+            }
           }
         }
       })
