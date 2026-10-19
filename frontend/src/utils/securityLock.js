@@ -158,8 +158,10 @@ export function getArchivedChats(userId) {
 export function isChatArchived(userId, chatId) {
   if (!chatId) return false;
   const list = getArchivedChats(userId);
+  if (!list.length) return false;
   const canonical = chatId.includes('_') ? chatId.split('_').sort().join('_') : chatId;
-  return list.includes(chatId) || list.includes(canonical);
+  const composite = (!chatId.includes('_') && userId) ? [userId, chatId].sort().join('_') : null;
+  return list.includes(chatId) || list.includes(canonical) || (composite ? list.includes(composite) : false);
 }
 
 export function setChatArchived(userId, chatId, archived) {
@@ -167,12 +169,20 @@ export function setChatArchived(userId, chatId, archived) {
   try {
     const list = getArchivedChats(userId);
     const canonical = chatId.includes('_') ? chatId.split('_').sort().join('_') : chatId;
+    const composite = (!chatId.includes('_') && userId) ? [userId, chatId].sort().join('_') : null;
+    const idsToMatch = new Set([chatId, canonical]);
+    if (composite) idsToMatch.add(composite);
+    if (chatId.includes('_')) {
+      chatId.split('_').forEach(id => idsToMatch.add(id));
+    }
+
     let nextList;
     if (archived) {
       const set = new Set([...list, chatId, canonical]);
+      if (composite) set.add(composite);
       nextList = Array.from(set);
     } else {
-      nextList = list.filter(id => id !== chatId && id !== canonical);
+      nextList = list.filter(id => !idsToMatch.has(id));
     }
     localStorage.setItem(`pulsechat_archived_chats_${userId || 'default'}`, JSON.stringify(nextList));
     window.dispatchEvent(new CustomEvent('pulsechat_archived_chats_updated', { detail: { chatId, archived: !!archived } }));
