@@ -1,5 +1,4 @@
-// local storage & local-first IndexedDB helper functions
-import { saveMessagesToLocalDb, getMessagesFromLocalDb, deleteMessagesFromLocalDb, updateMessageInLocalDb, clearChatFromLocalDb } from './localDatabase';
+import { saveMessagesToLocalDb, getMessagesFromLocalDb, deleteMessagesFromLocalDb, updateMessageInLocalDb, clearChatFromLocalDb, cleanOldMessagesFromLocalDb } from './localDatabase';
 
 const STORAGE_KEYS = {
   USER: 'pulsechat_user',
@@ -629,8 +628,8 @@ export function updateGroupInStorage(groupId, updates, currentUserId) {
   }
 }
 
-// Auto-cleanup local cached messages (keeps last N days safe, cleans older)
-export function cleanupLocalMessageStorage(days = 7) {
+// Auto-cleanup local cached messages (keeps last N days safe, cleans older from localStorage & IndexedDB)
+export async function cleanupLocalMessageStorage(days = 7) {
   if (typeof window === 'undefined') return 0;
   let cleanedCount = 0;
   try {
@@ -659,6 +658,14 @@ export function cleanupLocalMessageStorage(days = 7) {
         }
       } catch (err) {}
     });
+
+    // Also clean messages from device IndexedDB
+    try {
+      const idbCleaned = await cleanOldMessagesFromLocalDb(days);
+      cleanedCount += (idbCleaned || 0);
+    } catch (idbErr) {
+      console.warn('[OfflineStorage] IndexedDB cleanup warning:', idbErr);
+    }
   } catch (e) {
     console.warn('[OfflineStorage] Error cleaning local messages:', e);
   }

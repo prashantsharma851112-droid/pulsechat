@@ -194,6 +194,45 @@ export async function clearChatFromLocalDb(chatId) {
 }
 
 /**
+ * Purge messages older than N days from local IndexedDB
+ */
+export async function cleanOldMessagesFromLocalDb(days = 7) {
+  const db = await getDb();
+  if (!db) return 0;
+  return new Promise((resolve) => {
+    try {
+      const cutoffTime = Date.now() - (days * 24 * 60 * 60 * 1000);
+      const tx = db.transaction([STORE_MESSAGES], 'readwrite');
+      const store = tx.objectStore(STORE_MESSAGES);
+      const request = store.openCursor();
+      let cleaned = 0;
+
+      request.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          const msg = cursor.value;
+          const t = new Date(msg.timestamp || msg.createdAt || 0).getTime();
+          if (t && t < cutoffTime) {
+            cursor.delete();
+            cleaned++;
+          }
+          cursor.continue();
+        } else {
+          resolve(cleaned);
+        }
+      };
+
+      request.onerror = () => resolve(cleaned);
+      tx.oncomplete = () => resolve(cleaned);
+      tx.onerror = () => resolve(cleaned);
+    } catch (err) {
+      console.warn('cleanOldMessagesFromLocalDb error:', err);
+      resolve(0);
+    }
+  });
+}
+
+/**
  * Update a message in local IndexedDB (e.g. status='deleted', content='This message was deleted')
  */
 export async function updateMessageInLocalDb(msgId, updates) {

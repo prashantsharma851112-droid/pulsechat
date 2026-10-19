@@ -437,8 +437,8 @@ export function AuthProvider({ children }) {
   };
 
   const runInstantCleanup = async (days = 30) => {
-    // 1. Clean local storage cached messages
-    const localCleaned = cleanupLocalMessageStorage(days);
+    // 1. Clean local storage & IndexedDB cached messages
+    const localCleaned = await cleanupLocalMessageStorage(days);
 
     if (!token) return { success: true, deletedCount: localCleaned };
     try {

@@ -952,7 +952,7 @@ export default function SettingsModal({
       if (res && res.success) {
         setCleanupResult({ 
           type: 'success', 
-          msg: `Cleaned ${res.deletedCount || 0} old messages (${daysNum}+ days old) from local storage and cache!` 
+          msg: `Cleaned ${res.deletedCount || 0} old messages (${daysNum}+ days old) from device storage and cache!` 
         });
       } else {
         setCleanupResult({ type: 'error', msg: res?.error || 'Storage cleanup failed. Please try again.' });
@@ -2330,59 +2330,7 @@ export default function SettingsModal({
               {/* WhatsApp-Style Device Backup & Restore (Zero Cloud Bandwidth) */}
               <ChatBackupSection currentUser={user} />
 
-              {/* Auto Cleanup Background Toggle */}
-              <div
-                onClick={() => toggleAutoCleanup(user?.autoCleanupEnabled === false)}
-                style={{
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '14px',
-                  padding: '12px 14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  cursor: 'pointer'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <RefreshCw size={18} color="#10b981" />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      Auto-Cleanup (Background)
-                      <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '1px 6px', borderRadius: '6px', background: user?.autoCleanupEnabled !== false ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', color: user?.autoCleanupEnabled !== false ? '#10b981' : '#ef4444' }}>
-                        {user?.autoCleanupEnabled !== false ? 'ENABLED' : 'DISABLED'}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                      Keeps last 7 days safe & automatically cleans older messages and cache
-                    </div>
-                  </div>
-                </div>
-                <div style={{
-                  width: '38px',
-                  height: '22px',
-                  borderRadius: '11px',
-                  background: user?.autoCleanupEnabled !== false ? '#10b981' : 'var(--border)',
-                  position: 'relative',
-                  transition: 'all 0.2s ease',
-                  flexShrink: 0
-                }}>
-                  <div style={{
-                    width: '18px',
-                    height: '18px',
-                    borderRadius: '50%',
-                    background: '#fff',
-                    position: 'absolute',
-                    top: '2px',
-                    left: user?.autoCleanupEnabled !== false ? '18px' : '2px',
-                    transition: 'all 0.2s ease'
-                  }} />
-                </div>
-              </div>
-
-              {/* Custom Storage Cleaner (Collapsible: User Enters Days & Cleans Storage) */}
+              {/* WhatsApp-Style Manage Device Storage (Collapsible: User Enters Days & Cleans Storage) */}
               <div style={{
                 background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(99, 102, 241, 0.08))',
                 border: '1px solid rgba(16, 185, 129, 0.3)',
@@ -2422,10 +2370,10 @@ export default function SettingsModal({
                     </div>
                     <div>
                       <h4 style={{ margin: 0, fontSize: '0.94rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                        Custom Storage Cleaner
+                        Manage Device Storage
                       </h4>
                       <p style={{ margin: '2px 0 0 0', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                        Purge old messages & media from local storage and cache
+                        Clean old messages & media from your phone to free up space
                       </p>
                     </div>
                   </div>
@@ -2452,7 +2400,7 @@ export default function SettingsModal({
                     paddingTop: '12px'
                   }}>
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                      Enter the number of days below. All messages older than this threshold will be cleaned from your phone's storage and cache, freeing up space and speeding up the app.
+                      Enter the number of days below. All messages and media older than this threshold will be cleaned from your phone's local storage and cache, freeing up space while keeping your recent chats intact.
                     </div>
 
                     {/* Days Input and Quick Chips */}
@@ -2545,12 +2493,12 @@ export default function SettingsModal({
                       {cleaningStorage ? (
                         <>
                           <Loader2 size={16} className="animate-spin" />
-                          <span>Cleaning Local Storage & Cache...</span>
+                          <span>Cleaning Device Storage & Cache...</span>
                         </>
                       ) : (
                         <>
                           <HardDrive size={16} />
-                          <span>Clean Storage Now {cleanupDays ? `(${cleanupDays}+ Days Old)` : ''}</span>
+                          <span>Clean Device Storage Now {cleanupDays ? `(${cleanupDays}+ Days Old)` : ''}</span>
                         </>
                       )}
                     </button>
