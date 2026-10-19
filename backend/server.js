@@ -463,11 +463,10 @@ io.on('connection', (socket) => {
           }
         }
 
-        // 3. Mark queued messages as delivered in MongoDB
-        await Message.updateMany(
-          { receiverId: { $in: allUserVariants }, status: 'sent' },
-          { $set: { status: 'delivered' } }
-        );
+        // 3. WhatsApp Pure Post Office: Wipe delivered queued messages from MongoDB immediately
+        await Message.deleteMany({
+          _id: { $in: pendingMsgs.map(m => m._id) }
+        });
       }
     } catch (err) {
       console.error('Error delivering pending messages on setup:', err);
@@ -559,15 +558,11 @@ io.on('connection', (socket) => {
           await targetUser.save();
         }
 
-        // Target user mobile data is ON -> Push delivered! Update status to 'delivered' and emit to sender!
+        // Target user mobile data is ON -> Push delivered! WhatsApp Pure Post Office: Wipe from MongoDB immediately!
         if (pushDelivered && messageId) {
           try {
-            const updatedMsg = await Message.findOneAndUpdate(
-              { id: messageId, status: 'sent' },
-              { status: 'delivered' },
-              { new: true }
-            );
-            if (updatedMsg && senderId) {
+            await Message.deleteMany({ id: messageId });
+            if (senderId) {
               io.to(`user_${senderId}`).emit('message_delivered_update', {
                 messageId,
                 chatId: chatTargetId,
@@ -1058,21 +1053,25 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Message Delivered Acknowledgment from Recipient
+  // Message Delivered Acknowledgment from Recipient - WhatsApp Pure Post Office
   socket.on('message_delivered', async ({ messageId, chatId, senderId }) => {
     try {
       if (!messageId) return;
-      await Message.findOneAndUpdate(
-        { $or: [{ id: messageId }, { clientTempId: messageId }] },
-        { status: 'delivered' }
-      );
+      // WIPE from MongoDB immediately upon delivery!
+      await Message.deleteMany({
+        $or: [{ id: messageId }, { clientTempId: messageId }]
+      });
       const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
       const singlePayload = { messageId, chatId, canonicalChatId, status: 'delivered' };
       const multiPayload = { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered' };
 
-      if (senderId) {
-        io.to(`user_${senderId}`).emit('message_delivered_update', singlePayload);
-        io.to(`user_${senderId}`).emit('messages_delivered', multiPayload);
+      const resolvedSenderId = senderId || ((chatId && chatId.includes('_')) ? chatId.split('_').find(p => p !== socket.userId) : null);
+
+      if (resolvedSenderId) {
+        io.to(`user_${resolvedSenderId}`).emit('message_delivered_update', singlePayload);
+        io.to(resolvedSenderId).emit('message_delivered_update', singlePayload);
+        io.to(`user_${resolvedSenderId}`).emit('messages_delivered', multiPayload);
+        io.to(resolvedSenderId).emit('messages_delivered', multiPayload);
       }
       if (chatId) {
         io.to(chatId).emit('message_delivered_update', singlePayload);
@@ -1261,28 +1260,24 @@ io.on('connection', (socket) => {
     socket.emit('chats_wiped');
   });
 
-  // Read Receipt (Blue Double Tick)
-  socket.on('mark_read', async ({ messageId, chatId, userId, isGhost }) => {
+  // Read Receipt (Blue Double Tick) - WhatsApp Pure Event-Forwarding
+  socket.on('mark_read', async ({ messageId, chatId, userId, senderId, isGhost }) => {
     const readerId = userId || socket.userId;
     const isGhostMode = Boolean(isGhost) || await resolveGhostMode(readerId, chatId);
     const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+    const senderTarget = senderId || ((chatId && chatId.includes('_')) ? chatId.split('_').find(p => p !== readerId) : null);
 
     if (isGhostMode) {
+      const delivPayload = { messageId, chatId, canonicalChatId, status: 'delivered' };
+      if (senderTarget) {
+        io.to(`user_${senderTarget}`).emit('message_delivered_update', delivPayload);
+        io.to(senderTarget).emit('message_delivered_update', delivPayload);
+        io.to(`user_${senderTarget}`).emit('messages_delivered', { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered' });
+        io.to(senderTarget).emit('messages_delivered', { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered' });
+      }
+      if (chatId) io.to(chatId).emit('message_delivered_update', delivPayload);
+      if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('message_delivered_update', delivPayload);
       if (readerId) {
-        const updated = await Message.findOneAndUpdate(
-          { $or: [{ id: messageId }, { clientTempId: messageId }] },
-          { $addToSet: { readBy: readerId }, $set: { status: 'delivered' } },
-          { new: true }
-        ).lean();
-        const delivPayload = { messageId, chatId, canonicalChatId, status: 'delivered' };
-        if (updated && updated.senderId) {
-          io.to(`user_${updated.senderId}`).emit('message_delivered_update', delivPayload);
-          io.to(updated.senderId).emit('message_delivered_update', delivPayload);
-          io.to(`user_${updated.senderId}`).emit('messages_delivered', { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered' });
-          io.to(updated.senderId).emit('messages_delivered', { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered' });
-        }
-        if (chatId) io.to(chatId).emit('message_delivered_update', delivPayload);
-        if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('message_delivered_update', delivPayload);
         io.to(`user_${readerId}`).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
         io.to(readerId).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
       }
@@ -1290,26 +1285,18 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const updateDoc = { $addToSet: { readBy: readerId }, $set: { status: 'read' } };
-    const updatedMsg = await Message.findOneAndUpdate(
-      { $or: [{ id: messageId }, { clientTempId: messageId }] },
-      updateDoc,
-      { new: true }
-    ).lean();
-
+    // Pure Stateless Event-Forwarding: Server acts as Post Office router
     const readPayload = { messageId, chatId, canonicalChatId, status: 'read' };
     if (chatId) io.to(chatId).emit('message_read_update', readPayload);
     if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('message_read_update', readPayload);
 
-    const senderTarget = (updatedMsg && updatedMsg.senderId)
-      ? updatedMsg.senderId
-      : ((chatId && chatId.includes('_')) ? chatId.split('_').find(p => p !== readerId) : null);
-
     if (senderTarget) {
       io.to(`user_${senderTarget}`).emit('message_read_update', readPayload);
+      io.to(senderTarget).emit('message_read_update', readPayload);
     }
     if (readerId) {
       io.to(`user_${readerId}`).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
+      io.to(readerId).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
     }
     socket.emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
   });

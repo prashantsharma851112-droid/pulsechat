@@ -2538,23 +2538,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               }
             });
 
-            // Retain older scrolled messages, but DO NOT resurrect deleted messages from cache that server omitted!
+            // WhatsApp Local-First Master Store:
+            // Local storage (IndexedDB + localStorage) is the permanent home of chat history.
+            // Server only delivers new transient messages or returns empty if already delivered.
             const cachedNow = getCachedMessages(chatId, user?.id);
             const messageMap = new Map();
 
-            // If server returned messages, only retain cached messages that are older than the server window
-            if (serverMsgs.length > 0) {
-              const oldestServerTime = new Date(serverMsgs[0].timestamp || serverMsgs[0].createdAt || 0).getTime();
-              cachedNow.forEach(c => {
-                const k = c.clientTempId || c.id;
-                const cTime = new Date(c.timestamp || c.createdAt || 0).getTime();
-                if (k && cTime < oldestServerTime) {
-                  messageMap.set(k, c);
-                }
-              });
-            }
+            // 1. Populate all local cached messages
+            cachedNow.forEach(c => {
+              const k = c.clientTempId || c.id;
+              if (k) messageMap.set(k, c);
+            });
 
-            // Populate fresh server messages
+            // 2. Merge any incoming server messages (queued offline messages or updates)
             serverMsgs.forEach(m => {
               if (m && m.id) {
                 if (m.clientTempId && messageMap.has(m.clientTempId)) {
@@ -2567,7 +2563,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               }
             });
 
-            // Add pending outbox messages
+            // 3. Add pending outbox messages
             pendingMap.forEach((p, k) => {
               messageMap.set(k, p);
             });
@@ -2580,6 +2576,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
             // WhatsApp pattern: Retain any in-flight pending/uploading messages from state so they NEVER disappear!
             setMessages(prev => {
+              if (merged.length === 0 && prev.length > 0) {
+                return prev;
+              }
               const pendingInState = prev.filter(pm => pm && (pm.status === 'pending' || pm.status === 'uploading' || pm.isUploading));
               let finalMerged = merged;
               if (pendingInState.length > 0) {
@@ -2604,14 +2603,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 });
                 if (isIdentical) return prev;
               }
-              return merged;
+              return finalMerged;
             });
             // If user was pinned to bottom before server sync or on initial load, ensure bottom anchor
             if (isPinnedToBottomRef.current || isInitialLoad.current) {
               scrollToBottom('instant');
               requestAnimationFrame(() => scrollToBottom('instant'));
             }
-            setCachedMessages(chatId, merged);
+            if (merged.length > 0) {
+              setCachedMessages(chatId, merged);
+            }
           }
         })
         .catch(() => {
@@ -2868,7 +2869,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       if (lastNotification.senderId !== user.id) {
         playSound('received');
         if (!isGhostModeRef.current) {
-          socket?.emit('mark_read', { messageId: lastNotification.id, chatId });
+          socket?.emit('mark_read', { messageId: lastNotification.id, chatId, senderId: lastNotification.senderId });
         } else {
           socket?.emit('message_delivered', { messageId: lastNotification.id, chatId, senderId: lastNotification.senderId });
         }
@@ -3090,7 +3091,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             setNewScrolledMessagesCount(newScrolledMessagesCountRef.current);
           }
           if (!isGhostModeRef.current) {
-            socket.emit('mark_read', { messageId: msg.id, chatId });
+            socket.emit('mark_read', { messageId: msg.id, chatId, senderId: msg.senderId });
           } else {
             socket.emit('message_delivered', { messageId: msg.id, chatId, senderId: msg.senderId });
           }
