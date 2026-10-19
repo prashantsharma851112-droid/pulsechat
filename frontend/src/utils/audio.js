@@ -17,11 +17,29 @@ export function getSharedAudioContext() {
   }
 }
 
-export function playSound(type = 'received') {
-  if (typeof window !== 'undefined') {
-    if (localStorage.getItem('pulsechat_notifications_enabled') === 'false') return;
-    if (localStorage.getItem('pulsechat_chat_sounds') === 'false') return;
+let cachedNotifEnabled = null;
+let cachedChatSounds = null;
+
+function checkSoundsAllowed() {
+  if (typeof window === 'undefined') return true;
+  if (cachedNotifEnabled === null) {
+    cachedNotifEnabled = localStorage.getItem('pulsechat_notifications_enabled') !== 'false';
   }
+  if (cachedChatSounds === null) {
+    cachedChatSounds = localStorage.getItem('pulsechat_chat_sounds') !== 'false';
+  }
+  return cachedNotifEnabled && cachedChatSounds;
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'pulsechat_notifications_enabled') cachedNotifEnabled = null;
+    if (e.key === 'pulsechat_chat_sounds') cachedChatSounds = null;
+  });
+}
+
+export function playSound(type = 'received') {
+  if (!checkSoundsAllowed()) return;
   try {
     const ctx = getSharedAudioContext();
     if (!ctx) return;

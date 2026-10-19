@@ -652,13 +652,16 @@ input, textarea {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   z-index: 999;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  transform: translateZ(0);
+  will-change: opacity;
 }
 
 .modal-card {
@@ -669,12 +672,14 @@ input, textarea {
   max-width: 480px;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
   overflow: hidden;
-  animation: modal-pop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  animation: modal-pop 0.14s cubic-bezier(0, 0, 0.2, 1);
 }
 
 @keyframes modal-pop {
-  0% { opacity: 0; transform: scale(0.95) translateY(10px); }
-  100% { opacity: 1; transform: scale(1) translateY(0); }
+  0% { opacity: 0; transform: scale(0.96) translateZ(0); }
+  100% { opacity: 1; transform: scale(1) translateZ(0); }
 }
 
 .modal-header {

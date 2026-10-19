@@ -10,7 +10,7 @@ import VibeAuraRing, { resolveUserAura, getProAuraRingClass } from '../common/Vi
 import { Gamepad2 } from 'lucide-react';
 import { useAppMusic } from '../../context/AppMusicContext';
 
-import { lazyWithRetry } from '../../utils/lazyRetry';
+import { lazyWithRetry, scheduleIdlePreload } from '../../utils/lazyRetry';
 
 // Code-Splitting: Lazy load heavy modals with automatic retry & reload resilience
 const CreateGroupModal = lazyWithRetry(() => import('./CreateGroupModal'));
@@ -314,6 +314,23 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       window.removeEventListener('pulsechat_chat_lock_updated', handleLockUpdated);
       window.removeEventListener('pulsechat_chat_mute_updated', handleMuteUpdated);
     };
+  }, []);
+
+  // Preload all modal bundles during idle time for 0ms instantaneous tap open
+  useEffect(() => {
+    scheduleIdlePreload([
+      SettingsModal,
+      SparksWalletModal,
+      PulseProModal,
+      ReferEarnModal,
+      CreateGroupModal,
+      PulseZoneModal,
+      CreateVibeModal,
+      VibeViewerModal,
+      VibeAuraSelectorModal,
+      MusicPickerModal,
+      PinLockModal
+    ]);
   }, []);
 
   const togglePinChat = useCallback((e, targetId) => {

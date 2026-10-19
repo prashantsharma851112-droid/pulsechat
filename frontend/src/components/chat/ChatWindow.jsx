@@ -29,7 +29,7 @@ import MediaUploadModal from './MediaUploadModal';
 import Animated3DTextModal from './Animated3DTextModal';
 import ScheduleMessageModal from './ScheduleMessageModal';
 
-import { lazyWithRetry } from '../../utils/lazyRetry';
+import { lazyWithRetry, scheduleIdlePreload } from '../../utils/lazyRetry';
 
 // Code-Splitting: Lazy load heavy modals with automatic retry & reload resilience
 const WhiteboardModal = lazyWithRetry(() => import('./WhiteboardModal'));
@@ -217,6 +217,31 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   });
   const sendBtnHoldTimerRef = useRef(null);
+
+  // Preload all modal bundles during idle time for 0ms instantaneous tap open
+  useEffect(() => {
+    scheduleIdlePreload([
+      WhiteboardModal,
+      UserProfileModal,
+      GroupProfileModal,
+      ChatThemeModal,
+      SolidThemeModal,
+      PulseProModal,
+      GiftPickerModal,
+      LiveArrowGameModal,
+      TicTacToeModal,
+      PulseStreakModal,
+      VibeAuraSelectorModal,
+      MusicPickerModal,
+      ForwardModal,
+      MessageInfoModal,
+      SetDefaultReactionsModal,
+      SparksWalletModal,
+      ChatNicknameModal,
+      ShareableStoryCardModal,
+      PinLockModal
+    ]);
+  }, []);
 
   const chatScheduledMessages = useMemo(() => {
     return scheduledList.filter(s => s.chatId === chatId);

@@ -6,9 +6,21 @@ import React from 'react';
  * It automatically reloads the page once to pull fresh HTML and the latest JS bundles.
  */
 export function lazyWithRetry(componentImport) {
-  return React.lazy(async () => {
+  let cachedPromise = null;
+
+  const load = () => {
+    if (!cachedPromise) {
+      cachedPromise = componentImport().catch(error => {
+        cachedPromise = null;
+        throw error;
+      });
+    }
+    return cachedPromise;
+  };
+
+  const LazyComponent = React.lazy(async () => {
     try {
-      return await componentImport();
+      return await load();
     } catch (error) {
       const isChunkLoadFailed =
         error?.name === 'ChunkLoadError' ||
@@ -35,4 +47,30 @@ export function lazyWithRetry(componentImport) {
       throw error;
     }
   });
+
+  LazyComponent.preload = load;
+  return LazyComponent;
+}
+
+/**
+ * Preload modal chunks during browser idle time so clicking buttons is instant (0ms delay)
+ */
+export function scheduleIdlePreload(lazyComponents = []) {
+  if (typeof window === 'undefined') return;
+
+  const preloadAll = () => {
+    lazyComponents.forEach(comp => {
+      try {
+        if (typeof comp?.preload === 'function') {
+          comp.preload();
+        }
+      } catch (_) {}
+    });
+  };
+
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(preloadAll, { timeout: 2500 });
+  } else {
+    setTimeout(preloadAll, 1200);
+  }
 }
