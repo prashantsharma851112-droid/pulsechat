@@ -313,6 +313,31 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const [selectedUserForInfo, setSelectedUserForInfo] = useState(null);
   const [selectedGroupForInfo, setSelectedGroupForInfo] = useState(null);
 
+  const [allUsers, setAllUsers] = useState(() => getCachedAllUsers(currentUid));
+  const [isOnline, setIsOnline] = useState(() => isDeviceOnline());
+  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'groups' | 'friends'
+  const [friendsSubTab, setFriendsSubTab] = useState('friends');
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const [friendIdsSet, setFriendIdsSet] = useState(() => {
+    const cached = getCachedFriends(currentUid);
+    return new Set(cached.map(f => f.id));
+  });
+  const [outgoingPendingIds, setOutgoingPendingIds] = useState(new Set());
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [showProModal, setShowProModal] = useState(false);
+  const [proModalTab, setProModalTab] = useState('pro');
+  const [showFeatureTourModal, setShowFeatureTourModal] = useState(false);
+  const [showCreateVibe, setShowCreateVibe] = useState(false);
+  const [selectedVibeGroup, setSelectedVibeGroup] = useState(null);
+  const [allVibeGroups, setAllVibeGroups] = useState([]);
+  const [showPulseZone, setShowPulseZone] = useState(false);
+  const [showSparksWallet, setShowSparksWallet] = useState(false);
+  const [showVibeSelector, setShowVibeSelector] = useState(false);
+  const [showTopMenu, setShowTopMenu] = useState(false);
+  const [showSwitchAccountMenu, setShowSwitchAccountMenu] = useState(false);
+  const [showMusicPickerModal, setShowMusicPickerModal] = useState(false);
+  const [showReferEarnModal, setShowReferEarnModal] = useState(false);
+
   const selectionMoreMenuRef = useRef(null);
   const longPressTimeoutRef = useRef(null);
   const touchStartPosRef = useRef({ x: 0, y: 0 });
@@ -806,31 +831,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     }
     setSelectedChatIds([]);
   };
-
-  const [allUsers, setAllUsers] = useState(() => getCachedAllUsers(currentUid));
-  const [isOnline, setIsOnline] = useState(() => isDeviceOnline());
-  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'groups' | 'friends'
-  const [friendsSubTab, setFriendsSubTab] = useState('friends');
-  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
-  const [friendIdsSet, setFriendIdsSet] = useState(() => {
-    const cached = getCachedFriends(currentUid);
-    return new Set(cached.map(f => f.id));
-  });
-  const [outgoingPendingIds, setOutgoingPendingIds] = useState(new Set());
-  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
-  const [showProModal, setShowProModal] = useState(false);
-  const [proModalTab, setProModalTab] = useState('pro');
-  const [showFeatureTourModal, setShowFeatureTourModal] = useState(false);
-  const [showCreateVibe, setShowCreateVibe] = useState(false);
-  const [selectedVibeGroup, setSelectedVibeGroup] = useState(null);
-  const [allVibeGroups, setAllVibeGroups] = useState([]);
-  const [showPulseZone, setShowPulseZone] = useState(false);
-  const [showSparksWallet, setShowSparksWallet] = useState(false);
-  const [showVibeSelector, setShowVibeSelector] = useState(false);
-  const [showTopMenu, setShowTopMenu] = useState(false);
-  const [showSwitchAccountMenu, setShowSwitchAccountMenu] = useState(false);
-  const [showMusicPickerModal, setShowMusicPickerModal] = useState(false);
-  const [showReferEarnModal, setShowReferEarnModal] = useState(false);
 
   useEffect(() => {
     const handleOpenReferral = () => setShowReferEarnModal(true);
