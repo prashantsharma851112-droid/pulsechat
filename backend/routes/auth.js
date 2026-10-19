@@ -274,7 +274,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, username: user.username, email: user.email },
       config.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '3650d' }
     );
 
     const userObj = user.toObject ? user.toObject() : { ...user };
@@ -460,11 +460,11 @@ router.post('/verify-otp', async (req, res) => {
       updated = user.toObject ? user.toObject() : user;
     }
 
-    // Issue JWT token now that email is verified!
+    // Issue JWT token now that email is verified! (10-year permanent login)
     const token = jwt.sign(
       { id: updated.id || user.id, username: updated.username || user.username, email: updated.email || user.email },
       config.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '3650d' }
     );
 
     const safeUser = updated.toObject ? updated.toObject() : { ...updated };
@@ -711,11 +711,11 @@ router.post('/google', async (req, res) => {
       }
     }
 
-    // Sign JWT token
+    // Sign JWT token (10-year permanent login)
     const token = jwt.sign(
       { id: user.id, username: user.username, email: user.email },
       config.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '3650d' }
     );
 
     const { passwordHash: _, otpCode: __, ...safeUser } = user.toObject ? user.toObject() : user;
@@ -763,6 +763,56 @@ router.get('/me', authMiddleware, async (req, res) => {
   if (!user) return res.status(404).json({ error: 'User not found.' });
 
   res.json({ user });
+});
+
+// Silent Session Renewal (WhatsApp/Antigravity Permanent Login - Never Auto-Logout)
+router.post('/refresh-session', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Token missing.' });
+    }
+    const token = authHeader.split(' ')[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, config.JWT_SECRET);
+    } catch (e) {
+      // Allow expired tokens signed by our secret to be safely renewed
+      decoded = jwt.verify(token, config.JWT_SECRET, { ignoreExpiration: true });
+    }
+    if (!decoded || !decoded.id) {
+      return res.status(401).json({ error: 'Invalid token payload.' });
+    }
+
+    const mongoose = require('mongoose');
+    const targetId = decoded.id;
+    const isObjectId = mongoose.Types.ObjectId.isValid(targetId);
+    const user = await User.findOne({
+      $or: [
+        { id: targetId },
+        ...(isObjectId ? [{ _id: targetId }] : []),
+        ...(decoded.username ? [{ username: decoded.username }] : [])
+      ]
+    })
+      .select('-passwordHash -friends -otpCode -otpExpires -pushSubscriptions')
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    // Sign permanent long-lived token (10 years)
+    const newToken = jwt.sign(
+      { id: user.id || user._id, username: user.username, email: user.email },
+      config.JWT_SECRET,
+      { expiresIn: '3650d' }
+    );
+
+    res.json({ success: true, token: newToken, user });
+  } catch (err) {
+    console.error('Refresh Session Error:', err);
+    res.status(401).json({ error: 'Session renewal failed.' });
+  }
 });
 
 module.exports = router;

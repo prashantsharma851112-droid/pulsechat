@@ -49,7 +49,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (token) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
 
       fetch(`${BACKEND_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -58,6 +58,39 @@ export function AuthProvider({ children }) {
         .then(async (res) => {
           clearTimeout(timeoutId);
           if (res.status === 401) {
+            // Attempt silent session renewal before considering logout
+            try {
+              const refreshRes = await fetch(`${BACKEND_URL}/api/auth/refresh-session`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`
+                }
+              });
+              if (refreshRes.ok) {
+                const refreshData = await refreshRes.json();
+                if (refreshData.token && refreshData.user) {
+                  localStorage.setItem('pulsechat_token', refreshData.token);
+                  localStorage.setItem('pulse_persistent_auth', 'true');
+                  setToken(refreshData.token);
+                  setUser(refreshData.user);
+                  setCachedUser(refreshData.user);
+                  updateSavedAccountsList(refreshData.user, refreshData.token);
+                  return;
+                }
+              }
+            } catch (refErr) {
+              console.warn('Silent session renewal attempt error:', refErr);
+            }
+
+            // WhatsApp / Antigravity Model: If persistent auth flag or cached user is present,
+            // NEVER auto-logout the user! Allow offline usage indefinitely.
+            const isPersistent = localStorage.getItem('pulse_persistent_auth') === 'true';
+            const cached = getCachedUser();
+            if (isPersistent || cached) {
+              console.info('Session protected by persistent auth. User will remain logged in offline.');
+              return;
+            }
             logout();
             return;
           }
@@ -65,6 +98,7 @@ export function AuthProvider({ children }) {
           if (data.user) {
             setUser(data.user);
             setCachedUser(data.user);
+            localStorage.setItem('pulse_persistent_auth', 'true');
             updateSavedAccountsList(data.user, token);
           }
         })
@@ -82,6 +116,7 @@ export function AuthProvider({ children }) {
 
   const login = (data) => {
     localStorage.setItem('pulsechat_token', data.token);
+    localStorage.setItem('pulse_persistent_auth', 'true');
     setCachedUser(data.user);
     setToken(data.token);
     setUser(data.user);
@@ -115,6 +150,7 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     localStorage.removeItem('pulsechat_token');
+    localStorage.removeItem('pulse_persistent_auth');
     setCachedUser(null);
     setToken(null);
     setUser(null);

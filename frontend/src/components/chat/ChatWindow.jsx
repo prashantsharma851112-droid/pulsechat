@@ -1492,6 +1492,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const loadedChatIdRef = useRef(null);
   const lastRenderedLastMsgIdRef = useRef(null);
   const scrollPositionRef = useRef({ prevScrollHeight: 0, prevScrollTop: 0, isPrepending: false });
+  // Local-First RAM buffer for 0ms predictive scrolling & zero-blink hydration
+  const prewarmedOlderBufferRef = useRef([]);
+  const isPrefetchingOlderRef = useRef(false);
 
   // Multi-Select & Clear Chat states
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
@@ -1848,9 +1851,68 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   }, [socket, chatId, currentUserId, user?.id]);
 
   // Pagination for infinite fast scroll
-  const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState(false);
+  const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState(() => {
+    try {
+      return localStorage.getItem(`pulsechat_nomore_${chatId}`) !== 'true';
+    } catch (e) {
+      return true;
+    }
+  });
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const isLoadingOlderRef = useRef(false);
+
+  // Local-First Predictive Hydration: Pre-warm older messages into RAM buffer from IndexedDB / Server
+  const prefetchOlderMessagesIntoRam = useCallback(async (targetChatId, beforeTimestamp) => {
+    if (!targetChatId || !beforeTimestamp || isPrefetchingOlderRef.current) return;
+    if (prewarmedOlderBufferRef.current.length >= 50) return;
+
+    isPrefetchingOlderRef.current = true;
+    try {
+      // 1. WhatsApp Local-First check: Try IndexedDB first on device SSD (0ms, 0 bytes network!)
+      const localMsgs = await getCachedMessagesFromLocalDb(targetChatId, 100, beforeTimestamp);
+      if (Array.isArray(localMsgs) && localMsgs.length > 0) {
+        const deletedForMe = getDeletedForMeIds(user?.id);
+        const validLocal = localMsgs
+          .filter(m => !deletedForMe.has(String(m.id)) && !deletedForMe.has(String(m._id)))
+          .map(sanitizeFogSnapMessage)
+          .filter(Boolean);
+        if (validLocal.length > 0) {
+          prewarmedOlderBufferRef.current = validLocal;
+          isPrefetchingOlderRef.current = false;
+          return;
+        }
+      }
+
+      // 2. Silent background prefetch from server if device is online
+      if (token && isDeviceOnline()) {
+        const isCurGhost = isGhostModeRef.current;
+        const res = await fetch(`${BACKEND_URL}/api/messages/${targetChatId}?limit=100&before=${encodeURIComponent(beforeTimestamp)}${isCurGhost ? '&ghost=true' : ''}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...(isCurGhost ? { 'x-ghost-mode': 'true' } : {})
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            const deletedForMe = getDeletedForMeIds(user?.id);
+            const validServer = data
+              .filter(m => !deletedForMe.has(String(m.id)) && !deletedForMe.has(String(m._id)))
+              .map(sanitizeFogSnapMessage)
+              .filter(Boolean);
+            if (validServer.length > 0) {
+              prewarmedOlderBufferRef.current = validServer;
+              setCachedMessages(targetChatId, validServer);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      // Silent catch for predictive prewarm
+    } finally {
+      isPrefetchingOlderRef.current = false;
+    }
+  }, [token, user?.id]);
 
   // Pulse Aura Soundscapes State
   const [activeAura, setActiveAura] = useState(() => {
@@ -2361,6 +2423,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       showScrollBottomRef.current = false;
       lastRenderedLastMsgIdRef.current = null;
       scrollPositionRef.current = { prevScrollHeight: 0, prevScrollTop: 0, isPrepending: false };
+      prewarmedOlderBufferRef.current = [];
+      isPrefetchingOlderRef.current = false;
+      const noMoreCached = localStorage.getItem(`pulsechat_nomore_${chatId}`) === 'true';
+      setHasMoreOlderMessages(!noMoreCached);
       setReplyTo(null);
       setChatSetting({ disappearingEnabled: false });
       setBlockStatus({ isBlockedByMe: false, isBlockedByThem: false });
@@ -2376,6 +2442,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         const combinedInitial = [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))].map(sanitizeFogSnapMessage).filter(Boolean);
         setMessages(combinedInitial);
 
+        // Pre-warm RAM buffer in background for instant zero-lag scrolling
+        const oldestInitial = combinedInitial.find(m => m.timestamp && !m.id?.startsWith('temp_'));
+        if (oldestInitial?.timestamp) {
+          prefetchOlderMessagesIntoRam(chatId, oldestInitial.timestamp);
+        }
+
         // 2. If memory/localStorage cache was empty on cold start, check IndexedDB once
         if (cached.length === 0) {
           getCachedMessagesFromLocalDb(chatId, 50).then((dbMsgs) => {
@@ -2384,6 +2456,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               const validMsgs = dbMsgs.filter(m => !deletedIds.has(String(m.id)) && !deletedIds.has(String(m._id)));
               if (validMsgs.length > 0) {
                 setMessages(validMsgs.map(sanitizeFogSnapMessage).filter(Boolean));
+                const oldestDb = validMsgs.find(m => m.timestamp && !m.id?.startsWith('temp_'));
+                if (oldestDb?.timestamp) {
+                  prefetchOlderMessagesIntoRam(chatId, oldestDb.timestamp);
+                }
               }
             }
           }).catch(() => {});
@@ -3402,14 +3478,27 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }, 6000);
   }, []);
 
-  // Seamless scroll anchoring when older messages are loaded at top
+  // Seamless scroll anchoring when older messages are loaded at top (Zero Layout Shift / Jump)
   useLayoutEffect(() => {
     if (scrollPositionRef.current.isPrepending && chatContainerRef.current) {
       const { prevScrollHeight, prevScrollTop } = scrollPositionRef.current;
       const currentScrollHeight = chatContainerRef.current.scrollHeight;
       const diff = currentScrollHeight - prevScrollHeight;
       if (diff > 0) {
+        const prevBehavior = chatContainerRef.current.style.scrollBehavior;
+        chatContainerRef.current.style.scrollBehavior = 'auto';
         chatContainerRef.current.scrollTop = prevScrollTop + diff;
+        chatContainerRef.current.style.scrollBehavior = prevBehavior;
+
+        // Microtask affirmation in case dynamic elements settle in the next layout pass
+        requestAnimationFrame(() => {
+          if (chatContainerRef.current) {
+            const recheckDiff = chatContainerRef.current.scrollHeight - prevScrollHeight;
+            if (recheckDiff > 0 && Math.abs(chatContainerRef.current.scrollTop - (prevScrollTop + recheckDiff)) > 2) {
+              chatContainerRef.current.scrollTop = prevScrollTop + recheckDiff;
+            }
+          }
+        });
       }
       scrollPositionRef.current.isPrepending = false;
     }
@@ -3588,35 +3677,73 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleLoadOlderMessages = async () => {
     if (isLoadingOlderRef.current || messages.length === 0) return;
-    const oldestMsg = messages.find(m => m.timestamp && !m.id?.startsWith('temp_'));
-    if (!oldestMsg || !oldestMsg.timestamp) return;
 
-    isLoadingOlderRef.current = true;
-    if (chatContainerRef.current) {
+    // 0ms Predictive Hydration: If RAM buffer is pre-warmed, prepend instantly without any network wait or spinner!
+    if (prewarmedOlderBufferRef.current.length > 0 && chatContainerRef.current) {
+      const buffered = [...prewarmedOlderBufferRef.current];
+      prewarmedOlderBufferRef.current = [];
+
+      // Synchronously capture scroll metrics in the exact same render frame
       scrollPositionRef.current = {
         prevScrollHeight: chatContainerRef.current.scrollHeight,
         prevScrollTop: chatContainerRef.current.scrollTop,
         isPrepending: true
       };
+
+      setMessages(prev => {
+        const currentIds = new Set(prev.map(m => m.clientTempId || m.id));
+        const newOldMsgs = buffered.filter(m => !currentIds.has(m.clientTempId || m.id));
+        if (newOldMsgs.length === 0) {
+          scrollPositionRef.current.isPrepending = false;
+          return prev;
+        }
+        return [...newOldMsgs, ...prev];
+      });
+
+      // Silently replenish the RAM buffer with the next batch in background
+      const oldestOfBatch = buffered[0];
+      if (oldestOfBatch?.timestamp) {
+        prefetchOlderMessagesIntoRam(chatId, oldestOfBatch.timestamp);
+      }
+      return;
     }
+
+    const oldestMsg = messages.find(m => m.timestamp && !m.id?.startsWith('temp_'));
+    if (!oldestMsg || !oldestMsg.timestamp) return;
+
+    isLoadingOlderRef.current = true;
 
     try {
       // 1. WhatsApp Local-First check: Try IndexedDB first on device SSD (0ms, 0 bytes network!)
-      const localOlder = await getCachedMessagesFromLocalDb(chatId, 50, oldestMsg.timestamp);
+      const localOlder = await getCachedMessagesFromLocalDb(chatId, 100, oldestMsg.timestamp);
       if (Array.isArray(localOlder) && localOlder.length > 0) {
-        let hasNew = false;
-        setMessages(prev => {
-          const currentIds = new Set(prev.map(m => m.id));
-          const newOldMsgs = localOlder.filter(m => !currentIds.has(m.id));
-          if (newOldMsgs.length === 0) {
-            scrollPositionRef.current.isPrepending = false;
-            return prev;
+        const deletedForMe = getDeletedForMeIds(user?.id);
+        const validMsgs = localOlder
+          .filter(m => !deletedForMe.has(String(m.id)) && !deletedForMe.has(String(m._id)))
+          .map(sanitizeFogSnapMessage)
+          .filter(Boolean);
+
+        if (validMsgs.length > 0 && chatContainerRef.current) {
+          // Synchronously capture scroll metrics immediately before state update (eliminates scroll jumping)
+          scrollPositionRef.current = {
+            prevScrollHeight: chatContainerRef.current.scrollHeight,
+            prevScrollTop: chatContainerRef.current.scrollTop,
+            isPrepending: true
+          };
+
+          setMessages(prev => {
+            const currentIds = new Set(prev.map(m => m.clientTempId || m.id));
+            const newOldMsgs = validMsgs.filter(m => !currentIds.has(m.clientTempId || m.id));
+            if (newOldMsgs.length === 0) {
+              scrollPositionRef.current.isPrepending = false;
+              return prev;
+            }
+            return [...newOldMsgs, ...prev];
+          });
+
+          if (validMsgs[0]?.timestamp) {
+            prefetchOlderMessagesIntoRam(chatId, validMsgs[0].timestamp);
           }
-          hasNew = true;
-          return [...newOldMsgs, ...prev];
-        });
-        if (hasNew) {
-          isLoadingOlderRef.current = false;
           return;
         }
       }
@@ -3627,7 +3754,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         return;
       }
       const isCurGhost = isGhostModeRef.current;
-      const res = await fetch(`${BACKEND_URL}/api/messages/${chatId}?limit=50&before=${encodeURIComponent(oldestMsg.timestamp)}${isCurGhost ? '&ghost=true' : ''}`, {
+      const res = await fetch(`${BACKEND_URL}/api/messages/${chatId}?limit=100&before=${encodeURIComponent(oldestMsg.timestamp)}${isCurGhost ? '&ghost=true' : ''}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           ...(isCurGhost ? { 'x-ghost-mode': 'true' } : {})
@@ -3642,9 +3769,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           setHasMoreOlderMessages(true);
         }
         if (data.length > 0) {
+          const deletedForMe = getDeletedForMeIds(user?.id);
+          const validServer = data
+            .filter(m => !deletedForMe.has(String(m.id)) && !deletedForMe.has(String(m._id)))
+            .map(sanitizeFogSnapMessage)
+            .filter(Boolean);
+
+          if (chatContainerRef.current) {
+            scrollPositionRef.current = {
+              prevScrollHeight: chatContainerRef.current.scrollHeight,
+              prevScrollTop: chatContainerRef.current.scrollTop,
+              isPrepending: true
+            };
+          }
+
           setMessages(prev => {
-            const currentIds = new Set(prev.map(m => m.id));
-            const newOldMsgs = data.filter(m => !currentIds.has(m.id));
+            const currentIds = new Set(prev.map(m => m.clientTempId || m.id));
+            const newOldMsgs = validServer.filter(m => !currentIds.has(m.clientTempId || m.id));
             if (newOldMsgs.length === 0) {
               scrollPositionRef.current.isPrepending = false;
               setHasMoreOlderMessages(false);
@@ -3655,6 +3796,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             setCachedMessages(chatId, merged);
             return merged;
           });
+
+          if (validServer[0]?.timestamp) {
+            prefetchOlderMessagesIntoRam(chatId, validServer[0].timestamp);
+          }
         } else {
           scrollPositionRef.current.isPrepending = false;
           setHasMoreOlderMessages(false);
@@ -3680,8 +3825,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (scrollRafRef.current) return;
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollRafRef.current = null;
-      // Smart Seamless Prefetching: Trigger before user hits the ceiling (650px threshold for 0ms lag-free continuous scroll)
-      if (scrollHeight > clientHeight + 200 && scrollTop <= 650 && hasMoreOlderMessages && !isLoadingOlderRef.current) {
+      // Scroll Horizon Threshold (Invisible Loading): Trigger before user hits ceiling (1000px threshold for 0ms lag-free continuous scroll)
+      if (scrollHeight > clientHeight + 100 && scrollTop <= 1000 && hasMoreOlderMessages && !isLoadingOlderRef.current) {
         handleLoadOlderMessages();
       }
 
