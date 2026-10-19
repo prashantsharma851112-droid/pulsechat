@@ -1,8 +1,281 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { Lock, AtSign, Mail, ArrowLeft, RefreshCw, AlertCircle, KeyRound, CheckCircle2 } from 'lucide-react';
 import { BACKEND_URL, GOOGLE_CLIENT_ID } from '../../utils/config';
 import AppLogo from '../common/AppLogo';
+
+// =========================================================================
+// ATOMIC ISOLATED AUTH COMPONENTS (React.memo + 0ms GPU Feedback)
+// =========================================================================
+
+export const LoginGoogleButton = React.memo(function LoginGoogleButton({
+  isGoogleBtnRendered,
+  onClick
+}) {
+  return (
+    <div style={{ width: '100%', marginBottom: '0.75rem', display: 'flex', justifyContent: 'center' }}>
+      <div
+        id="googleLoginBtn"
+        style={{
+          minHeight: isGoogleBtnRendered ? '40px' : '0',
+          display: isGoogleBtnRendered ? 'flex' : 'none',
+          width: '100%',
+          maxWidth: '360px',
+          justifyContent: 'center',
+          alignItems: 'center',
+          overflow: 'visible'
+        }}
+      />
+
+      {!isGoogleBtnRendered && (
+        <button
+          type="button"
+          onClick={onClick}
+          className="interactive-tap auth-btn"
+          style={{
+            width: '100%',
+            maxWidth: '360px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            padding: '0.6rem 1.1rem',
+            fontSize: '0.88rem',
+            fontWeight: 600,
+            borderRadius: '24px',
+            background: '#ffffff',
+            color: '#3c4043',
+            border: '1px solid #dadce0',
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            boxSizing: 'border-box',
+            transform: 'translateZ(0)',
+            willChange: 'transform'
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+          </svg>
+          <span style={{ whiteSpace: 'nowrap' }}>Sign in with Google</span>
+        </button>
+      )}
+    </div>
+  );
+});
+
+export const LoginForgotPasswordButton = React.memo(function LoginForgotPasswordButton({ onClick }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.85rem' }}>
+      <button
+        type="button"
+        onClick={onClick}
+        className="interactive-tap auth-btn"
+        style={{
+          background: 'none',
+          border: 'none',
+          color: 'var(--accent)',
+          fontSize: '0.82rem',
+          fontWeight: 600,
+          cursor: 'pointer',
+          padding: '2px 0',
+          transition: 'opacity 0.2s',
+          transform: 'translateZ(0)',
+          willChange: 'transform'
+        }}
+      >
+        Forgot Password?
+      </button>
+    </div>
+  );
+});
+
+export const AuthSubmitButton = React.memo(function AuthSubmitButton({
+  loading,
+  loadingText,
+  defaultText,
+  disabled = false,
+  padding = '0.72rem'
+}) {
+  return (
+    <button
+      type="submit"
+      className="btn-primary interactive-tap auth-btn"
+      style={{
+        width: '100%',
+        padding,
+        transform: 'translateZ(0)',
+        willChange: 'transform'
+      }}
+      disabled={disabled || loading}
+    >
+      {loading ? loadingText : defaultText}
+    </button>
+  );
+});
+
+export const AuthSwitchLink = React.memo(function AuthSwitchLink({
+  promptText,
+  actionText,
+  onSwitch
+}) {
+  return (
+    <p style={{ textAlign: 'center', marginTop: '0.85rem', fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: 0 }}>
+      {promptText}{' '}
+      <span
+        onClick={onSwitch}
+        className="interactive-tap"
+        style={{
+          color: 'var(--accent)',
+          cursor: 'pointer',
+          fontWeight: 600,
+          display: 'inline-block',
+          transform: 'translateZ(0)',
+          willChange: 'transform'
+        }}
+      >
+        {actionText}
+      </span>
+    </p>
+  );
+});
+
+export const AuthBackButton = React.memo(function AuthBackButton({
+  label = 'Back to Sign In',
+  onClick
+}) {
+  return (
+    <button
+      type="button"
+      className="icon-btn-ghost interactive-tap auth-back-btn"
+      onClick={onClick}
+      style={{
+        marginBottom: '1rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '5px',
+        fontSize: '0.85rem',
+        transform: 'translateZ(0)',
+        willChange: 'transform'
+      }}
+    >
+      <ArrowLeft size={16} /> {label}
+    </button>
+  );
+});
+
+export const AuthResendButton = React.memo(function AuthResendButton({
+  resendCooldown,
+  loading,
+  onResend,
+  label = 'Resend Code'
+}) {
+  return (
+    <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
+      {resendCooldown > 0 ? (
+        <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+          Resend code in <strong style={{ color: 'var(--text-main)' }}>{resendCooldown}s</strong>
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={onResend}
+          disabled={loading}
+          className="interactive-tap auth-resend-btn"
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--accent)',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '5px',
+            transform: 'translateZ(0)',
+            willChange: 'transform'
+          }}
+        >
+          <RefreshCw size={14} /> {label}
+        </button>
+      )}
+    </div>
+  );
+});
+
+export const AuthLegalFooter = React.memo(function AuthLegalFooter() {
+  const openTab = (tab) => {
+    window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab } }));
+  };
+
+  return (
+    <div style={{
+      marginTop: '10px',
+      marginBottom: '4px',
+      textAlign: 'center',
+      fontSize: '0.72rem',
+      color: 'rgba(255, 255, 255, 0.45)',
+      display: 'flex',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: '4px 10px',
+      maxWidth: '420px',
+      width: '100%',
+      lineHeight: '1.4',
+      padding: '0 4px',
+      boxSizing: 'border-box'
+    }}>
+      <a
+        href="/privacy"
+        onClick={(e) => { e.preventDefault(); openTab('privacy'); }}
+        className="interactive-tap auth-legal-link"
+        style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer', transform: 'translateZ(0)', willChange: 'transform' }}
+      >
+        Privacy Policy
+      </a>
+      <span style={{ opacity: 0.4 }}>•</span>
+      <a
+        href="/terms"
+        onClick={(e) => { e.preventDefault(); openTab('terms'); }}
+        className="interactive-tap auth-legal-link"
+        style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer', transform: 'translateZ(0)', willChange: 'transform' }}
+      >
+        Terms of Service
+      </a>
+      <span style={{ opacity: 0.4 }}>•</span>
+      <a
+        href="/refund"
+        onClick={(e) => { e.preventDefault(); openTab('refund'); }}
+        className="interactive-tap auth-legal-link"
+        style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer', transform: 'translateZ(0)', willChange: 'transform' }}
+      >
+        Refund & Cancellation
+      </a>
+      <span style={{ opacity: 0.4 }}>•</span>
+      <a
+        href="/pricing"
+        onClick={(e) => { e.preventDefault(); openTab('pricing'); }}
+        className="interactive-tap auth-legal-link"
+        style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer', transform: 'translateZ(0)', willChange: 'transform' }}
+      >
+        Pricing
+      </a>
+      <span style={{ opacity: 0.4 }}>•</span>
+      <a
+        href="/contact"
+        onClick={(e) => { e.preventDefault(); openTab('contact'); }}
+        className="interactive-tap auth-legal-link"
+        style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer', transform: 'translateZ(0)', willChange: 'transform' }}
+      >
+        Contact Us
+      </a>
+    </div>
+  );
+});
 
 export default function Login({ switchToRegister }) {
   const { login } = useContext(AuthContext);
@@ -387,6 +660,35 @@ export default function Login({ switchToRegister }) {
     }
   };
 
+  const handleGoogleClick = useCallback(() => {
+    if (!googleClientId || googleClientId.includes('sample')) {
+      setError('Google Client ID setup required: Please add your GOOGLE_CLIENT_ID in backend/.env to activate 1-click Google login.');
+    } else if (window.google?.accounts?.id) {
+      window.google.accounts.id.prompt();
+    } else {
+      setError('Google services are initializing. Please try again in a few seconds.');
+    }
+  }, [googleClientId]);
+
+  const handleGoToForgotEmail = useCallback(() => {
+    setViewMode('forgot_email');
+    setForgotEmail(identifier.includes('@') ? identifier : '');
+    setError('');
+    setSuccessMsg('');
+  }, [identifier]);
+
+  const handleBackToLogin = useCallback(() => {
+    setViewMode('login');
+    setError('');
+    setSuccessMsg('');
+  }, []);
+
+  const handleBackToForgotEmail = useCallback(() => {
+    setViewMode('forgot_email');
+    setError('');
+    setSuccessMsg('');
+  }, []);
+
   return (
     <div className="auth-page-container">
       <div className="auth-wrapper">
@@ -406,63 +708,11 @@ export default function Login({ switchToRegister }) {
               </p>
             </div>
 
-            {/* Google Sign-In Section */}
-            <div style={{ width: '100%', marginBottom: '0.75rem', display: 'flex', justifyContent: 'center' }}>
-              <div
-                id="googleLoginBtn"
-                style={{
-                  minHeight: isGoogleBtnRendered ? '40px' : '0',
-                  display: isGoogleBtnRendered ? 'flex' : 'none',
-                  width: '100%',
-                  maxWidth: '360px',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  overflow: 'visible'
-                }}
-              />
-
-              {!isGoogleBtnRendered && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!googleClientId || googleClientId.includes('sample')) {
-                      setError('Google Client ID setup required: Please add your GOOGLE_CLIENT_ID in backend/.env to activate 1-click Google login.');
-                    } else if (window.google?.accounts?.id) {
-                      window.google.accounts.id.prompt();
-                    } else {
-                      setError('Google services are initializing. Please try again in a few seconds.');
-                    }
-                  }}
-                  style={{
-                    width: '100%',
-                    maxWidth: '360px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '10px',
-                    padding: '0.6rem 1.1rem',
-                    fontSize: '0.88rem',
-                    fontWeight: 600,
-                    borderRadius: '24px',
-                    background: '#ffffff',
-                    color: '#3c4043',
-                    border: '1px solid #dadce0',
-                    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                  </svg>
-                  <span style={{ whiteSpace: 'nowrap' }}>Sign in with Google</span>
-                </button>
-              )}
-            </div>
+            {/* Google Sign-In Section (Atomic Isolated) */}
+            <LoginGoogleButton
+              isGoogleBtnRendered={isGoogleBtnRendered}
+              onClick={handleGoogleClick}
+            />
 
             <div style={{ display: 'flex', alignItems: 'center', margin: '0.65rem 0 0.85rem 0' }}>
               <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
@@ -517,41 +767,23 @@ export default function Login({ switchToRegister }) {
               </div>
             </div>
 
-            {/* Forgot Password Link */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.85rem' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setViewMode('forgot_email');
-                  setForgotEmail(identifier.includes('@') ? identifier : '');
-                  setError('');
-                  setSuccessMsg('');
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--accent)',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  padding: '2px 0',
-                  transition: 'opacity 0.2s'
-                }}
-              >
-                Forgot Password?
-              </button>
-            </div>
+            {/* Forgot Password Link (Atomic Isolated) */}
+            <LoginForgotPasswordButton onClick={handleGoToForgotEmail} />
 
-            <button type="submit" className="btn-primary" style={{ width: '100%', padding: '0.72rem' }} disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
+            {/* Sign In Primary Button (Atomic Isolated) */}
+            <AuthSubmitButton
+              loading={loading}
+              loadingText="Signing in..."
+              defaultText="Sign In"
+              padding="0.72rem"
+            />
 
-            <p style={{ textAlign: 'center', marginTop: '0.85rem', fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: 0 }}>
-              Don't have an account?{' '}
-              <span onClick={switchToRegister} style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}>
-                Create Account
-              </span>
-            </p>
+            {/* Switch to Register (Atomic Isolated) */}
+            <AuthSwitchLink
+              promptText="Don't have an account?"
+              actionText="Create Account"
+              onSwitch={switchToRegister}
+            />
           </form>
         </div>
       )}
@@ -559,14 +791,7 @@ export default function Login({ switchToRegister }) {
       {/* 2. Forgot Password - Step 1: Request Email OTP */}
       {viewMode === 'forgot_email' && (
         <form onSubmit={handleSendRecoveryCode}>
-          <button
-            type="button"
-            className="icon-btn-ghost"
-            onClick={() => { setViewMode('login'); setError(''); setSuccessMsg(''); }}
-            style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem' }}
-          >
-            <ArrowLeft size={16} /> Back to Sign In
-          </button>
+          <AuthBackButton label="Back to Sign In" onClick={handleBackToLogin} />
 
           <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
@@ -603,23 +828,20 @@ export default function Login({ switchToRegister }) {
             </div>
           </div>
 
-          <button type="submit" className="btn-primary" style={{ width: '100%', padding: '0.85rem' }} disabled={loading || !forgotEmail}>
-            {loading ? 'Sending Recovery Code...' : 'Send Recovery Code'}
-          </button>
+          <AuthSubmitButton
+            loading={loading}
+            loadingText="Sending Recovery Code..."
+            defaultText="Send Recovery Code"
+            disabled={!forgotEmail}
+            padding="0.85rem"
+          />
         </form>
       )}
 
       {/* 3. Forgot Password - Step 2: Verify OTP & Enter New Password */}
       {viewMode === 'forgot_reset' && (
         <form onSubmit={handleResetPasswordSubmit}>
-          <button
-            type="button"
-            className="icon-btn-ghost"
-            onClick={() => { setViewMode('forgot_email'); setError(''); setSuccessMsg(''); }}
-            style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem' }}
-          >
-            <ArrowLeft size={16} /> Back
-          </button>
+          <AuthBackButton label="Back" onClick={handleBackToForgotEmail} />
 
           <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
@@ -695,40 +917,27 @@ export default function Login({ switchToRegister }) {
             </div>
           </div>
 
-          <button type="submit" className="btn-primary" style={{ width: '100%', padding: '0.85rem' }} disabled={loading || resetOtp.length < 6 || !newPassword}>
-            {loading ? 'Updating Password...' : 'Reset & Save Password'}
-          </button>
+          <AuthSubmitButton
+            loading={loading}
+            loadingText="Updating Password..."
+            defaultText="Reset & Save Password"
+            disabled={resetOtp.length < 6 || !newPassword}
+            padding="0.85rem"
+          />
 
-          <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
-            {resendCooldown > 0 ? (
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                Resend code in <strong style={{ color: 'var(--text-main)' }}>{resendCooldown}s</strong>
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSendRecoveryCode}
-                disabled={loading}
-                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-              >
-                <RefreshCw size={14} /> Resend Reset Code
-              </button>
-            )}
-          </div>
+          <AuthResendButton
+            resendCooldown={resendCooldown}
+            loading={loading}
+            onResend={handleSendRecoveryCode}
+            label="Resend Reset Code"
+          />
         </form>
       )}
 
       {/* 4. Unverified Login OTP View */}
       {viewMode === 'unverified_otp' && (
         <form onSubmit={handleVerifyOtp}>
-          <button
-            type="button"
-            className="icon-btn-ghost"
-            onClick={() => { setViewMode('login'); setError(''); setSuccessMsg(''); }}
-            style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem' }}
-          >
-            <ArrowLeft size={16} /> Back to Sign In
-          </button>
+          <AuthBackButton label="Back to Sign In" onClick={handleBackToLogin} />
 
           <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
@@ -774,103 +983,26 @@ export default function Login({ switchToRegister }) {
             </p>
           </div>
 
-          <button type="submit" className="btn-primary" style={{ width: '100%', padding: '0.85rem' }} disabled={loading || otpCode.length < 6}>
-            {loading ? 'Verifying...' : 'Verify & Enter PulseChat'}
-          </button>
+          <AuthSubmitButton
+            loading={loading}
+            loadingText="Verifying..."
+            defaultText="Verify & Enter PulseChat"
+            disabled={otpCode.length < 6}
+            padding="0.85rem"
+          />
 
-          <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
-            {resendCooldown > 0 ? (
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                Resend code in <strong style={{ color: 'var(--text-main)' }}>{resendCooldown}s</strong>
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={handleResendOtp}
-                disabled={loading}
-                style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-              >
-                <RefreshCw size={14} /> Resend OTP Code
-              </button>
-            )}
-          </div>
+          <AuthResendButton
+            resendCooldown={resendCooldown}
+            loading={loading}
+            onResend={handleResendOtp}
+            label="Resend OTP Code"
+          />
         </form>
       )}
       </div>
 
-      {/* Compliance & Legal Policy Footer */}
-      <div style={{
-        marginTop: '10px',
-        marginBottom: '4px',
-        textAlign: 'center',
-        fontSize: '0.72rem',
-        color: 'rgba(255, 255, 255, 0.45)',
-        display: 'flex',
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: '4px 10px',
-        maxWidth: '420px',
-        width: '100%',
-        lineHeight: '1.4',
-        padding: '0 4px',
-        boxSizing: 'border-box'
-      }}>
-        <a
-          href="/privacy"
-          onClick={(e) => {
-            e.preventDefault();
-            window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'privacy' } }));
-          }}
-          style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer' }}
-        >
-          Privacy Policy
-        </a>
-        <span style={{ opacity: 0.4 }}>•</span>
-        <a
-          href="/terms"
-          onClick={(e) => {
-            e.preventDefault();
-            window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'terms' } }));
-          }}
-          style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer' }}
-        >
-          Terms of Service
-        </a>
-        <span style={{ opacity: 0.4 }}>•</span>
-        <a
-          href="/refund"
-          onClick={(e) => {
-            e.preventDefault();
-            window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'refund' } }));
-          }}
-          style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer' }}
-        >
-          Refund & Cancellation
-        </a>
-        <span style={{ opacity: 0.4 }}>•</span>
-        <a
-          href="/pricing"
-          onClick={(e) => {
-            e.preventDefault();
-            window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'pricing' } }));
-          }}
-          style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer' }}
-        >
-          Pricing
-        </a>
-        <span style={{ opacity: 0.4 }}>•</span>
-        <a
-          href="/contact"
-          onClick={(e) => {
-            e.preventDefault();
-            window.dispatchEvent(new CustomEvent('pulsechat_open_legal', { detail: { tab: 'contact' } }));
-          }}
-          style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', padding: '2px 4px', cursor: 'pointer' }}
-        >
-          Contact Us
-        </a>
-      </div>
+      {/* Compliance & Legal Policy Footer (Atomic Isolated) */}
+      <AuthLegalFooter />
       </div>
     </div>
   );
