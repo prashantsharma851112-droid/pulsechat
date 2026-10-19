@@ -149,7 +149,27 @@ export function setChatMuted(chatId, muted) {
 export function getArchivedChats(userId) {
   try {
     const raw = localStorage.getItem(`pulsechat_archived_chats_${userId || 'default'}`);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return [];
+
+    // Deduplicate: Map each ID to its canonical conversation partner / target
+    const uniqueChats = new Set();
+    list.forEach(id => {
+      if (!id || typeof id !== 'string') return;
+      if (id.includes('_') && userId) {
+        const parts = id.split('_');
+        if (parts.length === 2 && parts.includes(userId)) {
+          // It's a 1-on-1 composite ID involving the current user:
+          // The true conversation target is the partner's ID
+          const partnerId = parts[0] === userId ? parts[1] : parts[0];
+          uniqueChats.add(partnerId);
+          return;
+        }
+      }
+      uniqueChats.add(id);
+    });
+    return Array.from(uniqueChats);
   } catch (e) {
     return [];
   }
@@ -157,34 +177,44 @@ export function getArchivedChats(userId) {
 
 export function isChatArchived(userId, chatId) {
   if (!chatId) return false;
+  let target = chatId;
+  if (chatId.includes('_') && userId) {
+    const parts = chatId.split('_');
+    if (parts.length === 2 && parts.includes(userId)) {
+      target = parts[0] === userId ? parts[1] : parts[0];
+    }
+  }
   const list = getArchivedChats(userId);
-  if (!list.length) return false;
-  const canonical = chatId.includes('_') ? chatId.split('_').sort().join('_') : chatId;
   const composite = (!chatId.includes('_') && userId) ? [userId, chatId].sort().join('_') : null;
-  return list.includes(chatId) || list.includes(canonical) || (composite ? list.includes(composite) : false);
+  return list.includes(target) || list.includes(chatId) || (composite ? list.includes(composite) : false);
 }
 
 export function setChatArchived(userId, chatId, archived) {
   if (!chatId) return;
   try {
-    const list = getArchivedChats(userId);
-    const canonical = chatId.includes('_') ? chatId.split('_').sort().join('_') : chatId;
-    const composite = (!chatId.includes('_') && userId) ? [userId, chatId].sort().join('_') : null;
-    const idsToMatch = new Set([chatId, canonical]);
-    if (composite) idsToMatch.add(composite);
-    if (chatId.includes('_')) {
-      chatId.split('_').forEach(id => idsToMatch.add(id));
+    let target = chatId;
+    if (chatId.includes('_') && userId) {
+      const parts = chatId.split('_');
+      if (parts.length === 2 && parts.includes(userId)) {
+        target = parts[0] === userId ? parts[1] : parts[0];
+      }
     }
-
+    const current = getArchivedChats(userId);
     let nextList;
     if (archived) {
-      const set = new Set([...list, chatId, canonical]);
-      if (composite) set.add(composite);
+      const set = new Set(current);
+      set.add(target);
       nextList = Array.from(set);
     } else {
-      nextList = list.filter(id => !idsToMatch.has(id));
+      const composite = (userId && !target.includes('_')) ? [userId, target].sort().join('_') : null;
+      const idsToRemove = new Set([chatId, target]);
+      if (composite) idsToRemove.add(composite);
+      if (chatId.includes('_')) {
+        chatId.split('_').forEach(id => idsToRemove.add(id));
+      }
+      nextList = current.filter(id => !idsToRemove.has(id));
     }
     localStorage.setItem(`pulsechat_archived_chats_${userId || 'default'}`, JSON.stringify(nextList));
-    window.dispatchEvent(new CustomEvent('pulsechat_archived_chats_updated', { detail: { chatId, archived: !!archived } }));
+    window.dispatchEvent(new CustomEvent('pulsechat_archived_chats_updated', { detail: { chatId, target, archived: !!archived } }));
   } catch (e) {}
 }

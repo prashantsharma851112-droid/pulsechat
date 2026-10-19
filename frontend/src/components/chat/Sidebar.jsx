@@ -345,6 +345,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const isLongPressActiveRef = useRef(false);
   const suppressClickUntilRef = useRef(0);
   const lastTouchTimeRef = useRef(0);
+  const isScrollingRef = useRef(false);
+  const scrollEndTimerRef = useRef(null);
 
   useEffect(() => {
     const handleLockUpdated = () => {
@@ -504,9 +506,25 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     return [...pinned, ...unpinned];
   }, [groups, pinnedChatIds, isArchivedView, archivedChatIdsState, currentUid]);
 
+  const handleListScroll = useCallback(() => {
+    isScrollingRef.current = true;
+    if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
+    scrollEndTimerRef.current = setTimeout(() => {
+      isScrollingRef.current = false;
+    }, 150);
+
+    // Atomic Gesture Isolation: Scrolling MUST cancel any pending hold timer immediately!
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+  }, []);
+
   // Touch and Long-Press Handlers for Chat Selection (WhatsApp style)
   const handleChatTouchStart = (chatItem, e) => {
     lastTouchTimeRef.current = Date.now();
+    // Atomic Gesture Isolation: Never start long-press if list is currently scrolling
+    if (isScrollingRef.current) return;
     if (selectedChatIds.length > 0) return; // In multi-select mode, normal tap toggles selection
     const touch = e.touches ? e.touches[0] : e;
     touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
@@ -516,6 +534,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     if (longPressTimeoutRef.current) clearTimeout(longPressTimeoutRef.current);
     longPressTimeoutRef.current = setTimeout(() => {
       longPressTimeoutRef.current = null;
+      if (isScrollingRef.current) return;
       isLongPressActiveRef.current = true;
       isLongPressTriggeredRef.current = true;
       suppressClickUntilRef.current = Date.now() + 2000;
@@ -525,20 +544,20 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       const cid = chatItem.id || chatItem._id;
       // Ensure it is added into selected list, NEVER removed while holding
       setSelectedChatIds(prev => prev.includes(cid) ? prev : [...prev, cid]);
-    }, 380);
+    }, 440);
   };
 
   const handleChatTouchMove = (e) => {
     lastTouchTimeRef.current = Date.now();
     // If selection already activated, user is simply resting or shifting their finger while holding
-    // NEVER cancel or abort selection once activated!
     if (isLongPressActiveRef.current) return;
     if (!longPressTimeoutRef.current) return;
     const touch = e.touches ? e.touches[0] : e;
     const dx = Math.abs(touch.clientX - touchStartPosRef.current.x);
     const dy = Math.abs(touch.clientY - touchStartPosRef.current.y);
-    // WhatsApp natural threshold (25px) allowing finger drift while scrolling cancels
-    if (dx > 25 || dy > 25) {
+    // Atomic Gesture Isolation: Standard mobile touch slop is 8px.
+    // Any finger movement > 8px means user is scrolling the list, NOT holding!
+    if (dx > 8 || dy > 8) {
       clearTimeout(longPressTimeoutRef.current);
       longPressTimeoutRef.current = null;
     }
@@ -588,7 +607,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       suppressClickUntilRef.current = Date.now() + 2000;
       const cid = chatItem.id || chatItem._id;
       setSelectedChatIds(prev => prev.includes(cid) ? prev : [...prev, cid]);
-    }, 400);
+    }, 440);
   };
 
   const handleChatMouseMove = (e) => {
@@ -597,7 +616,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     if (!longPressTimeoutRef.current) return;
     const dx = Math.abs(e.clientX - touchStartPosRef.current.x);
     const dy = Math.abs(e.clientY - touchStartPosRef.current.y);
-    if (dx > 20 || dy > 20) {
+    if (dx > 8 || dy > 8) {
       clearTimeout(longPressTimeoutRef.current);
       longPressTimeoutRef.current = null;
     }
@@ -639,8 +658,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   };
 
   // Dedicated Memo for All Archived Conversations (1-on-1 Chats + Groups)
-  const allArchivedConversations = useMemo(() => {
-    if (!isArchivedView) return [];
+  const unsearchedArchivedConversations = useMemo(() => {
     const archivedSet = new Set(archivedChatIdsState);
     const combined = [];
     const addedIds = new Set();
@@ -677,16 +695,21 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       }
     });
 
+    return combined;
+  }, [archivedChatIdsState, recentChats, groups, allUsers, currentUid, user?.id]);
+
+  const allArchivedConversations = useMemo(() => {
     if (deferredSearchQuery && deferredSearchQuery.trim()) {
       const q = deferredSearchQuery.trim().toLowerCase();
-      return combined.filter(item => {
+      return unsearchedArchivedConversations.filter(item => {
         const name = (item.name || item.displayName || item.username || '').toLowerCase();
         return name.includes(q);
       });
     }
+    return unsearchedArchivedConversations;
+  }, [unsearchedArchivedConversations, deferredSearchQuery]);
 
-    return combined;
-  }, [isArchivedView, archivedChatIdsState, recentChats, groups, allUsers, currentUid, user?.id, deferredSearchQuery]);
+  const totalArchivedCount = unsearchedArchivedConversations.length;
 
   // Selected chat objects resolved from state
   const selectedChatObjects = useMemo(() => {
@@ -1258,6 +1281,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   };
 
   const handleTouchMove = (e) => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
     if (!e.touches || e.touches.length === 0) return;
     const touch = e.touches[0];
     const deltaX = touch.clientX - touchStartRef.current.x;
@@ -2769,7 +2796,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               Archived
             </h3>
             <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-              {archivedChatIdsState.length} {archivedChatIdsState.length === 1 ? 'chat' : 'chats'}
+              {totalArchivedCount} {totalArchivedCount === 1 ? 'chat' : 'chats'}
             </span>
           </div>
         </div>
@@ -3386,7 +3413,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       )}
 
       {/* WhatsApp-Style Archived Row — positioned right below Search Input */}
-      {!isArchivedView && archivedChatIdsState.length > 0 && activeTab !== 'friends' && (
+      {!isArchivedView && totalArchivedCount > 0 && activeTab !== 'friends' && (
         <div
           onClick={() => {
             setSelectedChatIds([]);
@@ -3420,7 +3447,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             padding: '2px 8px',
             borderRadius: '10px'
           }}>
-            {archivedChatIdsState.length}
+            {totalArchivedCount}
           </span>
         </div>
       )}
@@ -3483,6 +3510,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       {/* WhatsApp Chat / Group List Area with Instagram Pull-to-Refresh & Swipe Tabs */}
       <div
         ref={listContainerRef}
+        onScroll={handleListScroll}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
