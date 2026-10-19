@@ -38,6 +38,193 @@ const THEMES = [
   { id: 'sunset', name: '🌅 Sunset Rose', color: '#f43f5e' }
 ];
 
+// =========================================================================
+// ATOMIC ISOLATED SETTINGS COMPONENTS (React.memo + 0ms GPU Tap Feedback)
+// =========================================================================
+
+export const SettingsCategoryRow = React.memo(function SettingsCategoryRow({
+  icon: Icon,
+  iconBg,
+  iconColor,
+  title,
+  badgeText,
+  badgeBg,
+  badgeColor,
+  onClick,
+  cardBg = 'var(--bg-card)',
+  cardBorder = '1px solid var(--border)'
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className="user-select-card interactive-tap"
+      style={{
+        background: cardBg,
+        border: cardBorder,
+        padding: '12px 14px',
+        borderRadius: '12px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        cursor: 'pointer',
+        transition: 'background 0.15s ease',
+        willChange: 'transform',
+        transform: 'translateZ(0)'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: '10px',
+          background: iconBg,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0
+        }}>
+          <Icon size={18} color={iconColor} />
+        </div>
+        <div style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {title}
+          {badgeText && (
+            <span style={{
+              fontSize: '0.66rem',
+              fontWeight: 800,
+              padding: '1px 6px',
+              borderRadius: '6px',
+              background: badgeBg || 'rgba(255, 255, 255, 0.08)',
+              color: badgeColor || 'var(--text-muted)'
+            }}>
+              {badgeText}
+            </span>
+          )}
+        </div>
+      </div>
+      <ChevronRight size={18} color="var(--text-muted)" />
+    </div>
+  );
+});
+
+export const SettingsThemeOption = React.memo(function SettingsThemeOption({
+  themeItem,
+  isSelected,
+  isLocked,
+  onSelect
+}) {
+  return (
+    <div
+      onClick={onSelect}
+      className="interactive-tap"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '11px 14px',
+        borderRadius: '12px',
+        background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-card)',
+        border: isSelected ? '2px solid var(--accent)' : (themeItem.isPro ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border)'),
+        cursor: 'pointer',
+        transition: 'all 0.15s ease',
+        willChange: 'transform',
+        transform: 'translateZ(0)'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{
+          width: '20px',
+          height: '20px',
+          borderRadius: '50%',
+          background: themeItem.color,
+          border: '2px solid rgba(255,255,255,0.3)',
+          flexShrink: 0
+        }} />
+        <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {themeItem.name}
+          {themeItem.isPro && <Crown size={12} color="#f59e0b" />}
+        </span>
+      </div>
+
+      {isSelected ? (
+        <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Check size={14} color="#fff" />
+        </div>
+      ) : isLocked ? (
+        <Lock size={15} color="#f59e0b" />
+      ) : null}
+    </div>
+  );
+});
+
+export const SettingsDisguiseButton = React.memo(function SettingsDisguiseButton({
+  preset,
+  isSelected,
+  onSelect
+}) {
+  const iconSrc = preset.id === 'default' ? '/icon-192.png' : (preset.iconUrl || `data:image/svg+xml;utf8,${encodeURIComponent(preset.iconSvg)}`);
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="interactive-tap"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '10px 8px',
+        borderRadius: '12px',
+        border: isSelected ? `2px solid ${preset.accentColor || 'var(--accent)'}` : '1px solid var(--border)',
+        background: isSelected ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+        cursor: 'pointer',
+        position: 'relative',
+        textAlign: 'center',
+        transition: 'all 0.15s ease',
+        willChange: 'transform',
+        transform: 'translateZ(0)'
+      }}
+    >
+      <div style={{ position: 'relative', width: '38px', height: '38px' }}>
+        <img
+          src={iconSrc}
+          alt={preset.name}
+          style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: '10px',
+            boxShadow: isSelected ? `0 0 10px ${preset.accentColor}44` : 'none',
+            display: 'block'
+          }}
+        />
+        {isSelected && (
+          <div style={{
+            position: 'absolute',
+            bottom: '-4px',
+            right: '-4px',
+            width: '16px',
+            height: '16px',
+            borderRadius: '50%',
+            background: preset.accentColor || 'var(--accent)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#fff',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.4)'
+          }}>
+            <Check size={10} strokeWidth={3} />
+          </div>
+        )}
+      </div>
+      <div style={{ fontSize: '0.8rem', fontWeight: isSelected ? 700 : 500, color: isSelected ? 'var(--text-main)' : 'var(--text-muted)' }}>
+        {preset.name}
+      </div>
+      <div style={{ fontSize: '0.65rem', color: isSelected ? preset.accentColor : 'var(--text-muted)', opacity: 0.8, lineHeight: 1.1 }}>
+        {preset.badge}
+      </div>
+    </button>
+  );
+});
+
 export default function SettingsModal({
   onClose,
   openProfileModal,
@@ -671,171 +858,66 @@ export default function SettingsModal({
                 </span>
 
                 {/* 1. Notifications Category */}
-                <div
+                <SettingsCategoryRow
+                  icon={notificationsEnabled ? Bell : BellOff}
+                  iconBg={notificationsEnabled ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)'}
+                  iconColor={notificationsEnabled ? '#10b981' : '#ef4444'}
+                  title="Notifications"
+                  badgeText={notificationsEnabled ? 'ON' : 'OFF'}
+                  badgeBg={notificationsEnabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}
+                  badgeColor={notificationsEnabled ? '#10b981' : '#ef4444'}
                   onClick={() => setActiveSection('notifications')}
-                  className="user-select-card"
-                  style={{
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
-                    padding: '12px 14px',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    transition: 'background 0.15s ease'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: notificationsEnabled ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {notificationsEnabled ? <Bell size={18} color="#10b981" /> : <BellOff size={18} color="#ef4444" />}
-                    </div>
-                    <div style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      Notifications
-                      <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '1px 6px', borderRadius: '6px', background: notificationsEnabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', color: notificationsEnabled ? '#10b981' : '#ef4444' }}>
-                        {notificationsEnabled ? 'ON' : 'OFF'}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight size={18} color="var(--text-muted)" />
-                </div>
+                />
 
                 {/* 2. Privacy & Security Category */}
-                <div
+                <SettingsCategoryRow
+                  icon={Shield}
+                  iconBg="rgba(99, 102, 241, 0.15)"
+                  iconColor="var(--accent)"
+                  title="Privacy & Security"
                   onClick={() => setActiveSection('privacy')}
-                  className="user-select-card"
-                  style={{
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
-                    padding: '12px 14px',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    transition: 'background 0.15s ease'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Shield size={18} color="var(--accent)" />
-                    </div>
-                    <div style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                      Privacy & Security
-                    </div>
-                  </div>
-                  <ChevronRight size={18} color="var(--text-muted)" />
-                </div>
+                />
 
                 {/* 3. Storage & Data Category */}
-                <div
+                <SettingsCategoryRow
+                  icon={HardDrive}
+                  iconBg="rgba(16, 185, 129, 0.15)"
+                  iconColor="#10b981"
+                  title="Storage & Data"
                   onClick={() => setActiveSection('storage')}
-                  className="user-select-card"
-                  style={{
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
-                    padding: '12px 14px',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    transition: 'background 0.15s ease'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <HardDrive size={18} color="#10b981" />
-                    </div>
-                    <div style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                      Storage & Data
-                    </div>
-                  </div>
-                  <ChevronRight size={18} color="var(--text-muted)" />
-                </div>
+                />
 
                 {/* 4. Appearance & Themes Category */}
-                <div
+                <SettingsCategoryRow
+                  icon={Palette}
+                  iconBg="rgba(236, 72, 153, 0.15)"
+                  iconColor="#ec4899"
+                  title="Appearance & Themes"
+                  badgeText={currentThemeObj.name.split(' ')[0]}
+                  badgeBg="rgba(255, 255, 255, 0.08)"
+                  badgeColor="var(--text-muted)"
                   onClick={() => setActiveSection('themes')}
-                  className="user-select-card"
-                  style={{
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
-                    padding: '12px 14px',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    transition: 'background 0.15s ease'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(236, 72, 153, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Palette size={18} color="#ec4899" />
-                    </div>
-                    <div style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      Appearance & Themes
-                      <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.08)', color: 'var(--text-muted)' }}>
-                        {currentThemeObj.name.split(' ')[0]}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight size={18} color="var(--text-muted)" />
-                </div>
+                />
 
                 {/* 5. App Info & Legal Category */}
-                <div
+                <SettingsCategoryRow
+                  icon={Info}
+                  iconBg="rgba(56, 189, 248, 0.15)"
+                  iconColor="#38bdf8"
+                  title="App Info & Legal"
                   onClick={() => setActiveSection('about')}
-                  className="user-select-card"
-                  style={{
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
-                    padding: '12px 14px',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    transition: 'background 0.15s ease'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(56, 189, 248, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Info size={18} color="#38bdf8" />
-                    </div>
-                    <div style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                      App Info & Legal
-                    </div>
-                  </div>
-                  <ChevronRight size={18} color="var(--text-muted)" />
-                </div>
+                />
 
                 {/* App Feature Tour Direct Shortcut */}
-                <div
+                <SettingsCategoryRow
+                  icon={Compass}
+                  iconBg="linear-gradient(135deg, #6366f1, #a855f7)"
+                  iconColor="#fff"
+                  title="Feature Tour Guide"
+                  cardBg="linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.12))"
+                  cardBorder="1px solid rgba(99, 102, 241, 0.3)"
                   onClick={() => setShowTourModal(true)}
-                  className="user-select-card"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.12))',
-                    border: '1px solid rgba(99, 102, 241, 0.3)',
-                    padding: '12px 14px',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                      <Compass size={18} />
-                    </div>
-                    <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                      Feature Tour Guide
-                    </div>
-                  </div>
-                  <ChevronRight size={18} color="var(--accent)" />
-                </div>
+                />
               </div>
 
               {/* Account Management & Logout */}
@@ -1749,69 +1831,14 @@ export default function SettingsModal({
                     borderTop: '1px solid var(--border)',
                     paddingTop: '12px'
                   }}>
-                    {DISGUISE_PRESETS.map((preset) => {
-                      const isSelected = currentDisguise === preset.id;
-                      const iconSrc = preset.id === 'default' ? '/icon-192.png' : (preset.iconUrl || `data:image/svg+xml;utf8,${encodeURIComponent(preset.iconSvg)}`);
-                      return (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          onClick={() => handleSelectDisguise(preset.id)}
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: '6px',
-                            padding: '10px 8px',
-                            borderRadius: '12px',
-                            border: isSelected ? `2px solid ${preset.accentColor || 'var(--accent)'}` : '1px solid var(--border)',
-                            background: isSelected ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-                            cursor: 'pointer',
-                            position: 'relative',
-                            textAlign: 'center',
-                            transition: 'all 0.15s ease'
-                          }}
-                        >
-                          <div style={{ position: 'relative', width: '38px', height: '38px' }}>
-                            <img
-                              src={iconSrc}
-                              alt={preset.name}
-                              style={{
-                                width: '38px',
-                                height: '38px',
-                                borderRadius: '10px',
-                                boxShadow: isSelected ? `0 0 10px ${preset.accentColor}44` : 'none',
-                                display: 'block'
-                              }}
-                            />
-                            {isSelected && (
-                              <div style={{
-                                position: 'absolute',
-                                bottom: '-4px',
-                                right: '-4px',
-                                width: '16px',
-                                height: '16px',
-                                borderRadius: '50%',
-                                background: preset.accentColor || 'var(--accent)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: '#fff',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.4)'
-                              }}>
-                                <Check size={10} strokeWidth={3} />
-                              </div>
-                            )}
-                          </div>
-                          <div style={{ fontSize: '0.8rem', fontWeight: isSelected ? 700 : 500, color: isSelected ? 'var(--text-main)' : 'var(--text-muted)' }}>
-                            {preset.name}
-                          </div>
-                          <div style={{ fontSize: '0.65rem', color: isSelected ? preset.accentColor : 'var(--text-muted)', opacity: 0.8, lineHeight: 1.1 }}>
-                            {preset.badge}
-                          </div>
-                        </button>
-                      );
-                    })}
+                    {DISGUISE_PRESETS.map((preset) => (
+                      <SettingsDisguiseButton
+                        key={preset.id}
+                        preset={preset}
+                        isSelected={currentDisguise === preset.id}
+                        onSelect={() => handleSelectDisguise(preset.id)}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
@@ -2190,50 +2217,19 @@ export default function SettingsModal({
                   const isSelected = theme === t.id;
 
                   return (
-                    <div
+                    <SettingsThemeOption
                       key={t.id}
-                      onClick={() => {
+                      themeItem={t}
+                      isSelected={isSelected}
+                      isLocked={isLocked}
+                      onSelect={() => {
                         if (isLocked) {
                           setShowProModal(true);
                           return;
                         }
                         changeTheme(t.id);
                       }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '11px 14px',
-                        borderRadius: '12px',
-                        background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-card)',
-                        border: isSelected ? '2px solid var(--accent)' : (t.isPro ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border)'),
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{
-                          width: '20px',
-                          height: '20px',
-                          borderRadius: '50%',
-                          background: t.color,
-                          border: '2px solid rgba(255,255,255,0.3)',
-                          flexShrink: 0
-                        }} />
-                        <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          {t.name}
-                          {t.isPro && <Crown size={12} color="#f59e0b" />}
-                        </span>
-                      </div>
-
-                      {isSelected ? (
-                        <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Check size={14} color="#fff" />
-                        </div>
-                      ) : isLocked ? (
-                        <Lock size={15} color="#f59e0b" />
-                      ) : null}
-                    </div>
+                    />
                   );
                 })}
               </div>

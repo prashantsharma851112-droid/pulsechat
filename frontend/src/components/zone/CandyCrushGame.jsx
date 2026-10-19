@@ -658,6 +658,106 @@ const CandyVisual = React.memo(function CandyVisual({ candy }) {
   }
 });
 
+// =========================================================================
+// ATOMIC ISOLATED CANDY CELL COMPONENT (React.memo + 0ms GPU Tap Feedback)
+// =========================================================================
+export const CandyGridCell = React.memo(function CandyGridCell({
+  r,
+  c,
+  candy,
+  isSelected,
+  isHint,
+  isEven,
+  isBursting,
+  coordKey,
+  onCellClick,
+  onTouchStart,
+  onTouchEnd
+}) {
+  return (
+    <div
+      onClick={() => onCellClick(r, c)}
+      onTouchStart={(e) => onTouchStart(r, c, e)}
+      onTouchEnd={onTouchEnd}
+      onMouseDown={(e) => onTouchStart(r, c, e)}
+      onMouseUp={onTouchEnd}
+      className="interactive-tap candy-grid-cell"
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        borderRadius: '6px',
+        background: isSelected
+          ? 'rgba(255, 255, 255, 0.35)'
+          : (isEven ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.22)'),
+        border: isSelected
+          ? '2.5px solid #fbbf24'
+          : (isHint ? '2px dashed #f43f5e' : '1px solid rgba(255, 255, 255, 0.04)'),
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        willChange: 'transform',
+        transform: isSelected ? 'scale(1.12) translateZ(0)' : (isHint ? 'scale(1.06) translateZ(0)' : 'scale(1) translateZ(0)'),
+        transition: 'transform 0.15s ease, background 0.15s ease',
+        boxShadow: isSelected ? '0 0 16px rgba(251, 191, 36, 0.9)' : 'none',
+        padding: '2px',
+        overflow: 'visible'
+      }}
+    >
+      {isBursting ? (
+        <div key={`burst-${coordKey}`} className="candy-bubble-pop-cell">
+          <div className="candy-pop-mesh">
+            <CandyVisual candy={isBursting.candy} />
+          </div>
+          <div
+            className="candy-bubble-sphere"
+            style={{
+              '--bubble-color': isBursting.color
+            }}
+          >
+            <div className="candy-bubble-gleam" />
+          </div>
+          <div className="candy-bubble-droplets">
+            {[0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => {
+              const rad = (deg * Math.PI) / 180;
+              const dx = Math.round(Math.cos(rad) * 26);
+              const dy = Math.round(Math.sin(rad) * 26);
+              return (
+                <span
+                  key={i}
+                  className="candy-droplet-dot"
+                  style={{
+                    '--dx': `${dx}px`,
+                    '--dy': `${dy}px`,
+                    background: isBursting.color,
+                    boxShadow: `0 0 8px ${isBursting.color}`
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div
+          key={candy?.dropKey || `cell-${r}-${c}-${candy?.id}`}
+          className={`candy-cell-content ${candy?.dropRows ? 'candy-dropping' : ''}`}
+          style={{
+            '--drop-rows': candy?.dropRows || 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            willChange: 'transform'
+          }}
+        >
+          <CandyVisual candy={candy} />
+        </div>
+      )}
+    </div>
+  );
+});
+
 const CandyCrushGame = React.memo(function CandyCrushGame({ onScoreUpdate, onBack }) {
   const [level, setLevel] = useState(() => {
     try {
@@ -1510,89 +1610,20 @@ const CandyCrushGame = React.memo(function CandyCrushGame({ onScoreUpdate, onBac
             const isBursting = burstingCells && burstingCells[coordKey];
 
             return (
-              <div
+              <CandyGridCell
                 key={`${r}-${c}`}
-                onClick={() => handleCellClick(r, c)}
-                onTouchStart={(e) => handleTouchStart(r, c, e)}
+                r={r}
+                c={c}
+                candy={candy}
+                isSelected={isSelected}
+                isHint={isHint}
+                isEven={isEven}
+                isBursting={isBursting}
+                coordKey={coordKey}
+                onCellClick={handleCellClick}
+                onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
-                onMouseDown={(e) => handleTouchStart(r, c, e)}
-                onMouseUp={handleTouchEnd}
-                style={{
-                  position: 'relative',
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '6px',
-                  background: isSelected
-                    ? 'rgba(255, 255, 255, 0.35)'
-                    : (isEven ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.22)'),
-                  border: isSelected
-                    ? '2.5px solid #fbbf24'
-                    : (isHint ? '2px dashed #f43f5e' : '1px solid rgba(255, 255, 255, 0.04)'),
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  willChange: 'transform',
-                  transform: isSelected ? 'scale(1.12) translateZ(0)' : (isHint ? 'scale(1.06) translateZ(0)' : 'scale(1) translateZ(0)'),
-                  transition: 'transform 0.15s ease, background 0.15s ease',
-                  boxShadow: isSelected ? '0 0 16px rgba(251, 191, 36, 0.9)' : 'none',
-                  padding: '2px',
-                  overflow: 'visible'
-                }}
-              >
-                {isBursting ? (
-                  <div key={`burst-${coordKey}`} className="candy-bubble-pop-cell">
-                    {/* 1. Squashing & popping vanishing candy visual */}
-                    <div className="candy-pop-mesh">
-                      <CandyVisual candy={isBursting.candy} />
-                    </div>
-                    {/* 2. Expanding iridescent soap bubble wrapping the candy and bursting! */}
-                    <div
-                      className="candy-bubble-sphere"
-                      style={{
-                        '--bubble-color': isBursting.color
-                      }}
-                    >
-                      <div className="candy-bubble-gleam" />
-                    </div>
-                    {/* 3. 8 Radiant sparkling droplet particles bursting outwards */}
-                    <div className="candy-bubble-droplets">
-                      {[0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => {
-                        const rad = (deg * Math.PI) / 180;
-                        const dx = Math.round(Math.cos(rad) * 26);
-                        const dy = Math.round(Math.sin(rad) * 26);
-                        return (
-                          <span
-                            key={i}
-                            className="candy-droplet-dot"
-                            style={{
-                              '--dx': `${dx}px`,
-                              '--dy': `${dy}px`,
-                              background: isBursting.color,
-                              boxShadow: `0 0 8px ${isBursting.color}`
-                            }}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    key={candy?.dropKey || `cell-${r}-${c}-${candy?.id}`}
-                    className={`candy-cell-content ${candy?.dropRows ? 'candy-dropping' : ''}`}
-                    style={{
-                      '--drop-rows': candy?.dropRows || 0,
-                      width: '100%',
-                      height: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      willChange: 'transform'
-                    }}
-                  >
-                    <CandyVisual candy={candy} />
-                  </div>
-                )}
-              </div>
+              />
             );
           })
         )}

@@ -60,6 +60,87 @@ const getGridConfig = (lvl) => {
   return { rows: 12, cols: 12, countMultiplier: 0.88, gap: '2px' };
 };
 
+// =========================================================================
+// ATOMIC ISOLATED ARROW TILE COMPONENT (React.memo + 0ms GPU Hardware Feedback)
+// =========================================================================
+export const ArrowTile = React.memo(function ArrowTile({
+  cell,
+  r,
+  c,
+  isFlying,
+  isShaking,
+  isHinted,
+  theme,
+  gridConfigRows,
+  onTap
+}) {
+  const { flyX, flyY, deg } = DIRS[cell.dir];
+  const svgSize = gridConfigRows >= 10 ? '22' : gridConfigRows >= 7 ? '26' : '30';
+  const strokeColor = isShaking ? '#ef4444' : isHinted ? '#f59e0b' : (theme === 'light' ? '#1e293b' : '#38bdf8');
+  const headColor = isShaking ? '#ef4444' : isHinted ? '#f59e0b' : (theme === 'light' ? '#0f172a' : '#38bdf8');
+
+  return (
+    <button
+      onClick={() => onTap(r, c)}
+      className="interactive-tap arrow-grid-cell"
+      style={{
+        width: '100%',
+        height: '100%',
+        background: isShaking
+          ? 'rgba(239, 68, 68, 0.4)'
+          : isHinted
+          ? 'rgba(245, 158, 11, 0.35)'
+          : (theme === 'light'
+              ? 'linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%)'
+              : 'radial-gradient(circle, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)'),
+        border: isShaking
+          ? '2px solid #ef4444'
+          : isHinted
+          ? '2px solid #f59e0b'
+          : (theme === 'light' ? '1.5px solid #cbd5e1' : '1.5px solid rgba(255, 255, 255, 0.18)'),
+        borderRadius: '8px',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 0,
+        position: 'relative',
+        boxShadow: theme === 'light' ? '0 2px 6px rgba(0,0,0,0.06)' : '0 4px 10px rgba(0,0,0,0.4)',
+        willChange: 'transform, opacity',
+        transform: isFlying
+          ? `translate3d(${flyX}px, ${flyY}px, 0) scale(0.4)`
+          : isShaking
+          ? 'scale(0.85) translateZ(0)'
+          : 'scale(1) translateZ(0)',
+        opacity: isFlying ? 0 : 1,
+        transition: isFlying
+          ? 'transform 0.65s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.65s cubic-bezier(0.5, 0, 1, 1)'
+          : 'transform 0.12s ease',
+        zIndex: isFlying ? 10 : 1
+      }}
+    >
+      <svg
+        width={svgSize}
+        height={svgSize}
+        viewBox="0 0 40 40"
+        style={{
+          transform: `rotate(${deg}deg)`,
+          overflow: 'visible',
+          display: 'block',
+          filter: isShaking
+            ? 'drop-shadow(0 0 8px #ef4444)'
+            : isHinted
+            ? 'drop-shadow(0 0 8px #f59e0b)'
+            : 'drop-shadow(0 2px 4px rgba(0,0,0,0.35))'
+        }}
+      >
+        <line x1="20" y1="36" x2="20" y2="12" stroke={strokeColor} strokeWidth="4.5" strokeLinecap="round" />
+        <polygon points="20,2 9,18 31,18" fill={headColor} />
+      </svg>
+    </button>
+  );
+});
+
 const ArrowPuzzleGame = React.memo(function ArrowPuzzleGame({ onBack, onScoreUpdate }) {
   const { user, updateUserProfile } = useContext(AuthContext);
 
@@ -560,86 +641,20 @@ const ArrowPuzzleGame = React.memo(function ArrowPuzzleGame({ onBack, onScoreUpd
                   const isFlying = flyingIds.has(cell.id);
                   const isShaking = shakingId === cell.id;
                   const isHinted = hintId === cell.id;
-                  const { flyX, flyY, deg } = DIRS[cell.dir];
 
                   return (
-                    <button
+                    <ArrowTile
                       key={cell.id}
-                      onClick={() => handleArrowTap(r, c)}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        background: isShaking
-                          ? 'rgba(239, 68, 68, 0.4)'
-                          : isHinted
-                          ? 'rgba(245, 158, 11, 0.35)'
-                          : (theme === 'light'
-                              ? 'linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%)'
-                              : 'radial-gradient(circle, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)'),
-                        border: isShaking
-                          ? '2px solid #ef4444'
-                          : isHinted
-                          ? '2px solid #f59e0b'
-                          : (theme === 'light' ? '1.5px solid #cbd5e1' : '1.5px solid rgba(255, 255, 255, 0.18)'),
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: 0,
-                        position: 'relative',
-                        boxShadow: theme === 'light' ? '0 2px 6px rgba(0,0,0,0.06)' : '0 4px 10px rgba(0,0,0,0.4)',
-                        willChange: 'transform, opacity',
-                        transform: isFlying
-                          ? `translate3d(${flyX}px, ${flyY}px, 0) scale(0.4)`
-                          : isShaking
-                          ? 'scale(0.85)'
-                          : 'scale(1)',
-                        opacity: isFlying ? 0 : 1,
-                        transition: isFlying
-                          ? 'transform 0.65s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.65s cubic-bezier(0.5, 0, 1, 1)'
-                          : 'transform 0.12s ease',
-                        zIndex: isFlying ? 10 : 1
-                      }}
-                    >
-                      {/* SVG Crisp Vector Arrow */}
-                      {(() => {
-                        const svgSize = gridConfig.rows >= 10 ? '22' : gridConfig.rows >= 7 ? '26' : '30';
-
-                        const strokeColor = isShaking
-                          ? '#ef4444'
-                          : isHinted
-                          ? '#f59e0b'
-                          : (theme === 'light' ? '#1e293b' : '#38bdf8');
-
-                        const headColor = isShaking
-                          ? '#ef4444'
-                          : isHinted
-                          ? '#f59e0b'
-                          : (theme === 'light' ? '#0f172a' : '#38bdf8');
-
-                        return (
-                          <svg
-                            width={svgSize}
-                            height={svgSize}
-                            viewBox="0 0 40 40"
-                            style={{
-                              transform: `rotate(${deg}deg)`,
-                              overflow: 'visible',
-                              display: 'block',
-                              filter: isShaking
-                                ? 'drop-shadow(0 0 8px #ef4444)'
-                                : isHinted
-                                ? 'drop-shadow(0 0 8px #f59e0b)'
-                                : 'drop-shadow(0 2px 4px rgba(0,0,0,0.35))'
-                            }}
-                          >
-                            <line x1="20" y1="36" x2="20" y2="12" stroke={strokeColor} strokeWidth="4.5" strokeLinecap="round" />
-                            <polygon points="20,2 9,18 31,18" fill={headColor} />
-                          </svg>
-                        );
-                      })()}
-                    </button>
+                      cell={cell}
+                      r={r}
+                      c={c}
+                      isFlying={isFlying}
+                      isShaking={isShaking}
+                      isHinted={isHinted}
+                      theme={theme}
+                      gridConfigRows={gridConfig.rows}
+                      onTap={handleArrowTap}
+                    />
                   );
                 })
               )}

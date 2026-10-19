@@ -92,6 +92,50 @@ const minimax = (tempBoard, isMaximizing) => {
   }
 };
 
+// =========================================================================
+// ATOMIC ISOLATED TIC-TAC-TOE CELL COMPONENT (React.memo + 0ms GPU Feedback)
+// =========================================================================
+export const TicTacToeCell = React.memo(function TicTacToeCell({
+  idx,
+  cell,
+  isWinningCell,
+  winner,
+  disabled,
+  onClick
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(idx)}
+      disabled={disabled}
+      className="interactive-tap tictactoe-cell"
+      style={{
+        background: isWinningCell
+          ? (winner === 'X' ? 'rgba(56, 189, 248, 0.35)' : 'rgba(244, 63, 94, 0.35)')
+          : (cell ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.04)'),
+        border: isWinningCell
+          ? `2px solid ${winner === 'X' ? '#38bdf8' : '#f43f5e'}`
+          : '1.5px solid rgba(255, 255, 255, 0.12)',
+        borderRadius: '16px',
+        fontSize: '2.4rem',
+        fontWeight: 900,
+        color: cell === 'X' ? '#38bdf8' : '#f43f5e',
+        cursor: disabled ? 'default' : 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'all 0.15s ease',
+        boxShadow: isWinningCell ? '0 0 16px rgba(168, 85, 247, 0.5)' : 'none',
+        userSelect: 'none',
+        willChange: 'transform',
+        transform: 'translateZ(0)'
+      }}
+    >
+      {cell}
+    </button>
+  );
+});
+
 const TicTacToeAIGame = React.memo(function TicTacToeAIGame({ onScoreUpdate }) {
   const { user } = useContext(AuthContext);
   const [board, setBoard] = useState(Array(9).fill(null));
@@ -504,38 +548,17 @@ const TicTacToeAIGame = React.memo(function TicTacToeAIGame({ onScoreUpdate }) {
         aspectRatio: '1',
         marginBottom: '16px'
       }}>
-        {board.map((cell, idx) => {
-          const isWinningCell = winnerInfo?.line?.includes(idx);
-          return (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => handleCellClick(idx)}
-              disabled={!!cell || !!winnerInfo || isThinking}
-              style={{
-                background: isWinningCell
-                  ? (winnerInfo.winner === 'X' ? 'rgba(56, 189, 248, 0.35)' : 'rgba(244, 63, 94, 0.35)')
-                  : (cell ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.04)'),
-                border: isWinningCell
-                  ? `2px solid ${winnerInfo.winner === 'X' ? '#38bdf8' : '#f43f5e'}`
-                  : '1.5px solid rgba(255, 255, 255, 0.12)',
-                borderRadius: '16px',
-                fontSize: '2.4rem',
-                fontWeight: 900,
-                color: cell === 'X' ? '#38bdf8' : '#f43f5e',
-                cursor: (cell || winnerInfo || isThinking) ? 'default' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.15s ease',
-                boxShadow: isWinningCell ? '0 0 16px rgba(168, 85, 247, 0.5)' : 'none',
-                userSelect: 'none'
-              }}
-            >
-              {cell}
-            </button>
-          );
-        })}
+        {board.map((cell, idx) => (
+          <TicTacToeCell
+            key={idx}
+            idx={idx}
+            cell={cell}
+            isWinningCell={winnerInfo?.line?.includes(idx)}
+            winner={winnerInfo?.winner}
+            disabled={!!cell || !!winnerInfo || isThinking}
+            onClick={handleCellClick}
+          />
+        ))}
       </div>
 
       {/* Action Buttons */}

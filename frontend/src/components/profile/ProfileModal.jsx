@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { X, Upload, Camera, Lock, User as UserIcon, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, Sparkles, Share2 } from 'lucide-react';
@@ -25,6 +25,259 @@ const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/avataaars/svg?seed=sam',
   'https://api.dicebear.com/7.x/adventurer/svg?seed=blaze'
 ];
+
+// =========================================================================
+// ATOMIC ISOLATED PROFILE COMPONENTS (React.memo + 0ms GPU Tap Feedback)
+// =========================================================================
+
+export const ProfileTabNav = React.memo(function ProfileTabNav({ activeTab, onSelectTab }) {
+  return (
+    <div style={{
+      display: 'flex',
+      borderBottom: '1px solid var(--border)',
+      background: 'var(--bg-card)',
+      padding: '0 8px',
+      gap: '8px',
+      flexShrink: 0
+    }}>
+      <button
+        onClick={() => onSelectTab('profile')}
+        title="Edit Profile"
+        aria-label="Edit Profile"
+        className="interactive-tap"
+        style={{
+          flex: 1,
+          padding: '11px 0',
+          border: 'none',
+          background: 'transparent',
+          borderBottom: activeTab === 'profile' ? '2.5px solid var(--accent)' : '2.5px solid transparent',
+          color: activeTab === 'profile' ? 'var(--accent)' : 'var(--text-muted)',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'all 0.15s ease',
+          willChange: 'transform',
+          transform: 'translateZ(0)'
+        }}
+      >
+        <UserIcon size={20} />
+      </button>
+      <button
+        onClick={() => onSelectTab('card')}
+        title="My Pulse Card"
+        aria-label="My Pulse Card"
+        className="interactive-tap"
+        style={{
+          flex: 1,
+          padding: '11px 0',
+          border: 'none',
+          background: 'transparent',
+          borderBottom: activeTab === 'card' ? '2.5px solid var(--accent)' : '2.5px solid transparent',
+          color: activeTab === 'card' ? 'var(--accent)' : 'var(--text-muted)',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'all 0.15s ease',
+          willChange: 'transform',
+          transform: 'translateZ(0)'
+        }}
+      >
+        <Sparkles size={20} color={activeTab === 'card' ? 'var(--accent)' : '#a855f7'} />
+      </button>
+    </div>
+  );
+});
+
+export const PresetAvatarItem = React.memo(function PresetAvatarItem({ avUrl, isSelected, onSelect }) {
+  return (
+    <img
+      src={avUrl}
+      onClick={() => onSelect(avUrl)}
+      alt="Avatar preset"
+      className="interactive-tap"
+      style={{
+        width: '42px',
+        height: '42px',
+        borderRadius: '50%',
+        cursor: 'pointer',
+        border: isSelected ? '2.5px solid var(--accent)' : '2px solid transparent',
+        background: 'var(--bg-card)',
+        padding: '2px',
+        transition: 'all 0.15s ease',
+        willChange: 'transform',
+        transform: 'translateZ(0)'
+      }}
+    />
+  );
+});
+
+export const InstantSaveDpBanner = React.memo(function InstantSaveDpBanner({ loading, onSave }) {
+  return (
+    <div style={{
+      marginBottom: '1.25rem',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '8px',
+      background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(16, 185, 129, 0.15) 100%)',
+      border: '1.5px solid var(--accent)',
+      padding: '12px 16px',
+      borderRadius: '16px',
+      textAlign: 'center',
+      boxShadow: '0 4px 14px rgba(0,0,0,0.15)'
+    }}>
+      <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <Sparkles size={16} color="var(--accent)" /> New Profile Photo Selected!
+      </span>
+      <button
+        type="button"
+        onClick={onSave}
+        className="btn-primary interactive-tap"
+        disabled={loading}
+        style={{
+          padding: '8px 22px',
+          borderRadius: '20px',
+          fontSize: '0.88rem',
+          fontWeight: 700,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)',
+          cursor: 'pointer',
+          willChange: 'transform',
+          transform: 'translateZ(0)'
+        }}
+      >
+        {loading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+        {loading ? 'Saving DP...' : 'Save New DP Now'}
+      </button>
+    </div>
+  );
+});
+
+export const ProfileQuickActionsRow = React.memo(function ProfileQuickActionsRow({
+  onOpenAuraModal,
+  onOpenStoryCard,
+  onCopyNglLink,
+  copiedAskToast
+}) {
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+      marginBottom: '1.25rem',
+      width: '100%'
+    }}>
+      <button
+        type="button"
+        onClick={onOpenAuraModal}
+        className="interactive-tap"
+        style={{
+          width: '100%',
+          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(239, 68, 68, 0.22))',
+          border: '1.5px solid rgba(245, 158, 11, 0.5)',
+          borderRadius: '14px',
+          padding: '10px 12px',
+          color: '#fbbf24',
+          fontSize: '0.82rem',
+          fontWeight: 800,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          boxShadow: '0 4px 14px rgba(245, 158, 11, 0.18)',
+          transition: 'all 0.15s ease',
+          willChange: 'transform',
+          transform: 'translateZ(0)'
+        }}
+      >
+        <Sparkles size={16} color="#fbbf24" /> Customize Ring
+      </button>
+
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        width: '100%'
+      }}>
+        <button
+          type="button"
+          onClick={onOpenStoryCard}
+          className="interactive-tap"
+          style={{
+            flex: 1,
+            background: 'linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045)',
+            border: 'none',
+            borderRadius: '14px',
+            padding: '10px 8px',
+            color: '#fff',
+            fontSize: '0.78rem',
+            fontWeight: 800,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            boxShadow: '0 4px 15px rgba(253, 29, 29, 0.35)',
+            willChange: 'transform',
+            transform: 'translateZ(0)'
+          }}
+        >
+          <Share2 size={14} /> Insta Story Card 📸
+        </button>
+        <button
+          type="button"
+          onClick={onCopyNglLink}
+          className="interactive-tap"
+          style={{
+            flex: 1,
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.25))',
+            border: '1.5px solid rgba(168, 85, 247, 0.5)',
+            borderRadius: '14px',
+            padding: '10px 8px',
+            color: '#c084fc',
+            fontSize: '0.78rem',
+            fontWeight: 800,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            willChange: 'transform',
+            transform: 'translateZ(0)'
+          }}
+        >
+          <Lock size={14} /> {copiedAskToast ? 'Link Copied! 🤫' : 'Copy NGL Link 🤫'}
+        </button>
+      </div>
+    </div>
+  );
+});
+
+export const ProfileSaveSubmitButton = React.memo(function ProfileSaveSubmitButton({ loading, onSave }) {
+  return (
+    <button
+      onClick={onSave}
+      className="btn-primary interactive-tap"
+      style={{
+        width: '100%',
+        padding: '0.8rem',
+        willChange: 'transform',
+        transform: 'translateZ(0)'
+      }}
+      disabled={loading}
+    >
+      {loading ? 'Saving Profile...' : 'Save Profile'}
+    </button>
+  );
+});
+
+// =========================================================================
+// MAIN PROFILE MODAL
+// =========================================================================
 
 export default function ProfileModal({ onClose, onOpenFullDp }) {
   useBackHandler(onClose, true);
@@ -115,7 +368,16 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
     }
   };
 
+  const handleCopyNgl = useCallback(() => {
+    const askUrl = `${window.location.origin}/ask/@${user?.username}`;
+    navigator.clipboard?.writeText(askUrl);
+    setCopiedAskToast(true);
+    setTimeout(() => setCopiedAskToast(false), 2500);
+  }, [user?.username]);
 
+  const handleSelectPresetAvatar = useCallback((url) => {
+    setAvatar(url);
+  }, []);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -128,59 +390,11 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
           <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)', fontWeight: 600 }}>
             Account Settings
           </h3>
-          <button className="icon-btn-ghost" onClick={onClose}><X size={20} /></button>
+          <button className="icon-btn-ghost interactive-tap" onClick={onClose}><X size={20} /></button>
         </div>
 
         {/* Tab Navigation (Icon-Only Minimal Bar) */}
-        <div style={{
-          display: 'flex',
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--bg-card)',
-          padding: '0 8px',
-          gap: '8px',
-          flexShrink: 0
-        }}>
-          <button
-            onClick={() => setActiveTab('profile')}
-            title="Edit Profile"
-            aria-label="Edit Profile"
-            style={{
-              flex: 1,
-              padding: '11px 0',
-              border: 'none',
-              background: 'transparent',
-              borderBottom: activeTab === 'profile' ? '2.5px solid var(--accent)' : '2.5px solid transparent',
-              color: activeTab === 'profile' ? 'var(--accent)' : 'var(--text-muted)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <UserIcon size={20} />
-          </button>
-          <button
-            onClick={() => setActiveTab('card')}
-            title="My Pulse Card"
-            aria-label="My Pulse Card"
-            style={{
-              flex: 1,
-              padding: '11px 0',
-              border: 'none',
-              background: 'transparent',
-              borderBottom: activeTab === 'card' ? '2.5px solid var(--accent)' : '2.5px solid transparent',
-              color: activeTab === 'card' ? 'var(--accent)' : 'var(--text-muted)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <Sparkles size={20} color={activeTab === 'card' ? 'var(--accent)' : '#a855f7'} />
-          </button>
-        </div>
+        <ProfileTabNav activeTab={activeTab} onSelectTab={setActiveTab} />
 
         {activeTab === 'profile' ? (
           <div style={{ padding: '1.5rem', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -281,6 +495,7 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
                   />
                   <label
                     htmlFor="dp-file-input"
+                    className="interactive-tap"
                     style={{
                       position: 'absolute',
                       bottom: 0,
@@ -295,7 +510,9 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
                       justifyContent: 'center',
                       cursor: 'pointer',
                       boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-                      zIndex: 10
+                      zIndex: 10,
+                      willChange: 'transform',
+                      transform: 'translateZ(0)'
                     }}
                     title="Upload Photo (Instant Compressed)"
                   >
@@ -311,7 +528,6 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
                 </div>
               </VibeAuraRing>
 
-
               <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.6rem' }}>
                 {compressing ? (
                   <span style={{ color: 'var(--accent)', fontWeight: 600 }}>Optimizing & compressing photo...</span>
@@ -324,155 +540,27 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
             {/* Preset Avatars Selection */}
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '10px', marginBottom: '1.25rem', maxHeight: '110px', overflowY: 'auto', padding: '4px' }}>
               {PRESET_AVATARS.map((avUrl) => (
-                <img
+                <PresetAvatarItem
                   key={avUrl}
-                  src={avUrl}
-                  onClick={() => setAvatar(avUrl)}
-                  alt="Avatar preset"
-                  style={{
-                    width: '42px',
-                    height: '42px',
-                    borderRadius: '50%',
-                    cursor: 'pointer',
-                    border: avatar === avUrl ? '2.5px solid var(--accent)' : '2px solid transparent',
-                    background: 'var(--bg-card)',
-                    padding: '2px',
-                    transition: 'all 0.15s ease'
-                  }}
+                  avUrl={avUrl}
+                  isSelected={avatar === avUrl}
+                  onSelect={handleSelectPresetAvatar}
                 />
               ))}
             </div>
 
-
-
             {/* Instant DP Save Prompt Banner when a new avatar is selected */}
             {avatar !== user?.avatar && (
-              <div style={{
-                marginBottom: '1.25rem',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '8px',
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(16, 185, 129, 0.15) 100%)',
-                border: '1.5px solid var(--accent)',
-                padding: '12px 16px',
-                borderRadius: '16px',
-                textAlign: 'center',
-                boxShadow: '0 4px 14px rgba(0,0,0,0.15)'
-              }}>
-                <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Sparkles size={16} color="var(--accent)" /> New Profile Photo Selected!
-                </span>
-                <button
-                  type="button"
-                  onClick={handleSaveProfile}
-                  className="btn-primary"
-                  disabled={loading}
-                  style={{
-                    padding: '8px 22px',
-                    borderRadius: '20px',
-                    fontSize: '0.88rem',
-                    fontWeight: 700,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {loading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                  {loading ? 'Saving DP...' : 'Save New DP Now'}
-                </button>
-              </div>
+              <InstantSaveDpBanner loading={loading} onSave={handleSaveProfile} />
             )}
 
             {/* Quick Action Buttons */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-              marginBottom: '1.25rem',
-              width: '100%'
-            }}>
-              <button
-                type="button"
-                onClick={() => setShowAuraModal(true)}
-                style={{
-                  width: '100%',
-                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(239, 68, 68, 0.22))',
-                  border: '1.5px solid rgba(245, 158, 11, 0.5)',
-                  borderRadius: '14px',
-                  padding: '10px 12px',
-                  color: '#fbbf24',
-                  fontSize: '0.82rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  boxShadow: '0 4px 14px rgba(245, 158, 11, 0.18)',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <Sparkles size={16} color="#fbbf24" /> Customize Ring
-              </button>
-
-              <div style={{
-                display: 'flex',
-                gap: '8px',
-                width: '100%'
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setShowStoryCardModal(true)}
-                  style={{
-                    flex: 1,
-                    background: 'linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045)',
-                    border: 'none',
-                    borderRadius: '14px',
-                    padding: '10px 8px',
-                    color: '#fff',
-                    fontSize: '0.78rem',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    boxShadow: '0 4px 15px rgba(253, 29, 29, 0.35)'
-                  }}
-                >
-                  <Share2 size={14} /> Insta Story Card 📸
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const askUrl = `${window.location.origin}/ask/@${user?.username}`;
-                    navigator.clipboard?.writeText(askUrl);
-                    setCopiedAskToast(true);
-                    setTimeout(() => setCopiedAskToast(false), 2500);
-                  }}
-                  style={{
-                    flex: 1,
-                    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.25))',
-                    border: '1.5px solid rgba(168, 85, 247, 0.5)',
-                    borderRadius: '14px',
-                    padding: '10px 8px',
-                    color: '#c084fc',
-                    fontSize: '0.78rem',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <Lock size={14} /> {copiedAskToast ? 'Link Copied! 🤫' : 'Copy NGL Link 🤫'}
-                </button>
-              </div>
-            </div>
+            <ProfileQuickActionsRow
+              onOpenAuraModal={() => setShowAuraModal(true)}
+              onOpenStoryCard={() => setShowStoryCardModal(true)}
+              onCopyNglLink={handleCopyNgl}
+              copiedAskToast={copiedAskToast}
+            />
 
             {/* Username Handle */}
             <div style={{ marginBottom: '1rem' }}>
@@ -512,9 +600,7 @@ export default function ProfileModal({ onClose, onOpenFullDp }) {
               />
             </div>
 
-            <button onClick={handleSaveProfile} className="btn-primary" style={{ width: '100%', padding: '0.8rem' }} disabled={loading}>
-              {loading ? 'Saving Profile...' : 'Save Profile'}
-            </button>
+            <ProfileSaveSubmitButton loading={loading} onSave={handleSaveProfile} />
           </div>
         ) : (
           <div style={{ padding: '0.75rem 1rem', flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', display: 'flex', justifyContent: 'center' }}>

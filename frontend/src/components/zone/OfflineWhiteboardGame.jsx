@@ -19,6 +19,62 @@ const STROKE_WIDTHS = [
   { label: 'XL', size: 22 }
 ];
 
+// =========================================================================
+// ATOMIC ISOLATED WHITEBOARD TOOLS (React.memo + 0ms GPU Tap Feedback)
+// =========================================================================
+export const WhiteboardColorSwatch = React.memo(function WhiteboardColorSwatch({
+  color,
+  isSelected,
+  onSelect
+}) {
+  return (
+    <button
+      onClick={() => onSelect(color)}
+      className="interactive-tap whiteboard-tool-btn"
+      style={{
+        width: '26px',
+        height: '26px',
+        borderRadius: '50%',
+        background: color,
+        border: isSelected ? '2.5px solid #fff' : '1px solid rgba(0,0,0,0.4)',
+        transform: isSelected ? 'scale(1.2) translateZ(0)' : 'scale(1) translateZ(0)',
+        cursor: 'pointer',
+        transition: 'transform 0.15s ease',
+        boxShadow: isSelected ? `0 0 10px ${color}` : 'none',
+        willChange: 'transform'
+      }}
+    />
+  );
+});
+
+export const WhiteboardStrokeButton = React.memo(function WhiteboardStrokeButton({
+  stroke,
+  isSelected,
+  onSelect
+}) {
+  return (
+    <button
+      onClick={() => onSelect(stroke.size)}
+      className="interactive-tap whiteboard-tool-btn"
+      style={{
+        width: '26px',
+        height: '26px',
+        borderRadius: '8px',
+        border: isSelected ? '1.5px solid var(--accent, #6366f1)' : '1px solid rgba(255, 255, 255, 0.1)',
+        background: isSelected ? 'rgba(99, 102, 241, 0.3)' : 'transparent',
+        color: isSelected ? '#fff' : '#94a3b8',
+        fontWeight: 800,
+        fontSize: '0.7rem',
+        cursor: 'pointer',
+        willChange: 'transform',
+        transform: 'translateZ(0)'
+      }}
+    >
+      {stroke.label}
+    </button>
+  );
+});
+
 const OfflineWhiteboardGame = React.memo(function OfflineWhiteboardGame({ onScoreUpdate, onBack }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
@@ -219,26 +275,18 @@ const OfflineWhiteboardGame = React.memo(function OfflineWhiteboardGame({ onScor
         {/* Colors Palette */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           {COLORS.map((c) => (
-            <button
+            <WhiteboardColorSwatch
               key={c}
-              onClick={() => { setCurrentColor(c); setIsEraser(false); }}
-              style={{
-                width: '26px',
-                height: '26px',
-                borderRadius: '50%',
-                background: c,
-                border: (!isEraser && currentColor === c) ? '2.5px solid #fff' : '1px solid rgba(0,0,0,0.4)',
-                transform: (!isEraser && currentColor === c) ? 'scale(1.2)' : 'scale(1)',
-                cursor: 'pointer',
-                transition: 'transform 0.15s ease',
-                boxShadow: (!isEraser && currentColor === c) ? `0 0 10px ${c}` : 'none'
-              }}
+              color={c}
+              isSelected={!isEraser && currentColor === c}
+              onSelect={(picked) => { setCurrentColor(picked); setIsEraser(false); }}
             />
           ))}
 
           {/* Eraser button */}
           <button
             onClick={() => setIsEraser(!isEraser)}
+            className="interactive-tap whiteboard-tool-btn"
             style={{
               padding: '4px 10px',
               borderRadius: '10px',
@@ -250,7 +298,9 @@ const OfflineWhiteboardGame = React.memo(function OfflineWhiteboardGame({ onScor
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '4px'
+              gap: '4px',
+              willChange: 'transform',
+              transform: 'translateZ(0)'
             }}
           >
             🧹 Eraser
@@ -260,23 +310,12 @@ const OfflineWhiteboardGame = React.memo(function OfflineWhiteboardGame({ onScor
         {/* Stroke Sizes & Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {STROKE_WIDTHS.map((sw) => (
-            <button
+            <WhiteboardStrokeButton
               key={sw.label}
-              onClick={() => setStrokeWidth(sw.size)}
-              style={{
-                width: '26px',
-                height: '26px',
-                borderRadius: '8px',
-                border: strokeWidth === sw.size ? '1.5px solid var(--accent, #6366f1)' : '1px solid rgba(255, 255, 255, 0.1)',
-                background: strokeWidth === sw.size ? 'rgba(99, 102, 241, 0.3)' : 'transparent',
-                color: strokeWidth === sw.size ? '#fff' : '#94a3b8',
-                fontWeight: 800,
-                fontSize: '0.7rem',
-                cursor: 'pointer'
-              }}
-            >
-              {sw.label}
-            </button>
+              stroke={sw}
+              isSelected={strokeWidth === sw.size}
+              onSelect={(size) => setStrokeWidth(size)}
+            />
           ))}
 
           <button

@@ -2961,7 +2961,11 @@ button,
 .mobile-fab-btn,
 .action-grid-item,
 .interactive-action,
-.interactive-tap {
+.interactive-tap,
+.arrow-grid-cell,
+.candy-grid-cell,
+.tictactoe-cell,
+.whiteboard-tool-btn {
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
   backface-visibility: hidden;
@@ -2984,7 +2988,11 @@ button:active:not(:disabled),
 .chat-neon-streak-pill:active,
 .bottom-round-vibe-btn:active,
 .mobile-fab-btn:active,
-.interactive-tap:active {
+.interactive-tap:active,
+.arrow-grid-cell:active,
+.candy-grid-cell:active,
+.tictactoe-cell:active,
+.whiteboard-tool-btn:active {
   transform: scale(0.95) translateZ(0) !important;
   transition: transform 0.06s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }

@@ -11,7 +11,213 @@ const ArrowPuzzleGame = lazyWithRetry(() => import('./ArrowPuzzleGame'));
 const TempleRunGame = lazyWithRetry(() => import('./TempleRunGame'));
 const TicTacToeAIGame = lazyWithRetry(() => import('./TicTacToeAIGame'));
 const CandyCrushGame = lazyWithRetry(() => import('./CandyCrushGame'));
-const OfflineWhiteboardGame = lazyWithRetry(() => import('./OfflineWhiteboardGame'));
+// =========================================================================
+// ATOMIC ISOLATED ARCADE & LEADERBOARD COMPONENTS (React.memo + 0ms GPU Tap Feedback)
+// =========================================================================
+
+export const ZoneGameLauncherCard = React.memo(function ZoneGameLauncherCard({
+  icon,
+  iconBg,
+  title,
+  badgeText,
+  badgeBg,
+  subtitle,
+  cardBg,
+  cardBorder,
+  cardShadow,
+  onPlay
+}) {
+  return (
+    <div
+      onClick={onPlay}
+      className="interactive-tap"
+      style={{
+        background: cardBg,
+        border: cardBorder,
+        borderRadius: '16px',
+        padding: '14px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        cursor: 'pointer',
+        transform: 'translateZ(0)',
+        willChange: 'transform',
+        transition: 'transform 0.12s cubic-bezier(0.2, 0, 0, 1), opacity 0.12s ease',
+        boxShadow: cardShadow
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div style={{
+          width: '52px',
+          height: '52px',
+          borderRadius: '14px',
+          background: iconBg,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '1.8rem',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
+          flexShrink: 0
+        }}>
+          {icon}
+        </div>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>{title}</span>
+            {badgeText && (
+              <span style={{ fontSize: '0.62rem', background: badgeBg || iconBg, color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>
+                {badgeText}
+              </span>
+            )}
+          </div>
+          {subtitle && (
+            <p style={{ margin: '3px 0 0 0', fontSize: '0.74rem', color: '#94a3b8' }}>
+              {subtitle}
+            </p>
+          )}
+        </div>
+      </div>
+      <button
+        onClick={(e) => { e.stopPropagation(); onPlay(); }}
+        className="interactive-tap"
+        style={{
+          background: iconBg,
+          color: '#fff',
+          border: 'none',
+          borderRadius: '12px',
+          padding: '8px 16px',
+          fontWeight: 900,
+          fontSize: '0.82rem',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '5px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          willChange: 'transform',
+          transform: 'translateZ(0)'
+        }}
+      >
+        <Play size={14} fill="#fff" /> PLAY
+      </button>
+    </div>
+  );
+});
+
+export const ZoneLeaderboardRow = React.memo(function ZoneLeaderboardRow({
+  item,
+  idx
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 14px',
+        borderRadius: '16px',
+        background: idx === 0
+          ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(234, 179, 8, 0.1) 100%)'
+          : idx === 1
+          ? 'linear-gradient(135deg, rgba(203, 213, 225, 0.2) 0%, rgba(148, 163, 184, 0.1) 100%)'
+          : 'var(--hover-bg)',
+        contain: 'content',
+        transform: 'translateZ(0)',
+        willChange: 'transform',
+        border: idx === 0
+          ? '1.5px solid rgba(245, 158, 11, 0.6)'
+          : idx === 1
+          ? '1.5px solid rgba(203, 213, 225, 0.6)'
+          : '1px solid var(--border)',
+        boxShadow: idx === 0
+          ? '0 4px 18px rgba(245, 158, 11, 0.25)'
+          : idx === 1
+          ? '0 4px 18px rgba(203, 213, 225, 0.25)'
+          : 'none'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <span style={{ fontSize: '0.95rem', fontWeight: 900, color: idx === 0 ? '#f59e0b' : (idx === 1 ? '#cbd5e1' : (idx === 2 ? '#94a3b8' : 'var(--text-muted)')), width: '22px' }}>
+          #{idx + 1}
+        </span>
+
+        {/* Avatar with King Crown (Gold) or Silver Crown Overlay */}
+        <div style={{ position: 'relative' }}>
+          {(item.hasKingCrown || idx === 0) ? (
+            <div style={{
+              position: 'absolute',
+              top: -12,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              fontSize: '1.1rem',
+              filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))',
+              zIndex: 5
+            }} title="👑 #1 Gold King Champion">
+              👑
+            </div>
+          ) : (item.hasSilverCrown || idx === 1) ? (
+            <div style={{
+              position: 'absolute',
+              top: -12,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              fontSize: '1.1rem',
+              filter: 'drop-shadow(0 2px 4px rgba(203, 213, 225, 0.95))',
+              zIndex: 5
+            }} title="👑 #2 Silver Champion">
+              👑
+            </div>
+          ) : null}
+          <img
+            src={item.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${item.displayName}`}
+            alt={item.displayName}
+            loading="lazy"
+            decoding="async"
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              objectFit: 'cover',
+              border: (item.hasKingCrown || idx === 0)
+                ? '2px solid #fbbf24'
+                : (item.hasSilverCrown || idx === 1)
+                ? '2px solid #cbd5e1'
+                : '1px solid rgba(255,255,255,0.2)'
+            }}
+          />
+        </div>
+
+        <div>
+          <div style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>{item.displayName}</span>
+            {idx === 0 && (
+              <span style={{ fontSize: '0.66rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.2)', padding: '1px 6px', borderRadius: '8px', border: '1px solid rgba(251, 191, 36, 0.4)' }}>
+                👑 #1 Gold Champion (+100⚡)
+              </span>
+            )}
+            {idx === 1 && (
+              <span style={{ fontSize: '0.66rem', color: '#cd7f32', background: 'rgba(205, 127, 50, 0.2)', padding: '1px 6px', borderRadius: '8px', border: '1px solid rgba(205, 127, 50, 0.4)' }}>
+                👑 #2 Bronze Champion
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+            <span style={{ color: '#38bdf8', fontWeight: 800, background: 'rgba(56, 189, 248, 0.15)', padding: '1px 6px', borderRadius: '6px' }}>
+              Level {item.level || 1}
+            </span>
+            <span style={{ fontWeight: 600 }}>• {item.gamesPlayed === 1 ? '1 Play' : `${item.gamesPlayed || 0} Plays`}</span>
+            <span style={{ color: '#fbbf24', fontWeight: 700 }}>• {item.gameName || 'Arrow Puzzle'}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ textAlign: 'right' }}>
+        <span style={{ fontSize: '0.96rem', fontWeight: 900, color: '#10b981', display: 'block' }}>
+          {item.score} pts
+        </span>
+      </div>
+    </div>
+  );
+});
 
 const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
   useBackHandler(onClose, true);
@@ -385,371 +591,83 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
               {selectedGame === null ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {/* Arrow Puzzle Card (TOP #1 GAME) */}
-                  <div
-                    onClick={() => setSelectedGame('arrow')}
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(139, 92, 246, 0.16))',
-                      border: '1.5px solid rgba(59, 130, 246, 0.55)',
-                      borderRadius: '16px',
-                      padding: '14px 16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer',
-                      transform: 'translateZ(0)',
-                      willChange: 'transform',
-                      transition: 'transform 0.12s cubic-bezier(0.2, 0, 0, 1), opacity 0.12s ease',
-                      boxShadow: '0 4px 16px rgba(59, 130, 246, 0.25)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <div style={{
-                        width: '52px',
-                        height: '52px',
-                        borderRadius: '14px',
-                        background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '1.8rem',
-                        boxShadow: '0 4px 14px rgba(59, 130, 246, 0.45)'
-                      }}>
-                        🎯
-                      </div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Arrow Puzzle</span>
-                          <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>RANKED • #1</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedGame('arrow'); }}
-                      style={{
-                        background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '8px 16px',
-                        fontWeight: 900,
-                        fontSize: '0.82rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)'
-                      }}
-                    >
-                      <Play size={14} fill="#fff" /> PLAY
-                    </button>
-                  </div>
+                  <ZoneGameLauncherCard
+                    icon="🎯"
+                    iconBg="linear-gradient(135deg, #3b82f6, #8b5cf6)"
+                    title="Arrow Puzzle"
+                    badgeText="RANKED • #1"
+                    cardBg="linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(139, 92, 246, 0.16))"
+                    cardBorder="1.5px solid rgba(59, 130, 246, 0.55)"
+                    cardShadow="0 4px 16px rgba(59, 130, 246, 0.25)"
+                    onPlay={() => setSelectedGame('arrow')}
+                  />
 
                   {/* Temple Run 3D Card */}
-                  <div
-                    onClick={() => setSelectedGame('temple')}
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(234, 88, 12, 0.16))',
-                      border: '1.5px solid rgba(245, 158, 11, 0.55)',
-                      borderRadius: '16px',
-                      padding: '14px 16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer',
-                      transform: 'translateZ(0)',
-                      willChange: 'transform',
-                      transition: 'transform 0.12s cubic-bezier(0.2, 0, 0, 1), opacity 0.12s ease',
-                      boxShadow: '0 4px 16px rgba(245, 158, 11, 0.2)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <div style={{
-                        width: '52px',
-                        height: '52px',
-                        borderRadius: '14px',
-                        background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '1.8rem',
-                        boxShadow: '0 4px 14px rgba(245, 158, 11, 0.45)'
-                      }}>
-                        🗿
-                      </div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Temple Run 3D</span>
-                          <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #f59e0b, #ea580c)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>POPULAR</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedGame('temple'); }}
-                      style={{
-                        background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '8px 16px',
-                        fontWeight: 900,
-                        fontSize: '0.82rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
-                      }}
-                    >
-                      <Play size={14} fill="#fff" /> PLAY
-                    </button>
-                  </div>
+                  <ZoneGameLauncherCard
+                    icon="🗿"
+                    iconBg="linear-gradient(135deg, #f59e0b, #ea580c)"
+                    title="Temple Run 3D"
+                    badgeText="POPULAR"
+                    cardBg="linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(234, 88, 12, 0.16))"
+                    cardBorder="1.5px solid rgba(245, 158, 11, 0.55)"
+                    cardShadow="0 4px 16px rgba(245, 158, 11, 0.2)"
+                    onPlay={() => setSelectedGame('temple')}
+                  />
 
                   {/* Candy Crush Saga Card */}
-                  <div
-                    onClick={() => setSelectedGame('candy')}
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.22), rgba(168, 85, 247, 0.16))',
-                      border: '1.5px solid rgba(236, 72, 153, 0.55)',
-                      borderRadius: '16px',
-                      padding: '14px 16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer',
-                      transform: 'translateZ(0)',
-                      willChange: 'transform',
-                      transition: 'transform 0.12s cubic-bezier(0.2, 0, 0, 1), opacity 0.12s ease',
-                      boxShadow: '0 4px 16px rgba(236, 72, 153, 0.25)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <div style={{
-                        width: '52px',
-                        height: '52px',
-                        borderRadius: '14px',
-                        background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '1.8rem',
-                        boxShadow: '0 4px 14px rgba(236, 72, 153, 0.45)'
-                      }}>
-                        🍬
-                      </div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Candy Crush Saga</span>
-                          <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #ec4899, #f43f5e)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>NEW • HIT</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedGame('candy'); }}
-                      style={{
-                        background: 'linear-gradient(135deg, #ec4899, #f43f5e)',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '8px 16px',
-                        fontWeight: 900,
-                        fontSize: '0.82rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        boxShadow: '0 4px 12px rgba(236, 72, 153, 0.4)'
-                      }}
-                    >
-                      <Play size={14} fill="#fff" /> PLAY
-                    </button>
-                  </div>
+                  <ZoneGameLauncherCard
+                    icon="🍬"
+                    iconBg="linear-gradient(135deg, #ec4899, #f43f5e)"
+                    title="Candy Crush Saga"
+                    badgeText="NEW • HIT"
+                    cardBg="linear-gradient(135deg, rgba(236, 72, 153, 0.22), rgba(168, 85, 247, 0.16))"
+                    cardBorder="1.5px solid rgba(236, 72, 153, 0.55)"
+                    cardShadow="0 4px 16px rgba(236, 72, 153, 0.25)"
+                    onPlay={() => setSelectedGame('candy')}
+                  />
 
                   {/* Speed Tapper Card */}
-                  <div
-                    onClick={() => setSelectedGame('tapper')}
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(239, 68, 68, 0.1))',
-                      border: '1.5px solid rgba(245, 158, 11, 0.35)',
-                      borderRadius: '16px',
-                      padding: '14px 16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer',
-                      transform: 'translateZ(0)',
-                      willChange: 'transform',
-                      transition: 'transform 0.12s cubic-bezier(0.2, 0, 0, 1), opacity 0.12s ease',
-                      boxShadow: '0 4px 16px rgba(245, 158, 11, 0.12)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <div style={{
-                        width: '52px',
-                        height: '52px',
-                        borderRadius: '14px',
-                        background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '1.8rem',
-                        boxShadow: '0 4px 14px rgba(245, 158, 11, 0.4)'
-                      }}>
-                        ⚡
-                      </div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Speed Tapper</span>
-                          <span style={{ fontSize: '0.62rem', background: '#f59e0b', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>REFLEX</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedGame('tapper'); }}
-                      style={{
-                        background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '8px 16px',
-                        fontWeight: 900,
-                        fontSize: '0.82rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
-                      }}
-                    >
-                      <Play size={14} fill="#fff" /> PLAY
-                    </button>
-                  </div>
+                  <ZoneGameLauncherCard
+                    icon="⚡"
+                    iconBg="linear-gradient(135deg, #f59e0b, #ef4444)"
+                    title="Speed Tapper"
+                    badgeText="REFLEX"
+                    cardBg="linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(239, 68, 68, 0.1))"
+                    cardBorder="1.5px solid rgba(245, 158, 11, 0.35)"
+                    cardShadow="0 4px 16px rgba(245, 158, 11, 0.12)"
+                    onPlay={() => setSelectedGame('tapper')}
+                  />
 
                   {/* Tic-Tac-Toe vs Computer Card */}
-                  <div
-                    onClick={() => setSelectedGame('tictactoe')}
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.18), rgba(99, 102, 241, 0.12))',
-                      border: '1.5px solid rgba(168, 85, 247, 0.45)',
-                      borderRadius: '16px',
-                      padding: '14px 16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer',
-                      transform: 'translateZ(0)',
-                      willChange: 'transform',
-                      transition: 'transform 0.12s cubic-bezier(0.2, 0, 0, 1), opacity 0.12s ease',
-                      boxShadow: '0 4px 16px rgba(168, 85, 247, 0.15)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <div style={{
-                        width: '52px',
-                        height: '52px',
-                        borderRadius: '14px',
-                        background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(236, 72, 153, 0.22))',
-                        border: '1.5px solid rgba(56, 189, 248, 0.55)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        boxShadow: '0 4px 14px rgba(56, 189, 248, 0.35)'
-                      }}>
-                        <svg width="32" height="32" viewBox="0 0 36 36" fill="none">
-                          <line x1="7" y1="9" x2="19" y2="27" stroke="#38bdf8" strokeWidth="4.2" strokeLinecap="round" />
-                          <line x1="19" y1="9" x2="7" y2="27" stroke="#38bdf8" strokeWidth="4.2" strokeLinecap="round" />
-                          <circle cx="27" cy="18" r="7.2" stroke="#ec4899" strokeWidth="4.2" />
-                        </svg>
-                      </div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Tic-Tac-Toe vs Computer</span>
-                          <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #a855f7, #6366f1)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>AI ARENA</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedGame('tictactoe'); }}
-                      style={{
-                        background: 'linear-gradient(135deg, #a855f7, #6366f1)',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '8px 16px',
-                        fontWeight: 900,
-                        fontSize: '0.82rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        boxShadow: '0 4px 12px rgba(168, 85, 247, 0.4)'
-                      }}
-                    >
-                      <Play size={14} fill="#fff" /> PLAY
-                    </button>
-                  </div>
+                  <ZoneGameLauncherCard
+                    icon={(
+                      <svg width="32" height="32" viewBox="0 0 36 36" fill="none">
+                        <line x1="7" y1="9" x2="19" y2="27" stroke="#38bdf8" strokeWidth="4.2" strokeLinecap="round" />
+                        <line x1="19" y1="9" x2="7" y2="27" stroke="#38bdf8" strokeWidth="4.2" strokeLinecap="round" />
+                        <circle cx="27" cy="18" r="7.2" stroke="#ec4899" strokeWidth="4.2" />
+                      </svg>
+                    )}
+                    iconBg="linear-gradient(135deg, #a855f7, #6366f1)"
+                    title="Tic-Tac-Toe vs Computer"
+                    badgeText="AI ARENA"
+                    cardBg="linear-gradient(135deg, rgba(168, 85, 247, 0.18), rgba(99, 102, 241, 0.12))"
+                    cardBorder="1.5px solid rgba(168, 85, 247, 0.45)"
+                    cardShadow="0 4px 16px rgba(168, 85, 247, 0.15)"
+                    onPlay={() => setSelectedGame('tictactoe')}
+                  />
 
                   {/* Creative Whiteboard Studio Card (100% Offline) */}
-                  <div
-                    onClick={() => setSelectedGame('draw')}
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(99, 102, 241, 0.14))',
-                      border: '1.5px solid rgba(56, 189, 248, 0.45)',
-                      borderRadius: '16px',
-                      padding: '14px 16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer',
-                      transform: 'translateZ(0)',
-                      willChange: 'transform',
-                      transition: 'transform 0.12s cubic-bezier(0.2, 0, 0, 1), opacity 0.12s ease',
-                      boxShadow: '0 4px 16px rgba(56, 189, 248, 0.2)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <div style={{
-                        width: '52px',
-                        height: '52px',
-                        borderRadius: '14px',
-                        background: 'linear-gradient(135deg, #38bdf8, #6366f1)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '1.8rem',
-                        boxShadow: '0 4px 14px rgba(56, 189, 248, 0.4)'
-                      }}>
-                        🎨
-                      </div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: 900, fontSize: '1.02rem', color: '#fff' }}>Whiteboard Studio</span>
-                          <span style={{ fontSize: '0.62rem', background: 'linear-gradient(135deg, #38bdf8, #6366f1)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 800 }}>OFFLINE • DRAW & SAVE</span>
-                        </div>
-                        <p style={{ margin: '3px 0 0 0', fontSize: '0.74rem', color: '#94a3b8' }}>
-                          Sketch freely & download PNG art directly to your phone/PC!
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedGame('draw'); }}
-                      style={{
-                        background: 'linear-gradient(135deg, #38bdf8, #6366f1)',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '8px 16px',
-                        fontWeight: 900,
-                        fontSize: '0.82rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        boxShadow: '0 4px 12px rgba(56, 189, 248, 0.4)'
-                      }}
-                    >
-                      <Play size={14} fill="#fff" /> DRAW
-                    </button>
-                  </div>
+                  <ZoneGameLauncherCard
+                    icon="🎨"
+                    iconBg="linear-gradient(135deg, #38bdf8, #6366f1)"
+                    title="Whiteboard Studio"
+                    badgeText="OFFLINE • DRAW & SAVE"
+                    subtitle="Sketch freely & download PNG art directly to your phone/PC!"
+                    cardBg="linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(99, 102, 241, 0.14))"
+                    cardBorder="1.5px solid rgba(56, 189, 248, 0.45)"
+                    cardShadow="0 4px 16px rgba(56, 189, 248, 0.2)"
+                    onPlay={() => setSelectedGame('draw')}
+                  />
                 </div>
               ) : (
                 /* When a game is selected: Top Back Bar + Active Game */
@@ -977,115 +895,11 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
                 </div>
               ) : (
                 leaderboard.map((item, idx) => (
-                  <div
+                  <ZoneLeaderboardRow
                     key={item.id || idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '12px 14px',
-                      borderRadius: '16px',
-                      background: idx === 0
-                        ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(234, 179, 8, 0.1) 100%)'
-                        : idx === 1
-                        ? 'linear-gradient(135deg, rgba(203, 213, 225, 0.2) 0%, rgba(148, 163, 184, 0.1) 100%)'
-                        : 'var(--hover-bg)',
-                      contain: 'content',
-                      transform: 'translateZ(0)',
-                      willChange: 'transform',
-                      border: idx === 0
-                        ? '1.5px solid rgba(245, 158, 11, 0.6)'
-                        : idx === 1
-                        ? '1.5px solid rgba(203, 213, 225, 0.6)'
-                        : '1px solid var(--border)',
-                      boxShadow: idx === 0
-                        ? '0 4px 18px rgba(245, 158, 11, 0.25)'
-                        : idx === 1
-                        ? '0 4px 18px rgba(203, 213, 225, 0.25)'
-                        : 'none'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <span style={{ fontSize: '0.95rem', fontWeight: 900, color: idx === 0 ? '#f59e0b' : (idx === 1 ? '#cbd5e1' : (idx === 2 ? '#94a3b8' : 'var(--text-muted)')), width: '22px' }}>
-                        #{idx + 1}
-                      </span>
-
-                      {/* Avatar with King Crown (Gold) or Silver Crown Overlay */}
-                      <div style={{ position: 'relative' }}>
-                        {(item.hasKingCrown || idx === 0) ? (
-                          <div style={{
-                            position: 'absolute',
-                            top: -12,
-                            left: '50%',
-                            transform: 'translateX(-50%)',
-                            fontSize: '1.1rem',
-                            filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))',
-                            zIndex: 5
-                          }} title="👑 #1 Gold King Champion">
-                            👑
-                          </div>
-                        ) : (item.hasSilverCrown || idx === 1) ? (
-                          <div style={{
-                            position: 'absolute',
-                            top: -12,
-                            left: '50%',
-                            transform: 'translateX(-50%)',
-                            fontSize: '1.1rem',
-                            filter: 'drop-shadow(0 2px 4px rgba(203, 213, 225, 0.95))',
-                            zIndex: 5
-                          }} title="👑 #2 Silver Champion">
-                            👑
-                          </div>
-                        ) : null}
-                        <img
-                          src={item.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${item.displayName}`}
-                          alt={item.displayName}
-                          loading="lazy"
-                          decoding="async"
-                          style={{
-                            width: '38px',
-                            height: '38px',
-                            borderRadius: '50%',
-                            objectFit: 'cover',
-                            border: (item.hasKingCrown || idx === 0)
-                              ? '2px solid #fbbf24'
-                              : (item.hasSilverCrown || idx === 1)
-                              ? '2px solid #cbd5e1'
-                              : '1px solid rgba(255,255,255,0.2)'
-                          }}
-                        />
-                      </div>
-
-                      <div>
-                        <div style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span>{item.displayName}</span>
-                          {idx === 0 && (
-                            <span style={{ fontSize: '0.66rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.2)', padding: '1px 6px', borderRadius: '8px', border: '1px solid rgba(251, 191, 36, 0.4)' }}>
-                              👑 #1 Gold Champion (+100⚡)
-                            </span>
-                          )}
-                          {idx === 1 && (
-                            <span style={{ fontSize: '0.66rem', color: '#cd7f32', background: 'rgba(205, 127, 50, 0.2)', padding: '1px 6px', borderRadius: '8px', border: '1px solid rgba(205, 127, 50, 0.4)' }}>
-                              👑 #2 Bronze Champion
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                          <span style={{ color: '#38bdf8', fontWeight: 800, background: 'rgba(56, 189, 248, 0.15)', padding: '1px 6px', borderRadius: '6px' }}>
-                            Level {item.level || 1}
-                          </span>
-                          <span style={{ fontWeight: 600 }}>• {item.gamesPlayed === 1 ? '1 Play' : `${item.gamesPlayed || 0} Plays`}</span>
-                          <span style={{ color: '#fbbf24', fontWeight: 700 }}>• {item.gameName || 'Arrow Puzzle'}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '0.96rem', fontWeight: 900, color: '#10b981', display: 'block' }}>
-                        {item.score} pts
-                      </span>
-                    </div>
-                  </div>
+                    item={item}
+                    idx={idx}
+                  />
                 ))
               )}
             </div>
