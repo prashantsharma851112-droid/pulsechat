@@ -342,6 +342,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const longPressTimeoutRef = useRef(null);
   const touchStartPosRef = useRef({ x: 0, y: 0 });
   const isLongPressTriggeredRef = useRef(false);
+  const isLongPressActiveRef = useRef(false);
   const suppressClickUntilRef = useRef(0);
   const lastTouchTimeRef = useRef(0);
 
@@ -506,26 +507,32 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   // Touch and Long-Press Handlers for Chat Selection (WhatsApp style)
   const handleChatTouchStart = (chatItem, e) => {
     lastTouchTimeRef.current = Date.now();
-    if (selectedChatIds.length > 0) return; // In multi-select mode, tap toggles selection
+    if (selectedChatIds.length > 0) return; // In multi-select mode, normal tap toggles selection
     const touch = e.touches ? e.touches[0] : e;
     touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
     isLongPressTriggeredRef.current = false;
+    isLongPressActiveRef.current = false;
 
     if (longPressTimeoutRef.current) clearTimeout(longPressTimeoutRef.current);
     longPressTimeoutRef.current = setTimeout(() => {
       longPressTimeoutRef.current = null;
+      isLongPressActiveRef.current = true;
       isLongPressTriggeredRef.current = true;
-      suppressClickUntilRef.current = Date.now() + 650;
+      suppressClickUntilRef.current = Date.now() + 2000;
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
         try { navigator.vibrate(45); } catch (_) {}
       }
       const cid = chatItem.id || chatItem._id;
-      setSelectedChatIds([cid]);
+      // Ensure it is added into selected list, NEVER removed while holding
+      setSelectedChatIds(prev => prev.includes(cid) ? prev : [...prev, cid]);
     }, 380);
   };
 
   const handleChatTouchMove = (e) => {
     lastTouchTimeRef.current = Date.now();
+    // If selection already activated, user is simply resting or shifting their finger while holding
+    // NEVER cancel or abort selection once activated!
+    if (isLongPressActiveRef.current) return;
     if (!longPressTimeoutRef.current) return;
     const touch = e.touches ? e.touches[0] : e;
     const dx = Math.abs(touch.clientX - touchStartPosRef.current.x);
@@ -539,6 +546,25 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
   const handleChatTouchEnd = () => {
     lastTouchTimeRef.current = Date.now();
+    if (isLongPressActiveRef.current) {
+      // Finger lifted after holding — shield click from THIS exact release timestamp!
+      suppressClickUntilRef.current = Date.now() + 1000;
+      isLongPressTriggeredRef.current = true;
+      isLongPressActiveRef.current = false;
+    }
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+  };
+
+  const handleChatTouchCancel = () => {
+    lastTouchTimeRef.current = Date.now();
+    if (isLongPressActiveRef.current) {
+      suppressClickUntilRef.current = Date.now() + 1000;
+      isLongPressTriggeredRef.current = true;
+      isLongPressActiveRef.current = false;
+    }
     if (longPressTimeoutRef.current) {
       clearTimeout(longPressTimeoutRef.current);
       longPressTimeoutRef.current = null;
@@ -552,19 +578,22 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     if (selectedChatIds.length > 0) return;
     touchStartPosRef.current = { x: e.clientX, y: e.clientY };
     isLongPressTriggeredRef.current = false;
+    isLongPressActiveRef.current = false;
 
     if (longPressTimeoutRef.current) clearTimeout(longPressTimeoutRef.current);
     longPressTimeoutRef.current = setTimeout(() => {
       longPressTimeoutRef.current = null;
+      isLongPressActiveRef.current = true;
       isLongPressTriggeredRef.current = true;
-      suppressClickUntilRef.current = Date.now() + 650;
+      suppressClickUntilRef.current = Date.now() + 2000;
       const cid = chatItem.id || chatItem._id;
-      setSelectedChatIds([cid]);
+      setSelectedChatIds(prev => prev.includes(cid) ? prev : [...prev, cid]);
     }, 400);
   };
 
   const handleChatMouseMove = (e) => {
     if (Date.now() - lastTouchTimeRef.current < 800) return;
+    if (isLongPressActiveRef.current) return;
     if (!longPressTimeoutRef.current) return;
     const dx = Math.abs(e.clientX - touchStartPosRef.current.x);
     const dy = Math.abs(e.clientY - touchStartPosRef.current.y);
@@ -576,6 +605,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
   const handleChatMouseUp = () => {
     if (Date.now() - lastTouchTimeRef.current < 800) return;
+    if (isLongPressActiveRef.current) {
+      suppressClickUntilRef.current = Date.now() + 1000;
+      isLongPressTriggeredRef.current = true;
+      isLongPressActiveRef.current = false;
+    }
     if (longPressTimeoutRef.current) {
       clearTimeout(longPressTimeoutRef.current);
       longPressTimeoutRef.current = null;
@@ -586,8 +620,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     if (e) {
       e.stopPropagation();
     }
-    // If long press triggered, suppress navigation
-    if (isLongPressTriggeredRef.current || Date.now() < suppressClickUntilRef.current) {
+    // If long press triggered, still active, or within release shield, suppress click
+    if (isLongPressTriggeredRef.current || isLongPressActiveRef.current || Date.now() < suppressClickUntilRef.current) {
       isLongPressTriggeredRef.current = false;
       if (e) e.preventDefault();
       return;
@@ -3631,12 +3665,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     onTouchStart={(e) => handleChatTouchStart(c, e)}
                     onTouchMove={handleChatTouchMove}
                     onTouchEnd={handleChatTouchEnd}
+                    onTouchCancel={handleChatTouchCancel}
                     onMouseDown={(e) => handleChatMouseDown(c, e)}
                     onMouseMove={handleChatMouseMove}
                     onMouseUp={handleChatMouseUp}
                     onContextMenu={(e) => {
                       e.preventDefault();
-                      setSelectedChatIds(prev => prev.includes(cid) ? prev.filter(id => id !== cid) : [...prev, cid]);
+                      e.stopPropagation();
+                      setSelectedChatIds(prev => prev.includes(cid) ? prev : [...prev, cid]);
                     }}
                     className={`chat-item-row ${isSelected ? 'selected' : (activeChat?.id === c.id ? 'active' : '')}`}
                     style={{
@@ -3646,6 +3682,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                       boxShadow: isSelected ? 'inset 3px 0 0 var(--accent)' : undefined,
                       userSelect: 'none',
                       WebkitUserSelect: 'none',
+                      WebkitTouchCallout: 'none',
+                      touchAction: 'pan-y',
                       willChange: 'transform',
                       transform: 'translateZ(0)',
                       transition: 'background 0.15s ease'
@@ -3765,12 +3803,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                   onTouchStart={(e) => handleChatTouchStart(g, e)}
                   onTouchMove={handleChatTouchMove}
                   onTouchEnd={handleChatTouchEnd}
+                  onTouchCancel={handleChatTouchCancel}
                   onMouseDown={(e) => handleChatMouseDown(g, e)}
                   onMouseMove={handleChatMouseMove}
                   onMouseUp={handleChatMouseUp}
                   onContextMenu={(e) => {
                     e.preventDefault();
-                    setSelectedChatIds(prev => prev.includes(gid) ? prev.filter(id => id !== gid) : [...prev, gid]);
+                    e.stopPropagation();
+                    setSelectedChatIds(prev => prev.includes(gid) ? prev : [...prev, gid]);
                   }}
                   className={`chat-item-row ${isSelected ? 'selected' : (activeChat?.id === g.id ? 'active' : '')}`}
                   style={{
@@ -3780,6 +3820,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     boxShadow: isSelected ? 'inset 3px 0 0 var(--accent)' : undefined,
                     userSelect: 'none',
                     WebkitUserSelect: 'none',
+                    WebkitTouchCallout: 'none',
+                    touchAction: 'pan-y',
                     willChange: 'transform',
                     transform: 'translateZ(0)',
                     transition: 'background 0.15s ease'
@@ -3873,12 +3915,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                     onTouchStart={(e) => handleChatTouchStart(u, e)}
                     onTouchMove={handleChatTouchMove}
                     onTouchEnd={handleChatTouchEnd}
+                    onTouchCancel={handleChatTouchCancel}
                     onMouseDown={(e) => handleChatMouseDown(u, e)}
                     onMouseMove={handleChatMouseMove}
                     onMouseUp={handleChatMouseUp}
                     onContextMenu={(e) => {
                       e.preventDefault();
-                      setSelectedChatIds(prev => prev.includes(cid) ? prev.filter(id => id !== cid) : [...prev, cid]);
+                      e.stopPropagation();
+                      setSelectedChatIds(prev => prev.includes(cid) ? prev : [...prev, cid]);
                     }}
                     className={`chat-item-row ${isSelected ? 'selected' : (activeChat?.id === u.id ? 'active' : '')}`}
                     style={{
@@ -3888,6 +3932,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                       boxShadow: isSelected ? 'inset 3px 0 0 var(--accent)' : undefined,
                       userSelect: 'none',
                       WebkitUserSelect: 'none',
+                      WebkitTouchCallout: 'none',
+                      touchAction: 'pan-y',
                       willChange: 'transform',
                       transform: 'translateZ(0)',
                       transition: 'background 0.15s ease'
