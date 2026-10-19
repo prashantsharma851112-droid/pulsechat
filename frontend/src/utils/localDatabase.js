@@ -467,8 +467,15 @@ export async function createFullDeviceBackup(currentUser) {
   const allMessages = await getAllMessagesFromLocalDb();
   let recentChats = [];
   try {
-    const rawChats = localStorage.getItem('cached_recent_chats');
-    if (rawChats) recentChats = JSON.parse(rawChats);
+    const uId = currentUser?.id || currentUser?._id;
+    if (uId) {
+      const rawChats = localStorage.getItem(`pulsechat_recent_${uId}`);
+      if (rawChats) recentChats = JSON.parse(rawChats);
+    }
+    if (!recentChats.length) {
+      const legacyChats = localStorage.getItem('cached_recent_chats');
+      if (legacyChats) recentChats = JSON.parse(legacyChats);
+    }
   } catch (_) {}
 
   const now = new Date();
@@ -526,7 +533,7 @@ export async function createFullDeviceBackup(currentUser) {
  * WhatsApp-Style Restore from Device Backup (Zero Cloud Bandwidth)
  * Restores messages directly into IndexedDB without pinging MongoDB or Render server.
  */
-export async function restoreFullDeviceBackup(fileContent) {
+export async function restoreFullDeviceBackup(fileContent, currentUser = null) {
   if (!fileContent) throw new Error('Backup file is empty.');
   const data = typeof fileContent === 'string' ? JSON.parse(fileContent) : fileContent;
 
@@ -541,31 +548,75 @@ export async function restoreFullDeviceBackup(fileContent) {
   if (messagesToRestore.length > 0) {
     const tx = db.transaction([STORE_MESSAGES], 'readwrite');
     const store = tx.objectStore(STORE_MESSAGES);
+    const chatBuckets = new Map();
+
     for (const msg of messagesToRestore) {
       if (msg && (msg.id || msg.clientTempId)) {
-        store.put({
+        const item = {
           ...msg,
           id: String(msg.id || msg.clientTempId),
           chatId: String(msg.chatId || 'restored'),
           timestamp: msg.timestamp || msg.createdAt || new Date().toISOString()
-        });
+        };
+        store.put(item);
+
+        const cId = item.chatId;
+        if (!chatBuckets.has(cId)) chatBuckets.set(cId, []);
+        chatBuckets.get(cId).push(item);
       }
     }
     await new Promise((resolve, reject) => {
       tx.oncomplete = () => resolve();
       tx.onerror = (e) => reject(e);
     });
+
+    // Populate per-chat localStorage cache for 0ms instant loading
+    chatBuckets.forEach((cMsgs, cId) => {
+      try {
+        const sorted = cMsgs.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+        localStorage.setItem(`pulsechat_msgs_${cId}`, JSON.stringify(sorted.slice(-250)));
+        if (cId.includes('_')) {
+          const canonical = cId.split('_').sort().join('_');
+          if (canonical !== cId) {
+            localStorage.setItem(`pulsechat_msgs_${canonical}`, JSON.stringify(sorted.slice(-250)));
+          }
+        }
+      } catch (_) {}
+    });
+  }
+
+  // Resolve target user ID for cached recent chats
+  let targetUserId = currentUser?.id || currentUser?._id;
+  if (!targetUserId && data.user) {
+    targetUserId = data.user.id || data.user._id;
+  }
+  if (!targetUserId) {
+    try {
+      const uStr = localStorage.getItem('pulsechat_user');
+      if (uStr) {
+        const u = JSON.parse(uStr);
+        targetUserId = u?.id || u?._id;
+      }
+    } catch (_) {}
   }
 
   // Restore recent chats if present in backup
   if (data.recentChats && Array.isArray(data.recentChats)) {
     try {
       localStorage.setItem('cached_recent_chats', JSON.stringify(data.recentChats));
+      if (targetUserId) {
+        localStorage.setItem(`pulsechat_recent_${targetUserId}`, JSON.stringify(data.recentChats));
+      }
     } catch (_) {}
   }
 
   try {
     localStorage.setItem('pulse_last_restore_time', new Date().toISOString());
+  } catch (_) {}
+
+  // Trigger real-time UI refresh
+  try {
+    window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
   } catch (_) {}
 
   return {

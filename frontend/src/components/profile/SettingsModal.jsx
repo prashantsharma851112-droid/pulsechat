@@ -302,7 +302,7 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
     setStatusMsg(null);
     try {
       const text = await file.text();
-      const res = await restoreFullDeviceBackup(text);
+      const res = await restoreFullDeviceBackup(text, currentUser);
       if (res?.success) {
         setStatusMsg({
           type: 'success',

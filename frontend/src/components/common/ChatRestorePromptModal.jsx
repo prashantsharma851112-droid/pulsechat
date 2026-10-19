@@ -27,7 +27,7 @@ export default function ChatRestorePromptModal({ user, onClose, onRestoreComplet
 
     try {
       const text = await file.text();
-      const res = await restoreFullDeviceBackup(text);
+      const res = await restoreFullDeviceBackup(text, user);
 
       if (res?.success) {
         setRestoredStats({
