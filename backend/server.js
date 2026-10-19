@@ -431,9 +431,12 @@ io.on('connection', (socket) => {
 
       const pendingMsgs = await Message.find({ receiverId: { $in: allUserVariants }, status: 'sent' }).lean();
       if (pendingMsgs.length > 0) {
-        await Message.updateMany({ receiverId: { $in: allUserVariants }, status: 'sent' }, { status: 'delivered' });
+        // 1. Deliver each queued message to the newly connected recipient
+        for (const pMsg of pendingMsgs) {
+          socket.emit('new_message', { ...pMsg, status: 'delivered' });
+        }
 
-        // Sender ko notify karo taaki unke screen par Single Tick turant Double Tick bann jaye
+        // 2. Sender ko notify karo taaki unke screen par Single Tick turant Double Tick bann jaye
         const senderMap = {};
         for (const msg of pendingMsgs) {
           if (!senderMap[msg.senderId]) senderMap[msg.senderId] = {};
@@ -458,6 +461,12 @@ io.on('connection', (socket) => {
               if (canonicalCId && canonicalCId !== cId) io.to(canonicalCId).emit('message_delivered_update', singlePayload);
             }
           }
+        }
+
+        // 3. WhatsApp Post Office: Once delivered to recipient device, wipe out from MongoDB server DB!
+        const deliveredMsgIds = pendingMsgs.map(m => m.id).filter(Boolean);
+        if (deliveredMsgIds.length > 0) {
+          await Message.deleteMany({ id: { $in: deliveredMsgIds } });
         }
       }
     } catch (err) {
@@ -1063,9 +1072,10 @@ io.on('connection', (socket) => {
   socket.on('message_delivered', async ({ messageId, chatId, senderId }) => {
     try {
       if (!messageId) return;
-      await Message.findOneAndUpdate(
-        { $or: [{ id: messageId }, { clientTempId: messageId }] },
-        { status: 'delivered' }
+      // WhatsApp Post Office: Once recipient confirms delivery to their phone,
+      // wipe out the delivered message from server database immediately!
+      await Message.deleteOne(
+        { $or: [{ id: messageId }, { clientTempId: messageId }] }
       );
       const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
       const singlePayload = { messageId, chatId, canonicalChatId, status: 'delivered' };
@@ -2475,12 +2485,12 @@ mongoose.connect(config.MONGO_URI)
         }, 10 * 60 * 1000);
       }
 
-      // WhatsApp-Style auto-cleanup: delivered messages older than 15 days archived from MongoDB (stored in user phone IndexedDB)
-      const AUTO_CLEANUP_INTERVAL = 12 * 60 * 60 * 1000;
+      // WhatsApp Post Office auto-cleanup: 7-day max queue protection
+      const AUTO_CLEANUP_INTERVAL = 6 * 60 * 60 * 1000;
       setTimeout(async () => {
         try {
-          console.log('Running 15-day chat auto-cleanup (WhatsApp-style DB protection)...');
-          await db.runAutoCleanupJob(15);
+          console.log('Running 7-day Post Office queue cleanup (WhatsApp-style DB protection)...');
+          await db.runAutoCleanupJob(7);
         } catch (e) {
           console.warn('Auto-cleanup startup error:', e.message);
         }
@@ -2488,8 +2498,8 @@ mongoose.connect(config.MONGO_URI)
 
       setInterval(async () => {
         try {
-          console.log('Running periodic 15-day chat auto-cleanup...');
-          await db.runAutoCleanupJob(15);
+          console.log('Running periodic 7-day Post Office queue cleanup...');
+          await db.runAutoCleanupJob(7);
         } catch (e) {
           console.warn('Auto-cleanup interval error:', e.message);
         }
