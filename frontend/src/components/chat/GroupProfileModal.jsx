@@ -6,6 +6,84 @@ import { BACKEND_URL } from '../../utils/config';
 import { compressImage, parseSafeJson } from '../../utils/imageCompressor';
 import { updateGroupInStorage } from '../../utils/offlineStorage';
 
+export const GroupMemberRowItem = React.memo(function GroupMemberRowItem({
+  member,
+  isOnline,
+  isMemberAdmin,
+  canCall,
+  isAdmin,
+  onStartVoiceCall,
+  onStartVideoCall,
+  onRemoveMember
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '8px 10px',
+        borderRadius: '10px',
+        background: 'var(--bg-card)',
+        willChange: 'transform',
+        transform: 'translateZ(0)'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ position: 'relative' }}>
+          <img src={member.avatar} alt={member.displayName} style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
+          {isOnline && <div className="online-indicator-dot" style={{ width: '10px', height: '10px', border: '2px solid var(--bg-card)' }} />}
+        </div>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-main)' }}>{member.displayName}</span>
+            {isMemberAdmin && (
+              <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: '6px' }}>
+                Admin
+              </span>
+            )}
+          </div>
+          <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>@{member.username}</span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        {canCall && (
+          <>
+            <button
+              className="icon-btn-ghost"
+              onClick={onStartVoiceCall}
+              title={`Voice Call ${member.displayName}`}
+              style={{ padding: '6px', willChange: 'transform', transform: 'translateZ(0)' }}
+            >
+              <Phone size={15} color="var(--accent)" />
+            </button>
+            <button
+              className="icon-btn-ghost"
+              onClick={onStartVideoCall}
+              title={`Video Call ${member.displayName}`}
+              style={{ padding: '6px', willChange: 'transform', transform: 'translateZ(0)' }}
+            >
+              <Video size={15} color="var(--accent)" />
+            </button>
+          </>
+        )}
+
+        {isAdmin && (
+          <button
+            className="icon-btn-ghost"
+            onClick={onRemoveMember}
+            title="Remove from group"
+            style={{ padding: '6px', color: '#ef4444', willChange: 'transform', transform: 'translateZ(0)' }}
+          >
+            <Trash2 size={15} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
+
 function GroupProfileModal({ group, onClose, onGroupUpdated, onStartCall, onOpenFullDp }) {
   const { user: currentUser, token } = useContext(AuthContext);
   const { socket, onlineUsers } = useContext(SocketContext);
@@ -471,75 +549,19 @@ function GroupProfileModal({ group, onClose, onGroupUpdated, onStartCall, onOpen
             </div>
 
             <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {memberUsers.map(m => {
-                const isOnline = onlineUsers.includes(m.id);
-                const isMemberAdmin = m.id === groupData.adminId;
-                return (
-                  <div
-                    key={m.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 10px',
-                      borderRadius: '10px',
-                      background: 'var(--bg-card)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ position: 'relative' }}>
-                        <img src={m.avatar} alt={m.displayName} style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
-                        {isOnline && <div className="online-indicator-dot" style={{ width: '10px', height: '10px', border: '2px solid var(--bg-card)' }} />}
-                      </div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-main)' }}>{m.displayName}</span>
-                          {isMemberAdmin && (
-                            <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: '6px' }}>
-                              Admin
-                            </span>
-                          )}
-                        </div>
-                        <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>@{m.username}</span>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      {m.id !== currentUser?.id && onStartCall && (
-                        <>
-                          <button
-                            className="icon-btn-ghost"
-                            onClick={() => { onClose(); onStartCall(false, m); }}
-                            title={`Voice Call ${m.displayName}`}
-                            style={{ padding: '6px' }}
-                          >
-                            <Phone size={15} color="var(--accent)" />
-                          </button>
-                          <button
-                            className="icon-btn-ghost"
-                            onClick={() => { onClose(); onStartCall(true, m); }}
-                            title={`Video Call ${m.displayName}`}
-                            style={{ padding: '6px' }}
-                          >
-                            <Video size={15} color="var(--accent)" />
-                          </button>
-                        </>
-                      )}
-
-                      {isAdmin && m.id !== currentUser?.id && (
-                        <button
-                          className="icon-btn-ghost"
-                          onClick={() => handleRemoveMember(m.id)}
-                          title="Remove from group"
-                          style={{ padding: '6px', color: '#ef4444' }}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {memberUsers.map(m => (
+                <GroupMemberRowItem
+                  key={m.id}
+                  member={m}
+                  isOnline={onlineUsers.includes(m.id)}
+                  isMemberAdmin={m.id === groupData.adminId}
+                  canCall={m.id !== currentUser?.id && Boolean(onStartCall)}
+                  isAdmin={isAdmin && m.id !== currentUser?.id}
+                  onStartVoiceCall={() => { onClose(); onStartCall?.(false, m); }}
+                  onStartVideoCall={() => { onClose(); onStartCall?.(true, m); }}
+                  onRemoveMember={() => handleRemoveMember(m.id)}
+                />
+              ))}
             </div>
           </div>
         </div>

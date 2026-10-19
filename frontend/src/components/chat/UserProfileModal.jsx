@@ -9,6 +9,354 @@ import { getCachedAllUsers, getCachedFriends, setCachedFriends, getCachedMessage
 import ChatManageStorageModal, { formatStorageSize, estimateMessageSize } from './ChatManageStorageModal';
 import PinLockModal from '../common/PinLockModal';
 import { isChatLocked, setChatLocked, isChatHidden, setChatHidden, getSecurityPin, isChatMuted, setChatMuted } from '../../utils/securityLock';
+import { runWorkerTask } from '../../workers/pulseWorkerBridge';
+
+/**
+ * 1. Atomic Profile Quick Actions Row (GPU-Accelerated)
+ */
+export const ProfileQuickActionRow = React.memo(function ProfileQuickActionRow({
+  validAvatar,
+  userToDisplay,
+  currentUserId,
+  onOpenFullDp,
+  onClose,
+  onStartCall
+}) {
+  return (
+    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+      <button
+        type="button"
+        className="btn-secondary"
+        onClick={() => onOpenFullDp?.(validAvatar, userToDisplay?.displayName, userToDisplay?.username)}
+        style={{
+          flex: 1,
+          minWidth: '90px',
+          padding: '8px 10px',
+          fontSize: '0.82rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '5px',
+          willChange: 'transform',
+          transform: 'translateZ(0)'
+        }}
+      >
+        <Eye size={15} /> View DP
+      </button>
+      <button
+        type="button"
+        className="btn-secondary"
+        onClick={() => {
+          onClose?.();
+          window.dispatchEvent(new CustomEvent('pulsechat_open_handle_card', { detail: { user: userToDisplay } }));
+        }}
+        style={{
+          flex: 1,
+          minWidth: '100px',
+          padding: '8px 10px',
+          fontSize: '0.82rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '5px',
+          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(236, 72, 153, 0.15))',
+          border: '1px solid rgba(168, 85, 247, 0.4)',
+          color: '#c084fc',
+          willChange: 'transform',
+          transform: 'translateZ(0)'
+        }}
+        title="View & Share Aesthetic Pulse Profile Card"
+      >
+        <Sparkles size={15} /> Pulse Card ✨
+      </button>
+      {onStartCall && (
+        <>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => { onClose?.(); onStartCall(false); }}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              fontSize: '0.82rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              willChange: 'transform',
+              transform: 'translateZ(0)'
+            }}
+          >
+            <Phone size={16} /> Voice
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => { onClose?.(); onStartCall(true); }}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              fontSize: '0.82rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              willChange: 'transform',
+              transform: 'translateZ(0)'
+            }}
+          >
+            <Video size={16} /> Video
+          </button>
+        </>
+      )}
+      {currentUserId !== userToDisplay?.id && (
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={() => {
+            onClose?.();
+            window.dispatchEvent(new CustomEvent('pulsechat_open_nickname_modal'));
+          }}
+          style={{
+            flex: 1,
+            minWidth: '95px',
+            padding: '8px 10px',
+            fontSize: '0.82rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '5px',
+            willChange: 'transform',
+            transform: 'translateZ(0)'
+          }}
+          title="Edit in-chat mutual nicknames"
+        >
+          <Edit3 size={15} /> Nicknames ✏️
+        </button>
+      )}
+    </div>
+  );
+});
+
+/**
+ * 2. Atomic Profile About / Bio Section (GPU-Accelerated)
+ */
+export const ProfileAboutBioSection = React.memo(function ProfileAboutBioSection({
+  userToDisplay,
+  isOnline,
+  hasVibe,
+  userAura
+}) {
+  return (
+    <div style={{
+      background: 'var(--bg-chat)',
+      border: '1px solid var(--border)',
+      borderRadius: '14px',
+      padding: '1rem',
+      textAlign: 'left',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '12px',
+      willChange: 'transform',
+      transform: 'translateZ(0)'
+    }}>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
+          <Info size={14} color="var(--accent)" /> About / Bio
+        </div>
+        <p style={{ margin: 0, fontSize: '0.92rem', color: 'var(--text-main)', lineHeight: 1.45, fontWeight: 500 }}>
+          {userToDisplay?.status || 'Hey there! I am using PulseChat.'}
+        </p>
+      </div>
+
+      <div style={{ height: '1px', background: 'var(--border)' }} />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+        <span style={{ color: 'var(--text-muted)' }}>Username:</span>
+        <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>@{userToDisplay?.username}</span>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+        <span style={{ color: 'var(--text-muted)' }}>Status:</span>
+        <span style={{ fontWeight: 600, color: isOnline ? '#10b981' : 'var(--text-muted)' }}>
+          {isOnline ? '🟢 Online' : '⚪ Offline'}
+        </span>
+      </div>
+
+      {hasVibe && userAura && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+          <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Zap size={14} color={userAura.auraColor || 'var(--accent)'} /> Live Vibe:
+          </span>
+          <span style={{
+            fontWeight: 600,
+            color: userAura.auraColor || 'var(--accent)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}>
+            <span>{userAura.emoji || '⚡'}</span>
+            <span>
+              {userAura.isLowBattery
+                ? `Low Battery (${userAura.batteryLevel || '<20'}%)`
+                : (userAura.inGame ? `Playing ${userAura.inGame}` : userAura.mood)}
+            </span>
+          </span>
+        </div>
+      )}
+
+      {userToDisplay?.isEmailVerified && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+          <span style={{ color: 'var(--text-muted)' }}>Account Verification:</span>
+          <span style={{ fontWeight: 600, color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <ShieldCheck size={14} /> Verified
+          </span>
+        </div>
+      )}
+    </div>
+  );
+});
+
+/**
+ * 3. Atomic Profile Settings Toggles: Disappearing, Mute & Block (GPU-Accelerated)
+ */
+export const ProfileSettingsToggles = React.memo(function ProfileSettingsToggles({
+  disappearingEnabled,
+  onToggleDisappearing,
+  isMuted,
+  onToggleMute,
+  isBlocked,
+  onToggleBlock
+}) {
+  return (
+    <div style={{
+      background: 'var(--bg-chat)',
+      border: '1px solid var(--border)',
+      borderRadius: '14px',
+      padding: '1rem',
+      textAlign: 'left',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '10px',
+      willChange: 'transform',
+      transform: 'translateZ(0)'
+    }}>
+      {/* Disappearing Messages (24h) Toggle */}
+      <div
+        onClick={onToggleDisappearing}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '6px 0',
+          cursor: 'pointer'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Clock size={16} color="var(--accent)" />
+          <div>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Disappearing Messages (24h)</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Auto-delete messages after 24 hours</div>
+          </div>
+        </div>
+
+        <div style={{
+          width: '36px',
+          height: '20px',
+          borderRadius: '10px',
+          background: disappearingEnabled ? 'var(--accent)' : 'var(--border)',
+          position: 'relative',
+          transition: 'all 0.2s ease',
+          flexShrink: 0
+        }}>
+          <div style={{
+            width: '16px',
+            height: '16px',
+            borderRadius: '50%',
+            background: '#fff',
+            position: 'absolute',
+            top: '2px',
+            left: disappearingEnabled ? '18px' : '2px',
+            transition: 'all 0.2s ease'
+          }} />
+        </div>
+      </div>
+
+      <div style={{ height: '1px', background: 'var(--border)' }} />
+
+      {/* Mute Notifications Toggle */}
+      <div
+        onClick={onToggleMute}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '6px 0',
+          cursor: 'pointer'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {isMuted ? <BellOff size={16} color="#f59e0b" /> : <Bell size={16} color="var(--accent)" />}
+          <div>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Mute Notifications</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{isMuted ? 'Notifications are muted for this chat' : 'Receive alerts for incoming messages'}</div>
+          </div>
+        </div>
+
+        <div style={{
+          width: '36px',
+          height: '20px',
+          borderRadius: '10px',
+          background: isMuted ? 'var(--accent)' : 'var(--border)',
+          position: 'relative',
+          transition: 'all 0.2s ease',
+          flexShrink: 0
+        }}>
+          <div style={{
+            width: '16px',
+            height: '16px',
+            borderRadius: '50%',
+            background: '#fff',
+            position: 'absolute',
+            top: '2px',
+            left: isMuted ? '18px' : '2px',
+            transition: 'all 0.2s ease'
+          }} />
+        </div>
+      </div>
+
+      <div style={{ height: '1px', background: 'var(--border)' }} />
+
+      {/* Block / Unblock Contact Button */}
+      <button
+        type="button"
+        onClick={onToggleBlock}
+        style={{
+          width: '100%',
+          padding: '10px',
+          borderRadius: '10px',
+          background: isBlocked ? 'rgba(99, 102, 241, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+          color: isBlocked ? 'var(--accent)' : '#ef4444',
+          fontWeight: 600,
+          fontSize: '0.85rem',
+          border: isBlocked ? '1px solid var(--accent)' : '1px solid rgba(239, 68, 68, 0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          cursor: 'pointer',
+          marginTop: '4px',
+          willChange: 'transform',
+          transform: 'translateZ(0)',
+          transition: 'transform 0.08s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}
+      >
+        {isBlocked ? <Unlock size={16} /> : <Ban size={16} />}
+        {isBlocked ? 'Unblock Contact' : 'Block Contact'}
+      </button>
+    </div>
+  );
+});
 
 function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp, messages: propMessages, onDeleteMessages, onForwardMessages }) {
   const { user, token, blockUser, unblockUser } = useContext(AuthContext);
@@ -60,7 +408,24 @@ function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp, mess
     return isOnce || isTwice || isDust;
   };
 
-  const sharedMediaItems = useMemo(() => {
+  // Off-thread Multi-threaded Storage Stats Calculation via pulseWorkerBridge
+  const [workerStorageStats, setWorkerStorageStats] = useState(null);
+
+  useEffect(() => {
+    let isCurrent = true;
+    if (sharedMessages && sharedMessages.length > 0) {
+      runWorkerTask('CALCULATE_STORAGE_STATS', { messages: sharedMessages })
+        .then(res => {
+          if (isCurrent && res) {
+            setWorkerStorageStats(res);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => { isCurrent = false; };
+  }, [sharedMessages]);
+
+  const initialSharedMediaItems = useMemo(() => {
     const items = [];
     (sharedMessages || []).forEach(m => {
       if (m.type === 'deleted' || m.isDeleted) return;
@@ -83,7 +448,7 @@ function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp, mess
     return items;
   }, [sharedMessages]);
 
-  const sharedFilesItems = useMemo(() => {
+  const initialSharedFilesItems = useMemo(() => {
     return (sharedMessages || []).filter(m =>
       (m.type === 'document' || m.type === 'file' || (m.fileName && m.type !== 'image' && m.type !== 'video' && m.type !== 'audio' && m.type !== 'stealth_dust')) &&
       (m.mediaUrl || m.fileUrl) &&
@@ -93,7 +458,7 @@ function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp, mess
     );
   }, [sharedMessages]);
 
-  const sharedLinksItems = useMemo(() => {
+  const initialSharedLinksItems = useMemo(() => {
     const list = [];
     (sharedMessages || []).forEach(m => {
       if (m.type === 'text' && m.content) {
@@ -106,12 +471,17 @@ function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp, mess
     return list;
   }, [sharedMessages]);
 
-  const totalMediaBytes = useMemo(() => {
+  const initialTotalBytes = useMemo(() => {
     let bytes = 0;
-    (sharedMediaItems || []).forEach(m => { bytes += estimateMessageSize(m); });
-    (sharedFilesItems || []).forEach(m => { bytes += estimateMessageSize(m); });
+    (initialSharedMediaItems || []).forEach(m => { bytes += estimateMessageSize(m); });
+    (initialSharedFilesItems || []).forEach(m => { bytes += estimateMessageSize(m); });
     return bytes;
-  }, [sharedMediaItems, sharedFilesItems]);
+  }, [initialSharedMediaItems, initialSharedFilesItems]);
+
+  const sharedMediaItems = workerStorageStats ? workerStorageStats.mediaItems : initialSharedMediaItems;
+  const sharedFilesItems = workerStorageStats ? workerStorageStats.fileItems : initialSharedFilesItems;
+  const sharedLinksItems = workerStorageStats ? workerStorageStats.linkItems : initialSharedLinksItems;
+  const totalMediaBytes = workerStorageStats ? workerStorageStats.totalMediaBytes : initialTotalBytes;
 
   const handleToggleChatLock = () => {
     if (!chatId) return;
@@ -798,79 +1168,15 @@ function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp, mess
             </div>
           )}
 
-          {/* Action Quick Buttons */}
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-            <button
-              className="btn-secondary"
-              onClick={() => onOpenFullDp(validAvatar, userToDisplay.displayName, userToDisplay.username)}
-              style={{ flex: 1, minWidth: '90px', padding: '8px 10px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
-            >
-              <Eye size={15} /> View DP
-            </button>
-            <button
-              className="btn-secondary"
-              onClick={() => {
-                onClose();
-                window.dispatchEvent(new CustomEvent('pulsechat_open_handle_card', { detail: { user: userToDisplay } }));
-              }}
-              style={{
-                flex: 1,
-                minWidth: '100px',
-                padding: '8px 10px',
-                fontSize: '0.82rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '5px',
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(236, 72, 153, 0.15))',
-                border: '1px solid rgba(168, 85, 247, 0.4)',
-                color: '#c084fc'
-              }}
-              title="View & Share Aesthetic Pulse Profile Card"
-            >
-              <Sparkles size={15} /> Pulse Card ✨
-            </button>
-            {onStartCall && (
-              <>
-                <button
-                  className="btn-secondary"
-                  onClick={() => { onClose(); onStartCall(false); }}
-                  style={{ flex: 1, padding: '8px 12px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                >
-                  <Phone size={16} /> Voice
-                </button>
-                <button
-                  className="btn-primary"
-                  onClick={() => { onClose(); onStartCall(true); }}
-                  style={{ flex: 1, padding: '8px 12px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                >
-                  <Video size={16} /> Video
-                </button>
-              </>
-            )}
-            {user?.id !== userToDisplay?.id && (
-              <button
-                className="btn-secondary"
-                onClick={() => {
-                  onClose();
-                  window.dispatchEvent(new CustomEvent('pulsechat_open_nickname_modal'));
-                }}
-                style={{
-                  flex: 1,
-                  minWidth: '95px',
-                  padding: '8px 10px',
-                  fontSize: '0.82rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '5px'
-                }}
-                title="Edit in-chat mutual nicknames"
-              >
-                <Edit3 size={15} /> Nicknames ✏️
-              </button>
-            )}
-          </div>
+          {/* Action Quick Buttons - Isolated Memoized Component with GPU Acceleration */}
+          <ProfileQuickActionRow
+            validAvatar={validAvatar}
+            userToDisplay={userToDisplay}
+            currentUserId={user?.id}
+            onOpenFullDp={onOpenFullDp}
+            onClose={onClose}
+            onStartCall={onStartCall}
+          />
 
           {/* WhatsApp / Telegram-Style Shared Media, Documents & Links Section */}
           <div style={{
@@ -1252,183 +1558,23 @@ function UserProfileModal({ targetUser, onClose, onStartCall, onOpenFullDp, mess
             )}
           </div>
 
-          {/* Bio / About Info Box */}
-          <div style={{
-            background: 'var(--bg-chat)',
-            border: '1px solid var(--border)',
-            borderRadius: '14px',
-            padding: '1rem',
-            textAlign: 'left',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px'
-          }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
-                <Info size={14} color="var(--accent)" /> About / Bio
-              </div>
-              <p style={{ margin: 0, fontSize: '0.92rem', color: 'var(--text-main)', lineHeight: 1.45, fontWeight: 500 }}>
-                {userToDisplay.status || 'Hey there! I am using PulseChat.'}
-              </p>
-            </div>
+          {/* Bio / About Info Box - Isolated Memoized Component */}
+          <ProfileAboutBioSection
+            userToDisplay={userToDisplay}
+            isOnline={isOnline}
+            hasVibe={hasVibe}
+            userAura={userAura}
+          />
 
-            <div style={{ height: '1px', background: 'var(--border)' }} />
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Username:</span>
-              <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>@{userToDisplay.username}</span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Status:</span>
-              <span style={{ fontWeight: 600, color: isOnline ? '#10b981' : 'var(--text-muted)' }}>
-                {isOnline ? '🟢 Online' : '⚪ Offline'}
-              </span>
-            </div>
-
-            {hasVibe && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
-                <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <Zap size={14} color={userAura.auraColor || 'var(--accent)'} /> Live Vibe:
-                </span>
-                <span style={{
-                  fontWeight: 600,
-                  color: userAura.auraColor || 'var(--accent)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}>
-                  <span>{userAura.emoji || '⚡'}</span>
-                  <span>
-                    {userAura.isLowBattery
-                      ? `Low Battery (${userAura.batteryLevel || '<20'}%)`
-                      : (userAura.inGame ? `Playing ${userAura.inGame}` : userAura.mood)}
-                  </span>
-                </span>
-              </div>
-            )}
-
-            {userToDisplay.isEmailVerified && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Account Verification:</span>
-                <span style={{ fontWeight: 600, color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <ShieldCheck size={14} /> Verified
-                </span>
-              </div>
-            )}
-
-            <div style={{ height: '1px', background: 'var(--border)' }} />
-
-            {/* Disappearing Messages (24h) Toggle */}
-            <div
-              onClick={handleToggleDisappearing}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '6px 0',
-                cursor: 'pointer'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Clock size={16} color="var(--accent)" />
-                <div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Disappearing Messages (24h)</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Auto-delete messages after 24 hours</div>
-                </div>
-              </div>
-
-              <div style={{
-                width: '36px',
-                height: '20px',
-                borderRadius: '10px',
-                background: disappearingEnabled ? 'var(--accent)' : 'var(--border)',
-                position: 'relative',
-                transition: 'all 0.2s ease',
-                flexShrink: 0
-              }}>
-                <div style={{
-                  width: '16px',
-                  height: '16px',
-                  borderRadius: '50%',
-                  background: '#fff',
-                  position: 'absolute',
-                  top: '2px',
-                  left: disappearingEnabled ? '18px' : '2px',
-                  transition: 'all 0.2s ease'
-                }} />
-              </div>
-            </div>
-
-            <div style={{ height: '1px', background: 'var(--border)' }} />
-
-            {/* Mute Notifications Toggle */}
-            <div
-              onClick={handleToggleNotificationMute}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '6px 0',
-                cursor: 'pointer'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {isMuted ? <BellOff size={16} color="#f59e0b" /> : <Bell size={16} color="var(--accent)" />}
-                <div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Mute Notifications</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{isMuted ? 'Notifications are muted for this chat' : 'Receive alerts for incoming messages'}</div>
-                </div>
-              </div>
-
-              <div style={{
-                width: '36px',
-                height: '20px',
-                borderRadius: '10px',
-                background: isMuted ? 'var(--accent)' : 'var(--border)',
-                position: 'relative',
-                transition: 'all 0.2s ease',
-                flexShrink: 0
-              }}>
-                <div style={{
-                  width: '16px',
-                  height: '16px',
-                  borderRadius: '50%',
-                  background: '#fff',
-                  position: 'absolute',
-                  top: '2px',
-                  left: isMuted ? '18px' : '2px',
-                  transition: 'all 0.2s ease'
-                }} />
-              </div>
-            </div>
-
-            <div style={{ height: '1px', background: 'var(--border)' }} />
-
-            {/* Block / Unblock Contact Button */}
-            <button
-              onClick={handleBlockToggle}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '10px',
-                background: isBlocked ? 'rgba(99, 102, 241, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                color: isBlocked ? 'var(--accent)' : '#ef4444',
-                fontWeight: 600,
-                fontSize: '0.85rem',
-                border: isBlocked ? '1px solid var(--accent)' : '1px solid rgba(239, 68, 68, 0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                cursor: 'pointer',
-                marginTop: '4px'
-              }}
-            >
-              {isBlocked ? <Unlock size={16} /> : <Ban size={16} />}
-              {isBlocked ? 'Unblock Contact' : 'Block Contact'}
-            </button>
-          </div>
+          {/* Profile Settings Toggles: Disappearing, Mute & Block - Isolated Memoized Component */}
+          <ProfileSettingsToggles
+            disappearingEnabled={disappearingEnabled}
+            onToggleDisappearing={handleToggleDisappearing}
+            isMuted={isMuted}
+            onToggleMute={handleToggleNotificationMute}
+            isBlocked={isBlocked}
+            onToggleBlock={handleBlockToggle}
+          />
         </div>
       </div>
 

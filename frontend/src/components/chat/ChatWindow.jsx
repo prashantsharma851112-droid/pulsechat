@@ -5204,6 +5204,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 blockStatus={blockStatus}
                 setBlockStatus={setBlockStatus}
                 blockUser={blockUser}
+                unblockUser={unblockUser}
               />
 
               {/* Pulse Aura Background Soundscape Dropdown Selector Card */}

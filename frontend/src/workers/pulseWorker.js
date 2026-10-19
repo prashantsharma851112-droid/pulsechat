@@ -109,6 +109,89 @@ self.onmessage = async (e) => {
         break;
       }
 
+      // 5. Off-thread storage stats & media filtering calculation
+      case 'CALCULATE_STORAGE_STATS': {
+        const { messages = [] } = payload || {};
+        let totalMediaBytes = 0;
+        const mediaItems = [];
+        const fileItems = [];
+        const linkItems = [];
+
+        const isPrivateEphemeral = (m) => {
+          if (!m) return false;
+          return Boolean(
+            m.isViewOnce || m.viewMode === 'once' || m.type === 'viewOnce' ||
+            m.isViewTwice || m.viewMode === 'twice' ||
+            m.isDustImage || m.isDust || m.isFogSnap || m.isDustText || m.type === 'stealth_dust' || m.viewMode === 'dust'
+          );
+        };
+
+        const estimateSize = (m) => {
+          if (m.bytes && typeof m.bytes === 'number') return m.bytes;
+          if (m.fileSize) {
+            const s = String(m.fileSize).trim().toUpperCase();
+            if (s.endsWith('MB')) return parseFloat(s) * 1024 * 1024;
+            if (s.endsWith('KB')) return parseFloat(s) * 1024;
+            if (s.endsWith('B')) return parseFloat(s);
+          }
+          if (m.type === 'video') return 2.5 * 1024 * 1024;
+          if (m.type === 'image') return 380 * 1024;
+          if (m.type === 'document') return 512 * 1024;
+          if (m.type === 'audio' || m.type === 'voice') return 180 * 1024;
+          return 120 * 1024;
+        };
+
+        for (let i = 0; i < messages.length; i++) {
+          const m = messages[i];
+          if (!m || m.type === 'deleted' || m.isDeleted || isPrivateEphemeral(m)) continue;
+
+          // Check Media (Images / Videos)
+          if (m.type === 'image' || m.type === 'video' || m.type === 'media' || m.mediaType === 'image' || m.mediaType === 'video') {
+            if (m.mediaUrl) {
+              mediaItems.push(m);
+              totalMediaBytes += estimateSize(m);
+            } else if (Array.isArray(m.mediaUrls) && m.mediaUrls.length > 0) {
+              m.mediaUrls.forEach((url, idx) => {
+                const subItem = { ...m, id: `${m.id || 'm'}_${idx}`, mediaUrl: url, type: 'image' };
+                mediaItems.push(subItem);
+                totalMediaBytes += estimateSize(subItem);
+              });
+            }
+          } else if (m.type === 'image_group' && Array.isArray(m.mediaUrls)) {
+            m.mediaUrls.forEach((url, idx) => {
+              const subItem = { ...m, id: `${m.id || 'm'}_${idx}`, mediaUrl: url, type: 'image' };
+              mediaItems.push(subItem);
+              totalMediaBytes += estimateSize(subItem);
+            });
+          }
+
+          // Check Documents / Files
+          if ((m.type === 'document' || m.type === 'file' || (m.fileName && m.type !== 'image' && m.type !== 'video' && m.type !== 'audio' && m.type !== 'stealth_dust')) && (m.mediaUrl || m.fileUrl)) {
+            fileItems.push(m);
+            totalMediaBytes += estimateSize(m);
+          }
+
+          // Check Links
+          if (m.type === 'text' && m.content) {
+            const matches = m.content.match(/https?:\/\/[^\s]+/g);
+            if (matches) {
+              matches.forEach(url => linkItems.push({ url, timestamp: m.timestamp, id: m.id }));
+            }
+          }
+        }
+
+        result = {
+          totalMediaBytes,
+          mediaCount: mediaItems.length,
+          filesCount: fileItems.length,
+          linksCount: linkItems.length,
+          mediaItems,
+          fileItems,
+          linkItems
+        };
+        break;
+      }
+
       default:
         result = null;
     }
