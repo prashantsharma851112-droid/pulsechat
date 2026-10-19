@@ -7,6 +7,111 @@ import { playSound } from '../../utils/audio';
 import { useBackHandler } from '../../utils/backNavigation';
 import PulseProModal from './PulseProModal';
 
+// =========================================================================
+// ATOMIC ISOLATED SPARKS WALLET COMPONENTS (React.memo + 0ms GPU Feedback)
+// =========================================================================
+
+export const SparksFilterPill = React.memo(function SparksFilterPill({ tab, isActive, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(tab.id)}
+      className="interactive-tap action-btn"
+      style={{
+        padding: '4px 10px',
+        borderRadius: '16px',
+        border: 'none',
+        background: isActive ? 'var(--accent, #6366f1)' : 'transparent',
+        color: isActive ? '#fff' : 'var(--text-muted)',
+        fontSize: '0.74rem',
+        fontWeight: 700,
+        cursor: 'pointer',
+        transition: 'all 0.15s ease',
+        transform: 'translateZ(0)',
+        willChange: 'transform'
+      }}
+    >
+      {tab.label}
+    </button>
+  );
+});
+
+export const SparksTransactionRow = React.memo(function SparksTransactionRow({ tx, formattedDate }) {
+  const isCredit = tx.type === 'credit';
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px',
+        borderRadius: '14px',
+        background: 'rgba(255, 255, 255, 0.03)',
+        border: '1px solid rgba(255, 255, 255, 0.06)',
+        transition: 'background 0.15s ease'
+      }}
+    >
+      {/* Left: Direction Icon & Info */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+        <div style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: '10px',
+          background: isCredit ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+          border: `1px solid ${isCredit ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0
+        }}>
+          {isCredit ? (
+            <ArrowDownLeft size={18} color="#10b981" />
+          ) : (
+            <ArrowUpRight size={18} color="#ef4444" />
+          )}
+        </div>
+
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{
+            fontWeight: 700,
+            fontSize: '0.86rem',
+            color: 'var(--text-main)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}>
+            {tx.title || (isCredit ? 'Received Sparks' : 'Sent Sparks')}
+          </div>
+          <div style={{
+            fontSize: '0.72rem',
+            color: 'var(--text-muted)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            marginTop: '2px'
+          }}>
+            {tx.description || formattedDate}
+          </div>
+        </div>
+      </div>
+
+      {/* Right: Amount & Balance after */}
+      <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '12px' }}>
+        <div style={{
+          fontSize: '0.96rem',
+          fontWeight: 800,
+          color: isCredit ? '#10b981' : '#f59e0b'
+        }}>
+          {isCredit ? `+${tx.amount}` : `-${tx.amount}`} ⚡
+        </div>
+        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+          {formattedDate}
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export default function SparksWalletModal({ onClose }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
@@ -459,11 +564,12 @@ export default function SparksWalletModal({ onClose }) {
               </div>
             </div>
 
-            {/* Action Buttons: Top Up / Buy & Daily Free Claim */}
+            {/* Action Buttons: Top Up / Buy & Daily Free Claim (Atomic Isolated Feedback) */}
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 type="button"
                 onClick={() => setShowBuySparksModal(true)}
+                className="interactive-tap action-btn"
                 style={{
                   flex: 1,
                   padding: '10px 14px',
@@ -478,7 +584,9 @@ export default function SparksWalletModal({ onClose }) {
                   justifyContent: 'center',
                   gap: '6px',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(245, 158, 11, 0.35)'
+                  boxShadow: '0 4px 14px rgba(245, 158, 11, 0.35)',
+                  transform: 'translateZ(0)',
+                  willChange: 'transform'
                 }}
               >
                 <ShoppingBag size={15} />
@@ -489,6 +597,7 @@ export default function SparksWalletModal({ onClose }) {
                 type="button"
                 onClick={handleClaimDaily}
                 disabled={!walletData.canClaimDaily || claimingDaily}
+                className="interactive-tap action-btn"
                 style={{
                   flex: 1,
                   padding: '10px 14px',
@@ -505,7 +614,9 @@ export default function SparksWalletModal({ onClose }) {
                   justifyContent: 'center',
                   gap: '6px',
                   cursor: walletData.canClaimDaily ? 'pointer' : 'default',
-                  boxShadow: walletData.canClaimDaily ? '0 4px 14px rgba(16, 185, 129, 0.35)' : 'none'
+                  boxShadow: walletData.canClaimDaily ? '0 4px 14px rgba(16, 185, 129, 0.35)' : 'none',
+                  transform: 'translateZ(0)',
+                  willChange: 'transform'
                 }}
               >
                 {walletData.canClaimDaily ? (
@@ -534,6 +645,7 @@ export default function SparksWalletModal({ onClose }) {
                 setAdModalOpen(true);
               }}
               disabled={walletData.adsWatchedToday >= 3}
+              className="interactive-tap action-btn"
               style={{
                 width: '100%',
                 marginTop: '10px',
@@ -552,7 +664,8 @@ export default function SparksWalletModal({ onClose }) {
                 gap: '8px',
                 cursor: walletData.adsWatchedToday < 3 ? 'pointer' : 'default',
                 boxShadow: walletData.adsWatchedToday < 3 ? '0 4px 14px rgba(99, 102, 241, 0.35)' : 'none',
-                transition: 'all 0.2s ease'
+                transform: 'translateZ(0)',
+                willChange: 'transform'
               }}
             >
               <Film size={16} />
@@ -570,7 +683,7 @@ export default function SparksWalletModal({ onClose }) {
               Sparks History ({filteredTransactions.length})
             </h3>
 
-            {/* Filter Pills */}
+            {/* Filter Pills (Atomic Isolated) */}
             <div style={{
               display: 'flex',
               background: 'rgba(255, 255, 255, 0.06)',
@@ -583,24 +696,12 @@ export default function SparksWalletModal({ onClose }) {
                 { id: 'credit', label: 'Earned' },
                 { id: 'debit', label: 'Spent' }
               ].map(tab => (
-                <button
+                <SparksFilterPill
                   key={tab.id}
-                  type="button"
-                  onClick={() => setFilterTab(tab.id)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '16px',
-                    border: 'none',
-                    background: filterTab === tab.id ? 'var(--accent, #6366f1)' : 'transparent',
-                    color: filterTab === tab.id ? '#fff' : 'var(--text-muted)',
-                    fontSize: '0.74rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  {tab.label}
-                </button>
+                  tab={tab}
+                  isActive={filterTab === tab.id}
+                  onClick={setFilterTab}
+                />
               ))}
             </div>
           </div>
@@ -640,82 +741,13 @@ export default function SparksWalletModal({ onClose }) {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {filteredTransactions.map((tx, idx) => {
-                const isCredit = tx.type === 'credit';
-                return (
-                  <div
-                    key={tx._id || tx.id || idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '12px',
-                      borderRadius: '14px',
-                      background: 'rgba(255, 255, 255, 0.03)',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
-                      transition: 'background 0.15s ease'
-                    }}
-                  >
-                    {/* Left: Direction Icon & Info */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                      <div style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '10px',
-                        background: isCredit ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                        border: `1px solid ${isCredit ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
-                        {isCredit ? (
-                          <ArrowDownLeft size={18} color="#10b981" />
-                        ) : (
-                          <ArrowUpRight size={18} color="#ef4444" />
-                        )}
-                      </div>
-
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{
-                          fontWeight: 700,
-                          fontSize: '0.86rem',
-                          color: 'var(--text-main)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {tx.title || (isCredit ? 'Received Sparks' : 'Sent Sparks')}
-                        </div>
-                        <div style={{
-                          fontSize: '0.72rem',
-                          color: 'var(--text-muted)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          marginTop: '2px'
-                        }}>
-                          {tx.description || formatTxDate(tx.createdAt)}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Right: Amount & Balance after */}
-                    <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '12px' }}>
-                      <div style={{
-                        fontSize: '0.96rem',
-                        fontWeight: 800,
-                        color: isCredit ? '#10b981' : '#f59e0b'
-                      }}>
-                        {isCredit ? `+${tx.amount}` : `-${tx.amount}`} ⚡
-                      </div>
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        {formatTxDate(tx.createdAt)}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {filteredTransactions.map((tx, idx) => (
+                <SparksTransactionRow
+                  key={tx._id || tx.id || idx}
+                  tx={tx}
+                  formattedDate={formatTxDate(tx.createdAt)}
+                />
+              ))}
             </div>
           )}
         </div>

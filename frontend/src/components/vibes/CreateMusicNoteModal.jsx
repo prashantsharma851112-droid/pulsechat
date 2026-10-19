@@ -18,6 +18,101 @@ const NOTE_THEMES = [
   { id: 'live-cosmic-galaxy', name: 'Cosmic Nebula', icon: '✨', isLive: true, isPro: true, bgPreview: 'linear-gradient(135deg, #1e1b4b, #701a75)' }
 ];
 
+// =========================================================================
+// ATOMIC ISOLATED MUSIC NOTE COMPONENTS (React.memo + 0ms GPU Feedback)
+// =========================================================================
+
+export const MusicNoteThemeOption = React.memo(function MusicNoteThemeOption({
+  themeItem,
+  isSelected,
+  onSelect
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(themeItem)}
+      className="interactive-tap vibe-action-btn"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '8px 10px',
+        borderRadius: '12px',
+        background: isSelected ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+        border: isSelected ? '1.8px solid #a855f7' : '1px solid var(--border)',
+        cursor: 'pointer',
+        textAlign: 'left',
+        transform: 'translateZ(0)',
+        willChange: 'transform'
+      }}
+    >
+      <div style={{
+        width: '24px',
+        height: '24px',
+        borderRadius: '50%',
+        background: themeItem.bgPreview,
+        boxShadow: themeItem.isLive ? '0 0 8px rgba(168, 85, 247, 0.6)' : 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '0.74rem',
+        flexShrink: 0
+      }}>
+        {themeItem.icon}
+      </div>
+
+      <div style={{
+        flex: 1,
+        minWidth: 0,
+        fontSize: '0.78rem',
+        fontWeight: 700,
+        color: isSelected ? '#ffffff' : 'var(--text-main)',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
+      }}>
+        {themeItem.name}
+      </div>
+
+      {themeItem.isPro && (
+        <Crown size={12} color="#f59e0b" style={{ flexShrink: 0 }} />
+      )}
+
+      {isSelected && (
+        <Check size={14} color="#a855f7" strokeWidth={3} style={{ flexShrink: 0 }} />
+      )}
+    </button>
+  );
+});
+
+export const MusicNoteDurationPill = React.memo(function MusicNoteDurationPill({
+  sec,
+  isSelected,
+  onSelect
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(sec)}
+      className="interactive-tap vibe-action-btn"
+      style={{
+        background: isSelected ? 'var(--accent)' : 'rgba(255, 255, 255, 0.05)',
+        border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border)',
+        borderRadius: '6px',
+        padding: '1px 5px',
+        fontSize: '0.64rem',
+        fontWeight: 700,
+        color: isSelected ? '#fff' : 'var(--text-muted)',
+        cursor: 'pointer',
+        transform: 'translateZ(0)',
+        willChange: 'transform'
+      }}
+    >
+      {sec}s
+    </button>
+  );
+});
+
 export default function CreateMusicNoteModal({ isOpen, onClose }) {
   const { user } = useContext(AuthContext);
   const { musicNoteText, saveMusicNote, deleteMusicNote } = useAppMusic();
@@ -366,6 +461,7 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
           <button
             type="button"
             onClick={() => setShowPicker(true)}
+            className="interactive-tap vibe-action-btn"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -379,7 +475,6 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
               fontWeight: 700,
               cursor: 'pointer',
               whiteSpace: 'nowrap',
-              transition: 'all 0.15s ease',
               flexShrink: 0
             }}
             title={selectedSong ? selectedSong.songTitle : "Attach Music"}
@@ -390,6 +485,7 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
           <button
             type="button"
             onClick={() => setShowThemes(prev => !prev)}
+            className="interactive-tap vibe-action-btn"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -403,7 +499,6 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
               fontWeight: 700,
               cursor: 'pointer',
               whiteSpace: 'nowrap',
-              transition: 'all 0.15s ease',
               flexShrink: 0
             }}
             title="Choose Theme"
@@ -445,64 +540,14 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
               overflowY: 'auto',
               padding: '2px'
             }}>
-              {NOTE_THEMES.map(th => {
-                const isSelected = selectedTheme === th.id;
-                return (
-                  <button
-                    key={th.id}
-                    type="button"
-                    onClick={() => handleSelectTheme(th)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '8px 10px',
-                      borderRadius: '12px',
-                      background: isSelected ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.04)',
-                      border: isSelected ? '1.8px solid #a855f7' : '1px solid var(--border)',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    <div style={{
-                      width: '24px',
-                      height: '24px',
-                      borderRadius: '50%',
-                      background: th.bgPreview,
-                      boxShadow: th.isLive ? '0 0 8px rgba(168, 85, 247, 0.6)' : 'none',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '0.74rem',
-                      flexShrink: 0
-                    }}>
-                      {th.icon}
-                    </div>
-
-                    <div style={{
-                      flex: 1,
-                      minWidth: 0,
-                      fontSize: '0.78rem',
-                      fontWeight: 700,
-                      color: isSelected ? '#ffffff' : 'var(--text-main)',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}>
-                      {th.name}
-                    </div>
-
-                    {th.isPro && (
-                      <Crown size={12} color="#f59e0b" style={{ flexShrink: 0 }} />
-                    )}
-
-                    {isSelected && (
-                      <Check size={14} color="#a855f7" strokeWidth={3} style={{ flexShrink: 0 }} />
-                    )}
-                  </button>
-                );
-              })}
+              {NOTE_THEMES.map(th => (
+                <MusicNoteThemeOption
+                  key={th.id}
+                  themeItem={th}
+                  isSelected={selectedTheme === th.id}
+                  onSelect={handleSelectTheme}
+                />
+              ))}
             </div>
           </div>
         )}
@@ -551,6 +596,7 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
                 <button
                   type="button"
                   onClick={handleTogglePreview}
+                  className="interactive-tap vibe-action-btn"
                   style={{
                     width: '28px',
                     height: '28px',
@@ -570,6 +616,7 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
                 <button
                   type="button"
                   onClick={() => setShowPicker(true)}
+                  className="interactive-tap vibe-action-btn"
                   style={{
                     padding: '3px 8px',
                     borderRadius: '8px',
@@ -595,6 +642,7 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
                     setIsPlayingPreview(false);
                     setSelectedSong(null);
                   }}
+                  className="interactive-tap vibe-action-btn"
                   style={{
                     width: '26px',
                     height: '26px',
@@ -629,23 +677,12 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
                 </span>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   {[15, 30, 60].map(sec => (
-                    <button
+                    <MusicNoteDurationPill
                       key={sec}
-                      type="button"
-                      onClick={() => handleDurationChange(sec)}
-                      style={{
-                        background: snippetDuration === sec ? 'var(--accent)' : 'rgba(255, 255, 255, 0.05)',
-                        border: snippetDuration === sec ? '1px solid var(--accent)' : '1px solid var(--border)',
-                        borderRadius: '6px',
-                        padding: '1px 5px',
-                        fontSize: '0.64rem',
-                        fontWeight: 700,
-                        color: snippetDuration === sec ? '#fff' : 'var(--text-muted)',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {sec}s
-                    </button>
+                      sec={sec}
+                      isSelected={snippetDuration === sec}
+                      onSelect={handleDurationChange}
+                    />
                   ))}
                 </div>
               </div>
@@ -668,6 +705,7 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
             <button
               type="button"
               onClick={handleDelete}
+              className="interactive-tap vibe-action-btn"
               style={{
                 padding: '10px 14px',
                 borderRadius: '12px',
@@ -688,7 +726,7 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
             type="button"
             onClick={handleSave}
             disabled={!selectedSong && !noteText.trim()}
-            className="btn-primary"
+            className="btn-primary interactive-tap vibe-action-btn"
             style={{
               flex: 1,
               padding: '10px 16px',

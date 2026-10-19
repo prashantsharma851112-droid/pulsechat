@@ -101,6 +101,60 @@ export const GLOBAL_LANGUAGES = [
   { code: 'it', name: 'Italian', flag: '🇮🇹' }
 ];
 
+// =========================================================================
+// ATOMIC ISOLATED STREAK FLAME BUTTON (React.memo + 0ms GPU Tap Feedback)
+// =========================================================================
+export const ChatStreakFlameButton = React.memo(function ChatStreakFlameButton({
+  streakCount = 0,
+  streakShields = 0,
+  onClick
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="chat-neon-streak-pill interactive-tap streak-flame-btn"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.22), rgba(239, 68, 68, 0.15))',
+        border: '1px solid rgba(249, 115, 22, 0.65)',
+        borderRadius: '12px',
+        padding: '2px 8px',
+        fontSize: '0.74rem',
+        fontWeight: 800,
+        color: '#ff8a3d',
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        boxShadow: '0 0 10px rgba(249, 115, 22, 0.25)',
+        transform: 'translateZ(0)',
+        willChange: 'transform'
+      }}
+      title="Pulse Streaks with Sparks Reward & Streak Freeze"
+    >
+      <span className="chat-neon-streak-flame" style={{ fontSize: '0.82rem', lineHeight: 1 }}>🔥</span>
+      <span style={{
+        background: 'linear-gradient(135deg, #ffb347, #ff4500)',
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        fontWeight: 800,
+        fontSize: '0.76rem',
+        lineHeight: 1
+      }}>
+        {streakCount}
+      </span>
+      {streakShields > 0 && (
+        <span style={{ fontSize: '0.68rem', marginLeft: '1px', filter: 'drop-shadow(0 0 4px #38bdf8)' }} title={`${streakShields} Freeze Shield Active`}>
+          ❄️{streakShields}
+        </span>
+      )}
+    </button>
+  );
+});
+
 const sanitizeFogSnapMessage = (m) => {
   if (!m || (!m.isFogSnap && !m.isDustImage)) return m;
   const isBurnedLocally = (() => {
@@ -6230,48 +6284,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         </div>
       )}
 
-      {/* Bottom Pulse Streaks Badge (in place of Set Vibe) */}
+      {/* Bottom Pulse Streaks Badge (Isolated React.memo + 0ms GPU Feedback) */}
       {!isGroup && !blockStatus.isBlockedByMe && !blockStatus.isBlockedByThem && (
         <div style={{ padding: '0.15rem 1rem 0.15rem 1rem', display: 'flex', alignItems: 'center', background: 'transparent', position: 'relative', zIndex: 2 }}>
-          <button
-            type="button"
+          <ChatStreakFlameButton
+            streakCount={streakData?.streakCount || 0}
+            streakShields={streakData?.streakShields || 0}
             onClick={() => setShowStreakModal(true)}
-            className="chat-neon-streak-pill"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.22), rgba(239, 68, 68, 0.15))',
-              border: '1px solid rgba(249, 115, 22, 0.65)',
-              borderRadius: '12px',
-              padding: '2px 8px',
-              fontSize: '0.74rem',
-              fontWeight: 800,
-              color: '#ff8a3d',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              backdropFilter: 'blur(8px)',
-              boxShadow: '0 0 10px rgba(249, 115, 22, 0.25)'
-            }}
-            title="Pulse Streaks with Sparks Reward & Streak Freeze"
-          >
-            <span className="chat-neon-streak-flame" style={{ fontSize: '0.82rem', lineHeight: 1 }}>🔥</span>
-            <span style={{
-              background: 'linear-gradient(135deg, #ffb347, #ff4500)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              fontWeight: 800,
-              fontSize: '0.76rem',
-              lineHeight: 1
-            }}>
-              {streakData?.streakCount || 0}
-            </span>
-            {(streakData?.streakShields || 0) > 0 && (
-              <span style={{ fontSize: '0.68rem', marginLeft: '1px', filter: 'drop-shadow(0 0 4px #38bdf8)' }} title={`${streakData.streakShields} Freeze Shield Active`}>
-                ❄️{streakData.streakShields}
-              </span>
-            )}
-          </button>
+          />
         </div>
       )}
 

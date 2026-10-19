@@ -8,6 +8,187 @@ import { preloadMediaUrls } from '../../utils/mediaCache';
 import InstaMusicNoteBubble from './InstaMusicNoteBubble';
 import CreateMusicNoteModal from './CreateMusicNoteModal';
 
+// =========================================================================
+// ATOMIC ISOLATED VIBES SCROLL BUBBLE COMPONENTS (React.memo + 0ms GPU Feedback)
+// =========================================================================
+
+export const MyVibeStoryBubble = React.memo(function MyVibeStoryBubble({
+  user,
+  hasVibes,
+  myHasKing,
+  myHasSilver,
+  myHasStreak,
+  activePoppedNoteId,
+  onOpenViewerOrCreate,
+  onOpenMusicNoteModal,
+  onTogglePop
+}) {
+  return (
+    <div
+      onClick={onOpenViewerOrCreate}
+      className="interactive-tap vibe-story-bubble"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '4px',
+        cursor: 'pointer',
+        flexShrink: 0,
+        minWidth: '76px',
+        zIndex: activePoppedNoteId === 'mine' ? 60 : 2,
+        transform: 'translateZ(0)',
+        willChange: 'transform'
+      }}
+    >
+      <div style={{
+        position: 'relative',
+        width: '56px',
+        height: '56px',
+        borderRadius: '50%',
+        padding: '2.5px',
+        background: hasVibes
+          ? 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)'
+          : 'rgba(255,255,255,0.18)',
+        boxShadow: hasVibes
+          ? '0 0 14px rgba(220, 39, 67, 0.45)'
+          : 'none'
+      }}>
+        {/* Instagram-style Floating Music Note Bubble */}
+        <InstaMusicNoteBubble
+          note={user?.musicNote}
+          authorUser={user}
+          onOpenPicker={onOpenMusicNoteModal}
+          isPopped={activePoppedNoteId === 'mine'}
+          onPop={onTogglePop}
+        />
+
+        {myHasKing ? (
+          <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+        ) : myHasSilver ? (
+          <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+        ) : myHasStreak ? (
+          <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+        ) : null}
+        <div style={{ width: '100%', height: '100%', borderRadius: '50%', padding: '2px', background: 'var(--bg-card, #0f172a)' }}>
+          <img
+            src={user?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.username || 'user'}`}
+            alt="My Vibe"
+            style={{
+              width: '100%',
+              height: '100%',
+              borderRadius: '50%',
+              objectFit: 'cover',
+              background: '#111'
+            }}
+          />
+        </div>
+        {/* Plus Icon Overlay */}
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          right: 0,
+          width: '18px',
+          height: '18px',
+          borderRadius: '50%',
+          background: '#38bdf8',
+          color: '#fff',
+          border: '2px solid var(--bg-card, #0f172a)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.5)'
+        }}>
+          <Plus size={11} strokeWidth={3} />
+        </div>
+      </div>
+      <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-muted)', maxWidth: '58px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        My Vibe
+      </span>
+    </div>
+  );
+});
+
+export const FriendVibeStoryBubble = React.memo(function FriendVibeStoryBubble({
+  group,
+  hasVibes,
+  viewed,
+  crowns,
+  isPopped,
+  displayName,
+  onOpenViewer,
+  onTogglePop
+}) {
+  return (
+    <div
+      onClick={onOpenViewer}
+      className="interactive-tap vibe-story-bubble"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '4px',
+        cursor: 'pointer',
+        flexShrink: 0,
+        minWidth: '76px',
+        opacity: viewed ? 0.65 : 1,
+        zIndex: isPopped ? 60 : 1,
+        transform: 'translateZ(0)',
+        willChange: 'transform'
+      }}
+    >
+      <div style={{
+        position: 'relative',
+        width: '56px',
+        height: '56px',
+        borderRadius: '50%',
+        padding: '2.5px',
+        background: viewed
+          ? 'rgba(255, 255, 255, 0.22)'
+          : 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)',
+        boxShadow: viewed
+          ? 'none'
+          : '0 0 14px rgba(220, 39, 67, 0.45)',
+        animation: viewed ? 'none' : 'pulseGlow 2.5s infinite alternate'
+      }}>
+        {/* Friend's Instagram-style Floating Music Note Bubble */}
+        {group.musicNote && (
+          <InstaMusicNoteBubble
+            note={group.musicNote}
+            authorUser={group}
+            isMine={false}
+            isPopped={isPopped}
+            onPop={onTogglePop}
+          />
+        )}
+
+        {crowns.king ? (
+          <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+        ) : crowns.silver ? (
+          <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+        ) : crowns.streak ? (
+          <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+        ) : null}
+        <div style={{ width: '100%', height: '100%', borderRadius: '50%', padding: '2px', background: 'var(--bg-card, #0f172a)' }}>
+          <img
+            src={group.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${group.username || 'vibe'}`}
+            alt={displayName}
+            style={{
+              width: '100%',
+              height: '100%',
+              borderRadius: '50%',
+              objectFit: 'cover',
+              background: '#111'
+            }}
+          />
+        </div>
+      </div>
+      <span style={{ fontSize: '0.68rem', fontWeight: 600, color: viewed ? 'var(--text-muted)' : 'var(--text-main)', maxWidth: '58px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {displayName}
+      </span>
+    </div>
+  );
+});
+
 export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOpenVibeSelector, myAura, recentChats = [] }) {
   const { user, token } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
@@ -305,9 +486,15 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
         WebkitOverflowScrolling: 'touch',
         scrollbarWidth: 'none'
       }}>
-        {/* User's own Story Item */}
-        <div
-          onClick={() => {
+        {/* User's own Story Item (Isolated React.memo + 0ms GPU Feedback) */}
+        <MyVibeStoryBubble
+          user={user}
+          hasVibes={Boolean(myVibesGroup && Array.isArray(myVibesGroup.vibes) && myVibesGroup.vibes.length > 0)}
+          myHasKing={myHasKing}
+          myHasSilver={myHasSilver}
+          myHasStreak={myHasStreak}
+          activePoppedNoteId={activePoppedNoteId}
+          onOpenViewerOrCreate={() => {
             const allGroupsList = [
               ...(myVibesGroup && myVibesGroup.vibes?.length ? [myVibesGroup] : []),
               ...otherVibesGroups
@@ -318,84 +505,11 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
               onOpenCreateVibe();
             }
           }}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            cursor: 'pointer',
-            flexShrink: 0,
-            minWidth: '76px',
-            zIndex: activePoppedNoteId === 'mine' ? 60 : 2
-          }}
-        >
-          <div style={{
-            position: 'relative',
-            width: '56px',
-            height: '56px',
-            borderRadius: '50%',
-            padding: '2.5px',
-            background: (myVibesGroup && Array.isArray(myVibesGroup.vibes) && myVibesGroup.vibes.length > 0)
-              ? 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)'
-              : 'rgba(255,255,255,0.18)',
-            boxShadow: (myVibesGroup && Array.isArray(myVibesGroup.vibes) && myVibesGroup.vibes.length > 0)
-              ? '0 0 14px rgba(220, 39, 67, 0.45)'
-              : 'none'
-          }}>
-            {/* Instagram-style Floating Music Note Bubble */}
-            <InstaMusicNoteBubble
-              note={user?.musicNote}
-              authorUser={user}
-              onOpenPicker={() => setShowMusicNoteModal(true)}
-              isPopped={activePoppedNoteId === 'mine'}
-              onPop={() => setActivePoppedNoteId(prev => prev === 'mine' ? null : 'mine')}
-            />
+          onOpenMusicNoteModal={() => setShowMusicNoteModal(true)}
+          onTogglePop={() => setActivePoppedNoteId(prev => prev === 'mine' ? null : 'mine')}
+        />
 
-            {myHasKing ? (
-              <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
-            ) : myHasSilver ? (
-              <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
-            ) : myHasStreak ? (
-              <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
-            ) : null}
-            <div style={{ width: '100%', height: '100%', borderRadius: '50%', padding: '2px', background: 'var(--bg-card, #0f172a)' }}>
-              <img
-                src={user?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.username || 'user'}`}
-                alt="My Vibe"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '50%',
-                  objectFit: 'cover',
-                  background: '#111'
-                }}
-              />
-            </div>
-            {/* Plus Icon Overlay */}
-            <div style={{
-              position: 'absolute',
-              bottom: 0,
-              right: 0,
-              width: '18px',
-              height: '18px',
-              borderRadius: '50%',
-              background: '#38bdf8',
-              color: '#fff',
-              border: '2px solid var(--bg-card, #0f172a)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.5)'
-            }}>
-              <Plus size={11} strokeWidth={3} />
-            </div>
-          </div>
-          <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-muted)', maxWidth: '58px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            My Vibe
-          </span>
-        </div>
-
-        {/* Other Users' / Friends' Stories */}
+        {/* Other Users' / Friends' Stories (Isolated React.memo + 0ms GPU Feedback) */}
         {otherVibesGroups.map(group => {
           const hasVibes = Boolean(group && Array.isArray(group.vibes) && group.vibes.length > 0);
           const hasNote = Boolean(group?.musicNote && (group.musicNote.noteText || group.musicNote.songTitle));
@@ -403,11 +517,18 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
           const viewed = hasVibes ? isGroupViewed(group) : true;
           const crowns = getGroupCrowns(group);
           const isPopped = activePoppedNoteId === group.userId;
+          const displayName = resolveNickname(group) || (group.displayName ? group.displayName.split(' ')[0] : 'User');
 
           return (
-            <div
+            <FriendVibeStoryBubble
               key={group.userId}
-              onClick={() => {
+              group={group}
+              hasVibes={hasVibes}
+              viewed={viewed}
+              crowns={crowns}
+              isPopped={isPopped}
+              displayName={displayName}
+              onOpenViewer={() => {
                 if (hasVibes) {
                   const enrichedGroup = {
                     ...group,
@@ -423,68 +544,8 @@ export default function PulseVibesBar({ onOpenCreateVibe, onOpenVibeViewer, onOp
                   onOpenVibeViewer(enrichedGroup, allGroupsList);
                 }
               }}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '4px',
-                cursor: 'pointer',
-                flexShrink: 0,
-                minWidth: '76px',
-                opacity: viewed ? 0.65 : 1,
-                zIndex: isPopped ? 60 : 1
-              }}
-            >
-              <div style={{
-                position: 'relative',
-                width: '56px',
-                height: '56px',
-                borderRadius: '50%',
-                padding: '2.5px',
-                background: viewed
-                  ? 'rgba(255, 255, 255, 0.22)'
-                  : 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)',
-                boxShadow: viewed
-                  ? 'none'
-                  : '0 0 14px rgba(220, 39, 67, 0.45)',
-                animation: viewed ? 'none' : 'pulseGlow 2.5s infinite alternate'
-              }}>
-                {/* Friend's Instagram-style Floating Music Note Bubble */}
-                {group.musicNote && (
-                  <InstaMusicNoteBubble
-                    note={group.musicNote}
-                    authorUser={group}
-                    isMine={false}
-                    isPopped={isPopped}
-                    onPop={() => setActivePoppedNoteId(prev => prev === group.userId ? null : group.userId)}
-                  />
-                )}
-
-                {crowns.king ? (
-                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
-                ) : crowns.silver ? (
-                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
-                ) : crowns.streak ? (
-                  <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1rem', filter: 'drop-shadow(0 2px 4px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
-                ) : null}
-                <div style={{ width: '100%', height: '100%', borderRadius: '50%', padding: '2px', background: 'var(--bg-card, #0f172a)' }}>
-                  <img
-                    src={group.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${group.username || 'vibe'}`}
-                    alt={resolveNickname(group) || group.displayName}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      borderRadius: '50%',
-                      objectFit: 'cover',
-                      background: '#111'
-                    }}
-                  />
-                </div>
-              </div>
-              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: viewed ? 'var(--text-muted)' : 'var(--text-main)', maxWidth: '58px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {resolveNickname(group) || (group.displayName ? group.displayName.split(' ')[0] : 'User')}
-              </span>
-            </div>
+              onTogglePop={() => setActivePoppedNoteId(prev => prev === group.userId ? null : group.userId)}
+            />
           );
         })}
       </div>

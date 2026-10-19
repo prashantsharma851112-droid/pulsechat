@@ -2970,7 +2970,10 @@ button,
 .vibe-shutter-btn,
 .vibe-send-btn,
 .vibe-cancel-btn,
-.vibe-swatch-btn {
+.vibe-swatch-btn,
+.streak-flame-btn,
+.sidebar-menu-btn,
+.vibe-story-bubble {
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
   backface-visibility: hidden;
@@ -3002,7 +3005,10 @@ button:active:not(:disabled),
 .vibe-shutter-btn:active,
 .vibe-send-btn:active,
 .vibe-cancel-btn:active,
-.vibe-swatch-btn:active {
+.vibe-swatch-btn:active,
+.streak-flame-btn:active,
+.sidebar-menu-btn:active,
+.vibe-story-bubble:active {
   transform: scale(0.95) translateZ(0) !important;
   transition: transform 0.06s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }

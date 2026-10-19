@@ -5,6 +5,162 @@ import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 import { useBackHandler } from '../../utils/backNavigation';
 
+// =========================================================================
+// ATOMIC ISOLATED REFER & EARN COMPONENTS (React.memo + 0ms GPU Feedback)
+// =========================================================================
+
+export const ReferralCodeBox = React.memo(function ReferralCodeBox({
+  referralCode,
+  copiedCode,
+  onCopyCode
+}) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#9ca3af', marginBottom: '6px' }}>
+        YOUR UNIQUE REFERRAL CODE
+      </label>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          background: 'rgba(255, 255, 255, 0.04)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          borderRadius: '12px',
+          padding: '8px 12px',
+          gap: '8px'
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'monospace',
+            fontSize: '1.05rem',
+            fontWeight: 800,
+            color: '#fbbf24',
+            letterSpacing: '1.5px',
+            flex: 1
+          }}
+        >
+          {referralCode || '...'}
+        </span>
+        <button
+          onClick={onCopyCode}
+          className="interactive-tap action-btn"
+          style={{
+            background: copiedCode ? '#059669' : 'rgba(245, 158, 11, 0.18)',
+            color: copiedCode ? '#ffffff' : '#fbbf24',
+            border: '1px solid rgba(245, 158, 11, 0.4)',
+            borderRadius: '8px',
+            padding: '6px 12px',
+            fontSize: '0.78rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            transform: 'translateZ(0)',
+            willChange: 'transform'
+          }}
+        >
+          {copiedCode ? <Check size={14} /> : <Copy size={14} />}
+          {copiedCode ? 'Copied!' : 'Copy Code'}
+        </button>
+      </div>
+    </div>
+  );
+});
+
+export const ReferralLinkBox = React.memo(function ReferralLinkBox({
+  referralLink,
+  copiedLink,
+  onCopyLink
+}) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#9ca3af', marginBottom: '6px' }}>
+        DIRECT SHAREABLE LINK
+      </label>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          background: 'rgba(255, 255, 255, 0.04)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          borderRadius: '12px',
+          padding: '6px 10px',
+          gap: '8px'
+        }}
+      >
+        <input
+          readOnly
+          value={referralLink || ''}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: '#d1d5db',
+            fontSize: '0.76rem',
+            flex: 1,
+            outline: 'none',
+            textOverflow: 'ellipsis'
+          }}
+        />
+        <button
+          onClick={onCopyLink}
+          className="interactive-tap action-btn"
+          style={{
+            background: copiedLink ? '#059669' : 'rgba(255, 255, 255, 0.08)',
+            color: copiedLink ? '#ffffff' : '#e5e7eb',
+            border: 'none',
+            borderRadius: '8px',
+            padding: '6px 10px',
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            transform: 'translateZ(0)',
+            willChange: 'transform'
+          }}
+        >
+          {copiedLink ? <Check size={13} /> : <Copy size={13} />}
+          {copiedLink ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+    </div>
+  );
+});
+
+export const ReferralShareButton = React.memo(function ReferralShareButton({
+  onShare
+}) {
+  return (
+    <button
+      onClick={onShare}
+      className="interactive-tap action-btn"
+      style={{
+        background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+        color: '#000000',
+        border: 'none',
+        borderRadius: '14px',
+        padding: '13px',
+        fontSize: '0.92rem',
+        fontWeight: 800,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        boxShadow: '0 4px 18px rgba(245, 158, 11, 0.35)',
+        transform: 'translateZ(0)',
+        willChange: 'transform'
+      }}
+    >
+      <Share2 size={18} />
+      Share Invite Link Now
+    </button>
+  );
+});
+
 export default function ReferEarnModal({ onClose }) {
   const { user, token, updateUserProfile } = useContext(AuthContext);
 
@@ -281,131 +437,22 @@ export default function ReferEarnModal({ onClose }) {
             </div>
           </div>
 
-          {/* Referral Code Box */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#9ca3af', marginBottom: '6px' }}>
-              YOUR UNIQUE REFERRAL CODE
-            </label>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                background: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                borderRadius: '12px',
-                padding: '8px 12px',
-                gap: '8px'
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: 'monospace',
-                  fontSize: '1.05rem',
-                  fontWeight: 800,
-                  color: '#fbbf24',
-                  letterSpacing: '1.5px',
-                  flex: 1
-                }}
-              >
-                {referralData.referralCode || '...'}
-              </span>
-              <button
-                onClick={handleCopyCode}
-                style={{
-                  background: copiedCode ? '#059669' : 'rgba(245, 158, 11, 0.18)',
-                  color: copiedCode ? '#ffffff' : '#fbbf24',
-                  border: '1px solid rgba(245, 158, 11, 0.4)',
-                  borderRadius: '8px',
-                  padding: '6px 12px',
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                {copiedCode ? <Check size={14} /> : <Copy size={14} />}
-                {copiedCode ? 'Copied!' : 'Copy Code'}
-              </button>
-            </div>
-          </div>
+          {/* Referral Code Box (Atomic Isolated) */}
+          <ReferralCodeBox
+            referralCode={referralData.referralCode}
+            copiedCode={copiedCode}
+            onCopyCode={handleCopyCode}
+          />
 
-          {/* Referral Link Box */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#9ca3af', marginBottom: '6px' }}>
-              DIRECT SHAREABLE LINK
-            </label>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                background: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                borderRadius: '12px',
-                padding: '6px 10px',
-                gap: '8px'
-              }}
-            >
-              <input
-                readOnly
-                value={referralData.referralLink || ''}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#d1d5db',
-                  fontSize: '0.76rem',
-                  flex: 1,
-                  outline: 'none',
-                  textOverflow: 'ellipsis'
-                }}
-              />
-              <button
-                onClick={handleCopyLink}
-                style={{
-                  background: copiedLink ? '#059669' : 'rgba(255, 255, 255, 0.08)',
-                  color: copiedLink ? '#ffffff' : '#e5e7eb',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '6px 10px',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                {copiedLink ? <Check size={13} /> : <Copy size={13} />}
-                {copiedLink ? 'Copied' : 'Copy'}
-              </button>
-            </div>
-          </div>
+          {/* Referral Link Box (Atomic Isolated) */}
+          <ReferralLinkBox
+            referralLink={referralData.referralLink}
+            copiedLink={copiedLink}
+            onCopyLink={handleCopyLink}
+          />
 
-          {/* Direct Share Button (WhatsApp / Web Share) */}
-          <button
-            onClick={handleShare}
-            style={{
-              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-              color: '#000000',
-              border: 'none',
-              borderRadius: '14px',
-              padding: '13px',
-              fontSize: '0.92rem',
-              fontWeight: 800,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              boxShadow: '0 4px 18px rgba(245, 158, 11, 0.35)',
-              transition: 'transform 0.12s ease'
-            }}
-          >
-            <Share2 size={18} />
-            Share Invite Link Now
-          </button>
+          {/* Direct Share Button (Atomic Isolated) */}
+          <ReferralShareButton onShare={handleShare} />
 
           {/* How Refer & Earn Works (Automated on account creation) */}
           <div

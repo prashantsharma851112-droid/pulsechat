@@ -132,6 +132,144 @@ function formatChatListTime(timeInput) {
   }
 }
 
+// =========================================================================
+// ATOMIC ISOLATED TOPBAR 3-DOT MENU ITEMS (React.memo + 0ms GPU Tap Feedback)
+// =========================================================================
+
+export const SidebarMenuSparksCard = React.memo(function SidebarMenuSparksCard({
+  sparksBalance,
+  onClick
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className="interactive-tap sidebar-menu-btn"
+      style={{
+        background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(236, 72, 153, 0.12))',
+        border: '1px solid rgba(245, 158, 11, 0.35)',
+        borderRadius: '12px',
+        padding: '10px 12px',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '4px',
+        transform: 'translateZ(0)',
+        willChange: 'transform'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#fff',
+          boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)'
+        }}>
+          <Zap size={16} fill="#fff" />
+        </div>
+        <div>
+          <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', fontWeight: 700 }}>Pulse Sparks</div>
+          <div style={{ fontSize: '1rem', fontWeight: 800, color: '#f59e0b' }}>
+            {sparksBalance ?? 50} <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>Sparks</span>
+          </div>
+        </div>
+      </div>
+      <span style={{
+        fontSize: '0.72rem',
+        fontWeight: 700,
+        color: '#f59e0b',
+        background: 'rgba(245, 158, 11, 0.15)',
+        padding: '4px 8px',
+        borderRadius: '8px',
+        border: '1px solid rgba(245, 158, 11, 0.3)'
+      }}>
+        Wallet ⚡
+      </span>
+    </div>
+  );
+});
+
+export const SidebarMenuVipButton = React.memo(function SidebarMenuVipButton({
+  isPro,
+  onClick
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="dropdown-menu-item interactive-tap sidebar-menu-btn"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '10px',
+        padding: '10px 12px',
+        borderRadius: '10px',
+        border: 'none',
+        background: isPro ? 'linear-gradient(90deg, rgba(245, 158, 11, 0.12), transparent)' : 'transparent',
+        color: 'var(--text-main)',
+        fontSize: '0.88rem',
+        fontWeight: 600,
+        cursor: 'pointer',
+        textAlign: 'left',
+        width: '100%',
+        transform: 'translateZ(0)',
+        willChange: 'transform'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <Crown size={17} color="#f59e0b" />
+        <span>{isPro ? 'Pulse VIP (Manage / Upgrade)' : 'Get Pulse VIP'}</span>
+      </div>
+      {isPro ? (
+        <PulseVipBadge size={14} showLabel={false} />
+      ) : (
+        <span style={{ fontSize: '0.68rem', fontWeight: 700, background: '#f59e0b', color: '#000', padding: '1px 6px', borderRadius: '4px' }}>
+          VIP
+        </span>
+      )}
+    </button>
+  );
+});
+
+export const SidebarMenuItem = React.memo(function SidebarMenuItem({
+  icon: Icon,
+  iconColor,
+  label,
+  onClick
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="dropdown-menu-item interactive-tap sidebar-menu-btn"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '10px 12px',
+        borderRadius: '10px',
+        border: 'none',
+        background: 'transparent',
+        color: 'var(--text-main)',
+        fontSize: '0.88rem',
+        fontWeight: 600,
+        cursor: 'pointer',
+        textAlign: 'left',
+        width: '100%',
+        transform: 'translateZ(0)',
+        willChange: 'transform'
+      }}
+    >
+      <Icon size={17} color={iconColor} />
+      <span>{label}</span>
+    </button>
+  );
+});
+
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
   const { user, logout, token, savedAccounts, switchAccount, addAccount, removeSavedAccount } = useContext(AuthContext);
   const { socket, onlineUsers, typingMap, lastNotification, vibeAuras } = useContext(SocketContext);
@@ -2231,182 +2369,58 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               }}
             >
               {/* Sparks Wallet Balance Card */}
-              <div
+              <SidebarMenuSparksCard
+                sparksBalance={user?.pulseSparks}
                 onClick={() => {
                   setShowSparksWallet(true);
                   setShowTopMenu(false);
                 }}
-                style={{
-                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(236, 72, 153, 0.12))',
-                  border: '1px solid rgba(245, 158, 11, 0.35)',
-                  borderRadius: '12px',
-                  padding: '10px 12px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: '4px',
-                  transition: 'transform 0.15s ease'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #f59e0b, #ec4899)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#fff',
-                    boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)'
-                  }}>
-                    <Zap size={16} fill="#fff" />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', fontWeight: 700 }}>Pulse Sparks</div>
-                    <div style={{ fontSize: '1rem', fontWeight: 800, color: '#f59e0b' }}>
-                      {user?.pulseSparks ?? 50} <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>Sparks</span>
-                    </div>
-                  </div>
-                </div>
-                <span style={{
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  color: '#f59e0b',
-                  background: 'rgba(245, 158, 11, 0.15)',
-                  padding: '4px 8px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(245, 158, 11, 0.3)'
-                }}>
-                  Wallet ⚡
-                </span>
-              </div>
+              />
 
               {/* Pulse VIP / Upgrade Button */}
-              <button
+              <SidebarMenuVipButton
+                isPro={Boolean(user?.isPro)}
                 onClick={() => {
                   setProModalTab('pro');
                   setShowProModal(true);
                   setShowTopMenu(false);
                 }}
-                className="dropdown-menu-item"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '10px',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: user?.isPro ? 'linear-gradient(90deg, rgba(245, 158, 11, 0.12), transparent)' : 'transparent',
-                  color: 'var(--text-main)',
-                  fontSize: '0.88rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  width: '100%',
-                  transition: 'background 0.15s ease'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Crown size={17} color="#f59e0b" />
-                  <span>{user?.isPro ? 'Pulse VIP (Manage / Upgrade)' : 'Get Pulse VIP'}</span>
-                </div>
-                {user?.isPro ? (
-                  <PulseVipBadge size={14} showLabel={false} />
-                ) : (
-                  <span style={{ fontSize: '0.68rem', fontWeight: 700, background: '#f59e0b', color: '#000', padding: '1px 6px', borderRadius: '4px' }}>
-                    VIP
-                  </span>
-                )}
-              </button>
+              />
 
               {/* Feature Tour Guide */}
-              <button
+              <SidebarMenuItem
+                icon={Compass}
+                iconColor="#38bdf8"
+                label="Feature Tour Guide"
                 onClick={() => {
                   setShowTopMenu(false);
                   setShowFeatureTourModal(true);
                 }}
-                className="dropdown-menu-item"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: 'transparent',
-                  color: 'var(--text-main)',
-                  fontSize: '0.88rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  width: '100%',
-                  transition: 'background 0.15s ease'
-                }}
-              >
-                <Compass size={17} color="#38bdf8" />
-                <span>Feature Tour Guide</span>
-              </button>
+              />
 
               {/* Refer & Earn (Directly below Feature Tour Guide, heading name only, no description) */}
-              <button
+              <SidebarMenuItem
+                icon={Sparkles}
+                iconColor="#f59e0b"
+                label="Refer & Earn"
                 onClick={() => {
                   setShowTopMenu(false);
                   setShowReferEarnModal(true);
                 }}
-                className="dropdown-menu-item"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: 'transparent',
-                  color: 'var(--text-main)',
-                  fontSize: '0.88rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  width: '100%',
-                  transition: 'background 0.15s ease'
-                }}
-              >
-                <Sparkles size={17} color="#f59e0b" />
-                <span>Refer & Earn</span>
-              </button>
+              />
 
               <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
 
               {/* Settings & Profile */}
-              <button
+              <SidebarMenuItem
+                icon={Settings}
+                iconColor="var(--text-muted)"
+                label="Settings & Profile"
                 onClick={() => {
                   setShowTopMenu(false);
                   openSettingsModal && openSettingsModal();
                 }}
-                className="dropdown-menu-item"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: 'transparent',
-                  color: 'var(--text-main)',
-                  fontSize: '0.88rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  width: '100%',
-                  transition: 'background 0.15s ease'
-                }}
-              >
-                <Settings size={17} color="var(--text-muted)" />
-                <span>Settings & Profile</span>
-              </button>
+              />
             </div>
           )}
         </div>
