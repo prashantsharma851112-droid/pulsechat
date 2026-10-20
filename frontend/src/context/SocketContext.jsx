@@ -268,12 +268,13 @@ export function SocketProvider({ children }) {
         triggerPushIfBackground(msg);
 
         // 2. Emit delivery ACK ONLY AFTER local storage commit succeeds
-        // Even if this was a duplicate retry from server, sending ACK allows server to clean up its queue!
+        // Passes cryptographic receiptToken for verified tamper-proof queue deletion
         if (msg.status !== 'read') {
           newSocket.emit('message_delivered', {
             messageId: msg.id,
             chatId: msg.chatId,
-            senderId: msg.senderId
+            senderId: msg.senderId,
+            receiptToken: msg.receiptToken || null
           });
         }
       };

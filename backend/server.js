@@ -151,22 +151,40 @@ io.use((socket, next) => {
         socket.data = socket.data || {};
         socket.data.userId = String(rawId);
         socket.userId = String(rawId);
+        socket.authenticatedUserId = String(rawId);
+      } else {
+        return next(new Error('AUTHENTICATION_FAILED: Invalid user ID in token'));
       }
     }
     next();
   } catch (err) {
-    next();
+    // Fail-closed authentication: If token was provided but failed verification, reject connection
+    return next(new Error('AUTHENTICATION_FAILED: ' + err.message));
   }
 });
 
 registerChatSocket(io, { receiptSecret: config.RECEIPT_SECRET || process.env.RECEIPT_SECRET });
 
-// Ephemeral 7-day queue cleanup
+// Ephemeral 7-day queue cleanup (both QueuedMessage and pending Message collection items)
 const cleanupQueueTimer = setInterval(async () => {
   try {
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const QueuedMessage = require('./models/QueuedMessage');
-    await QueuedMessage.deleteMany({ expiresAt: { $lte: new Date() } });
-  } catch (e) {}
+    const Message = require('./models/Message');
+
+    await QueuedMessage.deleteMany({ expiresAt: { $lte: now } });
+    await Message.deleteMany({
+      status: 'sent',
+      $or: [
+        { expiresAt: { $lte: now } },
+        { createdAt: { $lt: sevenDaysAgo } },
+        { createdAt: { $gt: now } }
+      ]
+    });
+  } catch (e) {
+    console.warn('Periodic queue cleanup error:', e.message);
+  }
 }, 60000);
 cleanupQueueTimer.unref();
 
@@ -420,7 +438,12 @@ io.on('connection', (socket) => {
   };
 
   // User comes online (mobile data ON / socket connected)
-  socket.on('setup', async (userId) => {
+  socket.on('setup', async (rawUserId) => {
+    let userId = rawUserId;
+    if (socket.authenticatedUserId) {
+      // Security: Strictly enforce authenticated JWT identity to prevent spoofing
+      userId = socket.authenticatedUserId;
+    }
     socket.userId = userId;
     socket.join(`user_${userId}`); // Join user's personal private room
     socket.join(userId);           // Also join direct userId room
@@ -630,37 +653,8 @@ io.on('connection', (socket) => {
           targetUser.markModified('pushSubscriptions');
           await targetUser.save();
         }
-
-        // Target user mobile data is ON -> Push delivered! Mark delivered in MongoDB (Retain until read)
-        if (pushDelivered && messageId) {
-          try {
-            await Message.updateOne({ id: messageId, status: 'sent' }, { $set: { status: 'delivered' } });
-            if (senderId) {
-              io.to(`user_${senderId}`).emit('message_delivered_update', {
-                messageId,
-                chatId: chatTargetId,
-                status: 'delivered'
-              });
-              io.to(`user_${senderId}`).emit('messages_delivered', {
-                chatId: chatTargetId,
-                messageIds: [messageId],
-                status: 'delivered'
-              });
-              if (chatTargetId) {
-                io.to(chatTargetId).emit('message_delivered_update', {
-                  messageId,
-                  chatId: chatTargetId,
-                  status: 'delivered'
-                });
-                io.to(chatTargetId).emit('messages_delivered', {
-                  chatId: chatTargetId,
-                  messageIds: [messageId],
-                  status: 'delivered'
-                });
-              }
-            }
-          } catch (e) {}
-        }
+        // Note: Web push alert dispatched. Delivery ACK (Double Tick) is strictly authoritative
+        // from receiver's IndexedDB commit, NOT from Web push notification dispatch.
       }
     } catch (e) {
       console.warn('Push notification dispatch error:', e.message);
@@ -1010,12 +1004,46 @@ io.on('connection', (socket) => {
         expiresAt: expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       };
 
-      // 1. Instant Ack to sender
+      // Bind cryptographic HMAC receiptToken to new message for verified delivery deletion
+      const { createReceiptToken } = require('./chat/receiptToken');
+      const receiptSecret = config.RECEIPT_SECRET || process.env.RECEIPT_SECRET;
+      newMsg.receiptToken = createReceiptToken({
+        messageId: newMsg.id,
+        senderId,
+        receiverId: resolvedReceiverId,
+        expiresAt: newMsg.expiresAt
+      }, receiptSecret);
+
+      // Sahi Order:
+      // 1. DURABLE PERSISTENCE FIRST: Save to MongoDB before notifying sender or receiver
+      await db.saveMessage(newMsg);
+
+      // Record in MessageLedger in queued state
+      try {
+        const MessageLedger = require('./models/MessageLedger');
+        const now = new Date();
+        await MessageLedger.findOneAndUpdate(
+          { messageId: newMsg.id },
+          {
+            $set: {
+              state: 'queued',
+              senderId,
+              receiverId: resolvedReceiverId,
+              createdAt: now,
+              queueExpiresAt: newMsg.expiresAt,
+              expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+            }
+          },
+          { upsert: true }
+        );
+      } catch (e) {}
+
+      // 2. Sender Ack (Single Tick confirmed saved to disk)
       if (typeof ackCallback === 'function') {
         ackCallback({ success: true, message: newMsg });
       }
 
-      // 2. Immediate zero-latency emission to chat room and participants (deduplicated)
+      // 3. Emit new_message to receiver and participants
       const targetRooms = new Set();
       if (chatId) targetRooms.add(chatId);
       if (canonicalChatId && canonicalChatId !== chatId) targetRooms.add(canonicalChatId);
@@ -1078,15 +1106,9 @@ io.on('connection', (socket) => {
         redis.invalidateAllRecent().catch(() => {});
       }
 
-      // 3. Concurrently save to MongoDB (zero blocking on emission)
-      const savePromise = db.saveMessage(newMsg).catch(err => {
-        console.error('Error saving message to DB:', err);
-      });
-
       // Background notifications & Push (non-blocking)
       setImmediate(async () => {
         try {
-          await savePromise;
           if (resolvedReceiverId && !isGroup) {
             const bodyText = newMsg.isForwarded
               ? `➡️ Forwarded: ${newMsg.content || newMsg.type}`
@@ -1134,10 +1156,44 @@ io.on('connection', (socket) => {
   });
 
   // Message Delivered Acknowledgment from Recipient - WhatsApp Pure Post Office
-  socket.on('message_delivered', async ({ messageId, chatId, senderId }) => {
+  socket.on('message_delivered', async (data) => {
     try {
+      const { messageId, chatId, senderId, receiptToken } = data || {};
       if (!messageId) return;
-      // WhatsApp Stateless Delivery Wipe: Deliver hote hi MongoDB se message turant delete (0 bytes)
+
+      const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+      const callerId = socket.authenticatedUserId || socket.userId;
+      const resolvedSenderId = senderId || await getOtherParticipantId(chatId, callerId);
+
+      const { verifyReceiptToken } = require('./chat/receiptToken');
+      const receiptSecret = config.RECEIPT_SECRET || process.env.RECEIPT_SECRET;
+      let verifiedSenderId = resolvedSenderId;
+
+      // 1. Cryptographic HMAC Token Verification (Fail-Closed)
+      if (receiptToken) {
+        const claims = verifyReceiptToken(receiptToken, receiptSecret);
+        if (!claims || claims.messageId !== messageId) {
+          console.warn('Rejected message_delivered: invalid receiptToken for', messageId);
+          return;
+        }
+        if (callerId && claims.receiverId !== String(callerId) && claims.receiverId !== String(socket.userCustomId) && claims.receiverId !== String(socket.userMongoId)) {
+          console.warn('Rejected message_delivered: receiver identity mismatch for', messageId);
+          return;
+        }
+        verifiedSenderId = claims.senderId || verifiedSenderId;
+      } else if (callerId && resolvedSenderId && String(callerId) === String(resolvedSenderId)) {
+        console.warn('Rejected message_delivered: sender cannot acknowledge delivery of own message');
+        return;
+      }
+
+      // 2. Idempotency Check: if already marked delivered in MessageLedger, do not re-emit duplicate events
+      const MessageLedger = require('./models/MessageLedger');
+      const existingLedger = await MessageLedger.findOne({ messageId });
+      if (existingLedger && existingLedger.state === 'delivered') {
+        return;
+      }
+
+      // 3. WhatsApp Stateless Delivery Wipe: Deliver hote hi MongoDB se message turant delete (0 bytes)
       const isMongoId = mongoose.Types.ObjectId.isValid(messageId);
       await Message.deleteMany({
         $or: [
@@ -1147,35 +1203,35 @@ io.on('connection', (socket) => {
         ]
       });
 
-      // Update metadata ledger for idempotency & crash recovery
+      // 4. Update metadata ledger for idempotency & crash recovery (survives restarts)
       try {
-        const MessageLedger = require('./models/MessageLedger');
         const now = new Date();
         await MessageLedger.findOneAndUpdate(
           { messageId },
           {
             $set: {
               state: 'delivered',
-              senderId: resolvedSenderId || senderId || 'unknown',
-              receiverId: socket.userId || 'unknown',
+              senderId: verifiedSenderId || 'unknown',
+              receiverId: callerId || 'unknown',
               queueExpiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
               expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
             }
           },
           { upsert: true }
         );
-      } catch (e) {}
-      const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-      const resolvedSenderId = senderId || await getOtherParticipantId(chatId, socket.userId);
-      const singlePayload = { messageId, chatId, canonicalChatId, status: 'delivered', senderId: resolvedSenderId };
-      const multiPayload = { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered', senderId: resolvedSenderId };
+      } catch (e) {
+        console.warn('Error updating MessageLedger on delivery:', e.message);
+      }
+
+      const singlePayload = { messageId, chatId, canonicalChatId, status: 'delivered', senderId: verifiedSenderId };
+      const multiPayload = { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered', senderId: verifiedSenderId };
 
       const targetRooms = new Set();
       if (chatId) targetRooms.add(chatId);
       if (canonicalChatId) targetRooms.add(canonicalChatId);
 
-      if (resolvedSenderId) {
-        const sRooms = await resolveUserRooms(resolvedSenderId);
+      if (verifiedSenderId) {
+        const sRooms = await resolveUserRooms(verifiedSenderId);
         sRooms.forEach(r => targetRooms.add(r));
       }
       if (chatId && chatId.includes('_')) {
