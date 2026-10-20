@@ -22,10 +22,7 @@ function fromBase64Url(str) {
   return Buffer.from(base64, 'base64');
 }
 
-// Persistent VAPID Keys Storage
-// We maintain consistent keys across server restarts & Render redeploys
-const VAPID_CACHE_FILE = path.join(__dirname, '../database/vapid-keys.json');
-
+// In-memory VAPID keys loaded securely from environment variables or ephemeral keypair
 let vapidKeyPair = {
   publicKey: '',
   privateKey: ''
@@ -61,52 +58,31 @@ function generateP256KeyPair() {
 
 /**
  * Initialize VAPID Keys:
- * 1. Check process.env (VAPID_PUBLIC_KEY & VAPID_PRIVATE_KEY)
- * 2. Check local persistent file (database/vapid-keys.json)
- * 3. Generate and save locally so it persists permanently
+ * 1. Checks process.env (VAPID_PUBLIC_KEY & VAPID_PRIVATE_KEY)
+ * 2. If missing in development/test, generates in-memory ephemeral keypair (never written to disk)
  */
 function initVapidKeys() {
   try {
     if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-      vapidKeys.publicKey = process.env.VAPID_PUBLIC_KEY;
-      vapidKeys.privateKey = process.env.VAPID_PRIVATE_KEY;
-      vapidKeyPair.privateKey = process.env.VAPID_PRIVATE_KEY;
+      const pub = process.env.VAPID_PUBLIC_KEY.trim();
+      let priv = process.env.VAPID_PRIVATE_KEY.trim();
+      if (priv.includes('\\n')) {
+        priv = priv.replace(/\\n/g, '\n');
+      }
+      vapidKeys.publicKey = pub;
+      vapidKeys.privateKey = priv;
+      vapidKeyPair.privateKey = priv;
       return;
     }
 
-    if (fs.existsSync(VAPID_CACHE_FILE)) {
-      try {
-        const saved = JSON.parse(fs.readFileSync(VAPID_CACHE_FILE, 'utf8'));
-        if (saved && saved.publicKey && saved.privateKey) {
-          vapidKeys.publicKey = saved.publicKey;
-          vapidKeys.privateKey = saved.privateKey;
-          vapidKeyPair.privateKey = saved.privateKeyPem || saved.privateKey;
-          return;
-        }
-      } catch (e) {
-        console.warn('Could not read cached vapid keys file:', e.message);
-      }
-    }
-
-    // Generate fresh permanent keypair
+    // In-memory ephemeral fallback (used only if environment variables are not yet configured)
     const generated = generateP256KeyPair();
     vapidKeys.publicKey = generated.publicKeyBase64Url;
     vapidKeys.privateKey = generated.privateKeyPem;
     vapidKeyPair.privateKey = generated.privateKeyPem;
 
-    // Cache locally
-    try {
-      const dir = path.dirname(VAPID_CACHE_FILE);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(VAPID_CACHE_FILE, JSON.stringify({
-        publicKey: generated.publicKeyBase64Url,
-        privateKey: generated.privateKeyPem,
-        privateKeyPem: generated.privateKeyPem,
-        publicKeyPem: generated.publicKeyPem,
-        createdAt: new Date().toISOString()
-      }, null, 2));
-    } catch (err) {
-      console.warn('Could not cache vapid keys to disk:', err.message);
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('⚠️ [WebPush] Warning: VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are not configured in environment variables. Web push notifications will use ephemeral keys that will reset upon container restart.');
     }
   } catch (err) {
     console.error('Failed to initialize VAPID keys:', err);
@@ -149,7 +125,7 @@ function getVapidPublicKey() {
  * Create RFC 8292 VAPID Authorization JWT
  * Uses IEEE P1363 (raw R || S 64-byte) ECDSA signature
  */
-function createVapidJwt(audience, subject = 'mailto:support@pulsechat.app') {
+function createVapidJwt(audience, subject = process.env.VAPID_SUBJECT || 'mailto:support@pulsechat.app') {
   const header = { typ: 'JWT', alg: 'ES256' };
   const payload = {
     aud: audience,
