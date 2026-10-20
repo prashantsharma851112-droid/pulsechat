@@ -488,41 +488,12 @@ io.on('connection', (socket) => {
 
       const pendingMsgs = await Message.find({ receiverId: { $in: allUserVariants }, status: 'sent' }).lean();
       if (pendingMsgs.length > 0) {
-        // 1. Deliver each queued message to the newly connected recipient
+        // 1. Deliver each queued message to the connected recipient
+        // NOTE: Do NOT delete from MongoDB here. The receiver will commit to local IndexedDB
+        // and send 'message_delivered' ACK, which will safely delete the message from MongoDB.
         for (const pMsg of pendingMsgs) {
-          socket.emit('new_message', { ...pMsg, status: 'delivered' });
+          socket.emit('new_message', pMsg);
         }
-
-        // 2. Sender ko notify karo taaki unke screen par Single Tick turant Double Tick bann jaye
-        const senderMap = {};
-        for (const msg of pendingMsgs) {
-          if (!senderMap[msg.senderId]) senderMap[msg.senderId] = {};
-          if (!senderMap[msg.senderId][msg.chatId]) senderMap[msg.senderId][msg.chatId] = [];
-          senderMap[msg.senderId][msg.chatId].push(msg.id);
-        }
-
-        for (const [sId, chats] of Object.entries(senderMap)) {
-          const sRooms = await resolveUserRooms(sId);
-          for (const [cId, msgIds] of Object.entries(chats)) {
-            const canonicalCId = (cId && cId.includes('_')) ? cId.split('_').sort().join('_') : cId;
-            const delivPayload = { chatId: cId, canonicalChatId: canonicalCId, messageIds: msgIds, status: 'delivered' };
-            sRooms.forEach(r => io.to(r).emit('messages_delivered', delivPayload));
-            if (cId) io.to(cId).emit('messages_delivered', delivPayload);
-            if (canonicalCId && canonicalCId !== cId) io.to(canonicalCId).emit('messages_delivered', delivPayload);
-
-            for (const mId of msgIds) {
-              const singlePayload = { messageId: mId, chatId: cId, canonicalChatId: canonicalCId, status: 'delivered' };
-              sRooms.forEach(r => io.to(r).emit('message_delivered_update', singlePayload));
-              if (cId) io.to(cId).emit('message_delivered_update', singlePayload);
-              if (canonicalCId && canonicalCId !== cId) io.to(canonicalCId).emit('message_delivered_update', singlePayload);
-            }
-          }
-        }
-
-        // 3. WhatsApp Stateless Delivery Wipe: Delivered queued messages immediately deleted from MongoDB (0 bytes)
-        await Message.deleteMany({
-          _id: { $in: pendingMsgs.map(m => m._id) }
-        });
       }
     } catch (err) {
       console.error('Error delivering pending messages on setup:', err);
@@ -941,7 +912,9 @@ io.on('connection', (socket) => {
           } catch {}
         }
       }
-      const initialStatus = isReceiverOnline ? 'delivered' : 'sent';
+      // WhatsApp True Delivery: Sender starts with 'sent' (Single Tick).
+      // Double Tick occurs strictly AFTER receiver's device commits to IndexedDB and emits 'message_delivered' ACK.
+      const initialStatus = 'sent';
 
       const canonicalChatId = (!isGroup && senderId && resolvedReceiverId && resolvedReceiverId !== 'user')
         ? [senderId, resolvedReceiverId].sort().join('_')

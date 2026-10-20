@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 import { AuthContext } from './AuthContext';
 import { BACKEND_URL } from '../utils/config';
 import { subscribeUserToPush, showPushNotification } from '../utils/notifications';
-import { updateUserProfileInStorage } from '../utils/offlineStorage';
+import { updateUserProfileInStorage, appendCachedMessage, updateRecentChatSnippet } from '../utils/offlineStorage';
 
 export const SocketContext = createContext();
 
@@ -244,36 +244,46 @@ export function SocketProvider({ children }) {
         }
       };
 
-      // Fires for every incoming notification — also send delivery ack
-      newSocket.on('message_notification', (msg) => {
-        const notification = { ...msg, receivedAt: Date.now() };
-        setLastNotification(notification);
+      // Receiver-side Durable ACK Engine:
+      // A incoming message is committed to local IndexedDB & cache FIRST before emitting 'message_delivered' ACK.
+      // If network disconnects or browser crashes before local commit, server retains the message in queue.
+      const handleIncomingDurableMessage = (msg) => {
+        if (!msg || !msg.id) return;
+        const curId = userRef.current?.id || user?.id;
+        if (msg.senderId === curId) return;
+
+        // 1. Durably save into local IndexedDB & memory cache
+        try {
+          if (msg.chatId) {
+            appendCachedMessage(msg.chatId, msg);
+            updateRecentChatSnippet(msg.senderId, msg);
+          }
+        } catch (e) {
+          console.warn('Durable local save error:', e);
+        }
+
         triggerPushIfBackground(msg);
 
-        // Delivery ack bhejo taaki sender ko double tick dikhe
-        const curId = userRef.current?.id || user?.id;
-        if (msg.id && msg.senderId && msg.senderId !== curId) {
+        // 2. Emit delivery ACK ONLY AFTER local storage commit
+        if (msg.status !== 'read') {
           newSocket.emit('message_delivered', {
             messageId: msg.id,
             chatId: msg.chatId,
             senderId: msg.senderId
           });
         }
+      };
+
+      // Fires for every incoming notification — save locally first and send delivery ack
+      newSocket.on('message_notification', (msg) => {
+        const notification = { ...msg, receivedAt: Date.now() };
+        setLastNotification(notification);
+        handleIncomingDurableMessage(msg);
       });
 
       // Also listen to direct new_message in active rooms
       newSocket.on('new_message', (msg) => {
-        const curId = userRef.current?.id || user?.id;
-        if (msg.senderId !== curId) {
-          triggerPushIfBackground(msg);
-          if (msg.id && msg.status !== 'read') {
-            newSocket.emit('message_delivered', {
-              messageId: msg.id,
-              chatId: msg.chatId,
-              senderId: msg.senderId
-            });
-          }
-        }
+        handleIncomingDurableMessage(msg);
       });
 
       newSocket.on('aura_changed', (data) => {
