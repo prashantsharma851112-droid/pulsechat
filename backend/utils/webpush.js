@@ -98,6 +98,10 @@ initVapidKeys();
 async function syncWithMongo(VapidKeyModel) {
   try {
     if (!VapidKeyModel) return;
+    // Explicit environment variables always take precedence over MongoDB fallback
+    if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+      return;
+    }
     const existing = await VapidKeyModel.findOne({ keyId: 'default_vapid_key' });
     if (existing && existing.publicKey && existing.privateKey) {
       vapidKeys.publicKey = existing.publicKey;

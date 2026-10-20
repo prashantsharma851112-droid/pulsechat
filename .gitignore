@@ -7,6 +7,9 @@ backend/.env
 frontend/.env
 frontend/dist/
 backend/database/vapid-keys.json
+*.pem
+*.key
+*.pk8
 .DS_Store
 *.log
 .gradle/

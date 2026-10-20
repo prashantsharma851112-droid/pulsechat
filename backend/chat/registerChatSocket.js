@@ -1,5 +1,7 @@
 const QueuedMessage = require('../models/QueuedMessage');
 const MessageLedger = require('../models/MessageLedger');
+const User = require('../models/User');
+const db = require('../database/db');
 const { createReceiptToken, verifyReceiptToken } = require('./receiptToken');
 
 const QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -126,9 +128,9 @@ async function sendPendingForUser(io, userId) {
 
 function registerChatSocket(io, { receiptSecret }) {
   io.on('connection', (socket) => {
-    // Support authenticated socket via JWT or existing setup event
+    // Derive authenticated identity strictly from verified socket session
     const getActiveUserId = () => {
-      return socket.data?.userId || socket.userId || null;
+      return socket.authenticatedUserId || socket.data?.userId || socket.userId || null;
     };
 
     const setupUserRooms = (uId) => {
@@ -146,21 +148,28 @@ function registerChatSocket(io, { receiptSecret }) {
       setupUserRooms(initialUserId);
     }
 
-    // Also support late authentication or setup emission
-    socket.on('setup', (userId) => {
-      if (userId) {
-        socket.data = socket.data || {};
-        socket.data.userId = String(userId);
-        setupUserRooms(String(userId));
+    // Reject client-supplied identity overrides; strictly ignore mismatches
+    socket.on('setup', (clientSuppliedId) => {
+      const authUserId = getActiveUserId();
+      if (!authUserId) {
+        console.warn(`[chat] Rejected unauthenticated setup from socket ${socket.id}`);
+        return;
       }
+      if (clientSuppliedId && String(clientSuppliedId) !== String(authUserId)) {
+        console.warn(`[chat] Rejected setup identity mismatch: authenticated=${authUserId}, supplied=${clientSuppliedId}`);
+        return;
+      }
+      setupUserRooms(authUserId);
     });
 
     socket.on('chat:sync', async (_payload, ack) => {
       try {
         const uId = getActiveUserId();
-        if (uId) {
-          await sendPendingForUser(io, uId);
+        if (!uId) {
+          safeAck(ack, { ok: false, error: 'UNAUTHORIZED' });
+          return;
         }
+        await sendPendingForUser(io, uId);
         safeAck(ack, { ok: true });
       } catch (error) {
         console.error('chat:sync failed:', error.message);
@@ -174,19 +183,53 @@ function registerChatSocket(io, { receiptSecret }) {
         return;
       }
 
-      const senderId = String(getActiveUserId() || payload.senderId || '');
-      const receiverId = String(payload.receiverId);
-      const messageId = payload.messageId;
-      const content = payload.content.trim();
-
-      if (!senderId) {
+      const authUserId = getActiveUserId();
+      if (!authUserId) {
         safeAck(ack, { ok: false, error: 'UNAUTHORIZED_SENDER' });
         return;
       }
 
+      // Strictly reject client-supplied identity mismatches
+      if (payload.senderId && String(payload.senderId) !== String(authUserId)) {
+        safeAck(ack, { ok: false, error: 'SENDER_IDENTITY_MISMATCH' });
+        return;
+      }
+
+      const senderId = String(authUserId);
+      const receiverId = String(payload.receiverId);
+      const messageId = payload.messageId;
+      const content = payload.content.trim();
+
       if (senderId === receiverId) {
         safeAck(ack, { ok: false, error: 'CANNOT_MESSAGE_SELF' });
         return;
+      }
+
+      // Enforce recipient authorization & block checks
+      try {
+        if (typeof User?.findOne === 'function') {
+          const receiver = await User.findOne({
+            $or: [{ id: receiverId }, { _id: receiverId }]
+          }).select('id blockedUsers').lean();
+
+          if (!receiver) {
+            safeAck(ack, { ok: false, error: 'RECIPIENT_NOT_FOUND' });
+            return;
+          }
+
+          if (typeof db?.isUserBlocked === 'function') {
+            const blockCheck = await db.isUserBlocked(senderId, String(receiver.id));
+            if (blockCheck.isBlocked) {
+              safeAck(ack, {
+                ok: false,
+                error: blockCheck.bBlockedA ? 'RECIPIENT_BLOCKED_SENDER' : 'SENDER_BLOCKED_RECIPIENT'
+              });
+              return;
+            }
+          }
+        }
+      } catch (authErr) {
+        console.warn('[chat:send] Recipient verification notice:', authErr.message);
       }
 
       try {
@@ -194,7 +237,7 @@ function registerChatSocket(io, { receiptSecret }) {
           const now = new Date();
           const queueExpiresAt = new Date(now.getTime() + QUEUE_TTL_MS);
           const ledgerExpiresAt = new Date(now.getTime() + LEDGER_TTL_MS);
-          const receiptToken = createReceiptToken({ messageId, senderId, receiverId, expiresAt: ledgerExpiresAt }, receiptSecret);
+          const receiptToken = createReceiptToken({ messageId, senderId, receiverId, expiresAt: queueExpiresAt }, receiptSecret);
           let ledger = await MessageLedger.findOne({ messageId });
 
           if (ledger) {
@@ -211,8 +254,7 @@ function registerChatSocket(io, { receiptSecret }) {
               safeAck(ack, {
                 ok: true,
                 alreadyDelivered: true,
-                messageId,
-                receiptToken
+                messageId
               });
               return;
             }
@@ -240,7 +282,7 @@ function registerChatSocket(io, { receiptSecret }) {
                 return;
               }
               if (ledger.state !== 'queued') {
-                safeAck(ack, { ok: true, alreadyDelivered: true, messageId, receiptToken });
+                safeAck(ack, { ok: true, alreadyDelivered: true, messageId });
                 return;
               }
             }
@@ -263,7 +305,7 @@ function registerChatSocket(io, { receiptSecret }) {
             { upsert: true }
           );
 
-          safeAck(ack, { ok: true, messageId, receiptToken, queued: true });
+          safeAck(ack, { ok: true, messageId, queued: true });
 
           // Forward to receiver if online
           await sendPendingForUser(io, receiverId);
@@ -275,9 +317,14 @@ function registerChatSocket(io, { receiptSecret }) {
     });
 
     socket.on('chat:delivered', async (payload, ack) => {
+      const authUserId = getActiveUserId();
+      if (!authUserId) {
+        safeAck(ack, { ok: false, error: 'UNAUTHORIZED' });
+        return;
+      }
+
       const receipt = verifyReceiptToken(payload?.receiptToken, receiptSecret);
-      const currentUserId = getActiveUserId();
-      if (!receipt || (currentUserId && receipt.receiverId !== String(currentUserId)) || receipt.messageId !== payload?.messageId) {
+      if (!receipt || receipt.receiverId !== String(authUserId) || receipt.messageId !== payload?.messageId) {
         safeAck(ack, { ok: false, error: 'INVALID_RECEIPT_TOKEN' });
         return;
       }
@@ -324,9 +371,14 @@ function registerChatSocket(io, { receiptSecret }) {
     });
 
     socket.on('chat:receipt:read', async (payload, ack) => {
+      const authUserId = getActiveUserId();
+      if (!authUserId) {
+        safeAck(ack, { ok: false, error: 'UNAUTHORIZED' });
+        return;
+      }
+
       const receipt = verifyReceiptToken(payload?.receiptToken, receiptSecret);
-      const currentUserId = getActiveUserId();
-      if (!receipt || (currentUserId && receipt.receiverId !== String(currentUserId)) || receipt.messageId !== payload?.messageId) {
+      if (!receipt || receipt.receiverId !== String(authUserId) || receipt.messageId !== payload?.messageId) {
         safeAck(ack, { ok: false, error: 'INVALID_RECEIPT_TOKEN' });
         return;
       }
