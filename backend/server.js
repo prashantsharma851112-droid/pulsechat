@@ -362,6 +362,31 @@ io.on('connection', (socket) => {
     callback({ isOnline: isActuallyConnected });
   });
 
+  // Helper to resolve all room names (id, Mongo _id, username) for a given user
+  const resolveUserRooms = async (rawUserId) => {
+    const rooms = new Set();
+    if (!rawUserId) return [];
+    const strId = String(rawUserId);
+    rooms.add(strId);
+    rooms.add(`user_${strId}`);
+    try {
+      const isOid = mongoose.Types.ObjectId.isValid(strId);
+      const u = await User.findOne({
+        $or: [
+          { id: strId },
+          ...(isOid ? [{ _id: strId }] : []),
+          { username: strId }
+        ]
+      }).select('id _id username').lean();
+      if (u) {
+        if (u.id) { rooms.add(String(u.id)); rooms.add(`user_${u.id}`); }
+        if (u._id) { const oid = u._id.toString(); rooms.add(oid); rooms.add(`user_${oid}`); }
+        if (u.username) { rooms.add(String(u.username)); rooms.add(`user_${u.username}`); }
+      }
+    } catch {}
+    return Array.from(rooms);
+  };
+
   // User comes online (mobile data ON / socket connected)
   socket.on('setup', async (userId) => {
     socket.userId = userId;
@@ -445,18 +470,17 @@ io.on('connection', (socket) => {
         }
 
         for (const [sId, chats] of Object.entries(senderMap)) {
+          const sRooms = await resolveUserRooms(sId);
           for (const [cId, msgIds] of Object.entries(chats)) {
             const canonicalCId = (cId && cId.includes('_')) ? cId.split('_').sort().join('_') : cId;
             const delivPayload = { chatId: cId, canonicalChatId: canonicalCId, messageIds: msgIds, status: 'delivered' };
-            io.to(`user_${sId}`).emit('messages_delivered', delivPayload);
-            io.to(sId).emit('messages_delivered', delivPayload);
+            sRooms.forEach(r => io.to(r).emit('messages_delivered', delivPayload));
             if (cId) io.to(cId).emit('messages_delivered', delivPayload);
             if (canonicalCId && canonicalCId !== cId) io.to(canonicalCId).emit('messages_delivered', delivPayload);
 
             for (const mId of msgIds) {
               const singlePayload = { messageId: mId, chatId: cId, canonicalChatId: canonicalCId, status: 'delivered' };
-              io.to(`user_${sId}`).emit('message_delivered_update', singlePayload);
-              io.to(sId).emit('message_delivered_update', singlePayload);
+              sRooms.forEach(r => io.to(r).emit('message_delivered_update', singlePayload));
               if (cId) io.to(cId).emit('message_delivered_update', singlePayload);
               if (canonicalCId && canonicalCId !== cId) io.to(canonicalCId).emit('message_delivered_update', singlePayload);
             }
@@ -944,9 +968,13 @@ io.on('connection', (socket) => {
       const targetRooms = new Set();
       if (chatId) targetRooms.add(chatId);
       if (canonicalChatId && canonicalChatId !== chatId) targetRooms.add(canonicalChatId);
-      if (senderId) targetRooms.add(`user_${senderId}`);
+      if (senderId) {
+        const sRooms = await resolveUserRooms(senderId);
+        sRooms.forEach(r => targetRooms.add(r));
+      }
       if (resolvedReceiverId && resolvedReceiverId !== 'user') {
-        targetRooms.add(`user_${resolvedReceiverId}`);
+        const rRooms = await resolveUserRooms(resolvedReceiverId);
+        rRooms.forEach(r => targetRooms.add(r));
       }
       io.to(Array.from(targetRooms)).emit('new_message', newMsg);
 
@@ -1069,28 +1097,25 @@ io.on('connection', (socket) => {
 
       const resolvedSenderId = senderId || ((chatId && chatId.includes('_')) ? chatId.split('_').find(p => p !== socket.userId) : null);
 
+      const targetRooms = new Set();
+      if (chatId) targetRooms.add(chatId);
+      if (canonicalChatId) targetRooms.add(canonicalChatId);
+
       if (resolvedSenderId) {
-        io.to(`user_${resolvedSenderId}`).emit('message_delivered_update', singlePayload);
-        io.to(resolvedSenderId).emit('message_delivered_update', singlePayload);
-        io.to(`user_${resolvedSenderId}`).emit('messages_delivered', multiPayload);
-        io.to(resolvedSenderId).emit('messages_delivered', multiPayload);
-      }
-      if (chatId) {
-        io.to(chatId).emit('message_delivered_update', singlePayload);
-        io.to(chatId).emit('messages_delivered', multiPayload);
-      }
-      if (canonicalChatId && canonicalChatId !== chatId) {
-        io.to(canonicalChatId).emit('message_delivered_update', singlePayload);
-        io.to(canonicalChatId).emit('messages_delivered', multiPayload);
+        const sRooms = await resolveUserRooms(resolvedSenderId);
+        sRooms.forEach(r => targetRooms.add(r));
       }
       if (chatId && chatId.includes('_')) {
-        chatId.split('_').forEach(pId => {
-          io.to(`user_${pId}`).emit('message_delivered_update', singlePayload);
-          io.to(pId).emit('message_delivered_update', singlePayload);
-          io.to(`user_${pId}`).emit('messages_delivered', multiPayload);
-          io.to(pId).emit('messages_delivered', multiPayload);
-        });
+        for (const pId of chatId.split('_')) {
+          const pRooms = await resolveUserRooms(pId);
+          pRooms.forEach(r => targetRooms.add(r));
+        }
       }
+
+      targetRooms.forEach(r => {
+        io.to(r).emit('message_delivered_update', singlePayload);
+        io.to(r).emit('messages_delivered', multiPayload);
+      });
     } catch (err) {
       console.error('Error handling message_delivered ack:', err);
     }
@@ -1277,46 +1302,42 @@ io.on('connection', (socket) => {
     const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
     const senderTarget = senderId || ((chatId && chatId.includes('_')) ? chatId.split('_').find(p => p !== readerId) : null);
 
+    const targetRooms = new Set();
+    if (chatId) targetRooms.add(chatId);
+    if (canonicalChatId) targetRooms.add(canonicalChatId);
+
+    if (senderTarget) {
+      const sRooms = await resolveUserRooms(senderTarget);
+      sRooms.forEach(r => targetRooms.add(r));
+    }
+    if (readerId) {
+      const rRooms = await resolveUserRooms(readerId);
+      rRooms.forEach(r => targetRooms.add(r));
+    }
+    if (chatId && chatId.includes('_')) {
+      for (const pId of chatId.split('_')) {
+        const pRooms = await resolveUserRooms(pId);
+        pRooms.forEach(r => targetRooms.add(r));
+      }
+    }
+
     if (isGhostMode) {
       const delivPayload = { messageId, chatId, canonicalChatId, status: 'delivered' };
-      if (senderTarget) {
-        io.to(`user_${senderTarget}`).emit('message_delivered_update', delivPayload);
-        io.to(senderTarget).emit('message_delivered_update', delivPayload);
-        io.to(`user_${senderTarget}`).emit('messages_delivered', { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered' });
-        io.to(senderTarget).emit('messages_delivered', { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered' });
-      }
-      if (chatId) io.to(chatId).emit('message_delivered_update', delivPayload);
-      if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('message_delivered_update', delivPayload);
-      if (readerId) {
-        io.to(`user_${readerId}`).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
-        io.to(readerId).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
-      }
-      socket.emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
+      targetRooms.forEach(r => {
+        io.to(r).emit('message_delivered_update', delivPayload);
+        io.to(r).emit('messages_delivered', { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered' });
+      });
       return;
     }
 
     // Pure Stateless Event-Forwarding: Server acts as Post Office router
     const readPayload = { messageId, chatId, canonicalChatId, status: 'read' };
-    if (chatId) io.to(chatId).emit('message_read_update', readPayload);
-    if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('message_read_update', readPayload);
-
-    if (senderTarget) {
-      io.to(`user_${senderTarget}`).emit('message_read_update', readPayload);
-      io.to(senderTarget).emit('message_read_update', readPayload);
-    }
-
     const chatReadPayload = { chatId, canonicalChatId, userId: readerId, status: 'read' };
-    if (chatId) io.to(chatId).emit('chat_read_update', chatReadPayload);
-    if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('chat_read_update', chatReadPayload);
-    if (senderTarget) {
-      io.to(`user_${senderTarget}`).emit('chat_read_update', chatReadPayload);
-      io.to(senderTarget).emit('chat_read_update', chatReadPayload);
-    }
-    if (readerId) {
-      io.to(`user_${readerId}`).emit('chat_read_update', chatReadPayload);
-      io.to(readerId).emit('chat_read_update', chatReadPayload);
-    }
-    socket.emit('chat_read_update', chatReadPayload);
+
+    targetRooms.forEach(r => {
+      io.to(r).emit('message_read_update', readPayload);
+      io.to(r).emit('chat_read_update', chatReadPayload);
+    });
 
     // Delete read message from MongoDB ONLY after recipient has seen/read it (Blue Tick confirmed)
     if (!isGhostMode && messageId) {
@@ -1340,41 +1361,33 @@ io.on('connection', (socket) => {
     const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
     const senderTarget = (chatId && chatId.includes('_')) ? chatId.split('_').find(p => p !== readerId) : null;
 
+    const targetRooms = new Set();
+    if (chatId) targetRooms.add(chatId);
+    if (canonicalChatId) targetRooms.add(canonicalChatId);
+
+    if (senderTarget) {
+      const sRooms = await resolveUserRooms(senderTarget);
+      sRooms.forEach(r => targetRooms.add(r));
+    }
+    if (readerId) {
+      const rRooms = await resolveUserRooms(readerId);
+      rRooms.forEach(r => targetRooms.add(r));
+    }
+    if (chatId && chatId.includes('_')) {
+      for (const pId of chatId.split('_')) {
+        const pRooms = await resolveUserRooms(pId);
+        pRooms.forEach(r => targetRooms.add(r));
+      }
+    }
+
     if (isGhostMode) {
       const delivPayload = { chatId, canonicalChatId, status: 'delivered' };
-      if (senderTarget) {
-        io.to(`user_${senderTarget}`).emit('messages_delivered', delivPayload);
-        io.to(senderTarget).emit('messages_delivered', delivPayload);
-      }
-      if (chatId) io.to(chatId).emit('messages_delivered', delivPayload);
-      if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('messages_delivered', delivPayload);
-      if (chatId && chatId.includes('_')) {
-        chatId.split('_').forEach(pId => {
-          io.to(`user_${pId}`).emit('messages_delivered', delivPayload);
-          io.to(pId).emit('messages_delivered', delivPayload);
-        });
-      }
+      targetRooms.forEach(r => io.to(r).emit('messages_delivered', delivPayload));
       return;
     }
 
     const chatReadPayload = { chatId, canonicalChatId, userId: readerId, status: 'read' };
-    if (chatId) io.to(chatId).emit('chat_read_update', chatReadPayload);
-    if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('chat_read_update', chatReadPayload);
-    if (senderTarget) {
-      io.to(`user_${senderTarget}`).emit('chat_read_update', chatReadPayload);
-      io.to(senderTarget).emit('chat_read_update', chatReadPayload);
-    }
-    if (chatId && chatId.includes('_')) {
-      chatId.split('_').forEach(pId => {
-        io.to(`user_${pId}`).emit('chat_read_update', chatReadPayload);
-        io.to(pId).emit('chat_read_update', chatReadPayload);
-      });
-    }
-    if (readerId) {
-      io.to(`user_${readerId}`).emit('chat_read_update', chatReadPayload);
-      io.to(readerId).emit('chat_read_update', chatReadPayload);
-    }
-    socket.emit('chat_read_update', chatReadPayload);
+    targetRooms.forEach(r => io.to(r).emit('chat_read_update', chatReadPayload));
 
     // Delete read messages from MongoDB ONLY after recipient has seen/read them (Blue Tick confirmed)
     if (!isGhostMode) {
@@ -1397,6 +1410,9 @@ io.on('connection', (socket) => {
         });
       } catch (e) {
         console.warn('Error deleting read messages from MongoDB:', e.message);
+      }
+    }
+  });
       }
     }
   });
@@ -2029,15 +2045,43 @@ io.on('connection', (socket) => {
       const canonicalChatId = updatedMsg.chatId || chatId;
       const payload = { messageId: updatedMsg.id || messageId, chatId: canonicalChatId, reactions: updatedMsg.reactions, emoji, userId, isAdded };
 
-      socket.emit('reaction_updated', payload);
-      if (chatId) io.to(chatId).emit('reaction_updated', payload);
-      if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('reaction_updated', payload);
+      const targetRooms = new Set();
+      if (chatId) targetRooms.add(chatId);
+      if (canonicalChatId) targetRooms.add(canonicalChatId);
       if (canonicalChatId && canonicalChatId.includes('_')) {
-        const parts = canonicalChatId.split('_');
-        parts.forEach(uId => {
-          io.to(`user_${uId}`).emit('reaction_updated', payload);
+        for (const uId of canonicalChatId.split('_')) {
+          const uRooms = await resolveUserRooms(uId);
+          uRooms.forEach(r => targetRooms.add(r));
           redis.invalidateRecent(uId).catch(() => {});
+        }
+      }
+
+      targetRooms.forEach(r => io.to(r).emit('reaction_updated', payload));
+
+      // A reaction proves beyond doubt that recipient has SEEN & READ the message!
+      const isAuthor = updatedMsg.senderId && (
+        String(updatedMsg.senderId) === String(userId) ||
+        (socket.userMongoId && String(updatedMsg.senderId) === String(socket.userMongoId)) ||
+        (socket.userUsername && String(updatedMsg.senderId) === String(socket.userUsername))
+      );
+      if (!isAuthor && isAdded) {
+        const readPayload = { messageId: updatedMsg.id || messageId, chatId: canonicalChatId, status: 'read' };
+        const chatReadPayload = { chatId: canonicalChatId, userId, status: 'read' };
+        targetRooms.forEach(r => {
+          io.to(r).emit('message_read_update', readPayload);
+          io.to(r).emit('chat_read_update', chatReadPayload);
         });
+
+        // Delete read message from MongoDB upon reaction read confirmation
+        try {
+          await Message.deleteMany({
+            $or: [
+              { id: updatedMsg.id || messageId },
+              { clientTempId: updatedMsg.id || messageId },
+              ...(mongoose.Types.ObjectId.isValid(messageId) ? [{ _id: messageId }] : [])
+            ]
+          });
+        } catch (e) {}
       }
     }
   });

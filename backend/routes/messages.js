@@ -726,10 +726,25 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
             return;
           }
 
-          io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+          io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id, status: 'read' });
           if (otherId) {
-            io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-            io.to(otherId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
+            try {
+              const otherDoc = await User.findOne({
+                $or: [
+                  { id: otherId },
+                  ...(mongoose.Types.ObjectId.isValid(otherId) ? [{ _id: otherId }] : []),
+                  { username: otherId }
+                ]
+              }).select('id _id username').lean();
+              const otherVars = Array.from(new Set([otherId, otherDoc?.id, otherDoc?._id?.toString(), otherDoc?.username].filter(Boolean)));
+              otherVars.forEach(v => {
+                io.to(`user_${v}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id, status: 'read' });
+                io.to(v).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id, status: 'read' });
+              });
+            } catch {
+              io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id, status: 'read' });
+              io.to(otherId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id, status: 'read' });
+            }
           }
         }
       } catch (bgErr) {

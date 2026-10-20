@@ -1344,6 +1344,13 @@ function MessageItem({
     // 2. Emit to socket for DB persistence & sync
     if (socket) {
       socket.emit('add_reaction', { messageId: targetMsgId, chatId, emoji, userId: myId });
+      if (!isMine) {
+        const isCurGhost = (typeof window !== 'undefined' && localStorage.getItem('pulsechat_ghost_global') === 'true') || Boolean(currentUser?.hideReadReceipts);
+        if (!isCurGhost) {
+          socket.emit('mark_read', { messageId: targetMsgId, chatId, senderId: message.senderId });
+          socket.emit('mark_chat_read', { chatId, userId: myId });
+        }
+      }
     }
 
     if (!isAlreadyReacted && typeof window !== 'undefined') {
@@ -2280,15 +2287,20 @@ function MessageItem({
                     <span>{timeStr}</span>
                     {isMine && (
                       <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-                        {message.status === 'pending' ? (
-                          <Clock size={11} color="#e2e8f0" />
-                        ) : message.status === 'read' ? (
-                          <CheckCheck size={13} color="#38bdf8" />
-                        ) : message.status === 'delivered' ? (
-                          <CheckCheck size={13} color="#e2e8f0" />
-                        ) : (
-                          <Check size={13} color="#e2e8f0" />
-                        )}
+                        {(() => {
+                          const hasPartnerReaction = message.reactions && Object.values(message.reactions).some(uList => Array.isArray(uList) && uList.some(u => String(u) !== String(currentUser?.id) && String(u) !== String(currentUser?._id)));
+                          const curStatus = hasPartnerReaction ? 'read' : (message.status || 'sent');
+
+                          if (curStatus === 'pending') {
+                            return <Clock size={11} color="#e2e8f0" />;
+                          } else if (curStatus === 'read' || curStatus === 'seen') {
+                            return <CheckCheck size={13} color="#38bdf8" />;
+                          } else if (curStatus === 'delivered') {
+                            return <CheckCheck size={13} color="#e2e8f0" />;
+                          } else {
+                            return <Check size={13} color="#e2e8f0" />;
+                          }
+                        })()}
                       </span>
                     )}
                   </div>
@@ -2377,15 +2389,20 @@ function MessageItem({
                     <span>{timeStr}</span>
                     {isMine && (
                       <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-                        {message.status === 'pending' ? (
-                          <Clock size={11} color="#e2e8f0" />
-                        ) : message.status === 'read' ? (
-                          <CheckCheck size={13} color="#38bdf8" />
-                        ) : message.status === 'delivered' ? (
-                          <CheckCheck size={13} color="#e2e8f0" />
-                        ) : (
-                          <Check size={13} color="#e2e8f0" />
-                        )}
+                        {(() => {
+                          const hasPartnerReaction = message.reactions && Object.values(message.reactions).some(uList => Array.isArray(uList) && uList.some(u => String(u) !== String(currentUser?.id) && String(u) !== String(currentUser?._id)));
+                          const curStatus = hasPartnerReaction ? 'read' : (message.status || 'sent');
+
+                          if (curStatus === 'pending') {
+                            return <Clock size={11} color="#e2e8f0" />;
+                          } else if (curStatus === 'read' || curStatus === 'seen') {
+                            return <CheckCheck size={13} color="#38bdf8" />;
+                          } else if (curStatus === 'delivered') {
+                            return <CheckCheck size={13} color="#e2e8f0" />;
+                          } else {
+                            return <Check size={13} color="#e2e8f0" />;
+                          }
+                        })()}
                       </span>
                     )}
                   </div>
@@ -2859,15 +2876,20 @@ function MessageItem({
             <span>{timeStr}</span>
             {isMine && (
               <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-                {message.status === 'pending' ? (
-                  <Clock size={12} color="#9ca3af" title="Waiting for network / Pending" />
-                ) : message.status === 'read' ? (
-                  <CheckCheck size={14} color="#53bdeb" />
-                ) : message.status === 'delivered' ? (
-                  <CheckCheck size={14} color="#9ca3af" />
-                ) : (
-                  <Check size={14} color="#9ca3af" />
-                )}
+                {(() => {
+                  const hasPartnerReaction = message.reactions && Object.values(message.reactions).some(uList => Array.isArray(uList) && uList.some(u => String(u) !== String(currentUser?.id) && String(u) !== String(currentUser?._id)));
+                  const curStatus = hasPartnerReaction ? 'read' : (message.status || 'sent');
+
+                  if (curStatus === 'pending') {
+                    return <Clock size={12} color="#9ca3af" title="Waiting for network / Pending" />;
+                  } else if (curStatus === 'read' || curStatus === 'seen') {
+                    return <CheckCheck size={14} color="#53bdeb" title="Read" />;
+                  } else if (curStatus === 'delivered') {
+                    return <CheckCheck size={14} color="#9ca3af" title="Delivered" />;
+                  } else {
+                    return <Check size={14} color="#9ca3af" title="Sent" />;
+                  }
+                })()}
               </span>
             )}
           </div>

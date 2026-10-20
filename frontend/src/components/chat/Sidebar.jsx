@@ -2015,19 +2015,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       );
       if (isMe || !isAdded) return;
 
-      const isCurrentlyViewing = Boolean(
-        activeChatRef.current && (
-          activeChatRef.current.id === cId ||
-          activeChatRef.current.chatId === cId ||
-          activeChatRef.current.id === reactorId ||
-          (cId && typeof cId === 'string' && cId.includes('_') && (
-            cId.split('_').includes(activeChatRef.current.id) ||
-            (activeChatRef.current.username && cId.split('_').includes(activeChatRef.current.username))
-          ))
-        )
-      );
-
-      const reactionSnippet = `Reacted ${emoji}`;
       setRecentChats(prev => {
         let found = false;
         const updated = prev.map(c => {
@@ -2036,61 +2023,65 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             c.id === reactorId ||
             c._id === reactorId ||
             (c.username && c.username === reactorId) ||
-            (cId && typeof cId === 'string' && cId.includes('_') && c.id && cId.split('_').includes(c.id))
+            (cId && typeof cId === 'string' && cId.includes('_') && (
+              (c.id && cId.split('_').includes(c.id)) ||
+              (c._id && cId.split('_').includes(String(c._id))) ||
+              (c.username && cId.split('_').includes(c.username))
+            ))
           );
           if (isMatch) {
             found = true;
-            const currentUnread = c.unreadCount || 0;
             return {
               ...c,
-              lastMessage: reactionSnippet,
-              lastMessageTime: new Date().toISOString(),
-              lastMessageTimestamp: new Date().toISOString(),
-              lastMessageFromMe: false,
-              unreadCount: isCurrentlyViewing ? 0 : currentUnread + 1
+              lastMessageStatus: 'read'
             };
           }
           return c;
         });
 
         if (found) {
-          const sorted = [...updated].sort((a, b) => {
-            const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
-            const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
-            return tB - tA;
-          });
-          if (user?.id) setCachedRecentChats(user.id, sorted);
-          if (!isCurrentlyViewing) {
-            try { playSound('received'); } catch {}
-          }
-          return sorted;
+          if (user?.id) setCachedRecentChats(user.id, updated);
+          return updated;
         }
         return prev;
       });
+
+      if (cId) {
+        markAllCachedMessagesRead(cId, user?.id);
+      }
     };
     socket.on('reaction_updated', handleReactionUpdated);
 
     // Instant delivery tick update in chat list
-    const handleDeliveryUpdate = ({ messageId, chatId: cId, status }) => {
+    const handleDeliveryUpdate = ({ messageId, chatId: cId, canonicalChatId, status }) => {
       setRecentChats(prev => {
+        let updatedAny = false;
         const next = prev.map(c => {
           const isMatch = Boolean(
             c.id === cId ||
             c._id === cId ||
-            (c.username && c.username === cId) ||
-            (c.chatId && c.chatId === cId) ||
+            c.id === canonicalChatId ||
+            c._id === canonicalChatId ||
+            (c.username && (c.username === cId || c.username === canonicalChatId)) ||
+            (c.chatId && (c.chatId === cId || c.chatId === canonicalChatId)) ||
             (typeof cId === 'string' && (
               (c.id && cId.includes(c.id)) ||
-              (c._id && cId.includes(c._id)) ||
+              (c._id && cId.includes(String(c._id))) ||
               (c.username && cId.toLowerCase().includes(c.username.toLowerCase()))
+            )) ||
+            (typeof canonicalChatId === 'string' && (
+              (c.id && canonicalChatId.includes(c.id)) ||
+              (c._id && canonicalChatId.includes(String(c._id))) ||
+              (c.username && canonicalChatId.toLowerCase().includes(c.username.toLowerCase()))
             ))
           );
           if (isMatch) {
+            updatedAny = true;
             return { ...c, lastMessageStatus: (c.lastMessageStatus === 'read' ? 'read' : (status || 'delivered')) };
           }
           return c;
         });
-        if (user?.id) setCachedRecentChats(user.id, next);
+        if (updatedAny && user?.id) setCachedRecentChats(user.id, next);
         return next;
       });
       if (cId) {
@@ -2100,25 +2091,63 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           markAllCachedMessagesDelivered(cId, user?.id);
         }
       }
+      if (canonicalChatId && canonicalChatId !== cId) {
+        if (messageId) {
+          updateCachedMessageStatus(canonicalChatId, messageId, { status: 'delivered' });
+        } else {
+          markAllCachedMessagesDelivered(canonicalChatId, user?.id);
+        }
+      }
     };
     socket.on('message_delivered_update', handleDeliveryUpdate);
-    socket.on('messages_delivered', ({ chatId: cId, status }) => {
-      handleDeliveryUpdate({ chatId: cId, status: status || 'delivered' });
+    socket.on('messages_delivered', ({ chatId: cId, canonicalChatId, status }) => {
+      handleDeliveryUpdate({ chatId: cId, canonicalChatId, status: status || 'delivered' });
     });
 
-    const handleReadUpdate = ({ messageId, chatId: cId, status }) => {
+    const handleReadUpdate = ({ messageId, chatId: cId, canonicalChatId, status }) => {
       setRecentChats(prev => {
+        let updatedAny = false;
         const next = prev.map(c => {
-          if (c.id === cId || c._id === cId || (cId && typeof cId === 'string' && (cId.includes(c.id) || (c._id && cId.includes(c._id)) || (c.username && cId.toLowerCase().includes(c.username.toLowerCase()))))) {
+          const isMatch = Boolean(
+            c.id === cId ||
+            c._id === cId ||
+            c.id === canonicalChatId ||
+            c._id === canonicalChatId ||
+            (c.username && (c.username === cId || c.username === canonicalChatId)) ||
+            (c.chatId && (c.chatId === cId || c.chatId === canonicalChatId)) ||
+            (typeof cId === 'string' && (
+              (c.id && cId.includes(c.id)) ||
+              (c._id && cId.includes(String(c._id))) ||
+              (c.username && cId.toLowerCase().includes(c.username.toLowerCase()))
+            )) ||
+            (typeof canonicalChatId === 'string' && (
+              (c.id && canonicalChatId.includes(c.id)) ||
+              (c._id && canonicalChatId.includes(String(c._id))) ||
+              (c.username && canonicalChatId.toLowerCase().includes(c.username.toLowerCase()))
+            ))
+          );
+          if (isMatch) {
+            updatedAny = true;
             return { ...c, lastMessageStatus: status || 'read' };
           }
           return c;
         });
-        if (user?.id) setCachedRecentChats(user.id, next);
+        if (updatedAny && user?.id) setCachedRecentChats(user.id, next);
         return next;
       });
-      if (cId && messageId) {
-        updateCachedMessageStatus(cId, messageId, { status: status || 'read' });
+      if (cId) {
+        if (messageId) {
+          updateCachedMessageStatus(cId, messageId, { status: status || 'read' });
+        } else {
+          markAllCachedMessagesRead(cId, user?.id);
+        }
+      }
+      if (canonicalChatId && canonicalChatId !== cId) {
+        if (messageId) {
+          updateCachedMessageStatus(canonicalChatId, messageId, { status: status || 'read' });
+        } else {
+          markAllCachedMessagesRead(canonicalChatId, user?.id);
+        }
       }
     };
     socket.on('message_read_update', handleReadUpdate);
@@ -2142,12 +2171,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           (c.chatId && (c.chatId === cId || c.chatId === canonicalChatId)) ||
           (typeof cId === 'string' && (
             (c.id && cId.includes(c.id)) ||
-            (c._id && cId.includes(c._id)) ||
+            (c._id && cId.includes(String(c._id))) ||
             (c.username && cId.toLowerCase().includes(c.username.toLowerCase()))
           )) ||
           (typeof canonicalChatId === 'string' && (
             (c.id && canonicalChatId.includes(c.id)) ||
-            (c._id && canonicalChatId.includes(c._id)) ||
+            (c._id && canonicalChatId.includes(String(c._id))) ||
             (c.username && canonicalChatId.toLowerCase().includes(c.username.toLowerCase()))
           ))
         );
@@ -4255,7 +4284,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                           }
 
                           const isFromMe = Boolean(u.lastMessageFromMe);
-                          const status = u.lastMessageStatus || 'sent';
+                          const isContactOnline = !u.isGroup && Array.isArray(onlineUsers) && (
+                            (u.id && onlineUsers.some(uid => String(uid) === String(u.id))) ||
+                            (u._id && onlineUsers.some(uid => String(uid) === String(u._id))) ||
+                            (u.username && onlineUsers.some(uid => String(uid).toLowerCase() === String(u.username).toLowerCase()))
+                          );
+                          const status = (u.lastMessageStatus === 'sent' && isContactOnline) ? 'delivered' : (u.lastMessageStatus || 'sent');
 
                           let statusIcon = null;
                           if (isFromMe && u.lastMessage) {
