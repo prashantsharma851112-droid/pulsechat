@@ -1521,22 +1521,68 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               if (fresh.hasStreakCrown !== undefined) res.hasStreakCrown = Boolean(fresh.hasStreakCrown);
             }
 
-            const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
-            if (cachedMatch) {
-              if (res.nickname === undefined && cachedMatch.nickname) {
-                res.nickname = cachedMatch.nickname;
+            const cachedMatch = cachedList.find(c => {
+              if (!c) return false;
+              if (res.id && (c.id === res.id || c._id === res.id)) return true;
+              if (res._id && (c.id === String(res._id) || c._id === String(res._id))) return true;
+              if (res.username && c.username && String(c.username).toLowerCase() === String(res.username).toLowerCase()) return true;
+              return false;
+            });
+
+            // WhatsApp Local-First: Inspect device's local message storage for this conversation
+            const derivedChatId = (user?.id && (res.id || res._id)) ? [user.id, res.id || res._id].sort().join('_') : null;
+            let localLastMsg = null;
+            if (derivedChatId) {
+              const localMsgs = getCachedMessages(derivedChatId, user?.id);
+              if (Array.isArray(localMsgs) && localMsgs.length > 0) {
+                localLastMsg = localMsgs[localMsgs.length - 1];
               }
-              if (res.nicknames === undefined && cachedMatch.nicknames) {
-                res.nicknames = cachedMatch.nicknames;
+            }
+
+            if (cachedMatch || localLastMsg) {
+              if (cachedMatch) {
+                if (res.nickname === undefined && cachedMatch.nickname) {
+                  res.nickname = cachedMatch.nickname;
+                }
+                if (res.nicknames === undefined && cachedMatch.nicknames) {
+                  res.nicknames = cachedMatch.nicknames;
+                }
               }
-              const cachedTime = new Date(cachedMatch.lastMessageTimestamp || cachedMatch.lastMessageTime || 0).getTime();
+
+              const cachedTime = new Date(cachedMatch?.lastMessageTimestamp || cachedMatch?.lastMessageTime || 0).getTime();
+              const localMsgTime = new Date(localLastMsg?.timestamp || localLastMsg?.createdAt || 0).getTime();
               const serverTime = new Date(res.lastMessageTimestamp || res.lastMessageTime || 0).getTime();
-              if (cachedTime > serverTime) {
-                res.lastMessage = cachedMatch.lastMessage;
-                res.lastMessageTime = cachedMatch.lastMessageTime;
-                res.lastMessageTimestamp = cachedMatch.lastMessageTimestamp;
-                res.lastMessageFromMe = cachedMatch.lastMessageFromMe;
-                res.lastMessageStatus = cachedMatch.lastMessageStatus;
+              const bestLocalTime = Math.max(cachedTime, localMsgTime);
+
+              // Device storage takes precedence over server in pure Post Office architecture
+              if (bestLocalTime >= serverTime || !res.lastMessage) {
+                if (localMsgTime >= cachedTime && localLastMsg) {
+                  const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean));
+                  const isFromMe = myVars.has(localLastMsg.senderId);
+                  let snippet = (localLastMsg.type === 'stealth_dust' || localLastMsg.isDustText)
+                    ? '⚡ Stealth Dust Text'
+                    : localLastMsg.type === 'text' ? (localLastMsg.content || '')
+                    : localLastMsg.type === '3d_text' ? `✨ 3D: ${localLastMsg.content}`
+                    : localLastMsg.type === 'image' ? '📷 Photo'
+                    : localLastMsg.type === 'video' ? '🎥 Video'
+                    : localLastMsg.type === 'voice' || localLastMsg.type === 'audio' ? '🎤 Voice message'
+                    : localLastMsg.type === 'gift' ? '🎁 Gift'
+                    : localLastMsg.type === 'poll' ? '📊 Poll'
+                    : 'File attachment';
+                  res.lastMessage = snippet;
+                  res.lastMessageTime = localLastMsg.timestamp;
+                  res.lastMessageTimestamp = localLastMsg.timestamp;
+                  res.lastMessageFromMe = isFromMe;
+                  res.lastMessageStatus = localLastMsg.status || 'sent';
+                  res.lastMessageType = localLastMsg.type || 'text';
+                } else if (cachedMatch?.lastMessage) {
+                  res.lastMessage = cachedMatch.lastMessage;
+                  res.lastMessageTime = cachedMatch.lastMessageTime;
+                  res.lastMessageTimestamp = cachedMatch.lastMessageTimestamp;
+                  res.lastMessageFromMe = cachedMatch.lastMessageFromMe;
+                  res.lastMessageStatus = cachedMatch.lastMessageStatus;
+                  res.lastMessageType = cachedMatch.lastMessageType || res.lastMessageType;
+                }
               }
             }
 
@@ -1546,7 +1592,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                 res._id === activeChatRef.current.id ||
                 res.id === activeChatRef.current._id ||
                 res._id === activeChatRef.current._id ||
-                (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username)
+                (res.username && activeChatRef.current.username && String(res.username).toLowerCase() === String(activeChatRef.current.username).toLowerCase())
               )
             );
             if (isCurrentlyActive) {
@@ -1558,11 +1604,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           });
 
           // Preserve local chats not present in server data yet
-          const serverKeys = new Set(serverMapped.flatMap(s => [s.id, s._id, s.username].filter(Boolean)));
+          const serverKeys = new Set(serverMapped.flatMap(s => [s.id, s._id, s.username && String(s.username).toLowerCase()].filter(Boolean)));
           const extraLocal = cachedList.filter(c =>
             !serverKeys.has(c.id) &&
             (!c._id || !serverKeys.has(c._id)) &&
-            (!c.username || !serverKeys.has(c.username))
+            (!c.username || !serverKeys.has(String(c.username).toLowerCase()))
           );
 
           const combined = [...serverMapped, ...extraLocal];
@@ -2031,12 +2077,19 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     });
 
     const handleReadUpdate = ({ messageId, chatId: cId, status }) => {
-      setRecentChats(prev => prev.map(c => {
-        if (c.id === cId || (cId && typeof cId === 'string' && cId.includes(c.id))) {
-          return { ...c, lastMessageStatus: status || 'read' };
-        }
-        return c;
-      }));
+      setRecentChats(prev => {
+        const next = prev.map(c => {
+          if (c.id === cId || c._id === cId || (cId && typeof cId === 'string' && (cId.includes(c.id) || (c._id && cId.includes(c._id))))) {
+            return { ...c, lastMessageStatus: status || 'read' };
+          }
+          return c;
+        });
+        if (user?.id) setCachedRecentChats(user.id, next);
+        return next;
+      });
+      if (cId && messageId) {
+        updateCachedMessageStatus(cId, messageId, { status: status || 'read' });
+      }
     };
     socket.on('message_read_update', handleReadUpdate);
 
@@ -2050,37 +2103,67 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
       if (isMe && user?.id) {
         clearUnreadCount(user.id, cId);
-        setRecentChats(prev => prev.map(c => {
-          const isMatch = Boolean(
-            c.id === cId ||
-            c._id === cId ||
-            (c.username && c.username === cId) ||
-            (c.chatId && c.chatId === cId) ||
-            (typeof cId === 'string' && (
-              (c.id && cId.includes(c.id)) ||
-              (c._id && cId.includes(c._id)) ||
-              (c.username && cId.includes(c.username))
-            ))
-          );
-          return isMatch ? { ...c, unreadCount: 0 } : c;
-        }));
+        setRecentChats(prev => {
+          const next = prev.map(c => {
+            const isMatch = Boolean(
+              c.id === cId ||
+              c._id === cId ||
+              (c.username && c.username === cId) ||
+              (c.chatId && c.chatId === cId) ||
+              (typeof cId === 'string' && (
+                (c.id && cId.includes(c.id)) ||
+                (c._id && cId.includes(c._id)) ||
+                (c.username && cId.includes(c.username))
+              ))
+            );
+            return isMatch ? { ...c, unreadCount: 0 } : c;
+          });
+          if (user?.id) setCachedRecentChats(user.id, next);
+          return next;
+        });
         setGroups(prev => prev.map(g => g.id === cId ? { ...g, unreadCount: 0 } : g));
       } else if (!isMe) {
-        // Other user read my messages -> mark lastMessageStatus as read
-        setRecentChats(prev => prev.map(c => {
-          const isMatch = Boolean(
-            c.id === cId ||
-            c._id === cId ||
-            (c.username && c.username === cId) ||
-            (c.chatId && c.chatId === cId) ||
-            (typeof cId === 'string' && (
-              (c.id && cId.includes(c.id)) ||
-              (c._id && cId.includes(c._id)) ||
-              (c.username && cId.includes(c.username))
-            ))
-          );
-          return isMatch ? { ...c, lastMessageStatus: 'read' } : c;
-        }));
+        // Other user read my messages -> mark lastMessageStatus as read in recentChats AND local message storage
+        setRecentChats(prev => {
+          const next = prev.map(c => {
+            const isMatch = Boolean(
+              c.id === cId ||
+              c._id === cId ||
+              (c.username && c.username === cId) ||
+              (c.chatId && c.chatId === cId) ||
+              (typeof cId === 'string' && (
+                (c.id && cId.includes(c.id)) ||
+                (c._id && cId.includes(c._id)) ||
+                (c.username && cId.includes(c.username))
+              ))
+            );
+            return isMatch ? { ...c, lastMessageStatus: 'read' } : c;
+          });
+          if (user?.id) setCachedRecentChats(user.id, next);
+          return next;
+        });
+
+        // Also update local cached messages for this chat so ChatWindow loads them with blue ticks!
+        try {
+          const targetCId = (typeof cId === 'string' && cId.includes('_')) ? cId : (user?.id && cId ? [user.id, cId].sort().join('_') : cId);
+          if (targetCId) {
+            const msgs = getCachedMessages(targetCId, user?.id);
+            if (Array.isArray(msgs) && msgs.length > 0) {
+              const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean));
+              let changed = false;
+              const next = msgs.map(m => {
+                if (myVars.has(m.senderId) && m.status !== 'read') {
+                  changed = true;
+                  return { ...m, status: 'read' };
+                }
+                return m;
+              });
+              if (changed) {
+                setCachedMessages(targetCId, next);
+              }
+            }
+          }
+        } catch (_) {}
       }
     };
     socket.on('chat_read_update', handleChatRead);

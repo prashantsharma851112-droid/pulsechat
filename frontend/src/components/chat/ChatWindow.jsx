@@ -2440,10 +2440,37 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         const pendingForThisChat = outbox.filter(m => m.chatId === chatId);
         const cachedIds = new Set(cached.map(m => m.id));
         const combinedInitial = [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))].map(sanitizeFogSnapMessage).filter(Boolean);
-        setMessages(combinedInitial);
+
+        const myVariants = new Set([user?.id, user?._id, user?.username].filter(Boolean));
+        let latestPartnerTime = 0;
+        combinedInitial.forEach(m => {
+          if (!myVariants.has(m.senderId)) {
+            const t = new Date(m.timestamp || m.createdAt || 0).getTime();
+            if (t > latestPartnerTime) latestPartnerTime = t;
+          }
+        });
+
+        // WhatsApp Natural Rule: If partner has sent messages AFTER my sent message, or if activeChat shows 'read':
+        // Then my message is 100% read (Blue Tick)!
+        let hasStatusUpdate = false;
+        const resolvedInitial = combinedInitial.map(m => {
+          if (myVariants.has(m.senderId) && m.status !== 'read' && m.status !== 'pending') {
+            const mTime = new Date(m.timestamp || m.createdAt || 0).getTime();
+            if (activeChat?.lastMessageStatus === 'read' || (latestPartnerTime > 0 && mTime <= latestPartnerTime)) {
+              hasStatusUpdate = true;
+              return { ...m, status: 'read' };
+            }
+          }
+          return m;
+        });
+
+        if (hasStatusUpdate) {
+          setCachedMessages(chatId, resolvedInitial);
+        }
+        setMessages(resolvedInitial);
 
         // Pre-warm RAM buffer in background for instant zero-lag scrolling
-        const oldestInitial = combinedInitial.find(m => m.timestamp && !m.id?.startsWith('temp_'));
+        const oldestInitial = resolvedInitial.find(m => m.timestamp && !m.id?.startsWith('temp_'));
         if (oldestInitial?.timestamp) {
           prefetchOlderMessagesIntoRam(chatId, oldestInitial.timestamp);
         }
@@ -2455,7 +2482,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               const deletedIds = getDeletedForMeIds(user?.id);
               const validMsgs = dbMsgs.filter(m => !deletedIds.has(String(m.id)) && !deletedIds.has(String(m._id)));
               if (validMsgs.length > 0) {
-                setMessages(validMsgs.map(sanitizeFogSnapMessage).filter(Boolean));
+                let dbLatestPartnerTime = 0;
+                validMsgs.forEach(m => {
+                  if (!myVariants.has(m.senderId)) {
+                    const t = new Date(m.timestamp || m.createdAt || 0).getTime();
+                    if (t > dbLatestPartnerTime) dbLatestPartnerTime = t;
+                  }
+                });
+                const resolvedDb = validMsgs.map(m => {
+                  if (myVariants.has(m.senderId) && m.status !== 'read' && m.status !== 'pending') {
+                    const mTime = new Date(m.timestamp || m.createdAt || 0).getTime();
+                    if (activeChat?.lastMessageStatus === 'read' || (dbLatestPartnerTime > 0 && mTime <= dbLatestPartnerTime)) {
+                      return { ...m, status: 'read' };
+                    }
+                  }
+                  return m;
+                });
+                setMessages(resolvedDb.map(sanitizeFogSnapMessage).filter(Boolean));
                 const oldestDb = validMsgs.find(m => m.timestamp && !m.id?.startsWith('temp_'));
                 if (oldestDb?.timestamp) {
                   prefetchOlderMessagesIntoRam(chatId, oldestDb.timestamp);
@@ -3084,7 +3127,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         updateRecentChatSnippet(user?.id, chatId, msg, activeChat);
         window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
 
-        if (msg.senderId !== user.id) {
+        const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean));
+        if (!myVars.has(msg.senderId)) {
+          // Partner sent a message -> all prior sent messages are confirmed read (Blue Tick)
+          setMessages(prev => {
+            let changed = false;
+            const next = prev.map(m => {
+              if (myVars.has(m.senderId) && m.status !== 'read' && m.status !== 'pending') {
+                changed = true;
+                return { ...m, status: 'read' };
+              }
+              return m;
+            });
+            if (changed) {
+              setCachedMessages(chatId, next);
+            }
+            return next;
+          });
           playSound('received');
           if (showScrollBottomRef.current) {
             newScrolledMessagesCountRef.current += 1;
@@ -3238,12 +3297,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       if (isMatch) {
         setMessages(prev => {
-          const next = prev.map(m =>
-            (m.senderId === user?.id || m.senderId === user?._id)
-              ? { ...m, status: 'read' }
-              : m
-          );
-          setCachedMessages(chatId, next);
+          const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean));
+          let changed = false;
+          const next = prev.map(m => {
+            if (myVars.has(m.senderId) && m.status !== 'read') {
+              changed = true;
+              return { ...m, status: 'read' };
+            }
+            return m;
+          });
+          if (changed) {
+            setCachedMessages(chatId, next);
+          }
           return next;
         });
       }

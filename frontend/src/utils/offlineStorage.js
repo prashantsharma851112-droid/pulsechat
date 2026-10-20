@@ -106,16 +106,28 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
 
   let recent = getCachedRecentChats(userId);
 
-  const contactId = targetChat?.id || targetChat?._id || message.receiverId || (message.senderId !== userId ? message.senderId : null);
+  const userObj = getCachedUser();
+  const myVariants = new Set([
+    userId,
+    userObj?.id,
+    userObj?._id,
+    userObj?.username
+  ].filter(Boolean));
+
+  const isFromMe = myVariants.has(message.senderId);
+
+  const contactId = targetChat?.id || targetChat?._id || message.receiverId || (!isFromMe ? message.senderId : null);
 
   const existingIdx = recent.findIndex(c => {
-    if (contactId && (c.id === contactId || c._id === contactId || c.username === contactId)) return true;
-    if (chatId && (c.id === chatId || c._id === chatId || (typeof chatId === 'string' && chatId.includes(c.id)))) return true;
-    if (targetChat?.username && c.username === targetChat.username) return true;
+    if (!c) return false;
+    if (contactId && (c.id === contactId || c._id === contactId || (c.username && contactId && String(c.username).toLowerCase() === String(contactId).toLowerCase()))) return true;
+    if (targetChat?._id && (c.id === String(targetChat._id) || c._id === String(targetChat._id))) return true;
+    if (targetChat?.id && (c.id === String(targetChat.id) || c._id === String(targetChat.id))) return true;
+    if (targetChat?.username && c.username && String(c.username).toLowerCase() === String(targetChat.username).toLowerCase()) return true;
+    if (chatId && (c.id === chatId || c._id === chatId || (typeof chatId === 'string' && (chatId.includes(c.id) || (c._id && chatId.includes(c._id)))))) return true;
     return false;
   });
 
-  const isFromMe = message.senderId === userId;
   let formattedContent = '';
 
   if (message.type === 'stealth_dust' || message.isDustText) {
@@ -181,8 +193,12 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
       customBadge: targetChat?.customBadge !== undefined ? targetChat.customBadge : (existing.customBadge || null)
     };
   } else if (targetChat) {
+    const realContactId = (contactId && contactId !== userId && !myVariants.has(contactId) && !String(contactId).includes('_'))
+      ? contactId
+      : (targetChat?.id || targetChat?._id || (typeof chatId === 'string' && chatId.includes('_') ? chatId.split('_').find(p => !myVariants.has(p)) : chatId));
+
     updatedEntry = {
-      id: targetChat.id || targetChat._id || contactId || chatId,
+      id: realContactId || targetChat.id || targetChat._id || contactId || chatId,
       displayName: targetChat.displayName || targetChat.name || targetChat.username || 'Chat',
       username: targetChat.username || '',
       avatar: targetChat.avatar || '',
