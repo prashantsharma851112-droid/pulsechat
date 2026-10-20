@@ -193,7 +193,7 @@ function registerChatSocket(io, { receiptSecret }) {
           const now = new Date();
           const queueExpiresAt = new Date(now.getTime() + QUEUE_TTL_MS);
           const ledgerExpiresAt = new Date(now.getTime() + LEDGER_TTL_MS);
-          const receiptToken = createReceiptToken({ messageId, senderId, receiverId }, receiptSecret);
+          const receiptToken = createReceiptToken({ messageId, senderId, receiverId, expiresAt: ledgerExpiresAt }, receiptSecret);
           let ledger = await MessageLedger.findOne({ messageId });
 
           if (ledger) {

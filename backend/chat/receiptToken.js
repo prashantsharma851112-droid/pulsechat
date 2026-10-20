@@ -4,8 +4,9 @@ function base64url(input) {
   return Buffer.from(input).toString('base64url');
 }
 
-function createReceiptToken({ messageId, senderId, receiverId }, secret) {
-  const body = base64url(JSON.stringify({ v: 1, messageId, senderId, receiverId }));
+function createReceiptToken({ messageId, senderId, receiverId, expiresAt }, secret) {
+  const exp = expiresAt ? new Date(expiresAt).getTime() : Date.now() + 30 * 24 * 60 * 60 * 1000;
+  const body = base64url(JSON.stringify({ v: 1, messageId, senderId, receiverId, exp }));
   const signature = crypto.createHmac('sha256', secret).update(body).digest('base64url');
   return `${body}.${signature}`;
 }
@@ -32,6 +33,12 @@ function verifyReceiptToken(token, secret) {
       typeof payload.senderId !== 'string' ||
       typeof payload.receiverId !== 'string'
     ) return null;
+
+    // Check expiry: token cannot be used after expiration
+    if (payload.exp && Date.now() > payload.exp) {
+      return null;
+    }
+
     return payload;
   } catch {
     return null;
