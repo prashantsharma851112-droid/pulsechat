@@ -49,6 +49,7 @@ const messageSchema = new mongoose.Schema({
   storyReply: { type: Object, default: null },
   // Instagram-style Vanish Mode (Permanent Auto-evaporate on chat exit)
   isVanish: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now, index: true },
   // WhatsApp-Style Post Office Queue: Max 7-day queue for offline delivery, auto-drops if receiver never connects
   expiresAt: { type: Date, default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), index: { expires: 0 } }
 });

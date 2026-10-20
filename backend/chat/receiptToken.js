@@ -42,9 +42,18 @@ function verifyReceiptToken(token, secret) {
       typeof payload.receiverId !== 'string'
     ) return null;
 
-    // Check expiry: consistent in milliseconds
+    // Fail-closed validation: invalid, missing, or non-finite expiry strictly rejects
     const tokenExp = Number(payload.exp ?? payload.expiresAt);
-    if (tokenExp && Date.now() > tokenExp) {
+
+    if (!Number.isFinite(tokenExp) || tokenExp <= Date.now()) {
+      return null;
+    }
+
+    if (
+      payload.exp != null &&
+      payload.expiresAt != null &&
+      Number(payload.exp) !== Number(payload.expiresAt)
+    ) {
       return null;
     }
 

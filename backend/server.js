@@ -489,24 +489,28 @@ io.on('connection', (socket) => {
       const now = new Date();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-      // Explicit cleanup of any expired messages before delivery
+      // Explicit cleanup of any expired or future-skewed messages before delivery
       Message.deleteMany({
         receiverId: { $in: allUserVariants },
         $or: [
           { createdAt: { $lt: sevenDaysAgo } },
+          { createdAt: { $gt: now } },
           { expiresAt: { $lte: now } }
         ]
       }).catch(() => {});
 
-      // Enforce strict server-side expiry: only deliver messages younger than 7 days and not expired
+      // Enforce strict server-side expiry: only deliver messages bounded by [sevenDaysAgo, now] and not expired
       const pendingMsgs = await Message.find({
         receiverId: { $in: allUserVariants },
         status: 'sent',
-        createdAt: { $gte: sevenDaysAgo },
+        createdAt: {
+          $gte: sevenDaysAgo,
+          $lte: now
+        },
         $or: [
+          { expiresAt: { $gt: now } },
           { expiresAt: { $exists: false } },
-          { expiresAt: null },
-          { expiresAt: { $gt: now } }
+          { expiresAt: null }
         ]
       }).sort({ timestamp: 1 }).lean();
       if (pendingMsgs.length > 0) {
@@ -994,12 +998,13 @@ io.on('connection', (socket) => {
         fogSnapStatus: 'unrevealed',
         viewedBy: [],
         status: initialStatus,
+        createdAt: new Date(),
         timestamp: new Date().toISOString(),
         reactions: {},
         replyTo: replyTo || null,
         storyReply: storyReply || messageData.storyReply || null,
         isVanish: Boolean(messageData.isVanish),
-        expiresAt
+        expiresAt: expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       };
 
       // 1. Instant Ack to sender
