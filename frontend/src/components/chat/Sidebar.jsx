@@ -1851,7 +1851,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         : msg.type === 'gift' ? '🎁 Gift'
         : msg.type === 'poll' ? '📊 Poll'
         : msg.type === 'call' ? '📞 Call'
-        : 'File attachment'));
+        : (msg.content || (msg.fileName ? `📁 ${msg.fileName}` : (msg.type === 'document' ? '📁 Document' : '')))));
 
       if (msg.type === 'text' && contentSnippet) {
         if (contentSnippet.startsWith('Replied to your story:')) {

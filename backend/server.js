@@ -487,11 +487,10 @@ io.on('connection', (socket) => {
           }
         }
 
-        // 3. Mark queued messages as delivered in MongoDB (Retain until read by recipient)
-        await Message.updateMany(
-          { _id: { $in: pendingMsgs.map(m => m._id) } },
-          { $set: { status: 'delivered' } }
-        );
+        // 3. WhatsApp Stateless Delivery Wipe: Delivered queued messages immediately deleted from MongoDB (0 bytes)
+        await Message.deleteMany({
+          _id: { $in: pendingMsgs.map(m => m._id) }
+        });
       }
     } catch (err) {
       console.error('Error delivering pending messages on setup:', err);
@@ -1086,11 +1085,15 @@ io.on('connection', (socket) => {
   socket.on('message_delivered', async ({ messageId, chatId, senderId }) => {
     try {
       if (!messageId) return;
-      // Mark as delivered in MongoDB - RETAIN until read by recipient!
-      await Message.updateMany(
-        { $or: [{ id: messageId }, { clientTempId: messageId }], status: 'sent' },
-        { $set: { status: 'delivered' } }
-      );
+      // WhatsApp Stateless Delivery Wipe: Deliver hote hi MongoDB se message turant delete (0 bytes)
+      const isMongoId = mongoose.Types.ObjectId.isValid(messageId);
+      await Message.deleteMany({
+        $or: [
+          { id: messageId },
+          { clientTempId: messageId },
+          ...(isMongoId ? [{ _id: messageId }] : [])
+        ]
+      });
       const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
       const resolvedSenderId = senderId || await getOtherParticipantId(chatId, socket.userId);
       const singlePayload = { messageId, chatId, canonicalChatId, status: 'delivered', senderId: resolvedSenderId };
@@ -1993,53 +1996,73 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Emoji Reaction
-  socket.on('add_reaction', async ({ messageId, chatId, emoji, userId }) => {
-    const updatedMsg = await db.toggleReaction(messageId, emoji, userId);
-    if (updatedMsg) {
-      const userReactions = updatedMsg.reactions?.[emoji] || [];
-      const isAdded = userReactions.includes(userId);
-      const canonicalChatId = updatedMsg.chatId || chatId;
-      const payload = { messageId: updatedMsg.id || messageId, chatId: canonicalChatId, reactions: updatedMsg.reactions, emoji, userId, isAdded };
+  // Emoji Reaction - WhatsApp Pure Event-Forwarding Router (Independent of MongoDB retention)
+  socket.on('add_reaction', async ({ messageId, chatId, emoji, userId, reactions }) => {
+    if (!messageId || !emoji) return;
+    let resolvedReactions = (reactions && typeof reactions === 'object') ? reactions : null;
+    let canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+    let isAdded = true;
 
-      const targetRooms = new Set();
-      if (chatId) targetRooms.add(chatId);
-      if (canonicalChatId) targetRooms.add(canonicalChatId);
-      if (canonicalChatId && canonicalChatId.includes('_')) {
-        for (const uId of canonicalChatId.split('_')) {
-          const uRooms = await resolveUserRooms(uId);
-          uRooms.forEach(r => targetRooms.add(r));
-          redis.invalidateRecent(uId).catch(() => {});
-        }
+    try {
+      const updatedMsg = await db.toggleReaction(messageId, emoji, userId);
+      if (updatedMsg) {
+        resolvedReactions = updatedMsg.reactions;
+        if (updatedMsg.chatId) canonicalChatId = updatedMsg.chatId;
+        const userReactions = updatedMsg.reactions?.[emoji] || [];
+        isAdded = userReactions.includes(userId);
       }
+    } catch (e) {}
 
-      targetRooms.forEach(r => io.to(r).emit('reaction_updated', payload));
-
-      // A reaction proves beyond doubt that recipient has SEEN & READ the message!
-      const isAuthor = updatedMsg.senderId && (
-        String(updatedMsg.senderId) === String(userId) ||
-        (socket.userMongoId && String(updatedMsg.senderId) === String(socket.userMongoId)) ||
-        (socket.userUsername && String(updatedMsg.senderId) === String(socket.userUsername))
-      );
-      if (!isAuthor && isAdded) {
-        const readPayload = { messageId: updatedMsg.id || messageId, chatId: canonicalChatId, status: 'read' };
-        const chatReadPayload = { chatId: canonicalChatId, userId, status: 'read' };
-        targetRooms.forEach(r => {
-          io.to(r).emit('message_read_update', readPayload);
-          io.to(r).emit('chat_read_update', chatReadPayload);
-        });
-
-        // Delete read message from MongoDB upon reaction read confirmation
-        try {
-          await Message.deleteMany({
-            $or: [
-              { id: updatedMsg.id || messageId },
-              { clientTempId: updatedMsg.id || messageId },
-              ...(mongoose.Types.ObjectId.isValid(messageId) ? [{ _id: messageId }] : [])
-            ]
-          });
-        } catch (e) {}
+    // Fallback: If message was wiped from MongoDB (WhatsApp delivered/read 0-byte rule),
+    // calculate / route reactions in memory so both users receive the reaction in 0ms!
+    if (!resolvedReactions) {
+      if (!global.memoryReactions) global.memoryReactions = new Map();
+      if (!global.memoryReactions.has(messageId)) {
+        global.memoryReactions.set(messageId, {});
       }
+      const cur = global.memoryReactions.get(messageId);
+      const userList = cur[emoji] || [];
+      if (userList.includes(userId)) {
+        cur[emoji] = userList.filter(id => id !== userId);
+        if (cur[emoji].length === 0) delete cur[emoji];
+        isAdded = false;
+      } else {
+        cur[emoji] = [...userList, userId];
+        isAdded = true;
+      }
+      resolvedReactions = { ...cur };
+    }
+
+    const payload = {
+      messageId,
+      chatId: canonicalChatId,
+      reactions: resolvedReactions,
+      emoji,
+      userId,
+      isAdded
+    };
+
+    const targetRooms = new Set();
+    if (chatId) targetRooms.add(chatId);
+    if (canonicalChatId) targetRooms.add(canonicalChatId);
+    if (canonicalChatId && canonicalChatId.includes('_')) {
+      for (const uId of canonicalChatId.split('_')) {
+        const uRooms = await resolveUserRooms(uId);
+        uRooms.forEach(r => targetRooms.add(r));
+        redis.invalidateRecent(uId).catch(() => {});
+      }
+    }
+
+    targetRooms.forEach(r => io.to(r).emit('reaction_updated', payload));
+
+    // A reaction proves beyond doubt that recipient has SEEN & READ the message!
+    if (isAdded) {
+      const readPayload = { messageId, chatId: canonicalChatId, status: 'read' };
+      const chatReadPayload = { chatId: canonicalChatId, userId, status: 'read' };
+      targetRooms.forEach(r => {
+        io.to(r).emit('message_read_update', readPayload);
+        io.to(r).emit('chat_read_update', chatReadPayload);
+      });
     }
   });
 

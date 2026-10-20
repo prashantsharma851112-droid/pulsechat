@@ -7908,12 +7908,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 onSelectEmoji={(em) => {
                   recordRecentReaction(em);
                   if (socket && user?.id && actionMessageForEmoji) {
+                    const curMsg = actionMessageForEmoji;
+                    const existingReactions = { ...(curMsg.reactions || {}) };
+                    const userList = Array.isArray(existingReactions[em]) ? [...existingReactions[em]] : [];
+                    if (userList.includes(user.id)) {
+                      existingReactions[em] = userList.filter(u => u !== user.id);
+                      if (existingReactions[em].length === 0) delete existingReactions[em];
+                    } else {
+                      existingReactions[em] = [...userList, user.id];
+                    }
                     socket.emit('add_reaction', {
-                      messageId: actionMessageForEmoji.id,
+                      messageId: curMsg.id,
                       chatId,
                       emoji: em,
-                      userId: user.id
+                      userId: user.id,
+                      reactions: existingReactions
                     });
+                    setMessages(prev => prev.map(m => (m.id === curMsg.id || m._id === curMsg.id || m.clientTempId === curMsg.id) ? { ...m, reactions: existingReactions } : m));
                     if (typeof window !== 'undefined') {
                       window.dispatchEvent(new CustomEvent('pulsechat_trigger_emoji_burst', {
                         detail: { emoji: em || '❤️', mode: 'reaction', duration: 3 }

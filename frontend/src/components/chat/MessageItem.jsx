@@ -1343,7 +1343,7 @@ function MessageItem({
 
     // 2. Emit to socket for DB persistence & sync
     if (socket) {
-      socket.emit('add_reaction', { messageId: targetMsgId, chatId, emoji, userId: myId });
+      socket.emit('add_reaction', { messageId: targetMsgId, chatId, emoji, userId: myId, reactions: existingReactions });
       if (!isMine) {
         const isCurGhost = (typeof window !== 'undefined' && localStorage.getItem('pulsechat_ghost_global') === 'true') || Boolean(currentUser?.hideReadReceipts);
         if (!isCurGhost) {

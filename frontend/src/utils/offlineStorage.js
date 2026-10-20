@@ -186,6 +186,20 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
     ? message.senderId
     : (targetChat?.id || targetChat?._id || message.receiverId || null);
 
+  // Pure status update (e.g. { status: 'delivered' } or { status: 'read' })
+  // NEVER overwrite existing text snippet with status updates!
+  const isStatusOnly = Boolean(
+    message.status &&
+    !message.content &&
+    !message.type &&
+    !message.mediaUrl &&
+    !message.audioUrl &&
+    !message.storyReply &&
+    !message.pollData &&
+    !message.giftData &&
+    !message.fileName
+  );
+
   const existingIdx = recent.findIndex(c => {
     if (!c) return false;
     if (contactId && (c.id === contactId || c._id === contactId || (c.username && String(c.username).toLowerCase() === String(contactId).toLowerCase()))) return true;
@@ -199,10 +213,36 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
     return false;
   });
 
+  if (isStatusOnly) {
+    if (existingIdx !== -1) {
+      recent[existingIdx] = {
+        ...recent[existingIdx],
+        lastMessageStatus: message.status
+      };
+      setCachedRecentChats(userId, recent);
+    }
+    return;
+  }
+
   let formattedContent = '';
 
-  if (message.type === 'stealth_dust' || message.isDustText) {
-    formattedContent = '⚡ Stealth Dust Text';
+  if (message.content) {
+    if (message.type === '3d_text') {
+      formattedContent = `✨ 3D: ${message.content}`;
+    } else if (message.type === 'stealth_dust' || message.isDustText) {
+      formattedContent = '⚡ Stealth Dust Text';
+    } else {
+      let raw = message.content || '';
+      if (raw.startsWith('Replied to your story:')) {
+        formattedContent = isFromMe ? raw.replace(/^Replied to your story:\s*/, 'You replied: ') : raw;
+      } else if (raw.startsWith('Reacted ') && raw.includes(' to your story')) {
+        formattedContent = isFromMe ? raw.replace(/\s*to your story$/, ' to story') : raw;
+      } else if (raw.startsWith('Tipped ') && raw.includes(' on your story!')) {
+        formattedContent = isFromMe ? raw.replace(/\s*on your story!$/, ' on story!') : raw;
+      } else {
+        formattedContent = raw;
+      }
+    }
   } else if (message.type === 'story_reply' || message.storyReply) {
     const sr = message.storyReply;
     const isShared = (message.content && message.content.startsWith('Shared ')) || (!sr?.reactionEmoji && !sr?.tipSparks && !sr?.replyText);
@@ -217,27 +257,25 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
     } else {
       formattedContent = isFromMe ? 'You shared a vibe ⚡' : 'Shared a vibe ⚡';
     }
-  } else if (message.type === 'text') {
-    let raw = message.content || '';
-    if (raw.startsWith('Replied to your story:')) {
-      formattedContent = isFromMe ? raw.replace(/^Replied to your story:\s*/, 'You replied: ') : raw;
-    } else if (raw.startsWith('Reacted ') && raw.includes(' to your story')) {
-      formattedContent = isFromMe ? raw.replace(/\s*to your story$/, ' to story') : raw;
-    } else if (raw.startsWith('Tipped ') && raw.includes(' on your story!')) {
-      formattedContent = isFromMe ? raw.replace(/\s*on your story!$/, ' on story!') : raw;
-    } else {
-      formattedContent = raw;
-    }
-  } else if (message.type === '3d_text') {
-    formattedContent = `✨ 3D: ${message.content}`;
-  } else if (message.type === 'voice') {
+  } else if (message.type === 'voice' || message.type === 'audio') {
     formattedContent = '🎤 Voice note';
   } else if (message.type === 'image' || message.type === 'fog_snap') {
-    formattedContent = message.isFogSnap ? '🌫️ Fog Snap' : (message.content || '🖼️ Photo');
+    formattedContent = message.isFogSnap ? '🌫️ Fog Snap' : '🖼️ Photo';
   } else if (message.type === 'video') {
     formattedContent = '🎥 Video';
+  } else if (message.type === 'gift') {
+    formattedContent = '🎁 Gift';
+  } else if (message.type === 'poll') {
+    formattedContent = '📊 Poll';
+  } else if (message.fileName) {
+    formattedContent = `📁 ${message.fileName}`;
+  } else if (message.type === 'document' || message.type === 'file') {
+    formattedContent = '📁 Document';
   } else {
-    formattedContent = message.content || 'Sent a file';
+    // Preserve existing snippet if present rather than showing random placeholder
+    formattedContent = (existingIdx !== -1 && recent[existingIdx]?.lastMessage)
+      ? recent[existingIdx].lastMessage
+      : 'New message';
   }
 
   const msgTime = message.timestamp || new Date().toISOString();

@@ -153,6 +153,14 @@ export const ChatDetailScreen = ({ route, navigation }: any) => {
         });
       });
 
+      socket.on('reaction_updated', ({ messageId, reactions }: { messageId: string; reactions: any }) => {
+        setMessages((prev) => {
+          const updated = prev.map((m) => (m.id === messageId ? { ...m, reactions } : m));
+          AsyncStorage.setItem(storageKey, JSON.stringify(updated)).catch(() => {});
+          return updated;
+        });
+      });
+
       socket.on('typing_start', ({ userId }: { userId: string }) => {
         if (userId === partner.id) {
           setIsPartnerTyping(true);
@@ -174,6 +182,7 @@ export const ChatDetailScreen = ({ route, navigation }: any) => {
         socket.off('messages_delivered');
         socket.off('message_read_update');
         socket.off('chat_read_update');
+        socket.off('reaction_updated');
         socket.off('typing_start');
         socket.off('typing_stop');
       }
