@@ -549,7 +549,17 @@ io.on('connection', (socket) => {
         // 1. Deliver each queued message to the connected recipient
         // NOTE: Do NOT delete from MongoDB here. The receiver will commit to local IndexedDB
         // and send 'message_delivered' ACK, which will safely delete the message from MongoDB.
+        const { createReceiptToken } = require('./chat/receiptToken');
+        const receiptSecret = config.RECEIPT_SECRET || process.env.RECEIPT_SECRET;
         for (const pMsg of pendingMsgs) {
+          if (!pMsg.receiptToken) {
+            pMsg.receiptToken = createReceiptToken({
+              messageId: pMsg.id,
+              senderId: pMsg.senderId,
+              receiverId: pMsg.receiverId,
+              expiresAt: pMsg.expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+            }, receiptSecret);
+          }
           socket.emit('new_message', pMsg);
         }
       }
@@ -575,14 +585,62 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Join Chat Room / Group Room
-  socket.on('join_chat', (chatId) => {
+  // Join Chat Room / Group Room (With strict membership verification)
+  socket.on('join_chat', async (chatId) => {
     if (!chatId) return;
-    socket.join(chatId);
-    if (chatId.includes('_')) {
-      const canonical = chatId.split('_').sort().join('_');
-      socket.join(canonical);
+
+    const callerId = socket.authenticatedUserId;
+    if (!callerId) {
+      console.warn('Rejected join_chat: unauthenticated socket', socket.id);
+      return;
     }
+
+    const myKeys = [
+      callerId,
+      socket.userCustomId,
+      socket.userMongoId,
+      socket.userUsername
+    ].filter(Boolean).map(String);
+
+    // 1. If 1-on-1 private chat (e.g. userA_userB): verify caller is one of the participants
+    if (typeof chatId === 'string' && chatId.includes('_') && !chatId.startsWith('group_')) {
+      const isParticipant = myKeys.some(m => chatId.startsWith(m + '_') || chatId.endsWith('_' + m) || chatId.split('_').includes(m));
+      if (!isParticipant) {
+        console.warn(`Rejected join_chat: user ${callerId} is not a member of chat ${chatId}`);
+        return;
+      }
+      socket.join(chatId);
+      const parts = chatId.split('_');
+      const canonical = parts.sort().join('_');
+      socket.join(canonical);
+      return;
+    }
+
+    // 2. If Group chat: verify caller is in group.members
+    if (typeof chatId === 'string' && (chatId.startsWith('group_') || mongoose.Types.ObjectId.isValid(chatId))) {
+      try {
+        const Group = require('./models/Group');
+        const isObjId = mongoose.Types.ObjectId.isValid(chatId);
+        const group = await Group.findOne({
+          $or: [
+            { id: chatId },
+            ...(isObjId ? [{ _id: chatId }] : [])
+          ]
+        }).select('members').lean();
+
+        if (group && Array.isArray(group.members)) {
+          const isMember = group.members.some(m => myKeys.includes(String(m)));
+          if (!isMember) {
+            console.warn(`Rejected join_chat: user ${callerId} is not a member of group ${chatId}`);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Error checking group membership in join_chat:', err.message);
+      }
+    }
+
+    socket.join(chatId);
   });
 
   // Typing Indicators
@@ -669,14 +727,60 @@ io.on('connection', (socket) => {
 
   // Send Real-Time Message (Instant 0ms emission & parallel background save)
   socket.on('send_message', async (messageData, ackCallback) => {
+    const callerId = socket.authenticatedUserId;
+    if (!callerId) {
+      console.warn('Rejected send_message: unauthenticated socket', socket.id);
+      if (typeof ackCallback === 'function') ackCallback({ error: 'AUTHENTICATION_REQUIRED' });
+      return;
+    }
+
     const {
-      chatId, senderId, receiverId, isGroup, content, type, textStyle,
+      chatId, senderId: clientSenderId, receiverId, isGroup, content, type, textStyle,
       audioUrl, mediaUrl, mediaUrls, fileName, fileSize, pollData, giftData, callData,
-      isViewOnce, replyTo, storyReply, clientTempId,
-      senderName, senderUsername, senderAvatar, senderIsPro, senderProTier, senderCustomBadge
-    } = messageData;
+      isViewOnce, replyTo, storyReply, clientTempId
+    } = messageData || {};
+
+    const myKeys = [
+      callerId,
+      socket.userCustomId,
+      socket.userMongoId,
+      socket.userUsername
+    ].filter(Boolean).map(String);
+
+    // Derive authoritative senderId from authenticated socket (prevents sender spoofing)
+    let senderId = socket.userCustomId || callerId;
+    if (clientSenderId && myKeys.includes(String(clientSenderId))) {
+      senderId = String(clientSenderId);
+    }
 
     try {
+      // Membership verification: Verify caller belongs to the chat or group
+      if (isGroup) {
+        try {
+          const Group = require('./models/Group');
+          const isObjId = mongoose.Types.ObjectId.isValid(chatId);
+          const groupDoc = await Group.findOne({
+            $or: [{ id: chatId }, ...(isObjId ? [{ _id: chatId }] : [])]
+          }).select('members').lean();
+
+          if (groupDoc && Array.isArray(groupDoc.members)) {
+            const isMember = groupDoc.members.some(m => myKeys.includes(String(m)));
+            if (!isMember) {
+              console.warn(`Rejected send_message: user ${callerId} is not a member of group ${chatId}`);
+              if (typeof ackCallback === 'function') ackCallback({ error: 'NOT_A_GROUP_MEMBER' });
+              return;
+            }
+          }
+        } catch (err) {}
+      } else if (chatId && typeof chatId === 'string' && chatId.includes('_')) {
+        const isParticipant = myKeys.some(m => chatId.startsWith(m + '_') || chatId.endsWith('_' + m) || chatId.split('_').includes(m));
+        if (!isParticipant) {
+          console.warn(`Rejected send_message: user ${callerId} is not a participant of chat ${chatId}`);
+          if (typeof ackCallback === 'function') ackCallback({ error: 'NOT_A_CHAT_PARTICIPANT' });
+          return;
+        }
+      }
+
       // 1. Instant fast block status check
       if (receiverId && !isGroup) {
         const blockStatus = await db.isUserBlocked(senderId, receiverId);
@@ -717,32 +821,32 @@ io.on('connection', (socket) => {
         }
       }
 
-      // Fast resolution of sender details (from payload if available, else DB fallback)
-      let resolvedSenderName = senderName || senderUsername || senderId;
-      let resolvedSenderAvatar = senderAvatar || null;
-      let resolvedSenderIsPro = Boolean(senderIsPro);
-      let resolvedSenderProTier = senderProTier || 'none';
-      let resolvedSenderCustomBadge = senderCustomBadge || '';
+      // Authoritative resolution of sender details from DB / cache (prevents client spoofing Pro/badge/avatar)
+      let resolvedSenderName = socket.userUsername || senderId;
+      let resolvedSenderAvatar = null;
+      let resolvedSenderIsPro = false;
+      let resolvedSenderProTier = 'none';
+      let resolvedSenderCustomBadge = '';
 
-      if (!senderName) {
-        try {
-          const isSenderObj = mongoose.Types.ObjectId.isValid(senderId);
-          const senderDoc = await User.findOne({
-            $or: [
-              { id: senderId },
-              ...(isSenderObj ? [{ _id: senderId }] : []),
-              { username: senderId }
-            ]
-          }).select('id _id displayName username avatar isPro proTier customBadge').lean();
-          if (senderDoc) {
-            resolvedSenderName = senderDoc.displayName || senderDoc.username || senderId;
-            resolvedSenderAvatar = senderDoc.avatar || null;
-            resolvedSenderIsPro = Boolean(senderDoc.isPro);
-            resolvedSenderProTier = senderDoc.proTier || 'none';
-            resolvedSenderCustomBadge = senderDoc.customBadge || '';
-          }
-        } catch (e) {}
-      }
+      try {
+        const isSenderObj = mongoose.Types.ObjectId.isValid(callerId);
+        const senderDoc = await User.findOne({
+          $or: [
+            { id: callerId },
+            { id: senderId },
+            ...(isSenderObj ? [{ _id: callerId }] : []),
+            { username: callerId }
+          ]
+        }).select('id _id displayName username avatar isPro proTier customBadge').lean();
+
+        if (senderDoc) {
+          resolvedSenderName = senderDoc.displayName || senderDoc.username || senderId;
+          resolvedSenderAvatar = senderDoc.avatar || null;
+          resolvedSenderIsPro = Boolean(senderDoc.isPro);
+          resolvedSenderProTier = senderDoc.proTier || 'none';
+          resolvedSenderCustomBadge = senderDoc.customBadge || '';
+        }
+      } catch (e) {}
 
       // Fast check for disappearing messages setting (cached or default)
       let chatSetting = null;
@@ -1045,24 +1149,31 @@ io.on('connection', (socket) => {
         );
       } catch (e) {}
 
-      // 2. Sender Ack (Single Tick confirmed saved to disk)
+      // Prepare public wire message with receiptToken stripped (receiptToken is strictly for intended receiver)
+      const publicWireMsg = { ...newMsg };
+      delete publicWireMsg.receiptToken;
+
+      // 2. Sender Ack (Single Tick confirmed saved to disk) - receiptToken STRIPPED
       if (typeof ackCallback === 'function') {
-        ackCallback({ success: true, message: newMsg });
+        ackCallback({ success: true, message: publicWireMsg });
       }
 
-      // 3. Emit new_message to receiver and participants
-      const targetRooms = new Set();
-      if (chatId) targetRooms.add(chatId);
-      if (canonicalChatId && canonicalChatId !== chatId) targetRooms.add(canonicalChatId);
-      if (senderId) {
-        const sRooms = await resolveUserRooms(senderId);
-        sRooms.forEach(r => targetRooms.add(r));
-      }
-      if (resolvedReceiverId && resolvedReceiverId !== 'user') {
+      // 3. Emit new_message: Intended receiver receives receiptToken; sender and shared room receive stripped message
+      if (!isGroup && resolvedReceiverId && resolvedReceiverId !== 'user') {
         const rRooms = await resolveUserRooms(resolvedReceiverId);
-        rRooms.forEach(r => targetRooms.add(r));
+        rRooms.forEach(r => io.to(r).emit('new_message', newMsg));
+
+        const sRooms = await resolveUserRooms(senderId);
+        sRooms.forEach(r => io.to(r).emit('new_message', publicWireMsg));
+
+        // Shared chat room broadcast (without receiptToken)
+        if (chatId) socket.to(chatId).emit('new_message', publicWireMsg);
+        if (canonicalChatId && canonicalChatId !== chatId) socket.to(canonicalChatId).emit('new_message', publicWireMsg);
+      } else {
+        // Group chat or general broadcast
+        if (chatId) io.to(chatId).emit('new_message', publicWireMsg);
+        if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('new_message', publicWireMsg);
       }
-      io.to(Array.from(targetRooms)).emit('new_message', newMsg);
 
       // Auto-update Pulse Streak for 1-on-1 chats
       if (!isGroup && resolvedReceiverId && senderId !== resolvedReceiverId) {
@@ -1241,8 +1352,26 @@ io.on('connection', (socket) => {
         // Document either already delivered OR not yet created in MessageLedger
         const existing = await MessageLedger.findOne({ messageId: String(messageId) });
         if (existing && existing.state === 'delivered') {
-          // Idempotent duplicate: already delivered, suppress duplicate Double Tick
-          return;
+          // Point C: Stale queue cleanup on retry / crash recovery
+          // Even if already delivered, ensure leftover pending queue records are wiped if a previous server crash interrupted deletion
+          const isMongoId = mongoose.Types.ObjectId.isValid(messageId);
+          await Message.deleteMany({
+            $or: [
+              { id: String(messageId) },
+              { clientTempId: String(messageId) },
+              ...(isMongoId ? [{ _id: messageId }] : [])
+            ],
+            receiverId: { $in: allowedReceiverKeys },
+            status: 'sent'
+          });
+          try {
+            const QueuedMessage = require('./models/QueuedMessage');
+            await QueuedMessage.deleteMany({
+              messageId: String(messageId),
+              receiverId: { $in: allowedReceiverKeys }
+            });
+          } catch {}
+          return; // Suppress duplicate Double Tick event emission
         }
 
         // If no ledger record existed yet, create it atomically (unique index on messageId prevents race)
@@ -1266,19 +1395,24 @@ io.on('connection', (socket) => {
         }
       }
 
-      // 3. WhatsApp Stateless Delivery Wipe: Deliver hote hi MongoDB queue se message delete (0 bytes)
+      // 3. Narrow Scoped Queue Deletion: Exact messageId, authenticated recipient, and pending status: 'sent'
       const isMongoId = mongoose.Types.ObjectId.isValid(messageId);
       await Message.deleteMany({
         $or: [
-          { id: messageId },
-          { clientTempId: messageId },
+          { id: String(messageId) },
+          { clientTempId: String(messageId) },
           ...(isMongoId ? [{ _id: messageId }] : [])
-        ]
+        ],
+        receiverId: { $in: allowedReceiverKeys },
+        status: 'sent'
       });
 
       try {
         const QueuedMessage = require('./models/QueuedMessage');
-        await QueuedMessage.deleteMany({ messageId: String(messageId) });
+        await QueuedMessage.deleteMany({
+          messageId: String(messageId),
+          receiverId: { $in: allowedReceiverKeys }
+        });
       } catch {}
 
       // 4. Double Tick Notification (Only emitted on verified atomic transition)
