@@ -78,7 +78,7 @@ async function forwardReceipt(io, targetUserId, eventName, payload) {
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true;
-        resolve(true); // Delivered to active connected sockets
+        resolve(false); // Sockets did not acknowledge receipt within timeout
       }
     }, ACK_TIMEOUT_MS);
 
@@ -86,8 +86,12 @@ async function forwardReceipt(io, targetUserId, eventName, payload) {
       if (!resolved) {
         resolved = true;
         clearTimeout(timeout);
-        const confirmed = Array.isArray(responses) && responses.some((r) => r?.ok === true);
-        resolve(confirmed || true);
+        if (error) {
+          resolve(false);
+          return;
+        }
+        const confirmed = Array.isArray(responses) ? responses.some((r) => r?.ok === true) : true;
+        resolve(confirmed);
       }
     });
   });
@@ -205,12 +209,12 @@ function registerChatSocket(io, { receiptSecret }) {
         return;
       }
 
-      // Enforce recipient authorization & block checks
+      // Enforce recipient authorization & contact rules under PulseChat policy
       try {
         if (typeof User?.findOne === 'function') {
           const receiver = await User.findOne({
             $or: [{ id: receiverId }, { _id: receiverId }]
-          }).select('id blockedUsers').lean();
+          }).select('id username blockedUsers friends isAdmin').lean();
 
           if (!receiver) {
             safeAck(ack, { ok: false, error: 'RECIPIENT_NOT_FOUND' });
@@ -225,6 +229,37 @@ function registerChatSocket(io, { receiptSecret }) {
                 error: blockCheck.bBlockedA ? 'RECIPIENT_BLOCKED_SENDER' : 'SENDER_BLOCKED_RECIPIENT'
               });
               return;
+            }
+          }
+
+          const sender = await User.findOne({
+            $or: [{ id: senderId }, { _id: senderId }]
+          }).select('id username friends isAdmin').lean();
+
+          if (sender && receiver) {
+            const sIdentifiers = [sender.id, sender._id?.toString(), sender.username, senderId].filter(Boolean);
+            const rIdentifiers = [receiver.id, receiver._id?.toString(), receiver.username, receiverId].filter(Boolean);
+
+            const isFriend = (sender.friends && sender.friends.some(f => rIdentifiers.includes(f))) ||
+                             (receiver.friends && receiver.friends.some(f => sIdentifiers.includes(f)));
+            const isAdmin = Boolean(sender.isAdmin || receiver.isAdmin);
+
+            if (!isFriend && !isAdmin) {
+              const hasLedger = typeof MessageLedger?.findOne === 'function' && await MessageLedger.findOne({
+                $or: [
+                  { senderId, receiverId: String(receiver.id) },
+                  { senderId: String(receiver.id), receiverId: senderId }
+                ]
+              }).lean();
+
+              if (!hasLedger) {
+                safeAck(ack, {
+                  ok: false,
+                  error: 'NOT_FRIENDS',
+                  message: 'You can only message synced friends. Send a friend request first.'
+                });
+                return;
+              }
             }
           }
         }
@@ -389,8 +424,6 @@ function registerChatSocket(io, { receiptSecret }) {
         safeAck(ack, { ok: true, alreadyRead: true });
         return;
       }
-      recentReadReceipts.add(readDedupeKey);
-      setTimeout(() => recentReadReceipts.delete(readDedupeKey), 10 * 60 * 1000);
 
       // Pure event-forwarding to the sender's socket room: ZERO MongoDB query.
       const forwarded = await forwardReceipt(io, receipt.senderId, 'chat:receipt:read', {
@@ -402,6 +435,13 @@ function registerChatSocket(io, { receiptSecret }) {
         console.error('Read receipt forwarding failed:', error.message);
         return false;
       });
+
+      // Only mark deduplicated if forwarded successfully, allowing outbox retry if sender is offline
+      if (forwarded) {
+        recentReadReceipts.add(readDedupeKey);
+        const timer = setTimeout(() => recentReadReceipts.delete(readDedupeKey), 10 * 60 * 1000);
+        if (timer.unref) timer.unref();
+      }
 
       safeAck(ack, { ok: forwarded, retry: !forwarded });
     });

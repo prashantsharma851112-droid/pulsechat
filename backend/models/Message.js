@@ -51,8 +51,15 @@ const messageSchema = new mongoose.Schema({
   isVanish: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now, index: true },
   // WhatsApp-Style Post Office Queue: Max 7-day queue for offline delivery, auto-drops if receiver never connects
-  expiresAt: { type: Date, default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), index: { expires: 0 } }
+  expiresAt: { type: Date, default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }
 });
+
+// Scoped TTL: Only expire pending messages that were never delivered (status: 'sent').
+// Delivered and read messages are NEVER auto-deleted by MongoDB TTL.
+messageSchema.index(
+  { expiresAt: 1 },
+  { expireAfterSeconds: 0, partialFilterExpression: { status: 'sent' } }
+);
 
 messageSchema.index({ chatId: 1, isVanish: 1 });
 
