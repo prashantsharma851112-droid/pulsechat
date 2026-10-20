@@ -142,23 +142,27 @@ const jwt = require('jsonwebtoken');
 const { registerChatSocket } = require('./chat/registerChatSocket');
 
 io.use((socket, next) => {
+  const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+
+  if (typeof token !== 'string' || !token.trim()) {
+    return next(new Error('AUTHENTICATION_FAILED: Token missing'));
+  }
+
   try {
-    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
-    if (token && typeof token === 'string') {
-      const decoded = jwt.verify(token, config.JWT_SECRET || process.env.JWT_SECRET);
-      const rawId = decoded.userId ?? decoded.id ?? decoded._id ?? decoded.user?.id ?? decoded.user?._id;
-      if (rawId !== undefined && rawId !== null && String(rawId).length > 0) {
-        socket.data = socket.data || {};
-        socket.data.userId = String(rawId);
-        socket.userId = String(rawId);
-        socket.authenticatedUserId = String(rawId);
-      } else {
-        return next(new Error('AUTHENTICATION_FAILED: Invalid user ID in token'));
-      }
+    const decoded = jwt.verify(token, config.JWT_SECRET || process.env.JWT_SECRET);
+    const rawId = decoded.userId ?? decoded.id ?? decoded._id ?? decoded.user?.id ?? decoded.user?._id;
+
+    if (rawId == null || !String(rawId).trim()) {
+      return next(new Error('AUTHENTICATION_FAILED: Invalid user ID in token'));
     }
-    next();
+
+    socket.authenticatedUserId = String(rawId);
+    socket.data = socket.data || {};
+    socket.data.userId = String(rawId);
+    socket.userId = String(rawId);
+
+    return next();
   } catch (err) {
-    // Fail-closed authentication: If token was provided but failed verification, reject connection
     return next(new Error('AUTHENTICATION_FAILED: ' + err.message));
   }
 });
@@ -439,11 +443,13 @@ io.on('connection', (socket) => {
 
   // User comes online (mobile data ON / socket connected)
   socket.on('setup', async (rawUserId) => {
-    let userId = rawUserId;
-    if (socket.authenticatedUserId) {
-      // Security: Strictly enforce authenticated JWT identity to prevent spoofing
-      userId = socket.authenticatedUserId;
+    // Security: Authenticated JWT identity is strictly mandatory (no unauthenticated spoofing)
+    const userId = socket.authenticatedUserId;
+    if (!userId) {
+      console.warn('Rejected setup event: unauthenticated socket', socket.id);
+      return;
     }
+
     socket.userId = userId;
     socket.join(`user_${userId}`); // Join user's personal private room
     socket.join(userId);           // Also join direct userId room
@@ -744,10 +750,11 @@ io.on('connection', (socket) => {
         chatSetting = await db.getChatSetting(chatId);
       } catch (e) {}
 
+      const MAX_QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
       const isDisappearing = Boolean(chatSetting && chatSetting.disappearingEnabled);
       const expiresAt = isDisappearing
-        ? new Date(Date.now() + (chatSetting.disappearingDuration || 86400) * 1000)
-        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30-day lifetime free storage rule
+        ? new Date(Math.min(Date.now() + (chatSetting.disappearingDuration || 86400) * 1000, Date.now() + MAX_QUEUE_TTL_MS))
+        : new Date(Date.now() + MAX_QUEUE_TTL_MS); // Strictly 7 days maximum queue retention rule
 
       // Cloudinary Auto-Upload: Offload heavy Base64 media to Cloudinary CDN
       let finalMediaUrl = mediaUrl || null;
@@ -1161,39 +1168,105 @@ io.on('connection', (socket) => {
       const { messageId, chatId, senderId, receiptToken } = data || {};
       if (!messageId) return;
 
-      const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-      const callerId = socket.authenticatedUserId || socket.userId;
-      const resolvedSenderId = senderId || await getOtherParticipantId(chatId, callerId);
+      const callerId = socket.authenticatedUserId;
+      if (!callerId) {
+        console.warn('Rejected delivery ACK: unauthenticated socket for message', messageId);
+        return;
+      }
+
+      // 1. Mandatory HMAC Receipt Token Verification (Fail-Closed)
+      if (!receiptToken || typeof receiptToken !== 'string') {
+        console.warn('Rejected delivery ACK: receipt token missing for message', messageId);
+        return;
+      }
 
       const { verifyReceiptToken } = require('./chat/receiptToken');
       const receiptSecret = config.RECEIPT_SECRET || process.env.RECEIPT_SECRET;
-      let verifiedSenderId = resolvedSenderId;
+      const claims = verifyReceiptToken(receiptToken, receiptSecret);
 
-      // 1. Cryptographic HMAC Token Verification (Fail-Closed)
-      if (receiptToken) {
-        const claims = verifyReceiptToken(receiptToken, receiptSecret);
-        if (!claims || claims.messageId !== messageId) {
-          console.warn('Rejected message_delivered: invalid receiptToken for', messageId);
-          return;
-        }
-        if (callerId && claims.receiverId !== String(callerId) && claims.receiverId !== String(socket.userCustomId) && claims.receiverId !== String(socket.userMongoId)) {
-          console.warn('Rejected message_delivered: receiver identity mismatch for', messageId);
-          return;
-        }
-        verifiedSenderId = claims.senderId || verifiedSenderId;
-      } else if (callerId && resolvedSenderId && String(callerId) === String(resolvedSenderId)) {
-        console.warn('Rejected message_delivered: sender cannot acknowledge delivery of own message');
+      if (!claims || claims.messageId !== String(messageId)) {
+        console.warn('Rejected delivery ACK: invalid receipt token for message', messageId);
         return;
       }
 
-      // 2. Idempotency Check: if already marked delivered in MessageLedger, do not re-emit duplicate events
+      // Verify caller identity against token receiverId
+      const allowedReceiverKeys = [
+        callerId,
+        socket.userCustomId,
+        socket.userMongoId,
+        socket.userUsername
+      ].filter(Boolean).map(String);
+
+      if (!allowedReceiverKeys.includes(String(claims.receiverId))) {
+        console.warn('Rejected delivery ACK: receiver identity mismatch for message', messageId);
+        return;
+      }
+
+      // Sender cannot acknowledge delivery of their own message
+      const verifiedSenderId = claims.senderId || senderId;
+      if (allowedReceiverKeys.includes(String(verifiedSenderId))) {
+        console.warn('Rejected delivery ACK: sender cannot acknowledge delivery of own message');
+        return;
+      }
+
+      // 2. Atomic Idempotent State Transition in MessageLedger FIRST (Prevents concurrent race conditions)
+      // Only transition from non-delivered to 'delivered'. Concurrent ACKs will fail the filter or unique index.
       const MessageLedger = require('./models/MessageLedger');
-      const existingLedger = await MessageLedger.findOne({ messageId });
-      if (existingLedger && existingLedger.state === 'delivered') {
-        return;
+      const now = new Date();
+      let ledgerEntry = null;
+
+      try {
+        ledgerEntry = await MessageLedger.findOneAndUpdate(
+          {
+            messageId: String(messageId),
+            state: { $ne: 'delivered' }
+          },
+          {
+            $set: {
+              state: 'delivered',
+              senderId: verifiedSenderId || 'unknown',
+              receiverId: callerId,
+              deliveredAt: now,
+              expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+            }
+          },
+          { new: true }
+        );
+      } catch (findErr) {
+        console.error('Error in atomic MessageLedger transition:', findErr);
+        return; // Fail-closed: do not delete or emit if DB update failed
       }
 
-      // 3. WhatsApp Stateless Delivery Wipe: Deliver hote hi MongoDB se message turant delete (0 bytes)
+      if (!ledgerEntry) {
+        // Document either already delivered OR not yet created in MessageLedger
+        const existing = await MessageLedger.findOne({ messageId: String(messageId) });
+        if (existing && existing.state === 'delivered') {
+          // Idempotent duplicate: already delivered, suppress duplicate Double Tick
+          return;
+        }
+
+        // If no ledger record existed yet, create it atomically (unique index on messageId prevents race)
+        try {
+          ledgerEntry = await MessageLedger.create({
+            messageId: String(messageId),
+            senderId: verifiedSenderId || 'unknown',
+            receiverId: callerId,
+            state: 'delivered',
+            createdAt: now,
+            queueExpiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+            expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+          });
+        } catch (createErr) {
+          if (createErr.code === 11000) {
+            // Concurrent ACK already inserted and marked delivered
+            return;
+          }
+          console.error('Failed to create MessageLedger record on ACK:', createErr);
+          return; // Fail-closed
+        }
+      }
+
+      // 3. WhatsApp Stateless Delivery Wipe: Deliver hote hi MongoDB queue se message delete (0 bytes)
       const isMongoId = mongoose.Types.ObjectId.isValid(messageId);
       await Message.deleteMany({
         $or: [
@@ -1203,26 +1276,13 @@ io.on('connection', (socket) => {
         ]
       });
 
-      // 4. Update metadata ledger for idempotency & crash recovery (survives restarts)
       try {
-        const now = new Date();
-        await MessageLedger.findOneAndUpdate(
-          { messageId },
-          {
-            $set: {
-              state: 'delivered',
-              senderId: verifiedSenderId || 'unknown',
-              receiverId: callerId || 'unknown',
-              queueExpiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
-              expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
-            }
-          },
-          { upsert: true }
-        );
-      } catch (e) {
-        console.warn('Error updating MessageLedger on delivery:', e.message);
-      }
+        const QueuedMessage = require('./models/QueuedMessage');
+        await QueuedMessage.deleteMany({ messageId: String(messageId) });
+      } catch {}
 
+      // 4. Double Tick Notification (Only emitted on verified atomic transition)
+      const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
       const singlePayload = { messageId, chatId, canonicalChatId, status: 'delivered', senderId: verifiedSenderId };
       const multiPayload = { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered', senderId: verifiedSenderId };
 
