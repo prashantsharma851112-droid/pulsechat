@@ -808,6 +808,24 @@ router.put('/:chatId/read', authMiddleware, async (req, res) => {
         io.to(`user_${otherId}`).emit('chat_read_update', readPayload);
         io.to(otherId).emit('chat_read_update', readPayload);
       }
+
+      // Delete read messages from MongoDB ONLY after recipient has seen/read them (Blue Tick confirmed)
+      try {
+        const candidateChatIds = [req.params.chatId, canonicalChatId].filter(Boolean);
+        const readerVariants = Array.from(new Set([
+          req.user.id,
+          req.user._id ? String(req.user._id) : null,
+          req.user.username
+        ].filter(Boolean)));
+
+        await Message.deleteMany({
+          $or: [
+            { chatId: { $in: candidateChatIds } },
+            { receiverId: { $in: readerVariants } }
+          ],
+          senderId: { $nin: readerVariants }
+        });
+      } catch (e) {}
     }
     res.json({ success: true, ghostMode: false });
   } catch (err) {

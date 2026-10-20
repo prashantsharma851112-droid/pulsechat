@@ -463,10 +463,11 @@ io.on('connection', (socket) => {
           }
         }
 
-        // 3. WhatsApp Pure Post Office: Wipe delivered queued messages from MongoDB immediately
-        await Message.deleteMany({
-          _id: { $in: pendingMsgs.map(m => m._id) }
-        });
+        // 3. Mark queued messages as delivered in MongoDB (Retain until read by recipient)
+        await Message.updateMany(
+          { _id: { $in: pendingMsgs.map(m => m._id) } },
+          { $set: { status: 'delivered' } }
+        );
       }
     } catch (err) {
       console.error('Error delivering pending messages on setup:', err);
@@ -558,10 +559,10 @@ io.on('connection', (socket) => {
           await targetUser.save();
         }
 
-        // Target user mobile data is ON -> Push delivered! WhatsApp Pure Post Office: Wipe from MongoDB immediately!
+        // Target user mobile data is ON -> Push delivered! Mark delivered in MongoDB (Retain until read)
         if (pushDelivered && messageId) {
           try {
-            await Message.deleteMany({ id: messageId });
+            await Message.updateOne({ id: messageId, status: 'sent' }, { $set: { status: 'delivered' } });
             if (senderId) {
               io.to(`user_${senderId}`).emit('message_delivered_update', {
                 messageId,
@@ -1057,10 +1058,11 @@ io.on('connection', (socket) => {
   socket.on('message_delivered', async ({ messageId, chatId, senderId }) => {
     try {
       if (!messageId) return;
-      // WIPE from MongoDB immediately upon delivery!
-      await Message.deleteMany({
-        $or: [{ id: messageId }, { clientTempId: messageId }]
-      });
+      // Mark as delivered in MongoDB - RETAIN until read by recipient!
+      await Message.updateMany(
+        { $or: [{ id: messageId }, { clientTempId: messageId }], status: 'sent' },
+        { $set: { status: 'delivered' } }
+      );
       const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
       const singlePayload = { messageId, chatId, canonicalChatId, status: 'delivered' };
       const multiPayload = { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered' };
@@ -1315,6 +1317,20 @@ io.on('connection', (socket) => {
       io.to(readerId).emit('chat_read_update', chatReadPayload);
     }
     socket.emit('chat_read_update', chatReadPayload);
+
+    // Delete read message from MongoDB ONLY after recipient has seen/read it (Blue Tick confirmed)
+    if (!isGhostMode && messageId) {
+      try {
+        const isMongoId = mongoose.Types.ObjectId.isValid(messageId);
+        await Message.deleteMany({
+          $or: [
+            { id: messageId },
+            { clientTempId: messageId },
+            ...(isMongoId ? [{ _id: messageId }] : [])
+          ]
+        });
+      } catch (e) {}
+    }
   });
 
   // Read Receipt for entire Chat (Blue Double Tick when recipient opens conversation)
@@ -1359,6 +1375,30 @@ io.on('connection', (socket) => {
       io.to(readerId).emit('chat_read_update', chatReadPayload);
     }
     socket.emit('chat_read_update', chatReadPayload);
+
+    // Delete read messages from MongoDB ONLY after recipient has seen/read them (Blue Tick confirmed)
+    if (!isGhostMode) {
+      try {
+        await db.markChatAsRead(chatId, readerId, false);
+        const candidateChatIds = [chatId, canonicalChatId].filter(Boolean);
+        const readerVariants = Array.from(new Set([
+          readerId,
+          socket.userMongoId,
+          socket.userUsername,
+          socket.userCustomId
+        ].filter(Boolean)));
+
+        await Message.deleteMany({
+          $or: [
+            { chatId: { $in: candidateChatIds } },
+            { receiverId: { $in: readerVariants } }
+          ],
+          senderId: { $nin: readerVariants }
+        });
+      } catch (e) {
+        console.warn('Error deleting read messages from MongoDB:', e.message);
+      }
+    }
   });
 
   // Pulse Aura Soundscapes Synchronization
