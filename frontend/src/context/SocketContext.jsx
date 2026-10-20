@@ -97,7 +97,9 @@ export function SocketProvider({ children }) {
 
   useEffect(() => {
     if (user?.id) {
+      const authToken = token || localStorage.getItem('token');
       const newSocket = io(BACKEND_URL, {
+        auth: { token: authToken },
         transports: ['websocket', 'polling'],
         reconnection: true,
         reconnectionAttempts: Infinity,

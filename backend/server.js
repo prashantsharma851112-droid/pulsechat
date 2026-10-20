@@ -138,6 +138,38 @@ const io = new Server(server, {
 
 app.set('io', io);
 
+const jwt = require('jsonwebtoken');
+const { registerChatSocket } = require('./chat/registerChatSocket');
+
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    if (token && typeof token === 'string') {
+      const decoded = jwt.verify(token, config.JWT_SECRET || process.env.JWT_SECRET);
+      const rawId = decoded.userId ?? decoded.id ?? decoded._id ?? decoded.user?.id ?? decoded.user?._id;
+      if (rawId !== undefined && rawId !== null && String(rawId).length > 0) {
+        socket.data = socket.data || {};
+        socket.data.userId = String(rawId);
+        socket.userId = String(rawId);
+      }
+    }
+    next();
+  } catch (err) {
+    next();
+  }
+});
+
+registerChatSocket(io, { receiptSecret: config.RECEIPT_SECRET || process.env.RECEIPT_SECRET });
+
+// Ephemeral 7-day queue cleanup
+const cleanupQueueTimer = setInterval(async () => {
+  try {
+    const QueuedMessage = require('./models/QueuedMessage');
+    await QueuedMessage.deleteMany({ expiresAt: { $lte: new Date() } });
+  } catch (e) {}
+}, 60000);
+cleanupQueueTimer.unref();
+
 const getOtherParticipantId = async (chatId, myUserId) => {
   if (!chatId || !myUserId) return null;
   try {
