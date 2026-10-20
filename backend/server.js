@@ -616,8 +616,8 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // 2. If Group chat: verify caller is in group.members
-    if (typeof chatId === 'string' && (chatId.startsWith('group_') || mongoose.Types.ObjectId.isValid(chatId))) {
+    // 2. If Group chat: verify caller is in group.members (Strict Fail-Closed)
+    if (typeof chatId === 'string' && (chatId.startsWith('group_') || !chatId.includes('_'))) {
       try {
         const Group = require('./models/Group');
         const isObjId = mongoose.Types.ObjectId.isValid(chatId);
@@ -628,15 +628,19 @@ io.on('connection', (socket) => {
           ]
         }).select('members').lean();
 
-        if (group && Array.isArray(group.members)) {
-          const isMember = group.members.some(m => myKeys.includes(String(m)));
-          if (!isMember) {
-            console.warn(`Rejected join_chat: user ${callerId} is not a member of group ${chatId}`);
-            return;
-          }
+        if (!group || !Array.isArray(group.members)) {
+          console.warn(`Rejected join_chat: group ${chatId} not found or invalid members`);
+          return; // Fail-closed: do not join room
+        }
+
+        const isMember = group.members.some(m => myKeys.includes(String(m)));
+        if (!isMember) {
+          console.warn(`Rejected join_chat: user ${callerId} is not a member of group ${chatId}`);
+          return; // Fail-closed: do not join room
         }
       } catch (err) {
-        console.warn('Error checking group membership in join_chat:', err.message);
+        console.warn('Error checking group membership in join_chat (failing closed):', err.message);
+        return; // Fail-closed: do not join room on DB failure
       }
     }
 
@@ -754,7 +758,7 @@ io.on('connection', (socket) => {
     }
 
     try {
-      // Membership verification: Verify caller belongs to the chat or group
+      // Membership verification: Verify caller belongs to the chat or group (Strict Fail-Closed)
       if (isGroup) {
         try {
           const Group = require('./models/Group');
@@ -763,15 +767,23 @@ io.on('connection', (socket) => {
             $or: [{ id: chatId }, ...(isObjId ? [{ _id: chatId }] : [])]
           }).select('members').lean();
 
-          if (groupDoc && Array.isArray(groupDoc.members)) {
-            const isMember = groupDoc.members.some(m => myKeys.includes(String(m)));
-            if (!isMember) {
-              console.warn(`Rejected send_message: user ${callerId} is not a member of group ${chatId}`);
-              if (typeof ackCallback === 'function') ackCallback({ error: 'NOT_A_GROUP_MEMBER' });
-              return;
-            }
+          if (!groupDoc || !Array.isArray(groupDoc.members)) {
+            console.warn(`Rejected send_message: group ${chatId} not found or invalid members`);
+            if (typeof ackCallback === 'function') ackCallback({ error: 'GROUP_NOT_FOUND' });
+            return;
           }
-        } catch (err) {}
+
+          const isMember = groupDoc.members.some(m => myKeys.includes(String(m)));
+          if (!isMember) {
+            console.warn(`Rejected send_message: user ${callerId} is not a member of group ${chatId}`);
+            if (typeof ackCallback === 'function') ackCallback({ error: 'NOT_A_GROUP_MEMBER' });
+            return;
+          }
+        } catch (err) {
+          console.error('Group membership check error:', err);
+          if (typeof ackCallback === 'function') ackCallback({ error: 'GROUP_MEMBERSHIP_CHECK_FAILED' });
+          return;
+        }
       } else if (chatId && typeof chatId === 'string' && chatId.includes('_')) {
         const isParticipant = myKeys.some(m => chatId.startsWith(m + '_') || chatId.endsWith('_' + m) || chatId.split('_').includes(m));
         if (!isParticipant) {
@@ -823,6 +835,7 @@ io.on('connection', (socket) => {
 
       // Authoritative resolution of sender details from DB / cache (prevents client spoofing Pro/badge/avatar)
       let resolvedSenderName = socket.userUsername || senderId;
+      let resolvedSenderUsername = socket.userUsername || '';
       let resolvedSenderAvatar = null;
       let resolvedSenderIsPro = false;
       let resolvedSenderProTier = 'none';
@@ -841,6 +854,7 @@ io.on('connection', (socket) => {
 
         if (senderDoc) {
           resolvedSenderName = senderDoc.displayName || senderDoc.username || senderId;
+          resolvedSenderUsername = senderDoc.username || resolvedSenderUsername;
           resolvedSenderAvatar = senderDoc.avatar || null;
           resolvedSenderIsPro = Boolean(senderDoc.isPro);
           resolvedSenderProTier = senderDoc.proTier || 'none';
@@ -997,10 +1011,44 @@ io.on('connection', (socket) => {
         }
       }
 
-      // Auto-resolve receiverId for 1-on-1 chats if not explicitly provided
-      let resolvedReceiverId = receiverId || '';
-      if ((!resolvedReceiverId || resolvedReceiverId === 'user') && !isGroup && chatId) {
-        resolvedReceiverId = await getOtherParticipantId(chatId, senderId) || '';
+      // Independent Server-Side Receiver Validation for 1-on-1 private conversations:
+      let resolvedReceiverId = '';
+      if (!isGroup) {
+        if (!chatId) {
+          if (typeof ackCallback === 'function') ackCallback({ error: 'CHAT_ID_REQUIRED' });
+          return;
+        }
+        const expectedReceiverId = await getOtherParticipantId(chatId, senderId);
+        if (!expectedReceiverId) {
+          console.warn(`Rejected send_message: cannot determine expected recipient from chatId ${chatId}`);
+          if (typeof ackCallback === 'function') ackCallback({ error: 'INVALID_CHAT_RECIPIENT' });
+          return;
+        }
+
+        const isExpObj = mongoose.Types.ObjectId.isValid(expectedReceiverId);
+        const expectedUserDoc = await User.findOne({
+          $or: [
+            { id: expectedReceiverId },
+            ...(isExpObj ? [{ _id: expectedReceiverId }] : []),
+            { username: expectedReceiverId }
+          ]
+        }).select('id _id username').lean();
+
+        const validReceiverIdentifiers = [
+          expectedReceiverId,
+          expectedUserDoc?.id,
+          expectedUserDoc?._id?.toString(),
+          expectedUserDoc?.username
+        ].filter(Boolean).map(String);
+
+        if (receiverId && receiverId !== 'user') {
+          if (!validReceiverIdentifiers.includes(String(receiverId))) {
+            console.warn(`Rejected send_message: receiverId ${receiverId} does not match conversation participant`);
+            if (typeof ackCallback === 'function') ackCallback({ error: 'RECIPIENT_CONVERSATION_MISMATCH' });
+            return;
+          }
+        }
+        resolvedReceiverId = expectedUserDoc?.id || expectedReceiverId;
       }
 
       // Enforce friendship for 1-on-1 messages: non-synced users cannot send messages
@@ -1077,7 +1125,7 @@ io.on('connection', (socket) => {
         chatId: canonicalChatId,
         senderId,
         senderName: resolvedSenderName,
-        senderUsername: senderUsername || '',
+        senderUsername: resolvedSenderUsername,
         senderAvatar: resolvedSenderAvatar,
         senderIsPro: resolvedSenderIsPro,
         senderProTier: resolvedSenderProTier,
@@ -1115,15 +1163,17 @@ io.on('connection', (socket) => {
         expiresAt: expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       };
 
-      // Bind cryptographic HMAC receiptToken to new message for verified delivery deletion
-      const { createReceiptToken } = require('./chat/receiptToken');
-      const receiptSecret = config.RECEIPT_SECRET || process.env.RECEIPT_SECRET;
-      newMsg.receiptToken = createReceiptToken({
-        messageId: newMsg.id,
-        senderId,
-        receiverId: resolvedReceiverId,
-        expiresAt: newMsg.expiresAt
-      }, receiptSecret);
+      // Bind cryptographic HMAC receiptToken ONLY for 1-on-1 direct messages (never in group broadcasts)
+      if (!isGroup && resolvedReceiverId && resolvedReceiverId !== 'user') {
+        const { createReceiptToken } = require('./chat/receiptToken');
+        const receiptSecret = config.RECEIPT_SECRET || process.env.RECEIPT_SECRET;
+        newMsg.receiptToken = createReceiptToken({
+          messageId: newMsg.id,
+          senderId,
+          receiverId: resolvedReceiverId,
+          expiresAt: newMsg.expiresAt
+        }, receiptSecret);
+      }
 
       // Sahi Order:
       // 1. DURABLE PERSISTENCE FIRST: Save to MongoDB before notifying sender or receiver
@@ -1242,7 +1292,7 @@ io.on('connection', (socket) => {
 
             if (group && group.members) {
               const notifPayload = {
-                ...newMsg,
+                ...publicWireMsg,
                 isGroup: true,
                 groupName: group.name,
                 senderName: resolvedSenderName,
@@ -1256,7 +1306,7 @@ io.on('connection', (socket) => {
 
               group.members.forEach(memberId => {
                 if (memberId !== senderId) {
-                  io.to(`user_${memberId}`).emit('new_message', newMsg);
+                  io.to(`user_${memberId}`).emit('new_message', publicWireMsg);
                   io.to(`user_${memberId}`).emit('message_notification', notifPayload);
                   dispatchWebPush(memberId, `👥 ${group.name}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, true, notifPayload.senderAvatar);
                 }
@@ -1618,9 +1668,31 @@ io.on('connection', (socket) => {
     socket.emit('chats_wiped');
   });
 
-  // Read Receipt (Blue Double Tick) - WhatsApp Pure Event-Forwarding
-  socket.on('mark_read', async ({ messageId, chatId, userId, senderId, isGhost }) => {
-    const readerId = userId || socket.userId;
+  // Read Receipt (Blue Double Tick) - WhatsApp Pure Stateless Event-Forwarding
+  socket.on('mark_read', async ({ messageId, chatId, senderId, isGhost }) => {
+    const callerId = socket.authenticatedUserId;
+    if (!callerId) {
+      console.warn('Rejected mark_read: unauthenticated socket', socket.id);
+      return;
+    }
+
+    const myKeys = [
+      callerId,
+      socket.userCustomId,
+      socket.userMongoId,
+      socket.userUsername
+    ].filter(Boolean).map(String);
+
+    // Membership verification: reader must be part of chatId
+    if (typeof chatId === 'string' && chatId.includes('_') && !chatId.startsWith('group_')) {
+      const isParticipant = myKeys.some(m => chatId.startsWith(m + '_') || chatId.endsWith('_' + m) || chatId.split('_').includes(m));
+      if (!isParticipant) {
+        console.warn(`Rejected mark_read: caller ${callerId} is not a member of chat ${chatId}`);
+        return;
+      }
+    }
+
+    const readerId = callerId;
     const isGhostMode = Boolean(isGhost) || await resolveGhostMode(readerId, chatId);
     const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
     const senderTarget = senderId || await getOtherParticipantId(chatId, readerId);
@@ -1653,7 +1725,7 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Pure Stateless Event-Forwarding: Server acts as Post Office router
+    // Pure Stateless Event-Forwarding: Server acts purely as real-time event router
     const readPayload = { messageId, chatId, canonicalChatId, userId: readerId, readerId, otherId: senderTarget, status: 'read' };
     const chatReadPayload = { chatId, canonicalChatId, userId: readerId, readerId, otherId: senderTarget, status: 'read' };
 
@@ -1661,25 +1733,32 @@ io.on('connection', (socket) => {
       io.to(r).emit('message_read_update', readPayload);
       io.to(r).emit('chat_read_update', chatReadPayload);
     });
-
-    // Delete read message from MongoDB ONLY after recipient has seen/read it (Blue Tick confirmed)
-    if (!isGhostMode && messageId) {
-      try {
-        const isMongoId = mongoose.Types.ObjectId.isValid(messageId);
-        await Message.deleteMany({
-          $or: [
-            { id: messageId },
-            { clientTempId: messageId },
-            ...(isMongoId ? [{ _id: messageId }] : [])
-          ]
-        });
-      } catch (e) {}
-    }
   });
 
-  // Read Receipt for entire Chat (Blue Double Tick when recipient opens conversation)
-  socket.on('mark_chat_read', async ({ chatId, userId, isGhost }) => {
-    const readerId = userId || socket.userId;
+  // Read Receipt for entire Chat (Blue Double Tick) - Pure Stateless Event-Forwarding
+  socket.on('mark_chat_read', async ({ chatId, isGhost }) => {
+    const callerId = socket.authenticatedUserId;
+    if (!callerId) {
+      console.warn('Rejected mark_chat_read: unauthenticated socket', socket.id);
+      return;
+    }
+
+    const myKeys = [
+      callerId,
+      socket.userCustomId,
+      socket.userMongoId,
+      socket.userUsername
+    ].filter(Boolean).map(String);
+
+    if (typeof chatId === 'string' && chatId.includes('_') && !chatId.startsWith('group_')) {
+      const isParticipant = myKeys.some(m => chatId.startsWith(m + '_') || chatId.endsWith('_' + m) || chatId.split('_').includes(m));
+      if (!isParticipant) {
+        console.warn(`Rejected mark_chat_read: caller ${callerId} is not a member of chat ${chatId}`);
+        return;
+      }
+    }
+
+    const readerId = callerId;
     const isGhostMode = Boolean(isGhost) || await resolveGhostMode(readerId, chatId);
     const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
     const otherId = await getOtherParticipantId(chatId, readerId);
@@ -1711,30 +1790,6 @@ io.on('connection', (socket) => {
 
     const chatReadPayload = { chatId, canonicalChatId, userId: readerId, readerId, otherId, status: 'read' };
     targetRooms.forEach(r => io.to(r).emit('chat_read_update', chatReadPayload));
-
-    // Delete read messages from MongoDB ONLY after recipient has seen/read them (Blue Tick confirmed)
-    if (!isGhostMode) {
-      try {
-        await db.markChatAsRead(chatId, readerId, false);
-        const candidateChatIds = [chatId, canonicalChatId].filter(Boolean);
-        const readerVariants = Array.from(new Set([
-          readerId,
-          socket.userMongoId,
-          socket.userUsername,
-          socket.userCustomId
-        ].filter(Boolean)));
-
-        await Message.deleteMany({
-          $or: [
-            { chatId: { $in: candidateChatIds } },
-            { receiverId: { $in: readerVariants } }
-          ],
-          senderId: { $nin: readerVariants }
-        });
-      } catch (e) {
-        console.warn('Error deleting read messages from MongoDB:', e.message);
-      }
-    }
   });
 
   // Pulse Aura Soundscapes Synchronization
