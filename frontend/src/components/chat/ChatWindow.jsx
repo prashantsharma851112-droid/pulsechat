@@ -232,10 +232,46 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const chatId = isGroup ? activeChatId : [currentUserId, activeChatId].filter(Boolean).sort().join('_');
   const partnerId = activeChat?.id || activeChat?._id || activeChat?.userId || '';
   const [showStoryCardModal, setShowStoryCardModal] = useState(false);
-  const isOnline = !isGroup && (
-    (partnerId && onlineUsers.some(uId => String(uId) === String(partnerId))) ||
-    (activeChat?.username && onlineUsers.some(uId => String(uId) === String(activeChat.username)))
+
+  const partnerVariants = useMemo(() => {
+    return Array.from(new Set([
+      activeChat?.id,
+      activeChat?._id,
+      activeChat?.userId,
+      activeChat?.username
+    ].filter(Boolean).map(v => String(v).toLowerCase())));
+  }, [activeChat]);
+
+  const isOnline = !isGroup && Array.isArray(onlineUsers) && onlineUsers.some(uId =>
+    partnerVariants.includes(String(uId).toLowerCase())
   );
+
+  // Instant Delivery Sync: When partner is online (mobile data ON / connected), promote all sent messages from current user to delivered (Double Grey Tick)
+  useEffect(() => {
+    if (isOnline && !isGroup) {
+      setMessages(prev => {
+        let changed = false;
+        const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
+        const next = prev.map(m => {
+          if (myVars.has(String(m.senderId)) && m.status === 'sent') {
+            changed = true;
+            return { ...m, status: 'delivered' };
+          }
+          return m;
+        });
+        if (changed) {
+          setCachedMessages(chatId, next);
+          const currentCanonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+          if (currentCanonical && currentCanonical !== chatId) {
+            setCachedMessages(currentCanonical, next);
+          }
+          updateRecentChatSnippet(user?.id, chatId, { status: 'delivered' }, activeChat);
+          window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+        }
+        return changed ? next : prev;
+      });
+    }
+  }, [isOnline, isGroup, chatId, user, activeChat]);
   const typingUser = typingMap[chatId];
   const isTyping = Boolean(typingUser && typingUser !== user?.username && typingUser !== user?.id && typingUser !== user?.displayName);
   const typingTimeoutRef = useRef(null);
@@ -2794,10 +2830,28 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       if (socket) {
         socket.emit('join_chat', chatId);
-        socket.emit('mark_chat_read', { chatId, userId: user?.id, isGhost: isCurGhost });
+        const canonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+        socket.emit('mark_chat_read', { chatId, canonicalChatId: canonical, userId: user?.id, isGhost: isCurGhost });
       }
     }
   }, [chatId, activeChat?.id, isGroup, token, socket, user?.id, isGhostMode]);
+
+  // Read Receipt on Tab / Window Focus or App returning to foreground
+  useEffect(() => {
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && socket && chatId) {
+        const canonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+        const isCurGhost = checkGhostModeActive();
+        socket.emit('mark_chat_read', { chatId, canonicalChatId: canonical, userId: user?.id, isGhost: isCurGhost });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+    };
+  }, [socket, chatId, user?.id, isGhostMode]);
 
   // Re-join chat room immediately when socket reconnects
   useEffect(() => {
@@ -3309,14 +3363,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     };
 
-    const handleChatReadUpdate = ({ chatId: targetChatId, canonicalChatId, userId }) => {
+    const handleChatReadUpdate = ({ chatId: targetChatId, canonicalChatId, userId, readerId, otherId }) => {
       const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
-      if (userId && myVars.has(String(userId))) return;
+      const eventReader = readerId || userId;
+      if (eventReader && myVars.has(String(eventReader))) return;
 
       const currentCanonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
       const targetCanonical = canonicalChatId || ((targetChatId && targetChatId.includes('_')) ? targetChatId.split('_').sort().join('_') : targetChatId);
 
+      const isReaderPartner = eventReader && partnerVariants.some(pv => String(pv).toLowerCase() === String(eventReader).toLowerCase());
+      const isTargetMe = otherId && myVars.has(String(otherId));
+
       const isMatch = Boolean(
+        isReaderPartner ||
+        isTargetMe ||
         !targetChatId ||
         targetChatId === chatId ||
         (targetCanonical && targetCanonical === currentCanonical) ||
@@ -3343,7 +3403,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               setCachedMessages(currentCanonical, next);
             }
           }
-          return next;
+          return changed ? next : prev;
         });
         markAllCachedMessagesRead(chatId, user?.id);
         if (currentCanonical && currentCanonical !== chatId) {
@@ -3356,37 +3416,53 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     const handleMessageDeliveredUpdate = ({ messageId, status }) => {
       setMessages(prev => {
-        const next = prev.map(m =>
-          (m.id === messageId || m._id === messageId || m.clientTempId === messageId)
-            ? { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) }
-            : m
-        );
-        setCachedMessages(chatId, next);
-        return next;
+        let changed = false;
+        const next = prev.map(m => {
+          if (m.id === messageId || m._id === messageId || m.clientTempId === messageId) {
+            changed = true;
+            return { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) };
+          }
+          return m;
+        });
+        if (changed) {
+          setCachedMessages(chatId, next);
+        }
+        return changed ? next : prev;
       });
       updateCachedMessageStatus(chatId, messageId, { status: 'delivered' });
       updateRecentChatSnippet(user?.id, chatId, { status: 'delivered' }, activeChat);
       window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
     };
 
-    const handleMessagesDelivered = ({ messageIds, chatId: incomingChatId, canonicalChatId, status }) => {
+    const handleMessagesDelivered = ({ messageIds, chatId: incomingChatId, canonicalChatId, status, senderId }) => {
       const currentCanonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
       const targetCanonical = canonicalChatId || ((incomingChatId && incomingChatId.includes('_')) ? incomingChatId.split('_').sort().join('_') : incomingChatId);
-      const isThisChat = !incomingChatId || incomingChatId === chatId || targetCanonical === currentCanonical;
+      const isThisChat = Boolean(
+        !incomingChatId ||
+        incomingChatId === chatId ||
+        targetCanonical === currentCanonical ||
+        (incomingChatId && partnerVariants.some(pv => String(incomingChatId).toLowerCase().includes(String(pv).toLowerCase())))
+      );
 
       if (!isThisChat) return;
 
+      const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
       const idSet = Array.isArray(messageIds) && messageIds.length > 0 ? new Set(messageIds.map(String)) : null;
+
       setMessages(prev => {
+        let changed = false;
         const next = prev.map(m => {
           const isTarget = !idSet || idSet.has(String(m.id)) || (m._id && idSet.has(String(m._id))) || (m.clientTempId && idSet.has(String(m.clientTempId)));
-          if (isTarget && m.status !== 'read') {
+          if ((isTarget || myVars.has(String(m.senderId))) && m.status === 'sent') {
+            changed = true;
             return { ...m, status: status || 'delivered' };
           }
           return m;
         });
-        setCachedMessages(chatId, next);
-        return next;
+        if (changed) {
+          setCachedMessages(chatId, next);
+        }
+        return changed ? next : prev;
       });
       if (idSet) {
         idSet.forEach(mId => updateCachedMessageStatus(chatId, mId, { status: status || 'delivered' }));

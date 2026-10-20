@@ -100,8 +100,15 @@ export const ChatDetailScreen = ({ route, navigation }: any) => {
       }
       socket.on('connect', flushOutbox);
 
+      // Emit read receipt for this chat immediately upon opening
+      socket.emit('mark_chat_read', { chatId, userId: user?.id });
+
       socket.on('new_message', async (newMsg: Message) => {
-        if (newMsg.chatId === chatId) {
+        if (newMsg.chatId === chatId || (newMsg.chatId && newMsg.chatId.includes(partner.id))) {
+          if (newMsg.senderId !== user?.id) {
+            socket.emit('message_delivered', { messageId: newMsg.id, chatId, senderId: newMsg.senderId });
+            socket.emit('mark_read', { messageId: newMsg.id, chatId, senderId: newMsg.senderId });
+          }
           setMessages((prev) => {
             const exists = prev.some((m) => m.id === newMsg.id);
             const updated = exists ? prev.map((m) => (m.id === newMsg.id ? newMsg : m)) : [...prev, newMsg];
@@ -109,6 +116,41 @@ export const ChatDetailScreen = ({ route, navigation }: any) => {
             return updated;
           });
         }
+      });
+
+      socket.on('message_delivered_update', ({ messageId }: { messageId: string }) => {
+        setMessages((prev) => {
+          const updated = prev.map((m) => (m.id === messageId ? { ...m, status: (m.status === 'read' ? 'read' : 'delivered') } : m));
+          AsyncStorage.setItem(storageKey, JSON.stringify(updated)).catch(() => {});
+          return updated;
+        });
+      });
+
+      socket.on('messages_delivered', ({ chatId: incomingChatId }: { chatId: string }) => {
+        if (!incomingChatId || incomingChatId === chatId || incomingChatId.includes(partner.id)) {
+          setMessages((prev) => {
+            const updated = prev.map((m) => (m.senderId === user?.id && m.status === 'sent' ? { ...m, status: 'delivered' } : m));
+            AsyncStorage.setItem(storageKey, JSON.stringify(updated)).catch(() => {});
+            return updated;
+          });
+        }
+      });
+
+      socket.on('message_read_update', ({ messageId }: { messageId: string }) => {
+        setMessages((prev) => {
+          const updated = prev.map((m) => (m.id === messageId ? { ...m, status: 'read' } : m));
+          AsyncStorage.setItem(storageKey, JSON.stringify(updated)).catch(() => {});
+          return updated;
+        });
+      });
+
+      socket.on('chat_read_update', ({ userId: readerId }: { userId?: string }) => {
+        if (readerId && readerId === user?.id) return;
+        setMessages((prev) => {
+          const updated = prev.map((m) => (m.senderId === user?.id && m.status !== 'read' ? { ...m, status: 'read' } : m));
+          AsyncStorage.setItem(storageKey, JSON.stringify(updated)).catch(() => {});
+          return updated;
+        });
       });
 
       socket.on('typing_start', ({ userId }: { userId: string }) => {
@@ -128,6 +170,10 @@ export const ChatDetailScreen = ({ route, navigation }: any) => {
       if (socket) {
         socket.off('connect', flushOutbox);
         socket.off('new_message');
+        socket.off('message_delivered_update');
+        socket.off('messages_delivered');
+        socket.off('message_read_update');
+        socket.off('chat_read_update');
         socket.off('typing_start');
         socket.off('typing_stop');
       }
