@@ -3297,10 +3297,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       if (isMatch) {
         setMessages(prev => {
-          const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean));
+          const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
           let changed = false;
           const next = prev.map(m => {
-            if (myVars.has(m.senderId) && m.status !== 'read') {
+            if (myVars.has(String(m.senderId)) && m.status !== 'read') {
               changed = true;
               return { ...m, status: 'read' };
             }
@@ -3308,6 +3308,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           });
           if (changed) {
             setCachedMessages(chatId, next);
+            if (currentCanonical && currentCanonical !== chatId) {
+              setCachedMessages(currentCanonical, next);
+            }
           }
           return next;
         });

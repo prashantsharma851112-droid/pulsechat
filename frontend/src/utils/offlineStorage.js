@@ -42,8 +42,22 @@ export function setCachedUser(user) {
 
 // recent chats
 export function getCachedRecentChats(userId) {
-  if (typeof window === 'undefined' || !userId) return [];
-  const raw = safeParse(localStorage.getItem(`${STORAGE_KEYS.RECENT_PREFIX}${userId}`), []);
+  if (typeof window === 'undefined') return [];
+  const userObj = getCachedUser();
+  const keysToCheck = Array.from(new Set([
+    userId,
+    userObj?.id,
+    userObj?._id ? String(userObj._id) : null
+  ].filter(Boolean)));
+
+  let raw = [];
+  for (const k of keysToCheck) {
+    const candidate = safeParse(localStorage.getItem(`${STORAGE_KEYS.RECENT_PREFIX}${k}`), []);
+    if (Array.isArray(candidate) && candidate.length > raw.length) {
+      raw = candidate;
+    }
+  }
+
   if (!Array.isArray(raw)) return [];
   return raw
     .filter(c => c && c.id && c.id !== 'user' && c.id !== 'undefined' && c.id !== 'null')
@@ -63,7 +77,15 @@ export function setCachedRecentChats(userId, chats) {
       const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
       return tB - tA;
     });
-    localStorage.setItem(`${STORAGE_KEYS.RECENT_PREFIX}${userId}`, JSON.stringify(sorted));
+    const serialized = JSON.stringify(sorted);
+    localStorage.setItem(`${STORAGE_KEYS.RECENT_PREFIX}${userId}`, serialized);
+    const userObj = getCachedUser();
+    if (userObj?.id && String(userObj.id) !== String(userId)) {
+      localStorage.setItem(`${STORAGE_KEYS.RECENT_PREFIX}${userObj.id}`, serialized);
+    }
+    if (userObj?._id && String(userObj._id) !== String(userId)) {
+      localStorage.setItem(`${STORAGE_KEYS.RECENT_PREFIX}${userObj._id}`, serialized);
+    }
   } catch (e) {
     console.warn('LocalStorage error setting recent chats', e);
   }
@@ -96,12 +118,56 @@ export function restoreDeletedChatId(userId, chatId) {
   }
 }
 
+// Helper to generate all potential conversation keys for a pair of users
+export function getConversationCandidateKeys(user, contact) {
+  if (!user || !contact) return [];
+  const myKeys = [user?.id, user?._id, user?.username].filter(Boolean).map(String);
+  const contactKeys = [contact?.id, contact?._id, contact?.username].filter(Boolean).map(String);
+  const keys = new Set();
+
+  if (contact?.chatId) keys.add(contact.chatId);
+  if (contact?.isGroup) {
+    if (contact?.id) keys.add(contact.id);
+    if (contact?._id) keys.add(String(contact._id));
+    return Array.from(keys);
+  }
+
+  for (const m of myKeys) {
+    for (const c of contactKeys) {
+      if (m && c && m !== c) {
+        keys.add([m, c].sort().join('_'));
+        keys.add(`${m}_${c}`);
+        keys.add(`${c}_${m}`);
+      }
+    }
+  }
+  return Array.from(keys);
+}
+
+// Find absolute newest message stored locally across any conversation key variants
+export function getLatestCachedMessageForContact(user, contact) {
+  const candidateKeys = getConversationCandidateKeys(user, contact);
+  let bestMsg = null;
+  let bestTime = 0;
+  for (const key of candidateKeys) {
+    const msgs = getCachedMessages(key, user?.id);
+    if (Array.isArray(msgs) && msgs.length > 0) {
+      const last = msgs[msgs.length - 1];
+      const t = new Date(last?.timestamp || last?.createdAt || 0).getTime();
+      if (t > bestTime) {
+        bestTime = t;
+        bestMsg = last;
+      }
+    }
+  }
+  return bestMsg;
+}
+
 // update last message snippet in recent chats
 export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
   if (!userId || !chatId || !message) return;
-  if (targetChat?.id === 'user' || message.receiverId === 'user') return;
   restoreDeletedChatId(userId, chatId);
-  if (targetChat?.id) restoreDeletedChatId(userId, targetChat.id);
+  if (targetChat?.id && targetChat.id !== 'user') restoreDeletedChatId(userId, targetChat.id);
   if (targetChat?._id) restoreDeletedChatId(userId, targetChat._id);
 
   let recent = getCachedRecentChats(userId);
@@ -112,18 +178,23 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
     userObj?.id,
     userObj?._id,
     userObj?.username
-  ].filter(Boolean));
+  ].filter(Boolean).map(String));
 
-  const isFromMe = myVariants.has(message.senderId);
+  const isFromMe = myVariants.has(String(message.senderId));
 
-  const contactId = targetChat?.id || targetChat?._id || message.receiverId || (!isFromMe ? message.senderId : null);
+  const contactId = (!isFromMe && message.senderId && !myVariants.has(String(message.senderId)))
+    ? message.senderId
+    : (targetChat?.id || targetChat?._id || message.receiverId || null);
 
   const existingIdx = recent.findIndex(c => {
     if (!c) return false;
-    if (contactId && (c.id === contactId || c._id === contactId || (c.username && contactId && String(c.username).toLowerCase() === String(contactId).toLowerCase()))) return true;
+    if (contactId && (c.id === contactId || c._id === contactId || (c.username && String(c.username).toLowerCase() === String(contactId).toLowerCase()))) return true;
     if (targetChat?._id && (c.id === String(targetChat._id) || c._id === String(targetChat._id))) return true;
     if (targetChat?.id && (c.id === String(targetChat.id) || c._id === String(targetChat.id))) return true;
     if (targetChat?.username && c.username && String(c.username).toLowerCase() === String(targetChat.username).toLowerCase()) return true;
+    if (message.senderUsername && c.username && String(c.username).toLowerCase() === String(message.senderUsername).toLowerCase()) return true;
+    if (message.senderName && c.displayName && String(c.displayName).toLowerCase() === String(message.senderName).toLowerCase()) return true;
+    if (message.senderName && c.username && String(c.username).toLowerCase() === String(message.senderName).toLowerCase()) return true;
     if (chatId && (c.id === chatId || c._id === chatId || (typeof chatId === 'string' && (chatId.includes(c.id) || (c._id && chatId.includes(c._id)))))) return true;
     return false;
   });
@@ -219,6 +290,8 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
   });
 
   setCachedRecentChats(userId, newRecent);
+  if (userObj?.id && userObj.id !== userId) setCachedRecentChats(userObj.id, newRecent);
+  if (userObj?._id && String(userObj._id) !== String(userId)) setCachedRecentChats(userObj._id, newRecent);
 }
 
 // clear unread count

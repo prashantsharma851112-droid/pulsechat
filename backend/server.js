@@ -1294,11 +1294,51 @@ io.on('connection', (socket) => {
       io.to(`user_${senderTarget}`).emit('message_read_update', readPayload);
       io.to(senderTarget).emit('message_read_update', readPayload);
     }
-    if (readerId) {
-      io.to(`user_${readerId}`).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
-      io.to(readerId).emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
+
+    const chatReadPayload = { chatId, canonicalChatId, userId: readerId, status: 'read' };
+    if (chatId) io.to(chatId).emit('chat_read_update', chatReadPayload);
+    if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('chat_read_update', chatReadPayload);
+    if (senderTarget) {
+      io.to(`user_${senderTarget}`).emit('chat_read_update', chatReadPayload);
+      io.to(senderTarget).emit('chat_read_update', chatReadPayload);
     }
-    socket.emit('chat_read_update', { chatId, canonicalChatId, userId: readerId });
+    if (readerId) {
+      io.to(`user_${readerId}`).emit('chat_read_update', chatReadPayload);
+      io.to(readerId).emit('chat_read_update', chatReadPayload);
+    }
+    socket.emit('chat_read_update', chatReadPayload);
+  });
+
+  // Read Receipt for entire Chat (Blue Double Tick when recipient opens conversation)
+  socket.on('mark_chat_read', async ({ chatId, userId, isGhost }) => {
+    const readerId = userId || socket.userId;
+    const isGhostMode = Boolean(isGhost) || await resolveGhostMode(readerId, chatId);
+    const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+    const senderTarget = (chatId && chatId.includes('_')) ? chatId.split('_').find(p => p !== readerId) : null;
+
+    if (isGhostMode) {
+      const delivPayload = { chatId, canonicalChatId, status: 'delivered' };
+      if (senderTarget) {
+        io.to(`user_${senderTarget}`).emit('messages_delivered', delivPayload);
+        io.to(senderTarget).emit('messages_delivered', delivPayload);
+      }
+      if (chatId) io.to(chatId).emit('messages_delivered', delivPayload);
+      if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('messages_delivered', delivPayload);
+      return;
+    }
+
+    const chatReadPayload = { chatId, canonicalChatId, userId: readerId, status: 'read' };
+    if (chatId) io.to(chatId).emit('chat_read_update', chatReadPayload);
+    if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('chat_read_update', chatReadPayload);
+    if (senderTarget) {
+      io.to(`user_${senderTarget}`).emit('chat_read_update', chatReadPayload);
+      io.to(senderTarget).emit('chat_read_update', chatReadPayload);
+    }
+    if (readerId) {
+      io.to(`user_${readerId}`).emit('chat_read_update', chatReadPayload);
+      io.to(readerId).emit('chat_read_update', chatReadPayload);
+    }
+    socket.emit('chat_read_update', chatReadPayload);
   });
 
   // Pulse Aura Soundscapes Synchronization

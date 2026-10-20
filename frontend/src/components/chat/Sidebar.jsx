@@ -54,7 +54,8 @@ import {
   addDeletedChatId,
   restoreDeletedChatId,
   clearCachedMessages,
-  updateRecentChatSnippet
+  updateRecentChatSnippet,
+  getLatestCachedMessageForContact
 } from '../../utils/offlineStorage';
 import { parseSafeJson } from '../../utils/imageCompressor';
 class ModalErrorBoundary extends React.Component {
@@ -1373,6 +1374,147 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     }
   };
 
+  const resolveMergedRecentChats = useCallback((serverData, freshUsersList = []) => {
+    if (!Array.isArray(serverData)) return [];
+    const localUsers = (Array.isArray(freshUsersList) && freshUsersList.length > 0) ? freshUsersList : (getCachedAllUsers(user?.id) || []);
+    const uMap = new Map();
+    localUsers.forEach(u => {
+      if (u.id) uMap.set(u.id, u);
+      if (u._id) uMap.set(u._id, u);
+      if (u.username) uMap.set(u.username, u);
+    });
+
+    const cachedList = (user?.id ? getCachedRecentChats(user.id) : []) || [];
+    const deletedSet = getDeletedChatIds(user?.id);
+
+    const serverMapped = serverData.map(item => {
+      const fresh = uMap.get(item.id) || (item.username ? uMap.get(item.username) : null);
+      let res = { ...item };
+      if (fresh) {
+        if (fresh.avatar) res.avatar = fresh.avatar;
+        if (fresh.displayName) res.displayName = fresh.displayName;
+        if (fresh.isPro !== undefined) res.isPro = Boolean(fresh.isPro);
+        if (fresh.proTier) res.proTier = fresh.proTier;
+        if (fresh.customBadge !== undefined) res.customBadge = fresh.customBadge;
+        if (fresh.hasKingCrown !== undefined) res.hasKingCrown = Boolean(fresh.hasKingCrown);
+        if (fresh.hasSilverCrown !== undefined) res.hasSilverCrown = Boolean(fresh.hasSilverCrown);
+        if (fresh.hasStreakCrown !== undefined) res.hasStreakCrown = Boolean(fresh.hasStreakCrown);
+      }
+
+      const cachedMatch = cachedList.find(c => {
+        if (!c) return false;
+        if (res.id && (c.id === res.id || c._id === res.id)) return true;
+        if (res._id && (c.id === String(res._id) || c._id === String(res._id))) return true;
+        if (res.username && c.username && String(c.username).toLowerCase() === String(res.username).toLowerCase()) return true;
+        if (res.displayName && c.displayName && String(c.displayName).toLowerCase() === String(res.displayName).toLowerCase()) return true;
+        return false;
+      });
+
+      // WhatsApp Local-First: Inspect device's local message storage for this conversation across all keys
+      const localLastMsg = getLatestCachedMessageForContact(user, res);
+
+      if (cachedMatch || localLastMsg) {
+        if (cachedMatch) {
+          if (res.nickname === undefined && cachedMatch.nickname) {
+            res.nickname = cachedMatch.nickname;
+          }
+          if (res.nicknames === undefined && cachedMatch.nicknames) {
+            res.nicknames = cachedMatch.nicknames;
+          }
+        }
+
+        const cachedTime = new Date(cachedMatch?.lastMessageTimestamp || cachedMatch?.lastMessageTime || 0).getTime();
+        const localMsgTime = new Date(localLastMsg?.timestamp || localLastMsg?.createdAt || 0).getTime();
+        const serverTime = new Date(res.lastMessageTimestamp || res.lastMessageTime || 0).getTime();
+        const bestLocalTime = Math.max(cachedTime, localMsgTime);
+
+        // WhatsApp Pure Post Office Architecture:
+        // Server deletes delivered messages, so local device storage is master.
+        const preferLocal = (bestLocalTime > 0) && (
+          !res.lastMessage ||
+          bestLocalTime >= serverTime ||
+          (serverTime > 0 && Math.abs(bestLocalTime - serverTime) > 60000 && bestLocalTime > serverTime) ||
+          localMsgTime > 0
+        );
+
+        if (preferLocal) {
+          if (localMsgTime >= cachedTime && localLastMsg) {
+            const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
+            const isFromMe = myVars.has(String(localLastMsg.senderId));
+            let snippet = (localLastMsg.type === 'stealth_dust' || localLastMsg.isDustText)
+              ? '⚡ Stealth Dust Text'
+              : localLastMsg.type === 'text' ? (localLastMsg.content || '')
+              : localLastMsg.type === '3d_text' ? `✨ 3D: ${localLastMsg.content}`
+              : localLastMsg.type === 'image' ? '📷 Photo'
+              : localLastMsg.type === 'video' ? '🎥 Video'
+              : localLastMsg.type === 'voice' || localLastMsg.type === 'audio' ? '🎤 Voice message'
+              : localLastMsg.type === 'gift' ? '🎁 Gift'
+              : localLastMsg.type === 'poll' ? '📊 Poll'
+              : 'File attachment';
+            res.lastMessage = snippet;
+            res.lastMessageTime = localLastMsg.timestamp || localLastMsg.createdAt;
+            res.lastMessageTimestamp = localLastMsg.timestamp || localLastMsg.createdAt;
+            res.lastMessageFromMe = isFromMe;
+            res.lastMessageStatus = localLastMsg.status || 'sent';
+            res.lastMessageType = localLastMsg.type || 'text';
+          } else if (cachedMatch?.lastMessage) {
+            res.lastMessage = cachedMatch.lastMessage;
+            res.lastMessageTime = cachedMatch.lastMessageTime;
+            res.lastMessageTimestamp = cachedMatch.lastMessageTimestamp;
+            res.lastMessageFromMe = cachedMatch.lastMessageFromMe;
+            res.lastMessageStatus = cachedMatch.lastMessageStatus;
+            res.lastMessageType = cachedMatch.lastMessageType || res.lastMessageType;
+          }
+        }
+      }
+
+      const isCurrentlyActive = Boolean(
+        activeChatRef.current && (
+          res.id === activeChatRef.current.id ||
+          res._id === activeChatRef.current.id ||
+          res.id === activeChatRef.current._id ||
+          res._id === activeChatRef.current._id ||
+          (res.username && activeChatRef.current.username && String(res.username).toLowerCase() === String(activeChatRef.current.username).toLowerCase())
+        )
+      );
+      if (isCurrentlyActive) {
+        res.unreadCount = 0;
+      } else {
+        res.unreadCount = Math.max(Number(res.unreadCount) || 0, Number(cachedMatch?.unreadCount) || 0);
+      }
+      return res;
+    });
+
+    // Preserve local chats not present in server data yet
+    const serverKeys = new Set(serverMapped.flatMap(s => [s.id, s._id, s.username && String(s.username).toLowerCase()].filter(Boolean)));
+    const extraLocal = cachedList.filter(c =>
+      !serverKeys.has(c.id) &&
+      (!c._id || !serverKeys.has(c._id)) &&
+      (!c.username || !serverKeys.has(String(c.username).toLowerCase()))
+    );
+
+    const combined = [...serverMapped, ...extraLocal];
+    const seenKeys = new Set();
+    const finalSorted = combined
+      .filter(c => {
+        if (!c || !c.id || c.id === 'user' || c.id === 'undefined') return false;
+        if (deletedSet.has(c.id) || (c._id && deletedSet.has(c._id))) return false;
+        const key = c.id || c._id;
+        if (seenKeys.has(key)) return false;
+        if (c.username && seenKeys.has(c.username)) return false;
+        seenKeys.add(key);
+        if (c.username) seenKeys.add(c.username);
+        return true;
+      })
+      .sort((a, b) => {
+        const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
+        const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
+        return tB - tA;
+      });
+
+    return finalSorted;
+  }, [user]);
+
   const handleManualRefresh = async () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
@@ -1425,50 +1567,9 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       if (recentRes.status === 'fulfilled' && recentRes.value?.ok) {
         const recentData = await parseSafeJson(recentRes.value);
         if (Array.isArray(recentData)) {
-          const uMap = new Map();
-          freshUsers.forEach(u => {
-            if (u.id) uMap.set(u.id, u);
-            if (u._id) uMap.set(u._id, u);
-            if (u.username) uMap.set(u.username, u);
-          });
-
-          const mapped = recentData.map(item => {
-            const fresh = uMap.get(item.id) || (item.username ? uMap.get(item.username) : null);
-            let res = { ...item };
-            if (fresh) {
-              if (fresh.avatar) res.avatar = fresh.avatar;
-              if (fresh.displayName) res.displayName = fresh.displayName;
-              if (fresh.isPro !== undefined) res.isPro = Boolean(fresh.isPro);
-              if (fresh.proTier) res.proTier = fresh.proTier;
-              if (fresh.customBadge !== undefined) res.customBadge = fresh.customBadge;
-            }
-            const isCurrentlyActive = Boolean(
-              activeChatRef.current && (
-                res.id === activeChatRef.current.id ||
-                res._id === activeChatRef.current.id ||
-                res.id === activeChatRef.current._id ||
-                res._id === activeChatRef.current._id ||
-                (res.username && activeChatRef.current.username && res.username === activeChatRef.current.username)
-              )
-            );
-            if (isCurrentlyActive) {
-              res.unreadCount = 0;
-            } else if (user?.id) {
-              const cachedList = getCachedRecentChats(user.id) || [];
-              const cachedMatch = cachedList.find(c => c.id === res.id || c._id === res.id || (res.username && c.username === res.username));
-              if (cachedMatch) {
-                if (res.nickname === undefined && cachedMatch.nickname) res.nickname = cachedMatch.nickname;
-                if (res.nicknames === undefined && cachedMatch.nicknames) res.nicknames = cachedMatch.nicknames;
-              }
-              res.unreadCount = Math.max(Number(res.unreadCount) || 0, Number(cachedMatch?.unreadCount) || 0);
-            } else {
-              res.unreadCount = Number(res.unreadCount) || 0;
-            }
-            return res;
-          });
-
-          setRecentChats(mapped);
-          if (user?.id) setCachedRecentChats(user.id, mapped);
+          const finalSorted = resolveMergedRecentChats(recentData, freshUsers);
+          setRecentChats(finalSorted);
+          if (user?.id) setCachedRecentChats(user.id, finalSorted);
         }
       }
 
@@ -1496,141 +1597,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       .then(res => parseSafeJson(res))
       .then(data => {
         if (Array.isArray(data)) {
-          const localUsers = getCachedAllUsers(user?.id) || [];
-          const uMap = new Map();
-          localUsers.forEach(u => {
-            if (u.id) uMap.set(u.id, u);
-            if (u._id) uMap.set(u._id, u);
-            if (u.username) uMap.set(u.username, u);
-          });
-
-          const cachedList = (user?.id ? getCachedRecentChats(user.id) : []) || [];
-          const deletedSet = getDeletedChatIds(user?.id);
-
-          const serverMapped = data.map(item => {
-            const fresh = uMap.get(item.id) || (item.username ? uMap.get(item.username) : null);
-            let res = { ...item };
-            if (fresh) {
-              if (fresh.avatar) res.avatar = fresh.avatar;
-              if (fresh.displayName) res.displayName = fresh.displayName;
-              if (fresh.isPro !== undefined) res.isPro = Boolean(fresh.isPro);
-              if (fresh.proTier) res.proTier = fresh.proTier;
-              if (fresh.customBadge !== undefined) res.customBadge = fresh.customBadge;
-              if (fresh.hasKingCrown !== undefined) res.hasKingCrown = Boolean(fresh.hasKingCrown);
-              if (fresh.hasSilverCrown !== undefined) res.hasSilverCrown = Boolean(fresh.hasSilverCrown);
-              if (fresh.hasStreakCrown !== undefined) res.hasStreakCrown = Boolean(fresh.hasStreakCrown);
-            }
-
-            const cachedMatch = cachedList.find(c => {
-              if (!c) return false;
-              if (res.id && (c.id === res.id || c._id === res.id)) return true;
-              if (res._id && (c.id === String(res._id) || c._id === String(res._id))) return true;
-              if (res.username && c.username && String(c.username).toLowerCase() === String(res.username).toLowerCase()) return true;
-              return false;
-            });
-
-            // WhatsApp Local-First: Inspect device's local message storage for this conversation
-            const derivedChatId = (user?.id && (res.id || res._id)) ? [user.id, res.id || res._id].sort().join('_') : null;
-            let localLastMsg = null;
-            if (derivedChatId) {
-              const localMsgs = getCachedMessages(derivedChatId, user?.id);
-              if (Array.isArray(localMsgs) && localMsgs.length > 0) {
-                localLastMsg = localMsgs[localMsgs.length - 1];
-              }
-            }
-
-            if (cachedMatch || localLastMsg) {
-              if (cachedMatch) {
-                if (res.nickname === undefined && cachedMatch.nickname) {
-                  res.nickname = cachedMatch.nickname;
-                }
-                if (res.nicknames === undefined && cachedMatch.nicknames) {
-                  res.nicknames = cachedMatch.nicknames;
-                }
-              }
-
-              const cachedTime = new Date(cachedMatch?.lastMessageTimestamp || cachedMatch?.lastMessageTime || 0).getTime();
-              const localMsgTime = new Date(localLastMsg?.timestamp || localLastMsg?.createdAt || 0).getTime();
-              const serverTime = new Date(res.lastMessageTimestamp || res.lastMessageTime || 0).getTime();
-              const bestLocalTime = Math.max(cachedTime, localMsgTime);
-
-              // Device storage takes precedence over server in pure Post Office architecture
-              if (bestLocalTime >= serverTime || !res.lastMessage) {
-                if (localMsgTime >= cachedTime && localLastMsg) {
-                  const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean));
-                  const isFromMe = myVars.has(localLastMsg.senderId);
-                  let snippet = (localLastMsg.type === 'stealth_dust' || localLastMsg.isDustText)
-                    ? '⚡ Stealth Dust Text'
-                    : localLastMsg.type === 'text' ? (localLastMsg.content || '')
-                    : localLastMsg.type === '3d_text' ? `✨ 3D: ${localLastMsg.content}`
-                    : localLastMsg.type === 'image' ? '📷 Photo'
-                    : localLastMsg.type === 'video' ? '🎥 Video'
-                    : localLastMsg.type === 'voice' || localLastMsg.type === 'audio' ? '🎤 Voice message'
-                    : localLastMsg.type === 'gift' ? '🎁 Gift'
-                    : localLastMsg.type === 'poll' ? '📊 Poll'
-                    : 'File attachment';
-                  res.lastMessage = snippet;
-                  res.lastMessageTime = localLastMsg.timestamp;
-                  res.lastMessageTimestamp = localLastMsg.timestamp;
-                  res.lastMessageFromMe = isFromMe;
-                  res.lastMessageStatus = localLastMsg.status || 'sent';
-                  res.lastMessageType = localLastMsg.type || 'text';
-                } else if (cachedMatch?.lastMessage) {
-                  res.lastMessage = cachedMatch.lastMessage;
-                  res.lastMessageTime = cachedMatch.lastMessageTime;
-                  res.lastMessageTimestamp = cachedMatch.lastMessageTimestamp;
-                  res.lastMessageFromMe = cachedMatch.lastMessageFromMe;
-                  res.lastMessageStatus = cachedMatch.lastMessageStatus;
-                  res.lastMessageType = cachedMatch.lastMessageType || res.lastMessageType;
-                }
-              }
-            }
-
-            const isCurrentlyActive = Boolean(
-              activeChatRef.current && (
-                res.id === activeChatRef.current.id ||
-                res._id === activeChatRef.current.id ||
-                res.id === activeChatRef.current._id ||
-                res._id === activeChatRef.current._id ||
-                (res.username && activeChatRef.current.username && String(res.username).toLowerCase() === String(activeChatRef.current.username).toLowerCase())
-              )
-            );
-            if (isCurrentlyActive) {
-              res.unreadCount = 0;
-            } else {
-              res.unreadCount = Math.max(Number(res.unreadCount) || 0, Number(cachedMatch?.unreadCount) || 0);
-            }
-            return res;
-          });
-
-          // Preserve local chats not present in server data yet
-          const serverKeys = new Set(serverMapped.flatMap(s => [s.id, s._id, s.username && String(s.username).toLowerCase()].filter(Boolean)));
-          const extraLocal = cachedList.filter(c =>
-            !serverKeys.has(c.id) &&
-            (!c._id || !serverKeys.has(c._id)) &&
-            (!c.username || !serverKeys.has(String(c.username).toLowerCase()))
-          );
-
-          const combined = [...serverMapped, ...extraLocal];
-          const seenKeys = new Set();
-          const finalSorted = combined
-            .filter(c => {
-              if (!c || !c.id || c.id === 'user' || c.id === 'undefined') return false;
-              if (deletedSet.has(c.id) || (c._id && deletedSet.has(c._id))) return false;
-              const key = c.id || c._id;
-              if (seenKeys.has(key)) return false;
-              if (c.username && seenKeys.has(c.username)) return false;
-              seenKeys.add(key);
-              if (c.username) seenKeys.add(c.username);
-              return true;
-            })
-            .sort((a, b) => {
-              const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
-              const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
-              return tB - tA;
-            });
-
-          if (finalSorted.length > 0 || cachedList.length === 0) {
+          const finalSorted = resolveMergedRecentChats(data);
+          if (finalSorted.length > 0 || (user?.id ? getCachedRecentChats(user.id) : []).length === 0) {
             setRecentChats(finalSorted);
             if (user?.id) {
               setCachedRecentChats(user.id, finalSorted);
@@ -1646,7 +1614,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           if (cached.length > 0) setRecentChats(cached);
         }
       });
-  }, [token, user?.id]);
+  }, [token, user, resolveMergedRecentChats]);
 
   const loadGroups = useCallback(() => {
     const curToken = token || localStorage.getItem('pulsechat_token');
@@ -1866,13 +1834,17 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
       setRecentChats(prevChats => {
         const existingIdx = prevChats.findIndex(c => {
+          if (!c) return false;
           if (msg.isGroup) {
             return c.id === msg.chatId || c._id === msg.chatId || c.id === targetId;
           }
-          return (
+          return Boolean(
             (targetId && (c.id === targetId || c._id === targetId)) ||
-            (msg.senderUsername && c.username === msg.senderUsername) ||
-            (c.username && (c.username === targetId || (msg.senderName && c.username === msg.senderName)))
+            (msg.chatId && (c.id === msg.chatId || c.chatId === msg.chatId || (typeof msg.chatId === 'string' && (msg.chatId.includes(c.id) || (c._id && msg.chatId.includes(c._id)))))) ||
+            (msg.senderUsername && c.username && String(c.username).toLowerCase() === String(msg.senderUsername).toLowerCase()) ||
+            (targetId && c.username && String(c.username).toLowerCase() === String(targetId).toLowerCase()) ||
+            (msg.senderName && c.username && String(c.username).toLowerCase() === String(msg.senderName).toLowerCase()) ||
+            (msg.senderName && c.displayName && String(c.displayName).toLowerCase() === String(msg.senderName).toLowerCase())
           );
         });
 
@@ -1899,9 +1871,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             const foundUser = (allUsersRef.current || []).find(u =>
               u.id === targetId ||
               u._id === targetId ||
-              u.username === targetId ||
-              (msg.senderUsername && u.username === msg.senderUsername) ||
-              (msg.senderName && u.username === msg.senderName)
+              (targetId && u.username && String(u.username).toLowerCase() === String(targetId).toLowerCase()) ||
+              (msg.senderUsername && u.username && String(u.username).toLowerCase() === String(msg.senderUsername).toLowerCase()) ||
+              (msg.senderName && u.displayName && String(u.displayName).toLowerCase() === String(msg.senderName).toLowerCase()) ||
+              (msg.senderName && u.username && String(u.username).toLowerCase() === String(msg.senderName).toLowerCase())
             );
             targetChat = foundUser ? {
               ...foundUser,
@@ -1930,11 +1903,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
             (!msg.isGroup && (
               activeChatRef.current.id === targetId ||
               activeChatRef.current._id === targetId ||
-              (activeChatRef.current.username && (
-                activeChatRef.current.username === targetId ||
-                activeChatRef.current.username === msg.senderUsername ||
-                activeChatRef.current.username === msg.senderName
-              ))
+              (targetId && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(targetId).toLowerCase()) ||
+              (msg.senderUsername && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(msg.senderUsername).toLowerCase()) ||
+              (msg.senderName && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(msg.senderName).toLowerCase()) ||
+              (msg.senderName && activeChatRef.current.displayName && String(activeChatRef.current.displayName).toLowerCase() === String(msg.senderName).toLowerCase())
             ))
           )
         );
