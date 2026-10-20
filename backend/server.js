@@ -131,8 +131,8 @@ const io = new Server(server, {
   perMessageDeflate: {
     threshold: 1024 // Compresses WebSocket frames > 1KB to save bandwidth
   },
-  pingInterval: 25000, // Reduced chatty pings from 5s to 25s (80% bandwidth cut on idle sockets)
-  pingTimeout: 60000,
+  pingInterval: 5000, // Fast 5s heartbeat for rapid offline detection
+  pingTimeout: 7000,  // Drop dead sockets within 7s instead of lingering for minutes
   maxHttpBufferSize: 1e7
 });
 
@@ -316,14 +316,14 @@ io.on('connection', (socket) => {
   // User explicitly signals going offline (data turned off / app hidden)
   socket.on('user_offline', (userId) => {
     const id = userId || socket.userId;
-    if (id) {
-      const toDelete = [id, socket.userId, socket.userCustomId, socket.userMongoId, socket.userUsername].filter(Boolean);
-      toDelete.forEach(k => onlineUsers.delete(String(k)));
-      if (!hiddenOnlineUsers.has(id)) {
-        io.emit('user_status', { userId: id, status: 'offline', lastSeen: new Date().toISOString() });
+    const toDelete = Array.from(new Set([id, socket.userId, socket.userCustomId, socket.userMongoId, socket.userUsername].filter(Boolean)));
+    toDelete.forEach(k => {
+      onlineUsers.delete(String(k));
+      if (!hiddenOnlineUsers.has(String(k))) {
+        io.emit('user_status', { userId: String(k), status: 'offline', lastSeen: new Date().toISOString() });
       }
-      io.emit('online_users_list', getPublicOnlineUsers());
-    }
+    });
+    io.emit('online_users_list', getPublicOnlineUsers());
   });
 
   // Dynamic socket event for toggling online status privacy in real time
@@ -2488,11 +2488,13 @@ io.on('connection', (socket) => {
     if (socket.gameVoiceChatId && socket.gameVoiceUserId) {
       io.to(`game_voice_${socket.gameVoiceChatId}`).emit('game_voice_peer_left', { userId: socket.gameVoiceUserId });
     }
-    const toDelete = [socket.userId, socket.userCustomId, socket.userMongoId, socket.userUsername].filter(Boolean);
-    toDelete.forEach(id => onlineUsers.delete(String(id)));
-    if (socket.userId && !hiddenOnlineUsers.has(socket.userId)) {
-      io.emit('user_status', { userId: socket.userId, status: 'offline', lastSeen: new Date().toISOString() });
-    }
+    const toDelete = Array.from(new Set([socket.userId, socket.userCustomId, socket.userMongoId, socket.userUsername].filter(Boolean)));
+    toDelete.forEach(id => {
+      onlineUsers.delete(String(id));
+      if (!hiddenOnlineUsers.has(String(id))) {
+        io.emit('user_status', { userId: String(id), status: 'offline', lastSeen: new Date().toISOString() });
+      }
+    });
     io.emit('online_users_list', getPublicOnlineUsers());
     console.log('⚡ Socket Disconnected:', socket.id);
   });

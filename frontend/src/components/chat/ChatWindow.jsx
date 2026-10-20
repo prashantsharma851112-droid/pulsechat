@@ -470,17 +470,25 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const newScrolledMessagesCountRef = useRef(0);
   const scrollRafRef = useRef(null);
 
-  // Pure container scroll helper — never shifts document body or moves input bar
+  // Pure container scroll helper — smoothly brings latest messages into full view above input bar
   const scrollToBottom = useCallback((behavior = 'instant') => {
     if (chatContainerRef.current) {
       if (behavior === 'smooth') {
         chatContainerRef.current.scrollTo({
-          top: chatContainerRef.current.scrollHeight,
+          top: chatContainerRef.current.scrollHeight + 5000,
           behavior: 'smooth'
         });
       } else {
-        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight + 5000;
       }
+    }
+    if (messagesEndRef.current) {
+      try {
+        messagesEndRef.current.scrollIntoView({
+          behavior: behavior === 'smooth' ? 'smooth' : 'auto',
+          block: 'end'
+        });
+      } catch (e) {}
     }
   }, []);
 
@@ -3712,46 +3720,48 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const lastMsgId = lastMsg?.id || lastMsg?._id || lastMsg?.clientTempId;
     const prevLastId = lastRenderedLastMsgIdRef.current;
 
-    // 1. Initial Cold Load only: jump to bottom once
+    // 1. Initial Load / Chat Open: Always jump to the latest message at the very bottom
     if (isInitialLoad.current) {
       scrollToBottom('instant');
-      requestAnimationFrame(() => scrollToBottom('instant'));
-      setTimeout(() => {
+      const t1 = setTimeout(() => scrollToBottom('instant'), 50);
+      const t2 = setTimeout(() => scrollToBottom('instant'), 150);
+      const t3 = setTimeout(() => {
         scrollToBottom('instant');
         isInitialLoad.current = false;
-      }, 150);
+      }, 350);
       lastRenderedLastMsgIdRef.current = lastMsgId;
-      return;
+      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
     }
 
-    // 2. Check if a genuinely new message arrived at the bottom
-    const isTempResolution = (
-      lastMsg?.clientTempId && (lastMsg.clientTempId === prevLastId || lastMsg.id === prevLastId)
+    const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
+    const isSentByMe = Boolean(
+      (lastMsg.senderId && myVars.has(String(lastMsg.senderId))) ||
+      (typeof lastMsg.id === 'string' && (lastMsg.id.startsWith('temp_') || lastMsg.id.startsWith('sched_')))
     );
-    const isNewMessageAtBottom = lastMsgId && lastMsgId !== prevLastId && !isTempResolution;
-    lastRenderedLastMsgIdRef.current = lastMsgId;
 
-    if (!isNewMessageAtBottom) {
-      // Existing messages updated (ticks, reactions, edits, prepended history) -> NEVER touch scroll position!
-      return;
-    }
-
-    // A brand new message arrived at the bottom
-    const isSentByMe = (lastMsg.senderId === user?.id || lastMsg.senderId === user?._id) || (typeof lastMsg.id === 'string' && (lastMsg.id.startsWith('temp_') || lastMsg.id.startsWith('sched_')));
-
+    // 2. User sent a message: ALWAYS smoothly scroll to bottom and keep visible above input bar!
     if (isSentByMe) {
-      // User sent a message -> scroll to bottom smoothly
-      scrollToBottom('smooth');
+      lastRenderedLastMsgIdRef.current = lastMsgId;
       setShowScrollBottom(false);
       showScrollBottomRef.current = false;
       isPinnedToBottomRef.current = true;
-    } else if (isPinnedToBottomRef.current) {
-      // Someone else sent a message -> auto scroll only if user was already at bottom
       scrollToBottom('smooth');
+      const t1 = setTimeout(() => scrollToBottom('smooth'), 50);
+      const t2 = setTimeout(() => scrollToBottom('smooth'), 150);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+
+    // 3. New message arrived from partner:
+    const isGenuinelyNew = lastMsgId && lastMsgId !== prevLastId;
+    if (isPinnedToBottomRef.current || isGenuinelyNew) {
+      lastRenderedLastMsgIdRef.current = lastMsgId;
       setShowScrollBottom(false);
       showScrollBottomRef.current = false;
+      scrollToBottom('smooth');
+      const t = setTimeout(() => scrollToBottom('smooth'), 50);
+      return () => clearTimeout(t);
     }
-  }, [messages, user?.id, user?._id]);
+  }, [messages, chatId, user?.id, user?._id, user?.username, scrollToBottom]);
 
   // Clear Chat Undo Timer
   useEffect(() => {
@@ -4215,6 +4225,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     showScrollBottomRef.current = false;
     scrollToBottom('smooth');
     requestAnimationFrame(() => scrollToBottom('smooth'));
+    setTimeout(() => scrollToBottom('smooth'), 50);
+    setTimeout(() => scrollToBottom('smooth'), 150);
 
     // Keep mobile virtual keyboard open continuously
     if (replyInputRef.current) {

@@ -143,6 +143,19 @@ export function SocketProvider({ children }) {
 
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
+      window.addEventListener('pagehide', handleOffline);
+      window.addEventListener('beforeunload', handleOffline);
+
+      // Instant user status updates (online / offline)
+      newSocket.on('user_status', ({ userId, status }) => {
+        if (!userId) return;
+        const targetStr = String(userId).toLowerCase();
+        if (status === 'offline') {
+          setOnlineUsers(prev => prev.filter(u => String(u).toLowerCase() !== targetStr));
+        } else if (status === 'online') {
+          setOnlineUsers(prev => prev.some(u => String(u).toLowerCase() === targetStr) ? prev : [...prev, userId]);
+        }
+      });
 
       newSocket.on('online_users_list', (users) => {
         if (Array.isArray(users)) {
@@ -405,6 +418,8 @@ export function SocketProvider({ children }) {
       return () => {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
+        window.removeEventListener('pagehide', handleOffline);
+        window.removeEventListener('beforeunload', handleOffline);
         window.removeEventListener('pulsechat_toggle_online_privacy', handleToggleOnlinePrivacy);
         newSocket.disconnect();
       };
