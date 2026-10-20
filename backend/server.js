@@ -489,15 +489,18 @@ io.on('connection', (socket) => {
       const now = new Date();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-      // Explicit cleanup of any expired or future-skewed messages before delivery
+      // Explicit cleanup of any expired or future-skewed queued messages before delivery
       Message.deleteMany({
         receiverId: { $in: allUserVariants },
+        status: 'sent',
         $or: [
           { createdAt: { $lt: sevenDaysAgo } },
           { createdAt: { $gt: now } },
           { expiresAt: { $lte: now } }
         ]
-      }).catch(() => {});
+      }).catch(err => {
+        console.warn('Queue expiry cleanup warning:', err.message);
+      });
 
       // Enforce strict server-side expiry: only deliver messages bounded by [sevenDaysAgo, now] and not expired
       const pendingMsgs = await Message.find({
