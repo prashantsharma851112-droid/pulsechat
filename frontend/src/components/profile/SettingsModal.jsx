@@ -6,7 +6,7 @@ import {
   Sparkles, Bell, BellOff, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2, 
   Crown, Lock, Shield, FileText, HelpCircle, RefreshCw, AlertTriangle, Loader2,
   ChevronRight, ArrowLeft, HardDrive, Palette, Info, Mail, Compass, Send, CheckCircle2, MessageSquare,
-  Ghost, Search, Volume2, VolumeX, Download, Upload, Database, CheckCircle
+  Ghost, Search, Volume2, VolumeX, Download, Upload, Database, CheckCircle, KeyRound
 } from 'lucide-react';
 import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
 import { playSound } from '../../utils/audio';
@@ -267,29 +267,47 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
     });
   }, []);
 
+  const [backupPassword, setBackupPassword] = useState('');
+  const [showBackupPasswordPrompt, setShowBackupPasswordPrompt] = useState(false);
+  const [restorePassword, setRestorePassword] = useState('');
+  const [pendingRestoreText, setPendingRestoreText] = useState(null);
+  const [showRestorePasswordPrompt, setShowRestorePasswordPrompt] = useState(false);
+
   useEffect(() => {
     if (isExpanded) {
       loadStats();
     }
   }, [isExpanded, loadStats]);
 
-  const handleBackupNow = async (e) => {
+  const handleBackupNowClick = (e) => {
     e?.stopPropagation?.();
+    setShowBackupPasswordPrompt(true);
+    setStatusMsg(null);
+  };
+
+  const handleConfirmBackup = async (e) => {
+    e?.preventDefault?.();
+    if (!backupPassword || backupPassword.length < 6) {
+      setStatusMsg({ type: 'error', text: 'Password must be at least 6 characters.' });
+      return;
+    }
     setIsBackingUp(true);
     setStatusMsg(null);
     try {
-      const res = await createFullDeviceBackup(currentUser);
+      const res = await createFullDeviceBackup(currentUser, backupPassword);
       if (res?.success) {
         setLastBackup(res.backupTime);
         setStatusMsg({
           type: 'success',
-          text: `Backup saved! ${res.totalMessages} messages (${res.size})`
+          text: `Encrypted backup saved! ${res.totalMessages} messages (${res.size})`
         });
         loadStats();
+        setShowBackupPasswordPrompt(false);
+        setBackupPassword('');
       }
     } catch (err) {
-      console.warn('Backup error:', err);
-      setStatusMsg({ type: 'error', text: 'Backup failed. Please try again.' });
+      console.warn('Backup error:', err?.message || 'Backup failed');
+      setStatusMsg({ type: 'error', text: err?.message || 'Backup failed. Please try again.' });
     } finally {
       setIsBackingUp(false);
     }
@@ -298,25 +316,63 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
   const handleFilePicked = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setIsRestoring(true);
     setStatusMsg(null);
     try {
       const text = await file.text();
-      const res = await restoreFullDeviceBackup(text, currentUser);
+      let isEncrypted = false;
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed.version === 2 || parsed.format === 'pulse_encrypted_backup' || parsed.ciphertext) {
+          isEncrypted = true;
+        }
+      } catch (_) {}
+
+      if (isEncrypted) {
+        setPendingRestoreText(text);
+        setShowRestorePasswordPrompt(true);
+      } else {
+        await executeRestore(text, '');
+      }
+    } catch (err) {
+      console.warn('Restore file read error:', err?.message || 'File error');
+      setStatusMsg({ type: 'error', text: err?.message || 'Failed to read backup file.' });
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const executeRestore = async (text, pwd) => {
+    setIsRestoring(true);
+    setStatusMsg(null);
+    try {
+      const res = await restoreFullDeviceBackup(text, currentUser, pwd);
       if (res?.success) {
         setStatusMsg({
           type: 'success',
           text: `Restored ${res.restoredMessages} messages to device!`
         });
         loadStats();
+        setShowRestorePasswordPrompt(false);
+        setRestorePassword('');
+        setPendingRestoreText(null);
         window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
       }
     } catch (err) {
-      console.warn('Restore error:', err);
+      console.warn('Restore error:', err?.message || 'Restore failed');
       setStatusMsg({ type: 'error', text: err?.message || 'Restore failed.' });
     } finally {
       setIsRestoring(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleConfirmRestore = async (e) => {
+    e?.preventDefault?.();
+    if (!restorePassword) {
+      setStatusMsg({ type: 'error', text: 'Please enter the backup password.' });
+      return;
+    }
+    if (pendingRestoreText) {
+      await executeRestore(pendingRestoreText, restorePassword);
     }
   };
 
@@ -450,12 +506,156 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
             </div>
           </div>
 
+          {/* Password Prompt for Creating Backup */}
+          {showBackupPasswordPrompt && (
+            <form onSubmit={handleConfirmBackup} style={{
+              background: 'var(--bg-card)',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              borderRadius: '10px',
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <KeyRound size={15} /> Set Password to Encrypt Backup (AES-256-GCM)
+              </div>
+              <input
+                type="password"
+                placeholder="Enter password (min 6 chars)"
+                value={backupPassword}
+                onChange={(e) => setBackupPassword(e.target.value)}
+                autoFocus
+                disabled={isBackingUp}
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  color: 'var(--text-main)',
+                  fontSize: '0.84rem',
+                  outline: 'none'
+                }}
+              />
+              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => { setShowBackupPasswordPrompt(false); setBackupPassword(''); }}
+                  disabled={isBackingUp}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border)',
+                    background: 'transparent',
+                    color: 'var(--text-muted)',
+                    fontSize: '0.78rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isBackingUp || backupPassword.length < 6}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#10b981',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: '0.78rem',
+                    cursor: isBackingUp ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  {isBackingUp ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                  <span>{isBackingUp ? 'Encrypting...' : 'Export Backup'}</span>
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Password Prompt for Decrypting / Restoring Backup */}
+          {showRestorePasswordPrompt && (
+            <form onSubmit={handleConfirmRestore} style={{
+              background: 'var(--bg-card)',
+              border: '1px solid rgba(99, 102, 241, 0.4)',
+              borderRadius: '10px',
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <KeyRound size={15} /> Enter Password to Decrypt Backup
+              </div>
+              <input
+                type="password"
+                placeholder="Enter your backup password"
+                value={restorePassword}
+                onChange={(e) => setRestorePassword(e.target.value)}
+                autoFocus
+                disabled={isRestoring}
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  color: 'var(--text-main)',
+                  fontSize: '0.84rem',
+                  outline: 'none'
+                }}
+              />
+              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => { setShowRestorePasswordPrompt(false); setRestorePassword(''); setPendingRestoreText(null); }}
+                  disabled={isRestoring}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border)',
+                    background: 'transparent',
+                    color: 'var(--text-muted)',
+                    fontSize: '0.78rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isRestoring || !restorePassword}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'var(--accent)',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: '0.78rem',
+                    cursor: isRestoring ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  {isRestoring ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                  <span>{isRestoring ? 'Decrypting...' : 'Decrypt & Restore'}</span>
+                </button>
+              </div>
+            </form>
+          )}
+
           {/* Action Buttons */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <button
               type="button"
-              onClick={handleBackupNow}
-              disabled={isBackingUp}
+              onClick={handleBackupNowClick}
+              disabled={isBackingUp || showBackupPasswordPrompt}
               className="interactive-tap"
               style={{
                 border: 'none',
@@ -483,7 +683,7 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={isRestoring}
+              disabled={isRestoring || showRestorePasswordPrompt}
               className="interactive-tap"
               style={{
                 border: '1px solid var(--border)',

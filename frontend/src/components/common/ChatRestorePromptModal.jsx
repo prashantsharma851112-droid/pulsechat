@@ -1,33 +1,32 @@
 import React, { useState, useRef } from 'react';
-import { Database, Upload, CheckCircle2, ArrowRight, X, ShieldCheck, Zap, HardDrive, Loader2 } from 'lucide-react';
+import { Database, Upload, CheckCircle2, ArrowRight, X, ShieldCheck, Zap, HardDrive, Loader2, KeyRound } from 'lucide-react';
 import { restoreFullDeviceBackup } from '../../utils/localDatabase';
 import { useBackHandler } from '../../utils/backNavigation';
 
 /**
  * WhatsApp-Style Post-Login Chat Restore Modal
  * Shown on new device login or fresh app install if local IndexedDB has no messages.
- * 100% on-device restore with 0 server bandwidth.
+ * 100% on-device restore with 0 server bandwidth and AES-256-GCM decryption.
  */
 export default function ChatRestorePromptModal({ user, onClose, onRestoreComplete }) {
   const [restoring, setRestoring] = useState(false);
   const [restoredStats, setRestoredStats] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [pendingText, setPendingText] = useState(null);
+  const [password, setPassword] = useState('');
+  const [needsPassword, setNeedsPassword] = useState(false);
   const fileInputRef = useRef(null);
 
   useBackHandler(() => {
     if (!restoring) onClose();
   }, true);
 
-  const handleFilePicked = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processRestore = async (text, pwd) => {
     setRestoring(true);
     setErrorMsg(null);
 
     try {
-      const text = await file.text();
-      const res = await restoreFullDeviceBackup(text, user);
+      const res = await restoreFullDeviceBackup(text, user, pwd);
 
       if (res?.success) {
         setRestoredStats({
@@ -40,11 +39,49 @@ export default function ChatRestorePromptModal({ user, onClose, onRestoreComplet
         setErrorMsg('Could not restore backup. Please ensure the file is a valid .pulse backup.');
       }
     } catch (err) {
-      console.warn('ChatRestorePromptModal restore error:', err);
-      setErrorMsg(err?.message || 'Failed to read backup file. Please select a valid .pulse file.');
+      console.warn('ChatRestorePromptModal restore error:', err?.message || 'Restore error');
+      setErrorMsg(err?.message || 'Failed to restore backup.');
     } finally {
       setRestoring(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFilePicked = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setErrorMsg(null);
+
+    try {
+      const text = await file.text();
+      let isEncrypted = false;
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed.version === 2 || parsed.format === 'pulse_encrypted_backup' || parsed.ciphertext) {
+          isEncrypted = true;
+        }
+      } catch (_) {}
+
+      if (isEncrypted) {
+        setPendingText(text);
+        setNeedsPassword(true);
+      } else {
+        await processRestore(text, '');
+      }
+    } catch (err) {
+      setErrorMsg('Failed to read file: ' + (err?.message || 'Unknown error'));
+    }
+  };
+
+  const handleDecryptSubmit = async (e) => {
+    e.preventDefault();
+    if (!password) {
+      setErrorMsg('Please enter your backup password.');
+      return;
+    }
+    if (pendingText) {
+      await processRestore(pendingText, password);
     }
   };
 
@@ -177,74 +214,150 @@ export default function ChatRestorePromptModal({ user, onClose, onRestoreComplet
 
             {/* Actions */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={restoring}
-                className="interactive-tap"
-                style={{
-                  width: '100%',
-                  padding: '13px 16px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                  color: '#fff',
-                  border: 'none',
-                  fontSize: '0.94rem',
-                  fontWeight: 700,
-                  cursor: restoring ? 'wait' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)',
-                  willChange: 'transform',
-                  transform: 'translateZ(0)'
-                }}
-              >
-                {restoring ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    <span>Restoring Messages...</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload size={18} />
-                    <span>Select Backup File (.pulse)</span>
-                  </>
-                )}
-              </button>
+              {needsPassword ? (
+                <form onSubmit={handleDecryptSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ fontSize: '0.82rem', color: '#cbd5e1', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <KeyRound size={16} color="#10b981" />
+                    Enter Backup Password to Decrypt
+                  </div>
+                  <input
+                    type="password"
+                    placeholder="Enter your backup password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={restoring}
+                    autoFocus
+                    style={{
+                      width: '100%',
+                      padding: '11px 14px',
+                      borderRadius: '12px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(16, 185, 129, 0.4)',
+                      color: '#fff',
+                      fontSize: '0.9rem',
+                      outline: 'none'
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNeedsPassword(false);
+                        setPassword('');
+                        setPendingText(null);
+                        setErrorMsg(null);
+                      }}
+                      disabled={restoring}
+                      style={{
+                        flex: 1,
+                        padding: '11px',
+                        borderRadius: '12px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        color: '#94a3b8',
+                        fontWeight: 600,
+                        fontSize: '0.86rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={restoring || !password}
+                      style={{
+                        flex: 2,
+                        padding: '11px',
+                        borderRadius: '12px',
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        border: 'none',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '0.88rem',
+                        cursor: restoring ? 'wait' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      {restoring ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+                      <span>{restoring ? 'Decrypting...' : 'Unlock & Restore'}</span>
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={restoring}
+                    className="interactive-tap"
+                    style={{
+                      width: '100%',
+                      padding: '13px 16px',
+                      borderRadius: '14px',
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      fontSize: '0.94rem',
+                      fontWeight: 700,
+                      cursor: restoring ? 'wait' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)',
+                      willChange: 'transform',
+                      transform: 'translateZ(0)'
+                    }}
+                  >
+                    {restoring ? (
+                      <>
+                        <Loader2 size={18} className="animate-spin" />
+                        <span>Restoring Messages...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={18} />
+                        <span>Select Backup File (.pulse)</span>
+                      </>
+                    )}
+                  </button>
 
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept=".pulse,.json,application/json,text/plain"
-                style={{ display: 'none' }}
-                onChange={handleFilePicked}
-              />
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept=".pulse,.json,application/json,text/plain"
+                    style={{ display: 'none' }}
+                    onChange={handleFilePicked}
+                  />
 
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={restoring}
-                className="interactive-tap"
-                style={{
-                  width: '100%',
-                  padding: '11px 16px',
-                  borderRadius: '12px',
-                  background: 'transparent',
-                  color: '#94a3b8',
-                  border: 'none',
-                  fontSize: '0.86rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
-              >
-                <span>Skip (Start Fresh)</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    disabled={restoring}
+                    className="interactive-tap"
+                    style={{
+                      width: '100%',
+                      padding: '11px 16px',
+                      borderRadius: '12px',
+                      background: 'transparent',
+                      color: '#94a3b8',
+                      border: 'none',
+                      fontSize: '0.86rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span>Skip (Start Fresh)</span>
+                  </button>
+                </>
+              )}
             </div>
 
             <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '0.72rem', color: '#64748b' }}>

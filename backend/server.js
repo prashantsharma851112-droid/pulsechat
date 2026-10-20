@@ -1572,8 +1572,40 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Helper for participant authorization in chat modification and restore handlers
+  async function isUserAuthorizedForChat(cId, uId) {
+    if (!cId || !uId) return false;
+    const cidStr = String(cId).trim();
+    const uidStr = String(uId).trim();
+
+    if (cidStr.includes('_') && !cidStr.startsWith('group_')) {
+      const { isParticipantInChat } = require('./utils/backupCrypto');
+      return isParticipantInChat(cidStr, uidStr);
+    }
+
+    try {
+      const Group = require('./models/Group');
+      const groupId = cidStr.startsWith('group_') ? cidStr.replace('group_', '') : cidStr;
+      const group = await Group.findOne({
+        $or: [{ id: groupId }, { _id: groupId }]
+      });
+      if (!group || !Array.isArray(group.members)) return false;
+      return group.members.some(m => {
+        const mid = typeof m === 'object' ? (m.userId || m.id || m._id) : m;
+        return String(mid) === uidStr;
+      });
+    } catch {
+      return false;
+    }
+  }
+
   // Restore Message Handler (Undo Delete)
   socket.on('restore_message', async ({ messageId, chatId }) => {
+    const authUserId = socket.authenticatedUserId || socket.data?.userId || socket.userId;
+    if (!authUserId || !chatId || !messageId) return;
+    const isAuth = await isUserAuthorizedForChat(chatId, authUserId);
+    if (!isAuth) return;
+
     const restoredMsg = await db.restoreMessage(messageId);
     if (restoredMsg) {
       io.to(chatId).emit('message_restored', { restoredMsg });
@@ -1583,6 +1615,11 @@ io.on('connection', (socket) => {
   // Clear Specific Chat Handler
   socket.on('clear_chat', async ({ chatId }) => {
     if (!chatId) return;
+    const authUserId = socket.authenticatedUserId || socket.data?.userId || socket.userId;
+    if (!authUserId) return;
+    const isAuth = await isUserAuthorizedForChat(chatId, authUserId);
+    if (!isAuth) return;
+
     const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
     await db.clearChatMessages(chatId);
     io.to(chatId).emit('chat_cleared', { chatId });
@@ -1601,18 +1638,39 @@ io.on('connection', (socket) => {
 
   // Restore Cleared Chat Handler (Undo Clear Chat)
   socket.on('restore_chat_messages', async ({ chatId, messages }) => {
-    await db.restoreChatMessages(messages);
-    io.to(chatId).emit('chat_restored', { chatId, messages });
+    if (!chatId || !Array.isArray(messages) || messages.length === 0 || messages.length > 1000) return;
+    const authUserId = socket.authenticatedUserId || socket.data?.userId || socket.userId;
+    if (!authUserId) return;
+    const isAuth = await isUserAuthorizedForChat(chatId, authUserId);
+    if (!isAuth) return;
+
+    const validMessages = messages.filter(m => m && typeof m === 'object' && String(m.chatId || '') === String(chatId));
+    if (validMessages.length === 0) return;
+
+    await db.restoreChatMessages(validMessages);
+    io.to(chatId).emit('chat_restored', { chatId, messages: validMessages });
   });
 
   // Delete Multiple Selected Messages
   socket.on('delete_multiple_messages', async ({ messageIds, chatId }) => {
+    if (!chatId || !Array.isArray(messageIds) || messageIds.length === 0) return;
+    const authUserId = socket.authenticatedUserId || socket.data?.userId || socket.userId;
+    if (!authUserId) return;
+    const isAuth = await isUserAuthorizedForChat(chatId, authUserId);
+    if (!isAuth) return;
+
     await db.deleteMultipleMessages(messageIds);
     io.to(chatId).emit('multiple_messages_deleted', { messageIds, chatId });
   });
 
   // Restore Multiple Selected Messages (Undo Delete Selected)
   socket.on('restore_multiple_messages', async ({ messageIds, chatId }) => {
+    if (!chatId || !Array.isArray(messageIds) || messageIds.length === 0) return;
+    const authUserId = socket.authenticatedUserId || socket.data?.userId || socket.userId;
+    if (!authUserId) return;
+    const isAuth = await isUserAuthorizedForChat(chatId, authUserId);
+    if (!isAuth) return;
+
     await db.restoreMultipleMessages(messageIds);
     io.to(chatId).emit('multiple_messages_restored', { messageIds, chatId });
   });

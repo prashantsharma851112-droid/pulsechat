@@ -1,3 +1,11 @@
+import {
+  encryptBackupPayload,
+  decryptBackupPayload,
+  filterMessagesForUser,
+  validateBackupPayload,
+  MAX_BACKUP_BYTE_SIZE
+} from './backupCrypto';
+
 // Local-First Device Database for PulseChat (IndexedDB)
 // Emulates WhatsApp's SQLite local-first architecture on Web / PWA.
 // Allows storing tens of thousands of messages, chats, and media locally on the user's phone/PC SSD.
@@ -467,44 +475,54 @@ export async function exportChatTranscript({ chatId, chatTitle, currentUserId, c
 }
 
 /**
- * WhatsApp-Style Full Device Backup (Zero Cloud Bandwidth)
- * Bundles all local IndexedDB messages & cached chats into a downloadable .pulse archive file.
+ * WhatsApp-Style Full Device Backup (Zero Cloud Bandwidth / Authenticated Encryption)
+ * Encrypts all local IndexedDB messages & cached chats into an AES-256-GCM .pulse archive.
+ * Scoped strictly to the currently authenticated account.
  */
-export async function createFullDeviceBackup(currentUser) {
+export async function createFullDeviceBackup(currentUser, password) {
+  const currentUserId = String(currentUser?.id || currentUser?._id || '').trim();
+  if (!currentUserId) {
+    throw new Error('AUTHENTICATION_REQUIRED: Log in to export backup.');
+  }
+
+  if (!password || typeof password !== 'string' || password.length < 6) {
+    throw new Error('BACKUP_PASSWORD_REQUIRED: Please enter a backup password of at least 6 characters.');
+  }
+
   const allMessages = await getAllMessagesFromLocalDb();
+  const scopedMessages = filterMessagesForUser(allMessages, currentUserId);
+
   let recentChats = [];
   try {
-    const uId = currentUser?.id || currentUser?._id;
-    if (uId) {
-      const rawChats = localStorage.getItem(`pulsechat_recent_${uId}`);
-      if (rawChats) recentChats = JSON.parse(rawChats);
-    }
-    if (!recentChats.length) {
-      const legacyChats = localStorage.getItem('cached_recent_chats');
-      if (legacyChats) recentChats = JSON.parse(legacyChats);
-    }
+    const rawChats = localStorage.getItem(`pulsechat_recent_${currentUserId}`);
+    if (rawChats) recentChats = JSON.parse(rawChats);
   } catch (_) {}
 
   const now = new Date();
-  const backupObject = {
+  const backupPayload = {
     app: 'PulseChat',
-    version: 1,
+    version: 2,
     type: 'device_backup',
     createdAt: now.toISOString(),
     user: {
-      id: currentUser?.id || currentUser?._id,
-      username: currentUser?.username,
-      displayName: currentUser?.displayName
+      id: currentUserId,
+      username: currentUser?.username || '',
+      displayName: currentUser?.displayName || ''
     },
     stats: {
-      totalMessages: allMessages.length,
+      totalMessages: scopedMessages.length,
       totalChats: recentChats.length
     },
     recentChats,
-    messages: allMessages
+    messages: scopedMessages
   };
 
-  const jsonStr = JSON.stringify(backupObject, null, 2);
+  const encryptedEnvelope = await encryptBackupPayload(backupPayload, password, {
+    id: currentUserId,
+    username: currentUser?.username || ''
+  });
+
+  const jsonStr = JSON.stringify(encryptedEnvelope, null, 2);
   const fileBlob = new Blob([jsonStr], { type: 'application/json' });
   const filename = `PulseChat_Backup_${currentUser?.username || 'user'}_${now.toISOString().slice(0, 10)}.pulse`;
 
@@ -528,7 +546,7 @@ export async function createFullDeviceBackup(currentUser) {
 
   return {
     success: true,
-    totalMessages: allMessages.length,
+    totalMessages: scopedMessages.length,
     totalChats: recentChats.length,
     filename,
     size: sizeFormatted,
@@ -537,18 +555,59 @@ export async function createFullDeviceBackup(currentUser) {
 }
 
 /**
- * WhatsApp-Style Restore from Device Backup (Zero Cloud Bandwidth)
- * Restores messages directly into IndexedDB without pinging MongoDB or Render server.
+ * WhatsApp-Style Restore from Device Backup (Zero Cloud Bandwidth / Authenticated Encryption)
+ * Decrypts with AES-256-GCM, validates account ownership, schema, and record limits,
+ * and restores messages atomically into IndexedDB.
  */
-export async function restoreFullDeviceBackup(fileContent, currentUser = null) {
+export async function restoreFullDeviceBackup(fileContent, currentUser = null, password = '') {
   if (!fileContent) throw new Error('Backup file is empty.');
-  const data = typeof fileContent === 'string' ? JSON.parse(fileContent) : fileContent;
 
-  if (!data || (!data.messages && !Array.isArray(data))) {
-    throw new Error('Invalid PulseChat backup file format.');
+  if (typeof fileContent === 'string' && fileContent.length > MAX_BACKUP_BYTE_SIZE) {
+    throw new Error('PAYLOAD_TOO_LARGE: Backup file exceeds the maximum 50MB size limit.');
   }
 
-  const messagesToRestore = Array.isArray(data) ? data : data.messages || [];
+  const currentUserId = String(currentUser?.id || currentUser?._id || '').trim();
+  if (!currentUserId) {
+    throw new Error('AUTHENTICATION_REQUIRED: Log in to restore chat history.');
+  }
+
+  let data;
+  try {
+    data = typeof fileContent === 'string' ? JSON.parse(fileContent) : fileContent;
+  } catch (_) {
+    throw new Error('INVALID_BACKUP_FORMAT: File is not valid JSON.');
+  }
+
+  if (!data || typeof data !== 'object') {
+    throw new Error('INVALID_BACKUP_FORMAT: Corrupted backup structure.');
+  }
+
+  let validatedData;
+
+  // Check if encrypted backup (version 2 or pulse_encrypted_backup)
+  if (data.version === 2 || data.format === 'pulse_encrypted_backup' || data.ciphertext) {
+    // Check account ownership in envelope
+    if (data.account?.id && String(data.account.id).trim() !== currentUserId) {
+      throw new Error(`ACCOUNT_MISMATCH: Backup belongs to account ${data.account.id}. Cannot restore into account ${currentUserId}.`);
+    }
+
+    if (!password) {
+      throw new Error('PASSWORD_REQUIRED: Password is required to decrypt this backup.');
+    }
+
+    const decryptedPayload = await decryptBackupPayload(data, password);
+    validatedData = validateBackupPayload(decryptedPayload, currentUser, data.account);
+  } else if (data.app === 'PulseChat' || Array.isArray(data.messages) || Array.isArray(data)) {
+    // Legacy unencrypted backup (version 1)
+    const rawPayload = Array.isArray(data) ? { app: 'PulseChat', messages: data } : data;
+    validatedData = validateBackupPayload(rawPayload, currentUser, rawPayload.user);
+  } else {
+    throw new Error('UNSUPPORTED_BACKUP: Unrecognized backup file format.');
+  }
+
+  const messagesToRestore = validatedData.messages || [];
+  const recentChatsToRestore = validatedData.recentChats || [];
+
   const db = await getDb();
   if (!db) throw new Error('Local IndexedDB is unavailable on this device.');
 
@@ -558,26 +617,20 @@ export async function restoreFullDeviceBackup(fileContent, currentUser = null) {
     const chatBuckets = new Map();
 
     for (const msg of messagesToRestore) {
-      if (msg && (msg.id || msg.clientTempId)) {
-        const item = {
-          ...msg,
-          id: String(msg.id || msg.clientTempId),
-          chatId: String(msg.chatId || 'restored'),
-          timestamp: msg.timestamp || msg.createdAt || new Date().toISOString()
-        };
-        store.put(item);
-
-        const cId = item.chatId;
-        if (!chatBuckets.has(cId)) chatBuckets.set(cId, []);
-        chatBuckets.get(cId).push(item);
-      }
+      store.put(msg);
+      const cId = msg.chatId;
+      if (!chatBuckets.has(cId)) chatBuckets.set(cId, []);
+      chatBuckets.get(cId).push(msg);
     }
+
+    // Wait for atomic completion of IndexedDB transaction
     await new Promise((resolve, reject) => {
       tx.oncomplete = () => resolve();
-      tx.onerror = (e) => reject(e);
+      tx.onabort = (e) => reject(tx.error || e || new Error('IndexedDB transaction aborted'));
+      tx.onerror = (e) => reject(tx.error || e || new Error('IndexedDB transaction error'));
     });
 
-    // Populate per-chat localStorage cache for 0ms instant loading
+    // Populate per-chat localStorage cache ONLY AFTER atomic tx.oncomplete
     chatBuckets.forEach((cMsgs, cId) => {
       try {
         const sorted = cMsgs.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
@@ -592,28 +645,11 @@ export async function restoreFullDeviceBackup(fileContent, currentUser = null) {
     });
   }
 
-  // Resolve target user ID for cached recent chats
-  let targetUserId = currentUser?.id || currentUser?._id;
-  if (!targetUserId && data.user) {
-    targetUserId = data.user.id || data.user._id;
-  }
-  if (!targetUserId) {
-    try {
-      const uStr = localStorage.getItem('pulsechat_user');
-      if (uStr) {
-        const u = JSON.parse(uStr);
-        targetUserId = u?.id || u?._id;
-      }
-    } catch (_) {}
-  }
-
   // Restore recent chats if present in backup
-  if (data.recentChats && Array.isArray(data.recentChats)) {
+  if (recentChatsToRestore.length > 0) {
     try {
-      localStorage.setItem('cached_recent_chats', JSON.stringify(data.recentChats));
-      if (targetUserId) {
-        localStorage.setItem(`pulsechat_recent_${targetUserId}`, JSON.stringify(data.recentChats));
-      }
+      localStorage.setItem('cached_recent_chats', JSON.stringify(recentChatsToRestore));
+      localStorage.setItem(`pulsechat_recent_${currentUserId}`, JSON.stringify(recentChatsToRestore));
     } catch (_) {}
   }
 
@@ -629,6 +665,6 @@ export async function restoreFullDeviceBackup(fileContent, currentUser = null) {
   return {
     success: true,
     restoredMessages: messagesToRestore.length,
-    restoredChats: data.recentChats?.length || 0
+    restoredChats: recentChatsToRestore.length
   };
 }
