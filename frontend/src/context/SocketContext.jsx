@@ -4,6 +4,7 @@ import { AuthContext } from './AuthContext';
 import { BACKEND_URL } from '../utils/config';
 import { subscribeUserToPush, showPushNotification } from '../utils/notifications';
 import { updateUserProfileInStorage, appendCachedMessage, updateRecentChatSnippet } from '../utils/offlineStorage';
+import { saveMessagesToLocalDb } from '../utils/localDatabase';
 
 export const SocketContext = createContext();
 
@@ -245,26 +246,29 @@ export function SocketProvider({ children }) {
       };
 
       // Receiver-side Durable ACK Engine:
-      // A incoming message is committed to local IndexedDB & cache FIRST before emitting 'message_delivered' ACK.
+      // An incoming message is committed to local IndexedDB & cache FIRST before emitting 'message_delivered' ACK.
       // If network disconnects or browser crashes before local commit, server retains the message in queue.
-      const handleIncomingDurableMessage = (msg) => {
+      const handleIncomingDurableMessage = async (msg) => {
         if (!msg || !msg.id) return;
         const curId = userRef.current?.id || user?.id;
         if (msg.senderId === curId) return;
 
-        // 1. Durably save into local IndexedDB & memory cache
+        // 1. Durably await IndexedDB transaction commit BEFORE emitting ACK
         try {
           if (msg.chatId) {
             appendCachedMessage(msg.chatId, msg);
+            await saveMessagesToLocalDb(msg.chatId, [msg]);
             updateRecentChatSnippet(msg.senderId, msg);
           }
         } catch (e) {
-          console.warn('Durable local save error:', e);
+          console.warn('Durable IndexedDB commit failed, suppressing delivery ACK:', e);
+          return; // DO NOT send ACK if local persistence fails (quota full or transaction abort)
         }
 
         triggerPushIfBackground(msg);
 
-        // 2. Emit delivery ACK ONLY AFTER local storage commit
+        // 2. Emit delivery ACK ONLY AFTER local storage commit succeeds
+        // Even if this was a duplicate retry from server, sending ACK allows server to clean up its queue!
         if (msg.status !== 'read') {
           newSocket.emit('message_delivered', {
             messageId: msg.id,

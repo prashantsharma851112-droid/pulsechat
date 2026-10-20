@@ -80,32 +80,39 @@ export function setChatBackupEnabled(userId = '', enabled = true) {
 }
 
 /**
- * Save messages to local IndexedDB asynchronously in the background.
- * Uses a single readwrite transaction for maximum bulk speed.
+ * Save messages to local IndexedDB with true transaction completion promise.
+ * Uses a single readwrite transaction and strictly resolves only on tx.oncomplete.
+ * Rejects on quota error or transaction abort so caller can suppress delivery ACK.
  */
 export async function saveMessagesToLocalDb(chatId, messages) {
-  if (!chatId || !Array.isArray(messages) || messages.length === 0) return;
+  if (!chatId || !Array.isArray(messages) || messages.length === 0) return true;
   const db = await getDb();
-  if (!db) return;
+  if (!db) throw new Error('IndexedDB is not available on this device.');
 
-  try {
-    const tx = db.transaction([STORE_MESSAGES], 'readwrite');
-    const store = tx.objectStore(STORE_MESSAGES);
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction([STORE_MESSAGES], 'readwrite');
+      const store = tx.objectStore(STORE_MESSAGES);
 
-    for (const msg of messages) {
-      if (msg && (msg.id || msg.clientTempId)) {
-        const record = {
-          ...msg,
-          id: String(msg.id || msg.clientTempId),
-          chatId: String(chatId),
-          timestamp: msg.timestamp || msg.createdAt || new Date().toISOString()
-        };
-        store.put(record);
+      for (const msg of messages) {
+        if (msg && (msg.id || msg.clientTempId)) {
+          const record = {
+            ...msg,
+            id: String(msg.id || msg.clientTempId),
+            chatId: String(chatId),
+            timestamp: msg.timestamp || msg.createdAt || new Date().toISOString()
+          };
+          store.put(record);
+        }
       }
+
+      tx.oncomplete = () => resolve(true);
+      tx.onabort = (e) => reject(tx.error || e || new Error('IndexedDB transaction aborted'));
+      tx.onerror = (e) => reject(tx.error || e || new Error('IndexedDB transaction error'));
+    } catch (err) {
+      reject(err);
     }
-  } catch (err) {
-    console.warn('saveMessagesToLocalDb error:', err);
-  }
+  });
 }
 
 /**

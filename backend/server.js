@@ -495,6 +495,23 @@ io.on('connection', (socket) => {
           socket.emit('new_message', pMsg);
         }
       }
+
+      // 2. Sender Delivery Status Recovery:
+      // If server crashed after ACK or sender disconnected, recover Double Tick from MessageLedger
+      try {
+        const MessageLedger = require('./models/MessageLedger');
+        const deliveredLedgers = await MessageLedger.find({
+          senderId: { $in: allUserVariants },
+          state: 'delivered'
+        }).sort({ updatedAt: -1 }).limit(100).lean();
+
+        for (const row of deliveredLedgers) {
+          socket.emit('message_delivered_update', {
+            messageId: row.messageId,
+            status: 'delivered'
+          });
+        }
+      } catch (syncErr) {}
     } catch (err) {
       console.error('Error delivering pending messages on setup:', err);
     }
@@ -1099,6 +1116,25 @@ io.on('connection', (socket) => {
           ...(isMongoId ? [{ _id: messageId }] : [])
         ]
       });
+
+      // Update metadata ledger for idempotency & crash recovery
+      try {
+        const MessageLedger = require('./models/MessageLedger');
+        const now = new Date();
+        await MessageLedger.findOneAndUpdate(
+          { messageId },
+          {
+            $set: {
+              state: 'delivered',
+              senderId: resolvedSenderId || senderId || 'unknown',
+              receiverId: socket.userId || 'unknown',
+              queueExpiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+              expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+            }
+          },
+          { upsert: true }
+        );
+      } catch (e) {}
       const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
       const resolvedSenderId = senderId || await getOtherParticipantId(chatId, socket.userId);
       const singlePayload = { messageId, chatId, canonicalChatId, status: 'delivered', senderId: resolvedSenderId };
