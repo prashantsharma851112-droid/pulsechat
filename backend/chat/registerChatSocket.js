@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const QueuedMessage = require('../models/QueuedMessage');
 const MessageLedger = require('../models/MessageLedger');
 const User = require('../models/User');
@@ -209,62 +210,79 @@ function registerChatSocket(io, { receiptSecret }) {
         return;
       }
 
-      // Enforce recipient authorization & contact rules under PulseChat policy
+      // Enforce recipient authorization & contact rules under PulseChat policy (Strict Fail-Closed)
       try {
-        if (typeof User?.findOne === 'function') {
-          const receiver = await User.findOne({
-            $or: [{ id: receiverId }, { _id: receiverId }]
-          }).select('id username blockedUsers friends isAdmin').lean();
+        if (!User || typeof User.findOne !== 'function') {
+          safeAck(ack, { ok: false, error: 'AUTHORIZATION_UNAVAILABLE' });
+          return;
+        }
 
-          if (!receiver) {
-            safeAck(ack, { ok: false, error: 'RECIPIENT_NOT_FOUND' });
+        // Safe User Query: Avoid Mongoose CastError on non-ObjectId custom string IDs
+        const isReceiverObjId = mongoose.Types.ObjectId.isValid(receiverId);
+        const receiverConditions = [{ id: receiverId }];
+        if (isReceiverObjId) receiverConditions.push({ _id: receiverId });
+
+        const receiver = await User.findOne({ $or: receiverConditions })
+          .select('id username blockedUsers friends isAdmin')
+          .lean();
+
+        if (!receiver) {
+          safeAck(ack, { ok: false, error: 'RECIPIENT_NOT_FOUND' });
+          return;
+        }
+
+        if (typeof db?.isUserBlocked === 'function') {
+          const blockCheck = await db.isUserBlocked(senderId, String(receiver.id));
+          if (blockCheck.isBlocked) {
+            safeAck(ack, {
+              ok: false,
+              error: blockCheck.bBlockedA ? 'RECIPIENT_BLOCKED_SENDER' : 'SENDER_BLOCKED_RECIPIENT'
+            });
             return;
           }
+        }
 
-          if (typeof db?.isUserBlocked === 'function') {
-            const blockCheck = await db.isUserBlocked(senderId, String(receiver.id));
-            if (blockCheck.isBlocked) {
-              safeAck(ack, {
-                ok: false,
-                error: blockCheck.bBlockedA ? 'RECIPIENT_BLOCKED_SENDER' : 'SENDER_BLOCKED_RECIPIENT'
-              });
-              return;
-            }
-          }
+        const isSenderObjId = mongoose.Types.ObjectId.isValid(senderId);
+        const senderConditions = [{ id: senderId }];
+        if (isSenderObjId) senderConditions.push({ _id: senderId });
 
-          const sender = await User.findOne({
-            $or: [{ id: senderId }, { _id: senderId }]
-          }).select('id username friends isAdmin').lean();
+        const sender = await User.findOne({ $or: senderConditions })
+          .select('id username friends isAdmin')
+          .lean();
 
-          if (sender && receiver) {
-            const sIdentifiers = [sender.id, sender._id?.toString(), sender.username, senderId].filter(Boolean);
-            const rIdentifiers = [receiver.id, receiver._id?.toString(), receiver.username, receiverId].filter(Boolean);
+        if (!sender) {
+          safeAck(ack, { ok: false, error: 'UNAUTHORIZED_SENDER' });
+          return;
+        }
 
-            const isFriend = (sender.friends && sender.friends.some(f => rIdentifiers.includes(f))) ||
-                             (receiver.friends && receiver.friends.some(f => sIdentifiers.includes(f)));
-            const isAdmin = Boolean(sender.isAdmin || receiver.isAdmin);
+        const sIdentifiers = [sender.id, sender._id?.toString(), sender.username, senderId].filter(Boolean);
+        const rIdentifiers = [receiver.id, receiver._id?.toString(), receiver.username, receiverId].filter(Boolean);
 
-            if (!isFriend && !isAdmin) {
-              const hasLedger = typeof MessageLedger?.findOne === 'function' && await MessageLedger.findOne({
-                $or: [
-                  { senderId, receiverId: String(receiver.id) },
-                  { senderId: String(receiver.id), receiverId: senderId }
-                ]
-              }).lean();
+        const isFriend = (sender.friends && sender.friends.some(f => rIdentifiers.includes(f))) ||
+                         (receiver.friends && receiver.friends.some(f => sIdentifiers.includes(f)));
+        const isAdmin = Boolean(sender.isAdmin || receiver.isAdmin);
 
-              if (!hasLedger) {
-                safeAck(ack, {
-                  ok: false,
-                  error: 'NOT_FRIENDS',
-                  message: 'You can only message synced friends. Send a friend request first.'
-                });
-                return;
-              }
-            }
+        if (!isFriend && !isAdmin) {
+          const hasLedger = typeof MessageLedger?.findOne === 'function' && await MessageLedger.findOne({
+            $or: [
+              { senderId, receiverId: String(receiver.id) },
+              { senderId: String(receiver.id), receiverId: senderId }
+            ]
+          }).lean();
+
+          if (!hasLedger) {
+            safeAck(ack, {
+              ok: false,
+              error: 'NOT_FRIENDS',
+              message: 'You can only message synced friends. Send a friend request first.'
+            });
+            return;
           }
         }
       } catch (authErr) {
-        console.warn('[chat:send] Recipient verification notice:', authErr.message);
+        console.error('[chat:send] Recipient verification error (failing closed):', authErr.message);
+        safeAck(ack, { ok: false, error: 'AUTHORIZATION_FAILED' });
+        return;
       }
 
       try {

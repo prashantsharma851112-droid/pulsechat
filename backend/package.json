@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node --max-old-space-size=400 server.js",
     "dev": "node --watch server.js",
+    "test": "node tests/run_all_tests.js",
     "build": "echo 'Backend build complete'"
   },
   "dependencies": {
