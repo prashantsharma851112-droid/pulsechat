@@ -465,30 +465,99 @@ export async function getCachedMessagesFromLocalDb(chatId, limit = 100, beforeTi
 
 export function appendCachedMessage(chatId, message) {
   if (!chatId || !message) return;
-  const msgs = getCachedMessages(chatId);
-  const targetId = message.id || message.clientTempId;
-  const targetTempId = message.clientTempId || message.tempId;
+  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+  const targetKeys = new Set([chatId, canonicalChatId].filter(Boolean));
 
-  if (msgs.some(m =>
-    (targetId && m.id === targetId) ||
-    (targetTempId && (m.clientTempId === targetTempId || m.tempId === targetTempId || m.id === targetTempId)) ||
-    (m.clientTempId && targetId && m.clientTempId === targetId)
-  )) {
-    return;
+  for (const cId of targetKeys) {
+    const msgs = getCachedMessages(cId);
+    const targetId = message.id || message.clientTempId;
+    const targetTempId = message.clientTempId || message.tempId;
+
+    if (msgs.some(m =>
+      (targetId && m.id === targetId) ||
+      (targetTempId && (m.clientTempId === targetTempId || m.tempId === targetTempId || m.id === targetTempId)) ||
+      (m.clientTempId && targetId && m.clientTempId === targetId)
+    )) {
+      continue;
+    }
+    setCachedMessages(cId, [...msgs, message]);
   }
-  setCachedMessages(chatId, [...msgs, message]);
 }
 
 export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
   if (!chatId || !messageIdOrTempId || !updates) return;
-  const msgs = getCachedMessages(chatId);
-  const updated = msgs.map(m => {
-    if (m.id === messageIdOrTempId || m._id === messageIdOrTempId || m.clientTempId === messageIdOrTempId || m.tempId === messageIdOrTempId) {
-      return typeof updates === 'string' ? { ...m, status: updates } : { ...m, ...updates };
+  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+  const targetKeys = new Set([chatId, canonicalChatId].filter(Boolean));
+
+  for (const cId of targetKeys) {
+    const msgs = getCachedMessages(cId);
+    if (!Array.isArray(msgs) || msgs.length === 0) continue;
+    let changed = false;
+    const updated = msgs.map(m => {
+      if (
+        m.id === messageIdOrTempId ||
+        m._id === messageIdOrTempId ||
+        m.clientTempId === messageIdOrTempId ||
+        m.tempId === messageIdOrTempId ||
+        (m.clientTempId && messageIdOrTempId && String(m.clientTempId) === String(messageIdOrTempId))
+      ) {
+        changed = true;
+        return typeof updates === 'string' ? { ...m, status: updates } : { ...m, ...updates };
+      }
+      return m;
+    });
+    if (changed) {
+      setCachedMessages(cId, updated);
     }
-    return m;
-  });
-  setCachedMessages(chatId, updated);
+  }
+}
+
+export function markAllCachedMessagesRead(chatId, myUserId) {
+  if (!chatId) return;
+  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+  const targetKeys = new Set([chatId, canonicalChatId].filter(Boolean));
+  const userObj = getCachedUser();
+  const myVars = new Set([myUserId, userObj?.id, userObj?._id, userObj?.username].filter(Boolean).map(String));
+
+  for (const cId of targetKeys) {
+    const msgs = getCachedMessages(cId);
+    if (!Array.isArray(msgs) || msgs.length === 0) continue;
+    let changed = false;
+    const updated = msgs.map(m => {
+      if (myVars.has(String(m.senderId)) && m.status !== 'read') {
+        changed = true;
+        return { ...m, status: 'read' };
+      }
+      return m;
+    });
+    if (changed) {
+      setCachedMessages(cId, updated);
+    }
+  }
+}
+
+export function markAllCachedMessagesDelivered(chatId, myUserId) {
+  if (!chatId) return;
+  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+  const targetKeys = new Set([chatId, canonicalChatId].filter(Boolean));
+  const userObj = getCachedUser();
+  const myVars = new Set([myUserId, userObj?.id, userObj?._id, userObj?.username].filter(Boolean).map(String));
+
+  for (const cId of targetKeys) {
+    const msgs = getCachedMessages(cId);
+    if (!Array.isArray(msgs) || msgs.length === 0) continue;
+    let changed = false;
+    const updated = msgs.map(m => {
+      if (myVars.has(String(m.senderId)) && m.status === 'sent') {
+        changed = true;
+        return { ...m, status: 'delivered' };
+      }
+      return m;
+    });
+    if (changed) {
+      setCachedMessages(cId, updated);
+    }
+  }
 }
 
 export function removeCachedMessages(chatId, messageIds, userId = null) {

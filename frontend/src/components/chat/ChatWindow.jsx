@@ -2441,10 +2441,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         const cachedIds = new Set(cached.map(m => m.id));
         const combinedInitial = [...cached, ...pendingForThisChat.filter(p => !cachedIds.has(p.id))].map(sanitizeFogSnapMessage).filter(Boolean);
 
-        const myVariants = new Set([user?.id, user?._id, user?.username].filter(Boolean));
+        const myVariants = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
         let latestPartnerTime = 0;
         combinedInitial.forEach(m => {
-          if (!myVariants.has(m.senderId)) {
+          if (!myVariants.has(String(m.senderId))) {
             const t = new Date(m.timestamp || m.createdAt || 0).getTime();
             if (t > latestPartnerTime) latestPartnerTime = t;
           }
@@ -2454,7 +2454,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         // Then my message is 100% read (Blue Tick)!
         let hasStatusUpdate = false;
         const resolvedInitial = combinedInitial.map(m => {
-          if (myVariants.has(m.senderId) && m.status !== 'read' && m.status !== 'pending') {
+          if (myVariants.has(String(m.senderId)) && m.status !== 'read' && m.status !== 'pending') {
             const mTime = new Date(m.timestamp || m.createdAt || 0).getTime();
             if (activeChat?.lastMessageStatus === 'read' || (latestPartnerTime > 0 && mTime <= latestPartnerTime)) {
               hasStatusUpdate = true;
@@ -2468,6 +2468,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           setCachedMessages(chatId, resolvedInitial);
         }
         setMessages(resolvedInitial);
+
+        // Instant 0ms Read Receipt Emission over websocket
+        if (socket && chatId) {
+          socket.emit('join_chat', chatId);
+          const isCurGhost = checkGhostModeActive();
+          socket.emit('mark_chat_read', { chatId, userId: user?.id, isGhost: isCurGhost });
+        }
 
         // Pre-warm RAM buffer in background for instant zero-lag scrolling
         const oldestInitial = resolvedInitial.find(m => m.timestamp && !m.id?.startsWith('temp_'));

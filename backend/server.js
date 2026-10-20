@@ -1081,6 +1081,14 @@ io.on('connection', (socket) => {
         io.to(canonicalChatId).emit('message_delivered_update', singlePayload);
         io.to(canonicalChatId).emit('messages_delivered', multiPayload);
       }
+      if (chatId && chatId.includes('_')) {
+        chatId.split('_').forEach(pId => {
+          io.to(`user_${pId}`).emit('message_delivered_update', singlePayload);
+          io.to(pId).emit('message_delivered_update', singlePayload);
+          io.to(`user_${pId}`).emit('messages_delivered', multiPayload);
+          io.to(pId).emit('messages_delivered', multiPayload);
+        });
+      }
     } catch (err) {
       console.error('Error handling message_delivered ack:', err);
     }
@@ -1324,6 +1332,12 @@ io.on('connection', (socket) => {
       }
       if (chatId) io.to(chatId).emit('messages_delivered', delivPayload);
       if (canonicalChatId && canonicalChatId !== chatId) io.to(canonicalChatId).emit('messages_delivered', delivPayload);
+      if (chatId && chatId.includes('_')) {
+        chatId.split('_').forEach(pId => {
+          io.to(`user_${pId}`).emit('messages_delivered', delivPayload);
+          io.to(pId).emit('messages_delivered', delivPayload);
+        });
+      }
       return;
     }
 
@@ -1333,6 +1347,12 @@ io.on('connection', (socket) => {
     if (senderTarget) {
       io.to(`user_${senderTarget}`).emit('chat_read_update', chatReadPayload);
       io.to(senderTarget).emit('chat_read_update', chatReadPayload);
+    }
+    if (chatId && chatId.includes('_')) {
+      chatId.split('_').forEach(pId => {
+        io.to(`user_${pId}`).emit('chat_read_update', chatReadPayload);
+        io.to(pId).emit('chat_read_update', chatReadPayload);
+      });
     }
     if (readerId) {
       io.to(`user_${readerId}`).emit('chat_read_update', chatReadPayload);

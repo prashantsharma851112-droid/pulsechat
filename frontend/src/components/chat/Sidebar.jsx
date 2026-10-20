@@ -55,7 +55,11 @@ import {
   restoreDeletedChatId,
   clearCachedMessages,
   updateRecentChatSnippet,
-  getLatestCachedMessageForContact
+  getLatestCachedMessageForContact,
+  appendCachedMessage,
+  updateCachedMessageStatus,
+  markAllCachedMessagesRead,
+  markAllCachedMessagesDelivered
 } from '../../utils/offlineStorage';
 import { parseSafeJson } from '../../utils/imageCompressor';
 class ModalErrorBoundary extends React.Component {
@@ -1789,6 +1793,43 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       const targetId = isMyMsg ? msg.receiverId : (msg.isGroup ? msg.chatId : msg.senderId);
       if (!targetId && !msg.chatId) return;
 
+      // WhatsApp Local-First: SAVE incoming message immediately to device local message storage!
+      if (msg.chatId) {
+        appendCachedMessage(msg.chatId, msg);
+        const canonical = msg.chatId.includes('_') ? msg.chatId.split('_').sort().join('_') : msg.chatId;
+        if (canonical && canonical !== msg.chatId) {
+          appendCachedMessage(canonical, msg);
+        }
+      }
+
+      const isCurrentlyViewing = Boolean(
+        activeChatRef.current && (
+          (msg.isGroup && (activeChatRef.current.id === msg.chatId || activeChatRef.current.id === targetId)) ||
+          (!msg.isGroup && (
+            activeChatRef.current.id === targetId ||
+            activeChatRef.current._id === targetId ||
+            (targetId && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(targetId).toLowerCase()) ||
+            (msg.senderUsername && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(msg.senderUsername).toLowerCase()) ||
+            (msg.senderName && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(msg.senderName).toLowerCase()) ||
+            (msg.senderName && activeChatRef.current.displayName && String(activeChatRef.current.displayName).toLowerCase() === String(msg.senderName).toLowerCase())
+          ))
+        )
+      );
+
+      // WhatsApp Post Office: Emit receipt packet back to sender immediately (0ms)
+      if (!isMyMsg) {
+        const isCurGhost = (typeof window !== 'undefined' && localStorage.getItem('pulsechat_ghost_global') === 'true') || Boolean(user?.hideReadReceipts);
+        const msgIdToAck = msg.id || msg.clientTempId;
+        if (msgIdToAck) {
+          if (isCurrentlyViewing && !isCurGhost) {
+            socket.emit('mark_read', { messageId: msgIdToAck, chatId: msg.chatId, senderId: msg.senderId });
+            socket.emit('mark_chat_read', { chatId: msg.chatId, userId: user?.id, isGhost: false });
+          } else {
+            socket.emit('message_delivered', { messageId: msgIdToAck, chatId: msg.chatId, senderId: msg.senderId });
+          }
+        }
+      }
+
       let contentSnippet = (msg.type === 'stealth_dust' || msg.isDustText)
         ? '⚡ Stealth Dust Text'
         : (msg.type === 'story_reply' || msg.storyReply)
@@ -2031,27 +2072,44 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
     // Instant delivery tick update in chat list
     const handleDeliveryUpdate = ({ messageId, chatId: cId, status }) => {
-      setRecentChats(prev => prev.map(c => {
-        if (c.id === cId || (cId && typeof cId === 'string' && cId.includes(c.id))) {
-          return { ...c, lastMessageStatus: status || 'delivered' };
+      setRecentChats(prev => {
+        const next = prev.map(c => {
+          const isMatch = Boolean(
+            c.id === cId ||
+            c._id === cId ||
+            (c.username && c.username === cId) ||
+            (c.chatId && c.chatId === cId) ||
+            (typeof cId === 'string' && (
+              (c.id && cId.includes(c.id)) ||
+              (c._id && cId.includes(c._id)) ||
+              (c.username && cId.toLowerCase().includes(c.username.toLowerCase()))
+            ))
+          );
+          if (isMatch) {
+            return { ...c, lastMessageStatus: (c.lastMessageStatus === 'read' ? 'read' : (status || 'delivered')) };
+          }
+          return c;
+        });
+        if (user?.id) setCachedRecentChats(user.id, next);
+        return next;
+      });
+      if (cId) {
+        if (messageId) {
+          updateCachedMessageStatus(cId, messageId, { status: 'delivered' });
+        } else {
+          markAllCachedMessagesDelivered(cId, user?.id);
         }
-        return c;
-      }));
+      }
     };
     socket.on('message_delivered_update', handleDeliveryUpdate);
     socket.on('messages_delivered', ({ chatId: cId, status }) => {
-      setRecentChats(prev => prev.map(c => {
-        if (c.id === cId || (cId && typeof cId === 'string' && cId.includes(c.id))) {
-          return { ...c, lastMessageStatus: status || 'delivered' };
-        }
-        return c;
-      }));
+      handleDeliveryUpdate({ chatId: cId, status: status || 'delivered' });
     });
 
     const handleReadUpdate = ({ messageId, chatId: cId, status }) => {
       setRecentChats(prev => {
         const next = prev.map(c => {
-          if (c.id === cId || c._id === cId || (cId && typeof cId === 'string' && (cId.includes(c.id) || (c._id && cId.includes(c._id))))) {
+          if (c.id === cId || c._id === cId || (cId && typeof cId === 'string' && (cId.includes(c.id) || (c._id && cId.includes(c._id)) || (c.username && cId.toLowerCase().includes(c.username.toLowerCase()))))) {
             return { ...c, lastMessageStatus: status || 'read' };
           }
           return c;
@@ -2066,76 +2124,57 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     socket.on('message_read_update', handleReadUpdate);
 
     // Instant local read update (0ms, no network roundtrip needed)
-    const handleChatRead = ({ chatId: cId, userId }) => {
+    const handleChatRead = ({ chatId: cId, canonicalChatId, userId }) => {
       const readerStr = String(userId || '');
       const myIdStr = String(user?.id || '');
       const myMongoStr = String(user?._id || '');
       const myUserStr = String(user?.username || '');
       const isMe = !userId || readerStr === myIdStr || readerStr === myMongoStr || readerStr === myUserStr;
 
+      const isMatchingChat = (c) => {
+        if (!c) return false;
+        return Boolean(
+          c.id === cId ||
+          c._id === cId ||
+          c.id === canonicalChatId ||
+          c._id === canonicalChatId ||
+          (c.username && (c.username === cId || c.username === canonicalChatId)) ||
+          (c.chatId && (c.chatId === cId || c.chatId === canonicalChatId)) ||
+          (typeof cId === 'string' && (
+            (c.id && cId.includes(c.id)) ||
+            (c._id && cId.includes(c._id)) ||
+            (c.username && cId.toLowerCase().includes(c.username.toLowerCase()))
+          )) ||
+          (typeof canonicalChatId === 'string' && (
+            (c.id && canonicalChatId.includes(c.id)) ||
+            (c._id && canonicalChatId.includes(c._id)) ||
+            (c.username && canonicalChatId.toLowerCase().includes(c.username.toLowerCase()))
+          ))
+        );
+      };
+
       if (isMe && user?.id) {
         clearUnreadCount(user.id, cId);
         setRecentChats(prev => {
-          const next = prev.map(c => {
-            const isMatch = Boolean(
-              c.id === cId ||
-              c._id === cId ||
-              (c.username && c.username === cId) ||
-              (c.chatId && c.chatId === cId) ||
-              (typeof cId === 'string' && (
-                (c.id && cId.includes(c.id)) ||
-                (c._id && cId.includes(c._id)) ||
-                (c.username && cId.includes(c.username))
-              ))
-            );
-            return isMatch ? { ...c, unreadCount: 0 } : c;
-          });
+          const next = prev.map(c => isMatchingChat(c) ? { ...c, unreadCount: 0 } : c);
           if (user?.id) setCachedRecentChats(user.id, next);
           return next;
         });
-        setGroups(prev => prev.map(g => g.id === cId ? { ...g, unreadCount: 0 } : g));
+        setGroups(prev => prev.map(g => (g.id === cId || g.id === canonicalChatId) ? { ...g, unreadCount: 0 } : g));
       } else if (!isMe) {
         // Other user read my messages -> mark lastMessageStatus as read in recentChats AND local message storage
         setRecentChats(prev => {
-          const next = prev.map(c => {
-            const isMatch = Boolean(
-              c.id === cId ||
-              c._id === cId ||
-              (c.username && c.username === cId) ||
-              (c.chatId && c.chatId === cId) ||
-              (typeof cId === 'string' && (
-                (c.id && cId.includes(c.id)) ||
-                (c._id && cId.includes(c._id)) ||
-                (c.username && cId.includes(c.username))
-              ))
-            );
-            return isMatch ? { ...c, lastMessageStatus: 'read' } : c;
-          });
+          const next = prev.map(c => isMatchingChat(c) ? { ...c, lastMessageStatus: 'read' } : c);
           if (user?.id) setCachedRecentChats(user.id, next);
           return next;
         });
 
-        // Also update local cached messages for this chat so ChatWindow loads them with blue ticks!
-        try {
-          const targetCId = (typeof cId === 'string' && cId.includes('_')) ? cId : (user?.id && cId ? [user.id, cId].sort().join('_') : cId);
-          if (targetCId) {
-            const msgs = getCachedMessages(targetCId, user?.id);
-            if (Array.isArray(msgs) && msgs.length > 0) {
-              const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean));
-              let changed = false;
-              const next = msgs.map(m => {
-                if (myVars.has(m.senderId) && m.status !== 'read') {
-                  changed = true;
-                  return { ...m, status: 'read' };
-                }
-                return m;
-              });
-              if (changed) {
-                setCachedMessages(targetCId, next);
-              }
-            }
-          }
-        } catch (_) {}
+        if (cId) {
+          markAllCachedMessagesRead(cId, user?.id);
+        }
+        if (canonicalChatId && canonicalChatId !== cId) {
+          markAllCachedMessagesRead(canonicalChatId, user?.id);
+        }
       }
     };
     socket.on('chat_read_update', handleChatRead);
@@ -2455,6 +2494,12 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         c.id === selectedUser.id ||
         (c.username && selectedUser.username && c.username === selectedUser.username)
       ) ? { ...c, unreadCount: 0 } : c));
+    }
+    if (socket && user?.id && (selectedUser?.id || selectedUser?._id)) {
+      const partnerId = selectedUser.id || selectedUser._id;
+      const cid = [user.id, partnerId].sort().join('_');
+      const isCurGhost = (typeof window !== 'undefined' && localStorage.getItem('pulsechat_ghost_global') === 'true') || Boolean(user?.hideReadReceipts);
+      socket.emit('mark_chat_read', { chatId: cid, userId: user.id, isGhost: isCurGhost });
     }
     startTransition(() => {
       setActiveChat(selectedUser);
