@@ -12,6 +12,7 @@ const userRoom = (userId) => `user:${String(userId)}`;
 
 // Serializes writes for a message within this Node process.
 const messageLocks = new Map();
+const recentReadReceipts = new Set();
 async function withMessageLock(messageId, work) {
   const previous = messageLocks.get(messageId) || Promise.resolve();
   let release;
@@ -284,6 +285,14 @@ function registerChatSocket(io, { receiptSecret }) {
       const { messageId, senderId, receiverId } = receipt;
       try {
         await withMessageLock(messageId, async () => {
+          const ledger = await MessageLedger.findOne({ messageId, senderId, receiverId });
+          if (ledger && ledger.state === 'delivered') {
+            // Idempotent: already delivered. Clean up queue if lingering and return safe ACK
+            await QueuedMessage.deleteOne({ messageId, receiverId });
+            safeAck(ack, { ok: true, alreadyDelivered: true });
+            return;
+          }
+
           // Mark delivering first
           await MessageLedger.updateOne(
             { messageId, senderId, receiverId, state: 'queued' },
@@ -321,6 +330,15 @@ function registerChatSocket(io, { receiptSecret }) {
         safeAck(ack, { ok: false, error: 'INVALID_RECEIPT_TOKEN' });
         return;
       }
+
+      // Idempotent replay protection for read receipts
+      const readDedupeKey = `${receipt.messageId}:${receipt.receiverId}`;
+      if (recentReadReceipts.has(readDedupeKey)) {
+        safeAck(ack, { ok: true, alreadyRead: true });
+        return;
+      }
+      recentReadReceipts.add(readDedupeKey);
+      setTimeout(() => recentReadReceipts.delete(readDedupeKey), 10 * 60 * 1000);
 
       // Pure event-forwarding to the sender's socket room: ZERO MongoDB query.
       const forwarded = await forwardReceipt(io, receipt.senderId, 'chat:receipt:read', {

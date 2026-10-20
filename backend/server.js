@@ -486,7 +486,29 @@ io.on('connection', (socket) => {
         socket.userUsername
       ].filter(Boolean)));
 
-      const pendingMsgs = await Message.find({ receiverId: { $in: allUserVariants }, status: 'sent' }).lean();
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      // Explicit cleanup of any expired messages before delivery
+      Message.deleteMany({
+        receiverId: { $in: allUserVariants },
+        $or: [
+          { createdAt: { $lt: sevenDaysAgo } },
+          { expiresAt: { $lte: now } }
+        ]
+      }).catch(() => {});
+
+      // Enforce strict server-side expiry: only deliver messages younger than 7 days and not expired
+      const pendingMsgs = await Message.find({
+        receiverId: { $in: allUserVariants },
+        status: 'sent',
+        createdAt: { $gte: sevenDaysAgo },
+        $or: [
+          { expiresAt: { $exists: false } },
+          { expiresAt: null },
+          { expiresAt: { $gt: now } }
+        ]
+      }).sort({ timestamp: 1 }).lean();
       if (pendingMsgs.length > 0) {
         // 1. Deliver each queued message to the connected recipient
         // NOTE: Do NOT delete from MongoDB here. The receiver will commit to local IndexedDB
