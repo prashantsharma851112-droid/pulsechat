@@ -14,7 +14,14 @@ const testFiles = [
   'test_step2_message_security_and_spoofing.js',
   'test_cross_protocol_security_and_retention.js',
   'test_backup_restore_security.js',
-  'test_vibe_and_vapid_production_fixes.js'
+  'test_vibe_and_vapid_production_fixes.js',
+  'test_phase_b_retention_and_cache.js',
+  'test_phase_c_e2ee.js',
+  'test_phase_d_and_e_queue_and_qr.js',
+  'test_phase1_protocol_verification.js',
+  'test_milestone1_prekey_directory.js',
+  'test_cloudinary_and_identity_remediations.js',
+  'test_milestone2_slice1.js'
 ];
 
 let failedSuites = 0;

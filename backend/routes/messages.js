@@ -886,12 +886,24 @@ router.post('/delivered-ack', async (req, res) => {
             status: 'delivered'
           });
           io.to(targetChatId).emit('messages_delivered', {
-            chatId: targetChatId,
             messageIds: [messageId],
             status: 'delivered'
           });
         }
       }
+
+      // Invalidate Redis RAM for affected chat
+      try {
+        const redis = require('../utils/redis');
+        const targetChatId = chatId || updatedMsg.chatId;
+        if (targetChatId) {
+          redis.invalidateChat(targetChatId).catch(() => {});
+          if (targetChatId.includes('_')) {
+            const canonical = targetChatId.split('_').sort().join('_');
+            if (canonical !== targetChatId) redis.invalidateChat(canonical).catch(() => {});
+          }
+        }
+      } catch (_) {}
     }
     res.json({ success: true, delivered: !!updatedMsg });
   } catch (err) {

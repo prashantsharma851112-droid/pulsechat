@@ -87,6 +87,10 @@ module.exports = {
       try {
         const redis = require('../utils/redis');
         redis.invalidateChat(msg.chatId).catch(() => {});
+        if (msg.chatId.includes('_')) {
+          const canonical = msg.chatId.split('_').sort().join('_');
+          if (canonical !== msg.chatId) redis.invalidateChat(canonical).catch(() => {});
+        }
         if (msg.senderId) redis.invalidateRecent(msg.senderId).catch(() => {});
         if (msg.receiverId) redis.invalidateRecent(msg.receiverId).catch(() => {});
       } catch {}
