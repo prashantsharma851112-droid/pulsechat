@@ -12,6 +12,7 @@ const testFiles = [
   'verify_concurrent_and_auth_fixes.js',
   'verify_5_deep_hardening_fixes.js',
   'test_step2_message_security_and_spoofing.js',
+  'test_keys_to_device_security.js',
   'test_cross_protocol_security_and_retention.js',
   'test_backup_restore_security.js',
   'test_vibe_and_vapid_production_fixes.js'

@@ -23,9 +23,11 @@ const vibeRoutes = require('./routes/vibes');
 const zoneRoutes = require('./routes/zone');
 const sparksRoutes = require('./routes/sparks');
 const legalRoutes = require('./routes/legal');
+const createKeysRoutes = require('./routes/keys');
 const { uploadToCloudinary } = require('./utils/cloudinary');
 const { checkAndUpdateFileQuota } = require('./utils/fileQuota');
 const redis = require('./utils/redis');
+const DeviceIdentity = require('./models/DeviceIdentity');
 
 const compression = require('compression');
 const app = express();
@@ -73,6 +75,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/vibes', vibeRoutes);
 app.use('/api/zone', zoneRoutes);
 app.use('/api/sparks', sparksRoutes);
+app.use('/api/keys', createKeysRoutes());
 app.use('/', legalRoutes); // Public Google Play URLs: /privacy, /terms
 app.use('/api', legalRoutes);
 
@@ -141,8 +144,9 @@ app.set('io', io);
 const jwt = require('jsonwebtoken');
 const { registerChatSocket } = require('./chat/registerChatSocket');
 
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+  const candidateDeviceId = socket.handshake.auth?.deviceId || socket.handshake.query?.deviceId || socket.handshake.headers?.['x-device-id'];
 
   if (typeof token !== 'string' || !token.trim()) {
     return next(new Error('AUTHENTICATION_FAILED: Token missing'));
@@ -157,9 +161,24 @@ io.use((socket, next) => {
     }
 
     socket.authenticatedUserId = String(rawId);
+    if (typeof candidateDeviceId === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(candidateDeviceId)) {
+      socket.authenticatedDeviceId = candidateDeviceId;
+    }
     socket.data = socket.data || {};
     socket.data.userId = String(rawId);
+    if (socket.authenticatedDeviceId) socket.data.deviceId = socket.authenticatedDeviceId;
     socket.userId = String(rawId);
+
+    if (socket.authenticatedDeviceId) {
+      const registeredDevice = await DeviceIdentity.findOne({
+        userId: String(rawId),
+        deviceId: socket.authenticatedDeviceId,
+        isRevoked: false
+      }).select('userId deviceId').lean();
+      if (!registeredDevice) {
+        return next(new Error('AUTHENTICATION_FAILED: Device not registered or revoked'));
+      }
+    }
 
     return next();
   } catch (err) {

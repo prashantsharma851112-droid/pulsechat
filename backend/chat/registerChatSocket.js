@@ -143,6 +143,9 @@ function registerChatSocket(io, { receiptSecret }) {
       socket.join(userRoom(uId));
       socket.join(`user_${String(uId)}`);
       socket.join(String(uId));
+      if (socket.authenticatedDeviceId) {
+        socket.join(`device:${String(uId)}:${String(socket.authenticatedDeviceId)}`);
+      }
       sendPendingForUser(io, String(uId)).catch((error) => {
         console.error('Initial pending-message sync failed:', error.message);
       });
