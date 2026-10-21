@@ -13,7 +13,8 @@ const testFiles = [
   'verify_5_deep_hardening_fixes.js',
   'test_step2_message_security_and_spoofing.js',
   'test_cross_protocol_security_and_retention.js',
-  'test_backup_restore_security.js'
+  'test_backup_restore_security.js',
+  'test_vibe_and_vapid_production_fixes.js'
 ];
 
 let failedSuites = 0;

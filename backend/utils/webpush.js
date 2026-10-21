@@ -22,7 +22,7 @@ function fromBase64Url(str) {
   return Buffer.from(base64, 'base64');
 }
 
-// In-memory VAPID keys loaded securely from environment variables or ephemeral keypair
+// In-memory VAPID keys loaded securely from environment variables or persistent storage
 let vapidKeyPair = {
   publicKey: '',
   privateKey: ''
@@ -32,6 +32,9 @@ let vapidKeys = {
   publicKey: '',
   privateKey: ''
 };
+
+// Tracks key persistence source: 'env' | 'mongodb' | 'ephemeral' | 'pending_db_sync'
+let vapidKeySource = 'uninitialized';
 
 /**
  * Generate standard P-256 EC Keypair and derive raw 65-byte uncompressed public key
@@ -59,7 +62,7 @@ function generateP256KeyPair() {
 /**
  * Initialize VAPID Keys:
  * 1. Checks process.env (VAPID_PUBLIC_KEY & VAPID_PRIVATE_KEY)
- * 2. If missing in development/test, generates in-memory ephemeral keypair (never written to disk)
+ * 2. If missing, initializes in-memory fallback pending MongoDB persistence sync
  */
 function initVapidKeys() {
   try {
@@ -72,20 +75,19 @@ function initVapidKeys() {
       vapidKeys.publicKey = pub;
       vapidKeys.privateKey = priv;
       vapidKeyPair.privateKey = priv;
+      vapidKeySource = 'env';
       return;
     }
 
-    // In-memory ephemeral fallback (used only if environment variables are not yet configured)
+    // In-memory keypair initialized pending DB sync (ensures functions work if called before DB ready)
     const generated = generateP256KeyPair();
     vapidKeys.publicKey = generated.publicKeyBase64Url;
     vapidKeys.privateKey = generated.privateKeyPem;
     vapidKeyPair.privateKey = generated.privateKeyPem;
-
-    if (process.env.NODE_ENV === 'production') {
-      console.warn('⚠️ [WebPush] Warning: VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are not configured in environment variables. Web push notifications will use ephemeral keys that will reset upon container restart.');
-    }
+    vapidKeySource = 'pending_db_sync';
   } catch (err) {
-    console.error('Failed to initialize VAPID keys:', err);
+    console.error('Failed to initialize VAPID keys:', err?.message || 'Initialization error');
+    vapidKeySource = 'ephemeral';
   }
 }
 
@@ -100,29 +102,42 @@ async function syncWithMongo(VapidKeyModel) {
     if (!VapidKeyModel) return;
     // Explicit environment variables always take precedence over MongoDB fallback
     if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+      vapidKeySource = 'env';
       return;
     }
+
     const existing = await VapidKeyModel.findOne({ keyId: 'default_vapid_key' });
     if (existing && existing.publicKey && existing.privateKey) {
       vapidKeys.publicKey = existing.publicKey;
       vapidKeys.privateKey = existing.privateKey;
       vapidKeyPair.privateKey = existing.privateKey;
-      console.log('🔑 Loaded persistent VAPID keys from MongoDB');
+      vapidKeySource = 'mongodb';
+      console.log('🔑 Loaded persistent VAPID keys from MongoDB (stable across restarts)');
     } else {
       await VapidKeyModel.create({
         keyId: 'default_vapid_key',
         publicKey: vapidKeys.publicKey,
         privateKey: vapidKeys.privateKey
       });
-      console.log('🔑 Stored new persistent VAPID keys to MongoDB');
+      vapidKeySource = 'mongodb';
+      console.log('🔑 Stored new persistent VAPID keys to MongoDB (stable across restarts)');
     }
   } catch (err) {
-    console.warn('MongoDB VAPID sync notice:', err.message);
+    vapidKeySource = 'ephemeral';
+    console.warn('⚠️ [WebPush] Warning: Unable to load or persist VAPID keys to MongoDB and environment variables are not set. Web push notifications will use ephemeral keys that will reset upon container restart:', err.message);
   }
 }
 
 function getVapidPublicKey() {
   return vapidKeys.publicKey;
+}
+
+function getVapidKeySource() {
+  return vapidKeySource;
+}
+
+function isVapidPersistent() {
+  return vapidKeySource === 'env' || vapidKeySource === 'mongodb';
 }
 
 /**
@@ -302,6 +317,8 @@ async function sendPushNotification(subscription, payload = null) {
 
 module.exports = {
   getVapidPublicKey,
+  getVapidKeySource,
+  isVapidPersistent,
   sendPushNotification,
   syncWithMongo
 };

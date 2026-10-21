@@ -2946,23 +2946,8 @@ mongoose.connect(config.MONGO_URI)
 
     // Hydrate userVibeAuras from MongoDB on startup so active vibes survive server restarts
     try {
-      const now = Date.now();
-      for (const u of usersWithVibes) {
-        if (u.vibeAura && !u.vibeAura.cleared && u.vibeAura.auraType !== 'none') {
-          if (u.vibeAura.trialExpiresAt && now > Number(u.vibeAura.trialExpiresAt)) {
-            User.updateOne({ _id: u._id }, { $unset: { vibeAura: 1 } }).catch(() => {});
-            continue;
-          }
-          const clean = {
-            ...u.vibeAura,
-            userId: u.id || u.username,
-            username: u.username || ''
-          };
-          if (u.id) userVibeAuras.set(String(u.id), clean);
-          if (u._id) userVibeAuras.set(String(u._id), clean);
-          if (u.username) userVibeAuras.set(String(u.username), clean);
-        }
-      }
+      const { hydrateUserVibeAuras } = require('./utils/vibeHydration');
+      await hydrateUserVibeAuras(User, userVibeAuras);
       console.log(`[VibeRadar] Hydrated ${userVibeAuras.size} user vibe auras from DB`);
 
       // Server-wide background sweeper every 5 seconds for aura trial expiration
