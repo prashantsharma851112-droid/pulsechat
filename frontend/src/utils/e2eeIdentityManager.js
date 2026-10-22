@@ -11,6 +11,141 @@
 
 const DB_NAME = 'pulsechat_local_db';
 const STORE_TRUSTED_IDENTITIES = 'trusted_identities';
+const REQUIRED_DEVICE_ALGORITHMS = ['m.olm.v1.curve25519-aes-sha2'];
+
+// In-memory pin store for Trust-On-First-Use (TOFU) key pinning
+const pinnedIdentityKeys = new Map();
+
+export function pinDeviceKey(userId, deviceId, ed25519Fingerprint) {
+  if (!userId || !deviceId || !ed25519Fingerprint) return;
+  const key = `${userId}:${deviceId}`;
+  pinnedIdentityKeys.set(key, String(ed25519Fingerprint));
+}
+
+export function getPinnedDeviceKey(userId, deviceId) {
+  return pinnedIdentityKeys.get(`${userId}:${deviceId}`) || null;
+}
+
+export function clearPinnedDevices() {
+  pinnedIdentityKeys.clear();
+}
+
+function hasFunction(obj, name) {
+  return Boolean(obj) && typeof obj[name] === 'function';
+}
+
+function extractFingerprint(deviceInfo) {
+  if (typeof deviceInfo?.fingerprint === 'function') {
+    return deviceInfo.fingerprint();
+  }
+  if (typeof deviceInfo?.fingerprint === 'string') {
+    return deviceInfo.fingerprint;
+  }
+  const keys = deviceInfo?.keys || {};
+  const deviceId = deviceInfo?.deviceId || '';
+  return keys[`ed25519:${deviceId}`] || keys['ed25519'] || null;
+}
+
+function ensureAlgorithms(deviceInfo) {
+  const algorithms = Array.isArray(deviceInfo?.algorithms) ? deviceInfo.algorithms : [];
+  for (const required of REQUIRED_DEVICE_ALGORITHMS) {
+    if (!algorithms.includes(required)) {
+      throw new Error(`UNTRUSTED_DEVICE: Missing required algorithm ${required}`);
+    }
+  }
+}
+
+export function assertMatrixDeviceTrusted(deviceInfo, options = {}) {
+  if (!deviceInfo || typeof deviceInfo !== 'object') {
+    throw new Error('UNTRUSTED_DEVICE: Missing device identity.');
+  }
+  if (!deviceInfo.deviceId || !deviceInfo.userId) {
+    throw new Error('UNTRUSTED_DEVICE: Device identity is incomplete.');
+  }
+  ensureAlgorithms(deviceInfo);
+
+  // Check explicit blocked status
+  if (hasFunction(deviceInfo, 'isBlocked') && deviceInfo.isBlocked()) {
+    throw new Error(`UNTRUSTED_DEVICE: ${deviceInfo.userId}/${deviceInfo.deviceId} is blocked.`);
+  }
+  if (deviceInfo.isBlocked === true || deviceInfo.blocked === true) {
+    throw new Error(`UNTRUSTED_DEVICE: ${deviceInfo.userId}/${deviceInfo.deviceId} is blocked.`);
+  }
+
+  if (!deviceInfo.keys || !deviceInfo.signatures) {
+    throw new Error(`UNTRUSTED_DEVICE: ${deviceInfo.userId}/${deviceInfo.deviceId} has unsigned key material.`);
+  }
+
+  // 1. Explicit verification status on SDK object or plain object
+  if (hasFunction(deviceInfo, 'isVerified')) {
+    if (!deviceInfo.isVerified()) {
+      throw new Error(`UNTRUSTED_DEVICE: ${deviceInfo.userId}/${deviceInfo.deviceId} is not verified.`);
+    }
+    return true;
+  }
+  if (typeof deviceInfo.isVerified === 'boolean') {
+    if (!deviceInfo.isVerified) {
+      throw new Error(`UNTRUSTED_DEVICE: ${deviceInfo.userId}/${deviceInfo.deviceId} is not verified.`);
+    }
+    return true;
+  }
+  if (typeof deviceInfo.verified === 'boolean') {
+    if (!deviceInfo.verified) {
+      throw new Error(`UNTRUSTED_DEVICE: ${deviceInfo.userId}/${deviceInfo.deviceId} is not verified.`);
+    }
+    return true;
+  }
+
+  // 2. Local trust enum (e.g. LocalTrust.Verified = 0)
+  if (deviceInfo.localTrust !== undefined && deviceInfo.localTrust !== null) {
+    if (deviceInfo.localTrust !== 0 && deviceInfo.localTrust !== 'verified') {
+      throw new Error(`UNTRUSTED_DEVICE: ${deviceInfo.userId}/${deviceInfo.deviceId} local trust is not verified.`);
+    }
+    return true;
+  }
+
+  // 3. Plain JSON object without SDK methods: TOFU Key-Pinning evaluation
+  const fingerprint = extractFingerprint(deviceInfo);
+  if (!fingerprint) {
+    throw new Error(`UNTRUSTED_DEVICE: ${deviceInfo.userId}/${deviceInfo.deviceId} lacks ed25519 identity key.`);
+  }
+
+  const pinned = getPinnedDeviceKey(deviceInfo.userId, deviceInfo.deviceId);
+  if (pinned) {
+    if (pinned !== fingerprint) {
+      // CRITICAL: Fingerprint changed for an already-pinned device! Possible MITM
+      throw new Error(
+        `UNTRUSTED_DEVICE: Security Alert: Key mismatch for ${deviceInfo.userId}/${deviceInfo.deviceId}! Fingerprint changed.`
+      );
+    }
+    return true;
+  }
+
+  // Not yet pinned:
+  // If strict mode is requested, unverified first-seen devices fail closed.
+  if (options.strict === true || options.requireExplicitVerification === true) {
+    throw new Error(
+      `UNTRUSTED_DEVICE: ${deviceInfo.userId}/${deviceInfo.deviceId} is unverified and requires explicit verification.`
+    );
+  }
+
+  // Trust On First Use (TOFU): pin the key on first sight
+  pinDeviceKey(deviceInfo.userId, deviceInfo.deviceId, fingerprint);
+  return true;
+}
+
+export function chooseTrustedDevice(devicesById, options = {}) {
+  const devices = Object.values(devicesById || {});
+  for (const device of devices) {
+    try {
+      assertMatrixDeviceTrusted(device, options);
+      return device;
+    } catch {
+      // Continue scanning for another trusted device.
+    }
+  }
+  throw new Error('UNTRUSTED_DEVICE: No verifiable Matrix device available.');
+}
 
 function getCryptoSubtle() {
   const subtle = (typeof window !== 'undefined' && window.crypto?.subtle) || globalThis.crypto?.subtle;

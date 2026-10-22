@@ -21,7 +21,9 @@ const testFiles = [
   'test_phase1_protocol_verification.js',
   'test_milestone1_prekey_directory.js',
   'test_cloudinary_and_identity_remediations.js',
-  'test_milestone2_slice1.js'
+  'test_milestone2_slice1.js',
+  'test_keys_to_device_security.js',
+  'test_e2ee_identity_manager.js'
 ];
 
 let failedSuites = 0;

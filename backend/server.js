@@ -144,8 +144,9 @@ const jwt = require('jsonwebtoken');
 const { registerChatSocket } = require('./chat/registerChatSocket');
 const { registerQrSyncSocket } = require('./chat/registerQrSyncSocket');
 
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+  const candidateDeviceId = socket.handshake.auth?.deviceId || socket.handshake.query?.deviceId || socket.handshake.headers?.['x-device-id'];
 
   if (typeof token !== 'string' || !token.trim()) {
     return next(new Error('AUTHENTICATION_FAILED: Token missing'));
@@ -160,9 +161,40 @@ io.use((socket, next) => {
     }
 
     socket.authenticatedUserId = String(rawId);
+    if (typeof candidateDeviceId === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(candidateDeviceId)) {
+      socket.authenticatedDeviceId = candidateDeviceId;
+    }
     socket.data = socket.data || {};
     socket.data.userId = String(rawId);
+    if (socket.authenticatedDeviceId) socket.data.deviceId = socket.authenticatedDeviceId;
     socket.userId = String(rawId);
+
+    if (socket.authenticatedDeviceId) {
+      let registeredDevice = null;
+      try {
+        const DeviceKey = require('./models/DeviceKey');
+        registeredDevice = await DeviceKey.findOne({
+          userId: String(rawId),
+          deviceId: socket.authenticatedDeviceId,
+          revoked: { $ne: true }
+        }).select('userId deviceId').lean();
+      } catch (_) {}
+
+      if (!registeredDevice) {
+        try {
+          const DeviceIdentity = require('./models/DeviceIdentity');
+          registeredDevice = await DeviceIdentity.findOne({
+            userId: String(rawId),
+            deviceId: socket.authenticatedDeviceId,
+            isRevoked: false
+          }).select('userId deviceId').lean();
+        } catch (_) {}
+      }
+
+      if (!registeredDevice) {
+        return next(new Error('AUTHENTICATION_FAILED: Device not registered or revoked'));
+      }
+    }
 
     return next();
   } catch (err) {
