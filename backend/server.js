@@ -23,11 +23,10 @@ const vibeRoutes = require('./routes/vibes');
 const zoneRoutes = require('./routes/zone');
 const sparksRoutes = require('./routes/sparks');
 const legalRoutes = require('./routes/legal');
-const createKeysRoutes = require('./routes/keys');
+const keyRoutes = require('./routes/keys');
 const { uploadToCloudinary } = require('./utils/cloudinary');
 const { checkAndUpdateFileQuota } = require('./utils/fileQuota');
 const redis = require('./utils/redis');
-const DeviceIdentity = require('./models/DeviceIdentity');
 
 const compression = require('compression');
 const app = express();
@@ -75,7 +74,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/vibes', vibeRoutes);
 app.use('/api/zone', zoneRoutes);
 app.use('/api/sparks', sparksRoutes);
-app.use('/api/keys', createKeysRoutes());
+app.use('/api/keys', keyRoutes);
 app.use('/', legalRoutes); // Public Google Play URLs: /privacy, /terms
 app.use('/api', legalRoutes);
 
@@ -143,6 +142,7 @@ app.set('io', io);
 
 const jwt = require('jsonwebtoken');
 const { registerChatSocket } = require('./chat/registerChatSocket');
+const { registerQrSyncSocket } = require('./chat/registerQrSyncSocket');
 
 io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
@@ -170,11 +170,27 @@ io.use(async (socket, next) => {
     socket.userId = String(rawId);
 
     if (socket.authenticatedDeviceId) {
-      const registeredDevice = await DeviceIdentity.findOne({
-        userId: String(rawId),
-        deviceId: socket.authenticatedDeviceId,
-        isRevoked: false
-      }).select('userId deviceId').lean();
+      let registeredDevice = null;
+      try {
+        const DeviceKey = require('./models/DeviceKey');
+        registeredDevice = await DeviceKey.findOne({
+          userId: String(rawId),
+          deviceId: socket.authenticatedDeviceId,
+          revoked: { $ne: true }
+        }).select('userId deviceId').lean();
+      } catch (_) {}
+
+      if (!registeredDevice) {
+        try {
+          const DeviceIdentity = require('./models/DeviceIdentity');
+          registeredDevice = await DeviceIdentity.findOne({
+            userId: String(rawId),
+            deviceId: socket.authenticatedDeviceId,
+            isRevoked: false
+          }).select('userId deviceId').lean();
+        } catch (_) {}
+      }
+
       if (!registeredDevice) {
         return next(new Error('AUTHENTICATION_FAILED: Device not registered or revoked'));
       }
@@ -197,6 +213,8 @@ const cleanupQueueTimer = setInterval(async () => {
     const Message = require('./models/Message');
 
     await QueuedMessage.deleteMany({ expiresAt: { $lte: now } });
+    
+    // Purge expired sent messages
     await Message.deleteMany({
       status: 'sent',
       $or: [
@@ -205,6 +223,83 @@ const cleanupQueueTimer = setInterval(async () => {
         { createdAt: { $gt: now } }
       ]
     });
+
+    // Also sweep any expired messages regardless of status (delivered/read/vanish) past retention cutoff
+    // to guarantee no message bodies remain indefinitely on the server
+    const expiredNonSent = await Message.find({
+      status: { $ne: 'sent' },
+      $or: [
+        { expiresAt: { $lte: now } },
+        { createdAt: { $lt: sevenDaysAgo } }
+      ]
+    }, { id: 1, chatId: 1, cloudinaryPublicId: 1, mediaUrl: 1, audioUrl: 1 }).limit(500).lean();
+
+    if (expiredNonSent.length > 0) {
+      const idsToDelete = expiredNonSent.map(m => m._id);
+      await Message.deleteMany({ _id: { $in: idsToDelete } });
+
+      // Invalidate Redis RAM for affected chats
+      try {
+        const redis = require('./utils/redis');
+        const uniqueChats = [...new Set(expiredNonSent.map(m => m.chatId).filter(Boolean))];
+        uniqueChats.forEach(cid => {
+          redis.invalidateChat(cid).catch(() => {});
+          if (cid.includes('_')) {
+            const canonical = cid.split('_').sort().join('_');
+            if (canonical !== cid) redis.invalidateChat(canonical).catch(() => {});
+          }
+        });
+      } catch (_) {}
+
+      // Clean up orphaned Cloudinary assets with reference counting (protects forwarded/shared media)
+      try {
+        const { deleteFromCloudinary, extractPublicIdFromUrl, isValidCloudinaryPublicId } = require('./utils/cloudinary');
+        for (const item of expiredNonSent) {
+          const mediaTarget = item.mediaUrl || item.audioUrl;
+          let pubId = null;
+
+          // Validate stored cloudinaryPublicId first
+          if (item.cloudinaryPublicId) {
+            if (isValidCloudinaryPublicId(item.cloudinaryPublicId)) {
+              pubId = item.cloudinaryPublicId;
+            } else {
+              console.warn('[Cloudinary Cleanup] Invalid stored cloudinaryPublicId detected, skipping deletion.');
+            }
+          }
+
+          // Fallback to validated URL extraction if no valid stored publicId
+          if (!pubId && mediaTarget) {
+            const extracted = extractPublicIdFromUrl(item.mediaUrl) || extractPublicIdFromUrl(item.audioUrl);
+            if (extracted && isValidCloudinaryPublicId(extracted)) {
+              pubId = extracted;
+            }
+          }
+
+          if (pubId && mediaTarget) {
+            // Ensure no other active or forwarded message references this asset before destruction
+            const remainingRefs = await Message.countDocuments({
+              _id: { $nin: idsToDelete },
+              $or: [
+                { mediaUrl: mediaTarget },
+                { audioUrl: mediaTarget },
+                { cloudinaryPublicId: pubId }
+              ]
+            });
+            if (remainingRefs === 0) {
+              deleteFromCloudinary(pubId, item.audioUrl ? 'video' : 'image')
+                .then(success => {
+                  if (!success) {
+                    console.warn(`[Cloudinary Cleanup] Destroy not confirmed for ${pubId}, will retry on next cycle.`);
+                  }
+                })
+                .catch(err => {
+                  console.warn(`[Cloudinary Cleanup] Error deleting asset:`, err.message);
+                });
+            }
+          }
+        }
+      } catch (_) {}
+    }
   } catch (e) {
     console.warn('Periodic queue cleanup error:', e.message);
   }
@@ -385,6 +480,7 @@ app.set('getLiveOnlineUsersDetails', getLiveOnlineUsersDetails);
 
 io.on('connection', (socket) => {
   console.log('⚡ Socket Connected:', socket.id);
+  registerQrSyncSocket(io, socket);
 
   // User explicitly signals going offline (data turned off / app hidden)
   socket.on('user_offline', (userId) => {
@@ -1464,7 +1560,7 @@ io.on('connection', (socket) => {
         }
       }
 
-      // 3. Narrow Scoped Queue Deletion: Exact messageId, authenticated recipient, and pending status: 'sent'
+      // 3. Narrow Scoped Queue Deletion: Exact messageId, authenticated recipient, and any active queue status
       const isMongoId = mongoose.Types.ObjectId.isValid(messageId);
       await Message.deleteMany({
         $or: [
@@ -1473,7 +1569,7 @@ io.on('connection', (socket) => {
           ...(isMongoId ? [{ _id: messageId }] : [])
         ],
         receiverId: { $in: allowedReceiverKeys },
-        status: 'sent'
+        status: { $in: ['sent', 'delivered', 'read'] }
       });
 
       try {
@@ -1482,6 +1578,14 @@ io.on('connection', (socket) => {
           messageId: String(messageId),
           receiverId: { $in: allowedReceiverKeys }
         });
+      } catch {}
+
+      // Invalidate Redis RAM for the chat so stale delivered messages are not served
+      try {
+        const redis = require('./utils/redis');
+        if (chatId) redis.invalidateChat(chatId).catch(() => {});
+        const canonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : null;
+        if (canonical && canonical !== chatId) redis.invalidateChat(canonical).catch(() => {});
       } catch {}
 
       // 4. Double Tick Notification (Only emitted on verified atomic transition)

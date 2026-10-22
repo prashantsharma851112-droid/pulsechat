@@ -51,7 +51,12 @@ const messageSchema = new mongoose.Schema({
   isVanish: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now, index: true },
   // WhatsApp-Style Post Office Queue: Max 7-day queue for offline delivery, auto-drops if receiver never connects
-  expiresAt: { type: Date, default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }
+  expiresAt: { type: Date, default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
+  // Local-First Privacy & E2EE Metadata
+  cloudinaryPublicId: { type: String, default: null },
+  isEncrypted: { type: Boolean, default: false },
+  envelope: { type: Object, default: null }, // { v, senderDeviceId, recipientDeviceId, ephemeralPublicKey, ciphertext, iv, tag }
+  deliveryAttempts: { type: Number, default: 0 }
 });
 
 // Scoped TTL: Only expire pending messages that were never delivered (status: 'sent').

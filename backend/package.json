@@ -10,6 +10,7 @@
     "build": "echo 'Backend build complete'"
   },
   "dependencies": {
+    "@matrix-org/olm": "^3.2.15",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.2.0",
     "compression": "^1.8.2",

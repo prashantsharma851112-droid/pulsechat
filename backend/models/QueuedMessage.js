@@ -5,10 +5,15 @@ const queuedMessageSchema = new mongoose.Schema(
     messageId: { type: String, required: true, unique: true, index: true },
     senderId: { type: String, required: true, index: true },
     receiverId: { type: String, required: true, index: true },
-    content: { type: String, required: true, maxlength: 10000 },
+    content: { type: String, required: true, maxlength: 50000 },
     createdAt: { type: Date, required: true },
     expiresAt: { type: Date, required: true, index: { expires: 0 } },
-    receiptToken: { type: String, required: true }
+    receiptToken: { type: String, required: true },
+    isEncrypted: { type: Boolean, default: false },
+    envelope: { type: Object, default: null },
+    chatId: { type: String, default: null },
+    senderDeviceId: { type: String, default: null },
+    recipientDeviceId: { type: String, default: null }
   },
   { versionKey: false, minimize: true }
 );
