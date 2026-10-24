@@ -298,6 +298,7 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
         setQrDisplayData(null);
         setTransferProgress(null);
         loadStats();
+        window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
       }).catch(err => {
         setStatusMsg({ type: 'error', text: err.message || 'Transfer cancelled' });
         setQrDisplayData(null);
@@ -364,6 +365,7 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
           text: `Encrypted backup saved! ${res.totalMessages} messages (${res.size})`
         });
         loadStats();
+        window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
         setShowBackupPasswordPrompt(false);
         setBackupPassword('');
       }
@@ -414,6 +416,7 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
           text: `Restored ${res.restoredMessages} messages to device!`
         });
         loadStats();
+        window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
         setShowRestorePasswordPrompt(false);
         setRestorePassword('');
         setPendingRestoreText(null);

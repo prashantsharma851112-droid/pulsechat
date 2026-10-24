@@ -211,8 +211,20 @@ const cleanupQueueTimer = setInterval(async () => {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const QueuedMessage = require('./models/QueuedMessage');
     const Message = require('./models/Message');
+    const MessageLedger = require('./models/MessageLedger');
 
     await QueuedMessage.deleteMany({ expiresAt: { $lte: now } });
+
+    // Transition undelivered items past their queue TTL to 'expired'
+    await MessageLedger.updateMany(
+      {
+        state: { $in: ['queued', 'delivering'] },
+        queueExpiresAt: { $lte: now }
+      },
+      { $set: { state: 'expired' } }
+    );
+    // Purge ledgers past their hard retention
+    await MessageLedger.deleteMany({ expiresAt: { $lte: now } });
     
     // Purge expired sent messages
     await Message.deleteMany({
@@ -1891,13 +1903,19 @@ io.on('connection', (socket) => {
       socket.userUsername
     ].filter(Boolean).map(String);
 
-    // Membership verification: reader must be part of chatId
-    if (typeof chatId === 'string' && chatId.includes('_') && !chatId.startsWith('group_')) {
-      const isParticipant = myKeys.some(m => chatId.startsWith(m + '_') || chatId.endsWith('_' + m) || chatId.split('_').includes(m));
-      if (!isParticipant) {
-        console.warn(`Rejected mark_read: caller ${callerId} is not a member of chat ${chatId}`);
-        return;
+    // Membership verification: reader must be authorized for chat
+    const { isParticipantInChat } = require('./utils/backupCrypto');
+    let isAuthorized = false;
+    if (typeof chatId === 'string') {
+      if (chatId.startsWith('group_')) {
+        isAuthorized = await isUserAuthorizedForChat(chatId, callerId);
+      } else {
+        isAuthorized = myKeys.some(m => isParticipantInChat(chatId, m)) || await isUserAuthorizedForChat(chatId, callerId);
       }
+    }
+    if (!isAuthorized) {
+      console.warn(`Rejected mark_read: caller ${callerId} is not a member of chat ${chatId}`);
+      return;
     }
 
     const readerId = callerId;
@@ -1917,10 +1935,23 @@ io.on('connection', (socket) => {
       const rRooms = await resolveUserRooms(readerId);
       rRooms.forEach(r => targetRooms.add(r));
     }
-    if (chatId && chatId.includes('_')) {
-      for (const pId of chatId.split('_')) {
-        const pRooms = await resolveUserRooms(pId);
-        pRooms.forEach(r => targetRooms.add(r));
+    if (chatId && chatId.includes('_') && !chatId.startsWith('group_')) {
+      for (const m of myKeys) {
+        if (chatId.startsWith(m + '_')) {
+          const rem = chatId.slice(m.length + 1);
+          if (rem) {
+            const pRooms = await resolveUserRooms(rem);
+            pRooms.forEach(r => targetRooms.add(r));
+          }
+          break;
+        } else if (chatId.endsWith('_' + m)) {
+          const rem = chatId.slice(0, -(m.length + 1));
+          if (rem) {
+            const pRooms = await resolveUserRooms(rem);
+            pRooms.forEach(r => targetRooms.add(r));
+          }
+          break;
+        }
       }
     }
 
@@ -1958,12 +1989,19 @@ io.on('connection', (socket) => {
       socket.userUsername
     ].filter(Boolean).map(String);
 
-    if (typeof chatId === 'string' && chatId.includes('_') && !chatId.startsWith('group_')) {
-      const isParticipant = myKeys.some(m => chatId.startsWith(m + '_') || chatId.endsWith('_' + m) || chatId.split('_').includes(m));
-      if (!isParticipant) {
-        console.warn(`Rejected mark_chat_read: caller ${callerId} is not a member of chat ${chatId}`);
-        return;
+    // Membership verification: reader must be authorized for chat
+    const { isParticipantInChat } = require('./utils/backupCrypto');
+    let isAuthorized = false;
+    if (typeof chatId === 'string') {
+      if (chatId.startsWith('group_')) {
+        isAuthorized = await isUserAuthorizedForChat(chatId, callerId);
+      } else {
+        isAuthorized = myKeys.some(m => isParticipantInChat(chatId, m)) || await isUserAuthorizedForChat(chatId, callerId);
       }
+    }
+    if (!isAuthorized) {
+      console.warn(`Rejected mark_chat_read: caller ${callerId} is not a member of chat ${chatId}`);
+      return;
     }
 
     const readerId = callerId;
@@ -1983,10 +2021,23 @@ io.on('connection', (socket) => {
       const rRooms = await resolveUserRooms(readerId);
       rRooms.forEach(r => targetRooms.add(r));
     }
-    if (chatId && chatId.includes('_')) {
-      for (const pId of chatId.split('_')) {
-        const pRooms = await resolveUserRooms(pId);
-        pRooms.forEach(r => targetRooms.add(r));
+    if (chatId && chatId.includes('_') && !chatId.startsWith('group_')) {
+      for (const m of myKeys) {
+        if (chatId.startsWith(m + '_')) {
+          const rem = chatId.slice(m.length + 1);
+          if (rem) {
+            const pRooms = await resolveUserRooms(rem);
+            pRooms.forEach(r => targetRooms.add(r));
+          }
+          break;
+        } else if (chatId.endsWith('_' + m)) {
+          const rem = chatId.slice(0, -(m.length + 1));
+          if (rem) {
+            const pRooms = await resolveUserRooms(rem);
+            pRooms.forEach(r => targetRooms.add(r));
+          }
+          break;
+        }
       }
     }
 
