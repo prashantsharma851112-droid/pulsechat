@@ -2616,17 +2616,45 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               );
               setMessages(decryptedInitial);
               setCachedMessages(chatId, decryptedInitial);
+
+              // Emit read receipt only for messages that were successfully decrypted
+              const decryptedUnread = decryptedInitial.filter(m =>
+                m && !myVariants.has(String(m.senderId)) && m.status !== 'read' && (m._decrypted || m.content)
+              );
+              if (decryptedUnread.length > 0 && socket && chatId) {
+                const canonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+                const isCurGhost = checkGhostModeActive();
+                socket.emit('mark_chat_read', {
+                  chatId,
+                  canonicalChatId: canonical,
+                  userId: user?.id,
+                  isGhost: isCurGhost,
+                  messageIds: decryptedUnread.map(m => m.id)
+                });
+              }
             }
           })();
         }
 
-        // Instant 0ms Read Receipt Emission over websocket
+        // Instant Read Receipt Emission over websocket ONLY for unread messages that are already decrypted and persisted
+        const unreadPartnerMsgs = resolvedInitial.filter(m =>
+          m && !myVariants.has(String(m.senderId)) && m.status !== 'read' && (!m.isEncrypted || m._decrypted || m.content)
+        );
+
         if (socket && chatId) {
           socket.emit('join_chat', chatId);
           const canonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
           if (canonical && canonical !== chatId) socket.emit('join_chat', canonical);
-          const isCurGhost = checkGhostModeActive();
-          socket.emit('mark_chat_read', { chatId, canonicalChatId: canonical, userId: user?.id, isGhost: isCurGhost });
+          if (unreadPartnerMsgs.length > 0) {
+            const isCurGhost = checkGhostModeActive();
+            socket.emit('mark_chat_read', {
+              chatId,
+              canonicalChatId: canonical,
+              userId: user?.id,
+              isGhost: isCurGhost,
+              messageIds: unreadPartnerMsgs.map(m => m.id)
+            });
+          }
         }
 
         // Pre-warm RAM buffer in background for instant zero-lag scrolling
@@ -2962,7 +2990,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       if (socket) {
         socket.emit('join_chat', chatId);
         const canonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-        socket.emit('mark_chat_read', { chatId, canonicalChatId: canonical, userId: user?.id, isGhost: isCurGhost });
+        const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
+        const unreadMsgs = (messagesRef.current || []).filter(m =>
+          m && !myVars.has(String(m.senderId)) && m.status !== 'read' && (!m.isEncrypted || m._decrypted || m.content)
+        );
+        if (unreadMsgs.length > 0) {
+          socket.emit('mark_chat_read', {
+            chatId,
+            canonicalChatId: canonical,
+            userId: user?.id,
+            isGhost: isCurGhost,
+            messageIds: unreadMsgs.map(m => m.id)
+          });
+        }
       }
     }
   }, [chatId, activeChat?.id, isGroup, token, socket, user?.id, isGhostMode]);
@@ -2973,7 +3013,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       if (typeof document !== 'undefined' && document.visibilityState === 'visible' && socket && chatId) {
         const canonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
         const isCurGhost = checkGhostModeActive();
-        socket.emit('mark_chat_read', { chatId, canonicalChatId: canonical, userId: user?.id, isGhost: isCurGhost });
+        const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
+        const unreadMsgs = (messagesRef.current || []).filter(m =>
+          m && !myVars.has(String(m.senderId)) && m.status !== 'read' && (!m.isEncrypted || m._decrypted || m.content)
+        );
+        if (unreadMsgs.length > 0) {
+          socket.emit('mark_chat_read', {
+            chatId,
+            canonicalChatId: canonical,
+            userId: user?.id,
+            isGhost: isCurGhost,
+            messageIds: unreadMsgs.map(m => m.id)
+          });
+        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
@@ -3380,10 +3432,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             newScrolledMessagesCountRef.current += 1;
             setNewScrolledMessagesCount(newScrolledMessagesCountRef.current);
           }
-          if (!isGhostModeRef.current) {
-            socket.emit('mark_read', { messageId: msg.id, chatId, senderId: msg.senderId });
-          } else {
-            socket.emit('message_delivered', { messageId: msg.id, chatId, senderId: msg.senderId });
+          // Invariant: Do not acknowledge read status or delivery if encrypted message is not yet decrypted
+          const isDecrypted = !msg.isEncrypted || msg._decrypted || Boolean(msg.content);
+          if (isDecrypted) {
+            saveMessagesToLocalDb(chatId, [msg]).catch(() => {});
+            if (!isGhostModeRef.current) {
+              socket.emit('mark_read', { messageId: msg.id, chatId, senderId: msg.senderId });
+            } else {
+              socket.emit('message_delivered', { messageId: msg.id, chatId, senderId: msg.senderId });
+            }
           }
         }
       }
@@ -3543,7 +3600,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     };
 
-    const handleChatReadUpdate = ({ chatId: targetChatId, canonicalChatId, userId, readerId, otherId }) => {
+    const handleChatReadUpdate = ({ chatId: targetChatId, canonicalChatId, userId, readerId, otherId, messageIds }) => {
       const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
       const eventReader = readerId || userId;
       if (eventReader && myVars.has(String(eventReader))) return;
@@ -3572,8 +3629,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           let changed = false;
           const next = prev.map(m => {
             if (myVars.has(String(m.senderId)) && m.status !== 'read') {
-              changed = true;
-              return { ...m, status: 'read' };
+              // Invariant: Un-delivered ('sent' / 'pending') messages cannot transition to 'read' unless explicitly confirmed by ID
+              const isExplicitId = Array.isArray(messageIds) && messageIds.includes(m.id);
+              if (m.status === 'delivered' || isExplicitId) {
+                changed = true;
+                return { ...m, status: 'read' };
+              }
             }
             return m;
           });

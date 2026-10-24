@@ -6,6 +6,7 @@ const db = require('../database/db');
 const { createReceiptToken, verifyReceiptToken } = require('./receiptToken');
 
 const QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const ENCRYPTED_QUEUE_TTL_MS = 24 * 60 * 60 * 1000; // Strict 24-hour maximum queue lifetime for encrypted payloads
 const LEDGER_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_MESSAGE_LENGTH = 10_000;
 const MAX_SYNC_BATCH = 300;
@@ -53,12 +54,16 @@ function validateOutgoing(payload) {
 function makeWireMessage(row) {
   return {
     messageId: row.messageId,
+    id: row.messageId,
+    chatId: row.chatId,
     senderId: row.senderId,
     receiverId: row.receiverId,
     content: row.content,
     createdAt: new Date(row.createdAt).toISOString(),
     expiresAt: new Date(row.expiresAt).toISOString(),
-    receiptToken: row.receiptToken
+    receiptToken: row.receiptToken,
+    isEncrypted: Boolean(row.isEncrypted),
+    envelope: row.envelope || null
   };
 }
 
@@ -291,7 +296,7 @@ function registerChatSocket(io, { receiptSecret }) {
       try {
         await withMessageLock(messageId, async () => {
           const now = new Date();
-          const queueExpiresAt = new Date(now.getTime() + QUEUE_TTL_MS);
+          const queueExpiresAt = new Date(now.getTime() + (payload.isEncrypted ? ENCRYPTED_QUEUE_TTL_MS : QUEUE_TTL_MS));
           const ledgerExpiresAt = new Date(now.getTime() + LEDGER_TTL_MS);
           const receiptToken = createReceiptToken({ messageId, senderId, receiverId, expiresAt: queueExpiresAt }, receiptSecret);
           let ledger = await MessageLedger.findOne({ messageId });
@@ -352,7 +357,12 @@ function registerChatSocket(io, { receiptSecret }) {
                 messageId,
                 senderId,
                 receiverId,
-                content,
+                content: payload.isEncrypted ? '' : (content || ''),
+                isEncrypted: Boolean(payload.isEncrypted),
+                envelope: payload.envelope || null,
+                chatId: payload.chatId || null,
+                senderDeviceId: payload.senderDeviceId || null,
+                recipientDeviceId: payload.recipientDeviceId || null,
                 createdAt: ledger.createdAt ?? now,
                 expiresAt: ledger.queueExpiresAt ?? queueExpiresAt,
                 receiptToken

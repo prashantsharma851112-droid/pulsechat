@@ -26,7 +26,8 @@ const testFiles = [
   'test_e2ee_identity_manager.js',
   'test_sender_optimistic_rendering_and_e2ee.js',
   'test_receiver_message_visibility_and_decryption.js',
-  'test_history_reconciliation_and_cross_device_sync.js'
+  'test_history_reconciliation_and_cross_device_sync.js',
+  'test_final_coordinated_invariants.js'
 ];
 
 let failedSuites = 0;

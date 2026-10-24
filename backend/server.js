@@ -1975,7 +1975,7 @@ io.on('connection', (socket) => {
   });
 
   // Read Receipt for entire Chat (Blue Double Tick) - Pure Stateless Event-Forwarding
-  socket.on('mark_chat_read', async ({ chatId, isGhost }) => {
+  socket.on('mark_chat_read', async ({ chatId, isGhost, messageIds }) => {
     const callerId = socket.authenticatedUserId;
     if (!callerId) {
       console.warn('Rejected mark_chat_read: unauthenticated socket', socket.id);
@@ -2042,12 +2042,12 @@ io.on('connection', (socket) => {
     }
 
     if (isGhostMode) {
-      const delivPayload = { chatId, canonicalChatId, status: 'delivered', userId: readerId };
+      const delivPayload = { chatId, canonicalChatId, status: 'delivered', userId: readerId, messageIds: Array.isArray(messageIds) ? messageIds : null };
       targetRooms.forEach(r => io.to(r).emit('messages_delivered', delivPayload));
       return;
     }
 
-    const chatReadPayload = { chatId, canonicalChatId, userId: readerId, readerId, otherId, status: 'read' };
+    const chatReadPayload = { chatId, canonicalChatId, userId: readerId, readerId, otherId, status: 'read', messageIds: Array.isArray(messageIds) ? messageIds : null };
     targetRooms.forEach(r => io.to(r).emit('chat_read_update', chatReadPayload));
   });
 

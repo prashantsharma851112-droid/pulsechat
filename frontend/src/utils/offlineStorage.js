@@ -646,7 +646,13 @@ export function markAllCachedMessagesRead(chatId, myUserId) {
     if (!Array.isArray(msgs) || msgs.length === 0) continue;
     let changed = false;
     const updated = msgs.map(m => {
-      if (myVars.has(String(m.senderId)) && m.status !== 'read') {
+      const isSentByMe = myVars.has(String(m.senderId));
+      // Invariant: Un-delivered sent messages (status: 'sent'/'pending') cannot transition to 'read'
+      if (isSentByMe && m.status === 'delivered') {
+        changed = true;
+        return { ...m, status: 'read' };
+      }
+      if (!isSentByMe && m.status !== 'read') {
         changed = true;
         return { ...m, status: 'read' };
       }

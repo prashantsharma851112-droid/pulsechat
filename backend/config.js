@@ -30,7 +30,7 @@ module.exports = {
   JWT_SECRET: jwtSecret.trim(),
   RECEIPT_SECRET: receiptSecret.trim(),
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
-  MONGO_URI: process.env.MONGO_URI,
+  MONGO_URI: process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/pulsechat',
   REDIS_URL: process.env.REDIS_URL || null,
   VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || null,
   VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY || null,
