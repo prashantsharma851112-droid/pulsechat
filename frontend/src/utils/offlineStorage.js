@@ -416,8 +416,6 @@ export function clearUnreadCount(userId, targetId) {
     setCachedRecentChats(userId, newRecent);
   }
 }
-  }
-}
 
 // cached groups
 export function getCachedGroups(userId) {
