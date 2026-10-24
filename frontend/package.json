@@ -9,9 +9,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "check:globals": "node check_globals.cjs",
+    "test:tar": "node test-tar-extraction.cjs",
     "cap:add": "npx cap add android",
     "cap:copy": "npx cap copy android",
-    "cap:open": "npx cap open android"
+    "cap:open": "npx cap open android",
+    "postinstall": "node patch-tar-compat.cjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",
@@ -28,7 +30,12 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^6.0.0",
-    "@vitejs/plugin-react": "^4.3.0",
-    "vite": "^5.2.11"
+    "@vitejs/plugin-react": "^4.7.0",
+    "vite": "^6.4.5"
+  },
+  "overrides": {
+    "@capacitor/cli": {
+      "tar": "^7.5.22"
+    }
   }
 }
