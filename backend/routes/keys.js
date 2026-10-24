@@ -224,7 +224,7 @@ function containsPrivateKeyMaterial(obj, seen = new WeakSet(), depth = 0) {
 async function findUserByIdSafe(userId) {
   if (!userId || !User) return null;
   const isObjId = mongoose.Types.ObjectId.isValid(userId);
-  const conditions = [{ id: String(userId) }];
+  const conditions = [{ id: String(userId) }, { username: String(userId) }];
   if (isObjId) conditions.push({ _id: userId });
   return User.findOne({ $or: conditions })
     .select('id _id username blockedUsers friends isAdmin')
@@ -245,8 +245,8 @@ async function checkKeyExchangeAuthorization(senderId, recipientId) {
   const rIdStr = String(recipientUser.id || recipientId);
   const sIdStr = String(senderUser.id || senderId);
 
-  const senderBlocked = Boolean(senderUser.blockedUsers && senderUser.blockedUsers.includes(rIdStr));
-  const recipientBlocked = Boolean(recipientUser.blockedUsers && recipientUser.blockedUsers.includes(sIdStr));
+  const senderBlocked = Boolean(senderUser.blockedUsers && senderUser.blockedUsers.map(String).includes(rIdStr));
+  const recipientBlocked = Boolean(recipientUser.blockedUsers && recipientUser.blockedUsers.map(String).includes(sIdStr));
   if (senderBlocked || recipientBlocked) {
     return {
       authorized: false,
@@ -256,11 +256,11 @@ async function checkKeyExchangeAuthorization(senderId, recipientId) {
     };
   }
 
-  const sIdentifiers = [senderUser.id, senderUser._id?.toString(), senderUser.username, senderId].filter(Boolean);
-  const rIdentifiers = [recipientUser.id, recipientUser._id?.toString(), recipientUser.username, recipientId].filter(Boolean);
+  const sIdentifiers = [senderUser.id, senderUser._id?.toString(), senderUser.username, senderId].filter(Boolean).map(String);
+  const rIdentifiers = [recipientUser.id, recipientUser._id?.toString(), recipientUser.username, recipientId].filter(Boolean).map(String);
 
-  const isFriend = (senderUser.friends && senderUser.friends.some((f) => rIdentifiers.includes(f))) ||
-                   (recipientUser.friends && recipientUser.friends.some((f) => sIdentifiers.includes(f)));
+  const isFriend = (senderUser.friends && senderUser.friends.some((f) => rIdentifiers.includes(String(f)))) ||
+                   (recipientUser.friends && recipientUser.friends.some((f) => sIdentifiers.includes(String(f))));
   const isAdmin = Boolean(senderUser.isAdmin || recipientUser.isAdmin);
 
   if (isFriend || isAdmin) {
@@ -272,7 +272,9 @@ async function checkKeyExchangeAuthorization(senderId, recipientId) {
     const hasLedger = await MessageLedger.findOne({
       $or: [
         { senderId, receiverId: rIdStr },
-        { senderId: rIdStr, receiverId: senderId }
+        { senderId: rIdStr, receiverId: senderId },
+        { senderId: { $in: sIdentifiers }, receiverId: { $in: rIdentifiers } },
+        { senderId: { $in: rIdentifiers }, receiverId: { $in: sIdentifiers } }
       ]
     }).lean();
     if (hasLedger) {

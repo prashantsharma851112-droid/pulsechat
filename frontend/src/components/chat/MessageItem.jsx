@@ -2315,7 +2315,9 @@ function MessageItem({
                           const hasPartnerReaction = message.reactions && Object.values(message.reactions).some(uList => Array.isArray(uList) && uList.some(u => String(u) !== String(currentUser?.id) && String(u) !== String(currentUser?._id)));
                           const curStatus = hasPartnerReaction ? 'read' : (message.status || 'sent');
 
-                          if (curStatus === 'pending') {
+                          if (curStatus === 'failed') {
+                            return <XCircle size={12} color="#ef4444" title={message.error === 'NO_E2EE_KEY' ? 'Waiting for recipient E2EE key registration' : 'Failed to send'} />;
+                          } else if (curStatus === 'pending') {
                             return <Clock size={11} color="#e2e8f0" />;
                           } else if (curStatus === 'read' || curStatus === 'seen') {
                             return <CheckCheck size={13} color="#38bdf8" />;
@@ -2417,7 +2419,9 @@ function MessageItem({
                           const hasPartnerReaction = message.reactions && Object.values(message.reactions).some(uList => Array.isArray(uList) && uList.some(u => String(u) !== String(currentUser?.id) && String(u) !== String(currentUser?._id)));
                           const curStatus = hasPartnerReaction ? 'read' : (message.status || 'sent');
 
-                          if (curStatus === 'pending') {
+                          if (curStatus === 'failed') {
+                            return <XCircle size={12} color="#ef4444" title={message.error === 'NO_E2EE_KEY' ? 'Waiting for recipient E2EE key registration' : 'Failed to send'} />;
+                          } else if (curStatus === 'pending') {
                             return <Clock size={11} color="#e2e8f0" />;
                           } else if (curStatus === 'read' || curStatus === 'seen') {
                             return <CheckCheck size={13} color="#38bdf8" />;
@@ -2904,7 +2908,9 @@ function MessageItem({
                   const hasPartnerReaction = message.reactions && Object.values(message.reactions).some(uList => Array.isArray(uList) && uList.some(u => String(u) !== String(currentUser?.id) && String(u) !== String(currentUser?._id)));
                   const curStatus = hasPartnerReaction ? 'read' : (message.status || 'sent');
 
-                  if (curStatus === 'pending') {
+                  if (curStatus === 'failed') {
+                    return <XCircle size={13} color="#ef4444" title={message.error === 'NO_E2EE_KEY' ? 'Waiting for recipient E2EE key registration' : 'Failed to send'} />;
+                  } else if (curStatus === 'pending') {
                     return <Clock size={12} color="#9ca3af" title="Waiting for network / Pending" />;
                   } else if (curStatus === 'read' || curStatus === 'seen') {
                     return <CheckCheck size={14} color="#53bdeb" title="Read" />;

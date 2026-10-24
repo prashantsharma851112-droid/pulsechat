@@ -708,8 +708,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   // Fetch fresh profile on mount to guarantee VIP/Pro aura & badge are always up-to-date
   useEffect(() => {
-    if (!isGroup && activeChat?.id && token) {
-      fetch(`${BACKEND_URL}/api/users/${activeChat.id}`, {
+    const targetUserId = activeChat?.id || activeChat?._id || activeChat?.username || '';
+    if (!isGroup && targetUserId && token) {
+      fetch(`${BACKEND_URL}/api/users/${targetUserId}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -2626,7 +2627,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             const deletedForMe = getDeletedForMeIds(user?.id);
             const rawServerMsgs = data.filter(m => !deletedForMe.has(String(m.id)) && !deletedForMe.has(String(m._id)));
 
-            // E2EE: Decrypt any incoming encrypted messages
+            // E2EE: Decrypt any incoming encrypted messages (never attempt to decrypt own sent messages with local private key)
             let identity = myIdentityRef.current;
             if (!identity && user?.id && token) {
               try {
@@ -2634,9 +2635,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 myIdentityRef.current = identity;
               } catch {}
             }
+            const myIdSet = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
             const serverMsgs = await Promise.all(
               rawServerMsgs.map(async m => {
-                if (m && m.isEncrypted && m.envelope && identity?.keyPair?.privateKey) {
+                const isSentByMe = m?.senderId && myIdSet.has(String(m.senderId));
+                if (m && m.isEncrypted && m.envelope && identity?.keyPair?.privateKey && !isSentByMe) {
                   return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
                 }
                 return m;
@@ -2652,7 +2655,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 if (m.clientTempId) deltaMap.delete(m.clientTempId);
                 if (m.tempId) deltaMap.delete(m.tempId);
                 const existing = deltaMap.get(m.id) || (m.clientTempId && deltaMap.get(m.clientTempId));
-                const finalContent = m.content || existing?.content || '';
+                const finalContent = existing?.content || m.content || '';
                 deltaMap.set(m.id, { ...m, content: finalContent });
               });
               const deltaMerged = Array.from(deltaMap.values())
@@ -2701,7 +2704,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   messageMap.delete(m.tempId);
                 }
                 const existing = messageMap.get(m.id) || (m.clientTempId && messageMap.get(m.clientTempId));
-                const finalContent = m.content || existing?.content || '';
+                const finalContent = existing?.content || m.content || '';
                 messageMap.set(m.id, { ...m, content: finalContent });
               }
             });
@@ -3193,7 +3196,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     const handleNewMessage = async (rawMsg) => {
       let msg = rawMsg;
-      if (msg && msg.isEncrypted && msg.envelope) {
+      const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
+      const isFromMe = msg?.senderId && myVars.has(String(msg.senderId));
+
+      // Strictly decrypt incoming partner messages; never attempt to decrypt own sent messages (already have local plaintext)
+      if (msg && msg.isEncrypted && msg.envelope && !isFromMe) {
         let identity = myIdentityRef.current;
         if (!identity && user?.id && token) {
           try {
@@ -3245,9 +3252,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           if (matchIdx !== -1) {
             updated = [...prev];
             const existing = updated[matchIdx];
-            const finalContent = sanitizedMsg.content || existing?.content || '';
+            // Sender preserves their local plaintext; recipient uses decrypted content
+            const finalContent = existing?.content || sanitizedMsg.content || '';
             updated[matchIdx] = { ...sanitizedMsg, content: finalContent };
           } else {
+            // For own messages not yet in state, check cached storage before falling back to wire content
+            if (isFromMe && !sanitizedMsg.content) {
+              const cached = getCachedMessages(chatId, user?.id) || [];
+              const foundCached = cached.find(c => c.id === sanitizedMsg.id || (sanitizedMsg.clientTempId && c.clientTempId === sanitizedMsg.clientTempId));
+              if (foundCached?.content) {
+                sanitizedMsg.content = foundCached.content;
+              }
+            }
             updated = [...prev, sanitizedMsg];
           }
           setCachedMessages(chatId, updated);
@@ -4054,9 +4070,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               myIdentityRef.current = identity;
             } catch {}
           }
+          const myIdSet = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
           const decryptedData = await Promise.all(
             data.map(async m => {
-              if (m?.isEncrypted && m?.envelope && identity?.keyPair?.privateKey) {
+              const isSentByMe = m?.senderId && myIdSet.has(String(m.senderId));
+              if (m?.isEncrypted && m?.envelope && identity?.keyPair?.privateKey && !isSentByMe) {
                 return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
               }
               return m;
@@ -4143,6 +4161,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     const isOnlineNow = isDeviceOnline() && socket?.connected;
+    const targetPartnerId = String(activeChat?.id || activeChat?._id || activeChat?.userId || activeChat?.username || '').trim();
 
     const replyPayload = replyTo ? {
       id: replyTo.id,
@@ -4152,40 +4171,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       senderName: replyTo.senderName || replyTo.senderId
     } : null;
 
-    let isEncrypted = false;
-    let envelope = null;
-
-    // Strict E2EE for 1-on-1 direct messages: Fail closed if keys not available, zero plaintext fallback!
-    if (!isGroup && activeChat?.id) {
-      let identity = myIdentityRef.current;
-      if (!identity && user?.id && token) {
-        try {
-          identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
-          myIdentityRef.current = identity;
-        } catch {}
-      }
-      const peerDevice = await fetchPeerDevicePublicKey(activeChat.id, token, BACKEND_URL);
-      if (!peerDevice || !peerDevice.publicKeyJwk) {
-        setActionToast('🔒 Waiting for recipient E2EE key registration...');
-        setTimeout(() => setActionToast(''), 3000);
-        return;
-      }
-      try {
-        envelope = await encryptMessageEnvelope(
-          { content: msgContent, type: 'text', replyTo: replyPayload },
-          peerDevice.publicKeyJwk,
-          identity?.deviceId,
-          peerDevice.deviceId
-        );
-        isEncrypted = true;
-      } catch (err) {
-        console.error('E2EE message encryption failed:', err);
-        setActionToast('🔒 E2EE encryption failed. Message not sent.');
-        setTimeout(() => setActionToast(''), 3000);
-        return;
-      }
-    }
-
+    // 1. Optimistic UI update: message appears INSTANTLY in chat without awaiting network!
     const pendingMsg = {
       ...getSenderPayload(),
       id: tempId,
@@ -4193,7 +4179,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       clientTempId: tempId,
       chatId,
       senderId: user.id,
-      receiverId: isGroup ? '' : activeChat.id,
+      receiverId: isGroup ? '' : targetPartnerId,
       isGroup,
       content: msgContent,
       type: 'text',
@@ -4201,17 +4187,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       timestamp: new Date().toISOString(),
       reactions: {},
       viewedBy: [],
-      isEncrypted,
-      envelope,
+      isEncrypted: false,
+      envelope: null,
       replyTo: replyPayload
     };
 
-    // 1. Optimistic UI update: message appears instantly in chat!
     setMessages(prev => [...prev, pendingMsg]);
     appendCachedMessage(chatId, pendingMsg);
 
     // 2. Update recent chats snippet in localStorage & dispatch event for sidebar
-    // Pass activeChat so newly opened contacts (offline) get added to recentChats
     updateRecentChatSnippet(user.id, chatId, pendingMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
     window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
 
@@ -4223,12 +4207,65 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       return;
     }
 
+    let isEncrypted = false;
+    let envelope = null;
+
+    // Strict E2EE for 1-on-1 direct messages: Fail closed if keys not available, zero plaintext fallback!
+    if (!isGroup && targetPartnerId && !isAnonymousBot) {
+      let identity = myIdentityRef.current;
+      if (!identity && user?.id && token) {
+        try {
+          identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
+          myIdentityRef.current = identity;
+        } catch (e) {
+          console.warn('Failed to ensure device identity:', e);
+        }
+      }
+
+      let peerDevice = null;
+      try {
+        peerDevice = await fetchPeerDevicePublicKey(targetPartnerId, token, BACKEND_URL);
+      } catch (e) {
+        console.warn('Failed to fetch peer device key:', e);
+      }
+
+      if (!peerDevice || !peerDevice.publicKeyJwk) {
+        // Fail closed for wire: do NOT send plaintext to server!
+        // Mark locally as failed so user sees clear feedback and can retry
+        setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, status: 'failed', error: 'NO_E2EE_KEY' } : m));
+        updateCachedMessageStatus(chatId, tempId, 'failed');
+        setActionToast('🔒 Waiting for recipient E2EE key registration...');
+        setTimeout(() => setActionToast(''), 3000);
+        return;
+      }
+
+      try {
+        envelope = await encryptMessageEnvelope(
+          { content: msgContent, type: 'text', replyTo: replyPayload },
+          peerDevice.publicKeyJwk,
+          identity?.deviceId,
+          peerDevice.deviceId
+        );
+        isEncrypted = true;
+      } catch (err) {
+        console.error('E2EE message encryption failed:', err);
+        setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, status: 'failed', error: 'ENCRYPTION_FAILED' } : m));
+        updateCachedMessageStatus(chatId, tempId, 'failed');
+        setActionToast('🔒 E2EE encryption failed. Message not sent.');
+        setTimeout(() => setActionToast(''), 3000);
+        return;
+      }
+
+      // Update local message in state with encryption metadata
+      setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, isEncrypted: true, envelope } : m));
+    }
+
     // 4. Online: emit over socket (Zero plaintext to server when isEncrypted is true)
     socket.emit('send_message', {
       ...getSenderPayload(),
       chatId,
       senderId: user.id,
-      receiverId: isGroup ? '' : activeChat.id,
+      receiverId: isGroup ? '' : targetPartnerId,
       isGroup,
       content: isEncrypted ? '' : msgContent,
       type: 'text',
@@ -4240,7 +4277,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         : pendingMsg.replyTo
     });
 
-    setReplyTo(null); // Reply clear karo bhejne ke baad
+    setReplyTo(null);
     playSound('sent');
   };
 
@@ -4250,6 +4287,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const trimmed = textContent.trim();
     const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     const isOnlineNow = isDeviceOnline() && socket?.connected;
+    const targetPartnerId = String(activeChat?.id || activeChat?._id || activeChat?.userId || activeChat?.username || '').trim();
 
     // Optimistically update trial flag and sparks in user state
     if (!user?.hasUsed3DTrial) {
@@ -4271,39 +4309,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       senderName: replyTo.senderName || replyTo.senderId
     } : null;
 
-    let isEncrypted = false;
-    let envelope = null;
-
-    if (!isGroup && activeChat?.id) {
-      let identity = myIdentityRef.current;
-      if (!identity && user?.id && token) {
-        try {
-          identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
-          myIdentityRef.current = identity;
-        } catch {}
-      }
-      const peerDevice = await fetchPeerDevicePublicKey(activeChat.id, token, BACKEND_URL);
-      if (!peerDevice || !peerDevice.publicKeyJwk) {
-        setActionToast('🔒 Waiting for recipient E2EE key registration...');
-        setTimeout(() => setActionToast(''), 3000);
-        return;
-      }
-      try {
-        envelope = await encryptMessageEnvelope(
-          { content: trimmed, type: '3d_text', textStyle: styleType || 'cyber-neon', replyTo: replyPayload },
-          peerDevice.publicKeyJwk,
-          identity?.deviceId,
-          peerDevice.deviceId
-        );
-        isEncrypted = true;
-      } catch (err) {
-        console.error('E2EE 3D text encryption failed:', err);
-        setActionToast('🔒 E2EE encryption failed. Message not sent.');
-        setTimeout(() => setActionToast(''), 3000);
-        return;
-      }
-    }
-
+    // 1. Optimistic UI update: message appears INSTANTLY in chat!
     const pendingMsg = {
       ...getSenderPayload(),
       id: tempId,
@@ -4311,7 +4317,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       clientTempId: tempId,
       chatId,
       senderId: user.id,
-      receiverId: isGroup ? '' : activeChat.id,
+      receiverId: isGroup ? '' : targetPartnerId,
       isGroup,
       content: trimmed,
       type: '3d_text',
@@ -4320,8 +4326,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       timestamp: new Date().toISOString(),
       reactions: {},
       viewedBy: [],
-      isEncrypted,
-      envelope,
+      isEncrypted: false,
+      envelope: null,
       replyTo: replyPayload
     };
 
@@ -4338,11 +4344,60 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       return;
     }
 
+    let isEncrypted = false;
+    let envelope = null;
+
+    if (!isGroup && targetPartnerId && !isAnonymousBot) {
+      let identity = myIdentityRef.current;
+      if (!identity && user?.id && token) {
+        try {
+          identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
+          myIdentityRef.current = identity;
+        } catch (e) {
+          console.warn('Failed to ensure device identity:', e);
+        }
+      }
+
+      let peerDevice = null;
+      try {
+        peerDevice = await fetchPeerDevicePublicKey(targetPartnerId, token, BACKEND_URL);
+      } catch (e) {
+        console.warn('Failed to fetch peer device key:', e);
+      }
+
+      if (!peerDevice || !peerDevice.publicKeyJwk) {
+        setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, status: 'failed', error: 'NO_E2EE_KEY' } : m));
+        updateCachedMessageStatus(chatId, tempId, 'failed');
+        setActionToast('🔒 Waiting for recipient E2EE key registration...');
+        setTimeout(() => setActionToast(''), 3000);
+        return;
+      }
+
+      try {
+        envelope = await encryptMessageEnvelope(
+          { content: trimmed, type: '3d_text', textStyle: styleType || 'cyber-neon', replyTo: replyPayload },
+          peerDevice.publicKeyJwk,
+          identity?.deviceId,
+          peerDevice.deviceId
+        );
+        isEncrypted = true;
+      } catch (err) {
+        console.error('E2EE 3D text encryption failed:', err);
+        setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, status: 'failed', error: 'ENCRYPTION_FAILED' } : m));
+        updateCachedMessageStatus(chatId, tempId, 'failed');
+        setActionToast('🔒 E2EE encryption failed. Message not sent.');
+        setTimeout(() => setActionToast(''), 3000);
+        return;
+      }
+
+      setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, isEncrypted: true, envelope } : m));
+    }
+
     socket.emit('send_message', {
       ...getSenderPayload(),
       chatId,
       senderId: user.id,
-      receiverId: isGroup ? '' : activeChat.id,
+      receiverId: isGroup ? '' : targetPartnerId,
       isGroup,
       content: isEncrypted ? '' : trimmed,
       type: '3d_text',
@@ -4492,8 +4547,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     let mediaIv = null;
     let isEncrypted = false;
     let envelope = null;
+    const targetPartnerId = String(activeChat?.id || activeChat?._id || activeChat?.userId || activeChat?.username || '').trim();
 
-    if (!isGroup && activeChat?.id) {
+    if (!isGroup && targetPartnerId && !isAnonymousBot) {
       try {
         const { uploadEncryptedMediaDirect } = await import('../../utils/mediaUpload');
         const encRes = await uploadEncryptedMediaDirect(audioUrl, 'pulsechat_voice', token, false);
@@ -4508,8 +4564,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             myIdentityRef.current = identity;
           } catch {}
         }
-        const peerDevice = await fetchPeerDevicePublicKey(activeChat.id, token, BACKEND_URL);
+        const peerDevice = await fetchPeerDevicePublicKey(targetPartnerId, token, BACKEND_URL);
         if (!peerDevice || !peerDevice.publicKeyJwk) {
+          setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, status: 'failed', error: 'NO_E2EE_KEY' } : m));
+          updateCachedMessageStatus(chatId, tempId, 'failed');
           setActionToast('🔒 Waiting for recipient E2EE key registration...');
           setTimeout(() => setActionToast(''), 3000);
           return;
@@ -4530,6 +4588,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         isEncrypted = true;
       } catch (e) {
         console.warn('Voice encryption/upload error:', e);
+        setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, status: 'failed', error: 'ENCRYPTION_FAILED' } : m));
+        updateCachedMessageStatus(chatId, tempId, 'failed');
+        setActionToast('🔒 Voice encryption failed. Message not sent.');
+        setTimeout(() => setActionToast(''), 3000);
+        return;
       }
     } else if (audioUrl && audioUrl.startsWith('data:')) {
       try {
@@ -4544,7 +4607,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       clientTempId: tempId,
       chatId,
       senderId: user.id,
-      receiverId: isGroup ? '' : activeChat.id,
+      receiverId: isGroup ? '' : targetPartnerId,
       isGroup,
       audioUrl: finalAudioUrl,
       type: 'voice',
@@ -5161,10 +5224,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       let mediaIv = null;
       let isEncrypted = false;
       let envelope = null;
+      const targetPartnerId = String(activeChat?.id || activeChat?._id || activeChat?.userId || activeChat?.username || '').trim();
 
       try {
         const payloadToUpload = rawFile || mediaUrl;
-        if (!isGroup && activeChat?.id) {
+        if (!isGroup && targetPartnerId && !isAnonymousBot) {
           // Encrypt attachment client-side with AES-256-GCM before uploading to CDN
           const { uploadEncryptedMediaDirect } = await import('../../utils/mediaUpload');
           const encRes = await uploadEncryptedMediaDirect(payloadToUpload, 'pulsechat_media', token, msgType === 'video');
@@ -5180,8 +5244,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               myIdentityRef.current = identity;
             } catch {}
           }
-          const peerDevice = await fetchPeerDevicePublicKey(activeChat.id, token, BACKEND_URL);
+          const peerDevice = await fetchPeerDevicePublicKey(targetPartnerId, token, BACKEND_URL);
           if (!peerDevice || !peerDevice.publicKeyJwk) {
+            setMessages(prev => prev.map(m => m.id === tempMediaId ? { ...m, status: 'failed', error: 'NO_E2EE_KEY', isUploading: false } : m));
+            updateCachedMessageStatus(chatId, tempMediaId, 'failed');
             setActionToast('🔒 Waiting for recipient E2EE key registration...');
             setTimeout(() => setActionToast(''), 3000);
             return;
@@ -5212,6 +5278,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         }
       } catch (e) {
         console.warn('Direct media upload / encryption error:', e);
+        setMessages(prev => prev.map(m => m.id === tempMediaId ? { ...m, status: 'failed', error: 'UPLOAD_FAILED', isUploading: false } : m));
+        updateCachedMessageStatus(chatId, tempMediaId, 'failed');
+        setActionToast('🔒 Media send failed.');
+        setTimeout(() => setActionToast(''), 3000);
+        return;
       }
 
       // Update local optimistic message with finalized CDN URL
@@ -5231,7 +5302,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         clientTempId: tempMediaId,
         chatId,
         senderId: user.id,
-        receiverId: isGroup ? '' : activeChat.id,
+        receiverId: isGroup ? '' : targetPartnerId,
         isGroup,
         mediaUrl: finalMediaUrl,
         type: msgType,

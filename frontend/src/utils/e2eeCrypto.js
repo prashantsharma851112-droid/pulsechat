@@ -541,11 +541,12 @@ export async function fetchPeerDevicePublicKey(peerId, token, apiBaseUrl = '') {
       const devices = data.devices || [];
       for (const dev of devices) {
         if (!dev || dev.revoked || dev.isRevoked) continue;
+        const keyObj = dev.keys || dev.publicKey;
         let pubJwk = null;
-        if (dev.keys && dev.keys.kty === 'EC') {
-          pubJwk = dev.keys;
-        } else if (dev.keys && typeof dev.keys === 'object') {
-          for (const [k, v] of Object.entries(dev.keys)) {
+        if (keyObj && keyObj.kty === 'EC') {
+          pubJwk = keyObj;
+        } else if (keyObj && typeof keyObj === 'object') {
+          for (const [k, v] of Object.entries(keyObj)) {
             if (v && typeof v === 'object' && v.kty === 'EC') {
               pubJwk = v;
               break;
@@ -604,6 +605,9 @@ export async function decryptMessageIfNeeded(msg, privateKey) {
     }
   } catch (err) {
     console.warn('Failed to decrypt message envelope:', err.message);
+    if (msg.content && typeof msg.content === 'string' && msg.content.trim() !== '' && !msg._decryptionFailed) {
+      return msg;
+    }
     return {
       ...msg,
       content: '🔒 Encrypted message (cannot decrypt on this device)',
