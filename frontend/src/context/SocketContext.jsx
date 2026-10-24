@@ -328,6 +328,8 @@ export function SocketProvider({ children }) {
           window.dispatchEvent(new CustomEvent('pulsechat_message_received', { detail: msgToCommit }));
         } catch (_) {}
 
+        setLastNotification({ ...msgToCommit, receivedAt: Date.now() });
+
         triggerPushIfBackground(msgToCommit);
 
         // 2. Emit delivery ACK ONLY AFTER local storage commit succeeds
@@ -344,8 +346,6 @@ export function SocketProvider({ children }) {
 
       // Fires for every incoming notification — save locally first and send delivery ack
       newSocket.on('message_notification', (msg) => {
-        const notification = { ...msg, receivedAt: Date.now() };
-        setLastNotification(notification);
         handleIncomingDurableMessage(msg);
       });
 

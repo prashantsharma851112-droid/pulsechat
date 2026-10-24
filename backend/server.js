@@ -1320,7 +1320,16 @@ io.on('connection', (socket) => {
           : (replyTo || null),
         storyReply: Boolean(messageData.isEncrypted) ? null : (storyReply || messageData.storyReply || null),
         isVanish: Boolean(messageData.isVanish),
-        expiresAt: expiresAt || new Date(Date.now() + (messageData.isEncrypted ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000)),
+        expiresAt: (() => {
+          if (!isGroup) {
+            const max24h = new Date(Date.now() + 24 * 60 * 60 * 1000);
+            if (expiresAt && new Date(expiresAt) < max24h) {
+              return new Date(expiresAt);
+            }
+            return max24h;
+          }
+          return expiresAt || new Date(Date.now() + (messageData.isEncrypted ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000));
+        })(),
         isEncrypted: Boolean(messageData.isEncrypted),
         envelope: messageData.envelope || null
       };

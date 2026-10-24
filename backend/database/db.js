@@ -280,7 +280,12 @@ module.exports = {
     };
 
     if (!isGhostMode) {
-      updateDoc.$set = { status: 'read' };
+      // Invariant: Sent messages do not jump directly to read without confirmed delivery
+      await Message.updateMany(
+        { ...filter, status: 'delivered' },
+        { $set: { status: 'read' }, $addToSet: { readBy: { $each: myVariants } } }
+      );
+      // Ensure readBy is recorded on all messages so recipient unread count drops
       await Message.updateMany(filter, updateDoc);
     } else {
       // In Ghost Mode: upgrade any 'sent' (single tick) to 'delivered' (double grey tick)!

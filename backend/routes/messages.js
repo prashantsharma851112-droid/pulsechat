@@ -662,37 +662,7 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
       try {
         const cached = await redis.getCachedMessages(req.params.chatId);
         if (cached && Array.isArray(cached) && cached.length > 0) {
-          res.json(cached);
-
-          // Non-blocking background read mark and socket emission
-          setImmediate(async () => {
-            try {
-              const isGhostMode = await resolveGhostMode(req.user.id, req.params.chatId, req);
-
-              await db.markChatAsRead(req.params.chatId, req.user.id, isGhostMode);
-              const io = req.app.get('io');
-              if (io) {
-                io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-                const otherId = await getOtherParticipantId(req.params.chatId, req.user.id);
-
-                if (isGhostMode) {
-                  io.to(req.params.chatId).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
-                  if (otherId) {
-                    io.to(`user_${otherId}`).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
-                    io.to(otherId).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
-                  }
-                  return;
-                }
-
-                io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-                if (otherId) {
-                  io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-                  io.to(otherId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-                }
-              }
-            } catch (bgErr) {}
-          });
-          return;
+          return res.json(cached);
         }
       } catch {}
     }
@@ -704,53 +674,6 @@ router.get('/:chatId', authMiddleware, async (req, res) => {
     if (!before && !since && Array.isArray(messages) && messages.length > 0) {
       redis.setCachedMessages(req.params.chatId, messages, 1800).catch(() => {});
     }
-
-    // Non-blocking background read mark and socket emission
-    setImmediate(async () => {
-      try {
-        const isGhostMode = await resolveGhostMode(req.user.id, req.params.chatId, req);
-
-        await db.markChatAsRead(req.params.chatId, req.user.id, isGhostMode);
-        const io = req.app.get('io');
-        if (io) {
-          // ALWAYS emit to reader so their sidebar/tab unread badge immediately clears!
-          io.to(`user_${req.user.id}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id });
-          const otherId = await getOtherParticipantId(req.params.chatId, req.user.id);
-
-          if (isGhostMode) {
-            io.to(req.params.chatId).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
-            if (otherId) {
-              io.to(`user_${otherId}`).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
-              io.to(otherId).emit('messages_delivered', { chatId: req.params.chatId, status: 'delivered' });
-            }
-            return;
-          }
-
-          io.to(req.params.chatId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id, status: 'read' });
-          if (otherId) {
-            try {
-              const otherDoc = await User.findOne({
-                $or: [
-                  { id: otherId },
-                  ...(mongoose.Types.ObjectId.isValid(otherId) ? [{ _id: otherId }] : []),
-                  { username: otherId }
-                ]
-              }).select('id _id username').lean();
-              const otherVars = Array.from(new Set([otherId, otherDoc?.id, otherDoc?._id?.toString(), otherDoc?.username].filter(Boolean)));
-              otherVars.forEach(v => {
-                io.to(`user_${v}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id, status: 'read' });
-                io.to(v).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id, status: 'read' });
-              });
-            } catch {
-              io.to(`user_${otherId}`).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id, status: 'read' });
-              io.to(otherId).emit('chat_read_update', { chatId: req.params.chatId, userId: req.user.id, status: 'read' });
-            }
-          }
-        }
-      } catch (bgErr) {
-        console.error('Background read mark error:', bgErr);
-      }
-    });
   } catch (err) {
     console.error('Error fetching chat messages:', err);
     res.status(500).json({ error: 'Failed to fetch messages' });

@@ -1255,15 +1255,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   // Listen for local chat updates (e.g. offline message sent in ChatWindow)
   useEffect(() => {
     const handleRecentUpdate = () => {
-      if (user?.id) {
-        const deletedSet = getDeletedChatIds(user.id);
-        const cached = getCachedRecentChats(user.id).filter(c => !deletedSet.has(c.id) && (!c._id || !deletedSet.has(c._id)));
+      const curId = user?.id || user?._id;
+      if (curId) {
+        const deletedSet = getDeletedChatIds(curId);
+        const cached = getCachedRecentChats(curId).filter(c => !deletedSet.has(c.id) && (!c._id || !deletedSet.has(c._id)));
         setRecentChats(cached);
       }
     };
     window.addEventListener('pulsechat_recent_updated', handleRecentUpdate);
     return () => window.removeEventListener('pulsechat_recent_updated', handleRecentUpdate);
-  }, [user?.id]);
+  }, [user?.id, user?._id]);
 
   // Notification Permission State — respect localStorage dismiss flag
   const [notifPermission, setNotifPermission] = useState(() => {
@@ -1842,30 +1843,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         }
       }
 
-      const isCurrentlyViewing = Boolean(
-        activeChatRef.current && (
-          (effectiveMsg.isGroup && (activeChatRef.current.id === effectiveMsg.chatId || activeChatRef.current.id === targetId)) ||
-          (!effectiveMsg.isGroup && (
-            activeChatRef.current.id === targetId ||
-            activeChatRef.current._id === targetId ||
-            (targetId && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(targetId).toLowerCase()) ||
-            (effectiveMsg.senderUsername && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(effectiveMsg.senderUsername).toLowerCase()) ||
-            (effectiveMsg.senderName && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(effectiveMsg.senderName).toLowerCase()) ||
-            (effectiveMsg.senderName && activeChatRef.current.displayName && String(activeChatRef.current.displayName).toLowerCase() === String(effectiveMsg.senderName).toLowerCase())
-          ))
-        )
-      );
-
-      // WhatsApp Post Office: Emit read receipt back to sender if user is actively viewing (0ms)
-      if (!isMyMsg && isCurrentlyViewing) {
-        const isCurGhost = (typeof window !== 'undefined' && localStorage.getItem('pulsechat_ghost_global') === 'true') || Boolean(user?.hideReadReceipts);
-        const msgIdToAck = effectiveMsg.id || effectiveMsg.clientTempId;
-        if (msgIdToAck && !isCurGhost) {
-          socket.emit('mark_read', { messageId: msgIdToAck, chatId: effectiveMsg.chatId, senderId: effectiveMsg.senderId });
-          socket.emit('mark_chat_read', { chatId: effectiveMsg.chatId, userId: user?.id, isGhost: false });
-        }
-      }
-
       let contentSnippet = (effectiveMsg.type === 'stealth_dust' || effectiveMsg.isDustText)
         ? '⚡ Stealth Dust Text'
         : (effectiveMsg.type === 'story_reply' || effectiveMsg.storyReply)
@@ -1974,7 +1951,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           }
         }
 
-        const isCurrentlyViewing = Boolean(
+        const isDocumentVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
+        const isCurrentlyViewing = isDocumentVisible && Boolean(
           activeChatRef.current && (
             (effectiveMsg.isGroup && (activeChatRef.current.id === effectiveMsg.chatId || activeChatRef.current.id === targetId)) ||
             (!effectiveMsg.isGroup && (

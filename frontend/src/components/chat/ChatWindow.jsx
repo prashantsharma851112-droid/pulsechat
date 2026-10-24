@@ -3164,10 +3164,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       });
       if (lastNotification.senderId !== user.id) {
         playSound('received');
-        if (!isGhostModeRef.current) {
+        const isVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
+        const isAtBottom = !showScrollBottomRef.current;
+        const isDecrypted = !lastNotification.isEncrypted || lastNotification._decrypted || Boolean(lastNotification.content);
+        if (isVisible && isAtBottom && isDecrypted && !isGhostModeRef.current) {
           socket?.emit('mark_read', { messageId: lastNotification.id, chatId, senderId: lastNotification.senderId });
-        } else {
-          socket?.emit('message_delivered', { messageId: lastNotification.id, chatId, senderId: lastNotification.senderId });
         }
       }
     }
@@ -3434,14 +3435,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             newScrolledMessagesCountRef.current += 1;
             setNewScrolledMessagesCount(newScrolledMessagesCountRef.current);
           }
-          // Invariant: Do not acknowledge read status or delivery if encrypted message is not yet decrypted
+          // Invariant: Do not acknowledge read status if encrypted message is not yet decrypted, window is in background, or scrolled up
           const isDecrypted = !msg.isEncrypted || msg._decrypted || Boolean(msg.content);
           if (isDecrypted) {
             saveMessagesToLocalDb(chatId, [msg]).catch(() => {});
-            if (!isGhostModeRef.current) {
+            const isVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
+            const isAtBottom = !showScrollBottomRef.current;
+            if (isVisible && isAtBottom && !isGhostModeRef.current) {
               socket.emit('mark_read', { messageId: msg.id, chatId, senderId: msg.senderId });
-            } else {
-              socket.emit('message_delivered', { messageId: msg.id, chatId, senderId: msg.senderId });
             }
           }
         }
@@ -4296,6 +4297,22 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       if (!isScrolledUp && newScrolledMessagesCountRef.current > 0) {
         newScrolledMessagesCountRef.current = 0;
         setNewScrolledMessagesCount(0);
+        if (socket && chatId && !isGhostModeRef.current) {
+          const canonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+          const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
+          const unreadMsgs = (messagesRef.current || []).filter(m =>
+            m && !myVars.has(String(m.senderId)) && m.status !== 'read' && (!m.isEncrypted || m._decrypted || m.content)
+          );
+          if (unreadMsgs.length > 0) {
+            socket.emit('mark_chat_read', {
+              chatId,
+              canonicalChatId: canonical,
+              userId: user?.id,
+              isGhost: false,
+              messageIds: unreadMsgs.map(m => m.id)
+            });
+          }
+        }
       }
     });
   };
@@ -7001,6 +7018,22 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             showScrollBottomRef.current = false;
             isPinnedToBottomRef.current = true;
             setNewScrolledMessagesCount(0);
+            if (socket && chatId && !isGhostModeRef.current) {
+              const canonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+              const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
+              const unreadMsgs = (messagesRef.current || []).filter(m =>
+                m && !myVars.has(String(m.senderId)) && m.status !== 'read' && (!m.isEncrypted || m._decrypted || m.content)
+              );
+              if (unreadMsgs.length > 0) {
+                socket.emit('mark_chat_read', {
+                  chatId,
+                  canonicalChatId: canonical,
+                  userId: user?.id,
+                  isGhost: false,
+                  messageIds: unreadMsgs.map(m => m.id)
+                });
+              }
+            }
           }}
           style={{
             position: 'absolute',
