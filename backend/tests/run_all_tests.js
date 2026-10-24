@@ -24,7 +24,8 @@ const testFiles = [
   'test_milestone2_slice1.js',
   'test_keys_to_device_security.js',
   'test_e2ee_identity_manager.js',
-  'test_sender_optimistic_rendering_and_e2ee.js'
+  'test_sender_optimistic_rendering_and_e2ee.js',
+  'test_receiver_message_visibility_and_decryption.js'
 ];
 
 let failedSuites = 0;

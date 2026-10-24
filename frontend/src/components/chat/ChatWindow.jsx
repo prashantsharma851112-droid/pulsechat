@@ -239,18 +239,52 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const partnerId = activeChat?.id || activeChat?._id || activeChat?.userId || '';
   const [showStoryCardModal, setShowStoryCardModal] = useState(false);
   const myIdentityRef = useRef(null);
+  const [deviceIdentityReady, setDeviceIdentityReady] = useState(false);
 
   useEffect(() => {
     if (user?.id && token) {
       ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL)
         .then(ident => {
           myIdentityRef.current = ident;
+          setDeviceIdentityReady(true);
         })
         .catch(err => {
           console.warn('E2EE identity registration error:', err);
         });
     }
   }, [user?.id, token]);
+
+  // Watchdog effect: When device identity becomes ready or un-decrypted envelopes are in messages, decrypt them
+  useEffect(() => {
+    if (!deviceIdentityReady || !myIdentityRef.current?.keyPair?.privateKey) return;
+    const privKey = myIdentityRef.current.keyPair.privateKey;
+    const myIdSet = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
+
+    setMessages(prev => {
+      const undecryptedIndices = [];
+      prev.forEach((m, idx) => {
+        const isSentByMe = m?.senderId && myIdSet.has(String(m.senderId));
+        if (m?.isEncrypted && m?.envelope && !m?._decrypted && !isSentByMe) {
+          undecryptedIndices.push(idx);
+        }
+      });
+      if (undecryptedIndices.length === 0) return prev;
+
+      (async () => {
+        const updated = await Promise.all(
+          prev.map(async (m, idx) => {
+            if (undecryptedIndices.includes(idx)) {
+              return await decryptMessageIfNeeded(m, privKey);
+            }
+            return m;
+          })
+        );
+        setMessages(updated);
+        if (chatId) setCachedMessages(chatId, updated);
+      })();
+      return prev;
+    });
+  }, [deviceIdentityReady, chatId, user]);
 
   const partnerVariants = useMemo(() => {
     return Array.from(new Set([
@@ -1959,8 +1993,26 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
+            let identity = myIdentityRef.current;
+            if (!identity && user?.id && token) {
+              try {
+                identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
+                myIdentityRef.current = identity;
+                setDeviceIdentityReady(true);
+              } catch {}
+            }
+            const myIdSet = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
+            const decryptedServer = await Promise.all(
+              data.map(async m => {
+                const isSentByMe = m?.senderId && myIdSet.has(String(m.senderId));
+                if (m?.isEncrypted && m?.envelope && identity?.keyPair?.privateKey && !isSentByMe) {
+                  return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
+                }
+                return m;
+              })
+            );
             const deletedForMe = getDeletedForMeIds(user?.id);
-            const validServer = data
+            const validServer = decryptedServer
               .filter(m => !deletedForMe.has(String(m.id)) && !deletedForMe.has(String(m._id)))
               .map(sanitizeFogSnapMessage)
               .filter(Boolean);
@@ -2540,6 +2592,34 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         }
         setMessages(resolvedInitial);
 
+        // Async decrypt pass for any un-decrypted cached messages on initial mount
+        const hasUndecryptedCached = resolvedInitial.some(m => m?.isEncrypted && m?.envelope && !m?._decrypted && !myVariants.has(String(m?.senderId)));
+        if (hasUndecryptedCached) {
+          (async () => {
+            let identity = myIdentityRef.current;
+            if (!identity && user?.id && token) {
+              try {
+                identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
+                myIdentityRef.current = identity;
+                setDeviceIdentityReady(true);
+              } catch {}
+            }
+            if (identity?.keyPair?.privateKey) {
+              const decryptedInitial = await Promise.all(
+                resolvedInitial.map(async m => {
+                  const isSentByMe = m?.senderId && myVariants.has(String(m.senderId));
+                  if (m?.isEncrypted && m?.envelope && !m?._decrypted && !isSentByMe) {
+                    return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
+                  }
+                  return m;
+                })
+              );
+              setMessages(decryptedInitial);
+              setCachedMessages(chatId, decryptedInitial);
+            }
+          })();
+        }
+
         // Instant 0ms Read Receipt Emission over websocket
         if (socket && chatId) {
           socket.emit('join_chat', chatId);
@@ -2557,7 +2637,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
         // 2. If memory/localStorage cache was empty on cold start, check IndexedDB once
         if (cached.length === 0) {
-          getCachedMessagesFromLocalDb(chatId, 50).then((dbMsgs) => {
+          getCachedMessagesFromLocalDb(chatId, 50).then(async (dbMsgs) => {
             if (Array.isArray(dbMsgs) && dbMsgs.length > 0) {
               const deletedIds = getDeletedForMeIds(user?.id);
               const validMsgs = dbMsgs.filter(m => !deletedIds.has(String(m.id)) && !deletedIds.has(String(m._id)));
@@ -2579,6 +2659,30 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   return m;
                 });
                 setMessages(resolvedDb.map(sanitizeFogSnapMessage).filter(Boolean));
+
+                // Async decrypt pass for IndexedDB fallback messages
+                let identity = myIdentityRef.current;
+                if (!identity && user?.id && token) {
+                  try {
+                    identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
+                    myIdentityRef.current = identity;
+                    setDeviceIdentityReady(true);
+                  } catch {}
+                }
+                if (identity?.keyPair?.privateKey) {
+                  const decryptedDb = await Promise.all(
+                    resolvedDb.map(async m => {
+                      const isSentByMe = m?.senderId && myVariants.has(String(m.senderId));
+                      if (m?.isEncrypted && m?.envelope && !m?._decrypted && !isSentByMe) {
+                        return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
+                      }
+                      return m;
+                    })
+                  );
+                  setMessages(decryptedDb.map(sanitizeFogSnapMessage).filter(Boolean));
+                  setCachedMessages(chatId, decryptedDb);
+                }
+
                 const oldestDb = validMsgs.find(m => m.timestamp && !m.id?.startsWith('temp_'));
                 if (oldestDb?.timestamp) {
                   prefetchOlderMessagesIntoRam(chatId, oldestDb.timestamp);

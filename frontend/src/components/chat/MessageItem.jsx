@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
-import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward, Edit3, ExternalLink, Globe, Ghost, Share2, ArrowLeft, MoreVertical, Loader2 } from 'lucide-react';
+import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward, Edit3, ExternalLink, Globe, Ghost, Share2, ArrowLeft, MoreVertical, Loader2, Lock } from 'lucide-react';
 import ThreadModal from './ThreadModal';
 import ForwardModal from './ForwardModal';
 import ViewOnceModal from './ViewOnceModal';
@@ -1986,9 +1986,16 @@ function MessageItem({
           };
           return (
             <div>
-              <p style={{ fontSize: '0.98rem', wordBreak: 'break-word', margin: 0, lineHeight: 1.45 }}>
-                {renderTextWithHighlight(message.content)}
-              </p>
+              {message.isEncrypted && !message.content && !message._decrypted ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted, #94a3b8)', fontStyle: 'italic', fontSize: '0.88rem', padding: '2px 0' }}>
+                  <Lock size={13} style={{ flexShrink: 0, opacity: 0.8 }} />
+                  <span>Decrypting message...</span>
+                </div>
+              ) : (
+                <p style={{ fontSize: '0.98rem', wordBreak: 'break-word', margin: 0, lineHeight: 1.45 }}>
+                  {renderTextWithHighlight(message.content)}
+                </p>
+              )}
               {urlMatch && urlMatch[0] && (
                 <RichLinkPreview url={urlMatch[0]} isMine={isMine} />
               )}

@@ -5,6 +5,7 @@ import { BACKEND_URL } from '../utils/config';
 import { subscribeUserToPush, showPushNotification } from '../utils/notifications';
 import { updateUserProfileInStorage, appendCachedMessage, updateRecentChatSnippet } from '../utils/offlineStorage';
 import { saveMessagesToLocalDb } from '../utils/localDatabase';
+import { getOrInitDeviceIdentity, decryptMessageIfNeeded } from '../utils/e2eeCrypto';
 
 export const SocketContext = createContext();
 
@@ -17,8 +18,19 @@ export function SocketProvider({ children }) {
   const [vibeAuras, setVibeAuras] = useState({});
 
   const userRef = useRef(user);
+  const deviceIdentityRef = useRef(null);
+
   useEffect(() => {
     userRef.current = user;
+    if (user?.id) {
+      getOrInitDeviceIdentity(user.id)
+        .then(ident => {
+          deviceIdentityRef.current = ident;
+        })
+        .catch(err => {
+          console.warn('SocketContext: Device identity preload error:', err);
+        });
+    }
   }, [user]);
 
   // Silently register Web Push subscription if permission already granted (no prompt)
@@ -247,25 +259,58 @@ export function SocketProvider({ children }) {
 
       // Receiver-side Durable ACK Engine:
       // An incoming message is committed to local IndexedDB & cache FIRST before emitting 'message_delivered' ACK.
+      // E2EE incoming messages are decrypted using the device private key before local caching so content is visible.
       // If network disconnects or browser crashes before local commit, server retains the message in queue.
       const handleIncomingDurableMessage = async (msg) => {
         if (!msg || !msg.id) return;
-        const curId = userRef.current?.id || user?.id;
-        if (msg.senderId === curId) return;
+        const curUser = userRef.current || user;
+        const curId = curUser?.id || curUser?._id;
+        const myIds = new Set([curUser?.id, curUser?._id, curUser?.username].filter(Boolean).map(String));
+        if (msg.senderId && myIds.has(String(msg.senderId))) return;
+
+        // E2EE: Decrypt incoming encrypted message using local device private key before local caching
+        let msgToCommit = msg;
+        if (msg.isEncrypted && msg.envelope && !msg._decrypted) {
+          let identity = deviceIdentityRef.current;
+          if (!identity && curId) {
+            try {
+              identity = await getOrInitDeviceIdentity(curId);
+              deviceIdentityRef.current = identity;
+            } catch (err) {
+              console.warn('SocketContext: Device identity init error:', err);
+            }
+          }
+          if (identity?.keyPair?.privateKey) {
+            try {
+              msgToCommit = await decryptMessageIfNeeded(msg, identity.keyPair.privateKey);
+            } catch (err) {
+              console.warn('SocketContext: Message decryption error:', err);
+            }
+          }
+        }
 
         // 1. Durably await IndexedDB transaction commit BEFORE emitting ACK
         try {
-          if (msg.chatId) {
-            appendCachedMessage(msg.chatId, msg);
-            await saveMessagesToLocalDb(msg.chatId, [msg]);
-            updateRecentChatSnippet(msg.senderId, msg);
+          if (msgToCommit.chatId) {
+            appendCachedMessage(msgToCommit.chatId, msgToCommit);
+            await saveMessagesToLocalDb(msgToCommit.chatId, [msgToCommit]);
+            if (curId) {
+              updateRecentChatSnippet(curId, msgToCommit.chatId, msgToCommit, null);
+              window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+            }
           }
         } catch (e) {
           console.warn('Durable IndexedDB commit failed, suppressing delivery ACK:', e);
           return; // DO NOT send ACK if local persistence fails (quota full or transaction abort)
         }
 
-        triggerPushIfBackground(msg);
+        // Notify active ChatWindow (if open) of new decrypted message
+        try {
+          window.dispatchEvent(new CustomEvent('pulsechat_new_message', { detail: msgToCommit }));
+          window.dispatchEvent(new CustomEvent('pulsechat_message_received', { detail: msgToCommit }));
+        } catch (_) {}
+
+        triggerPushIfBackground(msgToCommit);
 
         // 2. Emit delivery ACK ONLY AFTER local storage commit succeeds
         // Passes cryptographic receiptToken for verified tamper-proof queue deletion

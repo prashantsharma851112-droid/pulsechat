@@ -271,6 +271,8 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
     formattedContent = `📁 ${message.fileName}`;
   } else if (message.type === 'document' || message.type === 'file') {
     formattedContent = '📁 Document';
+  } else if (message.isEncrypted && !message.content && !message._decrypted) {
+    formattedContent = '🔒 Encrypted message';
   } else {
     // Preserve existing snippet if present rather than showing random placeholder
     formattedContent = (existingIdx !== -1 && recent[existingIdx]?.lastMessage)
