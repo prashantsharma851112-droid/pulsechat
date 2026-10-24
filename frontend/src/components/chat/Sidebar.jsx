@@ -9,6 +9,7 @@ import PulseVibesBar from '../vibes/PulseVibesBar';
 import VibeAuraRing, { resolveUserAura, getProAuraRingClass } from '../common/VibeAuraRing';
 import { Gamepad2 } from 'lucide-react';
 import { useAppMusic } from '../../context/AppMusicContext';
+import { playSound } from '../../utils/audio';
 
 import { lazyWithRetry, scheduleIdlePreload } from '../../utils/lazyRetry';
 

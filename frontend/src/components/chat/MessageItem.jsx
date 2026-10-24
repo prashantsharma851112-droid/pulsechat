@@ -16,6 +16,7 @@ import Animated3DText from '../common/Animated3DText';
 import GiftUnboxModal from './GiftUnboxModal';
 import AnonymousStoryReplyModal from './AnonymousStoryReplyModal';
 import { getSavedQuickReactions, recordRecentReaction } from '../../utils/quickReactions';
+import { BACKEND_URL } from '../../utils/config';
 import { getCachedMediaUrl, getSyncCachedMediaUrl, getOrCacheAudioBlobUrl, getSyncCachedAudioUrl, getOrCacheDecryptedMediaUrl } from '../../utils/mediaCache';
 import CachedImage from '../common/CachedImage';
 

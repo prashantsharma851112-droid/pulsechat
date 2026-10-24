@@ -10,6 +10,7 @@ import { useBackHandler } from '../../utils/backNavigation';
 // Core arcade games imported directly for instant offline gameplay
 import ArrowPuzzleGame from './ArrowPuzzleGame';
 import TicTacToeAIGame from './TicTacToeAIGame';
+import OfflineWhiteboardGame from './OfflineWhiteboardGame';
 const TempleRunGame = lazyWithRetry(() => import('./TempleRunGame'));
 const CandyCrushGame = lazyWithRetry(() => import('./CandyCrushGame'));
 // =========================================================================

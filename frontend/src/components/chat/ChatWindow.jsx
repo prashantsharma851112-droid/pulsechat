@@ -77,9 +77,11 @@ import {
   markCachedMessagesDeleted,
   clearCachedMessages,
   getDeletedForMeIds,
-  addDeletedForMeId
+  addDeletedForMeId,
+  markAllCachedMessagesRead,
+  markAllCachedMessagesDelivered
 } from '../../utils/offlineStorage';
-import { deleteMessagesFromLocalDb, clearChatFromLocalDb, exportChatTranscript } from '../../utils/localDatabase';
+import { saveMessagesToLocalDb, deleteMessagesFromLocalDb, clearChatFromLocalDb, exportChatTranscript } from '../../utils/localDatabase';
 import { getSyncCachedAudioUrl, getOrCacheAudioBlobUrl } from '../../utils/mediaCache';
 import {
   encryptMessageEnvelope,
@@ -7779,7 +7781,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       <ChatModalErrorBoundary onReset={() => {
         setShowGiftPicker(false);
         setShowTicTacToeModal(false);
-        setShowLiveArrow(false);
+        setShowArrowGameModal(false);
         setShowSparksWallet(false);
         setShowWhiteboard(false);
         setShowThemeModal(false);
@@ -7787,13 +7789,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         setShowProModal(false);
         setShowStreakModal(false);
         setShowVibeSelector(false);
-        setShowMusicPickerModal(false);
+        setShowChatMusicPicker(false);
         setShowForwardModal(false);
-        setShowInfoModal(false);
-        setShowReactionCustomizer(false);
+        setShowMessageInfoModal(false);
+        setShowCustomizeReactionsModal(false);
         setShowNicknameModal(false);
         setShowStoryCardModal(false);
-        setShowPinLock(false);
+        setShowChatLockPinModal(false);
       }}>
       <React.Suspense fallback={null}>
       {pendingMedia && (
@@ -8320,7 +8322,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           onSuccess={sparksPromptConfig.onSuccess}
           onOpenProModal={() => {
             setSparksPromptConfig(null);
-            setShowPulseProModal(true);
+            setShowProModal(true);
           }}
         />
       )}

@@ -8,6 +8,7 @@
     "generate-icons": "node generate_pngs.cjs",
     "build": "vite build",
     "preview": "vite preview",
+    "check:globals": "node check_globals.cjs",
     "cap:add": "npx cap add android",
     "cap:copy": "npx cap copy android",
     "cap:open": "npx cap open android"

@@ -110,7 +110,11 @@ export default function GroupCallModal({ group, isVideo, isCaller, onClose }) {
         } catch (err2) {
           setCallStatus('Mic permission required');
           setTimeout(() => {
-            handleEndCall();
+            if (typeof handleLeaveGroupCall === 'function') {
+              handleLeaveGroupCall();
+            } else if (onClose) {
+              onClose();
+            }
           }, 2500);
         }
       }

@@ -325,11 +325,11 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat, opt
     }
   }
 
+  const shouldInc = options?.increment !== undefined ? Boolean(options.increment) : true;
   let updatedEntry;
   if (existingIdx !== -1) {
     const existing = recent[existingIdx];
     const prevUnread = Number(existing.unreadCount) || 0;
-    const shouldInc = options?.increment !== undefined ? Boolean(options.increment) : true;
     const resolvedUnread = isFromMe ? 0 : (isStatusOnly ? prevUnread : (options?.isViewing ? 0 : (shouldInc ? prevUnread + 1 : prevUnread)));
 
     updatedEntry = {
