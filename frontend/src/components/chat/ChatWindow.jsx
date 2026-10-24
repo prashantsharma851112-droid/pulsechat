@@ -81,6 +81,12 @@ import {
 } from '../../utils/offlineStorage';
 import { deleteMessagesFromLocalDb, clearChatFromLocalDb, exportChatTranscript } from '../../utils/localDatabase';
 import { getSyncCachedAudioUrl, getOrCacheAudioBlobUrl } from '../../utils/mediaCache';
+import {
+  encryptMessageEnvelope,
+  ensureDeviceIdentityRegistered,
+  fetchPeerDevicePublicKey,
+  decryptMessageIfNeeded
+} from '../../utils/e2eeCrypto';
 
 export const GLOBAL_LANGUAGES = [
   { code: 'hi', name: 'Hindi', flag: '🇮🇳' },
@@ -232,6 +238,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const chatId = isGroup ? activeChatId : [currentUserId, activeChatId].filter(Boolean).sort().join('_');
   const partnerId = activeChat?.id || activeChat?._id || activeChat?.userId || '';
   const [showStoryCardModal, setShowStoryCardModal] = useState(false);
+  const myIdentityRef = useRef(null);
+
+  useEffect(() => {
+    if (user?.id && token) {
+      ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL)
+        .then(ident => {
+          myIdentityRef.current = ident;
+        })
+        .catch(err => {
+          console.warn('E2EE identity registration error:', err);
+        });
+    }
+  }, [user?.id, token]);
 
   const partnerVariants = useMemo(() => {
     return Array.from(new Set([
@@ -2279,7 +2298,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           receiverId: pendingMsg.receiverId,
           isGroup: pendingMsg.isGroup,
           isForwarded: pendingMsg.isForwarded || false,
-          content: pendingMsg.content,
+          isEncrypted: Boolean(pendingMsg.isEncrypted),
+          envelope: pendingMsg.envelope || null,
+          content: pendingMsg.isEncrypted ? '' : pendingMsg.content,
           type: pendingMsg.type || 'text',
           textStyle: pendingMsg.textStyle,
           audioUrl: pendingMsg.audioUrl,
@@ -2593,7 +2614,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         }
       })
         .then(res => res.json())
-        .then(data => {
+        .then(async data => {
           if (Array.isArray(data)) {
             // Delta Sync Optimization: If cache had latest messages and server returns 0,
             // we are 100% up-to-date locally (0ms, 0 re-render, 0 database load)!
@@ -2603,7 +2624,24 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
             // Filter out any locally deleted messages
             const deletedForMe = getDeletedForMeIds(user?.id);
-            const serverMsgs = data.filter(m => !deletedForMe.has(String(m.id)) && !deletedForMe.has(String(m._id)));
+            const rawServerMsgs = data.filter(m => !deletedForMe.has(String(m.id)) && !deletedForMe.has(String(m._id)));
+
+            // E2EE: Decrypt any incoming encrypted messages
+            let identity = myIdentityRef.current;
+            if (!identity && user?.id && token) {
+              try {
+                identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
+                myIdentityRef.current = identity;
+              } catch {}
+            }
+            const serverMsgs = await Promise.all(
+              rawServerMsgs.map(async m => {
+                if (m && m.isEncrypted && m.envelope && identity?.keyPair?.privateKey) {
+                  return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
+                }
+                return m;
+              })
+            );
 
             // If delta new messages arrived, append and merge into local IndexedDB cache
             if (latestCachedTime && serverMsgs.length > 0) {
@@ -2613,7 +2651,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               serverMsgs.forEach(m => {
                 if (m.clientTempId) deltaMap.delete(m.clientTempId);
                 if (m.tempId) deltaMap.delete(m.tempId);
-                deltaMap.set(m.id, m);
+                const existing = deltaMap.get(m.id) || (m.clientTempId && deltaMap.get(m.clientTempId));
+                const finalContent = m.content || existing?.content || '';
+                deltaMap.set(m.id, { ...m, content: finalContent });
               });
               const deltaMerged = Array.from(deltaMap.values())
                 .sort((a, b) => new Date(a.timestamp || a.createdAt || 0) - new Date(b.timestamp || b.createdAt || 0))
@@ -2660,7 +2700,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 if (m.tempId && messageMap.has(m.tempId)) {
                   messageMap.delete(m.tempId);
                 }
-                messageMap.set(m.id, m);
+                const existing = messageMap.get(m.id) || (m.clientTempId && messageMap.get(m.clientTempId));
+                const finalContent = m.content || existing?.content || '';
+                messageMap.set(m.id, { ...m, content: finalContent });
               }
             });
 
@@ -3149,7 +3191,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   useEffect(() => {
     if (!socket) return;
 
-    const handleNewMessage = (msg) => {
+    const handleNewMessage = async (rawMsg) => {
+      let msg = rawMsg;
+      if (msg && msg.isEncrypted && msg.envelope) {
+        let identity = myIdentityRef.current;
+        if (!identity && user?.id && token) {
+          try {
+            identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
+            myIdentityRef.current = identity;
+          } catch {}
+        }
+        if (identity?.keyPair?.privateKey) {
+          msg = await decryptMessageIfNeeded(msg, identity.keyPair.privateKey);
+        }
+      }
+
       const isThisChat = Boolean(
         msg && (
           msg.chatId === chatId ||
@@ -3188,7 +3244,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           let updated;
           if (matchIdx !== -1) {
             updated = [...prev];
-            updated[matchIdx] = sanitizedMsg;
+            const existing = updated[matchIdx];
+            const finalContent = sanitizedMsg.content || existing?.content || '';
+            updated[matchIdx] = { ...sanitizedMsg, content: finalContent };
           } else {
             updated = [...prev, sanitizedMsg];
           }
@@ -3200,7 +3258,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           removeFromOutbox(user?.id, msg.clientTempId);
         }
 
-        updateRecentChatSnippet(user?.id, chatId, msg, activeChat);
+        updateRecentChatSnippet(user?.id, chatId, sanitizedMsg, activeChat);
         window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
 
         const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean));
@@ -3365,8 +3423,25 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           }
         })
           .then(res => res.json())
-          .then(data => {
-            if (Array.isArray(data)) setMessages(data);
+          .then(async data => {
+            if (Array.isArray(data)) {
+              let identity = myIdentityRef.current;
+              if (!identity && user?.id && token) {
+                try {
+                  identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
+                  myIdentityRef.current = identity;
+                } catch {}
+              }
+              const decrypted = await Promise.all(
+                data.map(async m => {
+                  if (m?.isEncrypted && m?.envelope && identity?.keyPair?.privateKey) {
+                    return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
+                  }
+                  return m;
+                })
+              );
+              setMessages(decrypted);
+            }
           });
       }
     };
@@ -3972,8 +4047,23 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           setHasMoreOlderMessages(true);
         }
         if (data.length > 0) {
+          let identity = myIdentityRef.current;
+          if (!identity && user?.id && token) {
+            try {
+              identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
+              myIdentityRef.current = identity;
+            } catch {}
+          }
+          const decryptedData = await Promise.all(
+            data.map(async m => {
+              if (m?.isEncrypted && m?.envelope && identity?.keyPair?.privateKey) {
+                return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
+              }
+              return m;
+            })
+          );
           const deletedForMe = getDeletedForMeIds(user?.id);
-          const validServer = data
+          const validServer = decryptedData
             .filter(m => !deletedForMe.has(String(m.id)) && !deletedForMe.has(String(m._id)))
             .map(sanitizeFogSnapMessage)
             .filter(Boolean);
@@ -4048,11 +4138,53 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     });
   };
 
-  const dispatchMessage = (msgContent) => {
+  const dispatchMessage = async (msgContent) => {
     if (!msgContent) return;
 
     const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     const isOnlineNow = isDeviceOnline() && socket?.connected;
+
+    const replyPayload = replyTo ? {
+      id: replyTo.id,
+      content: replyTo.content,
+      type: replyTo.type,
+      senderId: replyTo.senderId,
+      senderName: replyTo.senderName || replyTo.senderId
+    } : null;
+
+    let isEncrypted = false;
+    let envelope = null;
+
+    // Strict E2EE for 1-on-1 direct messages: Fail closed if keys not available, zero plaintext fallback!
+    if (!isGroup && activeChat?.id) {
+      let identity = myIdentityRef.current;
+      if (!identity && user?.id && token) {
+        try {
+          identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
+          myIdentityRef.current = identity;
+        } catch {}
+      }
+      const peerDevice = await fetchPeerDevicePublicKey(activeChat.id, token, BACKEND_URL);
+      if (!peerDevice || !peerDevice.publicKeyJwk) {
+        setActionToast('🔒 Waiting for recipient E2EE key registration...');
+        setTimeout(() => setActionToast(''), 3000);
+        return;
+      }
+      try {
+        envelope = await encryptMessageEnvelope(
+          { content: msgContent, type: 'text', replyTo: replyPayload },
+          peerDevice.publicKeyJwk,
+          identity?.deviceId,
+          peerDevice.deviceId
+        );
+        isEncrypted = true;
+      } catch (err) {
+        console.error('E2EE message encryption failed:', err);
+        setActionToast('🔒 E2EE encryption failed. Message not sent.');
+        setTimeout(() => setActionToast(''), 3000);
+        return;
+      }
+    }
 
     const pendingMsg = {
       ...getSenderPayload(),
@@ -4069,13 +4201,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       timestamp: new Date().toISOString(),
       reactions: {},
       viewedBy: [],
-      replyTo: replyTo ? {
-        id: replyTo.id,
-        content: replyTo.content,
-        type: replyTo.type,
-        senderId: replyTo.senderId,
-        senderName: replyTo.senderName || replyTo.senderId
-      } : null
+      isEncrypted,
+      envelope,
+      replyTo: replyPayload
     };
 
     // 1. Optimistic UI update: message appears instantly in chat!
@@ -4095,24 +4223,28 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       return;
     }
 
-    // 4. Online: emit over socket
+    // 4. Online: emit over socket (Zero plaintext to server when isEncrypted is true)
     socket.emit('send_message', {
       ...getSenderPayload(),
       chatId,
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
       isGroup,
-      content: msgContent,
+      content: isEncrypted ? '' : msgContent,
       type: 'text',
+      isEncrypted,
+      envelope,
       clientTempId: tempId,
-      replyTo: pendingMsg.replyTo
+      replyTo: isEncrypted
+        ? (pendingMsg.replyTo ? { id: pendingMsg.replyTo.id, type: pendingMsg.replyTo.type, senderId: pendingMsg.replyTo.senderId } : null)
+        : pendingMsg.replyTo
     });
 
     setReplyTo(null); // Reply clear karo bhejne ke baad
     playSound('sent');
   };
 
-  const handleSend3DText = (textContent, styleType) => {
+  const handleSend3DText = async (textContent, styleType) => {
     if (!textContent || !textContent.trim()) return;
 
     const trimmed = textContent.trim();
@@ -4128,6 +4260,47 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       const currentSparks = user?.pulseSparks ?? 0;
       if (typeof updateUserProfile === 'function') {
         updateUserProfile({ ...user, pulseSparks: Math.max(0, currentSparks - 10) });
+      }
+    }
+
+    const replyPayload = replyTo ? {
+      id: replyTo.id,
+      content: replyTo.content,
+      type: replyTo.type,
+      senderId: replyTo.senderId,
+      senderName: replyTo.senderName || replyTo.senderId
+    } : null;
+
+    let isEncrypted = false;
+    let envelope = null;
+
+    if (!isGroup && activeChat?.id) {
+      let identity = myIdentityRef.current;
+      if (!identity && user?.id && token) {
+        try {
+          identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
+          myIdentityRef.current = identity;
+        } catch {}
+      }
+      const peerDevice = await fetchPeerDevicePublicKey(activeChat.id, token, BACKEND_URL);
+      if (!peerDevice || !peerDevice.publicKeyJwk) {
+        setActionToast('🔒 Waiting for recipient E2EE key registration...');
+        setTimeout(() => setActionToast(''), 3000);
+        return;
+      }
+      try {
+        envelope = await encryptMessageEnvelope(
+          { content: trimmed, type: '3d_text', textStyle: styleType || 'cyber-neon', replyTo: replyPayload },
+          peerDevice.publicKeyJwk,
+          identity?.deviceId,
+          peerDevice.deviceId
+        );
+        isEncrypted = true;
+      } catch (err) {
+        console.error('E2EE 3D text encryption failed:', err);
+        setActionToast('🔒 E2EE encryption failed. Message not sent.');
+        setTimeout(() => setActionToast(''), 3000);
+        return;
       }
     }
 
@@ -4147,13 +4320,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       timestamp: new Date().toISOString(),
       reactions: {},
       viewedBy: [],
-      replyTo: replyTo ? {
-        id: replyTo.id,
-        content: replyTo.content,
-        type: replyTo.type,
-        senderId: replyTo.senderId,
-        senderName: replyTo.senderName || replyTo.senderId
-      } : null
+      isEncrypted,
+      envelope,
+      replyTo: replyPayload
     };
 
     setMessages(prev => [...prev, pendingMsg]);
@@ -4175,11 +4344,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       senderId: user.id,
       receiverId: isGroup ? '' : activeChat.id,
       isGroup,
-      content: trimmed,
+      content: isEncrypted ? '' : trimmed,
       type: '3d_text',
       textStyle: styleType || 'cyber-neon',
+      isEncrypted,
+      envelope,
       clientTempId: tempId,
-      replyTo: pendingMsg.replyTo
+      replyTo: isEncrypted
+        ? (pendingMsg.replyTo ? { id: pendingMsg.replyTo.id, type: pendingMsg.replyTo.type, senderId: pendingMsg.replyTo.senderId } : null)
+        : pendingMsg.replyTo
     });
 
     setReplyTo(null);
@@ -4315,7 +4488,50 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
 
     let finalAudioUrl = audioUrl;
-    if (audioUrl && audioUrl.startsWith('data:')) {
+    let mediaKey = null;
+    let mediaIv = null;
+    let isEncrypted = false;
+    let envelope = null;
+
+    if (!isGroup && activeChat?.id) {
+      try {
+        const { uploadEncryptedMediaDirect } = await import('../../utils/mediaUpload');
+        const encRes = await uploadEncryptedMediaDirect(audioUrl, 'pulsechat_voice', token, false);
+        finalAudioUrl = encRes.mediaUrl;
+        mediaKey = encRes.mediaKey;
+        mediaIv = encRes.mediaIv;
+
+        let identity = myIdentityRef.current;
+        if (!identity && user?.id && token) {
+          try {
+            identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
+            myIdentityRef.current = identity;
+          } catch {}
+        }
+        const peerDevice = await fetchPeerDevicePublicKey(activeChat.id, token, BACKEND_URL);
+        if (!peerDevice || !peerDevice.publicKeyJwk) {
+          setActionToast('🔒 Waiting for recipient E2EE key registration...');
+          setTimeout(() => setActionToast(''), 3000);
+          return;
+        }
+        envelope = await encryptMessageEnvelope(
+          {
+            type: 'voice',
+            audioUrl: finalAudioUrl,
+            mediaKey,
+            mediaIv,
+            voiceFilter: voiceFilter !== 'normal' ? voiceFilter : null,
+            replyTo: pendingVoiceMsg.replyTo
+          },
+          peerDevice.publicKeyJwk,
+          identity?.deviceId,
+          peerDevice.deviceId
+        );
+        isEncrypted = true;
+      } catch (e) {
+        console.warn('Voice encryption/upload error:', e);
+      }
+    } else if (audioUrl && audioUrl.startsWith('data:')) {
       try {
         finalAudioUrl = await uploadMediaDirect(audioUrl, 'pulsechat_voice', token);
       } catch (e) {
@@ -4333,7 +4549,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       audioUrl: finalAudioUrl,
       type: 'voice',
       voiceFilter: voiceFilter !== 'normal' ? voiceFilter : null,
-      replyTo: pendingVoiceMsg.replyTo
+      isEncrypted,
+      envelope,
+      content: '',
+      replyTo: isEncrypted
+        ? (pendingVoiceMsg.replyTo ? { id: pendingVoiceMsg.replyTo.id, type: pendingVoiceMsg.replyTo.type, senderId: pendingVoiceMsg.replyTo.senderId } : null)
+        : pendingVoiceMsg.replyTo
     });
   }, [chatId, user?.id, activeChat?.id, isGroup, replyTo, socket, token, chatAvatar]);
 
@@ -4936,15 +5157,74 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     // Direct background upload to Cloudinary Edge CDN (bypasses Render Node.js bandwidth!)
     (async () => {
       let finalMediaUrl = mediaUrl;
+      let mediaKey = null;
+      let mediaIv = null;
+      let isEncrypted = false;
+      let envelope = null;
+
       try {
         const payloadToUpload = rawFile || mediaUrl;
-        finalMediaUrl = await uploadMediaDirect(payloadToUpload, 'pulsechat_media', token, msgType === 'video');
+        if (!isGroup && activeChat?.id) {
+          // Encrypt attachment client-side with AES-256-GCM before uploading to CDN
+          const { uploadEncryptedMediaDirect } = await import('../../utils/mediaUpload');
+          const encRes = await uploadEncryptedMediaDirect(payloadToUpload, 'pulsechat_media', token, msgType === 'video');
+          finalMediaUrl = encRes.mediaUrl;
+          mediaKey = encRes.mediaKey;
+          mediaIv = encRes.mediaIv;
+
+          // Fetch peer device public key and encrypt E2EE envelope
+          let identity = myIdentityRef.current;
+          if (!identity && user?.id && token) {
+            try {
+              identity = await ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL);
+              myIdentityRef.current = identity;
+            } catch {}
+          }
+          const peerDevice = await fetchPeerDevicePublicKey(activeChat.id, token, BACKEND_URL);
+          if (!peerDevice || !peerDevice.publicKeyJwk) {
+            setActionToast('🔒 Waiting for recipient E2EE key registration...');
+            setTimeout(() => setActionToast(''), 3000);
+            return;
+          }
+          envelope = await encryptMessageEnvelope(
+            {
+              type: msgType,
+              mediaUrl: finalMediaUrl,
+              mediaKey,
+              mediaIv,
+              fileName: fileName || null,
+              fileSize: fileSize || null,
+              isViewOnce: msgType === 'document' ? false : isEphemeralPhoto,
+              isViewTwice: isTwice,
+              viewLimit: isEphemeralPhoto ? calculatedLimit : undefined,
+              isFogSnap: isDust,
+              isDustImage: Boolean(isDustImage || isDust),
+              fogSnapDuration: fogSnapDuration || 10,
+              replyTo: currentReplyTo
+            },
+            peerDevice.publicKeyJwk,
+            identity?.deviceId,
+            peerDevice.deviceId
+          );
+          isEncrypted = true;
+        } else {
+          finalMediaUrl = await uploadMediaDirect(payloadToUpload, 'pulsechat_media', token, msgType === 'video');
+        }
       } catch (e) {
-        console.warn('Direct media upload error:', e);
+        console.warn('Direct media upload / encryption error:', e);
       }
 
       // Update local optimistic message with finalized CDN URL
-      setMessages(prev => prev.map(m => m.id === tempMediaId ? { ...m, mediaUrl: finalMediaUrl, status: 'sent', isUploading: false } : m));
+      setMessages(prev => prev.map(m => m.id === tempMediaId ? {
+        ...m,
+        mediaUrl: finalMediaUrl,
+        mediaKey,
+        mediaIv,
+        isEncrypted,
+        envelope,
+        status: 'sent',
+        isUploading: false
+      } : m));
 
       socket.emit('send_message', {
         ...getSenderPayload(),
@@ -4955,6 +5235,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         isGroup,
         mediaUrl: finalMediaUrl,
         type: msgType,
+        isEncrypted,
+        envelope,
+        content: '',
         isViewOnce: msgType === 'document' ? false : isEphemeralPhoto,
         isViewTwice: isTwice,
         viewLimit: isEphemeralPhoto ? calculatedLimit : undefined,
@@ -4962,9 +5245,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         isDustImage: Boolean(isDustImage || isDust),
         fogSnapDuration: fogSnapDuration || 10,
         fogSnapStatus: isDust ? 'unrevealed' : undefined,
-        fileName: fileName || null,
-        fileSize: fileSize || null,
-        replyTo: currentReplyTo
+        fileName: isEncrypted ? null : (fileName || null),
+        fileSize: isEncrypted ? null : (fileSize || null),
+        replyTo: isEncrypted
+          ? (currentReplyTo ? { id: currentReplyTo.id, type: currentReplyTo.type, senderId: currentReplyTo.senderId } : null)
+          : currentReplyTo
       });
     })();
   };

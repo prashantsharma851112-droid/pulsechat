@@ -319,3 +319,18 @@ export async function uploadMediaDirect(fileOrDataUrl, folder = 'pulsechat_media
   }
   return '';
 }
+
+/**
+ * Encrypts media payload on device via AES-256-GCM before uploading ciphertext to CDN.
+ * The mediaKey and mediaIv must be placed strictly inside the E2EE message envelope.
+ */
+export async function uploadEncryptedMediaDirect(fileOrDataUrl, folder, token, isVideo = false) {
+  const { encryptAttachmentFile } = await import('./e2eeCrypto');
+  const encrypted = await encryptAttachmentFile(fileOrDataUrl);
+  const uploadedUrl = await uploadMediaDirect(encrypted.ciphertextBlob, folder, token, false);
+  return {
+    mediaUrl: uploadedUrl,
+    mediaKey: encrypted.mediaKeyJwk,
+    mediaIv: encrypted.iv
+  };
+}

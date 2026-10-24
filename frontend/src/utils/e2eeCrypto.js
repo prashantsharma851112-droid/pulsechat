@@ -466,3 +466,149 @@ export async function decryptAttachmentFile(ciphertextBuffer, mediaKeyJwk, ivBas
 
   return decryptedBuffer;
 }
+
+// In-memory cache for peer device public keys to prevent redundant network fetches
+const peerDeviceKeyCache = new Map();
+
+/**
+ * Registers this device's public key with the backend key directory
+ */
+export async function ensureDeviceIdentityRegistered(userId, token, apiBaseUrl = '') {
+  if (!userId) return null;
+  const identity = await getOrInitDeviceIdentity(userId);
+  if (!token) return identity;
+
+  const sessionKey = `pulsechat_device_registered_${userId}_${identity.deviceId}`;
+  if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(sessionKey)) {
+    return identity;
+  }
+
+  try {
+    const backendUrl = apiBaseUrl || (typeof window !== 'undefined' ? (window.__BACKEND_URL__ || '') : '');
+    const url = `${backendUrl}/api/keys/upload`;
+    const payload = {
+      device_keys: {
+        user_id: String(userId),
+        device_id: identity.deviceId,
+        algorithms: ['m.olm.v1.curve25519-aes-sha2', 'pulse.p256.aes-gcm.v1'],
+        keys: {
+          [`p256:${identity.deviceId}`]: identity.publicKeyJwk
+        }
+      }
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok && typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(sessionKey, '1');
+    }
+  } catch (err) {
+    console.warn('Could not register device public key with server:', err);
+  }
+
+  return identity;
+}
+
+/**
+ * Fetches the peer's active device public key for E2EE session establishment
+ */
+export async function fetchPeerDevicePublicKey(peerId, token, apiBaseUrl = '') {
+  if (!peerId) return null;
+  const cleanPeerId = String(peerId).trim();
+
+  if (peerDeviceKeyCache.has(cleanPeerId)) {
+    return peerDeviceKeyCache.get(cleanPeerId);
+  }
+
+  try {
+    const backendUrl = apiBaseUrl || (typeof window !== 'undefined' ? (window.__BACKEND_URL__ || '') : '');
+    const url = `${backendUrl}/api/keys/${encodeURIComponent(cleanPeerId)}`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const devices = data.devices || [];
+      for (const dev of devices) {
+        if (!dev || dev.revoked || dev.isRevoked) continue;
+        let pubJwk = null;
+        if (dev.keys && dev.keys.kty === 'EC') {
+          pubJwk = dev.keys;
+        } else if (dev.keys && typeof dev.keys === 'object') {
+          for (const [k, v] of Object.entries(dev.keys)) {
+            if (v && typeof v === 'object' && v.kty === 'EC') {
+              pubJwk = v;
+              break;
+            }
+          }
+        }
+        if (pubJwk) {
+          const result = {
+            deviceId: dev.device_id || dev.deviceId,
+            publicKeyJwk: pubJwk
+          };
+          peerDeviceKeyCache.set(cleanPeerId, result);
+          return result;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to fetch peer device public key:', err);
+  }
+
+  return null;
+}
+
+/**
+ * Decrypts a message if it contains an E2EE envelope
+ */
+export async function decryptMessageIfNeeded(msg, privateKey) {
+  if (!msg || !msg.isEncrypted || !msg.envelope || !privateKey) {
+    return msg;
+  }
+  try {
+    const decrypted = await decryptMessageEnvelope(msg.envelope, privateKey);
+    if (typeof decrypted === 'object' && decrypted !== null) {
+      return {
+        ...msg,
+        content: decrypted.content !== undefined ? decrypted.content : msg.content,
+        type: decrypted.type || msg.type,
+        textStyle: decrypted.textStyle !== undefined ? decrypted.textStyle : msg.textStyle,
+        replyTo: decrypted.replyTo !== undefined ? decrypted.replyTo : msg.replyTo,
+        mediaUrl: decrypted.mediaUrl !== undefined ? decrypted.mediaUrl : msg.mediaUrl,
+        audioUrl: decrypted.audioUrl !== undefined ? decrypted.audioUrl : msg.audioUrl,
+        mediaKey: decrypted.mediaKey || msg.mediaKey,
+        mediaIv: decrypted.mediaIv || msg.mediaIv,
+        fileName: decrypted.fileName !== undefined ? decrypted.fileName : msg.fileName,
+        fileSize: decrypted.fileSize !== undefined ? decrypted.fileSize : msg.fileSize,
+        isViewOnce: decrypted.isViewOnce !== undefined ? decrypted.isViewOnce : msg.isViewOnce,
+        isViewTwice: decrypted.isViewTwice !== undefined ? decrypted.isViewTwice : msg.isViewTwice,
+        _decrypted: true
+      };
+    } else if (typeof decrypted === 'string') {
+      return {
+        ...msg,
+        content: decrypted,
+        _decrypted: true
+      };
+    }
+  } catch (err) {
+    console.warn('Failed to decrypt message envelope:', err.message);
+    return {
+      ...msg,
+      content: '🔒 Encrypted message (cannot decrypt on this device)',
+      _decryptionFailed: true
+    };
+  }
+  return msg;
+}

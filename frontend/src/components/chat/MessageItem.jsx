@@ -16,7 +16,7 @@ import Animated3DText from '../common/Animated3DText';
 import GiftUnboxModal from './GiftUnboxModal';
 import AnonymousStoryReplyModal from './AnonymousStoryReplyModal';
 import { getSavedQuickReactions, recordRecentReaction } from '../../utils/quickReactions';
-import { getCachedMediaUrl, getSyncCachedMediaUrl, getOrCacheAudioBlobUrl, getSyncCachedAudioUrl } from '../../utils/mediaCache';
+import { getCachedMediaUrl, getSyncCachedMediaUrl, getOrCacheAudioBlobUrl, getSyncCachedAudioUrl, getOrCacheDecryptedMediaUrl } from '../../utils/mediaCache';
 import CachedImage from '../common/CachedImage';
 
 // In-memory set of loaded media URLs so images never flash or reload when scrolling
@@ -931,6 +931,30 @@ function MessageItem({
 
   // Stable direct media handling without re-rendering blob swaps
   const isMediaImage = Boolean(message.mediaUrl && (message.type === 'image' || message.mediaType === 'image'));
+
+  const [decryptedMediaUrl, setDecryptedMediaUrl] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    if (message.mediaUrl && message.mediaKey && message.mediaIv) {
+      const mime = message.type === 'video' ? 'video/mp4' : (message.type === 'voice' || message.type === 'audio' ? 'audio/webm' : 'image/jpeg');
+      getOrCacheDecryptedMediaUrl(message.mediaUrl, message.mediaKey, message.mediaIv, mime)
+        .then(url => {
+          if (active && url) setDecryptedMediaUrl(url);
+        })
+        .catch(() => {});
+    } else if (message.audioUrl && message.mediaKey && message.mediaIv) {
+      getOrCacheDecryptedMediaUrl(message.audioUrl, message.mediaKey, message.mediaIv, 'audio/webm')
+        .then(url => {
+          if (active && url) setDecryptedMediaUrl(url);
+        })
+        .catch(() => {});
+    }
+    return () => { active = false; };
+  }, [message.mediaUrl, message.audioUrl, message.mediaKey, message.mediaIv, message.type]);
+
+  const activeMediaUrl = decryptedMediaUrl || message.mediaUrl;
+  const activeAudioUrl = decryptedMediaUrl || message.audioUrl;
 
   const [audioObj, setAudioObj] = useState(null);
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -1902,7 +1926,7 @@ function MessageItem({
         {/* Voice Note Message */}
         {message.type === 'voice' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <VoiceNotePlayer audioUrl={message.audioUrl} isMine={isMine} voiceFilter={message.voiceFilter} />
+            <VoiceNotePlayer audioUrl={activeAudioUrl} isMine={isMine} voiceFilter={message.voiceFilter} />
 
             {/* AI Voice Emotion Tag */}
             {(() => {
@@ -2227,7 +2251,7 @@ function MessageItem({
             {message.type === 'video' ? (
               <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', width: '280px', maxWidth: '100%' }}>
                 <video
-                  src={message.mediaUrl}
+                  src={activeMediaUrl}
                   controls
                   playsInline
                   preload="metadata"
@@ -2320,7 +2344,7 @@ function MessageItem({
                 onClick={() => setShowImagePreview(true)}
               >
                 <CachedImage
-                  src={message.mediaUrl}
+                  src={activeMediaUrl}
                   alt={message.fileName || "Attached Media"}
                   loading="eager"
                   decoding="async"

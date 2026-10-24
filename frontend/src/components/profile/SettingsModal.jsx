@@ -1,18 +1,20 @@
 import React, { useState, useContext, useMemo, useRef, useEffect, useCallback } from 'react';
 import { ThemeContext } from '../../context/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
+import { SocketContext } from '../../context/SocketContext';
 import { 
   X, Check, User, Plus, EyeOff, ShieldAlert, LogOut, Settings as SettingsIcon, 
   Sparkles, Bell, BellOff, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2, 
   Crown, Lock, Shield, FileText, HelpCircle, RefreshCw, AlertTriangle, Loader2,
   ChevronRight, ArrowLeft, HardDrive, Palette, Info, Mail, Compass, Send, CheckCircle2, MessageSquare,
-  Ghost, Search, Volume2, VolumeX, Download, Upload, Database, CheckCircle, KeyRound
+  Ghost, Search, Volume2, VolumeX, Download, Upload, Database, CheckCircle, KeyRound, QrCode
 } from 'lucide-react';
 import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
 import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { getCachedRecentChats, getCachedFriends, getCachedAllUsers } from '../../utils/offlineStorage';
 import { createFullDeviceBackup, restoreFullDeviceBackup, getLocalDatabaseStats, isChatBackupEnabled, setChatBackupEnabled } from '../../utils/localDatabase';
+import { initiateQrSyncSession, approveAndStreamHistory, listenAndImportHistory } from '../../utils/qrSyncManager';
 import PulseProModal from '../chat/PulseProModal';
 import PulseVipBadge from '../common/PulseVipBadge';
 import AppFeatureTourModal from '../common/AppFeatureTourModal';
@@ -272,6 +274,66 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
   const [restorePassword, setRestorePassword] = useState('');
   const [pendingRestoreText, setPendingRestoreText] = useState(null);
   const [showRestorePasswordPrompt, setShowRestorePasswordPrompt] = useState(false);
+
+  const { socket } = useContext(SocketContext) || {};
+  const [qrDisplayData, setQrDisplayData] = useState(null);
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [transferProgress, setTransferProgress] = useState(null);
+
+  const handleStartQrTransfer = async () => {
+    if (!socket) {
+      setStatusMsg({ type: 'error', text: 'Connecting to network...' });
+      return;
+    }
+    setIsTransferring(true);
+    setTransferProgress('Creating secure pairing session...');
+    try {
+      const session = await initiateQrSyncSession(socket);
+      setQrDisplayData(session.qrPayload);
+      setTransferProgress('Waiting for other device to approve...');
+      listenAndImportHistory(socket, session.sessionId, session.ephemeralKeyPair.privateKey, (curr, total) => {
+        setTransferProgress(`Importing chats: ${curr}/${total} chunks...`);
+      }).then(res => {
+        setStatusMsg({ type: 'success', text: `Synced ${res.importedMessages} messages from linked device!` });
+        setQrDisplayData(null);
+        setTransferProgress(null);
+        loadStats();
+      }).catch(err => {
+        setStatusMsg({ type: 'error', text: err.message || 'Transfer cancelled' });
+        setQrDisplayData(null);
+        setTransferProgress(null);
+      }).finally(() => {
+        setIsTransferring(false);
+      });
+    } catch (err) {
+      setStatusMsg({ type: 'error', text: err.message || 'Failed to initiate transfer' });
+      setIsTransferring(false);
+      setTransferProgress(null);
+    }
+  };
+
+  const handleApproveQrTransfer = async () => {
+    if (!socket) {
+      setStatusMsg({ type: 'error', text: 'Connecting to network...' });
+      return;
+    }
+    const code = prompt('Enter the Pairing Code displayed on your other device:');
+    if (!code || !code.trim()) return;
+    setIsTransferring(true);
+    setTransferProgress('Authorizing device...');
+    try {
+      const res = await approveAndStreamHistory(socket, code.trim(), (curr, total) => {
+        setTransferProgress(`Streaming chats: ${curr}/${total} chunks...`);
+      });
+      setStatusMsg({ type: 'success', text: `Transferred ${res.transferredMessages} messages to new device!` });
+      setTransferProgress(null);
+    } catch (err) {
+      setStatusMsg({ type: 'error', text: err.message || 'Transfer failed' });
+      setTransferProgress(null);
+    } finally {
+      setIsTransferring(false);
+    }
+  };
 
   useEffect(() => {
     if (isExpanded) {
@@ -713,6 +775,111 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
               style={{ display: 'none' }}
               onChange={handleFilePicked}
             />
+          </div>
+
+          {/* WhatsApp-Style Direct Device Linking & QR History Transfer */}
+          <div style={{
+            background: 'var(--bg-card)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            borderRadius: '10px',
+            padding: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <QrCode size={16} /> Link Device / Instant History Sync
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              Transfer encrypted chat history directly between your phones without downloading files.
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
+              <button
+                type="button"
+                onClick={handleStartQrTransfer}
+                disabled={isTransferring}
+                className="interactive-tap"
+                style={{
+                  border: '1px solid rgba(16, 185, 129, 0.5)',
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  color: '#10b981',
+                  borderRadius: '8px',
+                  padding: '8px',
+                  fontSize: '0.76rem',
+                  fontWeight: 700,
+                  cursor: isTransferring ? 'wait' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px'
+                }}
+              >
+                <QrCode size={13} />
+                <span>Show QR Code</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleApproveQrTransfer}
+                disabled={isTransferring}
+                className="interactive-tap"
+                style={{
+                  border: '1px solid var(--border)',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  color: 'var(--text-main)',
+                  borderRadius: '8px',
+                  padding: '8px',
+                  fontSize: '0.76rem',
+                  fontWeight: 700,
+                  cursor: isTransferring ? 'wait' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px'
+                }}
+              >
+                <RefreshCw size={13} />
+                <span>Pair With Code</span>
+              </button>
+            </div>
+
+            {/* QR Pairing Code Display */}
+            {qrDisplayData && (
+              <div style={{
+                background: 'rgba(0,0,0,0.3)',
+                padding: '10px',
+                borderRadius: '8px',
+                border: '1px dashed rgba(16, 185, 129, 0.4)',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 700, marginBottom: '4px' }}>
+                  Scan / Enter on your other device (Expires in 120s):
+                </div>
+                <div style={{
+                  fontSize: '0.68rem',
+                  wordBreak: 'break-all',
+                  fontFamily: 'monospace',
+                  background: '#000',
+                  padding: '6px',
+                  borderRadius: '6px',
+                  color: '#a7f3d0',
+                  userSelect: 'all'
+                }}>
+                  {qrDisplayData}
+                </div>
+                {transferProgress && (
+                  <div style={{ fontSize: '0.72rem', color: '#10b981', marginTop: '6px', fontWeight: 600 }}>
+                    {transferProgress}
+                  </div>
+                )}
+              </div>
+            )}
+            {!qrDisplayData && transferProgress && (
+              <div style={{ fontSize: '0.72rem', color: 'var(--accent)', fontWeight: 600, textAlign: 'center' }}>
+                {transferProgress}
+              </div>
+            )}
           </div>
 
           {statusMsg && (

@@ -236,3 +236,37 @@ export function preloadAudioUrls(urls = []) {
     }
   });
 }
+
+/**
+ * Retrieves or decrypts a cached Blob URL for an E2EE encrypted media attachment.
+ * Decrypts with AES-256-GCM using mediaKey & mediaIv from the E2EE envelope.
+ */
+export async function getOrCacheDecryptedMediaUrl(remoteUrl, mediaKey, mediaIv, mimeType = 'image/jpeg') {
+  if (!remoteUrl || typeof remoteUrl !== 'string') return '';
+  if (remoteUrl.startsWith('data:') || remoteUrl.startsWith('blob:')) {
+    return remoteUrl;
+  }
+  if (!mediaKey || !mediaIv) {
+    return getCachedMediaUrl(remoteUrl);
+  }
+
+  const cacheKey = `enc_${remoteUrl}`;
+  if (inMemoryBlobUrlCache.has(cacheKey)) {
+    return inMemoryBlobUrlCache.get(cacheKey);
+  }
+
+  try {
+    const res = await fetch(remoteUrl);
+    if (!res.ok) return remoteUrl;
+    const ciphertext = await res.arrayBuffer();
+    const { decryptAttachmentFile } = await import('./e2eeCrypto');
+    const decryptedBuffer = await decryptAttachmentFile(ciphertext, mediaKey, mediaIv);
+    const blob = new Blob([decryptedBuffer], { type: mimeType });
+    const blobUrl = URL.createObjectURL(blob);
+    inMemoryBlobUrlCache.set(cacheKey, blobUrl);
+    return blobUrl;
+  } catch (err) {
+    console.warn('Decryption of attachment failed:', err);
+    return remoteUrl;
+  }
+}

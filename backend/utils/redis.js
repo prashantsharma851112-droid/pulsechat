@@ -82,22 +82,14 @@ const redis = {
     }
   },
 
-  // get cached messages
+  // get cached messages - disabled to prevent plaintext message leaks
   async getCachedMessages(chatId) {
-    if (!chatId) return null;
-    const raw = await this.get(`pulse_chat_msgs:${chatId}`);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
+    return null;
   },
 
-  // set cached messages
+  // set cached messages - disabled: full message bodies are strictly never cached in Redis
   async setCachedMessages(chatId, messages, ttl = 1800) {
-    if (!chatId || !Array.isArray(messages)) return;
-    await this.set(`pulse_chat_msgs:${chatId}`, messages, ttl);
+    return;
   },
 
   // invalidate chat cache
@@ -123,10 +115,26 @@ const redis = {
     }
   },
 
-  // set cached recent chats
+  // set cached recent chats - strictly strips all message content and media keys before caching metadata
   async setCachedRecent(userId, conversations, ttl = 60) {
     if (!userId || !Array.isArray(conversations)) return;
-    await this.set(`pulse_recent:${userId}`, conversations, ttl);
+    const sanitized = conversations.map(c => {
+      if (!c) return c;
+      const copy = { ...c };
+      if (copy.lastMessage) {
+        copy.lastMessage = {
+          ...copy.lastMessage,
+          content: '',
+          mediaUrl: null,
+          audioUrl: null
+        };
+      }
+      delete copy.content;
+      delete copy.mediaUrl;
+      delete copy.audioUrl;
+      return copy;
+    });
+    await this.set(`pulse_recent:${userId}`, sanitized, ttl);
   },
 
   // invalidate recent chats

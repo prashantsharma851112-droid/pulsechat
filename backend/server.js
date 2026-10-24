@@ -144,8 +144,9 @@ const jwt = require('jsonwebtoken');
 const { registerChatSocket } = require('./chat/registerChatSocket');
 const { registerQrSyncSocket } = require('./chat/registerQrSyncSocket');
 
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+  const candidateDeviceId = socket.handshake.auth?.deviceId || socket.handshake.query?.deviceId || socket.handshake.headers?.['x-device-id'];
 
   if (typeof token !== 'string' || !token.trim()) {
     return next(new Error('AUTHENTICATION_FAILED: Token missing'));
@@ -160,9 +161,40 @@ io.use((socket, next) => {
     }
 
     socket.authenticatedUserId = String(rawId);
+    if (typeof candidateDeviceId === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(candidateDeviceId)) {
+      socket.authenticatedDeviceId = candidateDeviceId;
+    }
     socket.data = socket.data || {};
     socket.data.userId = String(rawId);
+    if (socket.authenticatedDeviceId) socket.data.deviceId = socket.authenticatedDeviceId;
     socket.userId = String(rawId);
+
+    if (socket.authenticatedDeviceId) {
+      let registeredDevice = null;
+      try {
+        const DeviceKey = require('./models/DeviceKey');
+        registeredDevice = await DeviceKey.findOne({
+          userId: String(rawId),
+          deviceId: socket.authenticatedDeviceId,
+          revoked: { $ne: true }
+        }).select('userId deviceId').lean();
+      } catch (_) {}
+
+      if (!registeredDevice) {
+        try {
+          const DeviceIdentity = require('./models/DeviceIdentity');
+          registeredDevice = await DeviceIdentity.findOne({
+            userId: String(rawId),
+            deviceId: socket.authenticatedDeviceId,
+            isRevoked: false
+          }).select('userId deviceId').lean();
+        } catch (_) {}
+      }
+
+      if (!registeredDevice) {
+        return next(new Error('AUTHENTICATION_FAILED: Device not registered or revoked'));
+      }
+    }
 
     return next();
   } catch (err) {
@@ -1216,14 +1248,14 @@ io.on('connection', (socket) => {
         receiverId: resolvedReceiverId,
         isGroup: !!isGroup,
         isForwarded: Boolean(messageData.isForwarded),
-        content: content || '',
+        content: Boolean(messageData.isEncrypted) ? '' : (content || ''),
         type: type || 'text',
         textStyle: textStyle || (type === '3d_text' ? 'cyber-neon' : null),
         audioUrl: finalAudioUrl,
         mediaUrl: finalMediaUrl || (Array.isArray(mediaUrls) && mediaUrls.length > 0 ? mediaUrls[0] : null),
         mediaUrls: Array.isArray(mediaUrls) ? mediaUrls : (finalMediaUrl ? [finalMediaUrl] : []),
-        fileName: fileName || null,
-        fileSize: fileSize || null,
+        fileName: Boolean(messageData.isEncrypted) ? null : (fileName || null),
+        fileSize: Boolean(messageData.isEncrypted) ? null : (fileSize || null),
         pollData: pollData || null,
         giftData: giftData || null,
         callData: callData || null,
@@ -1240,10 +1272,14 @@ io.on('connection', (socket) => {
         createdAt: new Date(),
         timestamp: new Date().toISOString(),
         reactions: {},
-        replyTo: replyTo || null,
-        storyReply: storyReply || messageData.storyReply || null,
+        replyTo: (messageData.isEncrypted && replyTo)
+          ? { id: replyTo.id, type: replyTo.type, senderId: replyTo.senderId, senderName: replyTo.senderName }
+          : (replyTo || null),
+        storyReply: Boolean(messageData.isEncrypted) ? null : (storyReply || messageData.storyReply || null),
         isVanish: Boolean(messageData.isVanish),
-        expiresAt: expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        expiresAt: expiresAt || new Date(Date.now() + (messageData.isEncrypted ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000)),
+        isEncrypted: Boolean(messageData.isEncrypted),
+        envelope: messageData.envelope || null
       };
 
       // Bind cryptographic HMAC receiptToken ONLY for 1-on-1 direct messages (never in group broadcasts)
@@ -1361,13 +1397,9 @@ io.on('connection', (socket) => {
       setImmediate(async () => {
         try {
           if (resolvedReceiverId && !isGroup) {
-            const bodyText = newMsg.isForwarded
-              ? `➡️ Forwarded: ${newMsg.content || newMsg.type}`
-              : (newMsg.type === 'text'
-                  ? (newMsg.content || 'New message')
-                  : (newMsg.type === '3d_text'
-                      ? `✨ 3D Text: "${newMsg.content}"`
-                      : `Sent a ${newMsg.type}`));
+            const bodyText = (newMsg.isEncrypted || newMsg.type === 'text' || newMsg.type === '3d_text')
+              ? 'New message'
+              : (newMsg.type === 'image' || newMsg.type === 'video' ? 'Sent an attachment' : `Sent a ${newMsg.type}`);
             dispatchWebPush(resolvedReceiverId, `💬 ${resolvedSenderName}`, bodyText, `pc-${chatId}`, chatId, newMsg.id, senderId, false, resolvedSenderAvatar);
           } else if (isGroup) {
             const Group = require('./models/Group');
@@ -1381,11 +1413,7 @@ io.on('connection', (socket) => {
                 senderName: resolvedSenderName,
                 senderAvatar: group.avatar || resolvedSenderAvatar || null
               };
-              const bodyText = newMsg.type === 'text'
-                ? `${resolvedSenderName}: ${newMsg.content}`
-                : (newMsg.type === '3d_text'
-                    ? `${resolvedSenderName} sent 3D text: "${newMsg.content}" ✨`
-                    : `${resolvedSenderName} sent a ${newMsg.type}`);
+              const bodyText = `${resolvedSenderName} sent a message`;
 
               group.members.forEach(memberId => {
                 if (memberId !== senderId) {
