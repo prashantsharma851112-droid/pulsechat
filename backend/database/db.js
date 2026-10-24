@@ -46,32 +46,133 @@ module.exports = {
 
   getMessages: async (chatId, limit = 50, before = null, userId = null, since = null) => {
     let chatQuery = chatId;
+    const queryList = [chatId];
+
     if (chatId && typeof chatId === 'string') {
-      const queryList = [chatId];
-      if (chatId.includes('_user_')) {
-        const idx = chatId.indexOf('_user_');
-        const first = chatId.slice(0, idx);
-        const second = chatId.slice(idx + 1);
-        queryList.push(`${second}_${first}`);
+      if (chatId.includes('_') && !chatId.startsWith('group_')) {
+        const parts = chatId.split('_');
+        if (parts.length === 2) {
+          queryList.push(`${parts[1]}_${parts[0]}`);
+          queryList.push(parts.slice().sort().join('_'));
+        } else {
+          const userIdx = chatId.indexOf('_user_');
+          if (userIdx !== -1) {
+            const first = chatId.slice(0, userIdx);
+            const second = chatId.slice(userIdx + 1);
+            queryList.push(`${second}_${first}`);
+            queryList.push([first, second].sort().join('_'));
+          }
+        }
       }
-      chatQuery = queryList.length > 1 ? { $in: queryList } : chatId;
     }
-    const query = {
-      chatId: chatQuery,
-      $or: [
-        { expiresAt: null },
-        { expiresAt: { $gt: new Date() } }
-      ]
-    };
+
+    // Bidirectional participant resolution: Resolves both users' (id, _id, username)
+    // so messages are accurately returned regardless of which format chatId was formed in
+    let participantFilter = null;
+    if (chatId && typeof chatId === 'string' && !chatId.startsWith('group_')) {
+      try {
+        const mongoose = require('mongoose');
+        let uid1 = userId;
+        let uid2 = null;
+
+        if (chatId.includes('_')) {
+          const split = chatId.split('_');
+          if (split.length === 2) {
+            uid1 = uid1 || split[0];
+            uid2 = split[1];
+          } else if (chatId.indexOf('_user_') !== -1) {
+            const uIdx = chatId.indexOf('_user_');
+            uid1 = uid1 || chatId.slice(0, uIdx);
+            uid2 = chatId.slice(uIdx + 1);
+          }
+        } else {
+          uid2 = chatId;
+        }
+
+        if (uid1 && uid2) {
+          const buildUserQueries = (rawId) => {
+            if (!rawId) return [];
+            const s = String(rawId).trim();
+            const withoutUser = s.replace(/^user_/, '');
+            const withUser = s.startsWith('user_') ? s : `user_${s}`;
+            const candidates = Array.from(new Set([s, withoutUser, withUser].filter(Boolean)));
+            const isOid = mongoose.Types.ObjectId.isValid(s);
+            const orList = [];
+            candidates.forEach(c => {
+              orList.push({ id: c });
+              orList.push({ username: c });
+            });
+            if (isOid) orList.push({ _id: s });
+            return orList;
+          };
+
+          const [u1, u2] = await Promise.all([
+            User.findOne({ $or: buildUserQueries(uid1) }).select('id _id username').lean(),
+            User.findOne({ $or: buildUserQueries(uid2) }).select('id _id username').lean()
+          ]);
+
+          const vars1 = Array.from(new Set([
+            uid1,
+            uid1?.replace(/^user_/, ''),
+            u1?.id,
+            u1?._id ? u1._id.toString() : null,
+            u1?.username
+          ].filter(Boolean).map(String)));
+
+          const vars2 = Array.from(new Set([
+            uid2,
+            uid2?.replace(/^user_/, ''),
+            u2?.id,
+            u2?._id ? u2._id.toString() : null,
+            u2?.username
+          ].filter(Boolean).map(String)));
+
+          if (vars1.length > 0 && vars2.length > 0) {
+            for (const v1 of vars1) {
+              for (const v2 of vars2) {
+                queryList.push(`${v1}_${v2}`);
+                queryList.push(`${v2}_${v1}`);
+                queryList.push([v1, v2].sort().join('_'));
+              }
+            }
+
+            participantFilter = {
+              $or: [
+                { senderId: { $in: vars1 }, receiverId: { $in: vars2 } },
+                { senderId: { $in: vars2 }, receiverId: { $in: vars1 } }
+              ]
+            };
+          }
+        }
+      } catch (e) {}
+    }
+
+    const uniqueChatQueries = Array.from(new Set(queryList.filter(Boolean)));
+    const baseChatFilter = participantFilter
+      ? { $or: [{ chatId: { $in: uniqueChatQueries } }, ...participantFilter.$or] }
+      : { chatId: uniqueChatQueries.length > 1 ? { $in: uniqueChatQueries } : chatId };
+
+    const andConditions = [
+      baseChatFilter,
+      {
+        $or: [
+          { expiresAt: null },
+          { expiresAt: { $gt: new Date() } }
+        ]
+      }
+    ];
+
     if (userId) {
-      query.deletedFor = { $ne: String(userId) };
+      andConditions.push({ deletedFor: { $ne: String(userId) } });
     }
     if (before) {
-      query.timestamp = { $lt: before };
+      andConditions.push({ timestamp: { $lt: before } });
     }
     if (since) {
-      query.timestamp = { $gt: since };
+      andConditions.push({ timestamp: { $gt: since } });
     }
+
+    const query = { $and: andConditions };
     const limitNum = Math.min(parseInt(limit, 10) || 50, 200);
     const msgs = await Message.find(query)
       .sort({ timestamp: since ? 1 : -1 })

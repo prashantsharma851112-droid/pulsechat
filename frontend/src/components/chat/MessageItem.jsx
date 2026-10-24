@@ -1957,7 +1957,7 @@ function MessageItem({
             onOpenStory={onOpenStory}
             onOpenSparksWallet={onOpenSparksWallet}
           />
-        ) : (message.type === 'text' && (() => {
+        ) : ((!message.type || message.type === 'text') && (() => {
           const urlMatch = message.content && message.content.match(/(https?:\/\/[^\s]+)/);
           const renderTextWithHighlight = (content) => {
             if (!highlightSearchTerm || !content) return content;
@@ -2617,13 +2617,19 @@ function MessageItem({
 
         {/* 3D Animated Typography Message (VIP Pro Feature) */}
         {message.type === '3d_text' && (
-          <Animated3DText
-            text={message.content}
-            styleType={message.textStyle || 'cyber-neon'}
-            isMine={isMine}
-            timeStr={timeStr}
-            status={message.status}
-          />
+          message.isEncrypted && !message.content && !message._decrypted ? (
+            <div style={{ padding: '8px 12px', fontStyle: 'italic', opacity: 0.7, fontSize: '13px' }}>
+              🔒 Decrypting 3D message...
+            </div>
+          ) : (
+            <Animated3DText
+              text={message.content || '...'}
+              styleType={message.textStyle || 'cyber-neon'}
+              isMine={isMine}
+              timeStr={timeStr}
+              status={message.status}
+            />
+          )
         )}
 
         {/* Poll Message */}

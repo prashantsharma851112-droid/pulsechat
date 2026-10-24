@@ -97,6 +97,8 @@ export async function saveMessagesToLocalDb(chatId, messages) {
   const db = await getDb();
   if (!db) throw new Error('IndexedDB is not available on this device.');
 
+  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+
   return new Promise((resolve, reject) => {
     try {
       const tx = db.transaction([STORE_MESSAGES], 'readwrite');
@@ -104,10 +106,16 @@ export async function saveMessagesToLocalDb(chatId, messages) {
 
       for (const msg of messages) {
         if (msg && (msg.id || msg.clientTempId)) {
+          // If message now has real ID, clean up old clientTempId optimistic entry
+          if (msg.clientTempId && msg.id && String(msg.clientTempId) !== String(msg.id)) {
+            try {
+              store.delete(String(msg.clientTempId));
+            } catch (_) {}
+          }
           const record = {
             ...msg,
             id: String(msg.id || msg.clientTempId),
-            chatId: String(chatId),
+            chatId: String(canonicalChatId || chatId),
             timestamp: msg.timestamp || msg.createdAt || new Date().toISOString()
           };
           store.put(record);
@@ -125,6 +133,7 @@ export async function saveMessagesToLocalDb(chatId, messages) {
 
 /**
  * Query messages from local IndexedDB by chatId with optional pagination.
+ * Queries both standard and canonical sorted chatId to ensure full history symmetry.
  * Runs in 1-2 milliseconds on local storage.
  */
 export async function getMessagesFromLocalDb(chatId, limit = 100, beforeTimestamp = null) {
@@ -132,33 +141,58 @@ export async function getMessagesFromLocalDb(chatId, limit = 100, beforeTimestam
   const db = await getDb();
   if (!db) return [];
 
+  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+  const targetKeys = Array.from(new Set([String(chatId), String(canonicalChatId)].filter(Boolean)));
+
   return new Promise((resolve) => {
     try {
       const tx = db.transaction([STORE_MESSAGES], 'readonly');
       const store = tx.objectStore(STORE_MESSAGES);
       const index = store.index('chatId');
-      const request = index.getAll(String(chatId));
 
-      request.onsuccess = (e) => {
-        let all = e.target.result || [];
-        // Sort chronologically
-        all.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+      const allResults = [];
+      let pendingRequests = targetKeys.length;
 
-        if (beforeTimestamp) {
-          const beforeDate = new Date(beforeTimestamp).getTime();
-          all = all.filter(m => new Date(m.timestamp || 0).getTime() < beforeDate);
-        }
+      targetKeys.forEach(k => {
+        const req = index.getAll(k);
+        req.onsuccess = (e) => {
+          if (Array.isArray(e.target.result)) {
+            allResults.push(...e.target.result);
+          }
+          pendingRequests--;
+          if (pendingRequests === 0) {
+            // Deduplicate by unique id / clientTempId
+            const uniqueMap = new Map();
+            for (const item of allResults) {
+              const uKey = String(item.id || item._id || item.clientTempId || '');
+              if (uKey && !uniqueMap.has(uKey)) {
+                uniqueMap.set(uKey, item);
+              }
+            }
 
-        if (limit && all.length > limit) {
-          all = all.slice(-limit);
-        }
+            let all = Array.from(uniqueMap.values());
+            // Sort chronologically
+            all.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
 
-        resolve(all);
-      };
+            if (beforeTimestamp) {
+              const beforeDate = new Date(beforeTimestamp).getTime();
+              all = all.filter(m => new Date(m.timestamp || 0).getTime() < beforeDate);
+            }
 
-      request.onerror = () => {
-        resolve([]);
-      };
+            if (limit && all.length > limit) {
+              all = all.slice(-limit);
+            }
+
+            resolve(all);
+          }
+        };
+        req.onerror = () => {
+          pendingRequests--;
+          if (pendingRequests === 0) {
+            resolve([]);
+          }
+        };
+      });
     } catch (err) {
       resolve([]);
     }

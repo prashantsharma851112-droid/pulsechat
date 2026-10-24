@@ -2698,21 +2698,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         mergeIntoAllUsersCache(user.id, [{ ...activeChat, avatar: chatAvatar || activeChat.avatar }]);
       }
 
-      // 2. Fetch fresh messages: WhatsApp-style Local-First Delta Sync!
-      const cached = getCachedMessages(chatId, user?.id);
-      let latestCachedTime = null;
-      if (cached && cached.length > 0) {
-        const lastMsg = cached[cached.length - 1];
-        latestCachedTime = lastMsg?.timestamp || lastMsg?.createdAt || null;
-      }
-
-      // If local cache already exists, only query messages sent AFTER latestCachedTime!
-      const queryParam = latestCachedTime 
-        ? `since=${encodeURIComponent(latestCachedTime)}` 
-        : 'limit=100';
+      // 2. Fetch fresh messages: Robust Local-First History Reconciliation
+      // Fetches the latest window (100 messages) without restrictive timestamp cutoffs,
+      // ensuring any messages sent from other devices or missed during background states are unified.
       const isCurrentGhost = checkGhostModeActive();
 
-      fetch(`${BACKEND_URL}/api/messages/${chatId}?${queryParam}${isCurrentGhost ? '&ghost=true' : ''}`, {
+      fetch(`${BACKEND_URL}/api/messages/${chatId}?limit=100${isCurrentGhost ? '&ghost=true' : ''}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           ...(isCurrentGhost ? { 'x-ghost-mode': 'true' } : {})
@@ -2721,12 +2712,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         .then(res => res.json())
         .then(async data => {
           if (Array.isArray(data)) {
-            // Delta Sync Optimization: If cache had latest messages and server returns 0,
-            // we are 100% up-to-date locally (0ms, 0 re-render, 0 database load)!
-            if (latestCachedTime && data.length === 0) {
-              return;
-            }
-
             // Filter out any locally deleted messages
             const deletedForMe = getDeletedForMeIds(user?.id);
             const rawServerMsgs = data.filter(m => !deletedForMe.has(String(m.id)) && !deletedForMe.has(String(m._id)));
@@ -2749,27 +2734,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 return m;
               })
             );
-
-            // If delta new messages arrived, append and merge into local IndexedDB cache
-            if (latestCachedTime && serverMsgs.length > 0) {
-              const baseNow = getCachedMessages(chatId, user?.id);
-              const deltaMap = new Map();
-              baseNow.forEach(m => deltaMap.set(m.clientTempId || m.id, m));
-              serverMsgs.forEach(m => {
-                if (m.clientTempId) deltaMap.delete(m.clientTempId);
-                if (m.tempId) deltaMap.delete(m.tempId);
-                const existing = deltaMap.get(m.id) || (m.clientTempId && deltaMap.get(m.clientTempId));
-                const finalContent = existing?.content || m.content || '';
-                deltaMap.set(m.id, { ...m, content: finalContent });
-              });
-              const deltaMerged = Array.from(deltaMap.values())
-                .sort((a, b) => new Date(a.timestamp || a.createdAt || 0) - new Date(b.timestamp || b.createdAt || 0))
-                .map(sanitizeFogSnapMessage)
-                .filter(Boolean);
-              setMessages(deltaMerged);
-              setCachedMessages(chatId, deltaMerged);
-              return;
-            }
 
             const noMore = localStorage.getItem(`pulsechat_nomore_${chatId}`) === 'true';
             setHasMoreOlderMessages(!noMore && data.length >= 50);
@@ -2801,15 +2765,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             // 2. Merge any incoming server messages (queued offline messages or updates)
             serverMsgs.forEach(m => {
               if (m && m.id) {
+                const existing = messageMap.get(m.id) ||
+                  (m.clientTempId && messageMap.get(m.clientTempId)) ||
+                  (m.tempId && messageMap.get(m.tempId));
                 if (m.clientTempId && messageMap.has(m.clientTempId)) {
                   messageMap.delete(m.clientTempId);
                 }
                 if (m.tempId && messageMap.has(m.tempId)) {
                   messageMap.delete(m.tempId);
                 }
-                const existing = messageMap.get(m.id) || (m.clientTempId && messageMap.get(m.clientTempId));
-                const finalContent = existing?.content || m.content || '';
-                messageMap.set(m.id, { ...m, content: finalContent });
+                const isSentByMe = m?.senderId && myIdSet.has(String(m.senderId));
+                const finalContent = isSentByMe
+                  ? (existing?.content || m.content || '')
+                  : (m.content || existing?.content || '');
+                messageMap.set(m.id, { ...existing, ...m, content: finalContent });
               }
             });
 
@@ -2862,6 +2831,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             }
             if (merged.length > 0) {
               setCachedMessages(chatId, merged);
+              saveMessagesToLocalDb(chatId, merged).catch(() => {});
+              const lastMerged = merged[merged.length - 1];
+              if (lastMerged) {
+                updateRecentChatSnippet(user?.id, chatId, lastMerged, activeChat);
+              }
             }
           }
         })
@@ -3357,7 +3331,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             updated = [...prev];
             const existing = updated[matchIdx];
             // Sender preserves their local plaintext; recipient uses decrypted content
-            const finalContent = existing?.content || sanitizedMsg.content || '';
+            const finalContent = isFromMe
+              ? (existing?.content || sanitizedMsg.content || '')
+              : (sanitizedMsg.content || existing?.content || '');
             updated[matchIdx] = { ...sanitizedMsg, content: finalContent };
           } else {
             // For own messages not yet in state, check cached storage before falling back to wire content
@@ -3371,6 +3347,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             updated = [...prev, sanitizedMsg];
           }
           setCachedMessages(chatId, updated);
+          saveMessagesToLocalDb(chatId, updated).catch(() => {});
           return updated;
         });
 

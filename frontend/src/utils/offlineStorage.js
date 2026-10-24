@@ -450,7 +450,13 @@ export function addDeletedForMeId(userId, messageId) {
 
 export function getCachedMessages(chatId, userId = null) {
   if (typeof window === 'undefined' || !chatId) return [];
-  const msgs = safeParse(localStorage.getItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`), []);
+  let msgs = safeParse(localStorage.getItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`), null);
+  if (!Array.isArray(msgs) || msgs.length === 0) {
+    const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+    if (canonicalChatId && canonicalChatId !== chatId) {
+      msgs = safeParse(localStorage.getItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${canonicalChatId}`), []);
+    }
+  }
   if (!Array.isArray(msgs)) return [];
   if (userId) {
     const deletedSet = getDeletedForMeIds(userId);
@@ -463,22 +469,27 @@ export function getCachedMessages(chatId, userId = null) {
 
 export function setCachedMessages(chatId, messages) {
   if (typeof window === 'undefined' || !chatId || !Array.isArray(messages)) return;
+  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+  const targetKeys = Array.from(new Set([chatId, canonicalChatId].filter(Boolean)));
+
   // 1. Instant sync localStorage for 0ms initial load
-  try {
-    const trimmed = messages.slice(-250);
-    localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`, JSON.stringify(trimmed));
-  } catch (e) {
+  for (const cId of targetKeys) {
     try {
-      const trimmed = messages.slice(-100);
-      localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`, JSON.stringify(trimmed));
-    } catch (err) {
-      console.warn('LocalStorage error setting messages', err);
+      const trimmed = messages.slice(-250);
+      localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${cId}`, JSON.stringify(trimmed));
+    } catch (e) {
+      try {
+        const trimmed = messages.slice(-100);
+        localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${cId}`, JSON.stringify(trimmed));
+      } catch (err) {
+        console.warn('LocalStorage error setting messages', err);
+      }
     }
   }
 
   // 2. Asynchronous local-first IndexedDB storage for unlimited history (thousands of messages)
   try {
-    saveMessagesToLocalDb(chatId, messages);
+    saveMessagesToLocalDb(canonicalChatId || chatId, messages);
   } catch (_) {}
 }
 
@@ -506,21 +517,37 @@ export async function getCachedMessagesFromLocalDb(chatId, limit = 100, beforeTi
 export function appendCachedMessage(chatId, message) {
   if (!chatId || !message) return;
   const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-  const targetKeys = new Set([chatId, canonicalChatId].filter(Boolean));
+  const targetKeys = Array.from(new Set([chatId, canonicalChatId].filter(Boolean)));
 
   for (const cId of targetKeys) {
     const msgs = getCachedMessages(cId);
     const targetId = message.id || message.clientTempId;
     const targetTempId = message.clientTempId || message.tempId;
 
-    if (msgs.some(m =>
-      (targetId && m.id === targetId) ||
+    const existingIdx = msgs.findIndex(m =>
+      (targetId && (m.id === targetId || m._id === targetId)) ||
       (targetTempId && (m.clientTempId === targetTempId || m.tempId === targetTempId || m.id === targetTempId)) ||
       (m.clientTempId && targetId && m.clientTempId === targetId)
-    )) {
+    );
+
+    if (existingIdx !== -1) {
+      const existing = msgs[existingIdx];
+      const updatedMsg = {
+        ...existing,
+        ...message,
+        content: message.content || existing.content || '',
+        _decrypted: message._decrypted || existing._decrypted || false
+      };
+      const nextMsgs = [...msgs];
+      nextMsgs[existingIdx] = updatedMsg;
+      setCachedMessages(cId, nextMsgs);
       continue;
     }
-    setCachedMessages(cId, [...msgs, message]);
+
+    const nextMsgs = [...msgs, message].sort((a, b) =>
+      new Date(a.timestamp || a.createdAt || 0) - new Date(b.timestamp || b.createdAt || 0)
+    );
+    setCachedMessages(cId, nextMsgs);
   }
 }
 

@@ -594,6 +594,9 @@ export async function decryptMessageIfNeeded(msg, privateKey) {
         fileSize: decrypted.fileSize !== undefined ? decrypted.fileSize : msg.fileSize,
         isViewOnce: decrypted.isViewOnce !== undefined ? decrypted.isViewOnce : msg.isViewOnce,
         isViewTwice: decrypted.isViewTwice !== undefined ? decrypted.isViewTwice : msg.isViewTwice,
+        pollData: decrypted.pollData !== undefined ? decrypted.pollData : msg.pollData,
+        giftData: decrypted.giftData !== undefined ? decrypted.giftData : msg.giftData,
+        storyReply: decrypted.storyReply !== undefined ? decrypted.storyReply : msg.storyReply,
         _decrypted: true
       };
     } else if (typeof decrypted === 'string') {
