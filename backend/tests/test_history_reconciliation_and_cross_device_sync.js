@@ -218,6 +218,127 @@ async function runAsyncTest(name, fn) {
     assert.strictEqual(reconciled[2].id, 'm3');
   });
 
+  // Test 6: Multi-account recent chat cache isolation (isSameUser safety check)
+  runTest('Multi-account recent chats cache strictly isolates distinct users on same browser', () => {
+    const mockStorage = new Map();
+    const setCached = (targetUserId, chats, currentLoggedInUser) => {
+      mockStorage.set(`pulsechat_recent_${targetUserId}`, JSON.stringify(chats));
+      const isSameUser = Boolean(currentLoggedInUser && (
+        String(currentLoggedInUser.id) === String(targetUserId) ||
+        String(currentLoggedInUser._id) === String(targetUserId) ||
+        String(currentLoggedInUser.username) === String(targetUserId)
+      ));
+      if (isSameUser) {
+        if (currentLoggedInUser?.id && String(currentLoggedInUser.id) !== String(targetUserId)) {
+          mockStorage.set(`pulsechat_recent_${currentLoggedInUser.id}`, JSON.stringify(chats));
+        }
+      }
+    };
+
+    // User A writes their chats
+    const userA = { id: 'user_100', _id: 'mongo_100', username: 'prashant' };
+    setCached('user_100', [{ id: 'chat_with_bob', lastMessage: 'Hey Bob' }], userA);
+
+    // Another tab or account B logs in
+    const userB = { id: 'user_200', _id: 'mongo_200', username: 'pulsechats' };
+    // Bug check: In the old code, userB write would overwrite userA's key if userObj.id !== userId!
+    setCached('user_200', [{ id: 'chat_with_alice', lastMessage: 'Hi Alice' }], userB);
+
+    // Verify userA's cache was NOT polluted or overwritten by userB
+    const userACache = JSON.parse(mockStorage.get('pulsechat_recent_user_100'));
+    const userBCache = JSON.parse(mockStorage.get('pulsechat_recent_user_200'));
+
+    assert.strictEqual(userACache.length, 1);
+    assert.strictEqual(userACache[0].id, 'chat_with_bob');
+    assert.strictEqual(userBCache.length, 1);
+    assert.strictEqual(userBCache[0].id, 'chat_with_alice');
+  });
+
+  // Test 7: Multi-device presence tracking resilience (closing one socket does not mark user offline)
+  runTest('Multi-device socket tracking retains online status until all user sockets disconnect', () => {
+    const onlineUsers = new Map();
+    const userSockets = new Map();
+    const registerUserSocket = (userId, socketId) => {
+      const str = String(userId);
+      if (!userSockets.has(str)) userSockets.set(str, new Set());
+      userSockets.get(str).add(socketId);
+      onlineUsers.set(str, socketId);
+    };
+    const unregisterUserSocket = (userId, socketId) => {
+      const str = String(userId);
+      if (userSockets.has(str)) {
+        if (socketId) userSockets.get(str).delete(socketId);
+        else userSockets.get(str).clear();
+        if (userSockets.get(str).size === 0) {
+          userSockets.delete(str);
+          onlineUsers.delete(str);
+          return true; // fully offline
+        } else {
+          const remaining = userSockets.get(str).values().next().value;
+          onlineUsers.set(str, remaining);
+          return false; // still online on other devices
+        }
+      }
+      onlineUsers.delete(str);
+      return true;
+    };
+
+    // Phone connects
+    registerUserSocket('prashant', 'socket_phone_1');
+    assert.strictEqual(onlineUsers.has('prashant'), true);
+
+    // Laptop connects
+    registerUserSocket('prashant', 'socket_laptop_2');
+    assert.strictEqual(userSockets.get('prashant').size, 2);
+
+    // Phone disconnects (app goes into background)
+    const phoneOffline = unregisterUserSocket('prashant', 'socket_phone_1');
+    assert.strictEqual(phoneOffline, false, 'User must NOT be reported fully offline');
+    assert.strictEqual(onlineUsers.has('prashant'), true, 'User remains online on server');
+    assert.strictEqual(onlineUsers.get('prashant'), 'socket_laptop_2', 'Routes to active laptop socket');
+
+    // Laptop disconnects
+    const laptopOffline = unregisterUserSocket('prashant', 'socket_laptop_2');
+    assert.strictEqual(laptopOffline, true, 'User is now fully offline');
+    assert.strictEqual(onlineUsers.has('prashant'), false, 'User removed from onlineUsers map');
+  });
+
+  // Test 8: Promotion of raw wire message to decrypted message without double-incrementing unread badge
+  runTest('Message promotion from raw to decrypted updates snippet without duplicate badge increment', () => {
+    const processedMap = new Map();
+    let unreadCount = 0;
+    let snippet = '';
+
+    const handleMessage = (msg) => {
+      const key = msg.id;
+      const already = processedMap.get(key);
+      if (already === 'decrypted') return;
+      if (already === 'raw' && !msg._decrypted) return;
+
+      const isPromotion = (already === 'raw' && msg._decrypted);
+      processedMap.set(key, msg._decrypted ? 'decrypted' : 'raw');
+
+      snippet = msg.content || (msg.isEncrypted && !msg._decrypted ? '🔒 Encrypted message' : '');
+      if (!isPromotion) {
+        unreadCount += 1;
+      }
+    };
+
+    // 1. Raw wire ciphertext arrives first
+    handleMessage({ id: 'msg_101', content: '', isEncrypted: true, _decrypted: false });
+    assert.strictEqual(snippet, '🔒 Encrypted message');
+    assert.strictEqual(unreadCount, 1);
+
+    // 2. Decrypted version arrives from durable decryption worker/context
+    handleMessage({ id: 'msg_101', content: 'Hey Prashant!', isEncrypted: true, _decrypted: true });
+    assert.strictEqual(snippet, 'Hey Prashant!');
+    assert.strictEqual(unreadCount, 1, 'Badge count must remain 1 (no double increment)');
+
+    // 3. Duplicate event arrives
+    handleMessage({ id: 'msg_101', content: 'Hey Prashant!', isEncrypted: true, _decrypted: true });
+    assert.strictEqual(unreadCount, 1, 'Duplicate event safely ignored');
+  });
+
   console.log(`\n================================================================`);
   console.log(` RESULTS: ${passedTests}/${totalTests} TESTS PASSED`);
   console.log(`================================================================\n`);

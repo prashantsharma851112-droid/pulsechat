@@ -422,9 +422,40 @@ const resolveGhostMode = async (userId, chatId) => {
   }
 };
 
-const onlineUsers = new Map(); // userId -> socketId
+const onlineUsers = new Map(); // userId -> socketId (most recently active socketId)
+const userSockets = new Map(); // userId -> Set<socketId> (tracks all active sockets for multi-device support)
 const hiddenOnlineUsers = new Set(); // userId set of users with hideOnlineStatus enabled
 const userVibeAuras = new Map(); // userId -> { mood, emoji, auraColor, auraType, isLowBattery, batteryLevel, inGame, updatedAt }
+
+const registerUserSocket = (userId, socketId) => {
+  if (!userId || !socketId) return;
+  const str = String(userId);
+  if (!userSockets.has(str)) userSockets.set(str, new Set());
+  userSockets.get(str).add(socketId);
+  onlineUsers.set(str, socketId);
+};
+
+const unregisterUserSocket = (userId, socketId) => {
+  if (!userId) return true;
+  const str = String(userId);
+  if (userSockets.has(str)) {
+    if (socketId) userSockets.get(str).delete(socketId);
+    else userSockets.get(str).clear();
+
+    if (userSockets.get(str).size === 0) {
+      userSockets.delete(str);
+      onlineUsers.delete(str);
+      return true; // fully offline
+    } else {
+      // Pick another alive socket
+      const remaining = userSockets.get(str).values().next().value;
+      onlineUsers.set(str, remaining);
+      return false; // still online on other sockets/devices
+    }
+  }
+  onlineUsers.delete(str);
+  return true;
+};
 
 const getPublicOnlineUsers = () => {
   return Array.from(onlineUsers.keys()).filter(id => !hiddenOnlineUsers.has(id));
@@ -487,8 +518,8 @@ io.on('connection', (socket) => {
     const id = userId || socket.userId;
     const toDelete = Array.from(new Set([id, socket.userId, socket.userCustomId, socket.userMongoId, socket.userUsername].filter(Boolean)));
     toDelete.forEach(k => {
-      onlineUsers.delete(String(k));
-      if (!hiddenOnlineUsers.has(String(k))) {
+      const isFullyOffline = unregisterUserSocket(String(k), socket.id);
+      if (isFullyOffline && !hiddenOnlineUsers.has(String(k))) {
         io.emit('user_status', { userId: String(k), status: 'offline', lastSeen: new Date().toISOString() });
       }
     });
@@ -568,7 +599,7 @@ io.on('connection', (socket) => {
     socket.userId = userId;
     socket.join(`user_${userId}`); // Join user's personal private room
     socket.join(userId);           // Also join direct userId room
-    onlineUsers.set(userId, socket.id);
+    registerUserSocket(userId, socket.id);
 
     try {
       const mongoose = require('mongoose');
@@ -600,18 +631,18 @@ io.on('connection', (socket) => {
         if (uDoc.id) {
           socket.join(`user_${uDoc.id}`);
           socket.join(uDoc.id);
-          onlineUsers.set(uDoc.id, socket.id);
+          registerUserSocket(uDoc.id, socket.id);
         }
         if (uDoc._id) {
           const strId = uDoc._id.toString();
           socket.join(`user_${strId}`);
           socket.join(strId);
-          onlineUsers.set(strId, socket.id);
+          registerUserSocket(strId, socket.id);
         }
         if (uDoc.username) {
           socket.join(`user_${uDoc.username}`);
           socket.join(uDoc.username);
-          onlineUsers.set(uDoc.username, socket.id);
+          registerUserSocket(uDoc.username, socket.id);
         }
       }
     } catch {}
@@ -3043,8 +3074,8 @@ io.on('connection', (socket) => {
     }
     const toDelete = Array.from(new Set([socket.userId, socket.userCustomId, socket.userMongoId, socket.userUsername].filter(Boolean)));
     toDelete.forEach(id => {
-      onlineUsers.delete(String(id));
-      if (!hiddenOnlineUsers.has(String(id))) {
+      const isFullyOffline = unregisterUserSocket(String(id), socket.id);
+      if (isFullyOffline && !hiddenOnlineUsers.has(String(id))) {
         io.emit('user_status', { userId: String(id), status: 'offline', lastSeen: new Date().toISOString() });
       }
     });

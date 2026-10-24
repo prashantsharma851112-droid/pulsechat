@@ -223,9 +223,17 @@ function containsPrivateKeyMaterial(obj, seen = new WeakSet(), depth = 0) {
 
 async function findUserByIdSafe(userId) {
   if (!userId || !User) return null;
-  const isObjId = mongoose.Types.ObjectId.isValid(userId);
-  const conditions = [{ id: String(userId) }, { username: String(userId) }];
-  if (isObjId) conditions.push({ _id: userId });
+  const s = String(userId).trim();
+  const withoutUser = s.replace(/^user_/, '');
+  const withUser = s.startsWith('user_') ? s : `user_${s}`;
+  const candidates = Array.from(new Set([s, withoutUser, withUser].filter(Boolean)));
+  const isObjId = mongoose.Types.ObjectId.isValid(s);
+  const conditions = [];
+  candidates.forEach(c => {
+    conditions.push({ id: c });
+    conditions.push({ username: c });
+  });
+  if (isObjId) conditions.push({ _id: s });
   return User.findOne({ $or: conditions })
     .select('id _id username blockedUsers friends isAdmin')
     .lean();
@@ -537,8 +545,17 @@ const handleQuery = async (req, res) => {
 
     resultDeviceKeys[targetUserId] = {};
 
+    const targetVariants = Array.from(new Set([
+      targetUserId,
+      authResult.recipientUser?.id,
+      authResult.recipientUser?._id ? authResult.recipientUser._id.toString() : null,
+      authResult.recipientUser?.username
+    ].filter(Boolean).map(String)));
+
+    const userQuery = (targetVariants.length === 1) ? targetVariants[0] : { $in: targetVariants };
+
     if (DeviceIdentity) {
-      const devices = await DeviceIdentity.find({ userId: targetUserId, isRevoked: false })
+      const devices = await DeviceIdentity.find({ userId: userQuery, isRevoked: false })
         .select('userId deviceId algorithms keys signatures')
         .lean();
 
@@ -552,7 +569,7 @@ const handleQuery = async (req, res) => {
         };
       }
     } else if (DeviceKey) {
-      const devices = await DeviceKey.find({ userId: targetUserId, revoked: { $ne: true } }).lean();
+      const devices = await DeviceKey.find({ userId: userQuery, revoked: { $ne: true } }).lean();
       for (const dev of devices) {
         resultDeviceKeys[targetUserId][dev.deviceId] = {
           user_id: dev.userId,

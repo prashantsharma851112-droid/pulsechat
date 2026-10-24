@@ -19,6 +19,7 @@ export function SocketProvider({ children }) {
 
   const userRef = useRef(user);
   const deviceIdentityRef = useRef(null);
+  const processedDurableMsgIdsRef = useRef(new Set());
 
   useEffect(() => {
     userRef.current = user;
@@ -110,7 +111,7 @@ export function SocketProvider({ children }) {
 
   useEffect(() => {
     if (user?.id) {
-      const authToken = token || localStorage.getItem('token');
+      const authToken = token || (typeof localStorage !== 'undefined' ? (localStorage.getItem('pulsechat_token') || localStorage.getItem('token')) : null);
       const newSocket = io(BACKEND_URL, {
         auth: { token: authToken },
         transports: ['websocket', 'polling'],
@@ -268,6 +269,17 @@ export function SocketProvider({ children }) {
         const myIds = new Set([curUser?.id, curUser?._id, curUser?.username].filter(Boolean).map(String));
         if (msg.senderId && myIds.has(String(msg.senderId))) return;
 
+        // Message deduplication: prevent double-processing identical events or retry bursts
+        const dId = String(msg.id || msg.clientTempId);
+        if (dId) {
+          if (processedDurableMsgIdsRef.current.has(dId)) return;
+          processedDurableMsgIdsRef.current.add(dId);
+          if (processedDurableMsgIdsRef.current.size > 500) {
+            const arr = Array.from(processedDurableMsgIdsRef.current);
+            processedDurableMsgIdsRef.current = new Set(arr.slice(arr.length - 250));
+          }
+        }
+
         // E2EE: Decrypt incoming encrypted message using local device private key before local caching
         let msgToCommit = msg;
         if (msg.isEncrypted && msg.envelope && !msg._decrypted) {
@@ -293,6 +305,12 @@ export function SocketProvider({ children }) {
         try {
           if (msgToCommit.chatId) {
             appendCachedMessage(msgToCommit.chatId, msgToCommit);
+            if (msgToCommit.chatId.includes('_')) {
+              const canonical = msgToCommit.chatId.split('_').sort().join('_');
+              if (canonical !== msgToCommit.chatId) {
+                appendCachedMessage(canonical, msgToCommit);
+              }
+            }
             await saveMessagesToLocalDb(msgToCommit.chatId, [msgToCommit]);
             if (curId) {
               updateRecentChatSnippet(curId, msgToCommit.chatId, msgToCommit, null);

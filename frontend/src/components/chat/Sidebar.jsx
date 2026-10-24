@@ -33,6 +33,7 @@ const GroupProfileModal = lazyWithRetry(() => import('./GroupProfileModal'));
 import { isChatLocked, isChatMuted, getLockedChats, getMutedChats, isChatHidden, getHiddenLockedChats, isChatArchived, setChatArchived, getArchivedChats, setChatMuted, setChatLocked, getSecurityPin } from '../../utils/securityLock';
 import { clearChatFromLocalDb } from '../../utils/localDatabase';
 import { BACKEND_URL } from '../../utils/config';
+import { getOrInitDeviceIdentity, decryptMessageIfNeeded } from '../../utils/e2eeCrypto';
 import { runWorkerTask } from '../../workers/pulseWorkerBridge';
 import { preloadMediaUrls } from '../../utils/mediaCache';
 import { requestNotificationPermission, showPushNotification, dismissNotificationBanner, subscribeUserToPush } from '../../utils/notifications';
@@ -1007,7 +1008,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   useEffect(() => { groupsRef.current = groups; }, [groups]);
   const allUsersRef = useRef(allUsers);
   useEffect(() => { allUsersRef.current = allUsers; }, [allUsers]);
-  const processedMsgIdsRef = useRef(new Set());
+  const processedMsgIdsRef = useRef(new Map());
+  const myIdentityRef = useRef(null);
+
+  useEffect(() => {
+    if (user?.id) {
+      getOrInitDeviceIdentity(user.id).then(ident => {
+        myIdentityRef.current = ident;
+      }).catch(() => {});
+    }
+  }, [user?.id]);
 
   // Listen to cross-component tab switch requests (e.g. clicking on sync notification toast)
   useEffect(() => {
@@ -1772,16 +1782,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     if (!socket) return;
 
     // Instant zero-latency chat list reordering on message send or receive (0ms)
-    const handleSidebarNewMessage = (msg) => {
-      const msgKey = msg.id || msg.clientTempId || msg._id || (msg.chatId + '_' + (msg.timestamp || ''));
-      if (msgKey) {
-        if (processedMsgIdsRef.current.has(msgKey)) return;
-        processedMsgIdsRef.current.add(msgKey);
-        if (processedMsgIdsRef.current.size > 200) {
-          const arr = Array.from(processedMsgIdsRef.current);
-          processedMsgIdsRef.current = new Set(arr.slice(arr.length - 100));
-        }
-      }
+    const handleSidebarNewMessage = async (msg) => {
+      if (!msg) return;
 
       const isMyMsg = Boolean(
         user?.id && (
@@ -1790,70 +1792,103 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           (user.username && msg.senderId === user.username)
         )
       );
-      const targetId = isMyMsg ? msg.receiverId : (msg.isGroup ? msg.chatId : msg.senderId);
-      if (!targetId && !msg.chatId) return;
+
+      // Decrypt message if incoming encrypted message and not yet decrypted
+      let effectiveMsg = msg;
+      if (!isMyMsg && effectiveMsg.isEncrypted && !effectiveMsg._decrypted) {
+        let privKey = myIdentityRef.current?.keyPair?.privateKey;
+        if (!privKey && user?.id) {
+          try {
+            const ident = await getOrInitDeviceIdentity(user.id);
+            myIdentityRef.current = ident;
+            privKey = ident?.keyPair?.privateKey;
+          } catch {}
+        }
+        if (privKey) {
+          try {
+            effectiveMsg = await decryptMessageIfNeeded(effectiveMsg, privKey);
+          } catch (e) {
+            console.warn('Sidebar decrypt error:', e);
+          }
+        }
+      }
+
+      const msgKey = effectiveMsg.id || effectiveMsg.clientTempId || effectiveMsg._id || (effectiveMsg.chatId + '_' + (effectiveMsg.timestamp || ''));
+      const isAlreadyProcessed = msgKey ? processedMsgIdsRef.current.get(msgKey) : null;
+      if (isAlreadyProcessed === 'decrypted') return;
+      if (isAlreadyProcessed === 'raw' && !effectiveMsg._decrypted) return;
+
+      const isPromotionFromRaw = (isAlreadyProcessed === 'raw' && effectiveMsg._decrypted);
+      if (msgKey) {
+        processedMsgIdsRef.current.set(msgKey, effectiveMsg._decrypted ? 'decrypted' : 'raw');
+        if (processedMsgIdsRef.current.size > 200) {
+          const keys = Array.from(processedMsgIdsRef.current.keys());
+          for (let i = 0; i < 100; i++) {
+            processedMsgIdsRef.current.delete(keys[i]);
+          }
+        }
+      }
+
+      const targetId = isMyMsg ? effectiveMsg.receiverId : (effectiveMsg.isGroup ? effectiveMsg.chatId : effectiveMsg.senderId);
+      if (!targetId && !effectiveMsg.chatId) return;
 
       // WhatsApp Local-First: SAVE incoming message immediately to device local message storage!
-      if (msg.chatId) {
-        appendCachedMessage(msg.chatId, msg);
-        const canonical = msg.chatId.includes('_') ? msg.chatId.split('_').sort().join('_') : msg.chatId;
-        if (canonical && canonical !== msg.chatId) {
-          appendCachedMessage(canonical, msg);
+      if (effectiveMsg.chatId) {
+        appendCachedMessage(effectiveMsg.chatId, effectiveMsg);
+        const canonical = effectiveMsg.chatId.includes('_') ? effectiveMsg.chatId.split('_').sort().join('_') : effectiveMsg.chatId;
+        if (canonical && canonical !== effectiveMsg.chatId) {
+          appendCachedMessage(canonical, effectiveMsg);
         }
       }
 
       const isCurrentlyViewing = Boolean(
         activeChatRef.current && (
-          (msg.isGroup && (activeChatRef.current.id === msg.chatId || activeChatRef.current.id === targetId)) ||
-          (!msg.isGroup && (
+          (effectiveMsg.isGroup && (activeChatRef.current.id === effectiveMsg.chatId || activeChatRef.current.id === targetId)) ||
+          (!effectiveMsg.isGroup && (
             activeChatRef.current.id === targetId ||
             activeChatRef.current._id === targetId ||
             (targetId && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(targetId).toLowerCase()) ||
-            (msg.senderUsername && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(msg.senderUsername).toLowerCase()) ||
-            (msg.senderName && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(msg.senderName).toLowerCase()) ||
-            (msg.senderName && activeChatRef.current.displayName && String(activeChatRef.current.displayName).toLowerCase() === String(msg.senderName).toLowerCase())
+            (effectiveMsg.senderUsername && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(effectiveMsg.senderUsername).toLowerCase()) ||
+            (effectiveMsg.senderName && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(effectiveMsg.senderName).toLowerCase()) ||
+            (effectiveMsg.senderName && activeChatRef.current.displayName && String(activeChatRef.current.displayName).toLowerCase() === String(effectiveMsg.senderName).toLowerCase())
           ))
         )
       );
 
-      // WhatsApp Post Office: Emit receipt packet back to sender immediately (0ms)
-      if (!isMyMsg) {
+      // WhatsApp Post Office: Emit read receipt back to sender if user is actively viewing (0ms)
+      if (!isMyMsg && isCurrentlyViewing) {
         const isCurGhost = (typeof window !== 'undefined' && localStorage.getItem('pulsechat_ghost_global') === 'true') || Boolean(user?.hideReadReceipts);
-        const msgIdToAck = msg.id || msg.clientTempId;
-        if (msgIdToAck) {
-          if (isCurrentlyViewing && !isCurGhost) {
-            socket.emit('mark_read', { messageId: msgIdToAck, chatId: msg.chatId, senderId: msg.senderId });
-            socket.emit('mark_chat_read', { chatId: msg.chatId, userId: user?.id, isGhost: false });
-          } else {
-            socket.emit('message_delivered', { messageId: msgIdToAck, chatId: msg.chatId, senderId: msg.senderId });
-          }
+        const msgIdToAck = effectiveMsg.id || effectiveMsg.clientTempId;
+        if (msgIdToAck && !isCurGhost) {
+          socket.emit('mark_read', { messageId: msgIdToAck, chatId: effectiveMsg.chatId, senderId: effectiveMsg.senderId });
+          socket.emit('mark_chat_read', { chatId: effectiveMsg.chatId, userId: user?.id, isGhost: false });
         }
       }
 
-      let contentSnippet = (msg.type === 'stealth_dust' || msg.isDustText)
+      let contentSnippet = (effectiveMsg.type === 'stealth_dust' || effectiveMsg.isDustText)
         ? '⚡ Stealth Dust Text'
-        : (msg.type === 'story_reply' || msg.storyReply)
+        : (effectiveMsg.type === 'story_reply' || effectiveMsg.storyReply)
         ? (() => {
-            const sr = msg.storyReply;
-            const isShared = (msg.content && msg.content.startsWith('Shared ')) || (!sr?.reactionEmoji && !sr?.tipSparks && !sr?.replyText);
+            const sr = effectiveMsg.storyReply;
+            const isShared = (effectiveMsg.content && effectiveMsg.content.startsWith('Shared ')) || (!sr?.reactionEmoji && !sr?.tipSparks && !sr?.replyText);
             if (isShared) return isMyMsg ? 'You shared a vibe ⚡' : 'Shared a vibe ⚡';
             if (sr?.reactionEmoji) return isMyMsg ? `You reacted ${sr.reactionEmoji} to story` : `Reacted ${sr.reactionEmoji} to your story`;
             if (sr?.tipSparks) return isMyMsg ? `You tipped ⚡ ${sr.tipSparks} Sparks on story` : `Tipped ⚡ ${sr.tipSparks} Sparks on your story!`;
             if (sr?.replyText) return isMyMsg ? `You replied: "${sr.replyText}"` : `Replied to your story: "${sr.replyText}"`;
             return isMyMsg ? 'You shared a vibe ⚡' : 'Shared a vibe ⚡';
           })()
-        : (msg.type === 'text'
-        ? (msg.content || '')
-        : (msg.type === '3d_text' ? `✨ 3D: ${msg.content}`
-        : msg.type === 'image' ? '📷 Photo'
-        : msg.type === 'video' ? '🎥 Video'
-        : msg.type === 'audio' || msg.type === 'voice' ? '🎤 Voice message'
-        : msg.type === 'gift' ? '🎁 Gift'
-        : msg.type === 'poll' ? '📊 Poll'
-        : msg.type === 'call' ? '📞 Call'
-        : (msg.content || (msg.fileName ? `📁 ${msg.fileName}` : (msg.type === 'document' ? '📁 Document' : '')))));
+        : (effectiveMsg.type === 'text'
+        ? (effectiveMsg.content || (effectiveMsg.isEncrypted && !effectiveMsg._decrypted ? '🔒 Encrypted message' : ''))
+        : (effectiveMsg.type === '3d_text' ? `✨ 3D: ${effectiveMsg.content || ''}`
+        : effectiveMsg.type === 'image' ? '📷 Photo'
+        : effectiveMsg.type === 'video' ? '🎥 Video'
+        : effectiveMsg.type === 'audio' || effectiveMsg.type === 'voice' ? '🎤 Voice message'
+        : effectiveMsg.type === 'gift' ? '🎁 Gift'
+        : effectiveMsg.type === 'poll' ? '📊 Poll'
+        : effectiveMsg.type === 'call' ? '📞 Call'
+        : (effectiveMsg.content || (effectiveMsg.fileName ? `📁 ${effectiveMsg.fileName}` : (effectiveMsg.type === 'document' ? '📁 Document' : '')))));
 
-      if (msg.type === 'text' && contentSnippet) {
+      if (effectiveMsg.type === 'text' && contentSnippet) {
         if (contentSnippet.startsWith('Replied to your story:')) {
           contentSnippet = isMyMsg
             ? contentSnippet.replace(/^Replied to your story:\s*/, 'You replied: ')
@@ -1869,23 +1904,23 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         }
       }
 
-      if (msg.isForwarded && contentSnippet) {
+      if (effectiveMsg.isForwarded && contentSnippet) {
         contentSnippet = `➡️ Forwarded: ${contentSnippet}`;
       }
 
       setRecentChats(prevChats => {
         const existingIdx = prevChats.findIndex(c => {
           if (!c) return false;
-          if (msg.isGroup) {
-            return c.id === msg.chatId || c._id === msg.chatId || c.id === targetId;
+          if (effectiveMsg.isGroup) {
+            return c.id === effectiveMsg.chatId || c._id === effectiveMsg.chatId || c.id === targetId;
           }
           return Boolean(
             (targetId && (c.id === targetId || c._id === targetId)) ||
-            (msg.chatId && (c.id === msg.chatId || c.chatId === msg.chatId || (typeof msg.chatId === 'string' && (msg.chatId.includes(c.id) || (c._id && msg.chatId.includes(c._id)))))) ||
-            (msg.senderUsername && c.username && String(c.username).toLowerCase() === String(msg.senderUsername).toLowerCase()) ||
+            (effectiveMsg.chatId && (c.id === effectiveMsg.chatId || c.chatId === effectiveMsg.chatId || (typeof effectiveMsg.chatId === 'string' && (effectiveMsg.chatId.includes(c.id) || (c._id && effectiveMsg.chatId.includes(c._id)))))) ||
+            (effectiveMsg.senderUsername && c.username && String(c.username).toLowerCase() === String(effectiveMsg.senderUsername).toLowerCase()) ||
             (targetId && c.username && String(c.username).toLowerCase() === String(targetId).toLowerCase()) ||
-            (msg.senderName && c.username && String(c.username).toLowerCase() === String(msg.senderName).toLowerCase()) ||
-            (msg.senderName && c.displayName && String(c.displayName).toLowerCase() === String(msg.senderName).toLowerCase())
+            (effectiveMsg.senderName && c.username && String(c.username).toLowerCase() === String(effectiveMsg.senderName).toLowerCase()) ||
+            (effectiveMsg.senderName && c.displayName && String(c.displayName).toLowerCase() === String(effectiveMsg.senderName).toLowerCase())
           );
         });
 
@@ -1893,19 +1928,19 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         if (existingIdx !== -1) {
           targetChat = { ...prevChats[existingIdx] };
           if (!isMyMsg) {
-            if (msg.senderAvatar) targetChat.avatar = msg.senderAvatar;
-            if (msg.senderName) targetChat.displayName = msg.senderName;
-            if (msg.senderIsPro !== undefined) targetChat.isPro = Boolean(msg.senderIsPro);
-            if (msg.senderProTier) targetChat.proTier = msg.senderProTier;
-            if (msg.senderCustomBadge !== undefined) targetChat.customBadge = msg.senderCustomBadge;
+            if (effectiveMsg.senderAvatar) targetChat.avatar = effectiveMsg.senderAvatar;
+            if (effectiveMsg.senderName) targetChat.displayName = effectiveMsg.senderName;
+            if (effectiveMsg.senderIsPro !== undefined) targetChat.isPro = Boolean(effectiveMsg.senderIsPro);
+            if (effectiveMsg.senderProTier) targetChat.proTier = effectiveMsg.senderProTier;
+            if (effectiveMsg.senderCustomBadge !== undefined) targetChat.customBadge = effectiveMsg.senderCustomBadge;
           }
         } else {
-          if (msg.isGroup) {
-            const foundGroup = (groupsRef.current || []).find(g => g.id === msg.chatId || g.id === targetId);
+          if (effectiveMsg.isGroup) {
+            const foundGroup = (groupsRef.current || []).find(g => g.id === effectiveMsg.chatId || g.id === targetId);
             targetChat = foundGroup ? { ...foundGroup, isGroup: true } : {
-              id: msg.chatId || targetId,
-              name: msg.groupName || 'Group',
-              avatar: foundGroup?.avatar || msg.senderAvatar || null,
+              id: effectiveMsg.chatId || targetId,
+              name: effectiveMsg.groupName || 'Group',
+              avatar: foundGroup?.avatar || effectiveMsg.senderAvatar || null,
               isGroup: true
             };
           } else {
@@ -1913,26 +1948,26 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
               u.id === targetId ||
               u._id === targetId ||
               (targetId && u.username && String(u.username).toLowerCase() === String(targetId).toLowerCase()) ||
-              (msg.senderUsername && u.username && String(u.username).toLowerCase() === String(msg.senderUsername).toLowerCase()) ||
-              (msg.senderName && u.displayName && String(u.displayName).toLowerCase() === String(msg.senderName).toLowerCase()) ||
-              (msg.senderName && u.username && String(u.username).toLowerCase() === String(msg.senderName).toLowerCase())
+              (effectiveMsg.senderUsername && u.username && String(u.username).toLowerCase() === String(effectiveMsg.senderUsername).toLowerCase()) ||
+              (effectiveMsg.senderName && u.displayName && String(u.displayName).toLowerCase() === String(effectiveMsg.senderName).toLowerCase()) ||
+              (effectiveMsg.senderName && u.username && String(u.username).toLowerCase() === String(effectiveMsg.senderName).toLowerCase())
             );
             targetChat = foundUser ? {
               ...foundUser,
-              avatar: (!isMyMsg && msg.senderAvatar) ? msg.senderAvatar : foundUser.avatar,
-              displayName: (!isMyMsg && (msg.senderName || msg.senderUsername)) ? (msg.senderName || msg.senderUsername) : foundUser.displayName,
-              isPro: (!isMyMsg && msg.senderIsPro !== undefined) ? Boolean(msg.senderIsPro) : Boolean(foundUser.isPro),
-              proTier: (!isMyMsg && msg.senderProTier) ? msg.senderProTier : (foundUser.proTier || 'none'),
-              customBadge: (!isMyMsg && msg.senderCustomBadge !== undefined) ? msg.senderCustomBadge : (foundUser.customBadge || ''),
+              avatar: (!isMyMsg && effectiveMsg.senderAvatar) ? effectiveMsg.senderAvatar : foundUser.avatar,
+              displayName: (!isMyMsg && (effectiveMsg.senderName || effectiveMsg.senderUsername)) ? (effectiveMsg.senderName || effectiveMsg.senderUsername) : foundUser.displayName,
+              isPro: (!isMyMsg && effectiveMsg.senderIsPro !== undefined) ? Boolean(effectiveMsg.senderIsPro) : Boolean(foundUser.isPro),
+              proTier: (!isMyMsg && effectiveMsg.senderProTier) ? effectiveMsg.senderProTier : (foundUser.proTier || 'none'),
+              customBadge: (!isMyMsg && effectiveMsg.senderCustomBadge !== undefined) ? effectiveMsg.senderCustomBadge : (foundUser.customBadge || ''),
               isGroup: false
             } : {
               id: targetId,
-              displayName: (!isMyMsg && (msg.senderName || msg.senderUsername)) ? (msg.senderName || msg.senderUsername) : 'PulseChat User',
-              username: (!isMyMsg && msg.senderUsername) ? msg.senderUsername : targetId,
-              avatar: (!isMyMsg && msg.senderAvatar) ? msg.senderAvatar : null,
-              isPro: (!isMyMsg && msg.senderIsPro !== undefined) ? Boolean(msg.senderIsPro) : false,
-              proTier: (!isMyMsg && msg.senderProTier) ? msg.senderProTier : 'none',
-              customBadge: (!isMyMsg && msg.senderCustomBadge) ? msg.senderCustomBadge : '',
+              displayName: (!isMyMsg && (effectiveMsg.senderName || effectiveMsg.senderUsername)) ? (effectiveMsg.senderName || effectiveMsg.senderUsername) : 'PulseChat User',
+              username: (!isMyMsg && effectiveMsg.senderUsername) ? effectiveMsg.senderUsername : targetId,
+              avatar: (!isMyMsg && effectiveMsg.senderAvatar) ? effectiveMsg.senderAvatar : null,
+              isPro: (!isMyMsg && effectiveMsg.senderIsPro !== undefined) ? Boolean(effectiveMsg.senderIsPro) : false,
+              proTier: (!isMyMsg && effectiveMsg.senderProTier) ? effectiveMsg.senderProTier : 'none',
+              customBadge: (!isMyMsg && effectiveMsg.senderCustomBadge) ? effectiveMsg.senderCustomBadge : '',
               isGroup: false
             };
           }
@@ -1940,33 +1975,33 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
         const isCurrentlyViewing = Boolean(
           activeChatRef.current && (
-            (msg.isGroup && (activeChatRef.current.id === msg.chatId || activeChatRef.current.id === targetId)) ||
-            (!msg.isGroup && (
+            (effectiveMsg.isGroup && (activeChatRef.current.id === effectiveMsg.chatId || activeChatRef.current.id === targetId)) ||
+            (!effectiveMsg.isGroup && (
               activeChatRef.current.id === targetId ||
               activeChatRef.current._id === targetId ||
               (targetId && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(targetId).toLowerCase()) ||
-              (msg.senderUsername && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(msg.senderUsername).toLowerCase()) ||
-              (msg.senderName && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(msg.senderName).toLowerCase()) ||
-              (msg.senderName && activeChatRef.current.displayName && String(activeChatRef.current.displayName).toLowerCase() === String(msg.senderName).toLowerCase())
+              (effectiveMsg.senderUsername && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(effectiveMsg.senderUsername).toLowerCase()) ||
+              (effectiveMsg.senderName && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(effectiveMsg.senderName).toLowerCase()) ||
+              (effectiveMsg.senderName && activeChatRef.current.displayName && String(activeChatRef.current.displayName).toLowerCase() === String(effectiveMsg.senderName).toLowerCase())
             ))
           )
         );
 
         const currentUnread = targetChat.unreadCount || 0;
-        const newUnread = (isMyMsg || isCurrentlyViewing) ? 0 : currentUnread + 1;
+        const newUnread = isPromotionFromRaw ? currentUnread : ((isMyMsg || isCurrentlyViewing) ? 0 : currentUnread + 1);
 
-        if (!isMyMsg && !isCurrentlyViewing) {
+        if (!isMyMsg && !isCurrentlyViewing && !isPromotionFromRaw) {
           try { playSound('received'); } catch {}
         }
 
         const updatedChat = {
           ...targetChat,
           lastMessage: contentSnippet,
-          lastMessageTime: msg.timestamp || new Date().toISOString(),
-          lastMessageTimestamp: msg.timestamp || new Date().toISOString(),
+          lastMessageTime: effectiveMsg.timestamp || new Date().toISOString(),
+          lastMessageTimestamp: effectiveMsg.timestamp || new Date().toISOString(),
           lastMessageFromMe: isMyMsg,
-          lastMessageStatus: msg.status || 'sent',
-          lastMessageType: msg.type || 'text',
+          lastMessageStatus: effectiveMsg.status || 'sent',
+          lastMessageType: effectiveMsg.type || 'text',
           unreadCount: newUnread
         };
 
@@ -1984,18 +2019,18 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       });
 
       // Also update groups list if group message
-      if (msg.isGroup) {
+      if (effectiveMsg.isGroup) {
         const isCurrentlyViewingGroup = Boolean(
-          activeChatRef.current && (activeChatRef.current.id === msg.chatId || activeChatRef.current.id === targetId)
+          activeChatRef.current && (activeChatRef.current.id === effectiveMsg.chatId || activeChatRef.current.id === targetId)
         );
         setGroups(prevGroups => prevGroups.map(g => {
-          if (g.id === (msg.chatId || targetId)) {
+          if (g.id === (effectiveMsg.chatId || targetId)) {
             const currentUnread = g.unreadCount || 0;
-            const newUnread = (isMyMsg || isCurrentlyViewingGroup) ? 0 : currentUnread + 1;
+            const newUnread = isPromotionFromRaw ? currentUnread : ((isMyMsg || isCurrentlyViewingGroup) ? 0 : currentUnread + 1);
             return {
               ...g,
               lastMessage: contentSnippet,
-              lastMessageTime: msg.timestamp || new Date().toISOString(),
+              lastMessageTime: effectiveMsg.timestamp || new Date().toISOString(),
               unreadCount: newUnread
             };
           }
@@ -2005,6 +2040,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     };
 
     socket.on('new_message', handleSidebarNewMessage);
+
+    const handleWindowMessage = (e) => {
+      if (e.detail) {
+        handleSidebarNewMessage(e.detail);
+      }
+    };
+    window.addEventListener('pulsechat_new_message', handleWindowMessage);
+    window.addEventListener('pulsechat_message_received', handleWindowMessage);
 
     // Emoji Reaction update in chat list
     const handleReactionUpdated = (data) => {
@@ -2386,6 +2429,8 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
     return () => {
       socket.off('new_message', handleSidebarNewMessage);
+      window.removeEventListener('pulsechat_new_message', handleWindowMessage);
+      window.removeEventListener('pulsechat_message_received', handleWindowMessage);
       socket.off('reaction_updated', handleReactionUpdated);
       socket.off('message_delivered_update', handleDeliveryUpdate);
       socket.off('messages_delivered');

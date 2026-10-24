@@ -42,12 +42,17 @@ export function setCachedUser(user) {
 
 // recent chats
 export function getCachedRecentChats(userId) {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined' || !userId) return [];
   const userObj = getCachedUser();
+  const isSameUser = Boolean(userObj && (
+    String(userObj.id) === String(userId) ||
+    String(userObj._id) === String(userId) ||
+    String(userObj.username) === String(userId)
+  ));
   const keysToCheck = Array.from(new Set([
-    userId,
-    userObj?.id,
-    userObj?._id ? String(userObj._id) : null
+    String(userId),
+    isSameUser ? userObj?.id : null,
+    isSameUser ? (userObj?._id ? String(userObj._id) : null) : null
   ].filter(Boolean)));
 
   let raw = [];
@@ -80,11 +85,18 @@ export function setCachedRecentChats(userId, chats) {
     const serialized = JSON.stringify(sorted);
     localStorage.setItem(`${STORAGE_KEYS.RECENT_PREFIX}${userId}`, serialized);
     const userObj = getCachedUser();
-    if (userObj?.id && String(userObj.id) !== String(userId)) {
-      localStorage.setItem(`${STORAGE_KEYS.RECENT_PREFIX}${userObj.id}`, serialized);
-    }
-    if (userObj?._id && String(userObj._id) !== String(userId)) {
-      localStorage.setItem(`${STORAGE_KEYS.RECENT_PREFIX}${userObj._id}`, serialized);
+    const isSameUser = Boolean(userObj && (
+      String(userObj.id) === String(userId) ||
+      String(userObj._id) === String(userId) ||
+      String(userObj.username) === String(userId)
+    ));
+    if (isSameUser) {
+      if (userObj?.id && String(userObj.id) !== String(userId)) {
+        localStorage.setItem(`${STORAGE_KEYS.RECENT_PREFIX}${userObj.id}`, serialized);
+      }
+      if (userObj?._id && String(userObj._id) !== String(userId)) {
+        localStorage.setItem(`${STORAGE_KEYS.RECENT_PREFIX}${userObj._id}`, serialized);
+      }
     }
   } catch (e) {
     console.warn('LocalStorage error setting recent chats', e);
@@ -164,7 +176,7 @@ export function getLatestCachedMessageForContact(user, contact) {
 }
 
 // update last message snippet in recent chats
-export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
+export function updateRecentChatSnippet(userId, chatId, message, targetChat, options = {}) {
   if (!userId || !chatId || !message) return;
   restoreDeletedChatId(userId, chatId);
   if (targetChat?.id && targetChat.id !== 'user') restoreDeletedChatId(userId, targetChat.id);
@@ -290,34 +302,62 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
     lastMessageStatus: message.status || 'sent'
   };
 
+  let effectiveTarget = targetChat;
+  if (!effectiveTarget) {
+    const allUsers = getCachedAllUsers(userId);
+    const found = allUsers.find(u =>
+      (contactId && (u.id === contactId || u._id === contactId || (u.username && String(u.username).toLowerCase() === String(contactId).toLowerCase()))) ||
+      (message.senderUsername && u.username && String(u.username).toLowerCase() === String(message.senderUsername).toLowerCase()) ||
+      (message.senderName && u.displayName && String(u.displayName).toLowerCase() === String(message.senderName).toLowerCase())
+    );
+    if (found) {
+      effectiveTarget = found;
+    } else {
+      const realContactId = (contactId && contactId !== userId && !myVariants.has(contactId) && !String(contactId).includes('_'))
+        ? contactId
+        : (typeof chatId === 'string' && chatId.includes('_') ? chatId.split('_').find(p => !myVariants.has(p)) : chatId);
+      effectiveTarget = {
+        id: realContactId || contactId || chatId,
+        displayName: (!isFromMe && (message.senderName || message.senderUsername)) ? (message.senderName || message.senderUsername) : 'Chat',
+        username: (!isFromMe && message.senderUsername) ? message.senderUsername : '',
+        avatar: (!isFromMe && message.senderAvatar) ? message.senderAvatar : ''
+      };
+    }
+  }
+
   let updatedEntry;
   if (existingIdx !== -1) {
     const existing = recent[existingIdx];
+    const prevUnread = Number(existing.unreadCount) || 0;
+    const shouldInc = options?.increment !== undefined ? Boolean(options.increment) : true;
+    const resolvedUnread = isFromMe ? 0 : (isStatusOnly ? prevUnread : (options?.isViewing ? 0 : (shouldInc ? prevUnread + 1 : prevUnread)));
+
     updatedEntry = {
       ...existing,
       ...snippet,
-      avatar: targetChat?.avatar || existing.avatar || '',
-      displayName: targetChat?.displayName || targetChat?.name || existing.displayName,
-      username: targetChat?.username || existing.username || '',
-      isPro: targetChat?.isPro !== undefined ? Boolean(targetChat.isPro) : Boolean(existing.isPro),
-      proTier: targetChat?.proTier || existing.proTier || null,
-      customBadge: targetChat?.customBadge !== undefined ? targetChat.customBadge : (existing.customBadge || null)
+      avatar: effectiveTarget?.avatar || existing.avatar || '',
+      displayName: effectiveTarget?.displayName || effectiveTarget?.name || existing.displayName,
+      username: effectiveTarget?.username || existing.username || '',
+      isPro: effectiveTarget?.isPro !== undefined ? Boolean(effectiveTarget.isPro) : Boolean(existing.isPro),
+      proTier: effectiveTarget?.proTier || existing.proTier || null,
+      customBadge: effectiveTarget?.customBadge !== undefined ? effectiveTarget.customBadge : (existing.customBadge || null),
+      unreadCount: resolvedUnread
     };
-  } else if (targetChat) {
+  } else if (effectiveTarget) {
     const realContactId = (contactId && contactId !== userId && !myVariants.has(contactId) && !String(contactId).includes('_'))
       ? contactId
-      : (targetChat?.id || targetChat?._id || (typeof chatId === 'string' && chatId.includes('_') ? chatId.split('_').find(p => !myVariants.has(p)) : chatId));
+      : (effectiveTarget?.id || effectiveTarget?._id || (typeof chatId === 'string' && chatId.includes('_') ? chatId.split('_').find(p => !myVariants.has(p)) : chatId));
 
     updatedEntry = {
-      id: realContactId || targetChat.id || targetChat._id || contactId || chatId,
-      displayName: targetChat.displayName || targetChat.name || targetChat.username || 'Chat',
-      username: targetChat.username || '',
-      avatar: targetChat.avatar || '',
-      isGroup: Boolean(targetChat.isGroup),
-      isPro: Boolean(targetChat.isPro),
-      proTier: targetChat.proTier || null,
-      customBadge: targetChat.customBadge || null,
-      unreadCount: 0,
+      id: realContactId || effectiveTarget.id || effectiveTarget._id || contactId || chatId,
+      displayName: effectiveTarget.displayName || effectiveTarget.name || effectiveTarget.username || 'Chat',
+      username: effectiveTarget.username || '',
+      avatar: effectiveTarget.avatar || '',
+      isGroup: Boolean(effectiveTarget.isGroup),
+      isPro: Boolean(effectiveTarget.isPro),
+      proTier: effectiveTarget.proTier || null,
+      customBadge: effectiveTarget.customBadge || null,
+      unreadCount: isFromMe || isStatusOnly || options?.isViewing ? 0 : (shouldInc ? 1 : 0),
       ...snippet
     };
   } else return;
@@ -330,8 +370,15 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat) {
   });
 
   setCachedRecentChats(userId, newRecent);
-  if (userObj?.id && userObj.id !== userId) setCachedRecentChats(userObj.id, newRecent);
-  if (userObj?._id && String(userObj._id) !== String(userId)) setCachedRecentChats(userObj._id, newRecent);
+  const isSameUser = Boolean(userObj && (
+    String(userObj.id) === String(userId) ||
+    String(userObj._id) === String(userId) ||
+    String(userObj.username) === String(userId)
+  ));
+  if (isSameUser) {
+    if (userObj?.id && String(userObj.id) !== String(userId)) setCachedRecentChats(userObj.id, newRecent);
+    if (userObj?._id && String(userObj._id) !== String(userId)) setCachedRecentChats(userObj._id, newRecent);
+  }
 }
 
 // clear unread count
@@ -339,19 +386,25 @@ export function clearUnreadCount(userId, targetId) {
   if (!userId || !targetId) return;
   let recent = getCachedRecentChats(userId);
   let updated = false;
+  const targetStr = String(targetId).trim();
+  const targetParts = targetStr.includes('_') ? targetStr.split('_') : [targetStr];
+
   const newRecent = recent.map(c => {
-    const isMatch = Boolean(
-      c.id === targetId ||
-      c._id === targetId ||
-      (c.username && c.username === targetId) ||
-      (c.chatId && c.chatId === targetId) ||
-      (typeof targetId === 'string' && (
-        (c.id && targetId.includes(c.id)) ||
-        (c._id && targetId.includes(c._id)) ||
-        (c.username && targetId.includes(c.username))
-      ))
+    if (!c) return c;
+    const isExactMatch = Boolean(
+      (c.id && String(c.id) === targetStr) ||
+      (c._id && String(c._id) === targetStr) ||
+      (c.username && String(c.username).toLowerCase() === targetStr.toLowerCase()) ||
+      (c.chatId && c.chatId === targetStr)
     );
-    if (isMatch) {
+    const isParticipantMatch = targetParts.length > 1 && targetParts.some(p =>
+      p && p !== 'user' && (
+        (c.id && String(c.id) === p) ||
+        (c._id && String(c._id) === p) ||
+        (c.username && String(c.username).toLowerCase() === p.toLowerCase())
+      )
+    );
+    if (isExactMatch || isParticipantMatch) {
       if (c.unreadCount > 0 || c.unreadCount === undefined) {
         updated = true;
         return { ...c, unreadCount: 0 };
@@ -361,6 +414,8 @@ export function clearUnreadCount(userId, targetId) {
   });
   if (updated) {
     setCachedRecentChats(userId, newRecent);
+  }
+}
   }
 }
 

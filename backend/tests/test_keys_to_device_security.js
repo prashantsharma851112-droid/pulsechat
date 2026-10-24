@@ -110,7 +110,8 @@ const DeviceIdentity = {
   find(query) {
     const list = [];
     for (const d of devices.values()) {
-      if (d.userId === query?.userId) {
+      const isMatch = query?.userId?.$in ? query.userId.$in.includes(d.userId) : (d.userId === query?.userId);
+      if (isMatch) {
         if (query?.isRevoked === false && d.isRevoked) continue;
         list.push(d);
       }
