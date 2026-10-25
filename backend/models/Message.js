@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
+  clientTempId: { type: String, default: null, index: true },
   // chatId is a deterministic string built by the frontend as
   // [userId1, userId2].sort().join('_') - this app only supports 1-on-1
   // chats, so no separate "Room" collection is needed (unlike ChatSpace).
@@ -50,8 +51,8 @@ const messageSchema = new mongoose.Schema({
   // Instagram-style Vanish Mode (Permanent Auto-evaporate on chat exit)
   isVanish: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now, index: true },
-  // WhatsApp-Style Post Office Queue: Max 7-day queue for offline delivery, auto-drops if receiver never connects
-  expiresAt: { type: Date, default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
+  // WhatsApp-Style Post Office Queue: Max 24-hour queue for offline delivery, auto-drops if receiver never connects
+  expiresAt: { type: Date, default: () => new Date(Date.now() + 24 * 60 * 60 * 1000) },
   // Local-First Privacy & E2EE Metadata
   cloudinaryPublicId: { type: String, default: null },
   isEncrypted: { type: Boolean, default: false },

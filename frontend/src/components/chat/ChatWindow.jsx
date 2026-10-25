@@ -2783,11 +2783,32 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             // WhatsApp Local-First Master Store:
             // Local storage (IndexedDB + localStorage) is the permanent home of chat history.
             // Server only delivers new transient messages or returns empty if already delivered.
-            const cachedNow = getCachedMessages(chatId, user?.id);
+            let cachedNow = getCachedMessages(chatId, user?.id);
+            if (!cachedNow || cachedNow.length === 0) {
+              try {
+                const dbMsgs = await getCachedMessagesFromLocalDb(chatId, 100);
+                if (Array.isArray(dbMsgs) && dbMsgs.length > 0) {
+                  const validDb = dbMsgs.filter(m => !deletedForMe.has(String(m.id)) && !deletedForMe.has(String(m._id)));
+                  if (identity?.keyPair?.privateKey) {
+                    cachedNow = await Promise.all(
+                      validDb.map(async m => {
+                        const isSentByMe = m?.senderId && myIdSet.has(String(m.senderId));
+                        if (m?.isEncrypted && m?.envelope && !m?._decrypted && !isSentByMe) {
+                          return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
+                        }
+                        return m;
+                      })
+                    );
+                  } else {
+                    cachedNow = validDb;
+                  }
+                }
+              } catch (_) {}
+            }
             const messageMap = new Map();
 
             // 1. Populate all local cached messages
-            cachedNow.forEach(c => {
+            (cachedNow || []).forEach(c => {
               const k = c.clientTempId || c.id;
               if (k) messageMap.set(k, c);
             });
@@ -3768,7 +3789,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       alert(reason || 'Message blocked: Communication not allowed.');
     };
 
-    socket.on('new_message', handleNewMessage);
+    // NOTE: SocketContext is the single source of truth for incoming durable messages;
+    // it decrypts and persists to IndexedDB before dispatching pulsechat_new_message below.
     socket.on('poll_updated', handlePollUpdate);
     socket.on('poll_edited', handlePollEdit);
     socket.on('message_deleted', handleMessageDeleted);
@@ -3870,7 +3892,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     return () => {
       window.removeEventListener('pulsechat_new_message', handleLocalNewMessage);
       window.removeEventListener('pulsechat_chat_cleared', handleLocalChatCleared);
-      socket.off('new_message', handleNewMessage);
       socket.off('poll_updated', handlePollUpdate);
       socket.off('poll_edited', handlePollEdit);
       socket.off('message_deleted', handleMessageDeleted);

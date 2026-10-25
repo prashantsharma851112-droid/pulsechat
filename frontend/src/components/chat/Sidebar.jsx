@@ -2018,15 +2018,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       }
     };
 
-    socket.on('new_message', handleSidebarNewMessage);
-
     const handleWindowMessage = (e) => {
       if (e.detail) {
         handleSidebarNewMessage(e.detail);
       }
     };
+    // Single source of truth for new messages: decrypted & locally persisted event from SocketContext
     window.addEventListener('pulsechat_new_message', handleWindowMessage);
-    window.addEventListener('pulsechat_message_received', handleWindowMessage);
 
     // Emoji Reaction update in chat list
     const handleReactionUpdated = (data) => {
@@ -2407,9 +2405,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     window.addEventListener('pulsechat_nickname_updated', handleWindowNicknameEvent);
 
     return () => {
-      socket.off('new_message', handleSidebarNewMessage);
       window.removeEventListener('pulsechat_new_message', handleWindowMessage);
-      window.removeEventListener('pulsechat_message_received', handleWindowMessage);
       socket.off('reaction_updated', handleReactionUpdated);
       socket.off('message_delivered_update', handleDeliveryUpdate);
       socket.off('messages_delivered');

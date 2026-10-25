@@ -674,28 +674,27 @@ io.on('connection', (socket) => {
       ].filter(Boolean)));
 
       const now = new Date();
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-      // Explicit cleanup of any expired or future-skewed queued messages before delivery
+      // Explicit cleanup of any expired queued messages before delivery (24h retention policy)
       Message.deleteMany({
         receiverId: { $in: allUserVariants },
         status: 'sent',
         $or: [
-          { createdAt: { $lt: sevenDaysAgo } },
-          { createdAt: { $gt: now } },
+          { createdAt: { $lt: oneDayAgo } },
           { expiresAt: { $lte: now } }
         ]
       }).catch(err => {
         console.warn('Queue expiry cleanup warning:', err.message);
       });
 
-      // Enforce strict server-side expiry: only deliver messages bounded by [sevenDaysAgo, now] and not expired
+      // Enforce strict server-side expiry: only deliver messages bounded by [oneDayAgo, now + 5min] and not expired
       const pendingMsgs = await Message.find({
         receiverId: { $in: allUserVariants },
         status: 'sent',
         createdAt: {
-          $gte: sevenDaysAgo,
-          $lte: now
+          $gte: oneDayAgo,
+          $lte: new Date(now.getTime() + 5 * 60 * 1000)
         },
         $or: [
           { expiresAt: { $gt: now } },
@@ -715,7 +714,7 @@ io.on('connection', (socket) => {
               messageId: pMsg.id,
               senderId: pMsg.senderId,
               receiverId: pMsg.receiverId,
-              expiresAt: pMsg.expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+              expiresAt: pMsg.expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000)
             }, receiptSecret);
           }
           socket.emit('new_message', pMsg);
@@ -1379,17 +1378,22 @@ io.on('connection', (socket) => {
         ackCallback({ success: true, message: publicWireMsg });
       }
 
-      // 3. Emit new_message: Intended receiver receives receiptToken; sender and shared room receive stripped message
+      // 3. Emit new_message: Intended receiver receives receiptToken; multi-device sender receives stripped wire message
       if (!isGroup && resolvedReceiverId && resolvedReceiverId !== 'user') {
         const rRooms = await resolveUserRooms(resolvedReceiverId);
-        rRooms.forEach(r => io.to(r).emit('new_message', newMsg));
+        if (rRooms.length > 0) {
+          let receiverBroadcaster = io;
+          rRooms.forEach(r => { receiverBroadcaster = receiverBroadcaster.to(r); });
+          receiverBroadcaster.emit('new_message', newMsg);
+        }
 
-        const sRooms = await resolveUserRooms(senderId);
-        sRooms.forEach(r => io.to(r).emit('new_message', publicWireMsg));
-
-        // Shared chat room broadcast (without receiptToken)
-        if (chatId) socket.to(chatId).emit('new_message', publicWireMsg);
-        if (canonicalChatId && canonicalChatId !== chatId) socket.to(canonicalChatId).emit('new_message', publicWireMsg);
+        // Multi-device sender sync: other active sessions/devices of sender receive stripped wire message
+        const sRooms = (await resolveUserRooms(senderId)).filter(r => !socket.rooms.has(r));
+        if (sRooms.length > 0) {
+          let senderBroadcaster = io;
+          sRooms.forEach(r => { senderBroadcaster = senderBroadcaster.to(r); });
+          senderBroadcaster.emit('new_message', publicWireMsg);
+        }
       } else {
         // Group chat or general broadcast
         if (chatId) io.to(chatId).emit('new_message', publicWireMsg);
@@ -1656,10 +1660,12 @@ io.on('connection', (socket) => {
         }
       }
 
-      targetRooms.forEach(r => {
-        io.to(r).emit('message_delivered_update', singlePayload);
-        io.to(r).emit('messages_delivered', multiPayload);
-      });
+      if (targetRooms.size > 0) {
+        let delivBroadcaster = io;
+        targetRooms.forEach(r => { delivBroadcaster = delivBroadcaster.to(r); });
+        delivBroadcaster.emit('message_delivered_update', singlePayload);
+        delivBroadcaster.emit('messages_delivered', multiPayload);
+      }
     } catch (err) {
       console.error('Error handling message_delivered ack:', err);
     }
