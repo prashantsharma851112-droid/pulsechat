@@ -5,7 +5,7 @@ import { BACKEND_URL } from '../utils/config';
 import { subscribeUserToPush, showPushNotification } from '../utils/notifications';
 import { updateUserProfileInStorage, appendCachedMessage, updateRecentChatSnippet } from '../utils/offlineStorage';
 import { saveMessagesToLocalDb } from '../utils/localDatabase';
-import { getOrInitDeviceIdentity, decryptMessageIfNeeded } from '../utils/e2eeCrypto';
+import { getOrInitDeviceIdentity, ensureDeviceIdentityRegistered, decryptMessageIfNeeded } from '../utils/e2eeCrypto';
 
 export const SocketContext = createContext();
 
@@ -24,7 +24,10 @@ export function SocketProvider({ children }) {
   useEffect(() => {
     userRef.current = user;
     if (user?.id) {
-      getOrInitDeviceIdentity(user.id)
+      const initPromise = token
+        ? ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL)
+        : getOrInitDeviceIdentity(user.id);
+      initPromise
         .then(ident => {
           deviceIdentityRef.current = ident;
         })
@@ -32,7 +35,7 @@ export function SocketProvider({ children }) {
           console.warn('SocketContext: Device identity preload error:', err);
         });
     }
-  }, [user]);
+  }, [user, token]);
 
   // Silently register Web Push subscription if permission already granted (no prompt)
   useEffect(() => {

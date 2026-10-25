@@ -4,7 +4,7 @@ const deviceKeySchema = new mongoose.Schema({
   userId: { type: String, required: true, index: true },
   deviceId: { type: String, required: true },
   publicKey: { type: Object, default: {} }, // Backwards compatibility for JWK / existing tests
-  keys: { type: Map, of: String, default: {} }, // e.g. { 'ed25519:<deviceId>': '...', 'curve25519:<deviceId>': '...' }
+  keys: { type: Object, default: {} }, // Supports both Matrix string keys and WebCrypto JWK objects
   signatures: { type: Object, default: {} }, // { '<userId>': { 'ed25519:<deviceId>': '...' } }
   algorithms: { type: [String], default: ['m.olm.v1.curve25519-aes-sha2', 'm.megolm.v1.aes-sha2'] },
   fallbackKey: { type: Object, default: null }, // Fallback prekey if OTK pool is exhausted

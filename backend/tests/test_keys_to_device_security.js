@@ -91,6 +91,7 @@ const emitted = [];
 function mongooseResult(result) {
   return {
     select() { return this; },
+    sort() { return this; },
     lean: async () => result
   };
 }

@@ -555,9 +555,12 @@ const handleQuery = async (req, res) => {
     const userQuery = (targetVariants.length === 1) ? targetVariants[0] : { $in: targetVariants };
 
     if (DeviceIdentity) {
-      const devices = await DeviceIdentity.find({ userId: userQuery, isRevoked: false })
-        .select('userId deviceId algorithms keys signatures')
-        .lean();
+      let q = DeviceIdentity.find({ userId: userQuery, isRevoked: false })
+        .select('userId deviceId algorithms keys signatures');
+      if (typeof q.sort === 'function') {
+        q = q.sort({ lastSeenAt: -1, createdAt: -1 });
+      }
+      const devices = await q.lean();
 
       for (const dev of devices) {
         resultDeviceKeys[targetUserId][dev.deviceId] = {
@@ -569,7 +572,11 @@ const handleQuery = async (req, res) => {
         };
       }
     } else if (DeviceKey) {
-      const devices = await DeviceKey.find({ userId: userQuery, revoked: { $ne: true } }).lean();
+      let q = DeviceKey.find({ userId: userQuery, revoked: { $ne: true } });
+      if (typeof q.sort === 'function') {
+        q = q.sort({ lastActiveAt: -1, createdAt: -1 });
+      }
+      const devices = await q.lean();
       for (const dev of devices) {
         resultDeviceKeys[targetUserId][dev.deviceId] = {
           user_id: dev.userId,
@@ -963,7 +970,10 @@ router.post('/to_device', authMiddleware, async (req, res) => {
 // EXPORTS: Support both `createKeysRouter()` factory AND direct router export
 // ============================================================================
 
-function createKeysRouter() {
+function createKeysRouter(req, res, next) {
+  if (req && res && typeof next === 'function') {
+    return router(req, res, next);
+  }
   return router;
 }
 

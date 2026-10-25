@@ -523,8 +523,9 @@ export async function fetchPeerDevicePublicKey(peerId, token, apiBaseUrl = '') {
   if (!peerId) return null;
   const cleanPeerId = String(peerId).trim();
 
-  if (peerDeviceKeyCache.has(cleanPeerId)) {
-    return peerDeviceKeyCache.get(cleanPeerId);
+  const cachedEntry = peerDeviceKeyCache.get(cleanPeerId);
+  if (cachedEntry && (!cachedEntry.expiresAt || cachedEntry.expiresAt > Date.now())) {
+    return cachedEntry.result || cachedEntry;
   }
 
   try {
@@ -558,7 +559,7 @@ export async function fetchPeerDevicePublicKey(peerId, token, apiBaseUrl = '') {
             deviceId: dev.device_id || dev.deviceId,
             publicKeyJwk: pubJwk
           };
-          peerDeviceKeyCache.set(cleanPeerId, result);
+          peerDeviceKeyCache.set(cleanPeerId, { result, expiresAt: Date.now() + 5 * 60 * 1000 });
           return result;
         }
       }
