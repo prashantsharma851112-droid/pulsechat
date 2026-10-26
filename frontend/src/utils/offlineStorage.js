@@ -175,6 +175,48 @@ export function getLatestCachedMessageForContact(user, contact) {
   return bestMsg;
 }
 
+// Monotonic receipt progression resolver: pending -> sent -> delivered -> read
+// Prevents late delivery/sent receipts from downgrading terminal read status
+export function resolveNextMessageStatus(currentStatus, newStatus) {
+  if (!newStatus) return currentStatus;
+  if (!currentStatus) return newStatus;
+  if (currentStatus === newStatus) return currentStatus;
+
+  // Terminal: read cannot downgrade to anything
+  if (currentStatus === 'read') {
+    return 'read';
+  }
+
+  // Delivered cannot downgrade to sent, pending, or failed
+  if (currentStatus === 'delivered') {
+    if (newStatus === 'read') return 'read';
+    return 'delivered';
+  }
+
+  // Sent can advance to delivered or read, or fail
+  if (currentStatus === 'sent') {
+    if (newStatus === 'delivered' || newStatus === 'read' || newStatus === 'failed') {
+      return newStatus;
+    }
+    return 'sent'; // do not downgrade to pending
+  }
+
+  // Pending can advance to sent, delivered, read, or fail
+  if (currentStatus === 'pending') {
+    return newStatus;
+  }
+
+  // Failed message retry: can transition back to pending, sent, delivered, read
+  if (currentStatus === 'failed') {
+    if (newStatus === 'pending' || newStatus === 'sent' || newStatus === 'delivered' || newStatus === 'read') {
+      return newStatus;
+    }
+    return 'failed';
+  }
+
+  return newStatus;
+}
+
 // update last message snippet in recent chats
 export function updateRecentChatSnippet(userId, chatId, message, targetChat, options = {}) {
   if (!userId || !chatId || !message) return;
@@ -227,9 +269,11 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat, opt
 
   if (isStatusOnly) {
     if (existingIdx !== -1) {
+      const currentStatus = recent[existingIdx]?.lastMessageStatus;
+      const targetStatus = resolveNextMessageStatus(currentStatus, message.status);
       recent[existingIdx] = {
         ...recent[existingIdx],
-        lastMessageStatus: message.status
+        lastMessageStatus: targetStatus
       };
       setCachedRecentChats(userId, recent);
     }
@@ -293,13 +337,34 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat, opt
   }
 
   const msgTime = message.timestamp || new Date().toISOString();
+  const existing = existingIdx !== -1 ? recent[existingIdx] : null;
+  const msgId = message.id || message._id || null;
+  const tempId = message.clientTempId || null;
+
+  const isSameMessage = Boolean(
+    existing && (
+      (msgId && existing.lastMessageId && (String(existing.lastMessageId) === String(msgId) || (existing.lastMessageClientTempId && String(existing.lastMessageClientTempId) === String(msgId)))) ||
+      (tempId && existing.lastMessageClientTempId && String(existing.lastMessageClientTempId) === String(tempId)) ||
+      (tempId && existing.lastMessageId && String(existing.lastMessageId) === String(tempId)) ||
+      (existing.lastMessageTimestamp === msgTime && existing.lastMessage === formattedContent)
+    )
+  );
+
+  // Apply monotonic status progression ONLY if this update refers to the same message
+  // For genuinely new messages replacing the preview, initialize from that new message's status
+  const targetSnippetStatus = (isSameMessage && existing?.lastMessageStatus)
+    ? resolveNextMessageStatus(existing.lastMessageStatus, message.status || 'sent')
+    : (message.status || 'sent');
+
   const snippet = {
     lastMessage: formattedContent,
     lastMessageTime: msgTime,
     lastMessageTimestamp: msgTime,
     lastMessageType: message.type || 'text',
     lastMessageFromMe: isFromMe,
-    lastMessageStatus: message.status || 'sent'
+    lastMessageStatus: targetSnippetStatus,
+    lastMessageId: msgId || (isSameMessage ? existing?.lastMessageId : null),
+    lastMessageClientTempId: tempId || (isSameMessage ? existing?.lastMessageClientTempId : null)
   };
 
   let effectiveTarget = targetChat;
@@ -328,9 +393,8 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat, opt
   const shouldInc = options?.increment !== undefined ? Boolean(options.increment) : true;
   let updatedEntry;
   if (existingIdx !== -1) {
-    const existing = recent[existingIdx];
     const prevUnread = Number(existing.unreadCount) || 0;
-    const resolvedUnread = isFromMe ? 0 : (isStatusOnly ? prevUnread : (options?.isViewing ? 0 : (shouldInc ? prevUnread + 1 : prevUnread)));
+    const resolvedUnread = isFromMe ? 0 : (isStatusOnly || isSameMessage ? prevUnread : (options?.isViewing ? 0 : (shouldInc ? prevUnread + 1 : prevUnread)));
 
     updatedEntry = {
       ...existing,
@@ -622,7 +686,10 @@ export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
         (m.clientTempId && messageIdOrTempId && String(m.clientTempId) === String(messageIdOrTempId))
       ) {
         changed = true;
-        return typeof updates === 'string' ? { ...m, status: updates } : { ...m, ...updates };
+        const incomingStatus = typeof updates === 'string' ? updates : updates.status;
+        const targetStatus = incomingStatus ? resolveNextMessageStatus(m.status, incomingStatus) : m.status;
+        const updateObj = typeof updates === 'string' ? { status: targetStatus } : { ...updates, ...(incomingStatus ? { status: targetStatus } : {}) };
+        return { ...m, ...updateObj };
       }
       return m;
     });

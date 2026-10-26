@@ -759,17 +759,30 @@ io.on('connection', (socket) => {
       socket.userUsername
     ].filter(Boolean).map(String);
 
-    // 1. If 1-on-1 private chat (e.g. userA_userB): verify caller is one of the participants
-    if (typeof chatId === 'string' && chatId.includes('_') && !chatId.startsWith('group_')) {
-      const isParticipant = myKeys.some(m => chatId.startsWith(m + '_') || chatId.endsWith('_' + m) || chatId.split('_').includes(m));
-      if (!isParticipant) {
-        console.warn(`Rejected join_chat: user ${callerId} is not a member of chat ${chatId}`);
-        return;
+    // 1. If 1-on-1 private chat (e.g. userA_userB or userA::userB): verify caller is one of the participants
+    if (typeof chatId === 'string' && (chatId.includes('::') || chatId.includes('_')) && !chatId.startsWith('group_')) {
+      let otherKey = null;
+      if (chatId.includes('::')) {
+        const parts = chatId.split('::');
+        const isParticipant = parts.some(p => myKeys.includes(p));
+        if (!isParticipant) {
+          console.warn(`Rejected join_chat: user ${callerId} is not a member of chat ${chatId}`);
+          return;
+        }
+        otherKey = parts.find(p => !myKeys.includes(p));
+      } else {
+        const isParticipant = myKeys.some(m => chatId.startsWith(m + '_') || chatId.endsWith('_' + m) || chatId.split('_').includes(m));
+        if (!isParticipant) {
+          console.warn(`Rejected join_chat: user ${callerId} is not a member of chat ${chatId}`);
+          return;
+        }
+        otherKey = await getOtherParticipantId(chatId, callerId);
       }
       socket.join(chatId);
-      const parts = chatId.split('_');
-      const canonical = parts.sort().join('_');
-      socket.join(canonical);
+      if (otherKey) {
+        const unambiguousCanonical = [String(callerId), String(otherKey)].sort().join('::');
+        socket.join(unambiguousCanonical);
+      }
       return;
     }
 
@@ -1644,32 +1657,41 @@ io.on('connection', (socket) => {
         });
       } catch {}
 
+      // 4. Double Tick Notification (Only emitted on verified atomic transition)
+      // Unambiguously derive canonical conversation ID using non-colliding '::' separator
+      const unambiguousCanonical = (verifiedSenderId && claims && claims.receiverId)
+        ? [String(verifiedSenderId), String(claims.receiverId)].sort().join('::')
+        : null;
+      const legacyCanonical = (verifiedSenderId && claims && claims.receiverId)
+        ? [String(verifiedSenderId), String(claims.receiverId)].sort().join('_')
+        : chatId;
+      const canonicalChatId = unambiguousCanonical || legacyCanonical;
+
       // Invalidate Redis RAM for the chat so stale delivered messages are not served
       try {
         const redis = require('./utils/redis');
         if (chatId) redis.invalidateChat(chatId).catch(() => {});
-        const canonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : null;
-        if (canonical && canonical !== chatId) redis.invalidateChat(canonical).catch(() => {});
+        if (legacyCanonical && legacyCanonical !== chatId) redis.invalidateChat(legacyCanonical).catch(() => {});
+        if (unambiguousCanonical) redis.invalidateChat(unambiguousCanonical).catch(() => {});
       } catch {}
 
-      // 4. Double Tick Notification (Only emitted on verified atomic transition)
-      const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-      const singlePayload = { messageId, clientTempId: resolvedClientTempId, chatId, canonicalChatId, status: 'delivered', senderId: verifiedSenderId };
-      const multiPayload = { chatId, canonicalChatId, messageIds: [messageId], clientTempIds: resolvedClientTempId ? [resolvedClientTempId] : [], status: 'delivered', senderId: verifiedSenderId };
+      const singlePayload = { messageId, clientTempId: resolvedClientTempId, chatId, canonicalChatId, status: 'delivered', senderId: verifiedSenderId, receiverId: claims?.receiverId || callerId };
+      const multiPayload = { chatId, canonicalChatId, messageIds: [messageId], clientTempIds: resolvedClientTempId ? [resolvedClientTempId] : [], status: 'delivered', senderId: verifiedSenderId, receiverId: claims?.receiverId || callerId };
 
       const targetRooms = new Set();
-      if (chatId) targetRooms.add(chatId);
-      if (canonicalChatId) targetRooms.add(canonicalChatId);
+      if (unambiguousCanonical) targetRooms.add(unambiguousCanonical);
 
       if (verifiedSenderId) {
         const sRooms = await resolveUserRooms(verifiedSenderId);
         sRooms.forEach(r => targetRooms.add(r));
       }
-      if (chatId && chatId.includes('_')) {
-        for (const pId of chatId.split('_')) {
-          const pRooms = await resolveUserRooms(pId);
-          pRooms.forEach(r => targetRooms.add(r));
-        }
+      if (claims && claims.receiverId) {
+        const rRooms = await resolveUserRooms(claims.receiverId);
+        rRooms.forEach(r => targetRooms.add(r));
+      }
+      if (callerId) {
+        const cRooms = await resolveUserRooms(callerId);
+        cRooms.forEach(r => targetRooms.add(r));
       }
 
       if (targetRooms.size > 0) {
@@ -1947,12 +1969,16 @@ io.on('connection', (socket) => {
 
     const readerId = callerId;
     const isGhostMode = Boolean(isGhost) || await resolveGhostMode(readerId, chatId);
-    const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
     const senderTarget = senderId || await getOtherParticipantId(chatId, readerId);
+    const unambiguousCanonical = (senderTarget && readerId)
+      ? [String(readerId), String(senderTarget)].sort().join('::')
+      : null;
+    const canonicalChatId = unambiguousCanonical || ((senderTarget && readerId)
+      ? [String(readerId), String(senderTarget)].sort().join('_')
+      : chatId);
 
     const targetRooms = new Set();
-    if (chatId) targetRooms.add(chatId);
-    if (canonicalChatId) targetRooms.add(canonicalChatId);
+    if (unambiguousCanonical) targetRooms.add(unambiguousCanonical);
 
     if (senderTarget) {
       const sRooms = await resolveUserRooms(senderTarget);
@@ -2033,12 +2059,16 @@ io.on('connection', (socket) => {
 
     const readerId = callerId;
     const isGhostMode = Boolean(isGhost) || await resolveGhostMode(readerId, chatId);
-    const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
     const otherId = await getOtherParticipantId(chatId, readerId);
+    const unambiguousCanonical = (otherId && readerId)
+      ? [String(readerId), String(otherId)].sort().join('::')
+      : null;
+    const canonicalChatId = unambiguousCanonical || ((otherId && readerId)
+      ? [String(readerId), String(otherId)].sort().join('_')
+      : chatId);
 
     const targetRooms = new Set();
-    if (chatId) targetRooms.add(chatId);
-    if (canonicalChatId) targetRooms.add(canonicalChatId);
+    if (unambiguousCanonical) targetRooms.add(unambiguousCanonical);
 
     if (otherId) {
       const sRooms = await resolveUserRooms(otherId);

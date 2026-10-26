@@ -60,6 +60,7 @@ import {
   setCachedMessages,
   appendCachedMessage,
   updateCachedMessageStatus,
+  resolveNextMessageStatus,
   getOutbox,
   addToOutbox,
   removeFromOutbox,
@@ -228,6 +229,47 @@ class ChatModalErrorBoundary extends React.Component {
 }
 
 // Standalone isolated ChatInputCapsule is imported above to eliminate typing lag and parent re-renders
+
+export function matchesConversation(incomingChatId, incomingCanonicalChatId, { isGroup, activeChatId, activeChat, currentUserId, user, chatId, partnerId } = {}) {
+  const incoming = [incomingChatId, incomingCanonicalChatId].filter(id => typeof id === 'string' && id.trim().length > 0);
+  if (incoming.length === 0) return false;
+
+  if (isGroup) {
+    const groupIds = new Set([activeChat?.id, activeChat?._id, activeChatId, chatId].filter(Boolean).map(String));
+    return incoming.some(id => groupIds.has(id));
+  }
+
+  // Direct 1:1 chat: derive valid IDs strictly from known participant IDs
+  const myIds = [user?.id, user?._id, user?.username, currentUserId].filter(Boolean).map(String);
+  const partnerIds = [activeChat?.id, activeChat?._id, activeChat?.userId, activeChat?.username, partnerId, activeChatId].filter(Boolean).map(String);
+  if (myIds.length === 0 || partnerIds.length === 0) return false;
+
+  const validUnambiguousIds = new Set();
+  const validLegacyIds = new Set();
+
+  for (const myId of myIds) {
+    for (const pId of partnerIds) {
+      // Unambiguous canonical representation using non-colliding '::' separator
+      validUnambiguousIds.add(`${myId}::${pId}`);
+      validUnambiguousIds.add(`${pId}::${myId}`);
+      validUnambiguousIds.add([myId, pId].sort().join('::'));
+
+      validLegacyIds.add(`${myId}_${pId}`);
+      validLegacyIds.add(`${pId}_${myId}`);
+      validLegacyIds.add([myId, pId].sort().join('_'));
+    }
+  }
+
+  // If incoming event provides an unambiguous canonical ID (contains '::'), enforce strict unambiguous matching
+  const hasUnambiguousIncoming = incoming.some(id => id.includes('::'));
+  if (hasUnambiguousIncoming) {
+    return incoming.some(id => validUnambiguousIds.has(id));
+  }
+
+  // Fallback for legacy events without '::'
+  if (chatId) validLegacyIds.add(String(chatId));
+  return incoming.some(id => validLegacyIds.has(id));
+}
 
 export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGroupCall, onOpenFullDp }) {
   const { user, token, blockUser, unblockUser, updateUserProfile } = useContext(AuthContext);
@@ -3698,7 +3740,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     };
 
-    const handleMessageDeliveredUpdate = ({ messageId, clientTempId, status }) => {
+    const isMatchingConversation = (incomingChatId, incomingCanonicalChatId) => {
+      return matchesConversation(incomingChatId, incomingCanonicalChatId, {
+        isGroup,
+        activeChatId,
+        activeChat,
+        currentUserId,
+        user,
+        chatId,
+        partnerId
+      });
+    };
+
+    const handleMessageDeliveredUpdate = ({ messageId, clientTempId, chatId: incomingChatId, canonicalChatId, status }) => {
+      if (!isMatchingConversation(incomingChatId, canonicalChatId)) return;
+
       setMessages(prev => {
         let changed = false;
         const next = prev.map(m => {
@@ -3711,7 +3767,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             return {
               ...m,
               id: (messageId && !m.id.startsWith('msg_') ? messageId : m.id),
-              status: (m.status === 'read' ? 'read' : (status || 'delivered'))
+              status: resolveNextMessageStatus(m.status, status || 'delivered')
             };
           }
           return m;
@@ -3728,16 +3784,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     const handleMessagesDelivered = ({ messageIds, clientTempIds, chatId: incomingChatId, canonicalChatId, status, senderId }) => {
-      const currentCanonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-      const targetCanonical = canonicalChatId || ((incomingChatId && incomingChatId.includes('_')) ? incomingChatId.split('_').sort().join('_') : incomingChatId);
-      const isThisChat = Boolean(
-        !incomingChatId ||
-        incomingChatId === chatId ||
-        targetCanonical === currentCanonical ||
-        (incomingChatId && partnerVariants.some(pv => String(incomingChatId).toLowerCase().includes(String(pv).toLowerCase())))
-      );
-
-      if (!isThisChat) return;
+      if (!isMatchingConversation(incomingChatId, canonicalChatId)) return;
 
       const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
       const idSet = Array.isArray(messageIds) && messageIds.length > 0 ? new Set(messageIds.map(String)) : null;
@@ -3753,7 +3800,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             (m.clientTempId && tempIdSet && tempIdSet.has(String(m.clientTempId)));
           if ((isTarget || myVars.has(String(m.senderId))) && m.status !== 'read') {
             changed = true;
-            return { ...m, status: status || 'delivered' };
+            return { ...m, status: resolveNextMessageStatus(m.status, status || 'delivered') };
           }
           return m;
         });
@@ -4375,6 +4422,40 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     });
   };
 
+  const handleSendMessageAck = useCallback((tempId, ack) => {
+    // Validate expected success ACK shape: { success: true, message: { id: ... } }
+    if (ack && typeof ack === 'object' && ack.success === true && ack.message && typeof ack.message.id === 'string' && ack.message.id.startsWith('msg_')) {
+      const serverId = ack.message.id;
+      setMessages(prev => prev.map(m => {
+        if (m.clientTempId === tempId || m.id === tempId) {
+          const nextStatus = resolveNextMessageStatus(m.status, 'sent');
+          return { ...m, id: serverId, status: nextStatus };
+        }
+        return m;
+      }));
+      updateCachedMessageStatus(chatId, tempId, { id: serverId, status: 'sent' });
+    } else if (ack && typeof ack === 'object' && (ack.error || ack.success === false)) {
+      // Definitive server rejection: update ONLY the corresponding message to 'failed'
+      const errorReason = ack.message || ack.error || 'Message rejected by server';
+      setMessages(prev => prev.map(m => {
+        if (m.clientTempId === tempId || m.id === tempId) {
+          if (m.status === 'delivered' || m.status === 'read') return m;
+          return {
+            ...m,
+            status: 'failed',
+            error: typeof ack.error === 'string' ? ack.error : errorReason,
+            errorMessage: errorReason
+          };
+        }
+        return m;
+      }));
+      updateCachedMessageStatus(chatId, tempId, { status: 'failed', error: ack.error || errorReason });
+      setActionToast(errorReason);
+      setTimeout(() => setActionToast(''), 4000);
+    }
+    // Missing ACK, timeout, or unexpected shape leaves the message in current state without false promotion/rejection
+  }, [chatId]);
+
   const dispatchMessage = async (msgContent) => {
     if (!msgContent) return;
 
@@ -4494,13 +4575,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       replyTo: isEncrypted
         ? (pendingMsg.replyTo ? { id: pendingMsg.replyTo.id, type: pendingMsg.replyTo.type, senderId: pendingMsg.replyTo.senderId } : null)
         : pendingMsg.replyTo
-    }, (ack) => {
-      if (ack?.success && ack?.message) {
-        const serverId = ack.message.id;
-        setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, id: serverId, status: 'sent' } : m));
-        updateCachedMessageStatus(chatId, tempId, { id: serverId, status: 'sent' });
-      }
-    });
+    }, (ack) => handleSendMessageAck(tempId, ack));
 
     setReplyTo(null);
     playSound('sent');
@@ -4633,7 +4708,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       replyTo: isEncrypted
         ? (pendingMsg.replyTo ? { id: pendingMsg.replyTo.id, type: pendingMsg.replyTo.type, senderId: pendingMsg.replyTo.senderId } : null)
         : pendingMsg.replyTo
-    });
+    }, (ack) => handleSendMessageAck(tempId, ack));
 
     setReplyTo(null);
     playSound('sent');

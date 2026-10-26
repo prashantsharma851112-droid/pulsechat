@@ -710,8 +710,9 @@ router.delete('/clear/:chatId', authMiddleware, async (req, res) => {
 router.put('/:chatId/read', authMiddleware, async (req, res) => {
   try {
     const isGhostMode = await resolveGhostMode(req.user.id, req.params.chatId, req);
-    const canonicalChatId = (req.params.chatId && req.params.chatId.includes('_'))
-      ? req.params.chatId.split('_').sort().join('_')
+    const otherId = await getOtherParticipantId(req.params.chatId, req.user.id);
+    const canonicalChatId = (otherId && req.user.id)
+      ? [String(req.user.id), String(otherId)].sort().join('_')
       : req.params.chatId;
 
     await db.markChatAsRead(req.params.chatId, req.user.id, isGhostMode);
@@ -721,8 +722,6 @@ router.put('/:chatId/read', authMiddleware, async (req, res) => {
       const readerPayload = { chatId: req.params.chatId, canonicalChatId, userId: req.user.id };
       io.to(`user_${req.user.id}`).emit('chat_read_update', readerPayload);
       io.to(req.user.id).emit('chat_read_update', readerPayload);
-
-      const otherId = await getOtherParticipantId(req.params.chatId, req.user.id);
 
       if (isGhostMode) {
         const delivPayload = { chatId: req.params.chatId, canonicalChatId, status: 'delivered' };
