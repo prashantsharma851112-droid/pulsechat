@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 import { AuthContext } from './AuthContext';
 import { BACKEND_URL } from '../utils/config';
 import { subscribeUserToPush, showPushNotification } from '../utils/notifications';
-import { updateUserProfileInStorage, appendCachedMessage, updateRecentChatSnippet } from '../utils/offlineStorage';
+import { updateUserProfileInStorage, appendCachedMessage, updateRecentChatSnippet, updateCachedMessageStatus } from '../utils/offlineStorage';
 import { saveMessagesToLocalDb } from '../utils/localDatabase';
 import { getOrInitDeviceIdentity, ensureDeviceIdentityRegistered, decryptMessageIfNeeded } from '../utils/e2eeCrypto';
 
@@ -245,20 +245,17 @@ export function SocketProvider({ children }) {
       });
 
       const triggerPushIfBackground = (msg) => {
-        const isHidden = typeof document !== 'undefined' && (document.visibilityState === 'hidden' || document.hidden);
-        if (isHidden) {
-          const senderTitle = msg.isGroup ? (msg.groupName || 'Group') : (msg.senderName || msg.senderId || 'PulseChat');
-          const body = msg.type === 'text'
-            ? (msg.isGroup ? `${msg.senderName || 'Member'}: ${msg.content}` : (msg.content || 'New message'))
-            : `Sent a ${msg.type}`;
-          showPushNotification(
-            `💬 ${senderTitle}`,
-            body,
-            msg.senderAvatar || '/icon-192.png',
-            `pulsechat-${msg.chatId || msg.senderId}`,
-            { chatId: msg.chatId, senderId: msg.senderId, isGroup: !!msg.isGroup }
-          );
-        }
+        const senderTitle = msg.isGroup ? (msg.groupName || 'Group') : (msg.senderName || msg.senderId || 'PulseChat');
+        const body = msg.type === 'text'
+          ? (msg.isGroup ? `${msg.senderName || 'Member'}: ${msg.content}` : (msg.content || 'New message'))
+          : `Sent a ${msg.type}`;
+        showPushNotification(
+          `💬 ${senderTitle}`,
+          body,
+          msg.senderAvatar || '/icon-192.png',
+          `pulsechat-${msg.chatId || msg.senderId}`,
+          { chatId: msg.chatId, senderId: msg.senderId, isGroup: !!msg.isGroup }
+        );
       };
 
       // Receiver-side Durable ACK Engine:
@@ -304,6 +301,26 @@ export function SocketProvider({ children }) {
           }
         }
 
+        // Check if recipient is actively viewing this specific chat right now
+        const activeChatId = typeof window !== 'undefined' ? window.__pulsechat_active_chat_id : null;
+        const activeChatObj = typeof window !== 'undefined' ? window.__pulsechat_active_chat : null;
+        const isDocVisible = typeof document === 'undefined' || (document.visibilityState === 'visible' && !document.hidden);
+        const isViewingThisChat = Boolean(
+          isDocVisible && (
+            (activeChatId && (
+              activeChatId === msgToCommit.chatId ||
+              activeChatId === msgToCommit.senderId ||
+              (msgToCommit.chatId && msgToCommit.chatId.includes('_') && msgToCommit.chatId.split('_').includes(String(activeChatId)))
+            )) ||
+            (activeChatObj && (
+              activeChatObj.id === msgToCommit.chatId ||
+              activeChatObj.id === msgToCommit.senderId ||
+              activeChatObj._id === msgToCommit.senderId ||
+              (activeChatObj.username && String(activeChatObj.username).toLowerCase() === String(msgToCommit.senderUsername || '').toLowerCase())
+            ))
+          )
+        );
+
         // 1. Durably await IndexedDB transaction commit BEFORE emitting ACK
         try {
           if (msgToCommit.chatId) {
@@ -316,7 +333,10 @@ export function SocketProvider({ children }) {
             }
             await saveMessagesToLocalDb(msgToCommit.chatId, [msgToCommit]);
             if (curId) {
-              updateRecentChatSnippet(curId, msgToCommit.chatId, msgToCommit, null);
+              updateRecentChatSnippet(curId, msgToCommit.chatId, msgToCommit, null, {
+                isViewing: isViewingThisChat,
+                increment: !isViewingThisChat
+              });
               window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
             }
           }
@@ -333,7 +353,9 @@ export function SocketProvider({ children }) {
 
         setLastNotification({ ...msgToCommit, receivedAt: Date.now() });
 
-        triggerPushIfBackground(msgToCommit);
+        if (!isViewingThisChat) {
+          triggerPushIfBackground(msgToCommit);
+        }
 
         // 2. Emit delivery ACK ONLY AFTER local storage commit succeeds
         // Passes cryptographic receiptToken for verified tamper-proof queue deletion
@@ -342,10 +364,23 @@ export function SocketProvider({ children }) {
             messageId: msg.id,
             chatId: msg.chatId,
             senderId: msg.senderId,
-            receiptToken: msg.receiptToken || null
+            receiptToken: msg.receiptToken || null,
+            clientTempId: msg.clientTempId || null
           });
         }
       };
+
+      // Real-time double-tick delivery update listener (sender receives confirmation when recipient commits to IndexedDB)
+      newSocket.on('message_delivered_update', ({ messageId, clientTempId, chatId: cId, canonicalChatId, status }) => {
+        const curId = userRef.current?.id || user?.id;
+        const targetChatId = cId || canonicalChatId;
+        if (targetChatId && curId) {
+          updateCachedMessageStatus(targetChatId, messageId || clientTempId, { status: status || 'delivered' });
+          if (clientTempId) updateCachedMessageStatus(targetChatId, clientTempId, { status: status || 'delivered' });
+          updateRecentChatSnippet(curId, targetChatId, { status: status || 'delivered' }, null);
+          window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
+        }
+      });
 
       // Fires for every incoming notification — save locally first and send delivery ack
       newSocket.on('message_notification', (msg) => {

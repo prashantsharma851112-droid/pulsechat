@@ -2987,6 +2987,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           });
       }
 
+      if (typeof window !== 'undefined') {
+        window.__pulsechat_active_chat = activeChat || null;
+        window.__pulsechat_active_chat_id = chatId || activeChat?.id || activeChat?._id || null;
+      }
+
       // Zero out unread count immediately in cache and notify other components (0ms)
       if (user?.id) {
         if (activeChat?.id) clearUnreadCount(user.id, activeChat.id);
@@ -3058,6 +3063,20 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       window.removeEventListener('focus', handleVisibilityOrFocus);
     };
   }, [socket, chatId, user?.id, isGhostMode]);
+
+  // Track active chat id globally for SocketContext incoming message delivery & unread suppression
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.__pulsechat_active_chat = activeChat || null;
+      window.__pulsechat_active_chat_id = chatId || activeChat?.id || activeChat?._id || null;
+    }
+    return () => {
+      if (typeof window !== 'undefined' && window.__pulsechat_active_chat_id === (chatId || activeChat?.id || activeChat?._id)) {
+        window.__pulsechat_active_chat = null;
+        window.__pulsechat_active_chat_id = null;
+      }
+    };
+  }, [chatId, activeChat]);
 
   // Re-join chat room immediately when socket reconnects
   useEffect(() => {
@@ -3431,7 +3450,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           removeFromOutbox(user?.id, msg.clientTempId);
         }
 
-        updateRecentChatSnippet(user?.id, chatId, sanitizedMsg, activeChat);
+        updateRecentChatSnippet(user?.id, chatId, sanitizedMsg, activeChat, { isViewing: true, increment: false });
         window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
 
         const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean));
@@ -3679,13 +3698,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     };
 
-    const handleMessageDeliveredUpdate = ({ messageId, status }) => {
+    const handleMessageDeliveredUpdate = ({ messageId, clientTempId, status }) => {
       setMessages(prev => {
         let changed = false;
         const next = prev.map(m => {
-          if (m.id === messageId || m._id === messageId || m.clientTempId === messageId) {
+          const isMatch = Boolean(
+            (messageId && (m.id === messageId || m._id === messageId || m.clientTempId === messageId)) ||
+            (clientTempId && (m.clientTempId === clientTempId || m.id === clientTempId))
+          );
+          if (isMatch) {
             changed = true;
-            return { ...m, status: (m.status === 'read' ? 'read' : (status || 'delivered')) };
+            return {
+              ...m,
+              id: (messageId && !m.id.startsWith('msg_') ? messageId : m.id),
+              status: (m.status === 'read' ? 'read' : (status || 'delivered'))
+            };
           }
           return m;
         });
@@ -3694,12 +3721,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         }
         return changed ? next : prev;
       });
-      updateCachedMessageStatus(chatId, messageId, { status: 'delivered' });
-      updateRecentChatSnippet(user?.id, chatId, { status: 'delivered' }, activeChat);
+      if (messageId) updateCachedMessageStatus(chatId, messageId, { status: status || 'delivered' });
+      if (clientTempId) updateCachedMessageStatus(chatId, clientTempId, { status: status || 'delivered' });
+      updateRecentChatSnippet(user?.id, chatId, { status: status || 'delivered' }, activeChat);
       window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
     };
 
-    const handleMessagesDelivered = ({ messageIds, chatId: incomingChatId, canonicalChatId, status, senderId }) => {
+    const handleMessagesDelivered = ({ messageIds, clientTempIds, chatId: incomingChatId, canonicalChatId, status, senderId }) => {
       const currentCanonical = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
       const targetCanonical = canonicalChatId || ((incomingChatId && incomingChatId.includes('_')) ? incomingChatId.split('_').sort().join('_') : incomingChatId);
       const isThisChat = Boolean(
@@ -3713,12 +3741,17 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
       const idSet = Array.isArray(messageIds) && messageIds.length > 0 ? new Set(messageIds.map(String)) : null;
+      const tempIdSet = Array.isArray(clientTempIds) && clientTempIds.length > 0 ? new Set(clientTempIds.map(String)) : null;
 
       setMessages(prev => {
         let changed = false;
         const next = prev.map(m => {
-          const isTarget = !idSet || idSet.has(String(m.id)) || (m._id && idSet.has(String(m._id))) || (m.clientTempId && idSet.has(String(m.clientTempId)));
-          if ((isTarget || myVars.has(String(m.senderId))) && m.status === 'sent') {
+          const isTarget = !idSet ||
+            idSet.has(String(m.id)) ||
+            (m._id && idSet.has(String(m._id))) ||
+            (m.clientTempId && idSet.has(String(m.clientTempId))) ||
+            (m.clientTempId && tempIdSet && tempIdSet.has(String(m.clientTempId)));
+          if ((isTarget || myVars.has(String(m.senderId))) && m.status !== 'read') {
             changed = true;
             return { ...m, status: status || 'delivered' };
           }
@@ -3731,10 +3764,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       });
       if (idSet) {
         idSet.forEach(mId => updateCachedMessageStatus(chatId, mId, { status: status || 'delivered' }));
-      } else {
+      }
+      if (tempIdSet) {
+        tempIdSet.forEach(tId => updateCachedMessageStatus(chatId, tId, { status: status || 'delivered' }));
+      }
+      if (!idSet && !tempIdSet) {
         markAllCachedMessagesDelivered(chatId, user?.id);
       }
-      updateRecentChatSnippet(user?.id, chatId, { status: 'delivered' }, activeChat);
+      updateRecentChatSnippet(user?.id, chatId, { status: status || 'delivered' }, activeChat);
       window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
     };
 
@@ -4457,6 +4494,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       replyTo: isEncrypted
         ? (pendingMsg.replyTo ? { id: pendingMsg.replyTo.id, type: pendingMsg.replyTo.type, senderId: pendingMsg.replyTo.senderId } : null)
         : pendingMsg.replyTo
+    }, (ack) => {
+      if (ack?.success && ack?.message) {
+        const serverId = ack.message.id;
+        setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, id: serverId, status: 'sent' } : m));
+        updateCachedMessageStatus(chatId, tempId, { id: serverId, status: 'sent' });
+      }
     });
 
     setReplyTo(null);

@@ -1493,7 +1493,7 @@ io.on('connection', (socket) => {
   // Message Delivered Acknowledgment from Recipient - WhatsApp Pure Post Office
   socket.on('message_delivered', async (data) => {
     try {
-      const { messageId, chatId, senderId, receiptToken } = data || {};
+      const { messageId, chatId, senderId, receiptToken, clientTempId } = data || {};
       if (!messageId) return;
 
       const callerId = socket.authenticatedUserId;
@@ -1613,7 +1613,19 @@ io.on('connection', (socket) => {
       }
 
       // 3. Narrow Scoped Queue Deletion: Exact messageId, authenticated recipient, and any active queue status
+      let resolvedClientTempId = clientTempId || null;
       const isMongoId = mongoose.Types.ObjectId.isValid(messageId);
+      if (!resolvedClientTempId) {
+        try {
+          const foundMsg = await Message.findOne({
+            $or: [
+              { id: String(messageId) },
+              ...(isMongoId ? [{ _id: messageId }] : [])
+            ]
+          }).select('clientTempId').lean();
+          if (foundMsg?.clientTempId) resolvedClientTempId = foundMsg.clientTempId;
+        } catch (_) {}
+      }
       await Message.deleteMany({
         $or: [
           { id: String(messageId) },
@@ -1642,8 +1654,8 @@ io.on('connection', (socket) => {
 
       // 4. Double Tick Notification (Only emitted on verified atomic transition)
       const canonicalChatId = (chatId && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-      const singlePayload = { messageId, chatId, canonicalChatId, status: 'delivered', senderId: verifiedSenderId };
-      const multiPayload = { chatId, canonicalChatId, messageIds: [messageId], status: 'delivered', senderId: verifiedSenderId };
+      const singlePayload = { messageId, clientTempId: resolvedClientTempId, chatId, canonicalChatId, status: 'delivered', senderId: verifiedSenderId };
+      const multiPayload = { chatId, canonicalChatId, messageIds: [messageId], clientTempIds: resolvedClientTempId ? [resolvedClientTempId] : [], status: 'delivered', senderId: verifiedSenderId };
 
       const targetRooms = new Set();
       if (chatId) targetRooms.add(chatId);

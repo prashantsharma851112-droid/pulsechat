@@ -1966,8 +1966,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           )
         );
 
-        const currentUnread = targetChat.unreadCount || 0;
-        const newUnread = isPromotionFromRaw ? currentUnread : ((isMyMsg || isCurrentlyViewing) ? 0 : currentUnread + 1);
+        const freshRecent = user?.id ? getCachedRecentChats(user.id) : [];
+        const cachedMatch = freshRecent.find(c => c && (
+          c.id === targetId ||
+          c._id === targetId ||
+          (effectiveMsg.chatId && (c.id === effectiveMsg.chatId || c.chatId === effectiveMsg.chatId))
+        ));
+        const currentUnread = (cachedMatch?.unreadCount !== undefined) ? Number(cachedMatch.unreadCount) : (Number(targetChat.unreadCount) || 0);
+        const newUnread = (isMyMsg || isCurrentlyViewing) ? 0 : currentUnread;
 
         if (!isMyMsg && !isCurrentlyViewing && !isPromotionFromRaw) {
           try { playSound('received'); } catch {}
@@ -2073,7 +2079,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     socket.on('reaction_updated', handleReactionUpdated);
 
     // Instant delivery tick update in chat list
-    const handleDeliveryUpdate = ({ messageId, chatId: cId, canonicalChatId, status }) => {
+    const handleDeliveryUpdate = ({ messageId, clientTempId, chatId: cId, canonicalChatId, status }) => {
       setRecentChats(prev => {
         let updatedAny = false;
         const next = prev.map(c => {
@@ -2107,21 +2113,35 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       if (cId) {
         if (messageId) {
           updateCachedMessageStatus(cId, messageId, { status: 'delivered' });
-        } else {
+        }
+        if (clientTempId) {
+          updateCachedMessageStatus(cId, clientTempId, { status: 'delivered' });
+        }
+        if (!messageId && !clientTempId) {
           markAllCachedMessagesDelivered(cId, user?.id);
         }
       }
       if (canonicalChatId && canonicalChatId !== cId) {
         if (messageId) {
           updateCachedMessageStatus(canonicalChatId, messageId, { status: 'delivered' });
-        } else {
+        }
+        if (clientTempId) {
+          updateCachedMessageStatus(canonicalChatId, clientTempId, { status: 'delivered' });
+        }
+        if (!messageId && !clientTempId) {
           markAllCachedMessagesDelivered(canonicalChatId, user?.id);
         }
       }
     };
     socket.on('message_delivered_update', handleDeliveryUpdate);
-    socket.on('messages_delivered', ({ chatId: cId, canonicalChatId, status }) => {
-      handleDeliveryUpdate({ chatId: cId, canonicalChatId, status: status || 'delivered' });
+    socket.on('messages_delivered', ({ messageIds, clientTempIds, chatId: cId, canonicalChatId, status }) => {
+      handleDeliveryUpdate({
+        messageId: Array.isArray(messageIds) ? messageIds[0] : null,
+        clientTempId: Array.isArray(clientTempIds) ? clientTempIds[0] : null,
+        chatId: cId,
+        canonicalChatId,
+        status: status || 'delivered'
+      });
     });
 
     const handleReadUpdate = ({ messageId, chatId: cId, canonicalChatId, status }) => {

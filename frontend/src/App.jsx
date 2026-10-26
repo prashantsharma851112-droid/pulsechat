@@ -299,6 +299,10 @@ export default function App() {
   const activeChatRef = useRef(activeChat);
   useEffect(() => {
     activeChatRef.current = activeChat;
+    if (typeof window !== 'undefined') {
+      window.__pulsechat_active_chat = activeChat || null;
+      window.__pulsechat_active_chat_id = activeChat?.id || activeChat?._id || activeChat?.chatId || null;
+    }
   }, [activeChat]);
 
   // Real-time DP & Profile sync across activeChat and local caches
