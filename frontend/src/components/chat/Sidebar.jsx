@@ -1770,15 +1770,23 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
 
   useEffect(() => {
-    if (activeChat && user?.id) {
-      clearUnreadCount(user.id, activeChat.id);
+    const curUid = user?.id || user?._id;
+    if (activeChat && curUid) {
+      const targetChatId = activeChat.id || activeChat._id || activeChat.chatId;
+      clearUnreadCount(curUid, targetChatId);
       setRecentChats(prev => prev.map(u => (
         u.id === activeChat.id ||
+        (activeChat._id && (u.id === activeChat._id || u._id === activeChat._id)) ||
+        (u._id && activeChat.id && u._id === activeChat.id) ||
         (u.username && activeChat.username && u.username === activeChat.username) ||
-        (activeChat.chatId && activeChat.chatId.includes(u.id))
+        (activeChat.chatId && (
+          activeChat.chatId.includes(u.id) ||
+          (u._id && activeChat.chatId.includes(String(u._id))) ||
+          (activeChat.chatId.includes('::') && activeChat.chatId.split('::').some(p => p === u.id || p === u._id))
+        ))
       ) ? { ...u, unreadCount: 0 } : u));
     }
-  }, [activeChat, user?.id]);
+  }, [activeChat, user?.id, user?._id]);
 
   useEffect(() => {
     if (!socket) return;
@@ -1837,9 +1845,16 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       // WhatsApp Local-First: SAVE incoming message immediately to device local message storage!
       if (effectiveMsg.chatId) {
         appendCachedMessage(effectiveMsg.chatId, effectiveMsg);
-        const canonical = effectiveMsg.chatId.includes('_') ? effectiveMsg.chatId.split('_').sort().join('_') : effectiveMsg.chatId;
-        if (canonical && canonical !== effectiveMsg.chatId) {
-          appendCachedMessage(canonical, effectiveMsg);
+        if (effectiveMsg.chatId.includes('::')) {
+          const canonical = effectiveMsg.chatId.split('::').sort().join('::');
+          if (canonical && canonical !== effectiveMsg.chatId) {
+            appendCachedMessage(canonical, effectiveMsg);
+          }
+        } else if (effectiveMsg.chatId.includes('_')) {
+          const canonical = effectiveMsg.chatId.split('_').sort().join('_');
+          if (canonical && canonical !== effectiveMsg.chatId) {
+            appendCachedMessage(canonical, effectiveMsg);
+          }
         }
       }
 
@@ -1966,14 +1981,55 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           )
         );
 
-        const freshRecent = user?.id ? getCachedRecentChats(user.id) : [];
-        const cachedMatch = freshRecent.find(c => c && (
-          c.id === targetId ||
-          c._id === targetId ||
-          (effectiveMsg.chatId && (c.id === effectiveMsg.chatId || c.chatId === effectiveMsg.chatId))
-        ));
-        const currentUnread = (cachedMatch?.unreadCount !== undefined) ? Number(cachedMatch.unreadCount) : (Number(targetChat.unreadCount) || 0);
-        const newUnread = (isMyMsg || isCurrentlyViewing) ? 0 : currentUnread;
+        const curUid = user?.id || user?._id;
+        const freshRecent = curUid ? getCachedRecentChats(curUid) : [];
+        const cachedMatch = freshRecent.find(c => {
+          if (!c) return false;
+          if (effectiveMsg.isGroup) {
+            return c.id === effectiveMsg.chatId || c._id === effectiveMsg.chatId || c.id === targetId;
+          }
+          return Boolean(
+            (targetId && (c.id === targetId || c._id === targetId)) ||
+            (targetChat && (c.id === targetChat.id || c._id === targetChat.id || (targetChat._id && (c.id === targetChat._id || c._id === targetChat._id)))) ||
+            (effectiveMsg.chatId && (
+              c.id === effectiveMsg.chatId ||
+              c.chatId === effectiveMsg.chatId ||
+              (typeof effectiveMsg.chatId === 'string' && (
+                effectiveMsg.chatId.includes('::')
+                  ? effectiveMsg.chatId.split('::').some(p => p === c.id || p === c._id)
+                  : (effectiveMsg.chatId.includes('_') ? effectiveMsg.chatId.split('_').some(p => p === c.id || p === c._id) : false)
+              ))
+            )) ||
+            (effectiveMsg.senderUsername && c.username && String(c.username).toLowerCase() === String(effectiveMsg.senderUsername).toLowerCase()) ||
+            (targetId && c.username && String(c.username).toLowerCase() === String(targetId).toLowerCase()) ||
+            (effectiveMsg.senderName && c.username && String(c.username).toLowerCase() === String(effectiveMsg.senderName).toLowerCase()) ||
+            (effectiveMsg.senderName && c.displayName && String(c.displayName).toLowerCase() === String(effectiveMsg.senderName).toLowerCase())
+          );
+        });
+
+        let newUnread;
+        if (isMyMsg || isCurrentlyViewing) {
+          newUnread = 0;
+        } else if (isPromotionFromRaw) {
+          newUnread = (cachedMatch?.unreadCount !== undefined)
+            ? Number(cachedMatch.unreadCount)
+            : (Number(targetChat.unreadCount) || 0);
+        } else {
+          const msgId = effectiveMsg.id || effectiveMsg._id || effectiveMsg.clientTempId;
+          const isCacheAlreadyUpdated = Boolean(
+            cachedMatch && msgId &&
+            (cachedMatch.lastMessageId === msgId || cachedMatch.lastMessageClientTempId === msgId)
+          );
+          if (isCacheAlreadyUpdated && cachedMatch?.unreadCount !== undefined) {
+            newUnread = Math.max(1, Number(cachedMatch.unreadCount));
+          } else if (cachedMatch?.unreadCount !== undefined) {
+            newUnread = Math.max(1, Number(cachedMatch.unreadCount));
+          } else {
+            // Cache lookup missed — never reset to zero!
+            const prevCount = Number(targetChat.unreadCount) || 0;
+            newUnread = prevCount + 1;
+          }
+        }
 
         if (!isMyMsg && !isCurrentlyViewing && !isPromotionFromRaw) {
           try { playSound('received'); } catch {}
@@ -1997,8 +2053,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           return tB - tA;
         });
 
-        if (user?.id) {
-          setCachedRecentChats(user.id, reordered);
+        if (curUid) {
+          setCachedRecentChats(curUid, reordered);
+          if (user?.id && user?._id && user.id !== user._id) {
+            setCachedRecentChats(user._id, reordered);
+          }
         }
         return reordered;
       });
@@ -2107,7 +2166,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           }
           return c;
         });
-        if (updatedAny && user?.id) setCachedRecentChats(user.id, next);
+        const curUid = user?.id || user?._id;
+        if (updatedAny && curUid) {
+          setCachedRecentChats(curUid, next);
+          if (user?.id && user?._id && user.id !== user._id) {
+            setCachedRecentChats(user._id, next);
+          }
+        }
         return next;
       });
       if (cId) {
@@ -2172,7 +2237,13 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           }
           return c;
         });
-        if (updatedAny && user?.id) setCachedRecentChats(user.id, next);
+        const curUid = user?.id || user?._id;
+        if (updatedAny && curUid) {
+          setCachedRecentChats(curUid, next);
+          if (user?.id && user?._id && user.id !== user._id) {
+            setCachedRecentChats(user._id, next);
+          }
+        }
         return next;
       });
       if (cId) {
@@ -2557,18 +2628,21 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   }, [deferredSearchQuery, token, user?.id]);
 
   const proceedSelectUser = (selectedUser) => {
-    if (selectedUser?.id && user?.id) {
-      clearUnreadCount(user.id, selectedUser.id);
+    const curUid = user?.id || user?._id;
+    const targetUserId = selectedUser?.id || selectedUser?._id;
+    if (targetUserId && curUid) {
+      clearUnreadCount(curUid, targetUserId);
       setRecentChats(prev => prev.map(c => (
-        c.id === selectedUser.id ||
+        c.id === targetUserId ||
+        (selectedUser._id && (c.id === selectedUser._id || c._id === selectedUser._id)) ||
+        (c._id && targetUserId && c._id === targetUserId) ||
         (c.username && selectedUser.username && c.username === selectedUser.username)
       ) ? { ...c, unreadCount: 0 } : c));
     }
-    if (socket && user?.id && (selectedUser?.id || selectedUser?._id)) {
-      const partnerId = selectedUser.id || selectedUser._id;
-      const cid = [user.id, partnerId].sort().join('_');
+    if (socket && curUid && targetUserId) {
+      const canonicalCid = [String(curUid), String(targetUserId)].sort().join('::');
       const isCurGhost = (typeof window !== 'undefined' && localStorage.getItem('pulsechat_ghost_global') === 'true') || Boolean(user?.hideReadReceipts);
-      socket.emit('mark_chat_read', { chatId: cid, userId: user.id, isGhost: isCurGhost });
+      socket.emit('mark_chat_read', { chatId: canonicalCid, userId: curUid, isGhost: isCurGhost });
     }
     startTransition(() => {
       setActiveChat(selectedUser);

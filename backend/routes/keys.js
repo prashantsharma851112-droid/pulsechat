@@ -594,6 +594,17 @@ const handleQuery = async (req, res) => {
   // Backwards compatibility for GET /:userId
   if (req.params.userId) {
     const uId = normalizeUserId(req.params.userId);
+    const failureReason = failures[req.params.userId] || failures[uId];
+    if (failureReason) {
+      const statusCode = (failureReason === 'NOT_CONTACTS' || failureReason === 'BLOCKED')
+        ? 403
+        : (failureReason === 'RECIPIENT_NOT_FOUND' ? 404 : 401);
+      return res.status(statusCode).json({
+        success: false,
+        error: failureReason,
+        userId: req.params.userId
+      });
+    }
     const devList = Object.values(resultDeviceKeys[uId] || {});
     return res.json({ success: true, userId: req.params.userId, devices: devList });
   }

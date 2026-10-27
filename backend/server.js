@@ -332,23 +332,28 @@ const getOtherParticipantId = async (chatId, myUserId) => {
     const myKeys = [myUserId, me?.id, me?.username, me?._id?.toString()].filter(Boolean);
 
     let otherKey = null;
-    for (const m of myKeys) {
-      if (chatId.startsWith(m + '_')) {
-        otherKey = chatId.slice(m.length + 1);
-        break;
-      } else if (chatId.endsWith('_' + m)) {
-        otherKey = chatId.slice(0, -(m.length + 1));
-        break;
+    if (chatId.includes('::')) {
+      const parts = chatId.split('::');
+      if (parts.length === 2 && parts[0] && parts[1]) {
+        const p0 = parts[0].trim();
+        const p1 = parts[1].trim();
+        if (myKeys.includes(p0)) otherKey = p1;
+        else if (myKeys.includes(p1)) otherKey = p0;
+      }
+    } else {
+      for (const m of myKeys) {
+        if (chatId.startsWith(m + '_')) {
+          otherKey = chatId.slice(m.length + 1);
+          break;
+        } else if (chatId.endsWith('_' + m)) {
+          otherKey = chatId.slice(0, -(m.length + 1));
+          break;
+        }
       }
     }
 
-    if (!otherKey && chatId.includes('_')) {
-      const parts = chatId.split('_');
-      otherKey = parts.find(p => !myKeys.includes(p));
-    }
-
     // CRITICAL: If chatId is a single ID (e.g. partner ID), otherKey is directly chatId!
-    if (!otherKey && !myKeys.includes(chatId) && !String(chatId).startsWith('group_')) {
+    if (!otherKey && !myKeys.includes(chatId) && !String(chatId).includes('::') && !String(chatId).includes('_') && !String(chatId).startsWith('group_')) {
       otherKey = chatId;
     }
 
@@ -731,10 +736,17 @@ io.on('connection', (socket) => {
         }).sort({ updatedAt: -1 }).limit(100).lean();
 
         for (const row of deliveredLedgers) {
-          socket.emit('message_delivered_update', {
-            messageId: row.messageId,
-            status: 'delivered'
-          });
+          if (row.senderId && row.receiverId) {
+            const unambiguousCanonical = [String(row.senderId), String(row.receiverId)].sort().join('::');
+            socket.emit('message_delivered_update', {
+              messageId: row.messageId,
+              chatId: unambiguousCanonical,
+              canonicalChatId: unambiguousCanonical,
+              senderId: row.senderId,
+              receiverId: row.receiverId,
+              status: 'delivered'
+            });
+          }
         }
       } catch (syncErr) {}
     } catch (err) {
@@ -743,12 +755,17 @@ io.on('connection', (socket) => {
   });
 
   // Join Chat Room / Group Room (With strict membership verification)
-  socket.on('join_chat', async (chatId) => {
-    if (!chatId) return;
+  socket.on('join_chat', async (chatId, callback) => {
+    if (!chatId || typeof chatId !== 'string' || chatId.trim() === '') {
+      console.warn('Rejected join_chat: empty or invalid chatId');
+      if (typeof callback === 'function') callback({ success: false, error: 'INVALID_CHAT_ID', rooms: Array.from(socket.rooms) });
+      return;
+    }
 
     const callerId = socket.authenticatedUserId;
     if (!callerId) {
       console.warn('Rejected join_chat: unauthenticated socket', socket.id);
+      if (typeof callback === 'function') callback({ success: false, error: 'UNAUTHENTICATED', rooms: Array.from(socket.rooms) });
       return;
     }
 
@@ -759,35 +776,153 @@ io.on('connection', (socket) => {
       socket.userUsername
     ].filter(Boolean).map(String);
 
-    // 1. If 1-on-1 private chat (e.g. userA_userB or userA::userB): verify caller is one of the participants
-    if (typeof chatId === 'string' && (chatId.includes('::') || chatId.includes('_')) && !chatId.startsWith('group_')) {
-      let otherKey = null;
+    // 1. If 1-on-1 private chat (canonical '::' or legacy '_'): verify caller is a participant, peer exists, not blocked, and are synced friends
+    if ((chatId.includes('::') || chatId.includes('_')) && !chatId.startsWith('group_')) {
+      let peerKey = null;
+
       if (chatId.includes('::')) {
         const parts = chatId.split('::');
-        const isParticipant = parts.some(p => myKeys.includes(p));
-        if (!isParticipant) {
-          console.warn(`Rejected join_chat: user ${callerId} is not a member of chat ${chatId}`);
+        if (parts.length !== 2 || !parts[0] || !parts[1] || parts[0].trim() === '' || parts[1].trim() === '') {
+          console.warn(`Rejected join_chat: malformed canonical chat ${chatId}`);
+          if (typeof callback === 'function') callback({ success: false, error: 'MALFORMED_CHAT_ID', rooms: Array.from(socket.rooms) });
           return;
         }
-        otherKey = parts.find(p => !myKeys.includes(p));
+
+        const p1 = parts[0].trim();
+        const p2 = parts[1].trim();
+
+        if (p1 === p2) {
+          console.warn(`Rejected join_chat: canonical chatId cannot have identical participants ${chatId}`);
+          if (typeof callback === 'function') callback({ success: false, error: 'IDENTICAL_PARTICIPANTS', rooms: Array.from(socket.rooms) });
+          return;
+        }
+
+        const isP1 = myKeys.includes(p1);
+        const isP2 = myKeys.includes(p2);
+
+        if (!isP1 && !isP2) {
+          console.warn(`Rejected join_chat: user ${callerId} is not a member of chat ${chatId}`);
+          if (typeof callback === 'function') callback({ success: false, error: 'NOT_A_CHAT_PARTICIPANT', rooms: Array.from(socket.rooms) });
+          return;
+        }
+
+        peerKey = isP1 ? p2 : p1;
       } else {
-        const isParticipant = myKeys.some(m => chatId.startsWith(m + '_') || chatId.endsWith('_' + m) || chatId.split('_').includes(m));
-        if (!isParticipant) {
-          console.warn(`Rejected join_chat: user ${callerId} is not a member of chat ${chatId}`);
+        // Legacy underscore conversation compatibility
+        let isParticipant = false;
+
+        for (const m of myKeys) {
+          if (chatId.startsWith(m + '_')) {
+            peerKey = chatId.slice(m.length + 1).trim();
+            isParticipant = true;
+            break;
+          } else if (chatId.endsWith('_' + m)) {
+            peerKey = chatId.slice(0, -(m.length + 1)).trim();
+            isParticipant = true;
+            break;
+          }
+        }
+
+        if (!isParticipant || !peerKey || peerKey === '') {
+          console.warn(`Rejected join_chat: user ${callerId} is not an unambiguous participant of legacy chat ${chatId}`);
+          if (typeof callback === 'function') callback({ success: false, error: 'NOT_A_CHAT_PARTICIPANT', rooms: Array.from(socket.rooms) });
           return;
         }
-        otherKey = await getOtherParticipantId(chatId, callerId);
+
+        if (myKeys.includes(peerKey)) {
+          console.warn(`Rejected join_chat: legacy chat cannot have identical participants ${chatId}`);
+          if (typeof callback === 'function') callback({ success: false, error: 'IDENTICAL_PARTICIPANTS', rooms: Array.from(socket.rooms) });
+          return;
+        }
       }
-      socket.join(chatId);
-      if (otherKey) {
-        const unambiguousCanonical = [String(callerId), String(otherKey)].sort().join('::');
-        socket.join(unambiguousCanonical);
+
+      try {
+        // Resolve caller and peer in MongoDB
+        const isCallerObj = mongoose.Types.ObjectId.isValid(callerId);
+        const callerDoc = await User.findOne({
+          $or: [
+            { id: callerId },
+            ...(isCallerObj ? [{ _id: callerId }] : []),
+            { username: callerId }
+          ]
+        }).select('id username _id friends blockedUsers').lean();
+
+        const isPeerObj = mongoose.Types.ObjectId.isValid(peerKey);
+        const peerDoc = await User.findOne({
+          $or: [
+            { id: peerKey },
+            ...(isPeerObj ? [{ _id: peerKey }] : []),
+            { username: peerKey }
+          ]
+        }).select('id username _id friends blockedUsers').lean();
+
+        if (!callerDoc || !peerDoc) {
+          console.warn(`Rejected join_chat: caller ${callerId} or peer ${peerKey} not found in database`);
+          if (typeof callback === 'function') callback({ success: false, error: 'INVALID_CHAT_PARTICIPANT', rooms: Array.from(socket.rooms) });
+          return;
+        }
+
+        if (callerDoc.id === peerDoc.id || String(callerDoc._id) === String(peerDoc._id)) {
+          console.warn(`Rejected join_chat: caller and peer resolve to the same user (${callerId})`);
+          if (typeof callback === 'function') callback({ success: false, error: 'IDENTICAL_PARTICIPANTS', rooms: Array.from(socket.rooms) });
+          return;
+        }
+
+        const peerIdentifiers = [peerDoc.id, peerDoc._id?.toString(), peerDoc.username, peerKey].filter(Boolean).map(String);
+        const callerIdentifiers = [callerDoc.id, callerDoc._id?.toString(), callerDoc.username, callerId].filter(Boolean).map(String);
+
+        // Mutual block check
+        const callerBlockedPeer = Boolean(callerDoc.blockedUsers && callerDoc.blockedUsers.some(b => peerIdentifiers.includes(String(b))));
+        const peerBlockedCaller = Boolean(peerDoc.blockedUsers && peerDoc.blockedUsers.some(b => callerIdentifiers.includes(String(b))));
+        let isBlocked = callerBlockedPeer || peerBlockedCaller;
+        if (!isBlocked && typeof db.isUserBlocked === 'function') {
+          const blockStatus = await db.isUserBlocked(callerDoc.id, peerDoc.id);
+          if (blockStatus && blockStatus.isBlocked) {
+            isBlocked = true;
+          }
+        }
+
+        const unambiguousCanonical = [String(callerDoc.id || callerId), String(peerDoc.id || peerKey)].sort().join('::');
+
+        if (isBlocked) {
+          socket.leave(chatId);
+          socket.leave(unambiguousCanonical);
+          console.warn(`Rejected join_chat: block relationship between ${callerId} and ${peerKey}`);
+          if (typeof callback === 'function') callback({ success: false, error: 'BLOCKED', rooms: Array.from(socket.rooms) });
+          return;
+        }
+
+        // Friendship / Contact sync check (consistent with send_message policy)
+        const isFriend = (Array.isArray(callerDoc.friends) && callerDoc.friends.some(f => peerIdentifiers.includes(String(f)))) ||
+                         (Array.isArray(peerDoc.friends) && peerDoc.friends.some(f => callerIdentifiers.includes(String(f))));
+
+        if (!isFriend) {
+          socket.leave(chatId);
+          socket.leave(unambiguousCanonical);
+          console.warn(`Rejected join_chat: user ${callerId} and peer ${peerKey} are not friends`);
+          if (typeof callback === 'function') callback({ success: false, error: 'NOT_FRIENDS', rooms: Array.from(socket.rooms) });
+          return;
+        }
+
+        // Verified: join primary room and canonical :: alias
+        socket.join(chatId);
+        if (unambiguousCanonical !== chatId) {
+          socket.join(unambiguousCanonical);
+        }
+
+        if (typeof callback === 'function') {
+          callback({ success: true, chatId, canonicalChatId: unambiguousCanonical, rooms: Array.from(socket.rooms) });
+        }
+        return;
+      } catch (err) {
+        console.error('Error validating direct chat in join_chat (failing closed):', err.message);
+        if (typeof callback === 'function') callback({ success: false, error: 'AUTHORIZATION_CHECK_FAILED', rooms: Array.from(socket.rooms) });
+        return;
       }
-      return;
     }
 
     // 2. If Group chat: verify caller is in group.members (Strict Fail-Closed)
-    if (typeof chatId === 'string' && (chatId.startsWith('group_') || !chatId.includes('_'))) {
+    if (chatId.startsWith('group_') || (!chatId.includes('_') && !chatId.includes('::'))) {
       try {
         const Group = require('./models/Group');
         const isObjId = mongoose.Types.ObjectId.isValid(chatId);
@@ -800,21 +935,30 @@ io.on('connection', (socket) => {
 
         if (!group || !Array.isArray(group.members)) {
           console.warn(`Rejected join_chat: group ${chatId} not found or invalid members`);
+          if (typeof callback === 'function') callback({ success: false, error: 'GROUP_NOT_FOUND', rooms: Array.from(socket.rooms) });
           return; // Fail-closed: do not join room
         }
 
         const isMember = group.members.some(m => myKeys.includes(String(m)));
         if (!isMember) {
           console.warn(`Rejected join_chat: user ${callerId} is not a member of group ${chatId}`);
+          if (typeof callback === 'function') callback({ success: false, error: 'NOT_A_GROUP_MEMBER', rooms: Array.from(socket.rooms) });
           return; // Fail-closed: do not join room
         }
+
+        socket.join(chatId);
+        if (typeof callback === 'function') callback({ success: true, chatId, rooms: Array.from(socket.rooms) });
+        return;
       } catch (err) {
         console.warn('Error checking group membership in join_chat (failing closed):', err.message);
+        if (typeof callback === 'function') callback({ success: false, error: 'GROUP_MEMBERSHIP_CHECK_FAILED', rooms: Array.from(socket.rooms) });
         return; // Fail-closed: do not join room on DB failure
       }
     }
 
-    socket.join(chatId);
+    // Unrecognized or invalid chatId format
+    console.warn(`Rejected join_chat: unrecognized chatId ${chatId}`);
+    if (typeof callback === 'function') callback({ success: false, error: 'INVALID_CHAT_ID', rooms: Array.from(socket.rooms) });
   });
 
   // Typing Indicators
@@ -954,12 +1098,92 @@ io.on('connection', (socket) => {
           if (typeof ackCallback === 'function') ackCallback({ error: 'GROUP_MEMBERSHIP_CHECK_FAILED' });
           return;
         }
-      } else if (chatId && typeof chatId === 'string' && chatId.includes('_')) {
-        const isParticipant = myKeys.some(m => chatId.startsWith(m + '_') || chatId.endsWith('_' + m) || chatId.split('_').includes(m));
-        if (!isParticipant) {
-          console.warn(`Rejected send_message: user ${callerId} is not a participant of chat ${chatId}`);
-          if (typeof ackCallback === 'function') ackCallback({ error: 'NOT_A_CHAT_PARTICIPANT' });
-          return;
+      } else if (chatId && typeof chatId === 'string') {
+        if (chatId.includes('::')) {
+          // Canonical direct-chat identity with '::' delimiter
+          const parts = chatId.split('::');
+          // Validate exactly two non-empty participant IDs
+          if (parts.length !== 2 || !parts[0] || !parts[1] || parts[0].trim() === '' || parts[1].trim() === '') {
+            console.warn(`Rejected send_message: malformed canonical chatId ${chatId}`);
+            if (typeof ackCallback === 'function') ackCallback({ error: 'MALFORMED_CHAT_ID' });
+            return;
+          }
+
+          const p1 = parts[0].trim();
+          const p2 = parts[1].trim();
+
+          if (p1 === p2) {
+            console.warn(`Rejected send_message: canonical chatId cannot have identical participants ${chatId}`);
+            if (typeof ackCallback === 'function') ackCallback({ error: 'MALFORMED_CHAT_ID' });
+            return;
+          }
+
+          const isP1 = myKeys.includes(p1);
+          const isP2 = myKeys.includes(p2);
+
+          if (!isP1 && !isP2) {
+            console.warn(`Rejected send_message: user ${callerId} is not a participant of canonical chat ${chatId}`);
+            if (typeof ackCallback === 'function') ackCallback({ error: 'NOT_A_CHAT_PARTICIPANT' });
+            return;
+          }
+
+          // Authoritative peer is the other participant
+          const expectedPeer = isP1 ? p2 : p1;
+
+          // Verify the peer is a registered user
+          const isPeerObj = mongoose.Types.ObjectId.isValid(expectedPeer);
+          const peerDoc = await User.findOne({
+            $or: [
+              { id: expectedPeer },
+              { username: expectedPeer },
+              ...(isPeerObj ? [{ _id: expectedPeer }] : [])
+            ]
+          }).select('id username _id').lean();
+
+          if (!peerDoc) {
+            console.warn(`Rejected send_message: peer ${expectedPeer} in canonical chat ${chatId} not found`);
+            if (typeof ackCallback === 'function') ackCallback({ error: 'INVALID_CHAT_RECIPIENT' });
+            return;
+          }
+
+          // If client provided receiverId, verify it matches the authorized peer
+          if (receiverId && receiverId !== 'user') {
+            const validPeerIdentifiers = new Set([
+              expectedPeer,
+              peerDoc?.id,
+              peerDoc?.username,
+              peerDoc?._id?.toString()
+            ].filter(Boolean).map(String));
+
+            if (!validPeerIdentifiers.has(String(receiverId))) {
+              console.warn(`Rejected send_message: receiverId ${receiverId} does not match canonical peer ${expectedPeer}`);
+              if (typeof ackCallback === 'function') ackCallback({ error: 'RECIPIENT_CONVERSATION_MISMATCH' });
+              return;
+            }
+          }
+        } else if (chatId.includes('_') && !chatId.startsWith('group_')) {
+          // Legacy underscore conversation compatibility:
+          // Resolve boundaries unambiguously from trusted metadata, NEVER arbitrary split('_')
+          let isParticipant = false;
+          let legacyPeer = null;
+
+          for (const m of myKeys) {
+            if (chatId.startsWith(m + '_')) {
+              legacyPeer = chatId.slice(m.length + 1);
+              isParticipant = true;
+              break;
+            } else if (chatId.endsWith('_' + m)) {
+              legacyPeer = chatId.slice(0, -(m.length + 1));
+              isParticipant = true;
+              break;
+            }
+          }
+
+          if (!isParticipant || !legacyPeer || legacyPeer.trim() === '') {
+            console.warn(`Rejected send_message: user ${callerId} is not an unambiguous participant of legacy chat ${chatId}`);
+            if (typeof ackCallback === 'function') ackCallback({ error: 'NOT_A_CHAT_PARTICIPANT' });
+            return;
+          }
         }
       }
 

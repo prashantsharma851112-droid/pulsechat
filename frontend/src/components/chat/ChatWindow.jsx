@@ -230,6 +230,32 @@ class ChatModalErrorBoundary extends React.Component {
 
 // Standalone isolated ChatInputCapsule is imported above to eliminate typing lag and parent re-renders
 
+export function getPeerKeyErrorMessage(peerKeyResult) {
+  const err = peerKeyResult?.error;
+  if (err === 'NOT_CONTACTS') {
+    return {
+      errorCode: 'NOT_CONTACTS',
+      toast: '🤝 You can only message synced friends. Send a Sync Request first.'
+    };
+  }
+  if (err === 'BLOCKED') {
+    return {
+      errorCode: 'BLOCKED',
+      toast: '🚫 Cannot message this user (blocked).'
+    };
+  }
+  if (err === 'NETWORK_ERROR') {
+    return {
+      errorCode: 'NETWORK_ERROR',
+      toast: '📡 Network error fetching recipient keys. Please check your connection.'
+    };
+  }
+  return {
+    errorCode: err || 'NO_E2EE_KEY',
+    toast: '🔒 Waiting for recipient E2EE key registration...'
+  };
+}
+
 export function matchesConversation(incomingChatId, incomingCanonicalChatId, { isGroup, activeChatId, activeChat, currentUserId, user, chatId, partnerId } = {}) {
   const incoming = [incomingChatId, incomingCanonicalChatId].filter(id => typeof id === 'string' && id.trim().length > 0);
   if (incoming.length === 0) return false;
@@ -4532,10 +4558,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       if (!peerDevice || !peerDevice.publicKeyJwk) {
         // Fail closed for wire: do NOT send plaintext to server!
         // Mark locally as failed so user sees clear feedback and can retry
-        setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, status: 'failed', error: 'NO_E2EE_KEY' } : m));
+        const { errorCode, toast } = getPeerKeyErrorMessage(peerDevice);
+        setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, status: 'failed', error: errorCode } : m));
         updateCachedMessageStatus(chatId, tempId, 'failed');
-        setActionToast('🔒 Waiting for recipient E2EE key registration...');
-        setTimeout(() => setActionToast(''), 3000);
+        setActionToast(toast);
+        setTimeout(() => setActionToast(''), 4000);
         return;
       }
 
@@ -4666,10 +4693,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
 
       if (!peerDevice || !peerDevice.publicKeyJwk) {
-        setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, status: 'failed', error: 'NO_E2EE_KEY' } : m));
+        const { errorCode, toast } = getPeerKeyErrorMessage(peerDevice);
+        setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, status: 'failed', error: errorCode } : m));
         updateCachedMessageStatus(chatId, tempId, 'failed');
-        setActionToast('🔒 Waiting for recipient E2EE key registration...');
-        setTimeout(() => setActionToast(''), 3000);
+        setActionToast(toast);
+        setTimeout(() => setActionToast(''), 4000);
         return;
       }
 
@@ -4866,10 +4894,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         }
         const peerDevice = await fetchPeerDevicePublicKey(targetPartnerId, token, BACKEND_URL);
         if (!peerDevice || !peerDevice.publicKeyJwk) {
-          setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, status: 'failed', error: 'NO_E2EE_KEY' } : m));
+          const { errorCode, toast } = getPeerKeyErrorMessage(peerDevice);
+          setMessages(prev => prev.map(m => (m.clientTempId === tempId || m.id === tempId) ? { ...m, status: 'failed', error: errorCode } : m));
           updateCachedMessageStatus(chatId, tempId, 'failed');
-          setActionToast('🔒 Waiting for recipient E2EE key registration...');
-          setTimeout(() => setActionToast(''), 3000);
+          setActionToast(toast);
+          setTimeout(() => setActionToast(''), 4000);
           return;
         }
         envelope = await encryptMessageEnvelope(
@@ -5546,10 +5575,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           }
           const peerDevice = await fetchPeerDevicePublicKey(targetPartnerId, token, BACKEND_URL);
           if (!peerDevice || !peerDevice.publicKeyJwk) {
-            setMessages(prev => prev.map(m => m.id === tempMediaId ? { ...m, status: 'failed', error: 'NO_E2EE_KEY', isUploading: false } : m));
+            const { errorCode, toast } = getPeerKeyErrorMessage(peerDevice);
+            setMessages(prev => prev.map(m => m.id === tempMediaId ? { ...m, status: 'failed', error: errorCode, isUploading: false } : m));
             updateCachedMessageStatus(chatId, tempMediaId, 'failed');
-            setActionToast('🔒 Waiting for recipient E2EE key registration...');
-            setTimeout(() => setActionToast(''), 3000);
+            setActionToast(toast);
+            setTimeout(() => setActionToast(''), 4000);
             return;
           }
           envelope = await encryptMessageEnvelope(

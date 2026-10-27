@@ -563,12 +563,21 @@ export async function fetchPeerDevicePublicKey(peerId, token, apiBaseUrl = '') {
           return result;
         }
       }
+      return { error: 'NO_ACTIVE_KEYS', status: 200 };
+    } else {
+      let errCode = 'FETCH_FAILED';
+      try {
+        const errData = await res.json();
+        if (errData?.error) errCode = errData.error;
+      } catch (_) {}
+      return { error: errCode, status: res.status };
     }
   } catch (err) {
     console.warn('Failed to fetch peer device public key:', err);
+    return { error: 'NETWORK_ERROR', status: 0 };
   }
 
-  return null;
+  return { error: 'UNKNOWN_ERROR', status: 0 };
 }
 
 /**

@@ -378,9 +378,9 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat, opt
     if (found) {
       effectiveTarget = found;
     } else {
-      const realContactId = (contactId && contactId !== userId && !myVariants.has(contactId) && !String(contactId).includes('_'))
+      const realContactId = (contactId && contactId !== userId && !myVariants.has(contactId) && !String(contactId).includes('::') && !String(contactId).includes('_'))
         ? contactId
-        : (typeof chatId === 'string' && chatId.includes('_') ? chatId.split('_').find(p => !myVariants.has(p)) : chatId);
+        : (typeof chatId === 'string' && (chatId.includes('::') ? chatId.split('::').find(p => !myVariants.has(p)) : (chatId.includes('_') ? chatId.split('_').find(p => !myVariants.has(p)) : chatId)));
       effectiveTarget = {
         id: realContactId || contactId || chatId,
         displayName: (!isFromMe && (message.senderName || message.senderUsername)) ? (message.senderName || message.senderUsername) : 'Chat',
@@ -408,9 +408,9 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat, opt
       unreadCount: resolvedUnread
     };
   } else if (effectiveTarget) {
-    const realContactId = (contactId && contactId !== userId && !myVariants.has(contactId) && !String(contactId).includes('_'))
+    const realContactId = (contactId && contactId !== userId && !myVariants.has(contactId) && !String(contactId).includes('::') && !String(contactId).includes('_'))
       ? contactId
-      : (effectiveTarget?.id || effectiveTarget?._id || (typeof chatId === 'string' && chatId.includes('_') ? chatId.split('_').find(p => !myVariants.has(p)) : chatId));
+      : (effectiveTarget?.id || effectiveTarget?._id || (typeof chatId === 'string' && (chatId.includes('::') ? chatId.split('::').find(p => !myVariants.has(p)) : (chatId.includes('_') ? chatId.split('_').find(p => !myVariants.has(p)) : chatId))));
 
     updatedEntry = {
       id: realContactId || effectiveTarget.id || effectiveTarget._id || contactId || chatId,
@@ -451,7 +451,9 @@ export function clearUnreadCount(userId, targetId) {
   let recent = getCachedRecentChats(userId);
   let updated = false;
   const targetStr = String(targetId).trim();
-  const targetParts = targetStr.includes('_') ? targetStr.split('_') : [targetStr];
+  const targetParts = targetStr.includes('::')
+    ? targetStr.split('::')
+    : (targetStr.includes('_') ? targetStr.split('_') : [targetStr]);
 
   const newRecent = recent.map(c => {
     if (!c) return c;
@@ -670,8 +672,18 @@ export function appendCachedMessage(chatId, message) {
 
 export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
   if (!chatId || !messageIdOrTempId || !updates) return;
-  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-  const targetKeys = new Set([chatId, canonicalChatId].filter(Boolean));
+  const targetKeys = new Set([chatId].filter(Boolean));
+  if (typeof chatId === 'string') {
+    if (chatId.includes('::')) {
+      const parts = chatId.split('::').sort();
+      targetKeys.add(parts.join('_'));
+      targetKeys.add(parts.join('::'));
+    } else if (chatId.includes('_')) {
+      const parts = chatId.split('_').sort();
+      targetKeys.add(parts.join('_'));
+      targetKeys.add(parts.join('::'));
+    }
+  }
 
   for (const cId of targetKeys) {
     const msgs = getCachedMessages(cId);

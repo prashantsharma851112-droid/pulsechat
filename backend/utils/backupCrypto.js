@@ -40,9 +40,11 @@ function isParticipantInChat(chatId, userId) {
   const uid = String(userId).trim();
   if (cid === uid) return true;
 
-  // Standard split check
-  const parts = cid.split('_');
-  if (parts.includes(uid)) return true;
+  // Unambiguous canonical '::' delimiter check
+  if (cid.includes('::')) {
+    const parts = cid.split('::');
+    return parts.length === 2 && parts.map(p => p.trim()).includes(uid);
+  }
 
   // Canonical sorted join check (handles IDs with underscores)
   if (cid.startsWith(uid + '_')) {
