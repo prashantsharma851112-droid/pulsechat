@@ -288,7 +288,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const { user, logout, token, savedAccounts, switchAccount, addAccount, removeSavedAccount, blockUser } = useContext(AuthContext);
   const { socket, onlineUsers, typingMap, lastNotification, vibeAuras } = useContext(SocketContext);
   const { currentTrack: appMusicTrack, isPlaying: isAppMusicPlaying, togglePlayPause: toggleAppMusic, playTrack: playAppMusicTrack } = useAppMusic();
-  const currentUid = user?.id || getCachedUser()?.id;
+  const currentUid = user?.id || user?._id || getCachedUser()?.id || getCachedUser()?._id;
 
   const myAura = useMemo(() => {
     return resolveUserAura(user, vibeAuras);
@@ -1228,16 +1228,17 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
   // When user becomes available (after login / token restore), load data from cache immediately
   useEffect(() => {
-    if (user?.id) {
-      const deletedSet = getDeletedChatIds(user.id);
-      const cached = getCachedRecentChats(user.id).filter(c => !deletedSet.has(c.id) && (!c._id || !deletedSet.has(c._id)));
+    const curUid = user?.id || user?._id || getCachedUser()?.id || getCachedUser()?._id;
+    if (curUid) {
+      const deletedSet = getDeletedChatIds(curUid);
+      const cached = getCachedRecentChats(curUid).filter(c => !deletedSet.has(c.id) && (!c._id || !deletedSet.has(c._id)));
       if (cached.length > 0) setRecentChats(cached);
-      const cachedGroups = getCachedGroups(user.id);
+      const cachedGroups = getCachedGroups(curUid);
       if (cachedGroups.length > 0) setGroups(cachedGroups);
-      const cachedUsers = getCachedAllUsers(user.id);
+      const cachedUsers = getCachedAllUsers(curUid);
       if (cachedUsers.length > 0) setAllUsers(cachedUsers);
     }
-  }, [user?.id]);
+  }, [user?.id, user?._id]);
 
   // Monitor network online/offline state
   useEffect(() => {
@@ -1421,6 +1422,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         if (!c) return false;
         if (res.id && (c.id === res.id || c._id === res.id)) return true;
         if (res._id && (c.id === String(res._id) || c._id === String(res._id))) return true;
+        if (res.chatId && (c.chatId === res.chatId || c.id === res.chatId || c._id === res.chatId)) return true;
         if (res.username && c.username && String(c.username).toLowerCase() === String(res.username).toLowerCase()) return true;
         if (res.displayName && c.displayName && String(c.displayName).toLowerCase() === String(res.displayName).toLowerCase()) return true;
         return false;
@@ -2023,7 +2025,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
           if (isCacheAlreadyUpdated && cachedMatch?.unreadCount !== undefined) {
             newUnread = Math.max(1, Number(cachedMatch.unreadCount));
           } else if (cachedMatch?.unreadCount !== undefined) {
-            newUnread = Math.max(1, Number(cachedMatch.unreadCount));
+            newUnread = (Number(cachedMatch.unreadCount) || 0) + 1;
           } else {
             // Cache lookup missed — never reset to zero!
             const prevCount = Number(targetChat.unreadCount) || 0;
@@ -2270,34 +2272,31 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       const myMongoStr = String(user?._id || '');
       const myUserStr = String(user?.username || '');
       const isMe = !userId || readerStr === myIdStr || readerStr === myMongoStr || readerStr === myUserStr;
+      const curUid = user?.id || user?._id || getCachedUser()?.id || getCachedUser()?._id;
 
       const isMatchingChat = (c) => {
         if (!c) return false;
-        return Boolean(
-          c.id === cId ||
-          c._id === cId ||
-          c.id === canonicalChatId ||
-          c._id === canonicalChatId ||
-          (c.username && (c.username === cId || c.username === canonicalChatId)) ||
-          (c.chatId && (c.chatId === cId || c.chatId === canonicalChatId)) ||
-          (typeof cId === 'string' && (
-            (c.id && cId.includes(c.id)) ||
-            (c._id && cId.includes(String(c._id))) ||
-            (c.username && cId.toLowerCase().includes(c.username.toLowerCase()))
-          )) ||
-          (typeof canonicalChatId === 'string' && (
-            (c.id && canonicalChatId.includes(c.id)) ||
-            (c._id && canonicalChatId.includes(String(c._id))) ||
-            (c.username && canonicalChatId.toLowerCase().includes(c.username.toLowerCase()))
-          ))
-        );
+        const targetIds = [cId, canonicalChatId].filter(Boolean);
+        for (const tid of targetIds) {
+          if (c.id === tid || c._id === tid || c.chatId === tid) return true;
+          if (c.username && c.username === tid) return true;
+          const parts = String(tid).includes('::') ? String(tid).split('::') : (String(tid).includes('_') ? String(tid).split('_') : []);
+          if (parts.length > 0 && (parts.includes(String(c.id)) || (c._id && parts.includes(String(c._id))))) return true;
+          if (typeof tid === 'string' && (
+            (c.id && tid.includes(c.id)) ||
+            (c._id && tid.includes(String(c._id))) ||
+            (c.username && tid.toLowerCase().includes(c.username.toLowerCase()))
+          )) return true;
+        }
+        return false;
       };
 
-      if (isMe && user?.id) {
-        clearUnreadCount(user.id, cId);
+      if (isMe && curUid) {
+        if (cId) clearUnreadCount(curUid, cId);
+        if (canonicalChatId && canonicalChatId !== cId) clearUnreadCount(curUid, canonicalChatId);
         setRecentChats(prev => {
           const next = prev.map(c => isMatchingChat(c) ? { ...c, unreadCount: 0 } : c);
-          if (user?.id) setCachedRecentChats(user.id, next);
+          setCachedRecentChats(curUid, next);
           return next;
         });
         setGroups(prev => prev.map(g => (g.id === cId || g.id === canonicalChatId) ? { ...g, unreadCount: 0 } : g));
@@ -2305,15 +2304,15 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         // Other user read my messages -> mark lastMessageStatus as read in recentChats AND local message storage
         setRecentChats(prev => {
           const next = prev.map(c => isMatchingChat(c) ? { ...c, lastMessageStatus: 'read' } : c);
-          if (user?.id) setCachedRecentChats(user.id, next);
+          if (curUid) setCachedRecentChats(curUid, next);
           return next;
         });
 
         if (cId) {
-          markAllCachedMessagesRead(cId, user?.id);
+          markAllCachedMessagesRead(cId, curUid);
         }
         if (canonicalChatId && canonicalChatId !== cId) {
-          markAllCachedMessagesRead(canonicalChatId, user?.id);
+          markAllCachedMessagesRead(canonicalChatId, curUid);
         }
       }
     };
@@ -2628,16 +2627,25 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   }, [deferredSearchQuery, token, user?.id]);
 
   const proceedSelectUser = (selectedUser) => {
-    const curUid = user?.id || user?._id;
+    const curUid = user?.id || user?._id || getCachedUser()?.id || getCachedUser()?._id;
     const targetUserId = selectedUser?.id || selectedUser?._id;
     if (targetUserId && curUid) {
+      const canonicalCid = [String(curUid), String(targetUserId)].sort().join('::');
+      const legacyCid = [String(curUid), String(targetUserId)].sort().join('_');
       clearUnreadCount(curUid, targetUserId);
-      setRecentChats(prev => prev.map(c => (
-        c.id === targetUserId ||
-        (selectedUser._id && (c.id === selectedUser._id || c._id === selectedUser._id)) ||
-        (c._id && targetUserId && c._id === targetUserId) ||
-        (c.username && selectedUser.username && c.username === selectedUser.username)
-      ) ? { ...c, unreadCount: 0 } : c));
+      clearUnreadCount(curUid, canonicalCid);
+      clearUnreadCount(curUid, legacyCid);
+      if (selectedUser.chatId) clearUnreadCount(curUid, selectedUser.chatId);
+      setRecentChats(prev => {
+        const next = prev.map(c => (
+          c.id === targetUserId ||
+          (selectedUser._id && (c.id === selectedUser._id || c._id === selectedUser._id)) ||
+          (c._id && targetUserId && c._id === targetUserId) ||
+          (c.username && selectedUser.username && c.username === selectedUser.username)
+        ) ? { ...c, unreadCount: 0 } : c);
+        setCachedRecentChats(curUid, next);
+        return next;
+      });
     }
     if (socket && curUid && targetUserId) {
       const canonicalCid = [String(curUid), String(targetUserId)].sort().join('::');
@@ -2662,9 +2670,14 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   };
 
   const proceedSelectGroup = (group) => {
-    if (group?.id && user?.id) {
-      clearUnreadCount(user.id, group.id);
-      setRecentChats(prev => prev.map(c => c.id === group.id ? { ...c, unreadCount: 0 } : c));
+    const curUid = user?.id || user?._id || getCachedUser()?.id || getCachedUser()?._id;
+    if (group?.id && curUid) {
+      clearUnreadCount(curUid, group.id);
+      setRecentChats(prev => {
+        const next = prev.map(c => c.id === group.id ? { ...c, unreadCount: 0 } : c);
+        setCachedRecentChats(curUid, next);
+        return next;
+      });
     }
     startTransition(() => {
       setActiveChat({

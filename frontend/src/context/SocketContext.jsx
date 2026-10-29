@@ -127,7 +127,7 @@ export function SocketProvider({ children }) {
       setSocket(newSocket);
 
       const sendSetup = () => {
-        const curId = userRef.current?.id || user?.id;
+        const curId = userRef.current?.id || userRef.current?._id || user?.id || user?._id;
         if (curId) {
           newSocket.emit('setup', curId);
           try {
@@ -305,18 +305,40 @@ export function SocketProvider({ children }) {
         const activeChatId = typeof window !== 'undefined' ? window.__pulsechat_active_chat_id : null;
         const activeChatObj = typeof window !== 'undefined' ? window.__pulsechat_active_chat : null;
         const isDocVisible = typeof document === 'undefined' || (document.visibilityState === 'visible' && !document.hidden);
+        
+        const chatParts = msgToCommit.chatId
+          ? (msgToCommit.chatId.includes('::') ? msgToCommit.chatId.split('::') : (msgToCommit.chatId.includes('_') ? msgToCommit.chatId.split('_') : []))
+          : [];
+
+        const isSameChat = (id1, id2) => {
+          if (!id1 || !id2) return false;
+          if (id1 === id2) return true;
+          const s1 = String(id1).replace(/::/g, '_');
+          const s2 = String(id2).replace(/::/g, '_');
+          if (s1 === s2) return true;
+          if (s1.includes('_') && s2.includes('_')) {
+            const p1 = s1.split('_').sort().join('_');
+            const p2 = s2.split('_').sort().join('_');
+            if (p1 === p2) return true;
+          }
+          return false;
+        };
+
         const isViewingThisChat = Boolean(
-          isDocVisible && (
+          isDocVisible && (activeChatId || activeChatObj) && (
             (activeChatId && (
-              activeChatId === msgToCommit.chatId ||
-              activeChatId === msgToCommit.senderId ||
-              (msgToCommit.chatId && msgToCommit.chatId.includes('_') && msgToCommit.chatId.split('_').includes(String(activeChatId)))
+              isSameChat(activeChatId, msgToCommit.chatId) ||
+              String(activeChatId) === String(msgToCommit.senderId) ||
+              chatParts.includes(String(activeChatId))
             )) ||
             (activeChatObj && (
-              activeChatObj.id === msgToCommit.chatId ||
-              activeChatObj.id === msgToCommit.senderId ||
-              activeChatObj._id === msgToCommit.senderId ||
-              (activeChatObj.username && String(activeChatObj.username).toLowerCase() === String(msgToCommit.senderUsername || '').toLowerCase())
+              isSameChat(activeChatObj.id, msgToCommit.chatId) ||
+              isSameChat(activeChatObj._id, msgToCommit.chatId) ||
+              String(activeChatObj.id) === String(msgToCommit.senderId) ||
+              String(activeChatObj._id) === String(msgToCommit.senderId) ||
+              (activeChatObj.username && String(activeChatObj.username).toLowerCase() === String(msgToCommit.senderUsername || '').toLowerCase()) ||
+              chatParts.includes(String(activeChatObj.id)) ||
+              (activeChatObj._id && chatParts.includes(String(activeChatObj._id)))
             ))
           )
         );
@@ -325,12 +347,6 @@ export function SocketProvider({ children }) {
         try {
           if (msgToCommit.chatId) {
             appendCachedMessage(msgToCommit.chatId, msgToCommit);
-            if (msgToCommit.chatId.includes('_')) {
-              const canonical = msgToCommit.chatId.split('_').sort().join('_');
-              if (canonical !== msgToCommit.chatId) {
-                appendCachedMessage(canonical, msgToCommit);
-              }
-            }
             await saveMessagesToLocalDb(msgToCommit.chatId, [msgToCommit]);
             if (curId) {
               updateRecentChatSnippet(curId, msgToCommit.chatId, msgToCommit, null, {
@@ -372,7 +388,7 @@ export function SocketProvider({ children }) {
 
       // Real-time double-tick delivery update listener (sender receives confirmation when recipient commits to IndexedDB)
       newSocket.on('message_delivered_update', ({ messageId, clientTempId, chatId: cId, canonicalChatId, status }) => {
-        const curId = userRef.current?.id || user?.id;
+        const curId = userRef.current?.id || userRef.current?._id || user?.id || user?._id;
         const targetChatId = cId || canonicalChatId;
         if (targetChatId && curId) {
           updateCachedMessageStatus(targetChatId, messageId || clientTempId, { status: status || 'delivered' });

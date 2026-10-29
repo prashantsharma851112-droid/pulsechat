@@ -130,6 +130,35 @@ export function restoreDeletedChatId(userId, chatId) {
   }
 }
 
+export function getChatStorageKeys(chatId) {
+  const keys = new Set();
+  if (!chatId || typeof chatId !== 'string') return [];
+  keys.add(chatId);
+
+  if (chatId.includes('::')) {
+    const parts = chatId.split('::').filter(Boolean);
+    if (parts.length === 2) {
+      const sorted = [...parts].sort();
+      keys.add(`${sorted[0]}::${sorted[1]}`);
+      keys.add(`${sorted[0]}_${sorted[1]}`);
+      keys.add(`${parts[0]}_${parts[1]}`);
+      keys.add(`${parts[1]}_${parts[0]}`);
+      keys.add(`${parts[1]}::${parts[0]}`);
+    }
+  } else if (chatId.includes('_') && !chatId.startsWith('group_')) {
+    const parts = chatId.split('_').filter(Boolean);
+    if (parts.length === 2) {
+      const sorted = [...parts].sort();
+      keys.add(`${sorted[0]}_${sorted[1]}`);
+      keys.add(`${sorted[0]}::${sorted[1]}`);
+      keys.add(`${parts[0]}::${parts[1]}`);
+      keys.add(`${parts[1]}::${parts[0]}`);
+      keys.add(`${parts[1]}_${parts[0]}`);
+    }
+  }
+  return Array.from(keys);
+}
+
 // Helper to generate all potential conversation keys for a pair of users
 export function getConversationCandidateKeys(user, contact) {
   if (!user || !contact) return [];
@@ -137,7 +166,12 @@ export function getConversationCandidateKeys(user, contact) {
   const contactKeys = [contact?.id, contact?._id, contact?.username].filter(Boolean).map(String);
   const keys = new Set();
 
-  if (contact?.chatId) keys.add(contact.chatId);
+  if (contact?.chatId) {
+    keys.add(contact.chatId);
+    for (const k of getChatStorageKeys(contact.chatId)) {
+      keys.add(k);
+    }
+  }
   if (contact?.isGroup) {
     if (contact?.id) keys.add(contact.id);
     if (contact?._id) keys.add(String(contact._id));
@@ -150,6 +184,9 @@ export function getConversationCandidateKeys(user, contact) {
         keys.add([m, c].sort().join('_'));
         keys.add(`${m}_${c}`);
         keys.add(`${c}_${m}`);
+        keys.add([m, c].sort().join('::'));
+        keys.add(`${m}::${c}`);
+        keys.add(`${c}::${m}`);
       }
     }
   }
@@ -263,7 +300,12 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat, opt
     if (message.senderUsername && c.username && String(c.username).toLowerCase() === String(message.senderUsername).toLowerCase()) return true;
     if (message.senderName && c.displayName && String(c.displayName).toLowerCase() === String(message.senderName).toLowerCase()) return true;
     if (message.senderName && c.username && String(c.username).toLowerCase() === String(message.senderName).toLowerCase()) return true;
-    if (chatId && (c.id === chatId || c._id === chatId || (typeof chatId === 'string' && (chatId.includes(c.id) || (c._id && chatId.includes(c._id)))))) return true;
+    if (chatId) {
+      if (c.id === chatId || c._id === chatId || c.chatId === chatId) return true;
+      const parts = String(chatId).includes('::') ? String(chatId).split('::') : (String(chatId).includes('_') ? String(chatId).split('_') : []);
+      if (parts.length > 0 && (parts.includes(String(c.id)) || (c._id && parts.includes(String(c._id))))) return true;
+      if (typeof chatId === 'string' && (chatId.includes(c.id) || (c._id && chatId.includes(String(c._id))))) return true;
+    }
     return false;
   });
 
@@ -408,12 +450,15 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat, opt
       unreadCount: resolvedUnread
     };
   } else if (effectiveTarget) {
-    const realContactId = (contactId && contactId !== userId && !myVariants.has(contactId) && !String(contactId).includes('::') && !String(contactId).includes('_'))
+    const resolvedContactId = (contactId && contactId !== userId && !myVariants.has(contactId) && !String(contactId).includes('::') && !String(contactId).includes('_'))
       ? contactId
-      : (effectiveTarget?.id || effectiveTarget?._id || (typeof chatId === 'string' && (chatId.includes('::') ? chatId.split('::').find(p => !myVariants.has(p)) : (chatId.includes('_') ? chatId.split('_').find(p => !myVariants.has(p)) : chatId))));
+      : (effectiveTarget?.id && !String(effectiveTarget.id).includes('::') && !String(effectiveTarget.id).includes('_')
+        ? effectiveTarget.id
+        : (effectiveTarget?._id || (typeof chatId === 'string' && (chatId.includes('::') ? chatId.split('::').find(p => !myVariants.has(p)) : (chatId.includes('_') ? chatId.split('_').find(p => !myVariants.has(p)) : chatId))))
+      );
 
     updatedEntry = {
-      id: realContactId || effectiveTarget.id || effectiveTarget._id || contactId || chatId,
+      id: resolvedContactId || effectiveTarget.id || effectiveTarget._id || contactId || chatId,
       displayName: effectiveTarget.displayName || effectiveTarget.name || effectiveTarget.username || 'Chat',
       username: effectiveTarget.username || '',
       avatar: effectiveTarget.avatar || '',
@@ -569,14 +614,19 @@ export function addDeletedForMeId(userId, messageId) {
 
 export function getCachedMessages(chatId, userId = null) {
   if (typeof window === 'undefined' || !chatId) return [];
-  let msgs = safeParse(localStorage.getItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`), null);
-  if (!Array.isArray(msgs) || msgs.length === 0) {
-    const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-    if (canonicalChatId && canonicalChatId !== chatId) {
-      msgs = safeParse(localStorage.getItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${canonicalChatId}`), []);
+  const candidateKeys = getChatStorageKeys(chatId);
+  let msgs = null;
+  for (const k of candidateKeys) {
+    const raw = localStorage.getItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${k}`);
+    if (raw) {
+      const parsed = safeParse(raw, null);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        msgs = parsed;
+        break;
+      }
     }
   }
-  if (!Array.isArray(msgs)) return [];
+  if (!Array.isArray(msgs)) msgs = [];
   if (userId) {
     const deletedSet = getDeletedForMeIds(userId);
     if (deletedSet.size > 0) {
@@ -588,8 +638,7 @@ export function getCachedMessages(chatId, userId = null) {
 
 export function setCachedMessages(chatId, messages) {
   if (typeof window === 'undefined' || !chatId || !Array.isArray(messages)) return;
-  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-  const targetKeys = Array.from(new Set([chatId, canonicalChatId].filter(Boolean)));
+  const targetKeys = getChatStorageKeys(chatId);
 
   // 1. Instant sync localStorage for 0ms initial load
   for (const cId of targetKeys) {
@@ -607,25 +656,21 @@ export function setCachedMessages(chatId, messages) {
   }
 
   // 2. Asynchronous local-first IndexedDB storage for unlimited history (thousands of messages)
-  try {
-    saveMessagesToLocalDb(canonicalChatId || chatId, messages);
-  } catch (_) {}
+  for (const cId of targetKeys) {
+    try {
+      saveMessagesToLocalDb(cId, messages);
+    } catch (_) {}
+  }
 }
 
 export function clearCachedMessages(chatId) {
   if (!chatId) return;
-  try {
-    localStorage.removeItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`);
-  } catch (e) {}
-  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-  if (canonicalChatId && canonicalChatId !== chatId) {
+  const targetKeys = getChatStorageKeys(chatId);
+  for (const cId of targetKeys) {
     try {
-      localStorage.removeItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${canonicalChatId}`);
+      localStorage.removeItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${cId}`);
     } catch (e) {}
-  }
-  clearChatFromLocalDb(chatId);
-  if (canonicalChatId && canonicalChatId !== chatId) {
-    clearChatFromLocalDb(canonicalChatId);
+    clearChatFromLocalDb(cId);
   }
 }
 
@@ -635,8 +680,7 @@ export async function getCachedMessagesFromLocalDb(chatId, limit = 100, beforeTi
 
 export function appendCachedMessage(chatId, message) {
   if (!chatId || !message) return;
-  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-  const targetKeys = Array.from(new Set([chatId, canonicalChatId].filter(Boolean)));
+  const targetKeys = getChatStorageKeys(chatId);
 
   for (const cId of targetKeys) {
     const msgs = getCachedMessages(cId);
@@ -659,31 +703,24 @@ export function appendCachedMessage(chatId, message) {
       };
       const nextMsgs = [...msgs];
       nextMsgs[existingIdx] = updatedMsg;
-      setCachedMessages(cId, nextMsgs);
+      try {
+        localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${cId}`, JSON.stringify(nextMsgs.slice(-250)));
+      } catch (e) {}
       continue;
     }
 
     const nextMsgs = [...msgs, message].sort((a, b) =>
       new Date(a.timestamp || a.createdAt || 0) - new Date(b.timestamp || b.createdAt || 0)
     );
-    setCachedMessages(cId, nextMsgs);
+    try {
+      localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${cId}`, JSON.stringify(nextMsgs.slice(-250)));
+    } catch (e) {}
   }
 }
 
 export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
   if (!chatId || !messageIdOrTempId || !updates) return;
-  const targetKeys = new Set([chatId].filter(Boolean));
-  if (typeof chatId === 'string') {
-    if (chatId.includes('::')) {
-      const parts = chatId.split('::').sort();
-      targetKeys.add(parts.join('_'));
-      targetKeys.add(parts.join('::'));
-    } else if (chatId.includes('_')) {
-      const parts = chatId.split('_').sort();
-      targetKeys.add(parts.join('_'));
-      targetKeys.add(parts.join('::'));
-    }
-  }
+  const targetKeys = getChatStorageKeys(chatId);
 
   for (const cId of targetKeys) {
     const msgs = getCachedMessages(cId);
@@ -713,8 +750,7 @@ export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
 
 export function markAllCachedMessagesRead(chatId, myUserId) {
   if (!chatId) return;
-  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-  const targetKeys = new Set([chatId, canonicalChatId].filter(Boolean));
+  const targetKeys = getChatStorageKeys(chatId);
   const userObj = getCachedUser();
   const myVars = new Set([myUserId, userObj?.id, userObj?._id, userObj?.username].filter(Boolean).map(String));
 
@@ -724,8 +760,7 @@ export function markAllCachedMessagesRead(chatId, myUserId) {
     let changed = false;
     const updated = msgs.map(m => {
       const isSentByMe = myVars.has(String(m.senderId));
-      // Invariant: Un-delivered sent messages (status: 'sent'/'pending') cannot transition to 'read'
-      if (isSentByMe && m.status === 'delivered') {
+      if (isSentByMe && m.status !== 'read') {
         changed = true;
         return { ...m, status: 'read' };
       }
@@ -743,8 +778,7 @@ export function markAllCachedMessagesRead(chatId, myUserId) {
 
 export function markAllCachedMessagesDelivered(chatId, myUserId) {
   if (!chatId) return;
-  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-  const targetKeys = new Set([chatId, canonicalChatId].filter(Boolean));
+  const targetKeys = getChatStorageKeys(chatId);
   const userObj = getCachedUser();
   const myVars = new Set([myUserId, userObj?.id, userObj?._id, userObj?.username].filter(Boolean).map(String));
 
@@ -768,16 +802,15 @@ export function markAllCachedMessagesDelivered(chatId, myUserId) {
 export function removeCachedMessages(chatId, messageIds, userId = null) {
   if (!chatId || !Array.isArray(messageIds) || messageIds.length === 0) return;
   const idsSet = new Set(messageIds.map(String));
-  const msgs = getCachedMessages(chatId);
-  const filtered = msgs.filter(m => !idsSet.has(String(m.id)) && !idsSet.has(String(m._id)) && !idsSet.has(String(m.clientTempId)));
-  try {
-    localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${chatId}`, JSON.stringify(filtered.slice(-250)));
-    const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-    if (canonicalChatId && canonicalChatId !== chatId) {
-      localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${canonicalChatId}`, JSON.stringify(filtered.slice(-250)));
-    }
-    deleteMessagesFromLocalDb(messageIds);
-  } catch (e) {}
+  const targetKeys = getChatStorageKeys(chatId);
+  for (const cId of targetKeys) {
+    const msgs = getCachedMessages(cId);
+    const filtered = msgs.filter(m => !idsSet.has(String(m.id)) && !idsSet.has(String(m._id)) && !idsSet.has(String(m.clientTempId)));
+    try {
+      localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${cId}`, JSON.stringify(filtered.slice(-250)));
+      deleteMessagesFromLocalDb(messageIds);
+    } catch (e) {}
+  }
   if (userId) {
     messageIds.forEach(id => addDeletedForMeId(userId, id));
   }

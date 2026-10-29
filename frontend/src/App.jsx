@@ -457,6 +457,10 @@ export default function App() {
       clearUnreadCount(user.id, activeChatRef.current.id);
       window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
     }
+    if (typeof window !== 'undefined') {
+      window.__pulsechat_active_chat = null;
+      window.__pulsechat_active_chat_id = null;
+    }
     setActiveChat(null);
   }, [user?.id]);
 

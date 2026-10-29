@@ -3139,7 +3139,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       window.__pulsechat_active_chat_id = chatId || activeChat?.id || activeChat?._id || null;
     }
     return () => {
-      if (typeof window !== 'undefined' && window.__pulsechat_active_chat_id === (chatId || activeChat?.id || activeChat?._id)) {
+      if (typeof window !== 'undefined') {
         window.__pulsechat_active_chat = null;
         window.__pulsechat_active_chat_id = null;
       }
@@ -3711,6 +3711,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     };
 
+    const isMatchingConversation = (incomingChatId, incomingCanonicalChatId) => {
+      return matchesConversation(incomingChatId, incomingCanonicalChatId, {
+        isGroup,
+        activeChatId,
+        activeChat,
+        currentUserId,
+        user,
+        chatId,
+        partnerId
+      });
+    };
+
     const handleChatReadUpdate = ({ chatId: targetChatId, canonicalChatId, userId, readerId, otherId, messageIds }) => {
       const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
       const eventReader = readerId || userId;
@@ -3727,6 +3739,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         isTargetMe ||
         !targetChatId ||
         targetChatId === chatId ||
+        isMatchingConversation(targetChatId, canonicalChatId || targetCanonical) ||
         (targetCanonical && targetCanonical === currentCanonical) ||
         (targetChatId && (targetChatId === activeChat?.id || targetChatId === activeChat?._id || targetChatId === activeChat?.username)) ||
         (activeChat?.id && targetChatId && targetChatId.includes(activeChat.id)) ||
@@ -3738,11 +3751,15 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       if (isMatch) {
         setMessages(prev => {
           let changed = false;
+          const hasExplicitIds = Array.isArray(messageIds) && messageIds.length > 0;
           const next = prev.map(m => {
             if (myVars.has(String(m.senderId)) && m.status !== 'read') {
-              // Invariant: Un-delivered ('sent' / 'pending') messages cannot transition to 'read' unless explicitly confirmed by ID
-              const isExplicitId = Array.isArray(messageIds) && messageIds.includes(m.id);
-              if (m.status === 'delivered' || isExplicitId) {
+              const isExplicitId = hasExplicitIds && (
+                messageIds.includes(m.id) ||
+                (m._id && messageIds.includes(m._id)) ||
+                (m.clientTempId && messageIds.includes(m.clientTempId))
+              );
+              if (!hasExplicitIds || isExplicitId) {
                 changed = true;
                 return { ...m, status: 'read' };
               }
@@ -3764,18 +3781,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         updateRecentChatSnippet(user?.id, chatId, { status: 'read' }, activeChat);
         window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
       }
-    };
-
-    const isMatchingConversation = (incomingChatId, incomingCanonicalChatId) => {
-      return matchesConversation(incomingChatId, incomingCanonicalChatId, {
-        isGroup,
-        activeChatId,
-        activeChat,
-        currentUserId,
-        user,
-        chatId,
-        partnerId
-      });
     };
 
     const handleMessageDeliveredUpdate = ({ messageId, clientTempId, chatId: incomingChatId, canonicalChatId, status }) => {
