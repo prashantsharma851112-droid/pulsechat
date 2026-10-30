@@ -222,7 +222,8 @@ function containsPrivateKeyMaterial(obj, seen = new WeakSet(), depth = 0) {
 }
 
 async function findUserByIdSafe(userId) {
-  if (!userId || !User || mongoose.connection.readyState !== 1) return null;
+  if (!userId || !User) return null;
+  if (User.schema && mongoose.connection.readyState !== 1) return null;
   const s = String(userId).trim();
   const withoutUser = s.replace(/^user_/, '');
   const withUser = s.startsWith('user_') ? s : `user_${s}`;

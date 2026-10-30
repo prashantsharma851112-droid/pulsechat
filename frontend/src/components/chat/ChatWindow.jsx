@@ -88,7 +88,9 @@ import {
   encryptMessageEnvelope,
   ensureDeviceIdentityRegistered,
   fetchPeerDevicePublicKey,
-  decryptMessageIfNeeded
+  decryptMessageIfNeeded,
+  invalidatePeerDeviceKeyCache,
+  invalidateDeviceRegistration
 } from '../../utils/e2eeCrypto';
 
 export const GLOBAL_LANGUAGES = [
@@ -309,11 +311,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const partnerId = activeChat?.id || activeChat?._id || activeChat?.userId || '';
   const [showStoryCardModal, setShowStoryCardModal] = useState(false);
   const myIdentityRef = useRef(null);
+  const retryingMsgIdsRef = useRef(new Set());
   const [deviceIdentityReady, setDeviceIdentityReady] = useState(false);
 
   useEffect(() => {
-    if (user?.id && token) {
-      ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL)
+    const myUid = user?.id || user?._id;
+    if (myUid && token) {
+      ensureDeviceIdentityRegistered(myUid, token, BACKEND_URL)
         .then(ident => {
           myIdentityRef.current = ident;
           setDeviceIdentityReady(true);
@@ -322,7 +326,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           console.warn('E2EE identity registration error:', err);
         });
     }
-  }, [user?.id, token]);
+  }, [user?.id, user?._id, token]);
 
   // Watchdog effect: When device identity becomes ready or un-decrypted envelopes are in messages, decrypt them
   useEffect(() => {
@@ -3621,35 +3625,79 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     const handleMessageDeleted = ({ messageId }) => {
+      if (!messageId) return;
+      const targetId = String(messageId).trim();
+      if (!targetId || targetId === 'undefined' || targetId === 'null') return;
+
       setMessages(prev => {
-        const next = prev.map(m => (m.id === messageId || m._id === messageId || m.clientTempId === messageId) ? { ...m, type: 'deleted', content: 'This message was deleted', mediaUrl: null, audioUrl: null, pollData: null } : m);
-        setCachedMessages(chatId, next);
-        return next;
+        let changed = false;
+        const next = prev.map(m => {
+          const isMatch = Boolean(
+            (m.id && String(m.id).trim() === targetId) ||
+            (m._id && String(m._id).trim() === targetId) ||
+            (m.clientTempId && String(m.clientTempId).trim() === targetId)
+          );
+          if (isMatch) {
+            changed = true;
+            return { ...m, type: 'deleted', content: 'This message was deleted', mediaUrl: null, audioUrl: null, pollData: null };
+          }
+          return m;
+        });
+        if (changed) {
+          setCachedMessages(chatId, next);
+          return next;
+        }
+        return prev;
       });
-      markCachedMessagesDeleted(chatId, [messageId]);
+      markCachedMessagesDeleted(chatId, [targetId]);
     };
 
     const handleReadUpdate = ({ messageId, status }) => {
+      if (!messageId) return;
+      const targetId = String(messageId).trim();
+      if (!targetId || targetId === 'undefined' || targetId === 'null') return;
+
       setMessages(prev => {
-        const next = prev.map(m =>
-          (m.id === messageId || m._id === messageId || m.clientTempId === messageId)
-            ? { ...m, status: 'read' }
-            : m
-        );
-        setCachedMessages(chatId, next);
-        return next;
+        let changed = false;
+        const next = prev.map(m => {
+          const isMatch = Boolean(
+            (m.id && String(m.id).trim() === targetId) ||
+            (m._id && String(m._id).trim() === targetId) ||
+            (m.clientTempId && String(m.clientTempId).trim() === targetId)
+          );
+          if (isMatch) {
+            changed = true;
+            return { ...m, status: 'read' };
+          }
+          return m;
+        });
+        if (changed) {
+          setCachedMessages(chatId, next);
+          return next;
+        }
+        return prev;
       });
-      updateCachedMessageStatus(chatId, messageId, { status: 'read' });
+      updateCachedMessageStatus(chatId, targetId, { status: 'read' });
       updateRecentChatSnippet(user?.id, chatId, { status: 'read' }, activeChat);
       window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
     };
 
     const handleReactionUpdated = ({ messageId, reactions }) => {
+      if (!messageId) return;
+      const targetId = String(messageId).trim();
+      if (!targetId || targetId === 'undefined' || targetId === 'null') return;
+
       setMessages(prev => {
         const myVars = new Set([user?.id, user?._id, user?.username].filter(Boolean).map(String));
+        let changed = false;
         const next = prev.map(m => {
-          const isThis = (m.id === messageId || m._id === messageId || m.clientTempId === messageId);
-          if (isThis) {
+          const isMatch = Boolean(
+            (m.id && String(m.id).trim() === targetId) ||
+            (m._id && String(m._id).trim() === targetId) ||
+            (m.clientTempId && String(m.clientTempId).trim() === targetId)
+          );
+          if (isMatch) {
+            changed = true;
             // A reaction confirms the message has been read by recipient (Double Blue Tick)!
             const hasPartnerReaction = reactions && Object.values(reactions).some(uList => Array.isArray(uList) && uList.some(u => !myVars.has(String(u))));
             const newStatus = (hasPartnerReaction && m.status !== 'pending') ? 'read' : m.status;
@@ -3657,10 +3705,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           }
           return m;
         });
-        setCachedMessages(chatId, next);
-        return next;
+        if (changed) {
+          setCachedMessages(chatId, next);
+          return next;
+        }
+        return prev;
       });
-      updateCachedMessageStatus(chatId, messageId, { reactions, status: 'read' });
+      updateCachedMessageStatus(chatId, targetId, { reactions, status: 'read' });
       updateRecentChatSnippet(user?.id, chatId, { status: 'read' }, activeChat);
       window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
     };
@@ -3722,15 +3773,34 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     const handleMultipleDeleted = ({ messageIds: targetIds, chatId: targetChatId }) => {
-      if (targetChatId === chatId && Array.isArray(targetIds)) {
-        const idSet = new Set(targetIds.map(String));
-        setMessages(prev => {
-          const next = prev.map(m => (idSet.has(String(m.id)) || idSet.has(String(m._id)) || idSet.has(String(m.clientTempId))) ? { ...m, type: 'deleted', content: 'This message was deleted', mediaUrl: null, audioUrl: null, pollData: null } : m);
+      if (targetChatId !== chatId || !Array.isArray(targetIds) || targetIds.length === 0) return;
+      const validIds = targetIds
+        .filter(id => id && String(id).trim().length > 0 && String(id) !== 'undefined' && String(id) !== 'null')
+        .map(id => String(id).trim());
+      if (validIds.length === 0) return;
+
+      const idSet = new Set(validIds);
+      setMessages(prev => {
+        let changed = false;
+        const next = prev.map(m => {
+          const isMatch = Boolean(
+            (m.id && idSet.has(String(m.id).trim())) ||
+            (m._id && idSet.has(String(m._id).trim())) ||
+            (m.clientTempId && idSet.has(String(m.clientTempId).trim()))
+          );
+          if (isMatch) {
+            changed = true;
+            return { ...m, type: 'deleted', content: 'This message was deleted', mediaUrl: null, audioUrl: null, pollData: null };
+          }
+          return m;
+        });
+        if (changed) {
           setCachedMessages(chatId, next);
           return next;
-        });
-        markCachedMessagesDeleted(chatId, targetIds);
-      }
+        }
+        return prev;
+      });
+      markCachedMessagesDeleted(chatId, validIds);
     };
 
     const handleMultipleRestored = ({ messageIds: targetIds, chatId: targetChatId }) => {
@@ -4285,14 +4355,31 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const handleDeleteSelectedMessages = () => {
     if (selectedMsgIds.length === 0) return;
 
-    const idsToDelete = [...selectedMsgIds];
+    const idsToDelete = selectedMsgIds
+      .filter(id => id && String(id).trim().length > 0 && String(id) !== 'undefined' && String(id) !== 'null')
+      .map(id => String(id).trim());
+    if (idsToDelete.length === 0) return;
+
     setMultiDeleteBackupIds(idsToDelete);
     setMultiDeleteUndoSecs(8);
 
     if (socket) {
       socket.emit('delete_multiple_messages', { messageIds: idsToDelete, chatId });
     }
-    setMessages(prev => prev.map(m => idsToDelete.includes(m.id) ? { ...m, type: 'deleted', content: 'This message was deleted' } : m));
+    const idSet = new Set(idsToDelete);
+    setMessages(prev => {
+      const next = prev.map(m => {
+        const isMatch = Boolean(
+          (m.id && idSet.has(String(m.id).trim())) ||
+          (m._id && idSet.has(String(m._id).trim())) ||
+          (m.clientTempId && idSet.has(String(m.clientTempId).trim()))
+        );
+        return isMatch ? { ...m, type: 'deleted', content: 'This message was deleted', mediaUrl: null, audioUrl: null, pollData: null } : m;
+      });
+      setCachedMessages(chatId, next);
+      return next;
+    });
+    markCachedMessagesDeleted(chatId, idsToDelete);
     setSelectedMsgIds([]);
     setIsMultiSelectMode(false);
   };
@@ -5721,17 +5808,211 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleDeleteLocalMessage = useCallback((msgId) => {
     if (!msgId) return;
+    const targetId = String(msgId).trim();
+    if (!targetId || targetId === 'undefined' || targetId === 'null') return;
+
     setMessages(prev => {
-      const next = prev.filter(m => m.id !== msgId && m._id !== msgId && m.clientTempId !== msgId);
+      const next = prev.filter(m => {
+        const isMatch = Boolean(
+          (m.id && String(m.id).trim() === targetId) ||
+          (m._id && String(m._id).trim() === targetId) ||
+          (m.clientTempId && String(m.clientTempId).trim() === targetId)
+        );
+        return !isMatch;
+      });
       setCachedMessages(chatId, next);
       return next;
     });
-    removeCachedMessages(chatId, [msgId], user?.id);
-    deleteMessagesFromLocalDb([msgId]);
+    removeCachedMessages(chatId, [targetId], user?.id);
+    deleteMessagesFromLocalDb([targetId]);
     if (socket && user?.id) {
-      socket.emit('delete_message_for_me', { messageId: msgId, chatId, userId: user.id });
+      socket.emit('delete_message_for_me', { messageId: targetId, chatId, userId: user.id });
     }
   }, [chatId, socket, user?.id]);
+
+  const handleRetryMessage = useCallback(async (msgToRetry) => {
+    if (!msgToRetry || msgToRetry.status !== 'failed') return;
+    const msgId = msgToRetry.clientTempId || msgToRetry.id || msgToRetry._id;
+    if (!msgId) return;
+
+    if (retryingMsgIdsRef.current.has(msgId)) return;
+    retryingMsgIdsRef.current.add(msgId);
+
+    // Optimistically transition status to 'pending' to block subsequent clicks and provide immediate feedback
+    setMessages(prev => prev.map(m => {
+      const isMatch = Boolean(
+        (m.clientTempId && m.clientTempId === msgId) ||
+        (m.id && m.id === msgId) ||
+        (m._id && m._id === msgId)
+      );
+      return isMatch ? { ...m, status: 'pending', error: null } : m;
+    }));
+
+    try {
+      const myUid = user?.id || user?._id;
+
+      if (!isGroup && targetPartnerId && !isAnonymousBot) {
+        setActionToast('🔄 Checking recipient encryption keys...');
+        invalidatePeerDeviceKeyCache(targetPartnerId);
+
+        let peerDevice = null;
+        try {
+          peerDevice = await fetchPeerDevicePublicKey(targetPartnerId, token, BACKEND_URL, true);
+        } catch (e) {
+          console.warn('Failed to fetch peer device key during retry:', e);
+        }
+
+        if (!peerDevice || !peerDevice.publicKeyJwk) {
+          const { errorCode, toast } = getPeerKeyErrorMessage(peerDevice);
+          setMessages(prev => prev.map(m => {
+            const isMatch = Boolean(
+              (m.clientTempId && m.clientTempId === msgId) ||
+              (m.id && m.id === msgId) ||
+              (m._id && m._id === msgId)
+            );
+            return isMatch ? { ...m, status: 'failed', error: errorCode } : m;
+          }));
+          updateCachedMessageStatus(chatId, msgId, { status: 'failed', error: errorCode });
+          setActionToast(toast || '🔒 Waiting for recipient E2EE key registration...');
+          setTimeout(() => setActionToast(''), 4000);
+          return;
+        }
+
+        let identity = myIdentityRef.current;
+        if (!identity && myUid && token) {
+          try {
+            identity = await ensureDeviceIdentityRegistered(myUid, token, BACKEND_URL);
+            myIdentityRef.current = identity;
+          } catch (e) {
+            console.warn('Failed to ensure device identity during retry:', e);
+          }
+        }
+
+        try {
+          const replyPayload = msgToRetry.replyTo
+            ? { id: msgToRetry.replyTo.id, type: msgToRetry.replyTo.type, senderId: msgToRetry.replyTo.senderId }
+            : null;
+
+          const envelope = await encryptMessageEnvelope(
+            {
+              content: msgToRetry.content,
+              type: msgToRetry.type || 'text',
+              replyTo: replyPayload
+            },
+            peerDevice.publicKeyJwk,
+            identity?.deviceId,
+            peerDevice.deviceId
+          );
+
+          if (!socket || !socket.connected) {
+            setMessages(prev => prev.map(m => {
+              const isMatch = Boolean(
+                (m.clientTempId && m.clientTempId === msgId) ||
+                (m.id && m.id === msgId) ||
+                (m._id && m._id === msgId)
+              );
+              return isMatch ? { ...m, status: 'failed', error: 'SOCKET_DISCONNECTED' } : m;
+            }));
+            updateCachedMessageStatus(chatId, msgId, { status: 'failed', error: 'SOCKET_DISCONNECTED' });
+            setActionToast('📡 Network disconnected. Please reconnect before retrying.');
+            setTimeout(() => setActionToast(''), 3000);
+            return;
+          }
+
+          socket.emit('send_message', {
+            ...getSenderPayload(),
+            chatId,
+            senderId: myUid,
+            receiverId: targetPartnerId,
+            isGroup: false,
+            content: '', // Zero server plaintext
+            isEncrypted: true,
+            envelope,
+            clientTempId: msgToRetry.clientTempId || msgId,
+            type: msgToRetry.type || 'text',
+            replyTo: replyPayload
+          }, (ack) => {
+            if (ack && typeof ack === 'object' && ack.success === true && ack.message && typeof ack.message.id === 'string') {
+              handleSendMessageAck(msgId, ack);
+              setActionToast('✅ Message sent securely!');
+              setTimeout(() => setActionToast(''), 3000);
+            } else {
+              const errCode = ack?.error || 'SEND_RETRY_FAILED';
+              setMessages(prev => prev.map(m => {
+                const isMatch = Boolean(
+                  (m.clientTempId && m.clientTempId === msgId) ||
+                  (m.id && m.id === msgId) ||
+                  (m._id && m._id === msgId)
+                );
+                return isMatch ? { ...m, status: 'failed', error: errCode } : m;
+              }));
+              updateCachedMessageStatus(chatId, msgId, { status: 'failed', error: errCode });
+              setActionToast('❌ Message send rejected by server.');
+              setTimeout(() => setActionToast(''), 3000);
+            }
+          });
+        } catch (err) {
+          console.error('Retry encryption failed:', err);
+          setMessages(prev => prev.map(m => {
+            const isMatch = Boolean(
+              (m.clientTempId && m.clientTempId === msgId) ||
+              (m.id && m.id === msgId) ||
+              (m._id && m._id === msgId)
+            );
+            return isMatch ? { ...m, status: 'failed', error: 'ENCRYPTION_FAILED' } : m;
+          }));
+          updateCachedMessageStatus(chatId, msgId, { status: 'failed', error: 'ENCRYPTION_FAILED' });
+          setActionToast('🔒 Encryption failed during retry.');
+          setTimeout(() => setActionToast(''), 3000);
+        }
+      } else {
+        if (!socket || !socket.connected) {
+          setMessages(prev => prev.map(m => {
+            const isMatch = Boolean(
+              (m.clientTempId && m.clientTempId === msgId) ||
+              (m.id && m.id === msgId) ||
+              (m._id && m._id === msgId)
+            );
+            return isMatch ? { ...m, status: 'failed', error: 'SOCKET_DISCONNECTED' } : m;
+          }));
+          updateCachedMessageStatus(chatId, msgId, { status: 'failed', error: 'SOCKET_DISCONNECTED' });
+          setActionToast('📡 Network disconnected. Please reconnect before retrying.');
+          setTimeout(() => setActionToast(''), 3000);
+          return;
+        }
+
+        socket.emit('send_message', {
+          ...getSenderPayload(),
+          chatId,
+          content: msgToRetry.content,
+          clientTempId: msgToRetry.clientTempId || msgId,
+          type: msgToRetry.type || 'text',
+          replyTo: msgToRetry.replyTo
+        }, (ack) => {
+          if (ack && typeof ack === 'object' && ack.success === true && ack.message && typeof ack.message.id === 'string') {
+            handleSendMessageAck(msgId, ack);
+            setActionToast('✅ Message resent successfully!');
+            setTimeout(() => setActionToast(''), 3000);
+          } else {
+            const errCode = ack?.error || 'SEND_RETRY_FAILED';
+            setMessages(prev => prev.map(m => {
+              const isMatch = Boolean(
+                (m.clientTempId && m.clientTempId === msgId) ||
+                (m.id && m.id === msgId) ||
+                (m._id && m._id === msgId)
+              );
+              return isMatch ? { ...m, status: 'failed', error: errCode } : m;
+            }));
+            updateCachedMessageStatus(chatId, msgId, { status: 'failed', error: errCode });
+            setActionToast('❌ Message send rejected by server.');
+            setTimeout(() => setActionToast(''), 3000);
+          }
+        });
+      }
+    } finally {
+      retryingMsgIdsRef.current.delete(msgId);
+    }
+  }, [isGroup, targetPartnerId, isAnonymousBot, token, BACKEND_URL, user?.id, user?._id, chatId, socket, getSenderPayload, handleSendMessageAck]);
 
   const lastActionSelectTimeRef = useRef(0);
 
@@ -6088,6 +6369,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             senderIsPro={msg.senderId === user.id ? user?.isPro : (isGroup ? senderObj?.isPro : chatIsPro)}
             onDeleteLocal={handleDeleteLocalMessage}
             onDeleteTrigger={handleTriggerUndoToast}
+            onRetryMessage={handleRetryMessage}
             isMultiSelectMode={isMultiSelectMode}
             isSelected={selectedMsgIds.includes(msg.id || msg._id || msg.clientTempId)}
             onToggleSelect={handleToggleSelectMsg}
@@ -6126,6 +6408,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     isGroup,
     chatIsPro,
     handleDeleteLocalMessage,
+    handleRetryMessage,
     handleTriggerUndoToast,
     isMultiSelectMode,
     selectedMsgIds,
@@ -8806,18 +9089,30 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   <button
                     type="button"
                     onClick={() => {
-                      const ids = deleteModalMessages.map(m => m.id);
-                      setMessages(prev => {
-                        const idSet = new Set(ids.map(String));
-                        const next = prev.map(m => (idSet.has(String(m.id)) || idSet.has(String(m._id)) || idSet.has(String(m.clientTempId))) ? { ...m, type: 'deleted', content: 'This message was deleted', mediaUrl: null, audioUrl: null, pollData: null } : m);
-                        setCachedMessages(chatId, next);
-                        return next;
-                      });
-                      markCachedMessagesDeleted(chatId, ids);
-                      deleteModalMessages.forEach(m => {
-                        if (socket) socket.emit('delete_message', { messageId: m.id, chatId });
-                        handleTriggerUndoToast(m.id);
-                      });
+                      const ids = (deleteModalMessages || [])
+                        .map(m => m.id || m._id || m.clientTempId)
+                        .filter(id => id && String(id).trim().length > 0 && String(id) !== 'undefined' && String(id) !== 'null')
+                        .map(id => String(id).trim());
+                      if (ids.length > 0) {
+                        const idSet = new Set(ids);
+                        setMessages(prev => {
+                          const next = prev.map(m => {
+                            const isMatch = Boolean(
+                              (m.id && idSet.has(String(m.id).trim())) ||
+                              (m._id && idSet.has(String(m._id).trim())) ||
+                              (m.clientTempId && idSet.has(String(m.clientTempId).trim()))
+                            );
+                            return isMatch ? { ...m, type: 'deleted', content: 'This message was deleted', mediaUrl: null, audioUrl: null, pollData: null } : m;
+                          });
+                          setCachedMessages(chatId, next);
+                          return next;
+                        });
+                        markCachedMessagesDeleted(chatId, ids);
+                        ids.forEach(targetId => {
+                          if (socket) socket.emit('delete_message', { messageId: targetId, chatId });
+                          handleTriggerUndoToast(targetId);
+                        });
+                      }
                       setDeleteModalMessages(null);
                       handleDismissActionMessage();
                       try { playSound('sent'); } catch {}
@@ -8847,9 +9142,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 <button
                   type="button"
                   onClick={() => {
-                    deleteModalMessages.forEach(m => {
-                      handleDeleteLocalMessage(m.id);
-                      handleTriggerUndoToast(m.id);
+                    const ids = (deleteModalMessages || [])
+                      .map(m => m.id || m._id || m.clientTempId)
+                      .filter(id => id && String(id).trim().length > 0 && String(id) !== 'undefined' && String(id) !== 'null')
+                      .map(id => String(id).trim());
+                    ids.forEach(targetId => {
+                      handleDeleteLocalMessage(targetId);
+                      handleTriggerUndoToast(targetId);
                     });
                     setDeleteModalMessages(null);
                     handleDismissActionMessage();

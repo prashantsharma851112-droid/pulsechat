@@ -1987,8 +1987,11 @@ io.on('connection', (socket) => {
 
   // Unsend / Delete Message Handler
   socket.on('delete_message', async ({ messageId, chatId }) => {
-    await db.deleteMessage(messageId);
-    io.to(chatId).emit('message_deleted', { messageId });
+    if (!messageId || typeof messageId !== 'string') return;
+    const cleanId = messageId.trim();
+    if (!cleanId || cleanId === 'undefined' || cleanId === 'null') return;
+    await db.deleteMessage(cleanId);
+    io.to(chatId).emit('message_deleted', { messageId: cleanId });
   });
 
   // Delete Message For Me Handler (Single user deletion)
@@ -2089,13 +2092,17 @@ io.on('connection', (socket) => {
   // Delete Multiple Selected Messages
   socket.on('delete_multiple_messages', async ({ messageIds, chatId }) => {
     if (!chatId || !Array.isArray(messageIds) || messageIds.length === 0) return;
+    const validIds = messageIds
+      .filter(id => id && typeof id === 'string' && id.trim().length > 0 && id.trim() !== 'undefined' && id.trim() !== 'null')
+      .map(id => id.trim());
+    if (validIds.length === 0) return;
     const authUserId = socket.authenticatedUserId || socket.data?.userId || socket.userId;
     if (!authUserId) return;
     const isAuth = await isUserAuthorizedForChat(chatId, authUserId);
     if (!isAuth) return;
 
-    await db.deleteMultipleMessages(messageIds);
-    io.to(chatId).emit('multiple_messages_deleted', { messageIds, chatId });
+    await db.deleteMultipleMessages(validIds);
+    io.to(chatId).emit('multiple_messages_deleted', { messageIds: validIds, chatId });
   });
 
   // Restore Multiple Selected Messages (Undo Delete Selected)

@@ -902,6 +902,7 @@ function MessageItem({
   senderName,
   onDeleteLocal,
   onDeleteTrigger,
+  onRetryMessage,
   isMultiSelectMode,
   isSelected,
   onToggleSelect,
@@ -2324,7 +2325,26 @@ function MessageItem({
                           const curStatus = hasPartnerReaction ? 'read' : (message.status || 'sent');
 
                           if (curStatus === 'failed') {
-                            return <XCircle size={12} color="#ef4444" title={message.error === 'NO_E2EE_KEY' ? 'Waiting for recipient E2EE key registration' : 'Failed to send'} />;
+                            return (
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (typeof onRetryMessage === 'function') onRetryMessage(message);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.stopPropagation();
+                                    if (typeof onRetryMessage === 'function') onRetryMessage(message);
+                                  }
+                                }}
+                                title={message.error === 'NO_E2EE_KEY' ? 'Waiting for recipient E2EE key registration. Click to retry.' : 'Failed to send. Click to retry.'}
+                                style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+                              >
+                                <XCircle size={12} color="#ef4444" />
+                              </span>
+                            );
                           } else if (curStatus === 'pending') {
                             return <Clock size={11} color="#e2e8f0" />;
                           } else if (curStatus === 'read' || curStatus === 'seen') {
@@ -2428,7 +2448,26 @@ function MessageItem({
                           const curStatus = hasPartnerReaction ? 'read' : (message.status || 'sent');
 
                           if (curStatus === 'failed') {
-                            return <XCircle size={12} color="#ef4444" title={message.error === 'NO_E2EE_KEY' ? 'Waiting for recipient E2EE key registration' : 'Failed to send'} />;
+                            return (
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (typeof onRetryMessage === 'function') onRetryMessage(message);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.stopPropagation();
+                                    if (typeof onRetryMessage === 'function') onRetryMessage(message);
+                                  }
+                                }}
+                                title={message.error === 'NO_E2EE_KEY' ? 'Waiting for recipient E2EE key registration. Click to retry.' : 'Failed to send. Click to retry.'}
+                                style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+                              >
+                                <XCircle size={12} color="#ef4444" />
+                              </span>
+                            );
                           } else if (curStatus === 'pending') {
                             return <Clock size={11} color="#e2e8f0" />;
                           } else if (curStatus === 'read' || curStatus === 'seen') {
@@ -2923,7 +2962,26 @@ function MessageItem({
                   const curStatus = hasPartnerReaction ? 'read' : (message.status || 'sent');
 
                   if (curStatus === 'failed') {
-                    return <XCircle size={13} color="#ef4444" title={message.error === 'NO_E2EE_KEY' ? 'Waiting for recipient E2EE key registration' : 'Failed to send'} />;
+                    return (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (typeof onRetryMessage === 'function') onRetryMessage(message);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.stopPropagation();
+                            if (typeof onRetryMessage === 'function') onRetryMessage(message);
+                          }
+                        }}
+                        title={message.error === 'NO_E2EE_KEY' ? 'Waiting for recipient E2EE key registration. Click to retry.' : 'Failed to send. Click to retry.'}
+                        style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+                      >
+                        <XCircle size={13} color="#ef4444" />
+                      </span>
+                    );
                   } else if (curStatus === 'pending') {
                     return <Clock size={12} color="#9ca3af" title="Waiting for network / Pending" />;
                   } else if (curStatus === 'read' || curStatus === 'seen') {

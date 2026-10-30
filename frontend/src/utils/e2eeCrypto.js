@@ -488,68 +488,140 @@ export async function decryptAttachmentFile(ciphertextBuffer, mediaKeyJwk, ivBas
 // In-memory cache for peer device public keys to prevent redundant network fetches
 const peerDeviceKeyCache = new Map();
 
+// In-flight registration promises to prevent race conditions on concurrent calls
+const registrationInFlight = new Map();
+
+// In-memory set of verified device key registrations
+const verifiedDeviceRegistrations = new Set();
+
 /**
- * Registers this device's public key with the backend key directory
+ * Invalidate cached registration state so that registration will be re-verified or re-uploaded.
  */
-export async function ensureDeviceIdentityRegistered(userId, token, apiBaseUrl = '') {
+export function invalidateDeviceRegistration(userId, deviceId) {
+  if (!userId && !deviceId) {
+    verifiedDeviceRegistrations.clear();
+  } else {
+    verifiedDeviceRegistrations.delete(`${userId}_${deviceId}`);
+  }
+}
+
+/**
+ * Invalidate peer device public key cache
+ */
+export function invalidatePeerDeviceKeyCache(peerId) {
+  if (!peerId) {
+    peerDeviceKeyCache.clear();
+  } else {
+    peerDeviceKeyCache.delete(String(peerId).trim());
+  }
+}
+
+/**
+ * Validates whether the server actually has this device's public key registered
+ */
+export async function validateServerDeviceRegistration(userId, deviceId, token, apiBaseUrl = '') {
+  if (!userId || !deviceId || !token) return false;
+  try {
+    const backendUrl = apiBaseUrl || (typeof window !== 'undefined' ? (window.__BACKEND_URL__ || '') : '');
+    const res = await fetch(`${backendUrl}/api/keys/devices/my`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    const devices = data.devices || [];
+    const isRegistered = devices.some(d => (d.deviceId === deviceId || d.device_id === deviceId) && !d.revoked && !d.isRevoked);
+    const regKey = `${userId}_${deviceId}`;
+    if (isRegistered) {
+      verifiedDeviceRegistrations.add(regKey);
+    } else {
+      verifiedDeviceRegistrations.delete(regKey);
+    }
+    return isRegistered;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Registers this device's public key with the backend key directory.
+ * Idempotent, safe under concurrency, does not rely blindly on sessionStorage,
+ * and preserves existing identity/private keys upon any network/server failure.
+ */
+export async function ensureDeviceIdentityRegistered(userId, token, apiBaseUrl = '', force = false) {
   if (!userId) return null;
   const identity = await getOrInitDeviceIdentity(userId);
   if (!token) return identity;
 
-  const sessionKey = `pulsechat_device_registered_${userId}_${identity.deviceId}`;
-  if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(sessionKey)) {
+  const regKey = `${userId}_${identity.deviceId}`;
+
+  // If already verified in memory for this session and not forced, return immediately
+  if (!force && verifiedDeviceRegistrations.has(regKey)) {
     return identity;
   }
 
-  try {
-    const backendUrl = apiBaseUrl || (typeof window !== 'undefined' ? (window.__BACKEND_URL__ || '') : '');
-    const url = `${backendUrl}/api/keys/upload`;
-    const payload = {
-      device_keys: {
-        user_id: String(userId),
-        device_id: identity.deviceId,
-        algorithms: ['m.olm.v1.curve25519-aes-sha2', 'pulse.p256.aes-gcm.v1'],
-        keys: {
-          [`p256:${identity.deviceId}`]: identity.publicKeyJwk
-        }
-      }
-    };
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (res.ok) {
-      if (typeof sessionStorage !== 'undefined') {
-        sessionStorage.setItem(sessionKey, '1');
-      }
-    } else {
-      let errText = '';
-      try { errText = await res.text(); } catch (_) {}
-      console.warn(`[E2EE] Could not register device public key (HTTP ${res.status}):`, errText);
-    }
-  } catch (err) {
-    console.warn('Could not register device public key with server:', err);
+  // If an upload is currently in flight for this exact device, join that promise
+  if (registrationInFlight.has(regKey)) {
+    return registrationInFlight.get(regKey);
   }
 
-  return identity;
+  const p = (async () => {
+    try {
+      const backendUrl = apiBaseUrl || (typeof window !== 'undefined' ? (window.__BACKEND_URL__ || '') : '');
+      const url = `${backendUrl}/api/keys/upload`;
+      const payload = {
+        device_keys: {
+          user_id: String(userId),
+          device_id: identity.deviceId,
+          algorithms: ['m.olm.v1.curve25519-aes-sha2', 'pulse.p256.aes-gcm.v1'],
+          keys: {
+            [`p256:${identity.deviceId}`]: identity.publicKeyJwk
+          }
+        }
+      };
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        verifiedDeviceRegistrations.add(regKey);
+      } else {
+        let errText = '';
+        try { errText = await res.text(); } catch (_) {}
+        console.warn(`[E2EE] Could not register device public key (HTTP ${res.status}):`, errText);
+      }
+    } catch (err) {
+      console.warn('Could not register device public key with server:', err);
+    } finally {
+      registrationInFlight.delete(regKey);
+    }
+
+    return identity;
+  })();
+
+  registrationInFlight.set(regKey, p);
+  return p;
 }
 
 /**
  * Fetches the peer's active device public key for E2EE session establishment
  */
-export async function fetchPeerDevicePublicKey(peerId, token, apiBaseUrl = '') {
+export async function fetchPeerDevicePublicKey(peerId, token, apiBaseUrl = '', bypassCache = false) {
   if (!peerId) return null;
   const cleanPeerId = String(peerId).trim();
 
-  const cachedEntry = peerDeviceKeyCache.get(cleanPeerId);
-  if (cachedEntry && (!cachedEntry.expiresAt || cachedEntry.expiresAt > Date.now())) {
-    return cachedEntry.result || cachedEntry;
+  if (!bypassCache) {
+    const cachedEntry = peerDeviceKeyCache.get(cleanPeerId);
+    if (cachedEntry && (!cachedEntry.expiresAt || cachedEntry.expiresAt > Date.now())) {
+      return cachedEntry.result || cachedEntry;
+    }
   }
 
   try {
@@ -587,6 +659,7 @@ export async function fetchPeerDevicePublicKey(peerId, token, apiBaseUrl = '') {
           return result;
         }
       }
+      peerDeviceKeyCache.delete(cleanPeerId);
       return { error: 'NO_ACTIVE_KEYS', status: 200 };
     } else {
       let errCode = 'FETCH_FAILED';

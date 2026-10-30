@@ -23,10 +23,11 @@ export function SocketProvider({ children }) {
 
   useEffect(() => {
     userRef.current = user;
-    if (user?.id) {
+    const myUserId = user?.id || user?._id;
+    if (myUserId) {
       const initPromise = token
-        ? ensureDeviceIdentityRegistered(user.id, token, BACKEND_URL)
-        : getOrInitDeviceIdentity(user.id);
+        ? ensureDeviceIdentityRegistered(myUserId, token, BACKEND_URL)
+        : getOrInitDeviceIdentity(myUserId);
       initPromise
         .then(ident => {
           deviceIdentityRef.current = ident;

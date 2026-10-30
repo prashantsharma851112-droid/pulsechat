@@ -272,14 +272,18 @@ export async function getMessagesFromLocalDb(chatId, limit = 100, beforeTimestam
  */
 export async function deleteMessagesFromLocalDb(messageIds) {
   if (!Array.isArray(messageIds) || messageIds.length === 0) return;
+  const validIds = messageIds
+    .filter(id => id && String(id).trim().length > 0 && String(id) !== 'undefined' && String(id) !== 'null')
+    .map(id => String(id).trim());
+  if (validIds.length === 0) return;
   const db = await getDb();
   if (!db) return;
 
   try {
     const tx = db.transaction([STORE_MESSAGES], 'readwrite');
     const store = tx.objectStore(STORE_MESSAGES);
-    for (const id of messageIds) {
-      if (id) store.delete(String(id));
+    for (const id of validIds) {
+      store.delete(id);
     }
   } catch (err) {
     console.warn('deleteMessagesFromLocalDb error:', err);
@@ -358,13 +362,15 @@ export async function cleanOldMessagesFromLocalDb(days = 7) {
  */
 export async function updateMessageInLocalDb(msgId, updates) {
   if (!msgId || !updates) return;
+  const targetId = String(msgId).trim();
+  if (!targetId || targetId === 'undefined' || targetId === 'null') return;
   const db = await getDb();
   if (!db) return;
 
   try {
     const tx = db.transaction([STORE_MESSAGES], 'readwrite');
     const store = tx.objectStore(STORE_MESSAGES);
-    const getReq = store.get(String(msgId));
+    const getReq = store.get(targetId);
     getReq.onsuccess = () => {
       if (getReq.result) {
         store.put({ ...getReq.result, ...updates });

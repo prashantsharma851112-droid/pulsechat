@@ -595,19 +595,34 @@ export function mergeIntoAllUsersCache(userId, newUsers) {
   setCachedAllUsers(userId, Array.from(map.values()));
 }
 
+// Helper to validate message IDs and prevent accidental deletion matching
+export function isValidMessageId(id) {
+  if (id === null || id === undefined) return false;
+  const s = String(id).trim();
+  return s.length > 0 && s !== 'undefined' && s !== 'null' && s !== '[object Object]';
+}
+
+export function filterValidMessageIds(ids) {
+  if (!Array.isArray(ids)) return [];
+  return ids.filter(isValidMessageId).map(id => String(id).trim());
+}
+
 // message history cache
 export function getDeletedForMeIds(userId) {
   if (typeof window === 'undefined' || !userId) return new Set();
   const raw = localStorage.getItem(`pulsechat_deleted_msg_ids_${userId}`);
-  return new Set(safeParse(raw, []));
+  const parsed = safeParse(raw, []);
+  if (!Array.isArray(parsed)) return new Set();
+  return new Set(parsed.filter(isValidMessageId).map(id => String(id).trim()));
 }
 
 export function addDeletedForMeId(userId, messageId) {
-  if (typeof window === 'undefined' || !userId || !messageId) return;
+  if (typeof window === 'undefined' || !userId || !isValidMessageId(messageId)) return;
+  const cleanId = String(messageId).trim();
   const set = getDeletedForMeIds(userId);
-  set.add(String(messageId));
+  set.add(cleanId);
   try {
-    const arr = Array.from(set).slice(-500);
+    const arr = Array.from(set).filter(isValidMessageId).slice(-500);
     localStorage.setItem(`pulsechat_deleted_msg_ids_${userId}`, JSON.stringify(arr));
   } catch (e) {}
 }
@@ -630,7 +645,14 @@ export function getCachedMessages(chatId, userId = null) {
   if (userId) {
     const deletedSet = getDeletedForMeIds(userId);
     if (deletedSet.size > 0) {
-      return msgs.filter(m => !deletedSet.has(String(m.id)) && !deletedSet.has(String(m._id)) && !deletedSet.has(String(m.clientTempId)));
+      return msgs.filter(m => {
+        const isDeleted = Boolean(
+          (m.id && deletedSet.has(String(m.id).trim())) ||
+          (m._id && deletedSet.has(String(m._id).trim())) ||
+          (m.clientTempId && deletedSet.has(String(m.clientTempId).trim()))
+        );
+        return !isDeleted;
+      });
     }
   }
   return msgs;
@@ -725,6 +747,8 @@ export function appendCachedMessage(chatId, message) {
 
 export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
   if (!chatId || !messageIdOrTempId || !updates) return;
+  const targetId = String(messageIdOrTempId).trim();
+  if (!isValidMessageId(targetId)) return;
   const targetKeys = getChatStorageKeys(chatId);
 
   for (const cId of targetKeys) {
@@ -732,13 +756,13 @@ export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
     if (!Array.isArray(msgs) || msgs.length === 0) continue;
     let changed = false;
     const updated = msgs.map(m => {
-      if (
-        m.id === messageIdOrTempId ||
-        m._id === messageIdOrTempId ||
-        m.clientTempId === messageIdOrTempId ||
-        m.tempId === messageIdOrTempId ||
-        (m.clientTempId && messageIdOrTempId && String(m.clientTempId) === String(messageIdOrTempId))
-      ) {
+      const isMatch = Boolean(
+        (m.id && String(m.id).trim() === targetId) ||
+        (m._id && String(m._id).trim() === targetId) ||
+        (m.clientTempId && String(m.clientTempId).trim() === targetId) ||
+        (m.tempId && String(m.tempId).trim() === targetId)
+      );
+      if (isMatch) {
         changed = true;
         const incomingStatus = typeof updates === 'string' ? updates : updates.status;
         const targetStatus = incomingStatus ? resolveNextMessageStatus(m.status, incomingStatus) : m.status;
@@ -749,10 +773,10 @@ export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
     });
     if (changed) {
       setCachedMessages(cId, updated);
-      if (typeof messageIdOrTempId === 'string' && updates) {
+      if (updates) {
         try {
           const updateObj = typeof updates === 'string' ? { status: updates } : updates;
-          updateMessageInLocalDb(messageIdOrTempId, updateObj);
+          updateMessageInLocalDb(targetId, updateObj);
         } catch (_) {}
       }
     }
@@ -812,33 +836,53 @@ export function markAllCachedMessagesDelivered(chatId, myUserId) {
 
 export function removeCachedMessages(chatId, messageIds, userId = null) {
   if (!chatId || !Array.isArray(messageIds) || messageIds.length === 0) return;
-  const idsSet = new Set(messageIds.map(String));
+  const validIds = filterValidMessageIds(messageIds);
+  if (validIds.length === 0) return;
+  const idsSet = new Set(validIds);
   const targetKeys = getChatStorageKeys(chatId);
   for (const cId of targetKeys) {
     const msgs = getCachedMessages(cId);
-    const filtered = msgs.filter(m => !idsSet.has(String(m.id)) && !idsSet.has(String(m._id)) && !idsSet.has(String(m.clientTempId)));
+    const filtered = msgs.filter(m => {
+      const isMatch = Boolean(
+        (m.id && idsSet.has(String(m.id).trim())) ||
+        (m._id && idsSet.has(String(m._id).trim())) ||
+        (m.clientTempId && idsSet.has(String(m.clientTempId).trim()))
+      );
+      return !isMatch;
+    });
     try {
       localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${cId}`, JSON.stringify(filtered.slice(-250)));
-      deleteMessagesFromLocalDb(messageIds);
+      deleteMessagesFromLocalDb(validIds);
     } catch (e) {}
   }
   if (userId) {
-    messageIds.forEach(id => addDeletedForMeId(userId, id));
+    validIds.forEach(id => addDeletedForMeId(userId, id));
   }
 }
 
 export function markCachedMessagesDeleted(chatId, messageIds) {
   if (!chatId || !Array.isArray(messageIds) || messageIds.length === 0) return;
-  const idsSet = new Set(messageIds.map(String));
+  const validIds = filterValidMessageIds(messageIds);
+  if (validIds.length === 0) return;
+  const idsSet = new Set(validIds);
   const msgs = getCachedMessages(chatId);
+  let changed = false;
   const updated = msgs.map(m => {
-    if (idsSet.has(String(m.id)) || idsSet.has(String(m._id)) || idsSet.has(String(m.clientTempId))) {
+    const isMatch = Boolean(
+      (m.id && idsSet.has(String(m.id).trim())) ||
+      (m._id && idsSet.has(String(m._id).trim())) ||
+      (m.clientTempId && idsSet.has(String(m.clientTempId).trim()))
+    );
+    if (isMatch) {
+      changed = true;
       return { ...m, type: 'deleted', content: 'This message was deleted', mediaUrl: null, audioUrl: null, pollData: null };
     }
     return m;
   });
-  setCachedMessages(chatId, updated);
-  messageIds.forEach(id => {
+  if (changed) {
+    setCachedMessages(chatId, updated);
+  }
+  validIds.forEach(id => {
     updateMessageInLocalDb(id, { type: 'deleted', content: 'This message was deleted', mediaUrl: null, audioUrl: null, pollData: null });
   });
 }
