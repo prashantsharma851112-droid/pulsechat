@@ -716,6 +716,11 @@ export function appendCachedMessage(chatId, message) {
       localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${cId}`, JSON.stringify(nextMsgs.slice(-250)));
     } catch (e) {}
   }
+
+  // Also persist to IndexedDB asynchronously
+  try {
+    saveMessagesToLocalDb(chatId, [message]).catch(() => {});
+  } catch (_) {}
 }
 
 export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
@@ -744,6 +749,12 @@ export function updateCachedMessageStatus(chatId, messageIdOrTempId, updates) {
     });
     if (changed) {
       setCachedMessages(cId, updated);
+      if (typeof messageIdOrTempId === 'string' && updates) {
+        try {
+          const updateObj = typeof updates === 'string' ? { status: updates } : updates;
+          updateMessageInLocalDb(messageIdOrTempId, updateObj);
+        } catch (_) {}
+      }
     }
   }
 }

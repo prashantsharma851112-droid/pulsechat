@@ -258,13 +258,6 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('pulsechat_music_note_updated', handleMusicNoteUpdateEvent);
   }, []);
 
-  // Auto-cleanup local message storage (keeps last 7 days safe, cleans older)
-  useEffect(() => {
-    if (user && user.autoCleanupEnabled !== false) {
-      cleanupLocalMessageStorage(7);
-    }
-  }, [user?.id, user?.autoCleanupEnabled]);
-
   const updateUserProfile = (updatedUser) => {
     setUser(current => {
       const merged = typeof updatedUser === 'function'

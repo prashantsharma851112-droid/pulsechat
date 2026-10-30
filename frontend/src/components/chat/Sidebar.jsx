@@ -1775,18 +1775,26 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     const curUid = user?.id || user?._id;
     if (activeChat && curUid) {
       const targetChatId = activeChat.id || activeChat._id || activeChat.chatId;
-      clearUnreadCount(curUid, targetChatId);
-      setRecentChats(prev => prev.map(u => (
-        u.id === activeChat.id ||
-        (activeChat._id && (u.id === activeChat._id || u._id === activeChat._id)) ||
-        (u._id && activeChat.id && u._id === activeChat.id) ||
-        (u.username && activeChat.username && u.username === activeChat.username) ||
-        (activeChat.chatId && (
-          activeChat.chatId.includes(u.id) ||
-          (u._id && activeChat.chatId.includes(String(u._id))) ||
-          (activeChat.chatId.includes('::') && activeChat.chatId.split('::').some(p => p === u.id || p === u._id))
-        ))
-      ) ? { ...u, unreadCount: 0 } : u));
+      if (targetChatId) clearUnreadCount(curUid, targetChatId);
+      if (activeChat.id && activeChat.id !== targetChatId) clearUnreadCount(curUid, activeChat.id);
+      if (activeChat._id && activeChat._id !== targetChatId) clearUnreadCount(curUid, activeChat._id);
+      if (activeChat.chatId && activeChat.chatId !== targetChatId) clearUnreadCount(curUid, activeChat.chatId);
+
+      setRecentChats(prev => {
+        const next = prev.map(u => (
+          u.id === activeChat.id ||
+          (activeChat._id && (u.id === activeChat._id || u._id === activeChat._id)) ||
+          (u._id && activeChat.id && u._id === activeChat.id) ||
+          (u.username && activeChat.username && u.username === activeChat.username) ||
+          (activeChat.chatId && (
+            activeChat.chatId.includes(u.id) ||
+            (u._id && activeChat.chatId.includes(String(u._id))) ||
+            (activeChat.chatId.includes('::') && activeChat.chatId.split('::').some(p => p === u.id || p === u._id))
+          ))
+        ) ? { ...u, unreadCount: 0 } : u);
+        setCachedRecentChats(curUid, next);
+        return next;
+      });
     }
   }, [activeChat, user?.id, user?._id]);
 
@@ -1794,9 +1802,11 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
     if (!socket) return;
 
     // Instant zero-latency chat list reordering on message send or receive (0ms)
+    // Consolidates update path with updateRecentChatSnippet as single source of truth
     const handleSidebarNewMessage = async (msg) => {
       if (!msg) return;
 
+      const curUid = user?.id || user?._id;
       const isMyMsg = Boolean(
         user?.id && (
           msg.senderId === user.id ||
@@ -1830,7 +1840,6 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       if (isAlreadyProcessed === 'decrypted') return;
       if (isAlreadyProcessed === 'raw' && !effectiveMsg._decrypted) return;
 
-      const isPromotionFromRaw = (isAlreadyProcessed === 'raw' && effectiveMsg._decrypted);
       if (msgKey) {
         processedMsgIdsRef.current.set(msgKey, effectiveMsg._decrypted ? 'decrypted' : 'raw');
         if (processedMsgIdsRef.current.size > 200) {
@@ -1844,225 +1853,44 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
       const targetId = isMyMsg ? effectiveMsg.receiverId : (effectiveMsg.isGroup ? effectiveMsg.chatId : effectiveMsg.senderId);
       if (!targetId && !effectiveMsg.chatId) return;
 
-      // WhatsApp Local-First: SAVE incoming message immediately to device local message storage!
-      if (effectiveMsg.chatId) {
-        appendCachedMessage(effectiveMsg.chatId, effectiveMsg);
-        if (effectiveMsg.chatId.includes('::')) {
-          const canonical = effectiveMsg.chatId.split('::').sort().join('::');
-          if (canonical && canonical !== effectiveMsg.chatId) {
-            appendCachedMessage(canonical, effectiveMsg);
-          }
-        } else if (effectiveMsg.chatId.includes('_')) {
-          const canonical = effectiveMsg.chatId.split('_').sort().join('_');
-          if (canonical && canonical !== effectiveMsg.chatId) {
-            appendCachedMessage(canonical, effectiveMsg);
-          }
-        }
+      const isDocumentVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
+      const isCurrentlyViewing = isDocumentVisible && Boolean(
+        activeChatRef.current && (
+          (effectiveMsg.isGroup && (activeChatRef.current.id === effectiveMsg.chatId || activeChatRef.current.id === targetId)) ||
+          (!effectiveMsg.isGroup && (
+            activeChatRef.current.id === targetId ||
+            activeChatRef.current._id === targetId ||
+            (targetId && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(targetId).toLowerCase()) ||
+            (effectiveMsg.senderUsername && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(effectiveMsg.senderUsername).toLowerCase()) ||
+            (effectiveMsg.senderName && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(effectiveMsg.senderName).toLowerCase()) ||
+            (effectiveMsg.senderName && activeChatRef.current.displayName && String(activeChatRef.current.displayName).toLowerCase() === String(effectiveMsg.senderName).toLowerCase())
+          ))
+        )
+      );
+
+      if (!isMyMsg && !isCurrentlyViewing) {
+        try { playSound('received'); } catch {}
       }
 
-      let contentSnippet = (effectiveMsg.type === 'stealth_dust' || effectiveMsg.isDustText)
-        ? '⚡ Stealth Dust Text'
-        : (effectiveMsg.type === 'story_reply' || effectiveMsg.storyReply)
-        ? (() => {
-            const sr = effectiveMsg.storyReply;
-            const isShared = (effectiveMsg.content && effectiveMsg.content.startsWith('Shared ')) || (!sr?.reactionEmoji && !sr?.tipSparks && !sr?.replyText);
-            if (isShared) return isMyMsg ? 'You shared a vibe ⚡' : 'Shared a vibe ⚡';
-            if (sr?.reactionEmoji) return isMyMsg ? `You reacted ${sr.reactionEmoji} to story` : `Reacted ${sr.reactionEmoji} to your story`;
-            if (sr?.tipSparks) return isMyMsg ? `You tipped ⚡ ${sr.tipSparks} Sparks on story` : `Tipped ⚡ ${sr.tipSparks} Sparks on your story!`;
-            if (sr?.replyText) return isMyMsg ? `You replied: "${sr.replyText}"` : `Replied to your story: "${sr.replyText}"`;
-            return isMyMsg ? 'You shared a vibe ⚡' : 'Shared a vibe ⚡';
-          })()
-        : (effectiveMsg.type === 'text'
-        ? (effectiveMsg.content || (effectiveMsg.isEncrypted && !effectiveMsg._decrypted ? '🔒 Encrypted message' : ''))
-        : (effectiveMsg.type === '3d_text' ? `✨ 3D: ${effectiveMsg.content || ''}`
-        : effectiveMsg.type === 'image' ? '📷 Photo'
-        : effectiveMsg.type === 'video' ? '🎥 Video'
-        : effectiveMsg.type === 'audio' || effectiveMsg.type === 'voice' ? '🎤 Voice message'
-        : effectiveMsg.type === 'gift' ? '🎁 Gift'
-        : effectiveMsg.type === 'poll' ? '📊 Poll'
-        : effectiveMsg.type === 'call' ? '📞 Call'
-        : (effectiveMsg.content || (effectiveMsg.fileName ? `📁 ${effectiveMsg.fileName}` : (effectiveMsg.type === 'document' ? '📁 Document' : '')))));
-
-      if (effectiveMsg.type === 'text' && contentSnippet) {
-        if (contentSnippet.startsWith('Replied to your story:')) {
-          contentSnippet = isMyMsg
-            ? contentSnippet.replace(/^Replied to your story:\s*/, 'You replied: ')
-            : contentSnippet;
-        } else if (contentSnippet.startsWith('Reacted ') && contentSnippet.includes(' to your story')) {
-          contentSnippet = isMyMsg
-            ? contentSnippet.replace(/\s*to your story$/, ' to story')
-            : contentSnippet;
-        } else if (contentSnippet.startsWith('Tipped ') && contentSnippet.includes(' on your story!')) {
-          contentSnippet = isMyMsg
-            ? contentSnippet.replace(/\s*on your story!$/, ' on story!')
-            : contentSnippet;
-        }
-      }
-
-      if (effectiveMsg.isForwarded && contentSnippet) {
-        contentSnippet = `➡️ Forwarded: ${contentSnippet}`;
-      }
-
-      setRecentChats(prevChats => {
-        const existingIdx = prevChats.findIndex(c => {
-          if (!c) return false;
-          if (effectiveMsg.isGroup) {
-            return c.id === effectiveMsg.chatId || c._id === effectiveMsg.chatId || c.id === targetId;
-          }
-          return Boolean(
-            (targetId && (c.id === targetId || c._id === targetId)) ||
-            (effectiveMsg.chatId && (c.id === effectiveMsg.chatId || c.chatId === effectiveMsg.chatId || (typeof effectiveMsg.chatId === 'string' && (effectiveMsg.chatId.includes(c.id) || (c._id && effectiveMsg.chatId.includes(c._id)))))) ||
-            (effectiveMsg.senderUsername && c.username && String(c.username).toLowerCase() === String(effectiveMsg.senderUsername).toLowerCase()) ||
-            (targetId && c.username && String(c.username).toLowerCase() === String(targetId).toLowerCase()) ||
-            (effectiveMsg.senderName && c.username && String(c.username).toLowerCase() === String(effectiveMsg.senderName).toLowerCase()) ||
-            (effectiveMsg.senderName && c.displayName && String(c.displayName).toLowerCase() === String(effectiveMsg.senderName).toLowerCase())
-          );
-        });
-
-        let targetChat;
-        if (existingIdx !== -1) {
-          targetChat = { ...prevChats[existingIdx] };
-          if (!isMyMsg) {
-            if (effectiveMsg.senderAvatar) targetChat.avatar = effectiveMsg.senderAvatar;
-            if (effectiveMsg.senderName) targetChat.displayName = effectiveMsg.senderName;
-            if (effectiveMsg.senderIsPro !== undefined) targetChat.isPro = Boolean(effectiveMsg.senderIsPro);
-            if (effectiveMsg.senderProTier) targetChat.proTier = effectiveMsg.senderProTier;
-            if (effectiveMsg.senderCustomBadge !== undefined) targetChat.customBadge = effectiveMsg.senderCustomBadge;
-          }
-        } else {
-          if (effectiveMsg.isGroup) {
-            const foundGroup = (groupsRef.current || []).find(g => g.id === effectiveMsg.chatId || g.id === targetId);
-            targetChat = foundGroup ? { ...foundGroup, isGroup: true } : {
-              id: effectiveMsg.chatId || targetId,
-              name: effectiveMsg.groupName || 'Group',
-              avatar: foundGroup?.avatar || effectiveMsg.senderAvatar || null,
-              isGroup: true
-            };
-          } else {
-            const foundUser = (allUsersRef.current || []).find(u =>
-              u.id === targetId ||
-              u._id === targetId ||
-              (targetId && u.username && String(u.username).toLowerCase() === String(targetId).toLowerCase()) ||
-              (effectiveMsg.senderUsername && u.username && String(u.username).toLowerCase() === String(effectiveMsg.senderUsername).toLowerCase()) ||
-              (effectiveMsg.senderName && u.displayName && String(u.displayName).toLowerCase() === String(effectiveMsg.senderName).toLowerCase()) ||
-              (effectiveMsg.senderName && u.username && String(u.username).toLowerCase() === String(effectiveMsg.senderName).toLowerCase())
-            );
-            targetChat = foundUser ? {
-              ...foundUser,
-              avatar: (!isMyMsg && effectiveMsg.senderAvatar) ? effectiveMsg.senderAvatar : foundUser.avatar,
-              displayName: (!isMyMsg && (effectiveMsg.senderName || effectiveMsg.senderUsername)) ? (effectiveMsg.senderName || effectiveMsg.senderUsername) : foundUser.displayName,
-              isPro: (!isMyMsg && effectiveMsg.senderIsPro !== undefined) ? Boolean(effectiveMsg.senderIsPro) : Boolean(foundUser.isPro),
-              proTier: (!isMyMsg && effectiveMsg.senderProTier) ? effectiveMsg.senderProTier : (foundUser.proTier || 'none'),
-              customBadge: (!isMyMsg && effectiveMsg.senderCustomBadge !== undefined) ? effectiveMsg.senderCustomBadge : (foundUser.customBadge || ''),
-              isGroup: false
-            } : {
-              id: targetId,
-              displayName: (!isMyMsg && (effectiveMsg.senderName || effectiveMsg.senderUsername)) ? (effectiveMsg.senderName || effectiveMsg.senderUsername) : 'PulseChat User',
-              username: (!isMyMsg && effectiveMsg.senderUsername) ? effectiveMsg.senderUsername : targetId,
-              avatar: (!isMyMsg && effectiveMsg.senderAvatar) ? effectiveMsg.senderAvatar : null,
-              isPro: (!isMyMsg && effectiveMsg.senderIsPro !== undefined) ? Boolean(effectiveMsg.senderIsPro) : false,
-              proTier: (!isMyMsg && effectiveMsg.senderProTier) ? effectiveMsg.senderProTier : 'none',
-              customBadge: (!isMyMsg && effectiveMsg.senderCustomBadge) ? effectiveMsg.senderCustomBadge : '',
-              isGroup: false
-            };
-          }
-        }
-
-        const isDocumentVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
-        const isCurrentlyViewing = isDocumentVisible && Boolean(
-          activeChatRef.current && (
-            (effectiveMsg.isGroup && (activeChatRef.current.id === effectiveMsg.chatId || activeChatRef.current.id === targetId)) ||
-            (!effectiveMsg.isGroup && (
-              activeChatRef.current.id === targetId ||
-              activeChatRef.current._id === targetId ||
-              (targetId && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(targetId).toLowerCase()) ||
-              (effectiveMsg.senderUsername && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(effectiveMsg.senderUsername).toLowerCase()) ||
-              (effectiveMsg.senderName && activeChatRef.current.username && String(activeChatRef.current.username).toLowerCase() === String(effectiveMsg.senderName).toLowerCase()) ||
-              (effectiveMsg.senderName && activeChatRef.current.displayName && String(activeChatRef.current.displayName).toLowerCase() === String(effectiveMsg.senderName).toLowerCase())
-            ))
-          )
+      // Check if cache has already recorded this message snippet
+      if (curUid && effectiveMsg.chatId) {
+        const freshRecent = getCachedRecentChats(curUid);
+        const msgId = effectiveMsg.id || effectiveMsg._id || effectiveMsg.clientTempId;
+        const alreadyInCache = freshRecent.some(c =>
+          msgId && (c.lastMessageId === msgId || c.lastMessageClientTempId === msgId)
         );
 
-        const curUid = user?.id || user?._id;
-        const freshRecent = curUid ? getCachedRecentChats(curUid) : [];
-        const cachedMatch = freshRecent.find(c => {
-          if (!c) return false;
-          if (effectiveMsg.isGroup) {
-            return c.id === effectiveMsg.chatId || c._id === effectiveMsg.chatId || c.id === targetId;
-          }
-          return Boolean(
-            (targetId && (c.id === targetId || c._id === targetId)) ||
-            (targetChat && (c.id === targetChat.id || c._id === targetChat.id || (targetChat._id && (c.id === targetChat._id || c._id === targetChat._id)))) ||
-            (effectiveMsg.chatId && (
-              c.id === effectiveMsg.chatId ||
-              c.chatId === effectiveMsg.chatId ||
-              (typeof effectiveMsg.chatId === 'string' && (
-                effectiveMsg.chatId.includes('::')
-                  ? effectiveMsg.chatId.split('::').some(p => p === c.id || p === c._id)
-                  : (effectiveMsg.chatId.includes('_') ? effectiveMsg.chatId.split('_').some(p => p === c.id || p === c._id) : false)
-              ))
-            )) ||
-            (effectiveMsg.senderUsername && c.username && String(c.username).toLowerCase() === String(effectiveMsg.senderUsername).toLowerCase()) ||
-            (targetId && c.username && String(c.username).toLowerCase() === String(targetId).toLowerCase()) ||
-            (effectiveMsg.senderName && c.username && String(c.username).toLowerCase() === String(effectiveMsg.senderName).toLowerCase()) ||
-            (effectiveMsg.senderName && c.displayName && String(c.displayName).toLowerCase() === String(effectiveMsg.senderName).toLowerCase())
-          );
-        });
-
-        let newUnread;
-        if (isMyMsg || isCurrentlyViewing) {
-          newUnread = 0;
-        } else if (isPromotionFromRaw) {
-          newUnread = (cachedMatch?.unreadCount !== undefined)
-            ? Number(cachedMatch.unreadCount)
-            : (Number(targetChat.unreadCount) || 0);
-        } else {
-          const msgId = effectiveMsg.id || effectiveMsg._id || effectiveMsg.clientTempId;
-          const isCacheAlreadyUpdated = Boolean(
-            cachedMatch && msgId &&
-            (cachedMatch.lastMessageId === msgId || cachedMatch.lastMessageClientTempId === msgId)
-          );
-          if (isCacheAlreadyUpdated && cachedMatch?.unreadCount !== undefined) {
-            newUnread = Math.max(1, Number(cachedMatch.unreadCount));
-          } else if (cachedMatch?.unreadCount !== undefined) {
-            newUnread = (Number(cachedMatch.unreadCount) || 0) + 1;
-          } else {
-            // Cache lookup missed — never reset to zero!
-            const prevCount = Number(targetChat.unreadCount) || 0;
-            newUnread = prevCount + 1;
-          }
+        if (!alreadyInCache) {
+          updateRecentChatSnippet(curUid, effectiveMsg.chatId, effectiveMsg, null, {
+            isViewing: isCurrentlyViewing,
+            increment: !isCurrentlyViewing && !isMyMsg
+          });
         }
 
-        if (!isMyMsg && !isCurrentlyViewing && !isPromotionFromRaw) {
-          try { playSound('received'); } catch {}
-        }
-
-        const updatedChat = {
-          ...targetChat,
-          lastMessage: contentSnippet,
-          lastMessageTime: effectiveMsg.timestamp || new Date().toISOString(),
-          lastMessageTimestamp: effectiveMsg.timestamp || new Date().toISOString(),
-          lastMessageFromMe: isMyMsg,
-          lastMessageStatus: effectiveMsg.status || 'sent',
-          lastMessageType: effectiveMsg.type || 'text',
-          unreadCount: newUnread
-        };
-
-        const remaining = prevChats.filter((_, idx) => idx !== existingIdx);
-        const reordered = [updatedChat, ...remaining].sort((a, b) => {
-          const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
-          const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
-          return tB - tA;
-        });
-
-        if (curUid) {
-          setCachedRecentChats(curUid, reordered);
-          if (user?.id && user?._id && user.id !== user._id) {
-            setCachedRecentChats(user._id, reordered);
-          }
-        }
-        return reordered;
-      });
+        const deletedSet = getDeletedChatIds(curUid);
+        const updatedRecent = getCachedRecentChats(curUid).filter(c => !deletedSet.has(c.id) && (!c._id || !deletedSet.has(c._id)));
+        setRecentChats(updatedRecent);
+      }
 
       // Also update groups list if group message
       if (effectiveMsg.isGroup) {
@@ -2072,10 +1900,10 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         setGroups(prevGroups => prevGroups.map(g => {
           if (g.id === (effectiveMsg.chatId || targetId)) {
             const currentUnread = g.unreadCount || 0;
-            const newUnread = isPromotionFromRaw ? currentUnread : ((isMyMsg || isCurrentlyViewingGroup) ? 0 : currentUnread + 1);
+            const newUnread = (isMyMsg || isCurrentlyViewingGroup) ? 0 : currentUnread + 1;
             return {
               ...g,
-              lastMessage: contentSnippet,
+              lastMessage: effectiveMsg.content || 'New message',
               lastMessageTime: effectiveMsg.timestamp || new Date().toISOString(),
               unreadCount: newUnread
             };

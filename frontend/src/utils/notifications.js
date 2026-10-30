@@ -56,13 +56,21 @@ export async function requestNotificationPermission(forcePrompt = false, token =
   }
 }
 
+let cachedVapidKey = null;
+let isSubscribing = false;
+
 // subscribe user to web push
 export async function subscribeUserToPush(token = null) {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     return false;
   }
   if (Notification.permission !== 'granted') return false;
+  if (isSubscribing) return false;
 
+  const authToken = token || localStorage.getItem('pulsechat_token');
+  if (!authToken) return false;
+
+  isSubscribing = true;
   try {
     let reg = null;
     try {
@@ -73,9 +81,18 @@ export async function subscribeUserToPush(token = null) {
     }
     if (!reg || !reg.pushManager) return false;
 
-    // fetch vapid public key
-    const res = await fetch(`${BACKEND_URL}/api/users/vapid-public-key`);
-    const { publicKey } = await res.json();
+    // fetch vapid public key if not already cached
+    let publicKey = cachedVapidKey || localStorage.getItem('pulsechat_vapid_key');
+    if (!publicKey) {
+      const res = await fetch(`${BACKEND_URL}/api/users/vapid-public-key`);
+      if (!res.ok) return false;
+      const data = await res.json();
+      publicKey = data?.publicKey;
+      if (publicKey) {
+        cachedVapidKey = publicKey;
+        localStorage.setItem('pulsechat_vapid_key', publicKey);
+      }
+    }
     if (!publicKey) return false;
 
     // check existing subscription
@@ -99,7 +116,6 @@ export async function subscribeUserToPush(token = null) {
     }
 
     // register push sub with backend
-    const authToken = token || localStorage.getItem('pulsechat_token');
     if (subscription && authToken) {
       const subJson = subscription.toJSON();
       const p256dh = subJson.keys?.p256dh || (subscription.getKey ? btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') : null);
@@ -122,6 +138,8 @@ export async function subscribeUserToPush(token = null) {
     }
   } catch (err) {
     console.warn('Push subscription setup failed:', err.message);
+  } finally {
+    isSubscribing = false;
   }
   return false;
 }

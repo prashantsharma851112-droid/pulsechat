@@ -268,6 +268,11 @@ router.get('/:id/block-status', authMiddleware, async (req, res) => {
   }
 });
 
+// Get VAPID Public Key for Web Push subscription (Static route MUST precede /:id)
+router.get('/vapid-public-key', (req, res) => {
+  res.json({ publicKey: webpush.getVapidPublicKey() });
+});
+
 // Get Specific User Profile by ID or username (Microsecond RAM speed with Redis Cache)
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
@@ -334,11 +339,6 @@ router.put('/change-password', authMiddleware, async (req, res) => {
     console.error('Password change error:', err);
     res.status(500).json({ error: 'Failed to change password.' });
   }
-});
-
-// Get VAPID Public Key for Web Push subscription
-router.get('/vapid-public-key', (req, res) => {
-  res.json({ publicKey: webpush.getVapidPublicKey() });
 });
 
 // Save or Update Push Subscription for current user

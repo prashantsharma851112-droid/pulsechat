@@ -88,6 +88,59 @@ export function setChatBackupEnabled(userId = '', enabled = true) {
 }
 
 /**
+ * Get canonical direct chat ID (sorted participants separated by '::').
+ * Safe against user IDs containing underscores.
+ */
+export function getCanonicalChatId(chatId) {
+  if (!chatId || typeof chatId !== 'string') return chatId || '';
+  if (chatId.includes('::')) {
+    const parts = chatId.split('::').filter(Boolean);
+    if (parts.length === 2) {
+      return [...parts].sort().join('::');
+    }
+  } else if (chatId.includes('_') && !chatId.startsWith('group_')) {
+    const parts = chatId.split('_').filter(Boolean);
+    if (parts.length === 2) {
+      return [...parts].sort().join('::');
+    }
+  }
+  return chatId;
+}
+
+/**
+ * Generate all equivalent candidate storage keys for a chat ID.
+ * Supports both canonical '::' and legacy '_' representations symmetrically.
+ */
+export function getChatStorageKeys(chatId) {
+  const keys = new Set();
+  if (!chatId || typeof chatId !== 'string') return [];
+  keys.add(chatId);
+
+  if (chatId.includes('::')) {
+    const parts = chatId.split('::').filter(Boolean);
+    if (parts.length === 2) {
+      const sorted = [...parts].sort();
+      keys.add(`${sorted[0]}::${sorted[1]}`);
+      keys.add(`${sorted[0]}_${sorted[1]}`);
+      keys.add(`${parts[0]}_${parts[1]}`);
+      keys.add(`${parts[1]}_${parts[0]}`);
+      keys.add(`${parts[1]}::${parts[0]}`);
+    }
+  } else if (chatId.includes('_') && !chatId.startsWith('group_')) {
+    const parts = chatId.split('_').filter(Boolean);
+    if (parts.length === 2) {
+      const sorted = [...parts].sort();
+      keys.add(`${sorted[0]}_${sorted[1]}`);
+      keys.add(`${sorted[0]}::${sorted[1]}`);
+      keys.add(`${parts[0]}::${parts[1]}`);
+      keys.add(`${parts[1]}::${parts[0]}`);
+      keys.add(`${parts[1]}_${parts[0]}`);
+    }
+  }
+  return Array.from(keys);
+}
+
+/**
  * Save messages to local IndexedDB with true transaction completion promise.
  * Uses a single readwrite transaction and strictly resolves only on tx.oncomplete.
  * Rejects on quota error or transaction abort so caller can suppress delivery ACK.
@@ -97,7 +150,7 @@ export async function saveMessagesToLocalDb(chatId, messages) {
   const db = await getDb();
   if (!db) throw new Error('IndexedDB is not available on this device.');
 
-  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
+  const canonicalChatId = getCanonicalChatId(chatId);
 
   return new Promise((resolve, reject) => {
     try {
@@ -141,8 +194,8 @@ export async function getMessagesFromLocalDb(chatId, limit = 100, beforeTimestam
   const db = await getDb();
   if (!db) return [];
 
-  const canonicalChatId = (typeof chatId === 'string' && chatId.includes('_')) ? chatId.split('_').sort().join('_') : chatId;
-  const targetKeys = Array.from(new Set([String(chatId), String(canonicalChatId)].filter(Boolean)));
+  const targetKeys = getChatStorageKeys(chatId);
+  if (targetKeys.length === 0) return [];
 
   return new Promise((resolve) => {
     try {
@@ -219,24 +272,28 @@ export async function deleteMessagesFromLocalDb(messageIds) {
 }
 
 /**
- * Remove all messages of a chat from local IndexedDB
+ * Remove all messages of a chat from local IndexedDB across all equivalent keys
  */
 export async function clearChatFromLocalDb(chatId) {
   if (!chatId) return;
   const db = await getDb();
   if (!db) return;
 
+  const targetKeys = getChatStorageKeys(chatId);
+
   try {
     const tx = db.transaction([STORE_MESSAGES], 'readwrite');
     const store = tx.objectStore(STORE_MESSAGES);
     const index = store.index('chatId');
-    const request = index.getAllKeys(String(chatId));
-    request.onsuccess = (e) => {
-      const keys = e.target.result || [];
-      for (const k of keys) {
-        store.delete(k);
-      }
-    };
+    for (const k of targetKeys) {
+      const request = index.getAllKeys(k);
+      request.onsuccess = (e) => {
+        const keys = e.target.result || [];
+        for (const msgKey of keys) {
+          store.delete(msgKey);
+        }
+      };
+    }
   } catch (err) {
     console.warn('clearChatFromLocalDb error:', err);
   }

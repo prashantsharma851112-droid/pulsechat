@@ -2912,26 +2912,84 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               .map(sanitizeFogSnapMessage)
               .filter(Boolean);
 
-            // WhatsApp pattern: Retain any in-flight pending/uploading messages from state so they NEVER disappear!
+            // WhatsApp pattern: Reconcile server response with local state.
+            // Never replace complete local conversation history with empty/incomplete server response.
+            // Merge messages using stable message IDs, preserving all previously persisted sent, delivered, read, and socket messages.
             setMessages(prev => {
-              if (merged.length === 0 && prev.length > 0) {
-                return prev;
+              const deletedForMe = getDeletedForMeIds(user?.id);
+              const combinedMap = new Map();
+
+              // 1. Preserve all existing valid messages from prev state
+              (prev || []).forEach(p => {
+                if (!p) return;
+                const pId = String(p.id || p._id || p.clientTempId || '');
+                if (pId && !deletedForMe.has(pId)) {
+                  combinedMap.set(pId, p);
+                  if (p.clientTempId) combinedMap.set(String(p.clientTempId), p);
+                  if (p.id) combinedMap.set(String(p.id), p);
+                }
+              });
+
+              // 2. Merge all messages from merged (cachedNow + serverMsgs + pendingMap)
+              merged.forEach(m => {
+                if (!m) return;
+                const mId = String(m.id || m._id || m.clientTempId || '');
+                if (!mId || deletedForMe.has(mId)) return;
+
+                const existing = (m.id && combinedMap.get(String(m.id))) ||
+                  (m.clientTempId && combinedMap.get(String(m.clientTempId))) ||
+                  (m.tempId && combinedMap.get(String(m.tempId))) ||
+                  combinedMap.get(mId);
+
+                // Clean up optimistic tempId keys if real server ID is known
+                if (m.clientTempId && m.id && String(m.clientTempId) !== String(m.id)) {
+                  combinedMap.delete(String(m.clientTempId));
+                }
+                if (m.tempId && m.id && String(m.tempId) !== String(m.id)) {
+                  combinedMap.delete(String(m.tempId));
+                }
+
+                const isSentByMe = m?.senderId && myIdSet.has(String(m.senderId));
+                const finalContent = isSentByMe
+                  ? (existing?.content || m.content || '')
+                  : (m.content || existing?.content || '');
+
+                const nextStatus = resolveNextMessageStatus(existing?.status, m?.status);
+
+                const item = {
+                  ...existing,
+                  ...m,
+                  content: finalContent,
+                  status: nextStatus || m.status || existing?.status,
+                  _decrypted: existing?._decrypted || m._decrypted || false
+                };
+
+                const stableKey = String(m.id || m.clientTempId);
+                combinedMap.set(stableKey, item);
+              });
+
+              // 3. Deduplicate strictly by stable primary ID
+              const uniqueItems = new Map();
+              for (const item of combinedMap.values()) {
+                const uKey = String(item.id || item._id || item.clientTempId || '');
+                if (uKey && !deletedForMe.has(uKey) && !uniqueItems.has(uKey)) {
+                  uniqueItems.set(uKey, item);
+                }
               }
-              const pendingInState = prev.filter(pm => pm && (pm.status === 'pending' || pm.status === 'uploading' || pm.isUploading));
-              let finalMerged = merged;
-              if (pendingInState.length > 0) {
-                const finalMap = new Map();
-                merged.forEach(m => finalMap.set(m.clientTempId || m.id, m));
-                pendingInState.forEach(pm => {
-                  const pk = pm.clientTempId || pm.tempId || pm.id;
-                  if (!finalMap.has(pm.id) && !finalMap.has(pm.clientTempId)) {
-                    finalMap.set(pk, pm);
-                  }
-                });
-                finalMerged = Array.from(finalMap.values())
-                  .sort((a, b) => new Date(a.timestamp || a.createdAt || 0) - new Date(b.timestamp || b.createdAt || 0))
-                  .map(sanitizeFogSnapMessage)
-                  .filter(Boolean);
+
+              const finalMerged = Array.from(uniqueItems.values())
+                .sort((a, b) => new Date(a.timestamp || a.createdAt || 0) - new Date(b.timestamp || b.createdAt || 0))
+                .map(sanitizeFogSnapMessage)
+                .filter(Boolean);
+
+              // 4. Persist the complete reconciled state to both localStorage and IndexedDB
+              if (finalMerged.length > 0) {
+                setCachedMessages(chatId, finalMerged);
+                saveMessagesToLocalDb(chatId, finalMerged).catch(() => {});
+                const lastMerged = finalMerged[finalMerged.length - 1];
+                if (lastMerged) {
+                  updateRecentChatSnippet(user?.id, chatId, lastMerged, activeChat);
+                }
               }
 
               if (prev.length === finalMerged.length) {
@@ -2947,14 +3005,6 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             if (isPinnedToBottomRef.current || isInitialLoad.current) {
               scrollToBottom('instant');
               requestAnimationFrame(() => scrollToBottom('instant'));
-            }
-            if (merged.length > 0) {
-              setCachedMessages(chatId, merged);
-              saveMessagesToLocalDb(chatId, merged).catch(() => {});
-              const lastMerged = merged[merged.length - 1];
-              if (lastMerged) {
-                updateRecentChatSnippet(user?.id, chatId, lastMerged, activeChat);
-              }
             }
           }
         })
@@ -4460,7 +4510,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       setMessages(prev => prev.map(m => {
         if (m.clientTempId === tempId || m.id === tempId) {
           const nextStatus = resolveNextMessageStatus(m.status, 'sent');
-          return { ...m, id: serverId, status: nextStatus };
+          const updatedMsg = { ...m, id: serverId, status: nextStatus };
+          saveMessagesToLocalDb(chatId, [updatedMsg]).catch(() => {});
+          return updatedMsg;
         }
         return m;
       }));
@@ -4525,6 +4577,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     setMessages(prev => [...prev, pendingMsg]);
     appendCachedMessage(chatId, pendingMsg);
+    saveMessagesToLocalDb(chatId, [pendingMsg]).catch(() => {});
 
     // 2. Update recent chats snippet in localStorage & dispatch event for sidebar
     updateRecentChatSnippet(user.id, chatId, pendingMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
@@ -4665,6 +4718,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     setMessages(prev => [...prev, pendingMsg]);
     appendCachedMessage(chatId, pendingMsg);
+    saveMessagesToLocalDb(chatId, [pendingMsg]).catch(() => {});
 
     updateRecentChatSnippet(user.id, chatId, pendingMsg, { ...activeChat, avatar: chatAvatar || activeChat.avatar });
     window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
