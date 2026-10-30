@@ -12,13 +12,14 @@ import {
 // Queries run locally in 1-2 milliseconds with ZERO network calls!
 
 const DB_NAME = 'pulsechat_local_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_MESSAGES = 'messages';
 const STORE_MEDIA = 'media_blobs';
+export const STORE_DEVICE_KEYS = 'device_keys';
 
 let dbPromise = null;
 
-function getDb() {
+export function getDb() {
   if (typeof window === 'undefined' || !window.indexedDB) {
     return Promise.resolve(null);
   }
@@ -43,10 +44,24 @@ function getDb() {
         if (!db.objectStoreNames.contains(STORE_MEDIA)) {
           db.createObjectStore(STORE_MEDIA, { keyPath: 'url' });
         }
+
+        // Store: device_keys (E2EE persistent cryptographic keys)
+        if (!db.objectStoreNames.contains(STORE_DEVICE_KEYS)) {
+          db.createObjectStore(STORE_DEVICE_KEYS, { keyPath: 'id' });
+        }
       };
 
       request.onsuccess = (e) => {
-        resolve(e.target.result);
+        const db = e.target.result;
+        db.onversionchange = () => {
+          try { db.close(); } catch (_) {}
+          dbPromise = null;
+        };
+        resolve(db);
+      };
+
+      request.onblocked = () => {
+        console.warn('IndexedDB open blocked by another tab');
       };
 
       request.onerror = (e) => {

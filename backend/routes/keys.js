@@ -222,7 +222,7 @@ function containsPrivateKeyMaterial(obj, seen = new WeakSet(), depth = 0) {
 }
 
 async function findUserByIdSafe(userId) {
-  if (!userId || !User) return null;
+  if (!userId || !User || mongoose.connection.readyState !== 1) return null;
   const s = String(userId).trim();
   const withoutUser = s.replace(/^user_/, '');
   const withUser = s.startsWith('user_') ? s : `user_${s}`;
@@ -403,8 +403,30 @@ const handleKeyUpload = async (req, res) => {
 
   // Prevent identity spoofing: cannot upload keys under someone else's user ID
   const bodyUserId = req.body.device_keys?.user_id || req.body.userId || req.body.user_id;
-  if (bodyUserId && normalizeUserId(bodyUserId) !== normalizeUserId(authUserId)) {
-    return res.status(403).json({ error: 'CANNOT_UPLOAD_FOR_ANOTHER_USER' });
+  if (bodyUserId) {
+    const cleanBodyId = normalizeUserId(bodyUserId);
+    const cleanAuthId = normalizeUserId(authUserId);
+    if (cleanBodyId !== cleanAuthId) {
+      let isSameUser = false;
+      if (User && mongoose.connection.readyState === 1) {
+        try {
+          const authDoc = await findUserByIdSafe(authUserId);
+          const validIdentifiers = new Set([
+            authUserId,
+            cleanAuthId,
+            authDoc?.id,
+            authDoc?._id?.toString(),
+            authDoc?.username
+          ].filter(Boolean).map(String));
+          if (validIdentifiers.has(String(bodyUserId)) || validIdentifiers.has(cleanBodyId)) {
+            isSameUser = true;
+          }
+        } catch (_) {}
+      }
+      if (!isSameUser) {
+        return res.status(403).json({ error: 'CANNOT_UPLOAD_FOR_ANOTHER_USER' });
+      }
+    }
   }
 
   const cleanUserId = normalizeUserId(authUserId);

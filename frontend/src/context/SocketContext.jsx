@@ -120,12 +120,23 @@ export function SocketProvider({ children }) {
       setSocket(newSocket);
 
       const sendSetup = () => {
-        const curId = userRef.current?.id || userRef.current?._id || user?.id || user?._id;
+        const curUser = userRef.current || user;
+        const curId = curUser?.id || curUser?._id;
+        const curToken = token || (typeof localStorage !== 'undefined' ? (localStorage.getItem('pulsechat_token') || localStorage.getItem('token')) : null);
         if (curId) {
           newSocket.emit('setup', curId);
           try {
             window.dispatchEvent(new Event('pulsechat_socket_reconnected'));
           } catch (e) {}
+        }
+        if (curId && curToken) {
+          ensureDeviceIdentityRegistered(curId, curToken, BACKEND_URL)
+            .then(ident => {
+              if (ident) deviceIdentityRef.current = ident;
+            })
+            .catch(err => {
+              console.warn('SocketContext: Device identity ensure error on connect:', err);
+            });
         }
       };
 
@@ -342,10 +353,14 @@ export function SocketProvider({ children }) {
             appendCachedMessage(msgToCommit.chatId, msgToCommit);
             await saveMessagesToLocalDb(msgToCommit.chatId, [msgToCommit]);
             if (curId) {
-              updateRecentChatSnippet(curId, msgToCommit.chatId, msgToCommit, null, {
-                isViewing: isViewingThisChat,
-                increment: !isViewingThisChat
-              });
+              if (isViewingThisChat) {
+                updateRecentChatSnippet(curId, msgToCommit.chatId, msgToCommit, null, {
+                  isViewing: true,
+                  increment: false
+                });
+              } else {
+                updateRecentChatSnippet(curId, msgToCommit.chatId, msgToCommit, null);
+              }
               window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
             }
           }

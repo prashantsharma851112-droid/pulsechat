@@ -62,7 +62,7 @@ export function base64ToArrayBuffer(base64) {
 }
 
 /**
- * Access or create IndexedDB store for device keys
+ * Access or create IndexedDB store for device keys (aligned with localDatabase version 2)
  */
 function getDeviceKeyDb() {
   if (typeof window === 'undefined' || !window.indexedDB) {
@@ -71,7 +71,6 @@ function getDeviceKeyDb() {
 
   return new Promise((resolve) => {
     try {
-      // Use version 2 to ensure STORE_DEVICE_KEYS exists
       const request = window.indexedDB.open(DB_NAME, 2);
       request.onupgradeneeded = (e) => {
         const db = e.target.result;
@@ -88,7 +87,16 @@ function getDeviceKeyDb() {
           db.createObjectStore(STORE_DEVICE_KEYS, { keyPath: 'id' });
         }
       };
-      request.onsuccess = (e) => resolve(e.target.result);
+      request.onsuccess = (e) => {
+        const db = e.target.result;
+        db.onversionchange = () => {
+          try { db.close(); } catch (_) {}
+        };
+        resolve(db);
+      };
+      request.onblocked = () => {
+        console.warn('IndexedDB device_keys open blocked by another tab');
+      };
       request.onerror = () => resolve(null);
     } catch (_) {
       resolve(null);
@@ -167,16 +175,23 @@ async function _performGetOrInitDeviceIdentity(identityId) {
     throw new Error('DURABLE_STORAGE_UNAVAILABLE: IndexedDB is required for E2EE device identity persistence.');
   }
 
-  const existing = await new Promise((resolve, reject) => {
+  let existing = null;
+  if (db.objectStoreNames && db.objectStoreNames.contains(STORE_DEVICE_KEYS)) {
     try {
-      const tx = db.transaction([STORE_DEVICE_KEYS], 'readonly');
-      const request = tx.objectStore(STORE_DEVICE_KEYS).get(identityId);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = (event) => reject(event);
+      existing = await new Promise((resolve, reject) => {
+        const tx = db.transaction([STORE_DEVICE_KEYS], 'readonly');
+        const request = tx.objectStore(STORE_DEVICE_KEYS).get(identityId);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = (event) => reject(event);
+      });
     } catch (err) {
-      reject(err);
+      console.warn('Could not read device identity from IndexedDB:', err);
     }
-  });
+  }
+
+  if (!existing) {
+    existing = inMemoryIdentityCache.get(identityId) || null;
+  }
 
   let keyPair;
   let identityRecord = existing;
@@ -202,17 +217,20 @@ async function _performGetOrInitDeviceIdentity(identityId) {
   }
 
   if (recordToPersist) {
-    await new Promise((resolve, reject) => {
+    inMemoryIdentityCache.set(identityId, identityRecord);
+    if (db && db.objectStoreNames && db.objectStoreNames.contains(STORE_DEVICE_KEYS)) {
       try {
-        const tx = db.transaction([STORE_DEVICE_KEYS], 'readwrite');
-        const request = tx.objectStore(STORE_DEVICE_KEYS).put(recordToPersist);
-        request.onerror = (event) => reject(event);
-        tx.oncomplete = resolve;
-        tx.onerror = (event) => reject(event);
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction([STORE_DEVICE_KEYS], 'readwrite');
+          const request = tx.objectStore(STORE_DEVICE_KEYS).put(recordToPersist);
+          request.onerror = (event) => reject(event);
+          tx.oncomplete = resolve;
+          tx.onerror = (event) => reject(event);
+        });
       } catch (err) {
-        reject(err);
+        console.warn('Could not persist device identity to IndexedDB:', err);
       }
-    });
+    }
   }
 
   return {
@@ -506,8 +524,14 @@ export async function ensureDeviceIdentityRegistered(userId, token, apiBaseUrl =
       body: JSON.stringify(payload)
     });
 
-    if (res.ok && typeof sessionStorage !== 'undefined') {
-      sessionStorage.setItem(sessionKey, '1');
+    if (res.ok) {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(sessionKey, '1');
+      }
+    } else {
+      let errText = '';
+      try { errText = await res.text(); } catch (_) {}
+      console.warn(`[E2EE] Could not register device public key (HTTP ${res.status}):`, errText);
     }
   } catch (err) {
     console.warn('Could not register device public key with server:', err);

@@ -990,16 +990,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const isMatchingChatId = (c1, c2) => {
     if (!c1 || !c2) return false;
     if (c1 === c2) return true;
-    if (c1.includes('_') && c2.includes('_')) {
-      if (c1.split('_').sort().join('_') === c2.split('_').sort().join('_')) return true;
+    const s1 = String(c1).replace(/::/g, '_');
+    const s2 = String(c2).replace(/::/g, '_');
+    if (s1 === s2) return true;
+    if (s1.includes('_') && s2.includes('_')) {
+      if (s1.split('_').sort().join('_') === s2.split('_').sort().join('_')) return true;
     }
     if (!isGroup && activeChat && user) {
       const myIds = [user.id, user._id, user.username].filter(Boolean).map(String);
       const otherIds = [activeChat.id, activeChat._id, activeChat.userId, activeChat.username].filter(Boolean).map(String);
 
       const checkMatches = (target) => {
-        if (!target || !target.includes('_')) return false;
-        const parts = target.split('_');
+        if (!target) return false;
+        const norm = String(target).replace(/::/g, '_');
+        if (!norm.includes('_')) return false;
+        const parts = norm.split('_');
         if (parts.length === 2) {
           const hasMe = myIds.includes(parts[0]) || myIds.includes(parts[1]);
           const hasOther = otherIds.includes(parts[0]) || otherIds.includes(parts[1]);
@@ -3506,8 +3511,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
       const isThisChat = Boolean(
         msg && (
+          matchesConversation(msg.chatId, msg.canonicalChatId || msg.chatId, { isGroup, activeChatId, activeChat, currentUserId, user, chatId, partnerId }) ||
           msg.chatId === chatId ||
-          (msg.chatId && chatId && typeof msg.chatId === 'string' && typeof chatId === 'string' && msg.chatId.includes('_') && chatId.includes('_') && msg.chatId.split('_').sort().join('_') === chatId.split('_').sort().join('_')) ||
           (!isGroup && (
             (msg.senderId === activeChat?.id && (msg.receiverId === user?.id || !msg.receiverId)) ||
             (msg.senderId === user?.id && msg.receiverId === activeChat?.id) ||
