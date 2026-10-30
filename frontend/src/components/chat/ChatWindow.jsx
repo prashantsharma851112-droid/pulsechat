@@ -5850,6 +5850,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
     try {
       const myUid = user?.id || user?._id;
+      const targetPartnerId = String(
+        msgToRetry.receiverId ||
+        activeChat?.id ||
+        activeChat?._id ||
+        activeChat?.userId ||
+        activeChat?.username ||
+        ''
+      ).trim();
 
       if (!isGroup && targetPartnerId && !isAnonymousBot) {
         setActionToast('🔄 Checking recipient encryption keys...');
@@ -6012,7 +6020,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     } finally {
       retryingMsgIdsRef.current.delete(msgId);
     }
-  }, [isGroup, targetPartnerId, isAnonymousBot, token, BACKEND_URL, user?.id, user?._id, chatId, socket, getSenderPayload, handleSendMessageAck]);
+  }, [isGroup, activeChat?.id, activeChat?._id, activeChat?.userId, activeChat?.username, isAnonymousBot, token, BACKEND_URL, user?.id, user?._id, chatId, socket, getSenderPayload, handleSendMessageAck]);
 
   const lastActionSelectTimeRef = useRef(0);
 
