@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check:globals": "node check_globals.cjs",
+    "check:live": "node check_live.cjs",
     "test:tar": "node test-tar-extraction.cjs",
     "cap:add": "npx cap add android",
     "cap:copy": "npx cap copy android",
