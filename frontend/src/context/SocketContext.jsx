@@ -4,7 +4,7 @@ import { AuthContext } from './AuthContext';
 import { BACKEND_URL } from '../utils/config';
 import { subscribeUserToPush, showPushNotification } from '../utils/notifications';
 import { updateUserProfileInStorage, appendCachedMessage, updateRecentChatSnippet, updateCachedMessageStatus } from '../utils/offlineStorage';
-import { saveMessagesToLocalDb } from '../utils/localDatabase';
+import { saveMessagesToLocalDb, parseChatParticipants, getCanonicalChatId } from '../utils/localDatabase';
 import { getOrInitDeviceIdentity, ensureDeviceIdentityRegistered, decryptMessageIfNeeded } from '../utils/e2eeCrypto';
 
 export const SocketContext = createContext();
@@ -311,21 +311,22 @@ export function SocketProvider({ children }) {
         const activeChatObj = typeof window !== 'undefined' ? window.__pulsechat_active_chat : null;
         const isDocVisible = typeof document === 'undefined' || (document.visibilityState === 'visible' && !document.hidden);
         
-        const chatParts = msgToCommit.chatId
-          ? (msgToCommit.chatId.includes('::') ? msgToCommit.chatId.split('::') : (msgToCommit.chatId.includes('_') ? msgToCommit.chatId.split('_') : []))
-          : [];
+        const parsedParticipants = parseChatParticipants(msgToCommit.chatId);
+        const chatParts = parsedParticipants || (
+          msgToCommit.chatId
+            ? (msgToCommit.chatId.includes('::') ? msgToCommit.chatId.split('::') : [msgToCommit.chatId])
+            : []
+        );
 
         const isSameChat = (id1, id2) => {
           if (!id1 || !id2) return false;
           if (id1 === id2) return true;
+          const c1 = getCanonicalChatId(id1);
+          const c2 = getCanonicalChatId(id2);
+          if (c1 && c2 && c1 === c2) return true;
           const s1 = String(id1).replace(/::/g, '_');
           const s2 = String(id2).replace(/::/g, '_');
           if (s1 === s2) return true;
-          if (s1.includes('_') && s2.includes('_')) {
-            const p1 = s1.split('_').sort().join('_');
-            const p2 = s2.split('_').sort().join('_');
-            if (p1 === p2) return true;
-          }
           return false;
         };
 

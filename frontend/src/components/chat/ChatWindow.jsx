@@ -307,7 +307,8 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   const currentUserId = user?.id || user?._id || '';
   const activeChatId = activeChat?.id || activeChat?._id || '';
   const isAnonymousBot = activeChatId === 'anonymous_pulse_bot' || activeChat?.username === 'anonymous_pulse_bot' || !!activeChat?.isAnonymousBot;
-  const chatId = isGroup ? activeChatId : [currentUserId, activeChatId].filter(Boolean).sort().join('_');
+  const candidateChatId = (!isGroup && (activeChat?.chatId || activeChat?.canonicalChatId)) ? (activeChat.chatId || activeChat.canonicalChatId) : null;
+  const chatId = isGroup ? activeChatId : (candidateChatId || [currentUserId, activeChatId].filter(Boolean).sort().join('_'));
   const partnerId = activeChat?.id || activeChat?._id || activeChat?.userId || '';
   const [showStoryCardModal, setShowStoryCardModal] = useState(false);
   const myIdentityRef = useRef(null);
@@ -2766,6 +2767,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   return m;
                 });
                 setMessages(resolvedDb.map(sanitizeFogSnapMessage).filter(Boolean));
+                setCachedMessages(chatId, resolvedDb);
 
                 // Async decrypt pass for IndexedDB fallback messages
                 let identity = myIdentityRef.current;

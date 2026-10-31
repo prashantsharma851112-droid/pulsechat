@@ -256,29 +256,69 @@ export async function getMessagesFromLocalDb(chatId, limit = 100, beforeTimestam
           }
           pendingRequests--;
           if (pendingRequests === 0) {
-            // Deduplicate by unique id / clientTempId
-            const uniqueMap = new Map();
-            for (const item of allResults) {
-              const uKey = String(item.id || item._id || item.clientTempId || '');
-              if (uKey && !uniqueMap.has(uKey)) {
-                uniqueMap.set(uKey, item);
+            const finalizeResults = () => {
+              // Deduplicate by unique id / clientTempId
+              const uniqueMap = new Map();
+              for (const item of allResults) {
+                const uKey = String(item.id || item._id || item.clientTempId || '');
+                if (uKey && !uniqueMap.has(uKey)) {
+                  uniqueMap.set(uKey, item);
+                }
+              }
+
+              let all = Array.from(uniqueMap.values());
+              // Sort chronologically
+              all.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+
+              if (beforeTimestamp) {
+                const beforeDate = new Date(beforeTimestamp).getTime();
+                all = all.filter(m => new Date(m.timestamp || 0).getTime() < beforeDate);
+              }
+
+              if (limit && all.length > limit) {
+                all = all.slice(-limit);
+              }
+
+              resolve(all);
+            };
+
+            if (allResults.length === 0 && !chatId.startsWith('group_')) {
+              try {
+                // Resilient cursor fallback: check if messages exist with matching participant IDs
+                const cursorReq = store.openCursor();
+                const participants = parseChatParticipants(chatId);
+                cursorReq.onsuccess = (ce) => {
+                  const cursor = ce.target.result;
+                  if (cursor) {
+                    const val = cursor.value;
+                    if (val) {
+                      let isMatch = false;
+                      if (participants && participants.length === 2) {
+                        const [u1, u2] = participants;
+                        if ((val.senderId === u1 && val.receiverId === u2) || (val.senderId === u2 && val.receiverId === u1)) {
+                          isMatch = true;
+                        } else if (val.chatId && (val.chatId.includes(u1) && val.chatId.includes(u2))) {
+                          isMatch = true;
+                        }
+                      }
+                      if (isMatch) {
+                        allResults.push(val);
+                      }
+                    }
+                    cursor.continue();
+                  } else {
+                    finalizeResults();
+                  }
+                };
+                cursorReq.onerror = () => finalizeResults();
+                return;
+              } catch (_) {
+                finalizeResults();
+                return;
               }
             }
 
-            let all = Array.from(uniqueMap.values());
-            // Sort chronologically
-            all.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
-
-            if (beforeTimestamp) {
-              const beforeDate = new Date(beforeTimestamp).getTime();
-              all = all.filter(m => new Date(m.timestamp || 0).getTime() < beforeDate);
-            }
-
-            if (limit && all.length > limit) {
-              all = all.slice(-limit);
-            }
-
-            resolve(all);
+            finalizeResults();
           }
         };
         req.onerror = () => {

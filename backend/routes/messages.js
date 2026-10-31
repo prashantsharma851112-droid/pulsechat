@@ -21,13 +21,23 @@ const getOtherParticipantId = async (chatId, myUserId) => {
     const myKeys = [myUserId, me?.id, me?.username, me?._id?.toString()].filter(Boolean);
 
     let otherKey = null;
-    for (const m of myKeys) {
-      if (chatId.startsWith(m + '_')) {
-        otherKey = chatId.slice(m.length + 1);
-        break;
-      } else if (chatId.endsWith('_' + m)) {
-        otherKey = chatId.slice(0, -(m.length + 1));
-        break;
+    if (chatId.includes('::')) {
+      const parts = chatId.split('::');
+      if (parts.length === 2 && parts[0] && parts[1]) {
+        const p0 = parts[0].trim();
+        const p1 = parts[1].trim();
+        if (myKeys.includes(p0)) otherKey = p1;
+        else if (myKeys.includes(p1)) otherKey = p0;
+      }
+    } else {
+      for (const m of myKeys) {
+        if (chatId.startsWith(m + '_')) {
+          otherKey = chatId.slice(m.length + 1);
+          break;
+        } else if (chatId.endsWith('_' + m)) {
+          otherKey = chatId.slice(0, -(m.length + 1));
+          break;
+        }
       }
     }
 

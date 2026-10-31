@@ -570,9 +570,11 @@ export function clearUnreadCount(userId, targetId) {
   let recent = getCachedRecentChats(userId);
   let updated = false;
   const targetStr = String(targetId).trim();
-  const targetParts = targetStr.includes('::')
-    ? targetStr.split('::')
-    : (targetStr.includes('_') ? targetStr.split('_') : [targetStr]);
+  const targetParts = parseChatParticipants(targetStr) || (
+    targetStr.includes('::')
+      ? targetStr.split('::').filter(Boolean)
+      : [targetStr]
+  );
 
   const newRecent = recent.map(c => {
     if (!c) return c;

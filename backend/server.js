@@ -1268,9 +1268,9 @@ io.on('connection', (socket) => {
       let resolvedSenderIsPro = false;
       let resolvedSenderProTier = 'none';
       let resolvedSenderCustomBadge = '';
+      let resolvedSenderDoc = null;
 
       try {
-        let resolvedSenderDoc = null;
         const isSenderObj = mongoose.Types.ObjectId.isValid(callerId);
         const senderDoc = await User.findOne({
           $or: [
@@ -1443,6 +1443,7 @@ io.on('connection', (socket) => {
 
       // Independent Server-Side Receiver Validation for 1-on-1 private conversations:
       let resolvedReceiverId = '';
+      let expectedUserDoc = null;
       if (!isGroup) {
         if (!chatId) {
           if (typeof ackCallback === 'function') ackCallback({ error: 'CHAT_ID_REQUIRED' });
@@ -1456,7 +1457,7 @@ io.on('connection', (socket) => {
         }
 
         const isExpObj = mongoose.Types.ObjectId.isValid(expectedReceiverId);
-        const expectedUserDoc = await User.findOne({
+        expectedUserDoc = await User.findOne({
           $or: [
             { id: expectedReceiverId },
             ...(isExpObj ? [{ _id: expectedReceiverId }] : []),
@@ -1501,9 +1502,9 @@ io.on('connection', (socket) => {
           }).select('id _id username friends').lean();
 
           if (sUser && rUser) {
-            const rIdentifiers = [rUser.id, rUser._id?.toString(), rUser.username, resolvedReceiverId].filter(Boolean);
-            const sIdentifiers = [sUser.id, sUser._id?.toString(), sUser.username, senderId].filter(Boolean);
-            const isFriend = sUser.friends?.some(f => rIdentifiers.includes(f)) || rUser.friends?.some(f => sIdentifiers.includes(f));
+            const rIdentifiers = [rUser.id, rUser._id?.toString(), rUser.username, resolvedReceiverId].filter(Boolean).map(String);
+            const sIdentifiers = [sUser.id, sUser._id?.toString(), sUser.username, senderId].filter(Boolean).map(String);
+            const isFriend = sUser.friends?.some(f => rIdentifiers.includes(String(f))) || rUser.friends?.some(f => sIdentifiers.includes(String(f)));
             if (!isFriend) {
               socket.emit('message_blocked', {
                 chatId,
