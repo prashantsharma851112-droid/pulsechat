@@ -1524,22 +1524,25 @@ io.on('connection', (socket) => {
       // Check if recipient is currently online (check all identifier variants)
       let isReceiverOnline = false;
       if (resolvedReceiverId && !isGroup) {
-        if (onlineUsers.has(resolvedReceiverId)) {
-          isReceiverOnline = true;
-        } else {
-          try {
-            const rDoc = await User.findOne({
-              $or: [
-                { id: resolvedReceiverId },
-                ...(mongoose.Types.ObjectId.isValid(resolvedReceiverId) ? [{ _id: resolvedReceiverId }] : []),
-                { username: resolvedReceiverId }
-              ]
-            }).select('id _id username').lean();
-            if (rDoc) {
-              const rVars = [rDoc.id, rDoc._id?.toString(), rDoc.username].filter(Boolean);
-              isReceiverOnline = rVars.some(v => onlineUsers.has(v));
-            }
-          } catch {}
+        const rVars = [
+          resolvedReceiverId,
+          expectedUserDoc?.id,
+          expectedUserDoc?._id?.toString(),
+          expectedUserDoc?.username
+        ].filter(Boolean).map(String);
+        isReceiverOnline = rVars.some(v => onlineUsers.has(v));
+
+        // Pre-seed userRoomsCache immediately to ensure zero-latency emission
+        if (expectedUserDoc) {
+          const preseededRooms = new Set();
+          rVars.forEach(v => {
+            preseededRooms.add(v);
+            preseededRooms.add(`user_${v}`);
+          });
+          const roomsArr = Array.from(preseededRooms);
+          userRoomsCache.set(String(resolvedReceiverId), { rooms: roomsArr, expiresAt: Date.now() + USER_ROOMS_CACHE_TTL });
+          if (expectedUserDoc.id) userRoomsCache.set(String(expectedUserDoc.id), { rooms: roomsArr, expiresAt: Date.now() + USER_ROOMS_CACHE_TTL });
+          if (expectedUserDoc._id) userRoomsCache.set(String(expectedUserDoc._id), { rooms: roomsArr, expiresAt: Date.now() + USER_ROOMS_CACHE_TTL });
         }
       }
       // WhatsApp True Delivery: Sender starts with 'sent' (Single Tick).
@@ -1620,28 +1623,30 @@ io.on('connection', (socket) => {
       }
 
       // Sahi Order:
-      // 1. DURABLE PERSISTENCE FIRST: Save to MongoDB before notifying sender or receiver
-      await db.saveMessage(newMsg);
-
-      // Record in MessageLedger in queued state
-      try {
-        const MessageLedger = require('./models/MessageLedger');
-        const now = new Date();
-        await MessageLedger.findOneAndUpdate(
-          { messageId: newMsg.id },
-          {
-            $set: {
-              state: 'queued',
-              senderId,
-              receiverId: resolvedReceiverId,
-              createdAt: now,
-              queueExpiresAt: newMsg.expiresAt,
-              expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
-            }
-          },
-          { upsert: true }
-        );
-      } catch (e) {}
+      // 1. DURABLE PERSISTENCE FIRST: Save to MongoDB and update MessageLedger concurrently before notifying sender or receiver
+      await Promise.all([
+        db.saveMessage(newMsg),
+        (async () => {
+          try {
+            const MessageLedger = require('./models/MessageLedger');
+            const now = new Date();
+            await MessageLedger.findOneAndUpdate(
+              { messageId: newMsg.id },
+              {
+                $set: {
+                  state: 'queued',
+                  senderId,
+                  receiverId: resolvedReceiverId,
+                  createdAt: now,
+                  queueExpiresAt: newMsg.expiresAt,
+                  expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+                }
+              },
+              { upsert: true }
+            );
+          } catch (e) {}
+        })()
+      ]);
 
       // Prepare public wire message with receiptToken stripped (receiptToken is strictly for intended receiver)
       const publicWireMsg = { ...newMsg };

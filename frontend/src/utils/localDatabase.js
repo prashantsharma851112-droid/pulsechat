@@ -103,21 +103,59 @@ export function setChatBackupEnabled(userId = '', enabled = true) {
 }
 
 /**
+ * Parse 1-on-1 direct conversation participants from any valid chatId representation.
+ * Robust against user IDs containing underscores (such as standard PulseChat 'user_<timestamp>' IDs),
+ * 24-hex Mongo ObjectIds, custom handles, and both '::' and legacy '_' delimiters.
+ */
+export function parseChatParticipants(chatId) {
+  if (!chatId || typeof chatId !== 'string' || chatId.startsWith('group_')) return null;
+
+  // 1. Unambiguous canonical delimiter '::'
+  if (chatId.includes('::')) {
+    const parts = chatId.split('::').filter(Boolean);
+    if (parts.length === 2) {
+      return [parts[0].trim(), parts[1].trim()];
+    }
+  }
+
+  // 2. Composite chatId containing standard '_user_' boundary (e.g. 'user_123_user_456')
+  const userIdx = chatId.indexOf('_user_', 1);
+  if (userIdx !== -1) {
+    const p1 = chatId.slice(0, userIdx).trim();
+    const p2 = chatId.slice(userIdx + 1).trim();
+    if (p1 && p2) return [p1, p2];
+  }
+
+  // 3. Mongo ObjectId boundaries (24 hex characters) joined with '_'
+  const mongoMatch1 = chatId.match(/^([0-9a-fA-F]{24})_(.+)$/);
+  if (mongoMatch1 && mongoMatch1[1] && mongoMatch1[2]) {
+    return [mongoMatch1[1].trim(), mongoMatch1[2].trim()];
+  }
+  const mongoMatch2 = chatId.match(/^(.+)_([0-9a-fA-F]{24})$/);
+  if (mongoMatch2 && mongoMatch2[1] && mongoMatch2[2]) {
+    return [mongoMatch2[1].trim(), mongoMatch2[2].trim()];
+  }
+
+  // 4. Fallback for two simple tokens separated by '_'
+  if (chatId.includes('_')) {
+    const parts = chatId.split('_').filter(Boolean);
+    if (parts.length === 2) {
+      return [parts[0].trim(), parts[1].trim()];
+    }
+  }
+
+  return null;
+}
+
+/**
  * Get canonical direct chat ID (sorted participants separated by '::').
  * Safe against user IDs containing underscores.
  */
 export function getCanonicalChatId(chatId) {
   if (!chatId || typeof chatId !== 'string') return chatId || '';
-  if (chatId.includes('::')) {
-    const parts = chatId.split('::').filter(Boolean);
-    if (parts.length === 2) {
-      return [...parts].sort().join('::');
-    }
-  } else if (chatId.includes('_') && !chatId.startsWith('group_')) {
-    const parts = chatId.split('_').filter(Boolean);
-    if (parts.length === 2) {
-      return [...parts].sort().join('::');
-    }
+  const parts = parseChatParticipants(chatId);
+  if (parts && parts.length === 2) {
+    return [...parts].sort().join('::');
   }
   return chatId;
 }
@@ -131,26 +169,15 @@ export function getChatStorageKeys(chatId) {
   if (!chatId || typeof chatId !== 'string') return [];
   keys.add(chatId);
 
-  if (chatId.includes('::')) {
-    const parts = chatId.split('::').filter(Boolean);
-    if (parts.length === 2) {
-      const sorted = [...parts].sort();
-      keys.add(`${sorted[0]}::${sorted[1]}`);
-      keys.add(`${sorted[0]}_${sorted[1]}`);
-      keys.add(`${parts[0]}_${parts[1]}`);
-      keys.add(`${parts[1]}_${parts[0]}`);
-      keys.add(`${parts[1]}::${parts[0]}`);
-    }
-  } else if (chatId.includes('_') && !chatId.startsWith('group_')) {
-    const parts = chatId.split('_').filter(Boolean);
-    if (parts.length === 2) {
-      const sorted = [...parts].sort();
-      keys.add(`${sorted[0]}_${sorted[1]}`);
-      keys.add(`${sorted[0]}::${sorted[1]}`);
-      keys.add(`${parts[0]}::${parts[1]}`);
-      keys.add(`${parts[1]}::${parts[0]}`);
-      keys.add(`${parts[1]}_${parts[0]}`);
-    }
+  const parts = parseChatParticipants(chatId);
+  if (parts && parts.length === 2) {
+    const sorted = [...parts].sort();
+    keys.add(`${sorted[0]}::${sorted[1]}`);
+    keys.add(`${sorted[0]}_${sorted[1]}`);
+    keys.add(`${parts[0]}::${parts[1]}`);
+    keys.add(`${parts[1]}::${parts[0]}`);
+    keys.add(`${parts[0]}_${parts[1]}`);
+    keys.add(`${parts[1]}_${parts[0]}`);
   }
   return Array.from(keys);
 }

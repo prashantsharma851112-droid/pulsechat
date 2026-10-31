@@ -32,7 +32,7 @@ const PinLockModal = lazyWithRetry(() => import('../common/PinLockModal'));
 const UserProfileModal = lazyWithRetry(() => import('./UserProfileModal'));
 const GroupProfileModal = lazyWithRetry(() => import('./GroupProfileModal'));
 import { isChatLocked, isChatMuted, getLockedChats, getMutedChats, isChatHidden, getHiddenLockedChats, isChatArchived, setChatArchived, getArchivedChats, setChatMuted, setChatLocked, getSecurityPin } from '../../utils/securityLock';
-import { clearChatFromLocalDb } from '../../utils/localDatabase';
+import { clearChatFromLocalDb, parseChatParticipants } from '../../utils/localDatabase';
 import { BACKEND_URL } from '../../utils/config';
 import { getOrInitDeviceIdentity, decryptMessageIfNeeded } from '../../utils/e2eeCrypto';
 import { runWorkerTask } from '../../workers/pulseWorkerBridge';
@@ -1932,16 +1932,17 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
 
       setRecentChats(prev => {
         let found = false;
+        const cParts = parseChatParticipants(cId) || (typeof cId === 'string' && (cId.includes('::') ? cId.split('::') : cId.split('_')));
         const updated = prev.map(c => {
           const isMatch = Boolean(
             c.id === cId ||
             c.id === reactorId ||
             c._id === reactorId ||
             (c.username && c.username === reactorId) ||
-            (cId && typeof cId === 'string' && cId.includes('_') && (
-              (c.id && cId.split('_').includes(c.id)) ||
-              (c._id && cId.split('_').includes(String(c._id))) ||
-              (c.username && cId.split('_').includes(c.username))
+            (Array.isArray(cParts) && (
+              (c.id && cParts.includes(c.id)) ||
+              (c._id && cParts.includes(String(c._id))) ||
+              (c.username && cParts.includes(c.username))
             ))
           );
           if (isMatch) {
@@ -2108,7 +2109,7 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
         for (const tid of targetIds) {
           if (c.id === tid || c._id === tid || c.chatId === tid) return true;
           if (c.username && c.username === tid) return true;
-          const parts = String(tid).includes('::') ? String(tid).split('::') : (String(tid).includes('_') ? String(tid).split('_') : []);
+          const parts = parseChatParticipants(tid) || (String(tid).includes('::') ? String(tid).split('::') : String(tid).split('_'));
           if (parts.length > 0 && (parts.includes(String(c.id)) || (c._id && parts.includes(String(c._id))))) return true;
           if (typeof tid === 'string' && (
             (c.id && tid.includes(c.id)) ||

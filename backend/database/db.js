@@ -48,19 +48,34 @@ module.exports = {
     let chatQuery = chatId;
     const queryList = [chatId];
 
-    if (chatId && typeof chatId === 'string') {
-      if (chatId.includes('_') && !chatId.startsWith('group_')) {
-        const parts = chatId.split('_');
+    if (chatId && typeof chatId === 'string' && !chatId.startsWith('group_')) {
+      if (chatId.includes('::')) {
+        const parts = chatId.split('::').filter(Boolean);
         if (parts.length === 2) {
+          queryList.push(`${parts[0]}_${parts[1]}`);
           queryList.push(`${parts[1]}_${parts[0]}`);
+          queryList.push(`${parts[1]}::${parts[0]}`);
+          queryList.push(parts.slice().sort().join('::'));
           queryList.push(parts.slice().sort().join('_'));
+        }
+      } else if (chatId.includes('_')) {
+        const userIdx = chatId.indexOf('_user_', 1);
+        if (userIdx !== -1) {
+          const first = chatId.slice(0, userIdx);
+          const second = chatId.slice(userIdx + 1);
+          queryList.push(`${second}_${first}`);
+          queryList.push(`${first}::${second}`);
+          queryList.push(`${second}::${first}`);
+          queryList.push([first, second].sort().join('_'));
+          queryList.push([first, second].sort().join('::'));
         } else {
-          const userIdx = chatId.indexOf('_user_');
-          if (userIdx !== -1) {
-            const first = chatId.slice(0, userIdx);
-            const second = chatId.slice(userIdx + 1);
-            queryList.push(`${second}_${first}`);
-            queryList.push([first, second].sort().join('_'));
+          const parts = chatId.split('_');
+          if (parts.length === 2) {
+            queryList.push(`${parts[1]}_${parts[0]}`);
+            queryList.push(`${parts[0]}::${parts[1]}`);
+            queryList.push(`${parts[1]}::${parts[0]}`);
+            queryList.push(parts.slice().sort().join('_'));
+            queryList.push(parts.slice().sort().join('::'));
           }
         }
       }
@@ -75,15 +90,23 @@ module.exports = {
         let uid1 = userId;
         let uid2 = null;
 
-        if (chatId.includes('_')) {
-          const split = chatId.split('_');
+        if (chatId.includes('::')) {
+          const split = chatId.split('::').filter(Boolean);
           if (split.length === 2) {
             uid1 = uid1 || split[0];
             uid2 = split[1];
-          } else if (chatId.indexOf('_user_') !== -1) {
-            const uIdx = chatId.indexOf('_user_');
+          }
+        } else if (chatId.includes('_')) {
+          const uIdx = chatId.indexOf('_user_', 1);
+          if (uIdx !== -1) {
             uid1 = uid1 || chatId.slice(0, uIdx);
             uid2 = chatId.slice(uIdx + 1);
+          } else {
+            const split = chatId.split('_');
+            if (split.length === 2) {
+              uid1 = uid1 || split[0];
+              uid2 = split[1];
+            }
           }
         } else {
           uid2 = chatId;

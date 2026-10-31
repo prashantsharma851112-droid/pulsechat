@@ -1347,7 +1347,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   };
 
   const [messages, setMessages] = useState(() => {
-    const cached = getCachedMessages(chatId);
+    const cached = getCachedMessages(chatId, user?.id);
     const outbox = getOutbox(user?.id);
     const pendingForThisChat = outbox.filter(m => m.chatId === chatId);
     const cachedIds = new Set(cached.map(m => m.id));
@@ -2999,6 +2999,11 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 if (lastMerged) {
                   updateRecentChatSnippet(user?.id, chatId, lastMerged, activeChat);
                 }
+              }
+
+              // WhatsApp Local-First Guard: If server reconciliation yielded 0 messages but prev has local messages, NEVER wipe local messages!
+              if (finalMerged.length === 0 && prev && prev.length > 0) {
+                return prev;
               }
 
               if (prev.length === finalMerged.length) {

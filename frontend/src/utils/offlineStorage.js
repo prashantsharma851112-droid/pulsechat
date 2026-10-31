@@ -1,4 +1,4 @@
-import { saveMessagesToLocalDb, getMessagesFromLocalDb, deleteMessagesFromLocalDb, updateMessageInLocalDb, clearChatFromLocalDb, cleanOldMessagesFromLocalDb } from './localDatabase';
+import { saveMessagesToLocalDb, getMessagesFromLocalDb, deleteMessagesFromLocalDb, updateMessageInLocalDb, clearChatFromLocalDb, cleanOldMessagesFromLocalDb, parseChatParticipants, getCanonicalChatId } from './localDatabase';
 
 const STORAGE_KEYS = {
   USER: 'pulsechat_user',
@@ -64,19 +64,69 @@ export function getCachedRecentChats(userId) {
   }
 
   if (!Array.isArray(raw)) return [];
-  return raw
-    .filter(c => c && c.id && c.id !== 'user' && c.id !== 'undefined' && c.id !== 'null')
-    .sort((a, b) => {
-      const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
-      const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
-      return tB - tA;
-    });
+  const myVariants = new Set(keysToCheck);
+  const healed = raw.map(c => {
+    if (!c) return null;
+    let effectiveId = c.id;
+    if (!effectiveId || effectiveId === 'user' || effectiveId === 'undefined' || effectiveId === 'null') {
+      const candChatId = c.chatId || (c.lastMessage && c.lastMessage.chatId);
+      if (candChatId) {
+        const parts = parseChatParticipants(candChatId);
+        if (parts) {
+          const partner = parts.find(p => !myVariants.has(p));
+          if (partner && partner !== 'user') effectiveId = partner;
+        }
+      }
+      if ((!effectiveId || effectiveId === 'user') && c.username && c.username !== 'user') {
+        effectiveId = c.username;
+      }
+    }
+    if (!effectiveId || effectiveId === 'user' || effectiveId === 'undefined' || effectiveId === 'null') {
+      return null;
+    }
+    return { ...c, id: effectiveId };
+  }).filter(Boolean);
+
+  return healed.sort((a, b) => {
+    const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
+    const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
+    return tB - tA;
+  });
 }
 
 export function setCachedRecentChats(userId, chats) {
   if (typeof window === 'undefined' || !userId || !Array.isArray(chats)) return;
   try {
-    const valid = chats.filter(c => c && c.id && c.id !== 'user' && c.id !== 'undefined' && c.id !== 'null');
+    const userObj = getCachedUser();
+    const myVariants = new Set([
+      userId,
+      userObj?.id,
+      userObj?._id ? String(userObj._id) : null,
+      userObj?.username
+    ].filter(Boolean).map(String));
+
+    const valid = chats.map(c => {
+      if (!c) return null;
+      let effectiveId = c.id;
+      if (!effectiveId || effectiveId === 'user' || effectiveId === 'undefined' || effectiveId === 'null') {
+        const candChatId = c.chatId || (c.lastMessage && c.lastMessage.chatId);
+        if (candChatId) {
+          const parts = parseChatParticipants(candChatId);
+          if (parts) {
+            const partner = parts.find(p => !myVariants.has(p));
+            if (partner && partner !== 'user') effectiveId = partner;
+          }
+        }
+        if ((!effectiveId || effectiveId === 'user') && c.username && c.username !== 'user') {
+          effectiveId = c.username;
+        }
+      }
+      if (!effectiveId || effectiveId === 'user' || effectiveId === 'undefined' || effectiveId === 'null') {
+        return null;
+      }
+      return { ...c, id: effectiveId };
+    }).filter(Boolean);
+
     const sorted = [...valid].sort((a, b) => {
       const tA = new Date(a.lastMessageTimestamp || a.lastMessageTime || 0).getTime();
       const tB = new Date(b.lastMessageTimestamp || b.lastMessageTime || 0).getTime();
@@ -84,7 +134,6 @@ export function setCachedRecentChats(userId, chats) {
     });
     const serialized = JSON.stringify(sorted);
     localStorage.setItem(`${STORAGE_KEYS.RECENT_PREFIX}${userId}`, serialized);
-    const userObj = getCachedUser();
     const isSameUser = Boolean(userObj && (
       String(userObj.id) === String(userId) ||
       String(userObj._id) === String(userId) ||
@@ -135,26 +184,15 @@ export function getChatStorageKeys(chatId) {
   if (!chatId || typeof chatId !== 'string') return [];
   keys.add(chatId);
 
-  if (chatId.includes('::')) {
-    const parts = chatId.split('::').filter(Boolean);
-    if (parts.length === 2) {
-      const sorted = [...parts].sort();
-      keys.add(`${sorted[0]}::${sorted[1]}`);
-      keys.add(`${sorted[0]}_${sorted[1]}`);
-      keys.add(`${parts[0]}_${parts[1]}`);
-      keys.add(`${parts[1]}_${parts[0]}`);
-      keys.add(`${parts[1]}::${parts[0]}`);
-    }
-  } else if (chatId.includes('_') && !chatId.startsWith('group_')) {
-    const parts = chatId.split('_').filter(Boolean);
-    if (parts.length === 2) {
-      const sorted = [...parts].sort();
-      keys.add(`${sorted[0]}_${sorted[1]}`);
-      keys.add(`${sorted[0]}::${sorted[1]}`);
-      keys.add(`${parts[0]}::${parts[1]}`);
-      keys.add(`${parts[1]}::${parts[0]}`);
-      keys.add(`${parts[1]}_${parts[0]}`);
-    }
+  const parts = parseChatParticipants(chatId);
+  if (parts && parts.length === 2) {
+    const sorted = [...parts].sort();
+    keys.add(`${sorted[0]}::${sorted[1]}`);
+    keys.add(`${sorted[0]}_${sorted[1]}`);
+    keys.add(`${parts[0]}::${parts[1]}`);
+    keys.add(`${parts[1]}::${parts[0]}`);
+    keys.add(`${parts[0]}_${parts[1]}`);
+    keys.add(`${parts[1]}_${parts[0]}`);
   }
   return Array.from(keys);
 }
@@ -420,11 +458,19 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat, opt
     if (found) {
       effectiveTarget = found;
     } else {
-      const realContactId = (contactId && contactId !== userId && !myVariants.has(contactId) && !String(contactId).includes('::') && !String(contactId).includes('_'))
-        ? contactId
-        : (typeof chatId === 'string' && (chatId.includes('::') ? chatId.split('::').find(p => !myVariants.has(p)) : (chatId.includes('_') ? chatId.split('_').find(p => !myVariants.has(p)) : chatId)));
+      let realContactId = null;
+      if (contactId && contactId !== userId && !myVariants.has(contactId) && contactId !== 'user') {
+        const parts = parseChatParticipants(contactId);
+        realContactId = parts ? parts.find(p => !myVariants.has(p)) : contactId;
+      }
+      if (!realContactId && chatId) {
+        const parts = parseChatParticipants(chatId);
+        if (parts) realContactId = parts.find(p => !myVariants.has(p));
+      }
+      if (!realContactId || realContactId === 'user') realContactId = (contactId && contactId !== 'user') ? contactId : chatId;
+
       effectiveTarget = {
-        id: realContactId || contactId || chatId,
+        id: realContactId,
         displayName: (!isFromMe && (message.senderName || message.senderUsername)) ? (message.senderName || message.senderUsername) : 'Chat',
         username: (!isFromMe && message.senderUsername) ? message.senderUsername : '',
         avatar: (!isFromMe && message.senderAvatar) ? message.senderAvatar : ''
@@ -438,8 +484,22 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat, opt
     const prevUnread = Number(existing.unreadCount) || 0;
     const resolvedUnread = isFromMe ? 0 : (isStatusOnly || isSameMessage ? prevUnread : (options?.isViewing ? 0 : (shouldInc ? prevUnread + 1 : prevUnread)));
 
+    let effectiveExistingId = existing.id;
+    if (effectiveExistingId === 'user' || !effectiveExistingId) {
+      const parts = parseChatParticipants(chatId);
+      if (parts) {
+        const partner = parts.find(p => !myVariants.has(p));
+        if (partner && partner !== 'user') effectiveExistingId = partner;
+      }
+      if (effectiveTarget?.id && effectiveTarget.id !== 'user') {
+        effectiveExistingId = effectiveTarget.id;
+      }
+    }
+
     updatedEntry = {
       ...existing,
+      id: effectiveExistingId || existing.id,
+      chatId: chatId || existing.chatId,
       ...snippet,
       avatar: effectiveTarget?.avatar || existing.avatar || '',
       displayName: effectiveTarget?.displayName || effectiveTarget?.name || existing.displayName,
@@ -450,15 +510,29 @@ export function updateRecentChatSnippet(userId, chatId, message, targetChat, opt
       unreadCount: resolvedUnread
     };
   } else if (effectiveTarget) {
-    const resolvedContactId = (contactId && contactId !== userId && !myVariants.has(contactId) && !String(contactId).includes('::') && !String(contactId).includes('_'))
-      ? contactId
-      : (effectiveTarget?.id && !String(effectiveTarget.id).includes('::') && !String(effectiveTarget.id).includes('_')
-        ? effectiveTarget.id
-        : (effectiveTarget?._id || (typeof chatId === 'string' && (chatId.includes('::') ? chatId.split('::').find(p => !myVariants.has(p)) : (chatId.includes('_') ? chatId.split('_').find(p => !myVariants.has(p)) : chatId))))
-      );
+    let resolvedContactId = null;
+    if (contactId && contactId !== userId && !myVariants.has(contactId) && contactId !== 'user') {
+      const parts = parseChatParticipants(contactId);
+      resolvedContactId = parts ? parts.find(p => !myVariants.has(p)) : contactId;
+    }
+    if (!resolvedContactId && effectiveTarget?.id && !myVariants.has(effectiveTarget.id) && effectiveTarget.id !== 'user') {
+      const parts = parseChatParticipants(effectiveTarget.id);
+      resolvedContactId = parts ? parts.find(p => !myVariants.has(p)) : effectiveTarget.id;
+    }
+    if (!resolvedContactId && effectiveTarget?._id && !myVariants.has(String(effectiveTarget._id))) {
+      resolvedContactId = String(effectiveTarget._id);
+    }
+    if (!resolvedContactId && chatId) {
+      const parts = parseChatParticipants(chatId);
+      if (parts) resolvedContactId = parts.find(p => !myVariants.has(p));
+    }
+    if (!resolvedContactId || resolvedContactId === 'user') {
+      resolvedContactId = effectiveTarget.id || effectiveTarget._id || contactId || chatId;
+    }
 
     updatedEntry = {
-      id: resolvedContactId || effectiveTarget.id || effectiveTarget._id || contactId || chatId,
+      id: resolvedContactId,
+      chatId: chatId,
       displayName: effectiveTarget.displayName || effectiveTarget.name || effectiveTarget.username || 'Chat',
       username: effectiveTarget.username || '',
       avatar: effectiveTarget.avatar || '',

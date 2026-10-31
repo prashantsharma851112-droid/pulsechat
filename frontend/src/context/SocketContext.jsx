@@ -348,7 +348,23 @@ export function SocketProvider({ children }) {
           )
         );
 
-        // 1. Durably await IndexedDB transaction commit BEFORE emitting ACK
+        // 1. Instant 0ms In-Memory UI Rendering:
+        // Immediately notify active ChatWindow (if open) and trigger local notification
+        // so the user experiences zero perceptible latency while durable disk persistence runs.
+        try {
+          window.dispatchEvent(new CustomEvent('pulsechat_new_message', { detail: msgToCommit }));
+          window.dispatchEvent(new CustomEvent('pulsechat_message_received', { detail: msgToCommit }));
+        } catch (_) {}
+
+        setLastNotification({ ...msgToCommit, receivedAt: Date.now() });
+
+        if (!isViewingThisChat) {
+          triggerPushIfBackground(msgToCommit);
+        }
+
+        // 2. Durable Local Storage Persistence & Double-Tick ACK:
+        // Commit to localStorage & IndexedDB. Only AFTER local transaction completes,
+        // emit 'message_delivered' ACK to the server with cryptographic receiptToken.
         try {
           if (msgToCommit.chatId) {
             appendCachedMessage(msgToCommit.chatId, msgToCommit);
@@ -370,19 +386,7 @@ export function SocketProvider({ children }) {
           return; // DO NOT send ACK if local persistence fails (quota full or transaction abort)
         }
 
-        // Notify active ChatWindow (if open) of new decrypted message
-        try {
-          window.dispatchEvent(new CustomEvent('pulsechat_new_message', { detail: msgToCommit }));
-          window.dispatchEvent(new CustomEvent('pulsechat_message_received', { detail: msgToCommit }));
-        } catch (_) {}
-
-        setLastNotification({ ...msgToCommit, receivedAt: Date.now() });
-
-        if (!isViewingThisChat) {
-          triggerPushIfBackground(msgToCommit);
-        }
-
-        // 2. Emit delivery ACK ONLY AFTER local storage commit succeeds
+        // 3. Emit delivery ACK ONLY AFTER local storage commit succeeds
         // Passes cryptographic receiptToken for verified tamper-proof queue deletion
         if (msg.status !== 'read') {
           newSocket.emit('message_delivered', {
