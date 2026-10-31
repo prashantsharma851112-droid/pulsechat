@@ -6,7 +6,7 @@ const messageSchema = new mongoose.Schema({
   // chatId is a deterministic string built by the frontend as
   // [userId1, userId2].sort().join('_') - this app only supports 1-on-1
   // chats, so no separate "Room" collection is needed (unlike ChatSpace).
-  chatId: { type: String, required: true, index: true },
+  chatId: { type: String, required: true },
   senderId: { type: String, required: true },
   receiverId: { type: String, default: '' },
   isGroup: { type: Boolean, default: false },
@@ -70,7 +70,6 @@ messageSchema.index(
 messageSchema.index({ chatId: 1, isVanish: 1 });
 
 messageSchema.index({ senderId: 1, receiverId: 1 });
-messageSchema.index({ receiverId: 1, status: 1 });
 messageSchema.index({ chatId: 1, timestamp: -1 });
 messageSchema.index({ chatId: 1, timestamp: 1 });
 messageSchema.index({ chatId: 1, readBy: 1 });

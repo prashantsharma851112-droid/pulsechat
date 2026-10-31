@@ -299,7 +299,7 @@ export function SocketProvider({ children }) {
           }
           if (identity?.keyPair?.privateKey) {
             try {
-              msgToCommit = await decryptMessageIfNeeded(msg, identity.keyPair.privateKey);
+              msgToCommit = await decryptMessageIfNeeded(msg, identity.keyPair.privateKey, identity.deviceId);
             } catch (err) {
               console.warn('SocketContext: Message decryption error:', err);
             }

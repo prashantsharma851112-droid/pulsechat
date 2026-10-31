@@ -348,7 +348,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         const updated = await Promise.all(
           prev.map(async (m, idx) => {
             if (undecryptedIndices.includes(idx)) {
-              return await decryptMessageIfNeeded(m, privKey);
+              return await decryptMessageIfNeeded(m, privKey, myIdentityRef.current?.deviceId);
             }
             return m;
           })
@@ -2085,7 +2085,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               data.map(async m => {
                 const isSentByMe = m?.senderId && myIdSet.has(String(m.senderId));
                 if (m?.isEncrypted && m?.envelope && identity?.keyPair?.privateKey && !isSentByMe) {
-                  return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
+                  return await decryptMessageIfNeeded(m, identity.keyPair.privateKey, identity?.deviceId);
                 }
                 return m;
               })
@@ -2688,7 +2688,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                 resolvedInitial.map(async m => {
                   const isSentByMe = m?.senderId && myVariants.has(String(m.senderId));
                   if (m?.isEncrypted && m?.envelope && !m?._decrypted && !isSentByMe) {
-                    return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
+                    return await decryptMessageIfNeeded(m, identity.keyPair.privateKey, identity?.deviceId);
                   }
                   return m;
                 })
@@ -2781,7 +2781,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     resolvedDb.map(async m => {
                       const isSentByMe = m?.senderId && myVariants.has(String(m.senderId));
                       if (m?.isEncrypted && m?.envelope && !m?._decrypted && !isSentByMe) {
-                        return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
+                        return await decryptMessageIfNeeded(m, identity.keyPair.privateKey, identity?.deviceId);
                       }
                       return m;
                     })
@@ -2836,7 +2836,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               rawServerMsgs.map(async m => {
                 const isSentByMe = m?.senderId && myIdSet.has(String(m.senderId));
                 if (m && m.isEncrypted && m.envelope && identity?.keyPair?.privateKey && !isSentByMe) {
-                  return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
+                  return await decryptMessageIfNeeded(m, identity.keyPair.privateKey, identity?.deviceId);
                 }
                 return m;
               })
@@ -2871,7 +2871,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                       validDb.map(async m => {
                         const isSentByMe = m?.senderId && myIdSet.has(String(m.senderId));
                         if (m?.isEncrypted && m?.envelope && !m?._decrypted && !isSentByMe) {
-                          return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
+                          return await decryptMessageIfNeeded(m, identity.keyPair.privateKey, identity?.deviceId);
                         }
                         return m;
                       })
@@ -3509,7 +3509,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           } catch {}
         }
         if (identity?.keyPair?.privateKey) {
-          msg = await decryptMessageIfNeeded(msg, identity.keyPair.privateKey);
+          msg = await decryptMessageIfNeeded(msg, identity.keyPair.privateKey, identity?.deviceId);
         }
       }
 
@@ -3825,7 +3825,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               const decrypted = await Promise.all(
                 data.map(async m => {
                   if (m?.isEncrypted && m?.envelope && identity?.keyPair?.privateKey) {
-                    return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
+                    return await decryptMessageIfNeeded(m, identity.keyPair.privateKey, identity?.deviceId);
                   }
                   return m;
                 })
@@ -3899,9 +3899,12 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           }
           return changed ? next : prev;
         });
-        markAllCachedMessagesRead(chatId, user?.id);
-        if (currentCanonical && currentCanonical !== chatId) {
-          markAllCachedMessagesRead(currentCanonical, user?.id);
+        const hasExplicitIds = Array.isArray(messageIds) && messageIds.length > 0;
+        if (!hasExplicitIds) {
+          markAllCachedMessagesRead(chatId, user?.id);
+          if (currentCanonical && currentCanonical !== chatId) {
+            markAllCachedMessagesRead(currentCanonical, user?.id);
+          }
         }
         updateRecentChatSnippet(user?.id, chatId, { status: 'read' }, activeChat);
         window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
@@ -4498,7 +4501,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
             data.map(async m => {
               const isSentByMe = m?.senderId && myIdSet.has(String(m.senderId));
               if (m?.isEncrypted && m?.envelope && identity?.keyPair?.privateKey && !isSentByMe) {
-                return await decryptMessageIfNeeded(m, identity.keyPair.privateKey);
+                return await decryptMessageIfNeeded(m, identity.keyPair.privateKey, identity?.deviceId);
               }
               return m;
             })
@@ -4719,9 +4722,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       try {
         envelope = await encryptMessageEnvelope(
           { content: msgContent, type: 'text', replyTo: replyPayload },
-          peerDevice.publicKeyJwk,
+          peerDevice,
           identity?.deviceId,
-          peerDevice.deviceId
+          peerDevice.deviceId,
+          identity?.publicKeyJwk
         );
         isEncrypted = true;
       } catch (err) {
@@ -5749,9 +5753,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               fogSnapDuration: fogSnapDuration || 10,
               replyTo: currentReplyTo
             },
-            peerDevice.publicKeyJwk,
+            peerDevice,
             identity?.deviceId,
-            peerDevice.deviceId
+            peerDevice.deviceId,
+            identity?.publicKeyJwk
           );
           isEncrypted = true;
         } else {
@@ -5907,9 +5912,10 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
               type: msgToRetry.type || 'text',
               replyTo: replyPayload
             },
-            peerDevice.publicKeyJwk,
+            peerDevice,
             identity?.deviceId,
-            peerDevice.deviceId
+            peerDevice.deviceId,
+            identity?.publicKeyJwk
           );
 
           if (!socket || !socket.connected) {
@@ -6314,14 +6320,21 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
 
   const handleReplyCallback = useCallback((msg) => {
     const senderInfo = groupMembersMap[msg.senderId];
+    const isMsgMine = Boolean(
+      msg?.senderId && (
+        String(msg.senderId) === String(user?.id || '') ||
+        String(msg.senderId) === String(user?._id || '') ||
+        String(msg.senderId) === String(user?.username || '')
+      )
+    );
     setReplyTo({
       ...msg,
-      senderName: msg.senderId === user?.id
+      senderName: isMsgMine
         ? (myNicknameInChat || 'You')
         : (isGroup ? (senderInfo?.displayName || senderInfo?.username || activeChat?.displayName) : (partnerNickname || senderInfo?.displayName || activeChat?.displayName))
     });
     replyInputRef.current?.focus();
-  }, [groupMembersMap, user?.id, myNicknameInChat, isGroup, partnerNickname, activeChat?.displayName]);
+  }, [groupMembersMap, user?.id, user?._id, user?.username, myNicknameInChat, isGroup, partnerNickname, activeChat?.displayName]);
 
   const handleOpenSparksWalletCallback = useCallback(() => {
     setShowSparksWallet(true);
@@ -6340,6 +6353,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       const prevMsg = index > 0 ? deduplicatedMessages[index - 1] : null;
       const showDateHeader = index === 0 || isDifferentDay(prevMsg?.timestamp, msg.timestamp);
       const dateLabel = formatMessageDateHeader(msg.timestamp);
+      const isMsgMine = Boolean(
+        msg?.senderId && (
+          String(msg.senderId) === String(user?.id || '') ||
+          String(msg.senderId) === String(user?._id || '') ||
+          String(msg.senderId) === String(user?.username || '')
+        )
+      );
 
       return (
         <React.Fragment key={msg.clientTempId || msg.id || index}>
@@ -6365,16 +6385,16 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           )}
           <MessageItem
             message={msg}
-            isMine={String(msg.senderId) === String(user?.id || user?._id || '')}
+            isMine={isMsgMine}
             chatId={chatId}
             socket={socket}
             currentUser={user}
             senderName={
-              msg.senderId === user.id
+              isMsgMine
                 ? (myNicknameInChat || user?.displayName || user?.username)
                 : (isGroup ? (senderObj?.displayName || senderObj?.username) : (partnerNickname || senderObj?.displayName || activeChat?.displayName || senderObj?.username))
             }
-            senderIsPro={msg.senderId === user.id ? user?.isPro : (isGroup ? senderObj?.isPro : chatIsPro)}
+            senderIsPro={isMsgMine ? user?.isPro : (isGroup ? senderObj?.isPro : chatIsPro)}
             onDeleteLocal={handleDeleteLocalMessage}
             onDeleteTrigger={handleTriggerUndoToast}
             onRetryMessage={handleRetryMessage}
@@ -8911,7 +8931,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       {showMessageInfoModal && selectedActionMessage && (
         <MessageInfoModal
           message={selectedActionMessage}
-          isMine={selectedActionMessage.senderId === user?.id}
+          isMine={Boolean(
+            selectedActionMessage.senderId && (
+              String(selectedActionMessage.senderId) === String(user?.id || '') ||
+              String(selectedActionMessage.senderId) === String(user?._id || '') ||
+              String(selectedActionMessage.senderId) === String(user?.username || '')
+            )
+          )}
           onClose={() => setShowMessageInfoModal(false)}
         />
       )}

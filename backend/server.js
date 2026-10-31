@@ -526,6 +526,19 @@ app.set('updateUserOnlinePrivacy', updateUserOnlinePrivacy);
 app.set('getRawOnlineUsersMap', () => onlineUsers);
 app.set('getLiveOnlineUsersDetails', getLiveOnlineUsersDetails);
 
+// Global In-memory cache for resolved user rooms to eliminate redundant remote DB roundtrips on every socket message
+const userRoomsCache = new Map();
+const USER_ROOMS_CACHE_TTL = 120_000; // 2 minutes
+
+const invalidateUserRoomsCache = (rawUserId) => {
+  if (!rawUserId) return;
+  const strId = String(rawUserId);
+  userRoomsCache.delete(strId);
+  userRoomsCache.delete(`user_${strId}`);
+};
+
+app.set('invalidateUserRoomsCache', invalidateUserRoomsCache);
+
 io.on('connection', (socket) => {
   console.log('⚡ Socket Connected:', socket.id);
   registerQrSyncSocket(io, socket);
@@ -536,8 +549,11 @@ io.on('connection', (socket) => {
     const toDelete = Array.from(new Set([id, socket.userId, socket.userCustomId, socket.userMongoId, socket.userUsername].filter(Boolean)));
     toDelete.forEach(k => {
       const isFullyOffline = unregisterUserSocket(String(k), socket.id);
-      if (isFullyOffline && !hiddenOnlineUsers.has(String(k))) {
-        io.emit('user_status', { userId: String(k), status: 'offline', lastSeen: new Date().toISOString() });
+      if (isFullyOffline) {
+        invalidateUserRoomsCache(k);
+        if (!hiddenOnlineUsers.has(String(k))) {
+          io.emit('user_status', { userId: String(k), status: 'offline', lastSeen: new Date().toISOString() });
+        }
       }
     });
     io.emit('online_users_list', getPublicOnlineUsers());
@@ -581,9 +597,14 @@ io.on('connection', (socket) => {
 
   // Helper to resolve all room names (id, Mongo _id, username) for a given user
   const resolveUserRooms = async (rawUserId) => {
-    const rooms = new Set();
     if (!rawUserId) return [];
     const strId = String(rawUserId);
+    const cached = userRoomsCache.get(strId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.rooms;
+    }
+
+    const rooms = new Set();
     rooms.add(strId);
     rooms.add(`user_${strId}`);
     try {
@@ -601,7 +622,9 @@ io.on('connection', (socket) => {
         if (u.username) { rooms.add(String(u.username)); rooms.add(`user_${u.username}`); }
       }
     } catch {}
-    return Array.from(rooms);
+    const arr = Array.from(rooms);
+    userRoomsCache.set(strId, { rooms: arr, expiresAt: Date.now() + USER_ROOMS_CACHE_TTL });
+    return arr;
   };
 
   // User comes online (mobile data ON / socket connected)
@@ -661,6 +684,17 @@ io.on('connection', (socket) => {
           socket.join(uDoc.username);
           registerUserSocket(uDoc.username, socket.id);
         }
+
+        const myRooms = [
+          userId, `user_${userId}`,
+          ...(uDoc.id ? [String(uDoc.id), `user_${uDoc.id}`] : []),
+          ...(uDoc._id ? [uDoc._id.toString(), `user_${uDoc._id.toString()}`] : []),
+          ...(uDoc.username ? [String(uDoc.username), `user_${uDoc.username}`] : [])
+        ];
+        const uniqueRooms = Array.from(new Set(myRooms));
+        [userId, uDoc.id, uDoc._id?.toString(), uDoc.username].filter(Boolean).forEach(k => {
+          userRoomsCache.set(String(k), { rooms: uniqueRooms, expiresAt: Date.now() + USER_ROOMS_CACHE_TTL });
+        });
       }
     } catch {}
 
@@ -1236,6 +1270,7 @@ io.on('connection', (socket) => {
       let resolvedSenderCustomBadge = '';
 
       try {
+        let resolvedSenderDoc = null;
         const isSenderObj = mongoose.Types.ObjectId.isValid(callerId);
         const senderDoc = await User.findOne({
           $or: [
@@ -1244,7 +1279,8 @@ io.on('connection', (socket) => {
             ...(isSenderObj ? [{ _id: callerId }] : []),
             { username: callerId }
           ]
-        }).select('id _id displayName username avatar isPro proTier customBadge').lean();
+        }).select('id _id displayName username avatar isPro proTier customBadge friends').lean();
+        resolvedSenderDoc = senderDoc;
 
         if (senderDoc) {
           resolvedSenderName = senderDoc.displayName || senderDoc.username || senderId;
@@ -1426,7 +1462,7 @@ io.on('connection', (socket) => {
             ...(isExpObj ? [{ _id: expectedReceiverId }] : []),
             { username: expectedReceiverId }
           ]
-        }).select('id _id username').lean();
+        }).select('id _id username friends').lean();
 
         const validReceiverIdentifiers = [
           expectedReceiverId,
@@ -1448,20 +1484,21 @@ io.on('connection', (socket) => {
       // Enforce friendship for 1-on-1 messages: non-synced users cannot send messages
       if (!isGroup && resolvedReceiverId && senderId !== resolvedReceiverId) {
         try {
-          const sUser = await User.findOne({
+          const sUser = resolvedSenderDoc || await User.findOne({
             $or: [
               { id: senderId },
               ...(mongoose.Types.ObjectId.isValid(senderId) ? [{ _id: senderId }] : []),
               { username: senderId }
             ]
-          });
-          const rUser = await User.findOne({
+          }).select('id _id username friends').lean();
+
+          const rUser = expectedUserDoc || await User.findOne({
             $or: [
               { id: resolvedReceiverId },
               ...(mongoose.Types.ObjectId.isValid(resolvedReceiverId) ? [{ _id: resolvedReceiverId }] : []),
               { username: resolvedReceiverId }
             ]
-          });
+          }).select('id _id username friends').lean();
 
           if (sUser && rUser) {
             const rIdentifiers = [rUser.id, rUser._id?.toString(), rUser.username, resolvedReceiverId].filter(Boolean);
@@ -2250,7 +2287,7 @@ io.on('connection', (socket) => {
 
     // Pure Stateless Event-Forwarding: Server acts purely as real-time event router
     const readPayload = { messageId, chatId, canonicalChatId, userId: readerId, readerId, otherId: senderTarget, status: 'read' };
-    const chatReadPayload = { chatId, canonicalChatId, userId: readerId, readerId, otherId: senderTarget, status: 'read' };
+    const chatReadPayload = { chatId, canonicalChatId, userId: readerId, readerId, otherId: senderTarget, status: 'read', messageIds: [messageId] };
 
     targetRooms.forEach(r => {
       io.to(r).emit('message_read_update', readPayload);
@@ -3414,8 +3451,11 @@ io.on('connection', (socket) => {
     const toDelete = Array.from(new Set([socket.userId, socket.userCustomId, socket.userMongoId, socket.userUsername].filter(Boolean)));
     toDelete.forEach(id => {
       const isFullyOffline = unregisterUserSocket(String(id), socket.id);
-      if (isFullyOffline && !hiddenOnlineUsers.has(String(id))) {
-        io.emit('user_status', { userId: String(id), status: 'offline', lastSeen: new Date().toISOString() });
+      if (isFullyOffline) {
+        invalidateUserRoomsCache(id);
+        if (!hiddenOnlineUsers.has(String(id))) {
+          io.emit('user_status', { userId: String(id), status: 'offline', lastSeen: new Date().toISOString() });
+        }
       }
     });
     io.emit('online_users_list', getPublicOnlineUsers());

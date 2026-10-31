@@ -581,7 +581,10 @@ const handleQuery = async (req, res) => {
       let q = DeviceIdentity.find({ userId: userQuery, isRevoked: false })
         .select('userId deviceId algorithms keys signatures');
       if (typeof q.sort === 'function') {
-        q = q.sort({ lastSeenAt: -1, createdAt: -1 });
+        q = q.sort({ lastSeenAt: -1, _id: -1 });
+      }
+      if (typeof q.limit === 'function') {
+        q = q.limit(25);
       }
       const devices = await q.lean();
 
@@ -597,7 +600,10 @@ const handleQuery = async (req, res) => {
     } else if (DeviceKey) {
       let q = DeviceKey.find({ userId: userQuery, revoked: { $ne: true } });
       if (typeof q.sort === 'function') {
-        q = q.sort({ lastActiveAt: -1, createdAt: -1 });
+        q = q.sort({ lastActiveAt: -1, _id: -1 });
+      }
+      if (typeof q.limit === 'function') {
+        q = q.limit(25);
       }
       const devices = await q.lean();
       for (const dev of devices) {

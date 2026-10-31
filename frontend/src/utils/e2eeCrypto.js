@@ -281,9 +281,9 @@ export async function getOrInitDeviceIdentity(userId) {
 }
 
 /**
- * Encrypts a message payload for a recipient using ECDH + HKDF + AES-256-GCM
+ * Single-device core envelope encryption helper (ECDH + HKDF + AES-256-GCM)
  */
-export async function encryptMessageEnvelope(plaintextData, recipientPublicKeyJwk, senderDeviceId, recipientDeviceId) {
+async function _encryptSingleDeviceEnvelope(plaintextData, recipientPublicKeyJwk, senderDeviceId, recipientDeviceId) {
   const subtle = getCryptoSubtle();
 
   // 1. Generate single-use ephemeral key pair for perfect forward secrecy
@@ -356,12 +356,75 @@ export async function encryptMessageEnvelope(plaintextData, recipientPublicKeyJw
 }
 
 /**
- * Decrypts an E2EE envelope using recipient's private key
+ * Encrypts a message payload for a recipient using ECDH + HKDF + AES-256-GCM
+ * Supports multi-device delivery: creates per-device ciphertext entries when multiple target devices are provided.
  */
-export async function decryptMessageEnvelope(envelope, recipientPrivateKeyOrJwk) {
+export async function encryptMessageEnvelope(plaintextData, recipientPublicKeyJwkOrTarget, senderDeviceId, recipientDeviceId, senderPublicKeyJwk = null) {
+  const isMultiDevice = Boolean(
+    recipientPublicKeyJwkOrTarget &&
+    Array.isArray(recipientPublicKeyJwkOrTarget.devices) &&
+    recipientPublicKeyJwkOrTarget.devices.length > 0
+  );
+
+  if (!isMultiDevice) {
+    const pubJwk = recipientPublicKeyJwkOrTarget?.publicKeyJwk || recipientPublicKeyJwkOrTarget;
+    return await _encryptSingleDeviceEnvelope(plaintextData, pubJwk, senderDeviceId, recipientDeviceId);
+  }
+
+  const targetDevices = [...recipientPublicKeyJwkOrTarget.devices];
+  if (senderDeviceId && senderPublicKeyJwk) {
+    if (!targetDevices.some(d => d.deviceId === senderDeviceId)) {
+      targetDevices.push({ deviceId: senderDeviceId, publicKeyJwk: senderPublicKeyJwk });
+    }
+  }
+  const deviceEnvelopes = {};
+  let primaryEnvelope = null;
+
+  for (const dev of targetDevices) {
+    if (!dev || !dev.publicKeyJwk) continue;
+    try {
+      const devEnv = await _encryptSingleDeviceEnvelope(plaintextData, dev.publicKeyJwk, senderDeviceId, dev.deviceId);
+      deviceEnvelopes[dev.deviceId] = devEnv;
+      if (!primaryEnvelope) {
+        primaryEnvelope = devEnv;
+      }
+    } catch (err) {
+      console.warn(`Failed to encrypt envelope for device ${dev.deviceId}:`, err);
+    }
+  }
+
+  if (!primaryEnvelope) {
+    throw new Error('E2EE_ENCRYPTION_FAILED: Could not encrypt envelope for any recipient device.');
+  }
+
+  return {
+    ...primaryEnvelope,
+    devices: deviceEnvelopes
+  };
+}
+
+/**
+ * Decrypts an E2EE envelope using recipient's private key
+ * Multi-device compatible: checks envelope.devices[myDeviceId] if available.
+ */
+export async function decryptMessageEnvelope(envelope, recipientPrivateKeyOrJwk, myDeviceId = '') {
   const subtle = getCryptoSubtle();
 
-  if (!envelope || envelope.format !== 'pulse_e2ee_v1' || !envelope.ephemeralPublicKey || !envelope.ciphertext || !envelope.iv) {
+  if (!envelope || (!envelope.format && !envelope.devices)) {
+    throw new Error('MALFORMED_E2EE_ENVELOPE: Invalid or missing cryptographic fields.');
+  }
+
+  // Multi-device selection: if per-device envelopes are present, select matching device entry
+  let activeEnvelope = envelope;
+  if (envelope.devices && typeof envelope.devices === 'object') {
+    if (myDeviceId && envelope.devices[myDeviceId]) {
+      activeEnvelope = envelope.devices[myDeviceId];
+    } else if (envelope.recipientDeviceId && envelope.devices[envelope.recipientDeviceId]) {
+      activeEnvelope = envelope.devices[envelope.recipientDeviceId];
+    }
+  }
+
+  if (!activeEnvelope || !activeEnvelope.ephemeralPublicKey || !activeEnvelope.ciphertext || !activeEnvelope.iv) {
     throw new Error('MALFORMED_E2EE_ENVELOPE: Invalid or missing cryptographic fields.');
   }
 
@@ -380,7 +443,7 @@ export async function decryptMessageEnvelope(envelope, recipientPrivateKeyOrJwk)
   // 2. Import ephemeral public key
   const ephemeralKey = await subtle.importKey(
     'jwk',
-    envelope.ephemeralPublicKey,
+    activeEnvelope.ephemeralPublicKey,
     { name: 'ECDH', namedCurve: 'P-256' },
     false,
     []
@@ -416,8 +479,8 @@ export async function decryptMessageEnvelope(envelope, recipientPrivateKeyOrJwk)
   );
 
   // 5. Decrypt ciphertext
-  const ivBuffer = base64ToArrayBuffer(envelope.iv);
-  const ciphertextBuffer = base64ToArrayBuffer(envelope.ciphertext);
+  const ivBuffer = base64ToArrayBuffer(activeEnvelope.iv);
+  const ciphertextBuffer = base64ToArrayBuffer(activeEnvelope.ciphertext);
 
   try {
     const decryptedBuffer = await subtle.decrypt(
@@ -636,6 +699,7 @@ export async function fetchPeerDevicePublicKey(peerId, token, apiBaseUrl = '', b
     if (res.ok) {
       const data = await res.json();
       const devices = data.devices || [];
+      const validDevices = [];
       for (const dev of devices) {
         if (!dev || dev.revoked || dev.isRevoked) continue;
         const keyObj = dev.keys || dev.publicKey;
@@ -651,13 +715,21 @@ export async function fetchPeerDevicePublicKey(peerId, token, apiBaseUrl = '', b
           }
         }
         if (pubJwk) {
-          const result = {
+          validDevices.push({
             deviceId: dev.device_id || dev.deviceId,
             publicKeyJwk: pubJwk
-          };
-          peerDeviceKeyCache.set(cleanPeerId, { result, expiresAt: Date.now() + 5 * 60 * 1000 });
-          return result;
+          });
         }
+      }
+      if (validDevices.length > 0) {
+        const primary = validDevices[0];
+        const result = {
+          deviceId: primary.deviceId,
+          publicKeyJwk: primary.publicKeyJwk,
+          devices: validDevices
+        };
+        peerDeviceKeyCache.set(cleanPeerId, { result, expiresAt: Date.now() + 5 * 60 * 1000 });
+        return result;
       }
       peerDeviceKeyCache.delete(cleanPeerId);
       return { error: 'NO_ACTIVE_KEYS', status: 200 };
@@ -679,13 +751,18 @@ export async function fetchPeerDevicePublicKey(peerId, token, apiBaseUrl = '', b
 
 /**
  * Decrypts a message if it contains an E2EE envelope
+ * Checks matching deviceId in multi-device envelopes to decrypt with appropriate private key.
  */
-export async function decryptMessageIfNeeded(msg, privateKey) {
+export async function decryptMessageIfNeeded(msg, privateKey, myDeviceId = '') {
   if (!msg || !msg.isEncrypted || !msg.envelope || !privateKey) {
     return msg;
   }
+  // If already decrypted and has valid content, never re-decrypt
+  if (msg._decrypted && msg.content && !msg._decryptionFailed) {
+    return msg;
+  }
   try {
-    const decrypted = await decryptMessageEnvelope(msg.envelope, privateKey);
+    const decrypted = await decryptMessageEnvelope(msg.envelope, privateKey, myDeviceId);
     if (typeof decrypted === 'object' && decrypted !== null) {
       return {
         ...msg,

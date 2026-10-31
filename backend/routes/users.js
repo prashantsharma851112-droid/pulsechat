@@ -323,7 +323,14 @@ router.put('/change-password', authMiddleware, async (req, res) => {
 
     const bcrypt = require('bcryptjs');
     const User = require('../models/User');
-    const user = await User.findOne({ id: req.user.id });
+    const authId = req.user?.id || req.userId || req.user?._id;
+    const isObj = mongoose.Types.ObjectId.isValid(authId);
+    const user = await User.findOne({
+      $or: [
+        { id: authId },
+        ...(isObj ? [{ _id: authId }] : [])
+      ]
+    });
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
     const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
@@ -349,7 +356,14 @@ router.post('/push-subscription', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Invalid push subscription data' });
     }
 
-    const user = await User.findOne({ id: req.user.id });
+    const authId = req.user?.id || req.userId || req.user?._id;
+    const isObj = mongoose.Types.ObjectId.isValid(authId);
+    const user = await User.findOne({
+      $or: [
+        { id: authId },
+        ...(isObj ? [{ _id: authId }] : [])
+      ]
+    });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     let subscriptions = user.pushSubscriptions || [];
@@ -372,7 +386,14 @@ router.post('/push-subscription', authMiddleware, async (req, res) => {
 router.delete('/push-subscription', authMiddleware, async (req, res) => {
   try {
     const { endpoint } = req.body;
-    const user = await User.findOne({ id: req.user.id });
+    const authId = req.user?.id || req.userId || req.user?._id;
+    const isObj = mongoose.Types.ObjectId.isValid(authId);
+    const user = await User.findOne({
+      $or: [
+        { id: authId },
+        ...(isObj ? [{ _id: authId }] : [])
+      ]
+    });
     if (user && user.pushSubscriptions) {
       user.pushSubscriptions = user.pushSubscriptions.filter(sub => sub.endpoint !== endpoint);
       user.markModified('pushSubscriptions');
