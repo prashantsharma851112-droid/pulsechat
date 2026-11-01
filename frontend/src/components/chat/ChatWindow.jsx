@@ -400,11 +400,19 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       });
     }
   }, [isOnline, isGroup, chatId, user, activeChat]);
-  const typingUser = typingMap[chatId];
+  const unambiguousCanonicalChatId = (!isGroup && currentUserId && activeChatId) ? [String(currentUserId), String(activeChatId)].sort().join('::') : null;
+  const legacyCanonicalChatId = (!isGroup && currentUserId && activeChatId) ? [String(currentUserId), String(activeChatId)].sort().join('_') : null;
+  const typingUser = typingMap[chatId] || (unambiguousCanonicalChatId && typingMap[unambiguousCanonicalChatId]) || (legacyCanonicalChatId && typingMap[legacyCanonicalChatId]) || (activeChatId && typingMap[activeChatId]);
   const isTyping = Boolean(typingUser && typingUser !== user?.username && typingUser !== user?.id && typingUser !== user?.displayName);
   const typingTimeoutRef = useRef(null);
   const draftSaveTimeoutRef = useRef(null);
   const lastTypingEmitRef = useRef(0);
+
+  useEffect(() => {
+    if (isTyping && isPinnedToBottomRef.current) {
+      scrollToBottom('smooth');
+    }
+  }, [isTyping]);
 
   const partnerAura = useMemo(() => {
     if (isGroup) return null;
@@ -6629,16 +6637,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                   </span>
                 )}
               </div>
-              <p style={{ fontSize: '0.74rem', color: isTyping ? '#22c55e' : 'var(--text-muted)', fontWeight: isTyping ? 600 : 400, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 400, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {isGroup
-                  ? (isTyping ? `✍️ ${typingUser} is typing...` : `${activeChat.members?.length || 0} members`)
+                  ? `${activeChat.members?.length || 0} members`
                   : isAnonymousBot
                     ? '🤫 Public Q&A Link Active'
-                    : isTyping
-                      ? '✍️ typing...'
-                      : isOnline
-                        ? 'Online'
-                        : 'Offline'}
+                    : isOnline
+                      ? 'Online'
+                      : 'Offline'}
               </p>
             </div>
           </div>
@@ -7556,6 +7562,36 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         )}
 
         {renderedMessagesList}
+
+        {/* WhatsApp-Style Inline Animated Typing Bubble */}
+        {isTyping && (
+          <div
+            className="inline-typing-bubble-container"
+          >
+            {isGroup && typingUser && (
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  color: 'var(--primary-color, #10b981)',
+                  marginBottom: '2px',
+                  marginLeft: '8px'
+                }}
+              >
+                {typingUser}
+              </span>
+            )}
+            <div
+              className="inline-typing-bubble"
+              title={`${typingUser || 'Contact'} is typing...`}
+            >
+              <span className="typing-dot dot-1" />
+              <span className="typing-dot dot-2" />
+              <span className="typing-dot dot-3" />
+            </div>
+          </div>
+        )}
+
         <div ref={messagesEndRef} style={{ overflowAnchor: 'none', height: '1px' }} />
       </div>
 

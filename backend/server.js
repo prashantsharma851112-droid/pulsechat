@@ -995,20 +995,72 @@ io.on('connection', (socket) => {
     if (typeof callback === 'function') callback({ success: false, error: 'INVALID_CHAT_ID', rooms: Array.from(socket.rooms) });
   });
 
-  // Typing Indicators
-  socket.on('typing_start', ({ chatId, userId, username, receiverId }) => {
-    socket.to(chatId).emit('typing_start', { chatId, userId, username });
-    if (receiverId) {
-      socket.to(`user_${receiverId}`).emit('typing_start', { chatId, userId, username });
-      socket.to(receiverId).emit('typing_start', { chatId, userId, username });
+  // Ephemeral Authenticated Typing Indicators (Never persisted in DB or IndexedDB)
+  socket.on('typing_start', async ({ chatId, userId, username, receiverId }) => {
+    const callerId = socket.authenticatedUserId;
+    if (!callerId || !chatId) return;
+
+    // Membership verification: sender must be authorized for chat
+    const { isParticipantInChat, getCanonicalChatId } = require('./utils/backupCrypto');
+    const myKeys = [
+      callerId,
+      socket.userCustomId,
+      socket.userMongoId,
+      socket.userUsername
+    ].filter(Boolean).map(String);
+
+    let isAuthorized = false;
+    if (typeof chatId === 'string') {
+      if (chatId.startsWith('group_')) {
+        isAuthorized = await isUserAuthorizedForChat(chatId, callerId);
+      } else {
+        isAuthorized = myKeys.some(m => isParticipantInChat(chatId, m)) || await isUserAuthorizedForChat(chatId, callerId);
+      }
+    }
+    if (!isAuthorized) return;
+
+    const otherId = receiverId || await getOtherParticipantId(chatId, callerId);
+    const unambiguousCanonical = (!chatId.startsWith('group_')) ? getCanonicalChatId(chatId) : null;
+    const safeUsername = username || socket.userUsername || 'Someone';
+
+    const payload = {
+      chatId,
+      canonicalChatId: unambiguousCanonical || chatId,
+      userId: callerId,
+      username: safeUsername
+    };
+
+    socket.to(chatId).emit('typing_start', payload);
+    if (unambiguousCanonical && unambiguousCanonical !== chatId) {
+      socket.to(unambiguousCanonical).emit('typing_start', payload);
+    }
+    if (otherId) {
+      const oRooms = await resolveUserRooms(otherId);
+      oRooms.forEach(r => socket.to(r).emit('typing_start', payload));
     }
   });
 
-  socket.on('typing_stop', ({ chatId, userId, receiverId }) => {
-    socket.to(chatId).emit('typing_stop', { chatId, userId });
-    if (receiverId) {
-      socket.to(`user_${receiverId}`).emit('typing_stop', { chatId, userId });
-      socket.to(receiverId).emit('typing_stop', { chatId, userId });
+  socket.on('typing_stop', async ({ chatId, userId, receiverId }) => {
+    const callerId = socket.authenticatedUserId;
+    if (!callerId || !chatId) return;
+
+    const { getCanonicalChatId } = require('./utils/backupCrypto');
+    const otherId = receiverId || await getOtherParticipantId(chatId, callerId);
+    const unambiguousCanonical = (!chatId.startsWith('group_')) ? getCanonicalChatId(chatId) : null;
+
+    const payload = {
+      chatId,
+      canonicalChatId: unambiguousCanonical || chatId,
+      userId: callerId
+    };
+
+    socket.to(chatId).emit('typing_stop', payload);
+    if (unambiguousCanonical && unambiguousCanonical !== chatId) {
+      socket.to(unambiguousCanonical).emit('typing_stop', payload);
+    }
+    if (otherId) {
+      const oRooms = await resolveUserRooms(otherId);
+      oRooms.forEach(r => socket.to(r).emit('typing_stop', payload));
     }
   });
 
@@ -1946,6 +1998,8 @@ io.on('connection', (socket) => {
       const multiPayload = { chatId, canonicalChatId, messageIds: [messageId], clientTempIds: resolvedClientTempId ? [resolvedClientTempId] : [], status: 'delivered', senderId: verifiedSenderId, receiverId: claims?.receiverId || callerId };
 
       const targetRooms = new Set();
+      if (chatId) targetRooms.add(chatId);
+      if (canonicalChatId) targetRooms.add(canonicalChatId);
       if (unambiguousCanonical) targetRooms.add(unambiguousCanonical);
 
       if (verifiedSenderId) {
@@ -2252,6 +2306,8 @@ io.on('connection', (socket) => {
       : chatId);
 
     const targetRooms = new Set();
+    if (chatId) targetRooms.add(chatId);
+    if (canonicalChatId) targetRooms.add(canonicalChatId);
     if (unambiguousCanonical) targetRooms.add(unambiguousCanonical);
 
     if (senderTarget) {
@@ -2342,6 +2398,8 @@ io.on('connection', (socket) => {
       : chatId);
 
     const targetRooms = new Set();
+    if (chatId) targetRooms.add(chatId);
+    if (canonicalChatId) targetRooms.add(canonicalChatId);
     if (unambiguousCanonical) targetRooms.add(unambiguousCanonical);
 
     if (otherId) {

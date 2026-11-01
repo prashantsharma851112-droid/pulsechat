@@ -38,14 +38,24 @@ const ChatInputCapsule = React.memo(React.forwardRef(function ChatInputCapsule({
   const lastTypingEmitRef = useRef(0);
   const sendBtnHoldTimerRef = useRef(null);
 
-  // Synchronize draft on chatId change
+  // Synchronize draft on chatId change and clean up typing status
   useEffect(() => {
     if (!chatId) return;
     try {
       const savedDraft = localStorage.getItem(`pulsechat_draft_${chatId}`) || '';
       setText(savedDraft);
     } catch {}
-  }, [chatId]);
+
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      if (socket && chatId && user?.id) {
+        const receiverId = isGroup ? '' : activeChat?.id;
+        socket.emit('typing_stop', { chatId, userId: user.id, receiverId });
+      }
+    };
+  }, [chatId, socket, user?.id, isGroup, activeChat?.id]);
 
   useImperativeHandle(ref, () => ({
     setText: (newText) => {
@@ -152,6 +162,14 @@ const ChatInputCapsule = React.memo(React.forwardRef(function ChatInputCapsule({
     }
     const trimmed = text.trim();
     if (!trimmed) return;
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    if (socket && chatId && user?.id) {
+      const receiverId = isGroup ? '' : activeChat?.id;
+      socket.emit('typing_stop', { chatId, userId: user.id, receiverId });
+    }
 
     onSendText(text);
     setText('');

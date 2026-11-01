@@ -31,6 +31,75 @@ function base64ToBuffer(b64) {
 }
 
 /**
+ * Parse 1-on-1 direct conversation participants from any valid chatId representation.
+ */
+function parseChatParticipants(chatId) {
+  if (!chatId || typeof chatId !== 'string' || chatId.startsWith('group_')) return null;
+
+  // 1. Unambiguous canonical delimiter '::'
+  if (chatId.includes('::')) {
+    const parts = chatId.split('::').filter(Boolean);
+    if (parts.length === 2) {
+      return [parts[0].trim(), parts[1].trim()];
+    }
+  }
+
+  // 2. Composite chatId containing standard '_user_' boundary (e.g. 'user_123_user_456')
+  const userIdx = chatId.indexOf('_user_', 1);
+  if (userIdx !== -1) {
+    const p1 = chatId.slice(0, userIdx).trim();
+    const p2 = chatId.slice(userIdx + 1).trim();
+    if (p1 && p2) return [p1, p2];
+  }
+
+  // 3. Mongo ObjectId boundaries (24 hex characters) joined with '_'
+  const mongoMatch1 = chatId.match(/^([0-9a-fA-F]{24})_(.+)$/);
+  if (mongoMatch1 && mongoMatch1[1] && mongoMatch1[2]) {
+    return [mongoMatch1[1].trim(), mongoMatch1[2].trim()];
+  }
+  const mongoMatch2 = chatId.match(/^(.+)_([0-9a-fA-F]{24})$/);
+  if (mongoMatch2 && mongoMatch2[1] && mongoMatch2[2]) {
+    return [mongoMatch2[1].trim(), mongoMatch2[2].trim()];
+  }
+
+  // 4. Fallback for two simple tokens separated by '_' (excluding single user_ prefixed IDs)
+  if (chatId.includes('_')) {
+    if (chatId.startsWith('user_')) {
+      const secondPartIdx = chatId.indexOf('_', 5);
+      if (secondPartIdx !== -1) {
+        const p1 = chatId.slice(0, secondPartIdx).trim();
+        const p2 = chatId.slice(secondPartIdx + 1).trim();
+        if (p1 && p2) return [p1, p2];
+      }
+      return null;
+    }
+    const parts = chatId.split('_').filter(Boolean);
+    if (parts.length === 2) {
+      return [parts[0].trim(), parts[1].trim()];
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Get canonical direct chat ID (sorted participants separated by '::').
+ * Supports getCanonicalChatId(chatId) or getCanonicalChatId(userA, userB).
+ */
+function getCanonicalChatId(chatIdOrUserA, maybeUserB) {
+  if (maybeUserB && typeof chatIdOrUserA === 'string' && typeof maybeUserB === 'string') {
+    return [chatIdOrUserA.trim(), maybeUserB.trim()].sort().join('::');
+  }
+  const chatId = chatIdOrUserA;
+  if (!chatId || typeof chatId !== 'string') return chatId || '';
+  const parts = parseChatParticipants(chatId);
+  if (parts && parts.length === 2) {
+    return [...parts].sort().join('::');
+  }
+  return chatId;
+}
+
+/**
  * Verify whether a userId is an authentic participant of a direct chat room
  * Handles IDs with underscores and prevents substring prefix/suffix collisions.
  */
@@ -44,6 +113,11 @@ function isParticipantInChat(chatId, userId) {
   if (cid.includes('::')) {
     const parts = cid.split('::');
     return parts.length === 2 && parts.map(p => p.trim()).includes(uid);
+  }
+
+  const parsed = parseChatParticipants(cid);
+  if (parsed && parsed.length === 2) {
+    return parsed.includes(uid);
   }
 
   // Canonical sorted join check (handles IDs with underscores)
@@ -343,6 +417,8 @@ module.exports = {
   filterMessagesForUser,
   validateBackupPayload,
   isParticipantInChat,
+  parseChatParticipants,
+  getCanonicalChatId,
   bufferToBase64,
   base64ToBuffer
 };

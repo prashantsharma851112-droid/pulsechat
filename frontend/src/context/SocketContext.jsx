@@ -20,6 +20,7 @@ export function SocketProvider({ children }) {
   const userRef = useRef(user);
   const deviceIdentityRef = useRef(null);
   const processedDurableMsgIdsRef = useRef(new Set());
+  const typingTimeoutsRef = useRef({});
 
   useEffect(() => {
     userRef.current = user;
@@ -235,18 +236,61 @@ export function SocketProvider({ children }) {
         }
       });
 
-      newSocket.on('typing_start', ({ chatId, username }) => {
+      newSocket.on('typing_start', ({ chatId, canonicalChatId, username }) => {
         const val = username || 'Someone';
-        setTypingMap(prev => (prev[chatId] === val ? prev : { ...prev, [chatId]: val }));
-      });
+        const keys = [chatId, canonicalChatId].filter(Boolean);
+        if (keys.length === 0) return;
 
-      newSocket.on('typing_stop', ({ chatId }) => {
+        // Auto-clear safety: Clear prior timeout and set a 3500ms safety auto-clear
+        keys.forEach(k => {
+          if (typingTimeoutsRef.current[k]) {
+            clearTimeout(typingTimeoutsRef.current[k]);
+          }
+          typingTimeoutsRef.current[k] = setTimeout(() => {
+            setTypingMap(prev => {
+              const next = { ...prev };
+              keys.forEach(key => delete next[key]);
+              return next;
+            });
+            keys.forEach(key => delete typingTimeoutsRef.current[key]);
+          }, 3500);
+        });
+
         setTypingMap(prev => {
-          if (!prev[chatId]) return prev;
           const next = { ...prev };
-          delete next[chatId];
+          keys.forEach(k => { next[k] = val; });
           return next;
         });
+      });
+
+      newSocket.on('typing_stop', ({ chatId, canonicalChatId }) => {
+        const keys = [chatId, canonicalChatId].filter(Boolean);
+        if (keys.length === 0) return;
+
+        keys.forEach(k => {
+          if (typingTimeoutsRef.current[k]) {
+            clearTimeout(typingTimeoutsRef.current[k]);
+            delete typingTimeoutsRef.current[k];
+          }
+        });
+
+        setTypingMap(prev => {
+          let changed = false;
+          const next = { ...prev };
+          keys.forEach(k => {
+            if (next[k]) {
+              delete next[k];
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+      });
+
+      newSocket.on('disconnect', () => {
+        Object.values(typingTimeoutsRef.current).forEach(clearTimeout);
+        typingTimeoutsRef.current = {};
+        setTypingMap({});
       });
 
       const triggerPushIfBackground = (msg) => {
@@ -397,6 +441,24 @@ export function SocketProvider({ children }) {
             receiptToken: msg.receiptToken || null,
             clientTempId: msg.clientTempId || null
           });
+        }
+
+        // 4. Instant Read Receipt (Blue Double Tick):
+        // If receiver is actively viewing this open, visible conversation, mark read immediately
+        // after durable IndexedDB persistence completes.
+        if (isViewingThisChat) {
+          const isCurGhost = (typeof window !== 'undefined' && localStorage.getItem('pulsechat_ghost_global') === 'true') || Boolean(curUser?.hideReadReceipts);
+          if (!isCurGhost && newSocket.connected) {
+            newSocket.emit('mark_read', {
+              messageId: msg.id,
+              chatId: msgToCommit.chatId,
+              senderId: msg.senderId
+            });
+            updateCachedMessageStatus(msgToCommit.chatId, msg.id, { status: 'read' });
+            if (msg.clientTempId) {
+              updateCachedMessageStatus(msgToCommit.chatId, msg.clientTempId, { status: 'read' });
+            }
+          }
         }
       };
 
@@ -569,6 +631,9 @@ export function SocketProvider({ children }) {
         window.removeEventListener('pagehide', handleOffline);
         window.removeEventListener('beforeunload', handleOffline);
         window.removeEventListener('pulsechat_toggle_online_privacy', handleToggleOnlinePrivacy);
+        Object.values(typingTimeoutsRef.current).forEach(clearTimeout);
+        typingTimeoutsRef.current = {};
+        setTypingMap({});
         newSocket.disconnect();
       };
     } else {

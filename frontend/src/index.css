@@ -3108,3 +3108,71 @@ button:active:not(:disabled),
   animation: pulseAudioWaveBar 0.65s ease-in-out infinite alternate;
 }
 
+/* WhatsApp-Style Inline Typing Indicator */
+@keyframes typingBubbleFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes typingBounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.inline-typing-bubble-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 4px 0 8px 0;
+  padding: 0 4px;
+  animation: typingBubbleFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 10;
+}
+
+.inline-typing-bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border-radius: 18px 18px 18px 4px;
+  background: var(--bubble-received, var(--bg-card, #202c33));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  min-height: 28px;
+  width: fit-content;
+}
+
+.typing-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--text-muted, #8696a0);
+  display: inline-block;
+  animation: typingBounce 1.4s infinite ease-in-out both;
+}
+
+.typing-dot.dot-1 {
+  animation-delay: -0.32s;
+}
+
+.typing-dot.dot-2 {
+  animation-delay: -0.16s;
+}
+
+.typing-dot.dot-3 {
+  animation-delay: 0s;
+}
+
+
