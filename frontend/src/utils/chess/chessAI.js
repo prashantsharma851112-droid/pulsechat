@@ -96,7 +96,7 @@ const PST = {
 /**
  * Static board evaluation from White's perspective (+ score favors White, - favors Black).
  */
-export function evaluateBoard(chess, ply = 0) {
+export function evaluateBoard(chess, ply = 0, level = 1) {
   if (chess.isCheckmate()) {
     return chess.turn() === 'w' ? -999999 + ply : 999999 - ply;
   }
@@ -116,7 +116,12 @@ export function evaluateBoard(chess, ply = 0) {
         // For black, mirror the table vertically
         const pstIndex = piece.color === 'w' ? squareIndex : (7 - r) * 8 + c;
         const pstBonus = (PST[piece.type] && PST[piece.type][pstIndex]) || 0;
-        const pieceTotal = val + pstBonus;
+        let pieceTotal = val + pstBonus;
+
+        // Strategic center control evaluation for Level 8-10
+        if (level >= 8 && (r === 3 || r === 4) && (c === 3 || c === 4)) {
+          pieceTotal += 15;
+        }
 
         if (piece.color === 'w') {
           totalEvaluation += pieceTotal;
@@ -127,11 +132,40 @@ export function evaluateBoard(chess, ply = 0) {
     }
   }
 
+  // Advanced King Safety & Pawn Protection for Level 10
+  if (level >= 10) {
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const p = board[r][c];
+        if (p && p.type === 'k') {
+          // Castled king bonus: kings safely tucked on g1/g8 or c1/c8
+          if (p.color === 'w' && r === 7 && (c === 6 || c === 2)) totalEvaluation += 30;
+          if (p.color === 'b' && r === 0 && (c === 6 || c === 2)) totalEvaluation -= 30;
+        }
+      }
+    }
+  }
+
   return totalEvaluation;
 }
 
+function getPSTDelta(move) {
+  if (!move || !move.piece || !move.from || !move.to) return 0;
+  const table = PST[move.piece];
+  if (!table) return 0;
+  const cFrom = move.from.charCodeAt(0) - 97;
+  const rFrom = 8 - parseInt(move.from[1], 10);
+  const idxFrom = move.color === 'w' ? rFrom * 8 + cFrom : (7 - rFrom) * 8 + cFrom;
+
+  const cTo = move.to.charCodeAt(0) - 97;
+  const rTo = 8 - parseInt(move.to[1], 10);
+  const idxTo = move.color === 'w' ? rTo * 8 + cTo : (7 - rTo) * 8 + cTo;
+
+  return (table[idxTo] || 0) - (table[idxFrom] || 0);
+}
+
 /**
- * Move ordering heuristic: Prioritizes checks/checkmates, then captures by MVV-LVA, then promotions.
+ * Move ordering heuristic: Prioritizes checks/checkmates, then captures by MVV-LVA, promotions, and positional gain.
  */
 function orderMoves(moves) {
   return moves.slice().sort((a, b) => {
@@ -145,31 +179,33 @@ function orderMoves(moves) {
     else if (b.san && b.san.includes('+')) scoreB += 5000;
 
     if (a.captured) {
-      scoreA += (PIECE_VALUES[a.captured] || 0) * 10 - (PIECE_VALUES[a.piece] || 0);
+      scoreA += (PIECE_VALUES[a.captured] || 0) * 10 - (PIECE_VALUES[a.piece] || 0) + 1000;
     }
     if (a.promotion) {
-      scoreA += (PIECE_VALUES[a.promotion] || 900);
+      scoreA += (PIECE_VALUES[a.promotion] || 900) + 500;
     }
+    scoreA += getPSTDelta(a);
 
     if (b.captured) {
-      scoreB += (PIECE_VALUES[b.captured] || 0) * 10 - (PIECE_VALUES[b.piece] || 0);
+      scoreB += (PIECE_VALUES[b.captured] || 0) * 10 - (PIECE_VALUES[b.piece] || 0) + 1000;
     }
     if (b.promotion) {
-      scoreB += (PIECE_VALUES[b.promotion] || 900);
+      scoreB += (PIECE_VALUES[b.promotion] || 900) + 500;
     }
+    scoreB += getPSTDelta(b);
 
     return scoreB - scoreA;
   });
 }
 
 /**
- * Quiescence search to avoid horizon effect on captures.
+ * Quiescence search with delta pruning to avoid horizon effect on captures.
  */
-function quiescence(chess, alpha, beta, isMaximizing, depthLimit = 2) {
+function quiescence(chess, alpha, beta, isMaximizing, depthLimit = 1, level = 1) {
   if (chess.isCheckmate()) {
     return chess.turn() === 'w' ? -999999 : 999999;
   }
-  const standPat = evaluateBoard(chess);
+  const standPat = evaluateBoard(chess, 0, level);
   if (depthLimit <= 0) return standPat;
 
   if (isMaximizing) {
@@ -177,12 +213,19 @@ function quiescence(chess, alpha, beta, isMaximizing, depthLimit = 2) {
     let maxVal = standPat;
     let a = Math.max(alpha, standPat);
 
-    const captures = orderMoves(chess.moves({ verbose: true })).filter(m => m.captured || m.promotion);
+    const allMoves = chess.moves({ verbose: true });
+    // Delta pruning: filter captures that cannot mathematically improve alpha
+    const captures = orderMoves(allMoves.filter(m => {
+      if (!m.captured && !m.promotion) return false;
+      const victimVal = PIECE_VALUES[m.captured] || 900;
+      return standPat + victimVal + 200 >= a;
+    }));
+
     if (captures.length === 0) return standPat;
 
     for (const move of captures) {
       chess.move(move);
-      const score = quiescence(chess, a, beta, false, depthLimit - 1);
+      const score = quiescence(chess, a, beta, false, depthLimit - 1, level);
       chess.undo();
       maxVal = Math.max(maxVal, score);
       a = Math.max(a, score);
@@ -194,12 +237,19 @@ function quiescence(chess, alpha, beta, isMaximizing, depthLimit = 2) {
     let minVal = standPat;
     let b = Math.min(beta, standPat);
 
-    const captures = orderMoves(chess.moves({ verbose: true })).filter(m => m.captured || m.promotion);
+    const allMoves = chess.moves({ verbose: true });
+    // Delta pruning: filter captures that cannot mathematically improve beta
+    const captures = orderMoves(allMoves.filter(m => {
+      if (!m.captured && !m.promotion) return false;
+      const victimVal = PIECE_VALUES[m.captured] || 900;
+      return standPat - victimVal - 200 <= b;
+    }));
+
     if (captures.length === 0) return standPat;
 
     for (const move of captures) {
       chess.move(move);
-      const score = quiescence(chess, alpha, b, true, depthLimit - 1);
+      const score = quiescence(chess, alpha, b, true, depthLimit - 1, level);
       chess.undo();
       minVal = Math.min(minVal, score);
       b = Math.min(b, score);
@@ -212,13 +262,17 @@ function quiescence(chess, alpha, beta, isMaximizing, depthLimit = 2) {
 /**
  * Minimax with Alpha-Beta Pruning.
  */
-function minimax(chess, depth, alpha, beta, isMaximizing, quiescenceDepth = 0, ply = 1) {
+function minimax(chess, depth, alpha, beta, isMaximizing, quiescenceDepth = 0, ply = 1, level = 1, lastMove = null) {
   if (chess.isGameOver()) {
-    return evaluateBoard(chess, ply);
+    return evaluateBoard(chess, ply, level);
   }
 
   if (depth <= 0) {
-    return quiescenceDepth > 0 ? quiescence(chess, alpha, beta, isMaximizing, quiescenceDepth) : evaluateBoard(chess, ply);
+    const isTurbulent = chess.inCheck() || (lastMove && (lastMove.captured || lastMove.promotion));
+    if (quiescenceDepth > 0 && isTurbulent) {
+      return quiescence(chess, alpha, beta, isMaximizing, quiescenceDepth, level);
+    }
+    return evaluateBoard(chess, ply, level);
   }
 
   const legalMoves = orderMoves(chess.moves({ verbose: true }));
@@ -227,7 +281,7 @@ function minimax(chess, depth, alpha, beta, isMaximizing, quiescenceDepth = 0, p
     let maxEval = -Infinity;
     for (const move of legalMoves) {
       chess.move(move);
-      const evaluation = minimax(chess, depth - 1, alpha, beta, false, quiescenceDepth, ply + 1);
+      const evaluation = minimax(chess, depth - 1, alpha, beta, false, quiescenceDepth, ply + 1, level, move);
       chess.undo();
       maxEval = Math.max(maxEval, evaluation);
       alpha = Math.max(alpha, evaluation);
@@ -238,7 +292,7 @@ function minimax(chess, depth, alpha, beta, isMaximizing, quiescenceDepth = 0, p
     let minEval = Infinity;
     for (const move of legalMoves) {
       chess.move(move);
-      const evaluation = minimax(chess, depth - 1, alpha, beta, true, quiescenceDepth, ply + 1);
+      const evaluation = minimax(chess, depth - 1, alpha, beta, true, quiescenceDepth, ply + 1, level, move);
       chess.undo();
       minEval = Math.min(minEval, evaluation);
       beta = Math.min(beta, evaluation);
@@ -275,7 +329,7 @@ export function calculateBestMove(chessInstance, level = 1) {
 
     for (const move of legalMoves) {
       chess.move(move);
-      let val = evaluateBoard(chess);
+      let val = evaluateBoard(chess, 0, clampedLevel);
       chess.undo();
 
       // Add small jitter at level 2 so it doesn't play identically every game
@@ -291,7 +345,7 @@ export function calculateBestMove(chessInstance, level = 1) {
     return bestMove;
   }
 
-  // Level 3 to 10 Parameter Matrix: Genuine scaling of searchDepth & quiescenceDepth
+  // Level 3 to 10 Parameter Matrix: Genuine scaling of searchDepth, quiescence, and positional complexity
   let searchDepth = 2;
   let qDepth = 0;
 
@@ -300,17 +354,17 @@ export function calculateBestMove(chessInstance, level = 1) {
   } else if (clampedLevel === 4) {
     searchDepth = 2; qDepth = 1;
   } else if (clampedLevel === 5) {
-    searchDepth = 3; qDepth = 0;
+    searchDepth = 2; qDepth = 1;
   } else if (clampedLevel === 6) {
-    searchDepth = 3; qDepth = 1;
+    searchDepth = 3; qDepth = 0;
   } else if (clampedLevel === 7) {
-    searchDepth = 3; qDepth = 2;
+    searchDepth = 3; qDepth = 0;
   } else if (clampedLevel === 8) {
-    searchDepth = 4; qDepth = 0;
+    searchDepth = 3; qDepth = 1;
   } else if (clampedLevel === 9) {
-    searchDepth = 4; qDepth = 1;
+    searchDepth = 3; qDepth = 1;
   } else if (clampedLevel >= 10) {
-    searchDepth = 4; qDepth = 2;
+    searchDepth = 3; qDepth = 1;
   }
 
   let bestMoves = [];
@@ -328,7 +382,7 @@ export function calculateBestMove(chessInstance, level = 1) {
       return move;
     }
 
-    const val = minimax(chess, searchDepth - 1, alpha, beta, !isMaximizing, qDepth, 1);
+    const val = minimax(chess, searchDepth - 1, alpha, beta, !isMaximizing, qDepth, 1, clampedLevel, move);
     chess.undo();
 
     if (isMaximizing) {

@@ -356,6 +356,9 @@ export default function ChessBoard3D({
       if (!isRunning) return;
       animFrameIdRef.current = requestAnimationFrame(animate);
 
+      // Suspend WebGL rendering loops when tab or window is hidden to save GPU/battery
+      if (typeof document !== 'undefined' && document.hidden) return;
+
       // Process any active move transitions
       const anims = animatingMovesRef.current;
       if (anims.length > 0) {

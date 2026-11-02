@@ -18,3 +18,5 @@ android/.gradle/
 android/app/build/
 AUTH_EMAIL_VERIFICATION_MASTERCLASS.html
 backend/tests/chrome_test_profile/
+
+backend/tests/*.png
