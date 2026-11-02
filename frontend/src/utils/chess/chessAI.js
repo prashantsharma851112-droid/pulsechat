@@ -96,9 +96,9 @@ const PST = {
 /**
  * Static board evaluation from White's perspective (+ score favors White, - favors Black).
  */
-export function evaluateBoard(chess) {
+export function evaluateBoard(chess, ply = 0) {
   if (chess.isCheckmate()) {
-    return chess.turn() === 'w' ? -999999 : 999999;
+    return chess.turn() === 'w' ? -999999 + ply : 999999 - ply;
   }
   if (chess.isDraw() || chess.isStalemate() || chess.isThreefoldRepetition() || chess.isInsufficientMaterial()) {
     return 0;
@@ -131,12 +131,18 @@ export function evaluateBoard(chess) {
 }
 
 /**
- * Move ordering heuristic: Sort captures by Most Valuable Victim - Least Valuable Attacker (MVV-LVA)
+ * Move ordering heuristic: Prioritizes checks/checkmates, then captures by MVV-LVA, then promotions.
  */
 function orderMoves(moves) {
   return moves.slice().sort((a, b) => {
     let scoreA = 0;
     let scoreB = 0;
+
+    if (a.san && a.san.includes('#')) scoreA += 100000;
+    else if (a.san && a.san.includes('+')) scoreA += 5000;
+
+    if (b.san && b.san.includes('#')) scoreB += 100000;
+    else if (b.san && b.san.includes('+')) scoreB += 5000;
 
     if (a.captured) {
       scoreA += (PIECE_VALUES[a.captured] || 0) * 10 - (PIECE_VALUES[a.piece] || 0);
@@ -160,48 +166,59 @@ function orderMoves(moves) {
  * Quiescence search to avoid horizon effect on captures.
  */
 function quiescence(chess, alpha, beta, isMaximizing, depthLimit = 2) {
+  if (chess.isCheckmate()) {
+    return chess.turn() === 'w' ? -999999 : 999999;
+  }
   const standPat = evaluateBoard(chess);
   if (depthLimit <= 0) return standPat;
 
   if (isMaximizing) {
     if (standPat >= beta) return beta;
-    if (alpha < standPat) alpha = standPat;
+    let maxVal = standPat;
+    let a = Math.max(alpha, standPat);
+
+    const captures = orderMoves(chess.moves({ verbose: true })).filter(m => m.captured || m.promotion);
+    if (captures.length === 0) return standPat;
+
+    for (const move of captures) {
+      chess.move(move);
+      const score = quiescence(chess, a, beta, false, depthLimit - 1);
+      chess.undo();
+      maxVal = Math.max(maxVal, score);
+      a = Math.max(a, score);
+      if (beta <= a) break;
+    }
+    return maxVal;
   } else {
     if (standPat <= alpha) return alpha;
-    if (beta > standPat) beta = standPat;
-  }
+    let minVal = standPat;
+    let b = Math.min(beta, standPat);
 
-  // Only examine capture moves
-  const captures = orderMoves(chess.moves({ verbose: true })).filter(m => m.captured || m.promotion);
-  if (captures.length === 0) return standPat;
+    const captures = orderMoves(chess.moves({ verbose: true })).filter(m => m.captured || m.promotion);
+    if (captures.length === 0) return standPat;
 
-  for (const move of captures) {
-    chess.move(move);
-    const score = quiescence(chess, alpha, beta, !isMaximizing, depthLimit - 1);
-    chess.undo();
-
-    if (isMaximizing) {
-      if (score >= beta) return beta;
-      if (score > alpha) alpha = score;
-    } else {
-      if (score <= alpha) return alpha;
-      if (score < beta) beta = score;
+    for (const move of captures) {
+      chess.move(move);
+      const score = quiescence(chess, alpha, b, true, depthLimit - 1);
+      chess.undo();
+      minVal = Math.min(minVal, score);
+      b = Math.min(b, score);
+      if (b <= alpha) break;
     }
+    return minVal;
   }
-
-  return isMaximizing ? alpha : beta;
 }
 
 /**
  * Minimax with Alpha-Beta Pruning.
  */
-function minimax(chess, depth, alpha, beta, isMaximizing, useQuiescence = false) {
-  if (depth === 0) {
-    return useQuiescence ? quiescence(chess, alpha, beta, isMaximizing, 2) : evaluateBoard(chess);
+function minimax(chess, depth, alpha, beta, isMaximizing, quiescenceDepth = 0, ply = 1) {
+  if (chess.isGameOver()) {
+    return evaluateBoard(chess, ply);
   }
 
-  if (chess.isGameOver()) {
-    return evaluateBoard(chess);
+  if (depth <= 0) {
+    return quiescenceDepth > 0 ? quiescence(chess, alpha, beta, isMaximizing, quiescenceDepth) : evaluateBoard(chess, ply);
   }
 
   const legalMoves = orderMoves(chess.moves({ verbose: true }));
@@ -210,7 +227,7 @@ function minimax(chess, depth, alpha, beta, isMaximizing, useQuiescence = false)
     let maxEval = -Infinity;
     for (const move of legalMoves) {
       chess.move(move);
-      const evaluation = minimax(chess, depth - 1, alpha, beta, false, useQuiescence);
+      const evaluation = minimax(chess, depth - 1, alpha, beta, false, quiescenceDepth, ply + 1);
       chess.undo();
       maxEval = Math.max(maxEval, evaluation);
       alpha = Math.max(alpha, evaluation);
@@ -221,7 +238,7 @@ function minimax(chess, depth, alpha, beta, isMaximizing, useQuiescence = false)
     let minEval = Infinity;
     for (const move of legalMoves) {
       chess.move(move);
-      const evaluation = minimax(chess, depth - 1, alpha, beta, true, useQuiescence);
+      const evaluation = minimax(chess, depth - 1, alpha, beta, true, quiescenceDepth, ply + 1);
       chess.undo();
       minEval = Math.min(minEval, evaluation);
       beta = Math.min(beta, evaluation);
@@ -244,7 +261,7 @@ export function calculateBestMove(chessInstance, level = 1) {
   if (legalMoves.length === 0) return null;
 
   const isMaximizing = chess.turn() === 'w';
-  const clampedLevel = Math.max(1, parseInt(level || '1', 10));
+  const clampedLevel = Math.max(1, Math.min(10, parseInt(level || '1', 10)));
 
   // Level 1: 35% chance of picking a random legal move (blunder simulator for beginners)
   if (clampedLevel === 1 && Math.random() < 0.35) {
@@ -274,17 +291,44 @@ export function calculateBestMove(chessInstance, level = 1) {
     return bestMove;
   }
 
-  // Level 3-4: Depth 2 to 3 Minimax
-  const searchDepth = clampedLevel <= 3 ? 2 : (clampedLevel <= 6 ? 3 : (clampedLevel <= 9 ? 4 : 5));
-  const useQuiescence = clampedLevel >= 5;
+  // Level 3 to 10 Parameter Matrix: Genuine scaling of searchDepth & quiescenceDepth
+  let searchDepth = 2;
+  let qDepth = 0;
+
+  if (clampedLevel === 3) {
+    searchDepth = 2; qDepth = 0;
+  } else if (clampedLevel === 4) {
+    searchDepth = 2; qDepth = 1;
+  } else if (clampedLevel === 5) {
+    searchDepth = 3; qDepth = 0;
+  } else if (clampedLevel === 6) {
+    searchDepth = 3; qDepth = 1;
+  } else if (clampedLevel === 7) {
+    searchDepth = 3; qDepth = 2;
+  } else if (clampedLevel === 8) {
+    searchDepth = 4; qDepth = 0;
+  } else if (clampedLevel === 9) {
+    searchDepth = 4; qDepth = 1;
+  } else if (clampedLevel >= 10) {
+    searchDepth = 4; qDepth = 2;
+  }
 
   let bestMoves = [];
   let bestVal = isMaximizing ? -Infinity : Infinity;
+  let alpha = -Infinity;
+  let beta = Infinity;
   const ordered = orderMoves(legalMoves);
 
   for (const move of ordered) {
     chess.move(move);
-    const val = minimax(chess, searchDepth - 1, -Infinity, Infinity, !isMaximizing, useQuiescence);
+
+    // Instant win recognition: If move delivers checkmate, return it immediately
+    if (chess.isCheckmate()) {
+      chess.undo();
+      return move;
+    }
+
+    const val = minimax(chess, searchDepth - 1, alpha, beta, !isMaximizing, qDepth, 1);
     chess.undo();
 
     if (isMaximizing) {
@@ -294,6 +338,7 @@ export function calculateBestMove(chessInstance, level = 1) {
       } else if (val === bestVal) {
         bestMoves.push(move);
       }
+      alpha = Math.max(alpha, val);
     } else {
       if (val < bestVal) {
         bestVal = val;
@@ -301,6 +346,7 @@ export function calculateBestMove(chessInstance, level = 1) {
       } else if (val === bestVal) {
         bestMoves.push(move);
       }
+      beta = Math.min(beta, val);
     }
   }
 

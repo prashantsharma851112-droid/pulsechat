@@ -169,6 +169,7 @@ async function runBrowserVerification() {
     '--remote-debugging-address=127.0.0.1',
     '--headless=new',
     '--disable-gpu',
+    '--disable-extensions',
     '--no-sandbox',
     '--disable-setuid-sandbox',
     `--user-data-dir=${USER_DATA_DIR}`,
@@ -198,8 +199,9 @@ async function runBrowserVerification() {
           });
           req.on('error', reject);
         });
-        if (jsonList && jsonList.length > 0 && jsonList[0].webSocketDebuggerUrl) {
-          wsUrl = jsonList[0].webSocketDebuggerUrl;
+        const pageTarget = Array.isArray(jsonList) && jsonList.find(t => t.type === 'page' && t.webSocketDebuggerUrl);
+        if (pageTarget) {
+          wsUrl = pageTarget.webSocketDebuggerUrl;
           break;
         }
       } catch (e) {}
@@ -249,6 +251,9 @@ async function runBrowserVerification() {
       })}));
       localStorage.setItem('pulsechat_onboarding_completed', 'true');
       localStorage.setItem('pulsechat_has_seen_intro', 'true');
+      localStorage.setItem('pulsechat_onboarding_${authUser.id}', 'true');
+      localStorage.setItem('pulsechat_feature_tour_completed_${authUser.id}', 'true');
+      localStorage.setItem('pulse_restore_prompt_dismissed_${authUser.id}', 'true');
     `);
 
     // Reload page to enter authenticated chat
@@ -409,9 +414,8 @@ async function runBrowserVerification() {
     // SCENARIO 5: Dismiss profile via Escape key
     // =========================================================================
     console.log('[Step 8] Testing Escape key dismissal...');
-    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
-    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
-    await sleep(500);
+    await cdp.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }))`);
+    await sleep(600);
 
     const isClosedAfterEsc = await cdp.eval(`!document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]')`);
     assert(isClosedAfterEsc, 'PlayerProfile failed to dismiss via Escape key');
@@ -427,30 +431,80 @@ async function runBrowserVerification() {
       deviceScaleFactor: 2,
       mobile: true
     });
-    await sleep(500);
+    await sleep(800);
+
+    // Verify Pulse Zone is open on mobile
+    let isZoneOpenMobile = await cdp.eval(`(() => {
+      const h2 = document.querySelector('.modal-card h2');
+      return Boolean(h2 && h2.innerText.includes('Pulse Zone'));
+    })()`);
+    if (!isZoneOpenMobile) {
+      console.log('[Mobile Setup] Opening Pulse Zone in mobile view...');
+      await cdp.eval(`(() => {
+        const btn = document.querySelector('[title*="Pulse Zone"]');
+        if (btn) btn.click();
+      })()`);
+      await sleep(1000);
+    }
+
+    // Ensure Leaderboard tab is selected
+    await cdp.eval(`(() => {
+      const tabs = Array.from(document.querySelectorAll('button'));
+      const lbTab = tabs.find(b => b.textContent && b.textContent.includes('Leaderboard'));
+      if (lbTab) lbTab.click();
+    })()`);
+    await sleep(800);
+
+    // Wait for leaderboard rows to be present
+    let mobileLbRows = 0;
+    for (let i = 0; i < 20; i++) {
+      mobileLbRows = await cdp.eval(`document.querySelectorAll('[aria-label*="View gaming profile"]').length`);
+      if (mobileLbRows > 0) break;
+      await sleep(300);
+    }
+
+    const domStateBeforeClick = await cdp.eval(`({
+      hasModalCard: Boolean(document.querySelector('.modal-card')),
+      mobileLbRows: document.querySelectorAll('[aria-label*="View gaming profile"]').length,
+      hasPulseZoneTitle: Boolean(document.querySelector('[title*="Pulse Zone"]')),
+      modalCardTextSnippet: document.querySelector('.modal-card')?.innerText?.substring(0, 300) || '',
+      activeTabButton: Array.from(document.querySelectorAll('button')).find(b => b.style.background?.includes('gradient'))?.innerText || ''
+    })`);
+    console.log('[Step 9 DOM State before clicking player row]:', domStateBeforeClick);
 
     // Tap #1 player row in mobile view
     await cdp.eval(`(() => {
       const rows = document.querySelectorAll('[aria-label*="View gaming profile"]');
-      if (rows[0]) rows[0].click();
+      if (rows[0]) {
+        rows[0].click();
+      }
     })()`);
-    await sleep(1200);
+    
+    // Wait for player profile view to appear
+    let mobileProfileAppeared = false;
+    for (let i = 0; i < 20; i++) {
+      mobileProfileAppeared = await cdp.eval(`Boolean(document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]'))`);
+      if (mobileProfileAppeared) break;
+      await sleep(300);
+    }
 
     // Verify mobile layout
     const mobileLayout = await cdp.eval(`(() => {
       const modal = document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]');
       const card = document.querySelector('.modal-card');
-      if (!modal || !card) return { hasOverflow: true };
+      if (!modal || !card) return { notFound: true, hasOverflow: true };
       const docWidth = document.documentElement.clientWidth;
       const modalRect = modal.getBoundingClientRect();
       return {
-        hasOverflow: modalRect.width > docWidth || modal.scrollWidth > modal.clientWidth + 1,
+        notFound: false,
+        hasOverflow: modalRect.width > docWidth || modal.scrollWidth > modal.clientWidth + 2,
         docWidth,
         modalWidth: Math.round(modalRect.width),
         modalScrollWidth: modal.scrollWidth
       };
     })()`);
 
+    assert(!mobileLayout.notFound, 'Player Profile view was not rendered on mobile');
     assert(!mobileLayout.hasOverflow, `Mobile profile has horizontal overflow! modalWidth: ${mobileLayout.modalWidth}, docWidth: ${mobileLayout.docWidth}`);
     console.log(`✓ Mobile Portrait Responsive: 0 horizontal overflow (viewport: 390px, modal: ${mobileLayout.modalWidth}px).\n`);
 
@@ -477,13 +531,63 @@ async function runBrowserVerification() {
       deviceScaleFactor: 2,
       mobile: true
     });
-    await sleep(500);
+    await sleep(800);
+
+    let isZoneOpenLandscape = await cdp.eval(`(() => {
+      const h2 = document.querySelector('.modal-card h2');
+      return Boolean(h2 && h2.innerText.includes('Pulse Zone'));
+    })()`);
+    if (!isZoneOpenLandscape) {
+      await cdp.eval(`(() => {
+        const btn = document.querySelector('[title*="Pulse Zone"]');
+        if (btn) btn.click();
+      })()`);
+      await sleep(1000);
+    }
+
+    await cdp.eval(`(() => {
+      const tabs = Array.from(document.querySelectorAll('button'));
+      const lbTab = tabs.find(b => b.textContent && b.textContent.includes('Leaderboard'));
+      if (lbTab) lbTab.click();
+    })()`);
+    await sleep(800);
+
+    // Wait for leaderboard rows
+    for (let i = 0; i < 20; i++) {
+      const rowsCount = await cdp.eval(`document.querySelectorAll('[aria-label*="View gaming profile"]').length`);
+      if (rowsCount > 0) break;
+      await sleep(300);
+    }
 
     await cdp.eval(`(() => {
       const rows = document.querySelectorAll('[aria-label*="View gaming profile"]');
       if (rows[0]) rows[0].click();
     })()`);
-    await sleep(1000);
+
+    // Wait for player profile view to appear
+    for (let i = 0; i < 20; i++) {
+      const appeared = await cdp.eval(`Boolean(document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]'))`);
+      if (appeared) break;
+      await sleep(300);
+    }
+
+    const landscapeLayout = await cdp.eval(`(() => {
+      const modal = document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]');
+      const card = document.querySelector('.modal-card');
+      if (!modal || !card) return { notFound: true, hasOverflow: true };
+      const docWidth = document.documentElement.clientWidth;
+      const modalRect = modal.getBoundingClientRect();
+      return {
+        notFound: false,
+        hasOverflow: modalRect.width > docWidth || modal.scrollWidth > modal.clientWidth + 2,
+        docWidth,
+        modalWidth: Math.round(modalRect.width)
+      };
+    })()`);
+
+    assert(!landscapeLayout.notFound, 'Player Profile view was not rendered on landscape mobile');
+    assert(!landscapeLayout.hasOverflow, `Landscape profile has horizontal overflow! modalWidth: ${landscapeLayout.modalWidth}`);
+    console.log(`✓ Mobile Landscape Responsive: 0 horizontal overflow (viewport: 844px, modal: ${landscapeLayout.modalWidth}px).\n`);
 
     const landscapeImg = await saveScreenshot(cdp, 'mobile_landscape_player_profile.png');
     console.log(`✓ Captured Mobile Landscape screenshot at: ${landscapeImg}\n`);

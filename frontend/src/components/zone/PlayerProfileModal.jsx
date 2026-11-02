@@ -20,18 +20,6 @@ export default function PlayerProfileModal({ userId, onClose, onBack, token }) {
   const [error, setError] = useState(null);
   const [profile, setProfile] = useState(null);
 
-  // Keyboard accessibility: ESC key dismiss to leaderboard
-  useEffect(() => {
-    function handleKeyDown(e) {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        handleBack();
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleBack]);
-
   const fetchProfile = useCallback(async (signal) => {
     if (!userId) {
       setError('Player not found');

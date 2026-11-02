@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const authMiddleware = require('../middleware/authMiddleware');
 const User = require('../models/User');
 const GameScore = require('../models/GameScore');
+const chessMatchManager = require('../chat/chessMatchManager');
 
 // Daily trivia poll state
 let currentDailyTrivia = {
@@ -528,12 +529,46 @@ async function applyScoreUpdate({ user, resolvedUserId, gameName, score, level, 
 // Submit Mini-Game Score, Level & Earn Rewards / Streaks
 router.post('/game-score', authMiddleware, async (req, res) => {
   try {
-    const { gameName, score, level, stats, submissionId } = req.body;
+    const { gameName, score, level, stats, submissionId, matchId, chatId, gameMode } = req.body;
     const userId = req.userId || req.user?.id || req.user?.userId;
 
+    // Enforce trusted match context: prohibit submitting Chat Games as competitive scores
+    const isChatMatch = Boolean(
+      matchId ||
+      chatId ||
+      stats?.matchId ||
+      stats?.chatId ||
+      gameMode === 'chat' ||
+      gameMode === 'friend' ||
+      stats?.mode === 'chat' ||
+      stats?.mode === 'friend' ||
+      (matchId && chessMatchManager.getMatch(matchId))
+    );
+
+    if (isChatMatch) {
+      return res.status(400).json({
+        error: 'CASUAL_GAME_ISOLATION',
+        message: 'Chat Game matches are strictly casual and cannot be submitted to competitive leaderboards.'
+      });
+    }
+
+    const gameKey = normalizeGameKey(gameName);
     const rawScore = parseInt(score || '0', 10);
+    const rawLevel = Math.max(1, parseInt(level || '1', 10));
+
     if (isNaN(rawScore) || rawScore < 0) {
       return res.status(400).json({ error: 'Invalid score' });
+    }
+
+    // Anti-cheat verification for Computer Chess: score cannot exceed level * 100
+    if (gameKey === 'chess') {
+      const maxAllowedForLevel = rawLevel * 100;
+      if (rawScore > maxAllowedForLevel) {
+        return res.status(400).json({
+          error: 'SCORE_EXCEEDS_MAX_LEVEL',
+          message: `Score ${rawScore} exceeds maximum allowed score (${maxAllowedForLevel}) for Chess Level ${rawLevel}.`
+        });
+      }
     }
 
     const isObjectId = mongoose.Types.ObjectId.isValid(userId);
