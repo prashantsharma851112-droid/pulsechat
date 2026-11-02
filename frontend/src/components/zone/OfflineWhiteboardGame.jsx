@@ -244,7 +244,12 @@ const OfflineWhiteboardGame = React.memo(function OfflineWhiteboardGame({ onScor
       setTimeout(() => setSaveSuccess(false), 3000);
 
       if (onScoreUpdate) {
-        onScoreUpdate('Creative Artist', 15, 1);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const lastExportDate = localStorage.getItem('pulsechat_whiteboard_last_export') || '';
+        if (lastExportDate !== todayStr) {
+          localStorage.setItem('pulsechat_whiteboard_last_export', todayStr);
+          onScoreUpdate('Creative Artist', 15, 1);
+        }
       }
     } catch (e) {
       console.error('Failed to export canvas image:', e);

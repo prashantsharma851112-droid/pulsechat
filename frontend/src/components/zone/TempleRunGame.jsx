@@ -1161,6 +1161,13 @@ const TempleRunGame = React.memo(function TempleRunGame({ onScoreUpdate, onBack 
   });
   const [isMuted, setIsMuted] = useState(false);
   const [powerMeter, setPowerMeter] = useState(0); // 0 to 100%
+  const [graphicsQuality, setGraphicsQuality] = useState(() => {
+    try {
+      return localStorage.getItem('pulsechat_temple_graphics') || 'balanced';
+    } catch (_) {
+      return 'balanced';
+    }
+  });
 
   // DIRECT DOM REFS FOR 60 FPS SILKY SMOOTH GAMEPLAY (ZERO REACT RE-RENDERS)
   const scoreTextRef = useRef(null);
@@ -1176,6 +1183,18 @@ const TempleRunGame = React.memo(function TempleRunGame({ onScoreUpdate, onBack 
   const popupsContainerRef = useRef(null);
 
   // Helper for floating score popups (direct DOM injection: 0% React re-render overhead)
+  const handleQualityChange = useCallback((newQ) => {
+    setGraphicsQuality(newQ);
+    try {
+      localStorage.setItem('pulsechat_temple_graphics', newQ);
+    } catch (_) {}
+    if (gameRef.current?.renderer) {
+      const dpr = window.devicePixelRatio || 1;
+      const ratio = newQ === 'performance' ? 1.0 : (newQ === 'ultra' ? Math.min(dpr, 1.75) : Math.min(dpr, 1.25));
+      gameRef.current.renderer.setPixelRatio(ratio);
+    }
+  }, []);
+
   const addPopup = useCallback((text, color = '#fbbf24') => {
     if (!popupsContainerRef.current) return;
     const el = document.createElement('div');
@@ -1487,7 +1506,10 @@ const TempleRunGame = React.memo(function TempleRunGame({ onScoreUpdate, onBack 
       depth: true
     });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+    const dpr = window.devicePixelRatio || 1;
+    const qPref = localStorage.getItem('pulsechat_temple_graphics') || 'balanced';
+    const dynamicRatio = qPref === 'performance' ? 1.0 : (qPref === 'ultra' ? Math.min(dpr, 1.75) : Math.min(dpr, 1.25));
+    renderer.setPixelRatio(dynamicRatio);
     renderer.shadowMap.enabled = false;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.18;
@@ -2430,7 +2452,10 @@ const TempleRunGame = React.memo(function TempleRunGame({ onScoreUpdate, onBack 
 
     if (onScoreUpdate) {
       const levelEarned = Math.max(1, Math.floor(g.distance / 120));
-      onScoreUpdate('Temple Run 3D', finalScore, levelEarned);
+      onScoreUpdate('Temple Run 3D', finalScore, levelEarned, {
+        bestDistance: g.distance,
+        totalCoins: g.coins
+      });
     }
   };
 
@@ -2847,6 +2872,39 @@ const TempleRunGame = React.memo(function TempleRunGame({ onScoreUpdate, onBack 
             </div>
           </div>
 
+                    {/* Graphics Quality Settings */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '20px',
+            background: 'rgba(0,0,0,0.5)',
+            padding: '5px 12px',
+            borderRadius: '18px',
+            border: '1px solid rgba(255,255,255,0.15)'
+          }}>
+            <span style={{ fontSize: '0.72rem', color: '#9ca3af', fontWeight: 800 }}>GRAPHICS:</span>
+            {['performance', 'balanced', 'ultra'].map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => handleQualityChange(q)}
+                style={{
+                  background: graphicsQuality === q ? 'linear-gradient(135deg, #f59e0b, #ea580c)' : 'rgba(255,255,255,0.06)',
+                  border: graphicsQuality === q ? '1px solid #fbbf24' : '1px solid rgba(255,255,255,0.1)',
+                  color: graphicsQuality === q ? '#fff' : '#94a3af',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                {q === 'performance' ? '⚡ Fast 60FPS' : q === 'balanced' ? '⚖️ Balanced' : '💎 Ultra 3D'}
+              </button>
+            ))}
+          </div>
+
           <button
             onClick={startGame}
             style={{
@@ -2883,6 +2941,37 @@ const TempleRunGame = React.memo(function TempleRunGame({ onScoreUpdate, onBack 
           backdropFilter: 'blur(8px)'
         }}>
           <h2 style={{ color: '#fbbf24', fontSize: '2rem', fontWeight: 900, marginBottom: '20px' }}>GAME PAUSED</h2>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '18px',
+            background: 'rgba(0,0,0,0.4)',
+            padding: '5px 12px',
+            borderRadius: '18px',
+            border: '1px solid rgba(255,255,255,0.15)'
+          }}>
+            <span style={{ fontSize: '0.72rem', color: '#9ca3af', fontWeight: 800 }}>GRAPHICS:</span>
+            {['performance', 'balanced', 'ultra'].map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => handleQualityChange(q)}
+                style={{
+                  background: graphicsQuality === q ? 'linear-gradient(135deg, #f59e0b, #ea580c)' : 'rgba(255,255,255,0.06)',
+                  border: graphicsQuality === q ? '1px solid #fbbf24' : '1px solid rgba(255,255,255,0.1)',
+                  color: graphicsQuality === q ? '#fff' : '#94a3af',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                {q === 'performance' ? '⚡ Fast 60FPS' : q === 'balanced' ? '⚖️ Balanced' : '💎 Ultra 3D'}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => setGameState('playing')}
             style={{

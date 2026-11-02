@@ -1,11 +1,22 @@
 import React, { useState, useEffect, useContext, Suspense, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Sparkles, Award, ArrowLeft, Loader2 } from 'lucide-react';
+import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Sparkles, Award, ArrowLeft, Loader2, WifiOff, RefreshCw } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 import { lazyWithRetry } from '../../utils/lazyRetry';
 import { useBackHandler } from '../../utils/backNavigation';
+import PlayerProfileModal from './PlayerProfileModal';
+import {
+  recordLocalGameScore,
+  syncPendingScores,
+  removePendingScores,
+  cacheLeaderboard,
+  getCachedLeaderboard,
+  formatCacheAge,
+  getGamePersonalBest,
+  getLocalGameBests
+} from '../../utils/gameStorage';
 
 // Core arcade games imported directly for instant offline gameplay
 import ArrowPuzzleGame from './ArrowPuzzleGame';
@@ -238,6 +249,11 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
   // Leaderboard State & Daily Task
   const [leaderboard, setLeaderboard] = useState([]);
   const [dailyTask, setDailyTask] = useState(null);
+  const [selectedPlayerId, setSelectedPlayerId] = useState(null);
+  const [leaderboardCategory, setLeaderboardCategory] = useState('all');
+  const [cacheInfo, setCacheInfo] = useState({ cachedAt: null, ageMs: 0 });
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [localBests, setLocalBests] = useState(() => getLocalGameBests());
 
   const fetchDailyTask = async () => {
     if (!token) return;
@@ -257,31 +273,59 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
     } catch (e) {}
   };
 
-  const fetchLeaderboard = async () => {
-    try {
-      localStorage.removeItem('pulsechat_local_leaderboard');
-    } catch (e) {}
+  const fetchLeaderboard = useCallback(async (cat = leaderboardCategory) => {
+    // 1. Instant offline cached display
+    const cached = getCachedLeaderboard(cat);
+    if (cached && cached.list) {
+      setLeaderboard(cached.list);
+      setCacheInfo({ cachedAt: cached.cachedAt, ageMs: cached.ageMs });
+    }
 
-    if (token) {
+    // 2. Fresh server fetch if online and authenticated
+    if (token && (typeof navigator === 'undefined' || navigator.onLine)) {
       try {
-        const res = await fetch(`${BACKEND_URL}/api/zone/leaderboard`, {
+        const res = await fetch(`${BACKEND_URL}/api/zone/leaderboard?game=${cat}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
           const serverList = await res.json();
           if (Array.isArray(serverList)) {
             setLeaderboard(serverList);
+            cacheLeaderboard(cat, serverList);
+            setCacheInfo({ cachedAt: Date.now(), ageMs: 0 });
           }
         }
       } catch (e) {
-        console.error('Error fetching leaderboard:', e);
+        console.warn('Leaderboard fetch network notice, using cached:', e.message);
       }
     }
-  };
+  }, [token, leaderboardCategory]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      if (token) {
+        syncPendingScores(token).catch(() => {});
+      }
+      fetchLeaderboard(leaderboardCategory);
+    };
+    const handleOffline = () => setIsOnline(false);
+    const handleScoreUpdated = () => setLocalBests(getLocalGameBests());
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('pulsechat_local_score_updated', handleScoreUpdated);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('pulsechat_local_score_updated', handleScoreUpdated);
+    };
+  }, [token, leaderboardCategory, fetchLeaderboard]);
 
   useEffect(() => {
     fetchDailyTask();
-    fetchLeaderboard();
+    fetchLeaderboard(leaderboardCategory);
 
     if (socket) {
       const handleSocketLbUpdate = (data) => {
@@ -341,7 +385,15 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
     setTapperState('ended');
     playSound('success');
 
-    if (token) {
+    const localRes = recordLocalGameScore({
+      gameName: 'Pulse Speed Tapper',
+      score,
+      level: 1,
+      stats: { bestScore: score }
+    });
+    setLocalBests(getLocalGameBests());
+
+    if (token && (typeof navigator === 'undefined' || navigator.onLine)) {
       try {
         const res = await fetch(`${BACKEND_URL}/api/zone/game-score`, {
           method: 'POST',
@@ -349,10 +401,17 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`
           },
-          body: JSON.stringify({ gameName: 'Pulse Speed Tapper', score, level: 1 })
+          body: JSON.stringify({
+            submissionId: localRes.submissionId,
+            gameName: 'Pulse Speed Tapper',
+            score,
+            level: 1,
+            stats: { bestScore: score }
+          })
         });
         const data = await res.json();
         if (data.success) {
+          removePendingScores([localRes.submissionId]);
           if (data.newSparksBalance !== undefined && updateUserProfile) {
             updateUserProfile({ ...user, pulseSparks: data.newSparksBalance });
           }
@@ -365,11 +424,21 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
         }
       } catch (e) {}
     }
-    fetchLeaderboard();
+    fetchLeaderboard(leaderboardCategory);
   };
 
-  const handleGameScoreUpdate = useCallback(async (gameName, pts, lvl = 1) => {
-    if (token) {
+  const handleGameScoreUpdate = useCallback(async (gameName, pts, lvl = 1, stats = {}) => {
+    // 1. Record locally first: personal best + offline sync queue
+    const localRes = recordLocalGameScore({
+      gameName,
+      score: pts,
+      level: lvl,
+      stats
+    });
+    setLocalBests(getLocalGameBests());
+
+    // 2. Attempt server sync if online
+    if (token && (typeof navigator === 'undefined' || navigator.onLine)) {
       try {
         const res = await fetch(`${BACKEND_URL}/api/zone/game-score`, {
           method: 'POST',
@@ -377,19 +446,28 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`
           },
-          body: JSON.stringify({ gameName, score: pts, level: lvl })
+          body: JSON.stringify({
+            submissionId: localRes.submissionId,
+            gameName,
+            score: pts,
+            level: lvl,
+            stats
+          })
         });
         const data = await res.json();
         if (data.success) {
+          removePendingScores([localRes.submissionId]);
           if (data.newSparksBalance !== undefined && updateUserProfile) {
             updateUserProfile({ ...user, pulseSparks: data.newSparksBalance });
           }
           fetchDailyTask();
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Game score queued for background sync:', e.message);
+      }
     }
-    fetchLeaderboard();
-  }, [token, user, updateUserProfile]);
+    fetchLeaderboard(leaderboardCategory);
+  }, [token, user, updateUserProfile, leaderboardCategory, fetchLeaderboard]);
 
   const handleBackFromGame = useCallback(() => setSelectedGame(null), []);
 
@@ -886,21 +964,84 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
 
           {activeTab === 'leaderboard' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                <Trophy size={16} color="#f59e0b" />
-                <span>Top Pulse Champions</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Trophy size={16} color="#f59e0b" />
+                  <span>Pulse Champions</span>
+                </div>
+
+                {(!isOnline || cacheInfo.cachedAt) && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '0.7rem',
+                    color: !isOnline ? '#f87171' : '#94a3b8',
+                    background: !isOnline ? 'rgba(239, 68, 68, 0.12)' : 'rgba(255, 255, 255, 0.05)',
+                    padding: '3px 8px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(255, 255, 255, 0.1)'
+                  }}>
+                    {!isOnline ? <WifiOff size={12} /> : null}
+                    <span>{isOnline ? `Cached (${formatCacheAge(cacheInfo.cachedAt)})` : 'Offline rankings'}</span>
+                    {isOnline && (
+                      <button
+                        onClick={() => fetchLeaderboard(leaderboardCategory)}
+                        style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', padding: 0 }}
+                        title="Refresh"
+                      >
+                        <RefreshCw size={11} />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Game Filter Pills */}
+              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
+                {[
+                  { id: 'all', label: 'All Games' },
+                  { id: 'temple', label: '🗿 Temple Run' },
+                  { id: 'arrow', label: '🎯 Arrow' },
+                  { id: 'candy', label: '🍬 Candy' },
+                  { id: 'tapper', label: '⚡ Tapper' },
+                  { id: 'tictactoe', label: '❌ AI Arena' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      setLeaderboardCategory(tab.id);
+                      fetchLeaderboard(tab.id);
+                    }}
+                    style={{
+                      background: leaderboardCategory === tab.id ? 'linear-gradient(135deg, #f59e0b, #ea580c)' : 'rgba(255, 255, 255, 0.06)',
+                      border: leaderboardCategory === tab.id ? '1px solid #fbbf24' : '1px solid rgba(255, 255, 255, 0.1)',
+                      color: leaderboardCategory === tab.id ? '#fff' : 'var(--text-muted)',
+                      borderRadius: '16px',
+                      padding: '4px 11px',
+                      fontSize: '0.74rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.12s ease'
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
 
               {leaderboard.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '30px 15px', color: 'var(--text-muted)', fontSize: '0.86rem' }}>
-                  🏆 No leaderboard scores submitted yet! Play mini-games to claim the #1 spot!
+                  🏆 No scores yet for this category! Play to claim the #1 spot!
                 </div>
               ) : (
                 leaderboard.map((item, idx) => (
                   <ZoneLeaderboardRow
-                    key={item.id || idx}
+                    key={item.id || item.userId || idx}
                     item={item}
                     idx={idx}
+                    onSelectPlayer={(id) => setSelectedPlayerId(id)}
                   />
                 ))
               )}
