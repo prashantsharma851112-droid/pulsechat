@@ -9,7 +9,8 @@ import { useBackHandler } from '../../utils/backNavigation';
 
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
 import SparksWalletModal from '../chat/SparksWalletModal';
-import PulseProModal from '../chat/PulseProModal';
+import { lazyWithRetry, ModalLoadingFallback } from '../../utils/lazyRetry';
+const PulseProModal = lazyWithRetry(() => import('../chat/PulseProModal'));
 import { EMOJI_CATEGORIES } from '../chat/EmojiPicker';
 import InstagramMusicSticker from './InstagramMusicSticker';
 import fixWebmDuration from 'fix-webm-duration';
@@ -4900,7 +4901,7 @@ export default function VibeViewerModal({ vibeGroup, allGroups, onSwitchVibeGrou
 
         {/* Get / Top-Up Sparks Modal */}
         {showGetSparksModal && (
-          <PulseProModal initialTab="sparks" onClose={() => setShowGetSparksModal(false)} />
+          <React.Suspense fallback={<ModalLoadingFallback />}><PulseProModal initialTab="sparks" onClose={() => setShowGetSparksModal(false)} /></React.Suspense>
         )}
 
         {/* Story Video Export / Download Overlay */}

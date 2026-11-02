@@ -131,7 +131,7 @@ const GlobalAppMusicPlayer = React.memo(function GlobalAppMusicPlayer() {
       handleResize();
     }
 
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleResize, { passive: true });
     return () => window.removeEventListener('resize', handleResize);
   }, [cardWidth, isMinimized, getClampedPos, position]);
 

@@ -118,10 +118,29 @@ export const ZoneGameLauncherCard = React.memo(function ZoneGameLauncherCard({
 
 export const ZoneLeaderboardRow = React.memo(function ZoneLeaderboardRow({
   item,
-  idx
+  idx,
+  onSelectPlayer
 }) {
+  const handleClick = useCallback(() => {
+    const targetId = item.userId || item.id;
+    if (targetId && onSelectPlayer) {
+      onSelectPlayer(targetId);
+    }
+  }, [item.userId, item.id, onSelectPlayer]);
+
   return (
     <div
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      aria-label={`View gaming profile for ${item.displayName || 'player'}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleClick();
+        }
+      }}
+      className="interactive-tap cursor-pointer"
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -145,7 +164,9 @@ export const ZoneLeaderboardRow = React.memo(function ZoneLeaderboardRow({
           ? '0 4px 18px rgba(245, 158, 11, 0.25)'
           : idx === 1
           ? '0 4px 18px rgba(203, 213, 225, 0.25)'
-          : 'none'
+          : 'none',
+        cursor: 'pointer',
+        transition: 'transform 0.12s ease, background 0.12s ease'
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -223,10 +244,15 @@ export const ZoneLeaderboardRow = React.memo(function ZoneLeaderboardRow({
         </div>
       </div>
 
-      <div style={{ textAlign: 'right' }}>
-        <span style={{ fontSize: '0.96rem', fontWeight: 900, color: '#10b981', display: 'block' }}>
-          {item.score} pts
-        </span>
+      <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ textAlign: 'right' }}>
+          <span style={{ fontSize: '0.96rem', fontWeight: 900, color: '#10b981', display: 'block' }}>
+            {item.score} pts
+          </span>
+          <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)' }}>
+            Tap for profile
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -1049,6 +1075,15 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
           )}
         </div>
       </div>
+
+      {/* Player Gaming Profile Modal */}
+      {selectedPlayerId && (
+        <PlayerProfileModal
+          userId={selectedPlayerId}
+          onClose={() => setSelectedPlayerId(null)}
+          token={token}
+        />
+      )}
     </div>
   );
 });

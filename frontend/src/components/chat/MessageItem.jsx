@@ -3,18 +3,19 @@ import { createPortal } from 'react-dom';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
 import { Check, CheckCheck, Clock, Play, Pause, BarChart2, CheckCircle2, XCircle, Trash2, GitBranch, Sparkles, Phone, PhoneOff, Video, VideoOff, Eye, CornerUpLeft, Pencil, Download, Maximize2, FileText, X, Star, Plus, SlidersHorizontal, Forward, Edit3, ExternalLink, Globe, Ghost, Share2, ArrowLeft, MoreVertical, Loader2, Lock } from 'lucide-react';
-import ThreadModal from './ThreadModal';
-import ForwardModal from './ForwardModal';
-import ViewOnceModal from './ViewOnceModal';
-import FogSnapModal from './FogSnapModal';
-import EditPollModal from './EditPollModal';
-import MultiPhotoGalleryModal from './MultiPhotoGalleryModal';
+import { lazyWithRetry, ModalLoadingFallback } from '../../utils/lazyRetry';
+const ThreadModal = lazyWithRetry(() => import('./ThreadModal'));
+const ForwardModal = lazyWithRetry(() => import('./ForwardModal'));
+const ViewOnceModal = lazyWithRetry(() => import('./ViewOnceModal'));
+const FogSnapModal = lazyWithRetry(() => import('./FogSnapModal'));
+const EditPollModal = lazyWithRetry(() => import('./EditPollModal'));
+const MultiPhotoGalleryModal = lazyWithRetry(() => import('./MultiPhotoGalleryModal'));
 import { getPollTheme, getPollAura } from './pollThemes';
 import PulseVipBadge from '../common/PulseVipBadge';
 import Sticker3D from '../common/Sticker3D';
 import Animated3DText from '../common/Animated3DText';
-import GiftUnboxModal from './GiftUnboxModal';
-import AnonymousStoryReplyModal from './AnonymousStoryReplyModal';
+const GiftUnboxModal = lazyWithRetry(() => import('./GiftUnboxModal'));
+const AnonymousStoryReplyModal = lazyWithRetry(() => import('./AnonymousStoryReplyModal'));
 import { getSavedQuickReactions, recordRecentReaction } from '../../utils/quickReactions';
 import { BACKEND_URL } from '../../utils/config';
 import { getCachedMediaUrl, getSyncCachedMediaUrl, getOrCacheAudioBlobUrl, getSyncCachedAudioUrl, getOrCacheDecryptedMediaUrl } from '../../utils/mediaCache';
@@ -2630,8 +2631,7 @@ function MessageItem({
             />
 
             {showGiftUnboxModal && (
-              <GiftUnboxModal
-                giftData={message.giftData}
+              <React.Suspense fallback={<ModalLoadingFallback />}><GiftUnboxModal giftData={message.giftData}
                 senderName={message.senderName || senderName || 'Friend'}
                 senderAvatar={message.senderAvatar || null}
                 isMine={isMine}
@@ -2650,7 +2650,7 @@ function MessageItem({
                     window.dispatchEvent(new CustomEvent('pulsechat_open_sparks_wallet'));
                   }
                 }}
-              />
+              /></React.Suspense>
             )}
           </div>
         )}
@@ -3394,24 +3394,22 @@ function MessageItem({
 
           {/* Forward Modal */}
           {showForwardModal && (
-            <ForwardModal
-              message={message}
+            <React.Suspense fallback={<ModalLoadingFallback />}><ForwardModal message={message}
               currentUserId={currentUser?.id}
               onClose={() => setShowForwardModal(false)}
               onForward={handleForwardToTargets}
-            />
+            /></React.Suspense>
           )}
         </div>,
         document.body
       )}
 
       {showThread && (
-        <ThreadModal message={message} onClose={() => setShowThread(false)} currentUser={currentUser} />
+        <React.Suspense fallback={<ModalLoadingFallback />}><ThreadModal message={message} onClose={() => setShowThread(false)} currentUser={currentUser} /></React.Suspense>
       )}
 
       {showViewOnceModal && (
-        <ViewOnceModal
-          message={message}
+        <React.Suspense fallback={<ModalLoadingFallback />}><ViewOnceModal message={message}
           viewCount={currentViewCount + 1}
           senderName={senderName}
           isMine={isMine}
@@ -3420,12 +3418,11 @@ function MessageItem({
           onOpenUnlimitedEmoji={onOpenUnlimitedEmoji}
           onMarkViewed={handleMarkViewed}
           onClose={() => setShowViewOnceModal(false)}
-        />
+        /></React.Suspense>
       )}
 
       {showFogSnapModal && (
-        <FogSnapModal
-          message={message}
+        <React.Suspense fallback={<ModalLoadingFallback />}><FogSnapModal message={message}
           chatId={chatId}
           senderName={senderName}
           isMine={isMine}
@@ -3441,14 +3438,13 @@ function MessageItem({
           onOpenUnlimitedEmoji={onOpenUnlimitedEmoji}
           onClose={() => setShowFogSnapModal(false)}
           socket={socket}
-        />
+        /></React.Suspense>
       )}
 
       {showMultiGallery && (
-        <MultiPhotoGalleryModal
-          photos={message.mediaUrls || [message.mediaUrl]}
+        <React.Suspense fallback={<ModalLoadingFallback />}><MultiPhotoGalleryModal photos={message.mediaUrls || [message.mediaUrl]}
           onClose={() => setShowMultiGallery(false)}
-        />
+        /></React.Suspense>
       )}
 
       {showEditPoll && pollData && (

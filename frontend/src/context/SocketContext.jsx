@@ -51,6 +51,8 @@ export function SocketProvider({ children }) {
   // Persistent VIP Aura Trial Expiration Watchdog (checks every 3 seconds)
   useEffect(() => {
     const interval = setInterval(() => {
+      const storedTrial = localStorage.getItem('pulsechat_aura_trial');
+      if (!storedTrial) return;
       const now = Date.now();
       try {
         const currentUserIsPro = Boolean(userRef.current?.isPro || user?.isPro || userRef.current?.isAdmin || user?.isAdmin);
@@ -103,7 +105,7 @@ export function SocketProvider({ children }) {
         }
         return changed ? next : prev;
       });
-    }, 3000);
+    }, 20000);
     return () => clearInterval(interval);
   }, [socket, user?.id]);
 

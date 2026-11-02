@@ -1830,7 +1830,7 @@ const TempleRunGame = React.memo(function TempleRunGame({ onScoreUpdate, onBack 
       renderer.setSize(w, h);
     };
 
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleResize, { passive: true });
 
     const onTouchStart = (e) => handleTouchStart(e);
     const onTouchMove = (e) => handleTouchMove(e);
@@ -1910,12 +1910,14 @@ const TempleRunGame = React.memo(function TempleRunGame({ onScoreUpdate, onBack 
   };
 
   // =========================================================================
-  // MAIN ANIMATION LOOP (60 FPS WEBGL)
+  // MAIN ANIMATION LOOP (60 FPS WEBGL) WITH ZERO-CPU BACKGROUND LIFECYCLE
   // =========================================================================
   useEffect(() => {
     let animId = null;
+    let isLoopActive = false;
 
-    const animate = (timestamp) => {
+    const renderFrame = (timestamp) => {
+      if (!isLoopActive || document.hidden) return;
       const g = gameRef.current;
       if (!g.lastTime) g.lastTime = timestamp;
       const dt = Math.min((timestamp - g.lastTime) / 1000, 0.1);
@@ -1929,11 +1931,61 @@ const TempleRunGame = React.memo(function TempleRunGame({ onScoreUpdate, onBack 
         g.renderer.render(g.scene, g.camera);
       }
 
-      animId = requestAnimationFrame(animate);
+      animId = requestAnimationFrame(renderFrame);
     };
 
-    animId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animId);
+    const startAnimation = () => {
+      if (isLoopActive || document.hidden) return;
+      isLoopActive = true;
+      const g = gameRef.current;
+      g.lastTime = 0; // Reset delta time anchor to prevent large physics jumps
+      animId = requestAnimationFrame(renderFrame);
+    };
+
+    const stopAnimation = () => {
+      isLoopActive = false;
+      if (animId) {
+        cancelAnimationFrame(animId);
+        animId = null;
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stopAnimation();
+        // Safe auto-pause to prevent player death when switching tabs
+        if (gameState === 'playing') {
+          setGameState('paused');
+        }
+      } else {
+        // Tab restored: resume rendering if playing, or render one static frame if paused
+        if (gameState === 'playing') {
+          startAnimation();
+        } else {
+          const g = gameRef.current;
+          if (g.renderer && g.scene && g.camera) {
+            g.renderer.render(g.scene, g.camera);
+          }
+        }
+      }
+    };
+
+    if (gameState === 'playing') {
+      startAnimation();
+    } else {
+      // Menu / Paused / GameOver: Render exactly one frame and halt
+      const g = gameRef.current;
+      if (g.renderer && g.scene && g.camera) {
+        g.renderer.render(g.scene, g.camera);
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      stopAnimation();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [gameState]);
 
   // =========================================================================

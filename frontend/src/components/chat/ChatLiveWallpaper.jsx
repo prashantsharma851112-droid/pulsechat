@@ -20,7 +20,7 @@ function ChatLiveWallpaper({ wallpaperId, customImage }) {
       canvas.height = canvas.parentElement?.clientHeight || window.innerHeight;
     };
     handleResize();
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleResize, { passive: true });
 
     const isLove = wallpaperId === 'love_hearts_live';
     const isNature = wallpaperId === 'nature_forest_live';
@@ -106,20 +106,47 @@ function ChatLiveWallpaper({ wallpaperId, customImage }) {
       particles.push(new Particle(true));
     }
 
-    const animate = () => {
+    let isRunning = false;
+
+    const renderLoop = () => {
+      if (!isRunning || !ctx || !canvas) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       particles.forEach(p => {
         p.update();
         p.draw(ctx);
       });
-      animationFrameId = requestAnimationFrame(animate);
+      animationFrameId = requestAnimationFrame(renderLoop);
     };
 
-    animate();
+    const startLoop = () => {
+      if (isRunning || document.hidden) return;
+      isRunning = true;
+      animationFrameId = requestAnimationFrame(renderLoop);
+    };
+
+    const stopLoop = () => {
+      isRunning = false;
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopLoop();
+      } else {
+        startLoop();
+      }
+    };
+
+    startLoop();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
+      stopLoop();
       window.removeEventListener('resize', handleResize);
-      cancelAnimationFrame(animationFrameId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [wallpaperId]);
 

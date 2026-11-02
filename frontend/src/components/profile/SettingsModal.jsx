@@ -15,7 +15,8 @@ import { BACKEND_URL } from '../../utils/config';
 import { getCachedRecentChats, getCachedFriends, getCachedAllUsers } from '../../utils/offlineStorage';
 import { createFullDeviceBackup, restoreFullDeviceBackup, getLocalDatabaseStats, isChatBackupEnabled, setChatBackupEnabled } from '../../utils/localDatabase';
 import { initiateQrSyncSession, approveAndStreamHistory, listenAndImportHistory } from '../../utils/qrSyncManager';
-import PulseProModal from '../chat/PulseProModal';
+import { lazyWithRetry, ModalLoadingFallback } from '../../utils/lazyRetry';
+const PulseProModal = lazyWithRetry(() => import('../chat/PulseProModal'));
 import PulseVipBadge from '../common/PulseVipBadge';
 import AppFeatureTourModal from '../common/AppFeatureTourModal';
 import LegalModal from '../common/LegalModal';
@@ -3576,10 +3577,10 @@ export default function SettingsModal({
 
         {/* Pulse Pro / VIP Modal */}
         {showProModal && (
-          <PulseProModal
+          <React.Suspense fallback={<ModalLoadingFallback />}><PulseProModal
             initialTab="pro"
             onClose={() => setShowProModal(false)}
-          />
+          /></React.Suspense>
         )}
 
         {/* Legal Policies Modal (Privacy, Terms, Refund, Contact) */}

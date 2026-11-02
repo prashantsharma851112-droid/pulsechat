@@ -177,3 +177,61 @@ export function scheduleIdlePreload(lazyComponents = []) {
     setTimeout(preloadAll, 1200);
   }
 }
+
+/**
+ * Lightweight, accessible loading fallback for user-triggered modals
+ * Prevents abrupt blank screens while on-demand chunks are fetched.
+ */
+export function ModalLoadingFallback({ label = 'Loading...' }) {
+  return React.createElement(
+    'div',
+    {
+      className: 'modal-overlay',
+      role: 'dialog',
+      'aria-busy': 'true',
+      'aria-label': label,
+      style: {
+        zIndex: 9999,
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.68)',
+        backdropFilter: 'blur(6px)',
+        WebkitBackdropFilter: 'blur(6px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        animation: 'fadeIn 0.15s ease-out'
+      }
+    },
+    React.createElement(
+      'div',
+      {
+        style: {
+          background: 'rgba(24, 24, 27, 0.96)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          borderRadius: '16px',
+          padding: '16px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          color: '#f8fafc',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+          fontSize: '0.86rem',
+          fontWeight: 600
+        }
+      },
+      React.createElement('div', {
+        style: {
+          width: '20px',
+          height: '20px',
+          border: '2.5px solid rgba(255,255,255,0.2)',
+          borderTopColor: 'var(--accent, #6366f1)',
+          borderRadius: '50%',
+          animation: 'spin 0.75s linear infinite'
+        }
+      }),
+      React.createElement('span', null, label)
+    )
+  );
+}

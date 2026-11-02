@@ -4,7 +4,8 @@ import { SocketContext } from './SocketContext';
 import { BACKEND_URL } from '../utils/config';
 import { getOrCacheAudioBlobUrl, getSyncCachedAudioUrl } from '../utils/mediaCache';
 import SparksFeaturePromptModal from '../components/common/SparksFeaturePromptModal';
-import PulseProModal from '../components/chat/PulseProModal';
+import { lazyWithRetry, ModalLoadingFallback } from '../utils/lazyRetry';
+const PulseProModal = lazyWithRetry(() => import('../components/chat/PulseProModal'));
 
 export const AppMusicContext = createContext(null);
 export const AppMusicProgressContext = createContext({ progress: 0, duration: 0, dailyListenedSec: 0 });
@@ -519,10 +520,7 @@ export function AppMusicProvider({ children }) {
           />
         )}
         {showPulseProModal && (
-          <PulseProModal
-            onClose={() => setShowPulseProModal(false)}
-            initialTab="pro"
-          />
+          <React.Suspense fallback={<ModalLoadingFallback />}><PulseProModal onClose={() => setShowPulseProModal(false)} initialTab="pro" /></React.Suspense>
         )}
       </AppMusicProgressContext.Provider>
     </AppMusicContext.Provider>

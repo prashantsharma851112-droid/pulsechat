@@ -1,65 +1,86 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { 
   X, Trophy, Flame, Award, Gamepad2, Sparkles, 
-  ShieldCheck, Target, Zap, Swords, Loader2, Calendar, User, Compass
+  Target, Zap, Swords, Loader2, Calendar, User, Compass, RefreshCw
 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
+import { AuthContext } from '../../context/AuthContext';
 import { useBackHandler } from '../../utils/backNavigation';
 
 export default function PlayerProfileModal({ userId, onClose, token }) {
+  // Integrate hardware back / popstate dismissal
   useBackHandler(onClose, true);
+
+  const authCtx = useContext(AuthContext);
+  const authToken = token || authCtx?.token;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [profile, setProfile] = useState(null);
 
+  // Keyboard accessibility: ESC key dismiss
   useEffect(() => {
-    let isMounted = true;
-
-    async function fetchProfile() {
-      if (!userId) {
-        setError('Player not found');
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/zone/profile/${encodeURIComponent(userId)}`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-
-        if (!res.ok) {
-          throw new Error(res.status === 404 ? 'Player profile not found' : 'Failed to load profile');
-        }
-
-        const data = await res.json();
-        if (isMounted) {
-          if (data && data.player) {
-            setProfile(data.player);
-          } else {
-            setError('Player data unavailable');
-          }
-        }
-      } catch (err) {
-        if (isMounted) {
-          setError(err.message || 'Error connecting to server');
-        }
-      } finally {
-        if (isMounted) setLoading(false);
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
       }
     }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
-    fetchProfile();
+  const fetchProfile = useCallback(async (signal) => {
+    if (!userId) {
+      setError('Player not found');
+      setLoading(false);
+      return;
+    }
 
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/zone/profile/${encodeURIComponent(userId)}`, {
+        signal,
+        headers: {
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+        }
+      });
+
+      if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error('Player profile not found');
+        } else if (res.status === 401) {
+          throw new Error('Authentication required');
+        } else {
+          throw new Error('Failed to load profile');
+        }
+      }
+
+      const data = await res.json();
+      if (data && data.player) {
+        setProfile(data.player);
+      } else {
+        setError('Player data unavailable');
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      setError(err.message || 'Error connecting to server');
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, authToken]);
+
+  // Fetch when userId or token changes with immediate stale-state flush & request cancellation
+  useEffect(() => {
+    setProfile(null);
+    const controller = new AbortController();
+    fetchProfile(controller.signal);
     return () => {
-      isMounted = false;
+      controller.abort();
     };
-  }, [userId, token]);
+  }, [fetchProfile]);
 
   const joinDate = profile?.memberSince
     ? new Date(profile.memberSince).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
@@ -67,11 +88,12 @@ export default function PlayerProfileModal({ userId, onClose, token }) {
 
   return (
     <div
-      className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
+      className="fixed inset-0 z-[1400] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label="Player Gaming Profile"
+      style={{ zIndex: 1400 }}
     >
       <div
         className="relative w-full max-w-md max-h-[90vh] flex flex-col rounded-3xl overflow-hidden shadow-2xl border border-white/10 bg-[#121622] text-white"
@@ -103,17 +125,28 @@ export default function PlayerProfileModal({ userId, onClose, token }) {
               <p className="text-xs text-gray-400 font-medium">Loading player stats & records...</p>
             </div>
           ) : error || !profile ? (
-            <div className="py-12 text-center space-y-3">
+            <div className="py-12 text-center space-y-4 px-4">
               <div className="w-12 h-12 mx-auto rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
                 <X className="w-6 h-6" />
               </div>
-              <p className="text-sm font-semibold text-gray-200">{error || 'Unable to display profile'}</p>
-              <button
-                onClick={onClose}
-                className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs text-gray-300 font-medium"
-              >
-                Close
-              </button>
+              <div>
+                <p className="text-sm font-semibold text-gray-200">{error || 'Unable to display profile'}</p>
+                <p className="text-xs text-gray-400 mt-1">Please check your connection and try again.</p>
+              </div>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <button
+                  onClick={() => fetchProfile()}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-xs text-white font-medium flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Retry
+                </button>
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 active:scale-95 text-xs text-gray-300 font-medium transition-all cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           ) : (
             <>
@@ -134,12 +167,12 @@ export default function PlayerProfileModal({ userId, onClose, token }) {
                     )}
                   </div>
                   {/* Floating Rank Crown / Badge */}
-                  {profile.hasKingCrown ? (
-                    <div className="absolute -top-2 -right-2 bg-amber-500 text-black text-xs font-black px-1.5 py-0.5 rounded-full shadow-lg flex items-center gap-0.5 border border-amber-300">
+                  {profile.hasKingCrown || profile.globalRank === 1 ? (
+                    <div className="absolute -top-2 -right-2 bg-amber-500 text-black text-xs font-black px-1.5 py-0.5 rounded-full shadow-lg flex items-center gap-0.5 border border-amber-300" title="👑 #1 Gold Champion">
                       👑 <span>#1</span>
                     </div>
-                  ) : profile.hasSilverCrown ? (
-                    <div className="absolute -top-2 -right-2 bg-slate-300 text-black text-xs font-black px-1.5 py-0.5 rounded-full shadow-lg flex items-center gap-0.5 border border-white">
+                  ) : profile.hasSilverCrown || profile.globalRank === 2 ? (
+                    <div className="absolute -top-2 -right-2 bg-slate-300 text-black text-xs font-black px-1.5 py-0.5 rounded-full shadow-lg flex items-center gap-0.5 border border-white" title="🥈 #2 Silver Champion">
                       🥈 <span>#2</span>
                     </div>
                   ) : profile.globalRank ? (
@@ -155,7 +188,7 @@ export default function PlayerProfileModal({ userId, onClose, token }) {
                       {profile.displayName || profile.username}
                     </h3>
                     {profile.isPro && (
-                      <span className="px-1.5 py-0.5 rounded bg-gradient-to-r from-amber-500 to-yellow-500 text-[10px] font-black uppercase text-black tracking-wide">
+                      <span className="px-1.5 py-0.5 rounded bg-gradient-to-r from-amber-500 to-yellow-500 text-[10px] font-black uppercase text-black tracking-wide shadow-sm">
                         PRO
                       </span>
                     )}
@@ -172,6 +205,11 @@ export default function PlayerProfileModal({ userId, onClose, token }) {
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3 h-3 text-indigo-400" /> Joined {joinDate}
                     </span>
+                    {profile.gamingStreakCount > 0 && (
+                      <span className="flex items-center gap-0.5 text-orange-400 font-semibold">
+                        <Flame className="w-3 h-3 text-orange-400 animate-pulse" /> {profile.gamingStreakCount}d Streak
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -202,13 +240,13 @@ export default function PlayerProfileModal({ userId, onClose, token }) {
 
                 <div className="p-3 rounded-2xl bg-white/[0.04] border border-white/5 flex flex-col items-center justify-center text-center">
                   <div className="flex items-center gap-1 text-orange-400 mb-1">
-                    <Flame className="w-4 h-4" />
+                    <Flame className={`w-4 h-4 ${profile.gamingStreakCount > 0 ? 'text-orange-500 animate-pulse' : 'text-gray-500'}`} />
                     <span className="text-[10px] uppercase font-bold tracking-wider">Streak</span>
                   </div>
                   <div className="text-lg font-black text-orange-300">
                     {profile.gamingStreakCount || 0}d
                   </div>
-                  <span className="text-[10px] text-gray-400 font-medium">Active</span>
+                  <span className="text-[10px] text-gray-400 font-medium">{profile.gamingStreakCount >= 7 ? '7-Day Quest' : 'Active'}</span>
                 </div>
               </div>
 

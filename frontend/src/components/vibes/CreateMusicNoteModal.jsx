@@ -2,8 +2,9 @@ import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { useAppMusic } from '../../context/AppMusicContext';
 import { X, Music, Disc, Sparkles, Play, Pause, Trash2, Crown, Check, Palette } from 'lucide-react';
-import MusicPickerModal from './MusicPickerModal';
-import PulseProModal from '../chat/PulseProModal';
+import { lazyWithRetry, ModalLoadingFallback } from '../../utils/lazyRetry';
+const MusicPickerModal = lazyWithRetry(() => import('./MusicPickerModal'));
+const PulseProModal = lazyWithRetry(() => import('../chat/PulseProModal'));
 
 const NOTE_THEMES = [
   { id: 'default', name: 'Classic Dark', icon: '🌙', isLive: false, isPro: false, bgPreview: 'linear-gradient(135deg, #232336, #14141c)' },
@@ -746,7 +747,7 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
 
       {/* Music Picker Modal */}
       {showPicker && (
-        <MusicPickerModal
+        <React.Suspense fallback={<ModalLoadingFallback />}><MusicPickerModal
           isOpen={showPicker}
           onClose={() => setShowPicker(false)}
           selectedSong={selectedSong}
@@ -762,12 +763,12 @@ export default function CreateMusicNoteModal({ isOpen, onClose }) {
             if (song.duration) setTrackTotalDuration(Number(song.duration));
             setShowPicker(false);
           }}
-        />
+        /></React.Suspense>
       )}
 
       {/* Pulse Pro VIP Modal */}
       {showProModal && (
-        <PulseProModal onClose={() => setShowProModal(false)} />
+        <React.Suspense fallback={<ModalLoadingFallback />}><PulseProModal onClose={() => setShowProModal(false)} /></React.Suspense>
       )}
     </div>
   );

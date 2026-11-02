@@ -1165,6 +1165,9 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     if (!chatId) return;
 
     const checkTrials = () => {
+      const themeTrialStr = localStorage.getItem(`pulsechat_theme_trial_${chatId}`);
+      const wallTrialStr = localStorage.getItem(`pulsechat_wallpaper_trial_${chatId}`);
+      if (!themeTrialStr && !wallTrialStr) return;
       const now = Date.now();
 
       // 1. Check Theme Trial
@@ -1201,7 +1204,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     };
 
     checkTrials();
-    const interval = setInterval(checkTrials, 3000);
+    const interval = setInterval(checkTrials, 15000);
     return () => clearInterval(interval);
   }, [chatId]);
 
@@ -2504,6 +2507,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     const checkScheduled = () => {
       try {
         const raw = localStorage.getItem('pulsechat_scheduled_messages');
+        if (!raw || raw === '[]') return;
         if (!raw) return;
         const list = JSON.parse(raw);
         if (!Array.isArray(list) || list.length === 0) return;
@@ -2571,9 +2575,33 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       }
     };
 
-    const interval = setInterval(checkScheduled, 5000);
-    checkScheduled();
-    return () => clearInterval(interval);
+    let precisionTimer = null;
+
+    const runPrecisionCheck = () => {
+      checkScheduled();
+      // Check if any upcoming message needs exact to-the-second trigger
+      try {
+        const raw = localStorage.getItem('pulsechat_scheduled_messages');
+        if (raw && raw !== '[]') {
+          const list = JSON.parse(raw);
+          const now = Date.now();
+          const upcoming = list.filter(i => i.scheduledTimestamp > now);
+          if (upcoming.length > 0) {
+            const nextDue = Math.min(...upcoming.map(i => i.scheduledTimestamp));
+            const delta = Math.max(100, Math.min(nextDue - now, 15000));
+            precisionTimer = setTimeout(runPrecisionCheck, delta);
+          }
+        }
+      } catch (_) {}
+    };
+
+    const interval = setInterval(runPrecisionCheck, 15000);
+    runPrecisionCheck();
+
+    return () => {
+      clearInterval(interval);
+      if (precisionTimer) clearTimeout(precisionTimer);
+    };
   }, [chatId, socket]);
 
   // Close 3-dots more menu ONLY on genuine outside click

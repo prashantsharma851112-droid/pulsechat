@@ -2,7 +2,8 @@ import React, { useState, useContext } from 'react';
 import { X, Sparkles, Send, Crown, Zap, Flame, Gem, Smile, Lock } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import Animated3DText from '../common/Animated3DText';
-import PulseProModal from './PulseProModal';
+import { lazyWithRetry, ModalLoadingFallback } from '../../utils/lazyRetry';
+const PulseProModal = lazyWithRetry(() => import('./PulseProModal'));
 
 const STYLES = [
   { id: 'cyber-neon', name: 'Cyber Neon', icon: <Zap size={14} />, color: '#06b6d4', desc: 'Electric Cyan & Magenta holographic glow', isPro: false },
@@ -420,10 +421,10 @@ export default function Animated3DTextModal({ initialText = '', onSend3D, onClos
       </div>
 
       {showProModal && (
-        <PulseProModal
+        <React.Suspense fallback={<ModalLoadingFallback />}><PulseProModal
           initialTab={proModalTab}
           onClose={() => setShowProModal(false)}
-        />
+        /></React.Suspense>
       )}
     </>
   );

@@ -239,12 +239,21 @@ async function getLeaderboardList(gameCategory = 'all', rank1UserId, rank2UserId
   }
 
   const userIds = scores.map(s => s.userId).filter(Boolean);
-  const usersList = await User.find({ id: { $in: userIds } })
-    .select('id hasKingCrown hasSilverCrown hasStreakCrown avatar displayName username')
+  const validObjectIds = userIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+  const usersList = await User.find({
+    $or: [
+      { id: { $in: userIds } },
+      ...(validObjectIds.length > 0 ? [{ _id: { $in: validObjectIds } }] : [])
+    ]
+  })
+    .select('id _id hasKingCrown hasSilverCrown hasStreakCrown avatar displayName username')
     .lean();
 
   const userMap = new Map();
-  usersList.forEach(u => userMap.set(u.id, u));
+  usersList.forEach(u => {
+    if (u.id) userMap.set(u.id, u);
+    if (u._id) userMap.set(u._id.toString(), u);
+  });
 
   return scores.map((s, idx) => {
     const uDoc = userMap.get(s.userId);
@@ -719,69 +728,151 @@ router.get('/profile/:targetUserId', authMiddleware, async (req, res) => {
         ...(isObjectId ? [{ _id: targetUserId }] : []),
         { username: targetUserId }
       ]
-    }).select('id username displayName avatar bio isPro proTier hasKingCrown hasSilverCrown hasStreakCrown gamingStreakCount createdAt').lean();
+    }).select('id _id username displayName avatar bio status isPro proTier proExpiresAt hasKingCrown hasSilverCrown hasStreakCrown gamingStreakCount createdAt').lean();
 
     if (!userDoc) {
       return res.status(404).json({ error: 'Player not found' });
     }
 
-    const resolvedId = userDoc.id || userDoc._id.toString();
-    const scoreDoc = await GameScore.findOne({ userId: resolvedId }).lean();
+    const resolvedId = userDoc.id || (userDoc._id ? userDoc._id.toString() : targetUserId);
+    const scoreDoc = await GameScore.findOne({
+      $or: [
+        { userId: resolvedId },
+        { userId: targetUserId },
+        ...(userDoc.username ? [{ userId: userDoc.username }] : [])
+      ]
+    }).lean();
 
-    // Compute global ranking
+    // Compute global ranking accurately matching the leaderboard order: score DESC, level DESC, gamesPlayed DESC
     const currentScore = scoreDoc?.score || 0;
-    const higherScoresCount = await GameScore.countDocuments({
-      score: { $gt: currentScore }
-    });
-    const globalRank = higherScoresCount + 1;
+    const currentLevel = scoreDoc?.level || 1;
+    const currentPlays = scoreDoc?.gamesPlayed || 0;
+
+    let globalRank = 1;
+    if (scoreDoc) {
+      const higherScoresCount = await GameScore.countDocuments({
+        $or: [
+          { score: { $gt: currentScore } },
+          { score: currentScore, level: { $gt: currentLevel } },
+          { score: currentScore, level: currentLevel, gamesPlayed: { $gt: currentPlays } }
+        ]
+      });
+      globalRank = higherScoresCount + 1;
+    } else {
+      const totalScores = await GameScore.countDocuments({ score: { $gt: 0 } });
+      globalRank = totalScores + 1;
+    }
+
+    // Pro validation: genuinely applicable only if active and not expired
+    const isGenuinelyPro = Boolean(
+      userDoc.isPro && (!userDoc.proExpiresAt || new Date(userDoc.proExpiresAt) > new Date())
+    );
+
+    // Crowns & streak
+    const hasKingCrown = Boolean(globalRank === 1 || userDoc.hasKingCrown);
+    const hasSilverCrown = Boolean((globalRank === 2 && !hasKingCrown) || userDoc.hasSilverCrown);
+    const streak = userDoc.gamingStreakCount || 0;
+
+    // Game stats with resilient fallbacks for older or partially populated GameScore documents
+    let arrowLvl = scoreDoc?.gameStats?.arrow?.maxLevel || 1;
+    let arrowBest = scoreDoc?.gameStats?.arrow?.bestScore || 0;
+    let candyLvl = scoreDoc?.gameStats?.candy?.maxLevel || 1;
+    let candyBest = scoreDoc?.gameStats?.candy?.bestScore || 0;
+    let templeDist = scoreDoc?.gameStats?.temple?.bestDistance || 0;
+    let templeCoins = scoreDoc?.gameStats?.temple?.totalCoins || 0;
+    let templeBest = scoreDoc?.gameStats?.temple?.bestScore || 0;
+    let tapperBest = scoreDoc?.gameStats?.tapper?.bestScore || 0;
+    let tictactoeWins = scoreDoc?.gameStats?.tictactoe?.wins || 0;
+    let tictactoeDraws = scoreDoc?.gameStats?.tictactoe?.draws || 0;
+    let tictactoeLosses = scoreDoc?.gameStats?.tictactoe?.losses || 0;
+
+    if (scoreDoc) {
+      const gName = String(scoreDoc.gameName || '').toLowerCase();
+      if (gName.includes('arrow') || (!scoreDoc.gameStats?.arrow?.maxLevel && scoreDoc.level > 1)) {
+        arrowLvl = Math.max(arrowLvl, scoreDoc.level || 1);
+        arrowBest = Math.max(arrowBest, scoreDoc.score || 0);
+      }
+      if (gName.includes('candy')) {
+        candyLvl = Math.max(candyLvl, scoreDoc.level || 1);
+        candyBest = Math.max(candyBest, scoreDoc.score || 0);
+      }
+      if (gName.includes('temple')) {
+        templeBest = Math.max(templeBest, scoreDoc.score || 0);
+      }
+      if (gName.includes('tapper') || gName.includes('speed')) {
+        tapperBest = Math.max(tapperBest, scoreDoc.score || 0);
+      }
+      if (gName.includes('tic') || gName.includes('toe')) {
+        if (tictactoeWins === 0 && scoreDoc.score > 0) {
+          tictactoeWins = Math.max(1, Math.floor(scoreDoc.score / 50));
+        }
+      }
+    }
 
     // Build achievements based on player statistics
     const achievements = [];
-    const totalScore = currentScore;
-    const streak = userDoc.gamingStreakCount || 0;
-    const arrowLvl = scoreDoc?.gameStats?.arrow?.maxLevel || scoreDoc?.level || 1;
-    const templeDist = scoreDoc?.gameStats?.temple?.bestDistance || 0;
-    const tictactoeWins = scoreDoc?.gameStats?.tictactoe?.wins || 0;
-    const candyLvl = scoreDoc?.gameStats?.candy?.maxLevel || 1;
-
-    if (totalScore >= 100) achievements.push({ id: 'centurion', title: 'Centurion', desc: 'Earned 100+ global points', icon: '⭐' });
-    if (totalScore >= 500) achievements.push({ id: 'high_roller', title: 'High Roller', desc: 'Earned 500+ global points', icon: '💎' });
-    if (totalScore >= 1000) achievements.push({ id: 'grand_master', title: 'Grand Master', desc: 'Crossed 1,000+ gaming points', icon: '👑' });
-    if (streak >= 3) achievements.push({ id: 'streak_3', title: 'Flame Keeper', desc: 'Maintained 3-day gaming streak', icon: '🔥' });
-    if (streak >= 7) achievements.push({ id: 'streak_7', title: 'Legendary Streak', desc: 'Completed full 7-day gaming quest', icon: '⚡' });
-    if (arrowLvl >= 5) achievements.push({ id: 'arrow_5', title: 'Puzzle Tactician', desc: 'Cleared Level 5 in Arrow Puzzle', icon: '🎯' });
-    if (templeDist >= 300) achievements.push({ id: 'temple_runner', title: 'Jungle Raider', desc: 'Ran 300m+ in Temple Run 3D', icon: '🗿' });
-    if (candyLvl >= 3) achievements.push({ id: 'candy_master', title: 'Sugar Master', desc: 'Passed Level 3 in Candy Crush', icon: '🍬' });
+    if (currentScore >= 100) achievements.push({ id: 'centurion', title: 'Centurion', desc: 'Earned 100+ global points', icon: '⭐' });
+    if (currentScore >= 500) achievements.push({ id: 'high_roller', title: 'High Roller', desc: 'Earned 500+ global points', icon: '💎' });
+    if (currentScore >= 1000) achievements.push({ id: 'grand_master', title: 'Grand Master', desc: 'Crossed 1,000+ gaming points', icon: '👑' });
+    if (streak >= 3) achievements.push({ id: 'flame_keeper', title: 'Flame Keeper', desc: 'Maintained 3-day gaming streak', icon: '🔥' });
+    if (streak >= 7) achievements.push({ id: 'legendary_streak', title: 'Legendary Streak', desc: 'Completed full 7-day gaming quest', icon: '⚡' });
+    if (templeDist >= 300) achievements.push({ id: 'jungle_raider', title: 'Jungle Raider', desc: 'Ran 300m+ in Temple Run 3D', icon: '🗿' });
+    if (candyLvl >= 3) achievements.push({ id: 'sugar_master', title: 'Sugar Master', desc: 'Passed Level 3 in Candy Crush', icon: '🍬' });
     if (tictactoeWins >= 3) achievements.push({ id: 'ai_slayer', title: 'AI Slayer', desc: 'Defeated Master AI 3+ times', icon: '🤖' });
+    if (arrowLvl >= 5) achievements.push({ id: 'puzzle_tactician', title: 'Puzzle Tactician', desc: 'Cleared Level 5 in Arrow Puzzle', icon: '🎯' });
+
+    // Explicit safe projection/DTO - sensitive fields (passwordHash, email, phone, privateKeys, tokens, etc.) are strictly excluded
+    const safePlayerDTO = {
+      userId: resolvedId,
+      username: userDoc.username || '',
+      displayName: userDoc.displayName || userDoc.username || 'Player',
+      avatar: userDoc.avatar || '',
+      bio: userDoc.bio || userDoc.status || '',
+      isPro: isGenuinelyPro,
+      proTier: isGenuinelyPro ? (userDoc.proTier || 'pro') : 'none',
+      hasKingCrown,
+      hasSilverCrown,
+      hasStreakCrown: Boolean(userDoc.hasStreakCrown || streak >= 7),
+      gamingStreakCount: streak,
+      globalRank,
+      totalScore: currentScore,
+      arrowLevel: arrowLvl,
+      gamesPlayed: currentPlays,
+      gameStats: {
+        arrow: {
+          bestScore: arrowBest,
+          maxLevel: arrowLvl,
+          gamesPlayed: scoreDoc?.gameStats?.arrow?.gamesPlayed || 0
+        },
+        temple: {
+          bestScore: templeBest,
+          bestDistance: templeDist,
+          totalCoins: templeCoins,
+          gamesPlayed: scoreDoc?.gameStats?.temple?.gamesPlayed || 0
+        },
+        candy: {
+          bestScore: candyBest,
+          maxLevel: candyLvl,
+          gamesPlayed: scoreDoc?.gameStats?.candy?.gamesPlayed || 0
+        },
+        tapper: {
+          bestScore: tapperBest,
+          gamesPlayed: scoreDoc?.gameStats?.tapper?.gamesPlayed || 0
+        },
+        tictactoe: {
+          wins: tictactoeWins,
+          draws: tictactoeDraws,
+          losses: tictactoeLosses,
+          gamesPlayed: scoreDoc?.gameStats?.tictactoe?.gamesPlayed || 0
+        }
+      },
+      achievements,
+      memberSince: userDoc.createdAt || null
+    };
 
     res.json({
       success: true,
-      player: {
-        userId: resolvedId,
-        username: userDoc.username,
-        displayName: userDoc.displayName || userDoc.username,
-        avatar: userDoc.avatar || '',
-        bio: userDoc.bio || '',
-        isPro: Boolean(userDoc.isPro),
-        proTier: userDoc.proTier || 'none',
-        hasKingCrown: Boolean(userDoc.hasKingCrown || globalRank === 1),
-        hasSilverCrown: Boolean(userDoc.hasSilverCrown || globalRank === 2),
-        hasStreakCrown: Boolean(userDoc.hasStreakCrown),
-        gamingStreakCount: streak,
-        globalRank,
-        totalScore,
-        arrowLevel: arrowLvl,
-        gamesPlayed: scoreDoc?.gamesPlayed || 0,
-        gameStats: scoreDoc?.gameStats || {
-          arrow: { bestScore: 0, maxLevel: 1, gamesPlayed: 0 },
-          temple: { bestScore: 0, bestDistance: 0, totalCoins: 0, gamesPlayed: 0 },
-          candy: { bestScore: 0, maxLevel: 1, gamesPlayed: 0 },
-          tapper: { bestScore: 0, gamesPlayed: 0 },
-          tictactoe: { wins: 0, draws: 0, losses: 0, gamesPlayed: 0 }
-        },
-        achievements,
-        memberSince: userDoc.createdAt
-      }
+      player: safePlayerDTO
     });
   } catch (err) {
     console.error('Error fetching player profile:', err);

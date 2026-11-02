@@ -9,7 +9,8 @@ import {
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 import { useBackHandler } from '../../utils/backNavigation';
-import PulseProModal from './PulseProModal';
+import { lazyWithRetry, ModalLoadingFallback } from '../../utils/lazyRetry';
+const PulseProModal = lazyWithRetry(() => import('./PulseProModal'));
 
 // =========================================================================
 // ATOMIC ISOLATED SPARKS WALLET COMPONENTS (React.memo + 0ms GPU Feedback)
@@ -1597,13 +1598,13 @@ export default function SparksWalletModal({ onClose }) {
 
       {/* Sparks Purchase / Top-Up Modal */}
       {showBuySparksModal && (
-        <PulseProModal
+        <React.Suspense fallback={<ModalLoadingFallback />}><PulseProModal
           initialTab="sparks"
           onClose={() => {
             setShowBuySparksModal(false);
             fetchWallet();
           }}
-        />
+        /></React.Suspense>
       )}
 
       {/* REWARDED VIDEO AD OVERLAY */}

@@ -1,7 +1,8 @@
 import React, { useState, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { X, Palette, Check, RotateCcw, Crown, Lock, Image as ImageIcon, Sparkles, Heart, Trees, Waves, Zap, Trash2 } from 'lucide-react';
-import PulseProModal from './PulseProModal';
+import { lazyWithRetry, ModalLoadingFallback } from '../../utils/lazyRetry';
+const PulseProModal = lazyWithRetry(() => import('./PulseProModal'));
 import SparksFeaturePromptModal from '../common/SparksFeaturePromptModal';
 
 const LIVE_WALLPAPERS = [
@@ -559,10 +560,10 @@ export default function ChatThemeModal({
       )}
 
       {showProModal && (
-        <PulseProModal
+        <React.Suspense fallback={<ModalLoadingFallback />}><PulseProModal
           initialTab="pro"
           onClose={() => setShowProModal(false)}
-        />
+        /></React.Suspense>
       )}
     </>
   );

@@ -10,7 +10,8 @@ import { BACKEND_URL } from '../../utils/config';
 import { registerGlobalMusicAudio, stopGlobalMusicAudio, playSound } from '../../utils/audio';
 import { uploadMediaDirect, compressImageOnDevice } from '../../utils/mediaUpload';
 import ChatLiveWallpaper from '../chat/ChatLiveWallpaper';
-import MusicPickerModal from './MusicPickerModal';
+import { lazyWithRetry, ModalLoadingFallback } from '../../utils/lazyRetry';
+const MusicPickerModal = lazyWithRetry(() => import('./MusicPickerModal'));
 import InstagramMusicSticker from './InstagramMusicSticker';
 import { EMOJI_CATEGORIES, ALL_EMOJIS } from '../chat/EmojiPicker';
 import { useBackHandler } from '../../utils/backNavigation';
@@ -2079,7 +2080,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
       </div>
 
       {/* Music Picker Modal */}
-      <MusicPickerModal
+      <React.Suspense fallback={<ModalLoadingFallback />}><MusicPickerModal
         isOpen={showMusicPicker}
         onClose={() => setShowMusicPicker(false)}
         onSelectSong={(song) => {
@@ -2090,7 +2091,7 @@ export default function CreateVibeModal({ onClose, onCreated }) {
           playSound('pop');
         }}
         selectedSong={selectedSong}
-      />
+      /></React.Suspense>
 
       {/* =========================================================================
           INSTAGRAM-STYLE MUSIC ADJUSTER & TRIMMER BOTTOM SHEET

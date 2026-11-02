@@ -443,7 +443,7 @@ export default function App() {
       setIsMobile(isMobileWidth || (isMobileAgent && isTouch));
     };
 
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleResize, { passive: true });
     window.addEventListener('orientationchange', handleResize);
     return () => {
       window.removeEventListener('resize', handleResize);

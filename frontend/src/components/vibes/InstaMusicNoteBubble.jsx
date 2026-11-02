@@ -237,8 +237,8 @@ export default function InstaMusicNoteBubble({ onOpenPicker, note, authorUser, i
       }
     };
     updateMenuPosition();
-    window.addEventListener('scroll', updateMenuPosition, true);
-    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, { capture: true, passive: true });
+    window.addEventListener('resize', updateMenuPosition, { passive: true });
     return () => {
       window.removeEventListener('scroll', updateMenuPosition, true);
       window.removeEventListener('resize', updateMenuPosition);

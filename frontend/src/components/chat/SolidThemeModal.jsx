@@ -2,7 +2,8 @@ import React, { useState, useContext } from 'react';
 import { ThemeContext } from '../../context/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
 import { X, Palette, Check, Crown, Lock, Zap } from 'lucide-react';
-import PulseProModal from './PulseProModal';
+import { lazyWithRetry, ModalLoadingFallback } from '../../utils/lazyRetry';
+const PulseProModal = lazyWithRetry(() => import('./PulseProModal'));
 import SparksFeaturePromptModal from '../common/SparksFeaturePromptModal';
 
 const SOLID_THEMES = [
@@ -163,10 +164,10 @@ export default function SolidThemeModal({ onClose, onSelectTheme, currentTheme }
       )}
 
       {showProModal && (
-        <PulseProModal
+        <React.Suspense fallback={<ModalLoadingFallback />}><PulseProModal
           initialTab="pro"
           onClose={() => setShowProModal(false)}
-        />
+        /></React.Suspense>
       )}
     </>
   );

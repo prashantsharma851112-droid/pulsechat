@@ -3,8 +3,9 @@ import { X, Zap, Battery, Sparkles, Check, Trash2, Music, Play, Pause, Disc, Cro
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
 import { useAppMusic } from '../../context/AppMusicContext';
-import MusicPickerModal from '../vibes/MusicPickerModal';
-import PulseProModal from './PulseProModal';
+import { lazyWithRetry, ModalLoadingFallback } from '../../utils/lazyRetry';
+const MusicPickerModal = lazyWithRetry(() => import('../vibes/MusicPickerModal'));
+const PulseProModal = lazyWithRetry(() => import('./PulseProModal'));
 import SparksFeaturePromptModal from '../common/SparksFeaturePromptModal';
 import { updateUserProfileInStorage } from '../../utils/offlineStorage';
 
@@ -575,7 +576,7 @@ export default function VibeAuraSelectorModal({
       </div>
 
       {showMusicPicker && (
-        <MusicPickerModal
+        <React.Suspense fallback={<ModalLoadingFallback />}><MusicPickerModal
           isOpen={showMusicPicker}
           onClose={() => setShowMusicPicker(false)}
           selectedSong={attachedSong}
@@ -584,7 +585,7 @@ export default function VibeAuraSelectorModal({
             setAttachedSong(song);
             setShowMusicPicker(false);
           }}
-        />
+        /></React.Suspense>
       )}
 
       {pendingTrialAura && (
@@ -650,10 +651,10 @@ export default function VibeAuraSelectorModal({
       )}
 
       {showProModal && (
-        <PulseProModal
+        <React.Suspense fallback={<ModalLoadingFallback />}><PulseProModal
           initialTab="pro"
           onClose={() => setShowProModal(false)}
-        />
+        /></React.Suspense>
       )}
     </div>
   );
