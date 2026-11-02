@@ -146,9 +146,9 @@ async function runPlayerProfileTests() {
     console.log('  ✓ 3.3 Profile switching verified: Player 1 and Player 2 return isolated data');
 
     // =========================================================================
-    // TEST GROUP 4: Game-Specific Records & Resilient Stat Fallbacks
+    // TEST GROUP 4: Game-Specific Records & Stat Integrity
     // =========================================================================
-    console.log('\n--- TEST GROUP 4: Game-Specific Records & Fallbacks ---');
+    console.log('\n--- TEST GROUP 4: Game-Specific Records & Data-Integrity ---');
 
     const expectedGames = ['arrow', 'temple', 'candy', 'tapper', 'tictactoe'];
     for (const game of expectedGames) {
@@ -164,6 +164,48 @@ async function runPlayerProfileTests() {
     assert(typeof player.gameStats.tictactoe.losses === 'number', 'TicTacToe losses must be a number');
 
     console.log('  ✓ 4.1 All game records present: Temple Run (dist & coins), Arrow (max lvl), Candy (lvl), Tapper (best), Tic-Tac-Toe (W/L)');
+
+    // 4.2 Data Integrity for Rank 1 Player (Legacy Tic-Tac-Toe record)
+    assert.strictEqual(player.arrowLevel, 1, `Rank 1 Tic-Tac-Toe player must have arrowLevel === 1, not 215! (got ${player.arrowLevel})`);
+    assert.strictEqual(player.gameStats.arrow.maxLevel, 1, 'Arrow puzzle maxLevel must be 1 for Tic-Tac-Toe player');
+    assert.strictEqual(player.gameStats.arrow.bestScore, 0, 'Arrow puzzle bestScore must be 0 for Tic-Tac-Toe player');
+    assert.strictEqual(player.gameStats.tictactoe.wins, 215, `Tic-Tac-Toe wins must be 215, not 24,659! (got ${player.gameStats.tictactoe.wins})`);
+    assert.strictEqual(player.gameStats.tictactoe.losses, 98, `Tic-Tac-Toe losses must be 98 (313-215)! (got ${player.gameStats.tictactoe.losses})`);
+    assert.strictEqual(player.gameStats.tictactoe.gamesPlayed, 313, `Tic-Tac-Toe gamesPlayed must be 313, not 0! (got ${player.gameStats.tictactoe.gamesPlayed})`);
+    assert.strictEqual(
+      player.gameStats.tictactoe.wins + player.gameStats.tictactoe.losses + player.gameStats.tictactoe.draws,
+      player.gameStats.tictactoe.gamesPlayed,
+      'Tic-Tac-Toe wins + losses + draws must equal gamesPlayed'
+    );
+    assert.strictEqual(player.gameStats.temple.bestDistance, 0, 'Temple distance must be 0 for unplayed game');
+    assert.strictEqual(player.gameStats.temple.bestScore, 0, 'Temple bestScore must be 0 (must not inherit global score)');
+    assert.strictEqual(player.gameStats.candy.maxLevel, 1, 'Candy maxLevel must be 1 for unplayed game');
+    console.log('  ✓ 4.2 Rank 1 Tic-Tac-Toe data-integrity verified: wins=215, losses=98, gamesPlayed=313 (reconciled), arrowLevel=1 (no leak)');
+
+    // 4.3 Data Integrity for Temple Run player with structured stats (user_1790839774009)
+    const templePlayerRes = await fetch(`${baseUrl}/profile/user_1790839774009`, {
+      headers: { Authorization: `Bearer ${testToken}` }
+    });
+    if (templePlayerRes.status === 200) {
+      const templePlayerData = await templePlayerRes.json();
+      const tp = templePlayerData.player;
+      assert.strictEqual(tp.gameStats.temple.bestDistance, 1308, 'Temple bestDistance must match verified distance 1308');
+      assert.strictEqual(tp.gameStats.temple.bestScore, 1308, 'Temple bestScore must be 1308, NOT global aggregate score 11449');
+      console.log('  ✓ 4.3 Temple player verified: bestDistance=1308, bestScore=1308 (no global score overwrite)');
+    }
+
+    // 4.4 Data Integrity for Legacy Candy Crush player (user_1790222419836)
+    const candyPlayerRes = await fetch(`${baseUrl}/profile/user_1790222419836`, {
+      headers: { Authorization: `Bearer ${testToken}` }
+    });
+    if (candyPlayerRes.status === 200) {
+      const candyPlayerData = await candyPlayerRes.json();
+      const cp = candyPlayerData.player;
+      assert.strictEqual(cp.gameStats.candy.maxLevel, 174, 'Candy maxLevel must be 174');
+      assert.strictEqual(cp.arrowLevel, 1, 'Candy player must have arrowLevel 1, not 174');
+      assert.strictEqual(cp.gameStats.tictactoe.wins, 0, 'Candy player must have 0 Tic-Tac-Toe wins');
+      console.log('  ✓ 4.4 Legacy Candy player verified: candy maxLevel=174, arrowLevel=1 (no cross-contamination)');
+    }
 
     // =========================================================================
     // TEST GROUP 5: Verifiable Achievements System
@@ -196,6 +238,21 @@ async function runPlayerProfileTests() {
       assert.strictEqual(grandMaster.title, 'Grand Master');
       console.log('    ✓ Grand Master achievement unlocked');
     }
+
+    // AI Slayer must be unlocked for Ｒ𝓲𝐓ｉЌ (215 wins >= 3)
+    const aiSlayer = player.achievements.find(a => a.id === 'ai_slayer');
+    assert(aiSlayer, 'Player with 215 Tic-Tac-Toe wins must have AI Slayer achievement');
+    console.log('    ✓ AI Slayer achievement unlocked (215 verified wins >= 3)');
+
+    // Puzzle Tactician must NOT be unlocked for Ｒ𝓲𝐓ｉЌ (arrow level is 1, not >= 5)
+    const puzzleTactician = player.achievements.find(a => a.id === 'puzzle_tactician');
+    assert(!puzzleTactician, 'Player with Arrow level 1 must NOT have Puzzle Tactician achievement');
+    console.log('    ✓ Puzzle Tactician correctly NOT awarded (verified arrowLevel=1 < 5)');
+
+    // Jungle Raider must NOT be unlocked (temple distance is 0, not >= 300)
+    const jungleRaider = player.achievements.find(a => a.id === 'jungle_raider');
+    assert(!jungleRaider, 'Player with Temple distance 0 must NOT have Jungle Raider achievement');
+    console.log('    ✓ Jungle Raider correctly NOT awarded (verified templeDistance=0 < 300)');
 
     // =========================================================================
     // TEST GROUP 6: Leaderboard List & Player Profile Continuity

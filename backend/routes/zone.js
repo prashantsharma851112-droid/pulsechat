@@ -773,53 +773,122 @@ router.get('/profile/:targetUserId', authMiddleware, async (req, res) => {
     const hasSilverCrown = Boolean((globalRank === 2 && !hasKingCrown) || userDoc.hasSilverCrown);
     const streak = userDoc.gamingStreakCount || 0;
 
-    // Game stats with resilient fallbacks for older or partially populated GameScore documents
-    let arrowLvl = scoreDoc?.gameStats?.arrow?.maxLevel || 1;
-    let arrowBest = scoreDoc?.gameStats?.arrow?.bestScore || 0;
-    let candyLvl = scoreDoc?.gameStats?.candy?.maxLevel || 1;
-    let candyBest = scoreDoc?.gameStats?.candy?.bestScore || 0;
-    let templeDist = scoreDoc?.gameStats?.temple?.bestDistance || 0;
-    let templeCoins = scoreDoc?.gameStats?.temple?.totalCoins || 0;
-    let templeBest = scoreDoc?.gameStats?.temple?.bestScore || 0;
-    let tapperBest = scoreDoc?.gameStats?.tapper?.bestScore || 0;
-    let tictactoeWins = scoreDoc?.gameStats?.tictactoe?.wins || 0;
-    let tictactoeDraws = scoreDoc?.gameStats?.tictactoe?.draws || 0;
-    let tictactoeLosses = scoreDoc?.gameStats?.tictactoe?.losses || 0;
+    // Game stats extraction: Authoritative resolution distinguishing modern structured docs from legacy records
+    let arrowStats = { bestScore: 0, maxLevel: 1, gamesPlayed: 0 };
+    let templeStats = { bestScore: 0, bestDistance: 0, totalCoins: 0, gamesPlayed: 0 };
+    let candyStats = { bestScore: 0, maxLevel: 1, gamesPlayed: 0 };
+    let tapperStats = { bestScore: 0, gamesPlayed: 0 };
+    let tictactoeStats = { wins: 0, draws: 0, losses: 0, gamesPlayed: 0 };
 
     if (scoreDoc) {
-      const gName = String(scoreDoc.gameName || '').toLowerCase();
-      if (gName.includes('arrow') || (!scoreDoc.gameStats?.arrow?.maxLevel && scoreDoc.level > 1)) {
-        arrowLvl = Math.max(arrowLvl, scoreDoc.level || 1);
-        arrowBest = Math.max(arrowBest, scoreDoc.score || 0);
-      }
-      if (gName.includes('candy')) {
-        candyLvl = Math.max(candyLvl, scoreDoc.level || 1);
-        candyBest = Math.max(candyBest, scoreDoc.score || 0);
-      }
-      if (gName.includes('temple')) {
-        templeBest = Math.max(templeBest, scoreDoc.score || 0);
-      }
-      if (gName.includes('tapper') || gName.includes('speed')) {
-        tapperBest = Math.max(tapperBest, scoreDoc.score || 0);
-      }
-      if (gName.includes('tic') || gName.includes('toe')) {
-        if (tictactoeWins === 0 && scoreDoc.score > 0) {
-          tictactoeWins = Math.max(1, Math.floor(scoreDoc.score / 50));
+      const rawStats = (typeof scoreDoc.gameStats === 'object' && scoreDoc.gameStats) ? scoreDoc.gameStats : null;
+      const hasStructuredStats = Boolean(rawStats && Object.keys(rawStats).length > 0);
+
+      if (hasStructuredStats) {
+        // Modern documents: read verified stats directly from structured sub-documents
+        if (rawStats.arrow) {
+          arrowStats = {
+            bestScore: Math.max(0, Number(rawStats.arrow.bestScore) || 0),
+            maxLevel: Math.max(1, Number(rawStats.arrow.maxLevel) || 1),
+            gamesPlayed: Math.max(0, Number(rawStats.arrow.gamesPlayed) || 0)
+          };
         }
+        if (rawStats.temple) {
+          templeStats = {
+            bestScore: Math.max(0, Number(rawStats.temple.bestScore) || 0),
+            bestDistance: Math.max(0, Number(rawStats.temple.bestDistance) || 0),
+            totalCoins: Math.max(0, Number(rawStats.temple.totalCoins) || 0),
+            gamesPlayed: Math.max(0, Number(rawStats.temple.gamesPlayed) || 0)
+          };
+        }
+        if (rawStats.candy) {
+          candyStats = {
+            bestScore: Math.max(0, Number(rawStats.candy.bestScore) || 0),
+            maxLevel: Math.max(1, Number(rawStats.candy.maxLevel) || 1),
+            gamesPlayed: Math.max(0, Number(rawStats.candy.gamesPlayed) || 0)
+          };
+        }
+        if (rawStats.tapper) {
+          tapperStats = {
+            bestScore: Math.max(0, Number(rawStats.tapper.bestScore) || 0),
+            gamesPlayed: Math.max(0, Number(rawStats.tapper.gamesPlayed) || 0)
+          };
+        }
+        if (rawStats.tictactoe) {
+          const w = Math.max(0, Number(rawStats.tictactoe.wins) || 0);
+          const d = Math.max(0, Number(rawStats.tictactoe.draws) || 0);
+          const l = Math.max(0, Number(rawStats.tictactoe.losses) || 0);
+          const p = Math.max(0, Number(rawStats.tictactoe.gamesPlayed) || 0);
+          tictactoeStats = {
+            wins: w,
+            draws: d,
+            losses: l,
+            gamesPlayed: p > 0 ? p : (w + d + l)
+          };
+        }
+      } else {
+        // Legacy documents: exactly one game was tracked per record, indicated by gameName
+        const gName = String(scoreDoc.gameName || '').toLowerCase();
+        let legacyKey = null;
+        if (gName.includes('temple')) legacyKey = 'temple';
+        else if (gName.includes('candy')) legacyKey = 'candy';
+        else if (gName.includes('arrow')) legacyKey = 'arrow';
+        else if (gName.includes('tapper') || gName.includes('speed')) legacyKey = 'tapper';
+        else if (gName.includes('tic') || gName.includes('toe')) legacyKey = 'tictactoe';
+
+        const legacyPlays = Math.max(0, Number(scoreDoc.gamesPlayed) || 0);
+
+        if (legacyKey === 'tictactoe') {
+          // For legacy Tic-Tac-Toe, scoreDoc.level represents rounds won
+          const rawLevel = Math.max(0, Number(scoreDoc.level) || 0);
+          const wins = legacyPlays > 0 ? Math.min(rawLevel, legacyPlays) : rawLevel;
+          const losses = legacyPlays > 0 ? Math.max(0, legacyPlays - wins) : 0;
+          tictactoeStats = {
+            wins,
+            draws: 0,
+            losses,
+            gamesPlayed: legacyPlays > 0 ? legacyPlays : wins
+          };
+        } else if (legacyKey === 'candy') {
+          candyStats = {
+            bestScore: 0,
+            maxLevel: Math.max(1, Number(scoreDoc.maxUnlockedLevel) || 0, Number(scoreDoc.level) || 1),
+            gamesPlayed: legacyPlays > 0 ? legacyPlays : 1
+          };
+        } else if (legacyKey === 'arrow') {
+          arrowStats = {
+            bestScore: Math.max(0, Number(scoreDoc.score) || 0),
+            maxLevel: Math.max(1, Number(scoreDoc.maxUnlockedLevel) || 0, Number(scoreDoc.level) || 1),
+            gamesPlayed: legacyPlays > 0 ? legacyPlays : 1
+          };
+        } else if (legacyKey === 'temple') {
+          templeStats = {
+            bestScore: 0,
+            bestDistance: 0,
+            totalCoins: 0,
+            gamesPlayed: legacyPlays > 0 ? legacyPlays : 1
+          };
+        } else if (legacyKey === 'tapper') {
+          tapperStats = {
+            bestScore: 0,
+            gamesPlayed: legacyPlays > 0 ? legacyPlays : 1
+          };
+        }
+        // Unplayed games remain strictly at their clean zero/default statistics!
       }
     }
 
-    // Build achievements based on player statistics
+    // Build achievements based strictly on verified player statistics (never unverified root aggregates)
     const achievements = [];
     if (currentScore >= 100) achievements.push({ id: 'centurion', title: 'Centurion', desc: 'Earned 100+ global points', icon: '⭐' });
     if (currentScore >= 500) achievements.push({ id: 'high_roller', title: 'High Roller', desc: 'Earned 500+ global points', icon: '💎' });
     if (currentScore >= 1000) achievements.push({ id: 'grand_master', title: 'Grand Master', desc: 'Crossed 1,000+ gaming points', icon: '👑' });
     if (streak >= 3) achievements.push({ id: 'flame_keeper', title: 'Flame Keeper', desc: 'Maintained 3-day gaming streak', icon: '🔥' });
     if (streak >= 7) achievements.push({ id: 'legendary_streak', title: 'Legendary Streak', desc: 'Completed full 7-day gaming quest', icon: '⚡' });
-    if (templeDist >= 300) achievements.push({ id: 'jungle_raider', title: 'Jungle Raider', desc: 'Ran 300m+ in Temple Run 3D', icon: '🗿' });
-    if (candyLvl >= 3) achievements.push({ id: 'sugar_master', title: 'Sugar Master', desc: 'Passed Level 3 in Candy Crush', icon: '🍬' });
-    if (tictactoeWins >= 3) achievements.push({ id: 'ai_slayer', title: 'AI Slayer', desc: 'Defeated Master AI 3+ times', icon: '🤖' });
-    if (arrowLvl >= 5) achievements.push({ id: 'puzzle_tactician', title: 'Puzzle Tactician', desc: 'Cleared Level 5 in Arrow Puzzle', icon: '🎯' });
+    if (templeStats.bestDistance >= 300) achievements.push({ id: 'jungle_raider', title: 'Jungle Raider', desc: 'Ran 300m+ in Temple Run 3D', icon: '🗿' });
+    if (candyStats.maxLevel >= 3) achievements.push({ id: 'sugar_master', title: 'Sugar Master', desc: 'Passed Level 3 in Candy Crush', icon: '🍬' });
+    if (tictactoeStats.wins >= 3) achievements.push({ id: 'ai_slayer', title: 'AI Slayer', desc: 'Defeated Master AI 3+ times', icon: '🤖' });
+    if (arrowStats.maxLevel >= 5) achievements.push({ id: 'puzzle_tactician', title: 'Puzzle Tactician', desc: 'Cleared Level 5 in Arrow Puzzle', icon: '🎯' });
 
     // Explicit safe projection/DTO - sensitive fields (passwordHash, email, phone, privateKeys, tokens, etc.) are strictly excluded
     const safePlayerDTO = {
@@ -836,35 +905,14 @@ router.get('/profile/:targetUserId', authMiddleware, async (req, res) => {
       gamingStreakCount: streak,
       globalRank,
       totalScore: currentScore,
-      arrowLevel: arrowLvl,
+      arrowLevel: arrowStats.maxLevel,
       gamesPlayed: currentPlays,
       gameStats: {
-        arrow: {
-          bestScore: arrowBest,
-          maxLevel: arrowLvl,
-          gamesPlayed: scoreDoc?.gameStats?.arrow?.gamesPlayed || 0
-        },
-        temple: {
-          bestScore: templeBest,
-          bestDistance: templeDist,
-          totalCoins: templeCoins,
-          gamesPlayed: scoreDoc?.gameStats?.temple?.gamesPlayed || 0
-        },
-        candy: {
-          bestScore: candyBest,
-          maxLevel: candyLvl,
-          gamesPlayed: scoreDoc?.gameStats?.candy?.gamesPlayed || 0
-        },
-        tapper: {
-          bestScore: tapperBest,
-          gamesPlayed: scoreDoc?.gameStats?.tapper?.gamesPlayed || 0
-        },
-        tictactoe: {
-          wins: tictactoeWins,
-          draws: tictactoeDraws,
-          losses: tictactoeLosses,
-          gamesPlayed: scoreDoc?.gameStats?.tictactoe?.gamesPlayed || 0
-        }
+        arrow: arrowStats,
+        temple: templeStats,
+        candy: candyStats,
+        tapper: tapperStats,
+        tictactoe: tictactoeStats
       },
       achievements,
       memberSince: userDoc.createdAt || null
