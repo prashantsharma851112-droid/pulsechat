@@ -34,6 +34,7 @@ function normalizeGameKey(name) {
   const n = String(name || '').toLowerCase();
   if (n.includes('temple')) return 'temple';
   if (n.includes('candy')) return 'candy';
+  if (n.includes('chess')) return 'chess';
   if (n.includes('arrow')) return 'arrow';
   if (n.includes('tapper') || n.includes('speed')) return 'tapper';
   if (n.includes('tic') || n.includes('toe')) return 'tictactoe';
@@ -223,6 +224,9 @@ async function getLeaderboardList(gameCategory = 'all', rank1UserId, rank2UserId
   } else if (gameCategory === 'tictactoe') {
     query = { 'gameStats.tictactoe.wins': { $gt: 0 } };
     sort = { 'gameStats.tictactoe.wins': -1, 'gameStats.tictactoe.draws': -1, updatedAt: 1 };
+  } else if (gameCategory === 'chess') {
+    query = { 'gameStats.chess.bestScore': { $gt: 0 } };
+    sort = { 'gameStats.chess.bestScore': -1, 'gameStats.chess.maxLevel': -1, updatedAt: 1 };
   }
 
   let scores = await GameScore.find(query)
@@ -281,6 +285,9 @@ async function getLeaderboardList(gameCategory = 'all', rank1UserId, rank2UserId
     } else if (gameCategory === 'tictactoe' && s.gameStats?.tictactoe) {
       displayScore = (s.gameStats.tictactoe.wins || 0) * 50;
       displayDetail = `${s.gameStats.tictactoe.wins || 0} Wins`;
+    } else if (gameCategory === 'chess' && s.gameStats?.chess) {
+      displayScore = s.gameStats.chess.bestScore || ((s.gameStats.chess.wins || 0) * 100);
+      displayDetail = `Level ${s.gameStats.chess.maxLevel || 1} • ${s.gameStats.chess.wins || 0}W`;
     }
 
     return {
@@ -440,6 +447,11 @@ async function applyScoreUpdate({ user, resolvedUserId, gameName, score, level, 
     gameEntry.maxLevel = Math.max(gameEntry.maxLevel || 1, rawLevel);
   } else if (gameKey === 'candy') {
     gameEntry.maxLevel = Math.max(gameEntry.maxLevel || 1, rawLevel);
+  } else if (gameKey === 'chess') {
+    gameEntry.maxLevel = Math.max(gameEntry.maxLevel || 1, rawLevel);
+    if (stats?.outcome === 'win') gameEntry.wins = (gameEntry.wins || 0) + 1;
+    else if (stats?.outcome === 'draw') gameEntry.draws = (gameEntry.draws || 0) + 1;
+    else if (stats?.outcome === 'loss') gameEntry.losses = (gameEntry.losses || 0) + 1;
   } else if (gameKey === 'tictactoe') {
     if (stats?.outcome === 'win') gameEntry.wins = (gameEntry.wins || 0) + 1;
     else if (stats?.outcome === 'draw') gameEntry.draws = (gameEntry.draws || 0) + 1;
@@ -779,6 +791,7 @@ router.get('/profile/:targetUserId', authMiddleware, async (req, res) => {
     let candyStats = { bestScore: 0, maxLevel: 1, gamesPlayed: 0 };
     let tapperStats = { bestScore: 0, gamesPlayed: 0 };
     let tictactoeStats = { wins: 0, draws: 0, losses: 0, gamesPlayed: 0 };
+    let chessStats = { bestScore: 0, maxLevel: 1, wins: 0, draws: 0, losses: 0, gamesPlayed: 0 };
 
     if (scoreDoc) {
       const rawStats = (typeof scoreDoc.gameStats === 'object' && scoreDoc.gameStats) ? scoreDoc.gameStats : null;
@@ -826,6 +839,20 @@ router.get('/profile/:targetUserId', authMiddleware, async (req, res) => {
             gamesPlayed: p > 0 ? p : (w + d + l)
           };
         }
+        if (rawStats.chess) {
+          const w = Math.max(0, Number(rawStats.chess.wins) || 0);
+          const d = Math.max(0, Number(rawStats.chess.draws) || 0);
+          const l = Math.max(0, Number(rawStats.chess.losses) || 0);
+          const p = Math.max(0, Number(rawStats.chess.gamesPlayed) || 0);
+          chessStats = {
+            bestScore: Math.max(0, Number(rawStats.chess.bestScore) || 0),
+            maxLevel: Math.max(1, Number(rawStats.chess.maxLevel) || 1),
+            wins: w,
+            draws: d,
+            losses: l,
+            gamesPlayed: p > 0 ? p : (w + d + l)
+          };
+        }
       } else {
         // Legacy documents: exactly one game was tracked per record, indicated by gameName
         const gName = String(scoreDoc.gameName || '').toLowerCase();
@@ -835,6 +862,7 @@ router.get('/profile/:targetUserId', authMiddleware, async (req, res) => {
         else if (gName.includes('arrow')) legacyKey = 'arrow';
         else if (gName.includes('tapper') || gName.includes('speed')) legacyKey = 'tapper';
         else if (gName.includes('tic') || gName.includes('toe')) legacyKey = 'tictactoe';
+        else if (gName.includes('chess')) legacyKey = 'chess';
 
         const legacyPlays = Math.max(0, Number(scoreDoc.gamesPlayed) || 0);
 
@@ -873,6 +901,16 @@ router.get('/profile/:targetUserId', authMiddleware, async (req, res) => {
             bestScore: 0,
             gamesPlayed: legacyPlays > 0 ? legacyPlays : 1
           };
+        } else if (legacyKey === 'chess') {
+          const rawLevel = Math.max(1, Number(scoreDoc.maxUnlockedLevel) || 0, Number(scoreDoc.level) || 1);
+          chessStats = {
+            bestScore: Math.max(0, Number(scoreDoc.score) || 0),
+            maxLevel: rawLevel,
+            wins: 1,
+            draws: 0,
+            losses: 0,
+            gamesPlayed: legacyPlays > 0 ? legacyPlays : 1
+          };
         }
         // Unplayed games remain strictly at their clean zero/default statistics!
       }
@@ -889,6 +927,8 @@ router.get('/profile/:targetUserId', authMiddleware, async (req, res) => {
     if (candyStats.maxLevel >= 3) achievements.push({ id: 'sugar_master', title: 'Sugar Master', desc: 'Passed Level 3 in Candy Crush', icon: '🍬' });
     if (tictactoeStats.wins >= 3) achievements.push({ id: 'ai_slayer', title: 'AI Slayer', desc: 'Defeated Master AI 3+ times', icon: '🤖' });
     if (arrowStats.maxLevel >= 5) achievements.push({ id: 'puzzle_tactician', title: 'Puzzle Tactician', desc: 'Cleared Level 5 in Arrow Puzzle', icon: '🎯' });
+    if (chessStats.wins >= 1) achievements.push({ id: 'grandmaster_initiate', title: 'Grandmaster Initiate', desc: 'Defeated Computer Chess AI', icon: '♟️' });
+    if (chessStats.maxLevel >= 5) achievements.push({ id: 'chess_virtuoso', title: 'Chess Virtuoso', desc: 'Conquered Level 5+ in Computer Chess', icon: '👑' });
 
     // Explicit safe projection/DTO - sensitive fields (passwordHash, email, phone, privateKeys, tokens, etc.) are strictly excluded
     const safePlayerDTO = {
@@ -912,7 +952,8 @@ router.get('/profile/:targetUserId', authMiddleware, async (req, res) => {
         temple: templeStats,
         candy: candyStats,
         tapper: tapperStats,
-        tictactoe: tictactoeStats
+        tictactoe: tictactoeStats,
+        chess: chessStats
       },
       achievements,
       memberSince: userDoc.createdAt || null

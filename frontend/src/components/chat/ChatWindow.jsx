@@ -31,6 +31,7 @@ import ScheduleMessageModal from './ScheduleMessageModal';
 import GiftPickerModal from './GiftPickerModal';
 import LiveArrowGameModal from './LiveArrowGameModal';
 import TicTacToeModal from './TicTacToeModal';
+const ChatChessModal = lazyWithRetry(() => import('./ChatChessModal'));
 import SparksWalletModal from './SparksWalletModal';
 
 import { lazyWithRetry, scheduleIdlePreload } from '../../utils/lazyRetry';
@@ -424,6 +425,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   }, [vibeAuras, user]);
   const [showVibeSelector, setShowVibeSelector] = useState(false);
   const [showTicTacToeModal, setShowTicTacToeModal] = useState(false);
+  const [showChessModal, setShowChessModal] = useState(false);
   const [tictactoeHostId, setTictactoeHostId] = useState(null);
   const [sparksPromptConfig, setSparksPromptConfig] = useState(null);
 
@@ -1501,6 +1503,13 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
     }
   }, [socket, chatId, user?.id]);
 
+  const handleCloseChess = useCallback((broadcast = true) => {
+    setShowChessModal(false);
+    if (broadcast && socket && chatId) {
+      socket.emit('request_close_chess', { chatId, senderId: user?.id });
+    }
+  }, [socket, chatId, user?.id]);
+
   const handleOpenSparksWallet = useCallback(() => setShowSparksWallet(true), []);
 
   // Universal Back Button registration for all submodals/pickers inside ChatWindow
@@ -1517,6 +1526,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
   useBackHandler(() => setShow3DTextModal(false), show3DTextModal);
   useBackHandler(() => handleCloseArrowGame(true), showArrowGameModal);
   useBackHandler(() => handleCloseTicTacToe(true), showTicTacToeModal);
+  useBackHandler(() => handleCloseChess(true), showChessModal);
   useBackHandler(() => setShowEmojiBurstPicker(false), showEmojiBurstPicker);
   useBackHandler(() => setShowProModal(false), showProModal);
   const [groupMembersMap, setGroupMembersMap] = useState({});
@@ -3303,6 +3313,14 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         setTimeout(() => setActionToast(''), 4000);
       }
     };
+    const handleAutoOpenChess = (data) => {
+      if (isMatchingChat(data) && data.senderId !== user?.id) {
+        setShowChessModal(true);
+        const inviter = data.senderName || activeChat?.displayName || 'Friend';
+        setActionToast(`♟️ ${inviter} ne 3D Chess shuru kiya!`);
+        setTimeout(() => setActionToast(''), 4000);
+      }
+    };
     const handleAutoOpenMusic = (data) => {
       // Do not open music popup on partner's screen; only the user who clicked gets the picker
     };
@@ -3325,25 +3343,34 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         setTictactoeHostId(null);
       }
     };
+    const handleAutoCloseChess = (data) => {
+      if (isMatchingChat(data)) {
+        setShowChessModal(false);
+      }
+    };
 
     socket.on('auto_open_arrow_game', handleAutoOpenGame);
     socket.on('auto_open_whiteboard', handleAutoOpenWhiteboard);
     socket.on('auto_open_tictactoe', handleAutoOpenTicTacToe);
+    socket.on('auto_open_chess', handleAutoOpenChess);
     socket.on('auto_open_music', handleAutoOpenMusic);
 
     socket.on('auto_close_arrow_game', handleAutoCloseGame);
     socket.on('auto_close_whiteboard', handleAutoCloseWhiteboard);
     socket.on('auto_close_tictactoe', handleAutoCloseTicTacToe);
+    socket.on('auto_close_chess', handleAutoCloseChess);
 
     return () => {
       socket.off('auto_open_arrow_game', handleAutoOpenGame);
       socket.off('auto_open_whiteboard', handleAutoOpenWhiteboard);
       socket.off('auto_open_tictactoe', handleAutoOpenTicTacToe);
+      socket.off('auto_open_chess', handleAutoOpenChess);
       socket.off('auto_open_music', handleAutoOpenMusic);
 
       socket.off('auto_close_arrow_game', handleAutoCloseGame);
       socket.off('auto_close_whiteboard', handleAutoCloseWhiteboard);
       socket.off('auto_close_tictactoe', handleAutoCloseTicTacToe);
+      socket.off('auto_close_chess', handleAutoCloseChess);
     };
   }, [socket, chatId, user?.id, activeChat?.displayName]);
 
@@ -5309,6 +5336,42 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
         icon: '❌⭕',
         description: '👑 VIP Chat Game: Free with Pulse Pro, or unlock this session for 5 Sparks ⚡!',
         onSuccess: () => launchTicTacToe()
+      });
+    });
+  };
+
+  const launchChess = () => {
+    if (!checkCanOpenActivity('Chess')) return;
+    setShowAppsFolderModal(false);
+    setShowChessModal(true);
+    if (socket && chatId) {
+      socket.emit('request_open_chess', {
+        chatId,
+        senderId: user?.id,
+        senderName: user?.displayName || user?.username,
+        receiverId: isGroup ? '' : (activeChat?.id || activeChat?._id)
+      });
+    }
+  };
+
+  const handleOpenChess = () => {
+    if (!checkCanOpenActivity('Chess')) return;
+    verifyRealPresenceAndProceed('Game (3D Chess)', () => {
+      const isUserPro = Boolean(user?.isPro && (!user?.proExpiresAt || new Date(user.proExpiresAt) > new Date()));
+
+      if (isUserPro) {
+        launchChess();
+        return;
+      }
+
+      setShowAppsFolderModal(false);
+      setSparksPromptConfig({
+        featureKey: 'chat_game',
+        featureName: '3D Chess 1v1',
+        sparksCost: 5,
+        icon: '♟️',
+        description: '👑 VIP Chat Game: Free with Pulse Pro, or unlock this session for 5 Sparks ⚡!',
+        onSuccess: () => launchChess()
       });
     });
   };
@@ -8429,6 +8492,7 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
       <ChatModalErrorBoundary onReset={() => {
         setShowGiftPicker(false);
         setShowTicTacToeModal(false);
+        setShowChessModal(false);
         setShowArrowGameModal(false);
         setShowSparksWallet(false);
         setShowWhiteboard(false);
@@ -8929,6 +8993,49 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
                     👑 PRO / ⚡ 5
                   </span>
                 </button>
+
+                {/* Game 3: 3D Chess 1v1 */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAppsFolderModal(false);
+                    handleOpenChess();
+                  }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '6px 4px',
+                    borderRadius: '16px',
+                    transition: 'transform 0.18s ease'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <div style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '17px',
+                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(217, 119, 6, 0.22))',
+                    border: '1.5px solid rgba(245, 158, 11, 0.55)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 6px 16px rgba(245, 158, 11, 0.35)',
+                    marginBottom: '7px'
+                  }}>
+                    <span style={{ fontSize: '28px' }}>♟️</span>
+                  </div>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                    3D Chess
+                  </span>
+                  <span style={{ fontSize: '0.62rem', color: '#f59e0b', fontWeight: 800, marginTop: '2px' }}>
+                    👑 PRO / ⚡ 5
+                  </span>
+                </button>
               </div>
             )}
             <style>{`
@@ -8949,6 +9056,18 @@ export default function ChatWindow({ activeChat, onBack, onStartCall, onStartGro
           onClose={handleCloseTicTacToe}
           onOpenSparksWallet={handleOpenSparksWallet}
         />
+      )}
+
+      {showChessModal && (
+        <React.Suspense fallback={null}>
+          <ChatChessModal
+            chatId={chatId}
+            partnerName={chatDisplayName || activeChat?.displayName}
+            partnerAvatar={activeChat?.avatar}
+            partnerId={isGroup ? '' : (activeChat?.id || activeChat?._id)}
+            onClose={() => handleCloseChess(true)}
+          />
+        </React.Suspense>
       )}
 
       {showArrowGameModal && (

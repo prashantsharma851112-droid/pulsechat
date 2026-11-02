@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { 
   X, Trophy, Flame, Award, Gamepad2, Sparkles, 
-  Target, Zap, Swords, Loader2, Calendar, User, Compass, RefreshCw
+  Target, Zap, Swords, Loader2, Calendar, User, Compass, RefreshCw, ArrowLeft
 } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { AuthContext } from '../../context/AuthContext';
 import { useBackHandler } from '../../utils/backNavigation';
 
-export default function PlayerProfileModal({ userId, onClose, token }) {
+export default function PlayerProfileModal({ userId, onClose, onBack, token }) {
+  const handleBack = onBack || onClose;
+
   // Integrate hardware back / popstate dismissal
-  useBackHandler(onClose, true);
+  useBackHandler(handleBack, true);
 
   const authCtx = useContext(AuthContext);
   const authToken = token || authCtx?.token;
@@ -18,17 +20,17 @@ export default function PlayerProfileModal({ userId, onClose, token }) {
   const [error, setError] = useState(null);
   const [profile, setProfile] = useState(null);
 
-  // Keyboard accessibility: ESC key dismiss
+  // Keyboard accessibility: ESC key dismiss to leaderboard
   useEffect(() => {
     function handleKeyDown(e) {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        handleBack();
       }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [handleBack]);
 
   const fetchProfile = useCallback(async (signal) => {
     if (!userId) {
@@ -72,7 +74,7 @@ export default function PlayerProfileModal({ userId, onClose, token }) {
     }
   }, [userId, authToken]);
 
-  // Fetch when userId or token changes with immediate stale-state flush & request cancellation
+  // Fetch when userId or token changes with request cancellation
   useEffect(() => {
     setProfile(null);
     const controller = new AbortController();
@@ -88,294 +90,475 @@ export default function PlayerProfileModal({ userId, onClose, token }) {
 
   return (
     <div
-      className="fixed inset-0 z-[1400] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
-      onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label="Player Gaming Profile"
-      style={{ zIndex: 1400 }}
+      className="player-profile-view animate-fadeIn"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '14px',
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box'
+      }}
     >
-      <div
-        className="relative w-full max-w-md max-h-[90vh] flex flex-col rounded-3xl overflow-hidden shadow-2xl border border-white/10 bg-[#121622] text-white"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 30px rgba(99, 102, 241, 0.15)'
-        }}
-      >
-        {/* Modal Header */}
-        <div className="relative p-5 pb-4 flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-indigo-950/60 via-purple-950/40 to-slate-900/60">
-          <div className="flex items-center gap-2">
-            <Gamepad2 className="w-5 h-5 text-indigo-400" />
-            <span className="text-sm font-bold uppercase tracking-wider text-indigo-300">Player Card</span>
-          </div>
+      {/* Navigation Top Bar */}
+      <div className="player-profile-nav">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="player-profile-back-btn"
+          aria-label="Back to Leaderboard"
+        >
+          <ArrowLeft size={16} />
+          <span>Back to Leaderboard</span>
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="player-profile-pill">Player Profile</span>
           <button
+            type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 active:scale-95 text-gray-300 hover:text-white transition-all cursor-pointer"
+            className="icon-btn-ghost"
+            style={{
+              color: 'var(--text-muted, #94a3b8)',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '50%',
+              width: '32px',
+              height: '32px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
             aria-label="Close Profile"
+            title="Close Profile"
           >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar">
-          {loading ? (
-            <div className="py-16 flex flex-col items-center justify-center gap-3">
-              <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
-              <p className="text-xs text-gray-400 font-medium">Loading player stats & records...</p>
-            </div>
-          ) : error || !profile ? (
-            <div className="py-12 text-center space-y-4 px-4">
-              <div className="w-12 h-12 mx-auto rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
-                <X className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-200">{error || 'Unable to display profile'}</p>
-                <p className="text-xs text-gray-400 mt-1">Please check your connection and try again.</p>
-              </div>
-              <div className="flex items-center justify-center gap-3 pt-2">
-                <button
-                  onClick={() => fetchProfile()}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-xs text-white font-medium flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" /> Retry
-                </button>
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 active:scale-95 text-xs text-gray-300 font-medium transition-all cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Profile Top Hero Card */}
-              <div className="relative p-4 rounded-2xl bg-gradient-to-br from-indigo-900/30 via-slate-800/40 to-purple-900/20 border border-white/10 flex items-center gap-4">
-                <div className="relative shrink-0">
-                  <div className="w-16 h-16 rounded-2xl overflow-hidden ring-2 ring-indigo-500/30 bg-slate-800 flex items-center justify-center">
-                    {profile.avatar ? (
-                      <img
-                        src={profile.avatar}
-                        alt={profile.displayName || profile.username}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-indigo-600 to-purple-600 text-white font-bold text-xl">
-                        {(profile.displayName || profile.username || 'P').charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                  {/* Floating Rank Crown / Badge */}
-                  {profile.hasKingCrown || profile.globalRank === 1 ? (
-                    <div className="absolute -top-2 -right-2 bg-amber-500 text-black text-xs font-black px-1.5 py-0.5 rounded-full shadow-lg flex items-center gap-0.5 border border-amber-300" title="👑 #1 Gold Champion">
-                      👑 <span>#1</span>
-                    </div>
-                  ) : profile.hasSilverCrown || profile.globalRank === 2 ? (
-                    <div className="absolute -top-2 -right-2 bg-slate-300 text-black text-xs font-black px-1.5 py-0.5 rounded-full shadow-lg flex items-center gap-0.5 border border-white" title="🥈 #2 Silver Champion">
-                      🥈 <span>#2</span>
-                    </div>
-                  ) : profile.globalRank ? (
-                    <div className="absolute -top-2 -right-2 bg-slate-700 text-gray-200 text-[10px] font-black px-1.5 py-0.5 rounded-full shadow border border-slate-500">
-                      #{profile.globalRank}
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <h3 className="font-bold text-base text-white truncate">
-                      {profile.displayName || profile.username}
-                    </h3>
-                    {profile.isPro && (
-                      <span className="px-1.5 py-0.5 rounded bg-gradient-to-r from-amber-500 to-yellow-500 text-[10px] font-black uppercase text-black tracking-wide shadow-sm">
-                        PRO
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-400 truncate">@{profile.username}</p>
-                  
-                  {profile.bio && (
-                    <p className="text-xs text-gray-300 mt-1 line-clamp-2 italic">
-                      "{profile.bio}"
-                    </p>
-                  )}
-
-                  <div className="flex items-center gap-3 mt-2 text-[11px] text-gray-400">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-indigo-400" /> Joined {joinDate}
-                    </span>
-                    {profile.gamingStreakCount > 0 && (
-                      <span className="flex items-center gap-0.5 text-orange-400 font-semibold">
-                        <Flame className="w-3 h-3 text-orange-400 animate-pulse" /> {profile.gamingStreakCount}d Streak
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Core Global Stats Row */}
-              <div className="grid grid-cols-3 gap-2.5">
-                <div className="p-3 rounded-2xl bg-white/[0.04] border border-white/5 flex flex-col items-center justify-center text-center">
-                  <div className="flex items-center gap-1 text-amber-400 mb-1">
-                    <Trophy className="w-4 h-4" />
-                    <span className="text-[10px] uppercase font-bold tracking-wider">Rank</span>
-                  </div>
-                  <div className="text-lg font-black text-white">
-                    {profile.globalRank ? `#${profile.globalRank}` : '—'}
-                  </div>
-                  <span className="text-[10px] text-gray-400 font-medium">Global</span>
-                </div>
-
-                <div className="p-3 rounded-2xl bg-white/[0.04] border border-white/5 flex flex-col items-center justify-center text-center">
-                  <div className="flex items-center gap-1 text-indigo-400 mb-1">
-                    <Sparkles className="w-4 h-4" />
-                    <span className="text-[10px] uppercase font-bold tracking-wider">Points</span>
-                  </div>
-                  <div className="text-lg font-black text-indigo-300">
-                    {Number(profile.totalScore || 0).toLocaleString()}
-                  </div>
-                  <span className="text-[10px] text-gray-400 font-medium">Verified</span>
-                </div>
-
-                <div className="p-3 rounded-2xl bg-white/[0.04] border border-white/5 flex flex-col items-center justify-center text-center">
-                  <div className="flex items-center gap-1 text-orange-400 mb-1">
-                    <Flame className={`w-4 h-4 ${profile.gamingStreakCount > 0 ? 'text-orange-500 animate-pulse' : 'text-gray-500'}`} />
-                    <span className="text-[10px] uppercase font-bold tracking-wider">Streak</span>
-                  </div>
-                  <div className="text-lg font-black text-orange-300">
-                    {profile.gamingStreakCount || 0}d
-                  </div>
-                  <span className="text-[10px] text-gray-400 font-medium">{profile.gamingStreakCount >= 7 ? '7-Day Quest' : 'Active'}</span>
-                </div>
-              </div>
-
-              {/* Verified Game Records */}
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2.5 flex items-center gap-1.5">
-                  <Target className="w-3.5 h-3.5 text-indigo-400" />
-                  Game Records & Best Scores
-                </h4>
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Temple Run 3D */}
-                  <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                    <div className="flex items-center justify-between text-xs font-semibold text-gray-300 mb-1">
-                      <span className="flex items-center gap-1">🗿 Temple Run 3D</span>
-                    </div>
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-xs text-gray-400">Distance</span>
-                      <span className="text-xs font-bold text-emerald-400">
-                        {profile.gameStats?.temple?.bestDistance || 0}m
-                      </span>
-                    </div>
-                    <div className="flex items-baseline justify-between mt-0.5">
-                      <span className="text-[10px] text-gray-500">Coins / Best</span>
-                      <span className="text-[10px] text-amber-300 font-semibold">
-                        {profile.gameStats?.temple?.totalCoins || 0} 🪙 • {profile.gameStats?.temple?.bestScore || 0} pts
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Arrow Puzzle */}
-                  <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                    <div className="flex items-center justify-between text-xs font-semibold text-gray-300 mb-1">
-                      <span className="flex items-center gap-1">🎯 Arrow Puzzle</span>
-                    </div>
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-xs text-gray-400">Max Level</span>
-                      <span className="text-xs font-bold text-indigo-400">
-                        Lvl {profile.gameStats?.arrow?.maxLevel || profile.arrowLevel || 1}
-                      </span>
-                    </div>
-                    <div className="flex items-baseline justify-between mt-0.5">
-                      <span className="text-[10px] text-gray-500">High Score</span>
-                      <span className="text-[10px] text-indigo-300 font-semibold">
-                        {profile.gameStats?.arrow?.bestScore || 0} pts
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Candy Crush */}
-                  <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                    <div className="flex items-center justify-between text-xs font-semibold text-gray-300 mb-1">
-                      <span className="flex items-center gap-1">🍬 Candy Crush</span>
-                    </div>
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-xs text-gray-400">Level</span>
-                      <span className="text-xs font-bold text-pink-400">
-                        Lvl {profile.gameStats?.candy?.maxLevel || 1}
-                      </span>
-                    </div>
-                    <div className="flex items-baseline justify-between mt-0.5">
-                      <span className="text-[10px] text-gray-500">Best Match</span>
-                      <span className="text-[10px] text-pink-300 font-semibold">
-                        {profile.gameStats?.candy?.bestScore || 0} pts
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Speed Tapper & AI TicTacToe */}
-                  <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                    <div className="flex items-center justify-between text-xs font-semibold text-gray-300 mb-1">
-                      <span className="flex items-center gap-1">⚡ Tapper & ❌ AI</span>
-                    </div>
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-xs text-gray-400">Speed Tap</span>
-                      <span className="text-xs font-bold text-yellow-400">
-                        {profile.gameStats?.tapper?.bestScore || 0} pts
-                      </span>
-                    </div>
-                    <div className="flex items-baseline justify-between mt-0.5">
-                      <span className="text-[10px] text-gray-500">AI Arena</span>
-                      <span className="text-[10px] text-cyan-300 font-semibold">
-                        {profile.gameStats?.tictactoe?.wins || 0}W - {profile.gameStats?.tictactoe?.losses || 0}L
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Achievements Showcase */}
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5">
-                  <Award className="w-3.5 h-3.5 text-amber-400" />
-                  Unlocked Achievements ({profile.achievements?.length || 0})
-                </h4>
-                {profile.achievements && profile.achievements.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    {profile.achievements.map((ach) => (
-                      <div
-                        key={ach.id}
-                        className="p-2.5 rounded-xl bg-gradient-to-r from-white/[0.04] to-white/[0.01] border border-amber-500/20 flex items-start gap-2"
-                      >
-                        <div className="text-lg shrink-0 mt-0.5">{ach.icon || '🏅'}</div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-amber-200 truncate">{ach.title}</p>
-                          <p className="text-[10px] text-gray-400 leading-tight line-clamp-2 mt-0.5">{ach.desc}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 text-center">
-                    <p className="text-xs text-gray-400">No achievements unlocked yet. Play games to earn trophies!</p>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Modal Footer */}
-        <div className="p-3 border-t border-white/10 bg-black/40 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white transition-all shadow-md cursor-pointer"
-          >
-            Done
+            <X size={16} />
           </button>
         </div>
       </div>
+
+      {loading ? (
+        <div style={{ padding: '60px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+          <Loader2 className="animate-spin" size={32} color="#818cf8" />
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-muted, #94a3b8)', fontWeight: 600 }}>
+            Loading player records & verified statistics...
+          </p>
+        </div>
+      ) : error || !profile ? (
+        <div style={{ padding: '40px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '18px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f87171' }}>
+            <X size={22} />
+          </div>
+          <div>
+            <p style={{ fontSize: '0.92rem', fontWeight: 700, color: '#f1f5f9' }}>{error || 'Unable to display profile'}</p>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted, #94a3b8)', marginTop: '4px' }}>Please check your network and try again.</p>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+            <button
+              type="button"
+              onClick={() => fetchProfile()}
+              className="btn-primary"
+              style={{ padding: '8px 16px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <RefreshCw size={14} /> Retry
+            </button>
+            <button
+              type="button"
+              onClick={handleBack}
+              className="btn-secondary"
+              style={{ padding: '8px 16px', fontSize: '0.8rem' }}
+            >
+              Back to Leaderboard
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Profile Hero Header Card */}
+          <div className="player-profile-hero">
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <div style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '18px',
+                overflow: 'hidden',
+                background: '#1e293b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: (profile.hasKingCrown || profile.globalRank === 1)
+                  ? '2.5px solid #fbbf24'
+                  : (profile.hasSilverCrown || profile.globalRank === 2)
+                  ? '2.5px solid #cbd5e1'
+                  : '1.5px solid rgba(255, 255, 255, 0.15)',
+                boxShadow: (profile.hasKingCrown || profile.globalRank === 1)
+                  ? '0 0 16px rgba(251, 191, 36, 0.4)'
+                  : (profile.hasSilverCrown || profile.globalRank === 2)
+                  ? '0 0 16px rgba(203, 213, 225, 0.35)'
+                  : 'none'
+              }}>
+                <img
+                  src={profile.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(profile.displayName || profile.username || 'P')}`}
+                  alt={profile.displayName || profile.username}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={(e) => {
+                    e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(profile.username || 'P')}`;
+                  }}
+                />
+              </div>
+
+              {/* Floating Rank Crown / Badge */}
+              {profile.hasKingCrown || profile.globalRank === 1 ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '-10px',
+                    right: '-8px',
+                    background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                    color: '#000',
+                    fontSize: '0.72rem',
+                    fontWeight: 900,
+                    padding: '2px 7px',
+                    borderRadius: '20px',
+                    boxShadow: '0 4px 10px rgba(0,0,0,0.5)',
+                    border: '1.5px solid #fef08a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '2px',
+                    zIndex: 2
+                  }}
+                  title="👑 #1 Gold Champion"
+                >
+                  👑 <span>#1</span>
+                </div>
+              ) : profile.hasSilverCrown || profile.globalRank === 2 ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '-10px',
+                    right: '-8px',
+                    background: 'linear-gradient(135deg, #e2e8f0, #cbd5e1)',
+                    color: '#000',
+                    fontSize: '0.72rem',
+                    fontWeight: 900,
+                    padding: '2px 7px',
+                    borderRadius: '20px',
+                    boxShadow: '0 4px 10px rgba(0,0,0,0.5)',
+                    border: '1.5px solid #ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '2px',
+                    zIndex: 2
+                  }}
+                  title="👑 #2 Silver Champion"
+                >
+                  🥈 <span>#2</span>
+                </div>
+              ) : profile.globalRank ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '-8px',
+                    right: '-6px',
+                    background: 'rgba(30, 41, 59, 0.95)',
+                    color: '#e2e8f0',
+                    fontSize: '0.66rem',
+                    fontWeight: 800,
+                    padding: '2px 6px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    zIndex: 2
+                  }}
+                >
+                  #{profile.globalRank}
+                </div>
+              ) : null}
+            </div>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <h3 style={{
+                  margin: 0,
+                  fontSize: '1.15rem',
+                  fontWeight: 800,
+                  color: '#ffffff',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: '100%'
+                }}>
+                  {profile.displayName || profile.username}
+                </h3>
+                {profile.isPro && (
+                  <span style={{
+                    padding: '2px 7px',
+                    borderRadius: '6px',
+                    background: 'linear-gradient(135deg, #f59e0b, #eab308)',
+                    color: '#000',
+                    fontSize: '0.64rem',
+                    fontWeight: 900,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    boxShadow: '0 2px 6px rgba(245, 158, 11, 0.3)'
+                  }}>
+                    PRO
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs text-gray-400" style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted, #94a3b8)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                @{profile.username}
+              </p>
+
+              {profile.bio && (
+                <p className="italic" style={{
+                  margin: '6px 0 0 0',
+                  fontSize: '0.78rem',
+                  color: '#cbd5e1',
+                  fontStyle: 'italic',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'anywhere',
+                  lineHeight: '1.35',
+                  maxHeight: '3.8em',
+                  overflow: 'hidden'
+                }}>
+                  "{profile.bio}"
+                </p>
+              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px', fontSize: '0.72rem', color: 'var(--text-muted, #94a3b8)', flexWrap: 'wrap' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <Calendar size={12} color="#818cf8" /> Joined {joinDate}
+                </span>
+                {profile.gamingStreakCount > 0 && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#fb923c', fontWeight: 700 }}>
+                    <Flame size={12} color="#f97316" /> {profile.gamingStreakCount}d Streak
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Core Global Stats Grid */}
+          <div className="player-profile-stats-grid">
+            <div className="player-profile-stat-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#f59e0b', marginBottom: '2px' }}>
+                <Trophy size={14} />
+                <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rank</span>
+              </div>
+              <div className="text-lg font-black text-white" style={{ fontSize: '1.15rem', fontWeight: 900, color: '#ffffff' }}>
+                {profile.globalRank ? `#${profile.globalRank}` : '—'}
+              </div>
+              <span style={{ fontSize: '0.64rem', color: 'var(--text-muted, #94a3b8)', fontWeight: 600, marginTop: '2px' }}>
+                {profile.globalRank === 1 ? '👑 Champion' : profile.globalRank === 2 ? '🥈 Silver' : 'Global'}
+              </span>
+            </div>
+
+            <div className="player-profile-stat-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#818cf8', marginBottom: '2px' }}>
+                <Sparkles size={14} />
+                <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Points</span>
+              </div>
+              <div className="text-lg font-black text-indigo-300" style={{ fontSize: '1.15rem', fontWeight: 900, color: '#a5b4fc' }}>
+                {Number(profile.totalScore || 0).toLocaleString()}
+              </div>
+              <span style={{ fontSize: '0.64rem', color: 'var(--text-muted, #94a3b8)', fontWeight: 600, marginTop: '2px' }}>
+                Verified
+              </span>
+            </div>
+
+            <div className="player-profile-stat-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#34d399', marginBottom: '2px' }}>
+                <Gamepad2 size={14} />
+                <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Matches</span>
+              </div>
+              <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#6ee7b7' }}>
+                {Number(profile.gamesPlayed || 0).toLocaleString()}
+              </div>
+              <span style={{ fontSize: '0.64rem', color: 'var(--text-muted, #94a3b8)', fontWeight: 600, marginTop: '2px' }}>
+                Total Plays
+              </span>
+            </div>
+
+            <div className="player-profile-stat-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#fb923c', marginBottom: '2px' }}>
+                <Flame size={14} />
+                <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Streak</span>
+              </div>
+              <div className="text-lg font-black text-orange-300" style={{ fontSize: '1.15rem', fontWeight: 900, color: '#fdba74' }}>
+                {profile.gamingStreakCount || 0}d
+              </div>
+              <span style={{ fontSize: '0.64rem', color: 'var(--text-muted, #94a3b8)', fontWeight: 600, marginTop: '2px' }}>
+                {profile.gamingStreakCount >= 7 ? '7-Day Quest' : 'Active'}
+              </span>
+            </div>
+          </div>
+
+          {/* Verified Game Records */}
+          <div>
+            <div className="player-profile-section-title">
+              <Target size={14} color="#818cf8" />
+              <span>Game Records & Best Scores</span>
+            </div>
+
+            <div className="player-profile-records-grid grid grid-cols-2">
+              {/* Temple Run 3D */}
+              <div className="player-profile-record-card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0', marginBottom: '4px' }}>
+                  <span>🗿 Temple Run 3D</span>
+                  {profile.gameStats?.temple?.gamesPlayed ? (
+                    <span style={{ fontSize: '0.64rem', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '1px 6px', borderRadius: '6px' }}>
+                      {profile.gameStats.temple.gamesPlayed} runs
+                    </span>
+                  ) : null}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted, #94a3b8)' }}>Distance</span>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#34d399' }}>
+                    {profile.gameStats?.temple?.bestDistance ? `${Number(profile.gameStats.temple.bestDistance).toLocaleString()}m` : '0m'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: '2px' }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted, #64748b)' }}>Coins / Best</span>
+                  <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#fbbf24' }}>
+                    {Number(profile.gameStats?.temple?.totalCoins || 0).toLocaleString()} 🪙 • {Number(profile.gameStats?.temple?.bestScore || 0).toLocaleString()} pts
+                  </span>
+                </div>
+              </div>
+
+              {/* Arrow Puzzle */}
+              <div className="player-profile-record-card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0', marginBottom: '4px' }}>
+                  <span>🎯 Arrow Puzzle</span>
+                  {profile.gameStats?.arrow?.gamesPlayed ? (
+                    <span style={{ fontSize: '0.64rem', color: '#818cf8', background: 'rgba(99, 102, 241, 0.1)', padding: '1px 6px', borderRadius: '6px' }}>
+                      {profile.gameStats.arrow.gamesPlayed} plays
+                    </span>
+                  ) : null}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted, #94a3b8)' }}>Max Level</span>
+                  <span className="text-xs font-bold text-indigo-400" style={{ fontSize: '0.82rem', fontWeight: 800, color: '#818cf8' }}>
+                    Lvl {profile.gameStats?.arrow?.maxLevel || profile.arrowLevel || 1}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: '2px' }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted, #64748b)' }}>High Score</span>
+                  <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#c7d2fe' }}>
+                    {Number(profile.gameStats?.arrow?.bestScore || 0).toLocaleString()} pts
+                  </span>
+                </div>
+              </div>
+
+              {/* Candy Crush */}
+              <div className="player-profile-record-card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0', marginBottom: '4px' }}>
+                  <span>🍬 Candy Crush</span>
+                  {profile.gameStats?.candy?.gamesPlayed ? (
+                    <span style={{ fontSize: '0.64rem', color: '#f472b6', background: 'rgba(244, 114, 182, 0.1)', padding: '1px 6px', borderRadius: '6px' }}>
+                      {profile.gameStats.candy.gamesPlayed} plays
+                    </span>
+                  ) : null}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted, #94a3b8)' }}>Level</span>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#f472b6' }}>
+                    Lvl {profile.gameStats?.candy?.maxLevel || 1}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: '2px' }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted, #64748b)' }}>Best Match</span>
+                  <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#fbcfe8' }}>
+                    {Number(profile.gameStats?.candy?.bestScore || 0).toLocaleString()} pts
+                  </span>
+                </div>
+              </div>
+
+              {/* Speed Tapper & AI TicTacToe */}
+              <div className="player-profile-record-card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0', marginBottom: '4px' }}>
+                  <span>⚡ Tapper & ❌ AI</span>
+                  {profile.gameStats?.tapper?.gamesPlayed ? (
+                    <span style={{ fontSize: '0.64rem', color: '#facc15', background: 'rgba(250, 204, 21, 0.1)', padding: '1px 6px', borderRadius: '6px' }}>
+                      {profile.gameStats.tapper.gamesPlayed} taps
+                    </span>
+                  ) : null}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted, #94a3b8)' }}>Speed Tap</span>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#facc15' }}>
+                    {Number(profile.gameStats?.tapper?.bestScore || 0).toLocaleString()} pts
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: '2px' }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted, #64748b)' }}>AI Arena</span>
+                  <span className="text-cyan-300" style={{ fontSize: '0.7rem', fontWeight: 700, color: '#67e8f9' }}>
+                    {profile.gameStats?.tictactoe?.wins || 0}W - {profile.gameStats?.tictactoe?.losses || 0}L
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Achievements Showcase */}
+          <div>
+            <div className="player-profile-section-title">
+              <Award size={14} color="#f59e0b" />
+              <span>Unlocked Achievements ({profile.achievements?.length || 0})</span>
+            </div>
+
+            {profile.achievements && profile.achievements.length > 0 ? (
+              <div className="player-profile-achievements-grid">
+                {profile.achievements.map((ach) => (
+                  <div key={ach.id} className="player-profile-achievement-card">
+                    <span style={{ fontSize: '1.25rem', lineHeight: '1', flexShrink: 0 }}>
+                      {ach.icon || '🏅'}
+                    </span>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <p className="text-amber-200" style={{ margin: 0, fontSize: '0.78rem', fontWeight: 700, color: '#fde68a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {ach.title}
+                      </p>
+                      <p style={{ margin: '2px 0 0 0', fontSize: '0.68rem', color: 'var(--text-muted, #94a3b8)', lineHeight: '1.3' }}>
+                        {ach.desc}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: '16px', borderRadius: '14px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.06)', textAlign: 'center' }}>
+                <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--text-muted, #94a3b8)' }}>
+                  No achievements unlocked yet. Play games to earn trophies!
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Footer Navigation Action */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', marginTop: '4px' }}>
+            <button
+              type="button"
+              onClick={handleBack}
+              className="player-profile-back-btn"
+              style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+            >
+              <ArrowLeft size={14} /> Back to Leaderboard
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn-primary"
+              style={{ fontSize: '0.78rem', padding: '6px 16px', borderRadius: '10px', cursor: 'pointer' }}
+            >
+              Done
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

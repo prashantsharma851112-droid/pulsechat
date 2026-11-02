@@ -12,6 +12,7 @@
   "dependencies": {
     "@matrix-org/olm": "^3.2.15",
     "bcryptjs": "^2.4.3",
+    "chess.js": "^1.4.0",
     "cloudinary": "^2.2.0",
     "compression": "^1.8.2",
     "cors": "^2.8.5",

@@ -16,6 +16,7 @@ const GameScore = require('../models/GameScore');
 const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const DEBUG_PORT = 9333;
 const USER_DATA_DIR = path.resolve(__dirname, 'chrome_test_profile');
+const ARTIFACTS_DIR = 'C:\\Users\\Lenovo\\.gemini\\antigravity\\brain\\f19ac595-d4fd-46b4-8168-300ab5c2127f';
 
 function isPortOpen(port) {
   return new Promise((resolve) => {
@@ -80,6 +81,19 @@ function createCDPClient(wsUrl) {
     });
     ws.on('error', rejectOpen);
   });
+}
+
+async function saveScreenshot(cdp, filename) {
+  const res = await cdp.send('Page.captureScreenshot', { format: 'png' });
+  const buf = Buffer.from(res.data, 'base64');
+  const localPath = path.resolve(__dirname, filename);
+  fs.writeFileSync(localPath, buf);
+  if (fs.existsSync(ARTIFACTS_DIR)) {
+    try {
+      fs.writeFileSync(path.resolve(ARTIFACTS_DIR, filename), buf);
+    } catch (e) {}
+  }
+  return localPath;
 }
 
 async function runBrowserVerification() {
@@ -158,63 +172,71 @@ async function runBrowserVerification() {
     '--no-sandbox',
     '--disable-setuid-sandbox',
     `--user-data-dir=${USER_DATA_DIR}`,
-    '--window-size=1280,800',
-    'http://127.0.0.1:5173'
+    'about:blank'
   ]);
 
-  chromeProc.stderr.on('data', d => {
+  chromeProc.stderr.on('data', (d) => {
     const s = d.toString();
-    if (!s.includes('GL_') && !s.includes('angle')) console.log('[Chrome Notice]:', s.trim());
-  });
-
-  // Connect to Chrome CDP (with retry loop while Chrome initializes)
-  let versionData = null;
-  for (let i = 0; i < 20; i++) {
-    await sleep(500);
-    try {
-      versionData = await new Promise((resolve, reject) => {
-        const req = http.get(`http://127.0.0.1:${DEBUG_PORT}/json/list`, (res) => {
-          let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', () => {
-            try { resolve(JSON.parse(data)); } catch (err) { reject(err); }
-          });
-        });
-        req.on('error', reject);
-      });
-      if (versionData && Array.isArray(versionData) && versionData.length > 0) {
-        break;
-      }
-    } catch (e) {}
-  }
-
-  assert(versionData, 'Chrome failed to respond on remote debugging port after 10s');
-  const pageTarget = versionData.find(t => t.type === 'page') || versionData[0];
-  assert(pageTarget && pageTarget.webSocketDebuggerUrl, 'Could not find Chrome page debug target');
-
-  const cdp = await createCDPClient(pageTarget.webSocketDebuggerUrl);
-  await cdp.send('Page.enable');
-  await cdp.send('Runtime.enable');
-  await cdp.send('Network.enable');
-
-  const networkRequests = [];
-  cdp.on('Network.responseReceived', (p) => {
-    if (p.response.url.includes('/api/zone/')) {
-      networkRequests.push({
-        url: p.response.url,
-        status: p.response.status,
-        statusText: p.response.statusText
-      });
-      console.log(`[Network Response] ${p.response.status} ${p.response.url}`);
+    if (s.includes('DevTools listening on')) {
+      console.log('[Chrome Notice]:', s.trim());
     }
   });
 
+  let cdp = null;
+
   try {
-    // 5. Navigate to origin and set credentials in browser localStorage
+    // Poll for CDP endpoint
+    let wsUrl = null;
+    for (let i = 0; i < 20; i++) {
+      await sleep(500);
+      try {
+        const jsonList = await new Promise((resolve, reject) => {
+          const req = http.get(`http://127.0.0.1:${DEBUG_PORT}/json/list`, (res) => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => resolve(JSON.parse(body)));
+          });
+          req.on('error', reject);
+        });
+        if (jsonList && jsonList.length > 0 && jsonList[0].webSocketDebuggerUrl) {
+          wsUrl = jsonList[0].webSocketDebuggerUrl;
+          break;
+        }
+      } catch (e) {}
+    }
+
+    assert(wsUrl, 'Failed to connect to Chrome DevTools WebSocket after 10s');
+    cdp = await createCDPClient(wsUrl);
+
+    await cdp.send('Page.enable');
+    await cdp.send('Runtime.enable');
+    await cdp.send('Network.enable');
+
+    cdp.on('Runtime.exceptionThrown', (params) => {
+      console.log('[Browser Exception]:', params.exceptionDetails?.text, params.exceptionDetails?.exception?.description);
+    });
+
+    cdp.on('Runtime.consoleAPICalled', (params) => {
+      if (params.type === 'error') {
+        const text = (params.args || []).map(a => a.value || a.description || '').join(' ');
+        console.log('[Browser Console Error]:', text);
+      }
+    });
+
+    // Default Desktop Viewport
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: 1280,
+      height: 800,
+      deviceScaleFactor: 1,
+      mobile: false
+    });
+
+    // 5. Navigate to frontend root
     console.log('[Step 1] Navigating to http://127.0.0.1:5173...');
     await cdp.send('Page.navigate', { url: 'http://127.0.0.1:5173' });
     await sleep(2000);
 
+    // Set localStorage
     console.log('[Step 1.1] Injecting authenticated session into browser localStorage...');
     await cdp.eval(`
       localStorage.setItem('pulsechat_token', '${authToken}');
@@ -237,9 +259,13 @@ async function runBrowserVerification() {
     // Wait for Sidebar to load
     let appLoaded = false;
     for (let i = 0; i < 30; i++) {
-      appLoaded = await cdp.eval(`Boolean(document.querySelector('.sidebar') || document.querySelector('[title*="Pulse Zone"]'))`);
+      appLoaded = await cdp.eval(`Boolean(document.querySelector('.sidebar') || document.querySelector('[title*="Pulse Zone"]') || document.querySelector('.chat-container'))`);
       if (appLoaded) break;
       await sleep(500);
+    }
+    if (!appLoaded) {
+      const pageInfo = await cdp.eval(`({ url: window.location.href, html: document.body.innerHTML.substring(0, 800) })`);
+      console.log('[Page Info on Timeout]:', pageInfo);
     }
     assert(appLoaded, 'Application did not load authenticated view');
     console.log('✓ Application loaded into authenticated view successfully.\n');
@@ -274,12 +300,8 @@ async function runBrowserVerification() {
     console.log(`[Leaderboard] Found ${rowCount} interactive player rows with aria-label.\n`);
     assert(rowCount > 0, 'Leaderboard rows did not render or lack aria-label');
 
-    // Check first player name
-    const topRowText = await cdp.eval(`document.querySelectorAll('[aria-label*="View gaming profile"]')[0].innerText`);
-    console.log(`[Top Player Row Display]:\n${topRowText}\n`);
-
     // =========================================================================
-    // SCENARIO 1 & 2: Click #1 player and verify profile
+    // SCENARIO 1 & 2: Click #1 player and verify profile replaces leaderboard
     // =========================================================================
     console.log('[Step 5] Clicking #1 Rank player row...');
     await cdp.eval(`(() => {
@@ -288,10 +310,26 @@ async function runBrowserVerification() {
     })()`);
     await sleep(1500);
 
-    // Verify PlayerProfileModal opened
+    // Verify PlayerProfile view opened inside modal
     const isProfileModalOpen = await cdp.eval(`Boolean(document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]'))`);
-    assert(isProfileModalOpen, 'PlayerProfileModal did not open when #1 player row was clicked!');
-    console.log('✓ SUCCESS: PlayerProfileModal opened on player row click!\n');
+    assert(isProfileModalOpen, 'PlayerProfile view did not open when #1 player row was clicked!');
+    console.log('✓ SUCCESS: Dedicated PlayerProfile view opened inside Pulse Zone modal!\n');
+
+    // Verify NO horizontal overflow outside modal
+    const overflowCheck = await cdp.eval(`(() => {
+      const modal = document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]');
+      const card = document.querySelector('.modal-card');
+      if (!modal || !card) return { hasOverflow: true };
+      const modalRect = modal.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      return {
+        hasOverflow: modalRect.right > cardRect.right + 2 || modalRect.left < cardRect.left - 2,
+        modalWidth: Math.round(modalRect.width),
+        cardWidth: Math.round(cardRect.width)
+      };
+    })()`);
+    assert(!overflowCheck.hasOverflow, `Profile overflowed modal! modalWidth: ${overflowCheck.modalWidth}, cardWidth: ${overflowCheck.cardWidth}`);
+    console.log(`✓ Zero horizontal overflow: Profile fits cleanly inside modal card (${overflowCheck.modalWidth}px / ${overflowCheck.cardWidth}px).\n`);
 
     // Inspect rendered profile details
     const profileDetails = await cdp.eval(`(() => {
@@ -305,9 +343,9 @@ async function runBrowserVerification() {
         pointsBadge: modal.querySelector('.text-lg.font-black.text-indigo-300')?.innerText || '',
         streakBadge: modal.querySelector('.text-lg.font-black.text-orange-300')?.innerText || '',
         hasGoldCrown: Boolean(modal.querySelector('[title*="#1 Gold"]')),
-        gameRecordsCount: modal.querySelectorAll('.grid.grid-cols-2 > div').length,
+        gameRecordsCount: modal.querySelectorAll('.grid.grid-cols-2 > div, .player-profile-records-grid > div').length,
         achievementsCount: modal.querySelectorAll('.text-amber-200').length,
-        arrowLevelText: Array.from(modal.querySelectorAll('.grid.grid-cols-2 > div')).find(d => d.textContent.includes('Arrow Puzzle'))?.querySelector('.text-xs.font-bold')?.innerText || '',
+        arrowLevelText: Array.from(modal.querySelectorAll('.grid.grid-cols-2 > div, .player-profile-records-grid > div')).find(d => d.textContent.includes('Arrow Puzzle'))?.querySelector('.text-xs.font-bold')?.innerText || '',
         tictactoeRecordText: modal.querySelector('.text-cyan-300')?.innerText || ''
       };
     })()`);
@@ -320,19 +358,25 @@ async function runBrowserVerification() {
     assert.strictEqual(profileDetails.tictactoeRecordText, '215W - 98L', 'AI Arena record must be 215W - 98L, NOT 24,659W - 0L!');
     console.log('✓ Profile rendered with verified #1 Gold Crown, global points, and accurate game stats (Lvl 1 Arrow, 215W-98L TicTacToe).\n');
 
-    // =========================================================================
-    // SCENARIO 3: Close modal via Close (X) button
-    // =========================================================================
-    console.log('[Step 6] Closing profile modal via Close button...');
-    await cdp.eval(`(() => {
-      const closeBtn = document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"] button[aria-label="Close Profile"]');
-      if (closeBtn) closeBtn.click();
-    })()`);
-    await sleep(500);
+    // Capture Desktop Screenshot
+    const desktopImg = await saveScreenshot(cdp, 'desktop_player_profile.png');
+    console.log(`✓ Captured Desktop profile screenshot at: ${desktopImg}\n`);
 
-    const isClosedAfterX = await cdp.eval(`!document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]')`);
-    assert(isClosedAfterX, 'PlayerProfileModal failed to close via Close button');
-    console.log('✓ Profile modal closed via X button; leaderboard view restored.\n');
+    // =========================================================================
+    // SCENARIO 3: Navigate back via "Back to Leaderboard" button
+    // =========================================================================
+    console.log('[Step 6] Navigating back to Leaderboard via "Back to Leaderboard" button...');
+    await cdp.eval(`(() => {
+      const backBtn = document.querySelector('button[aria-label="Back to Leaderboard"]');
+      if (backBtn) backBtn.click();
+    })()`);
+    await sleep(600);
+
+    const isClosedAfterBack = await cdp.eval(`!document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]')`);
+    assert(isClosedAfterBack, 'PlayerProfile failed to close via Back to Leaderboard button');
+    const isLeaderboardRestored = await cdp.eval(`Boolean(document.querySelectorAll('[aria-label*="View gaming profile"]').length > 0)`);
+    assert(isLeaderboardRestored, 'Leaderboard rows were not restored upon navigating back');
+    console.log('✓ Successfully navigated Back: Leaderboard view restored; Pulse Zone modal remains open.\n');
 
     // =========================================================================
     // SCENARIO 4: Click #2 player and verify profile updates to #2
@@ -362,7 +406,7 @@ async function runBrowserVerification() {
     console.log('✓ Successfully opened Player #2 profile with Silver Crown and isolated stats.\n');
 
     // =========================================================================
-    // SCENARIO 5: Dismiss modal via Escape key
+    // SCENARIO 5: Dismiss profile via Escape key
     // =========================================================================
     console.log('[Step 8] Testing Escape key dismissal...');
     await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
@@ -370,43 +414,81 @@ async function runBrowserVerification() {
     await sleep(500);
 
     const isClosedAfterEsc = await cdp.eval(`!document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]')`);
-    assert(isClosedAfterEsc, 'PlayerProfileModal failed to close via Escape key');
-    console.log('✓ Escape key successfully dismissed profile modal.\n');
+    assert(isClosedAfterEsc, 'PlayerProfile failed to dismiss via Escape key');
+    console.log('✓ Escape key successfully dismissed profile back to Leaderboard.\n');
 
     // =========================================================================
-    // SCENARIO 6: Test Backdrop click dismissal
+    // SCENARIO 6: Mobile Portrait Emulation (390 x 844)
     // =========================================================================
-    console.log('[Step 9] Reopening profile and testing Backdrop click dismissal...');
-    await cdp.eval(`(() => {
-      const rows = document.querySelectorAll('[aria-label*="View gaming profile"]');
-      if (rows[0]) rows[0].click();
-    })()`);
-    await sleep(800);
-
-    const isReopened = await cdp.eval(`Boolean(document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]'))`);
-    assert(isReopened, 'Profile modal failed to reopen for backdrop dismissal test');
-
-    // Click the backdrop directly (the outer modal wrapper div)
-    await cdp.eval(`(() => {
-      const backdrop = document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]');
-      if (backdrop) backdrop.click();
-    })()`);
+    console.log('[Step 9] Emulating Mobile Portrait Viewport (390x844 iPhone / Pixel)...');
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 2,
+      mobile: true
+    });
     await sleep(500);
 
-    const isClosedAfterBackdrop = await cdp.eval(`!document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]')`);
-    assert(isClosedAfterBackdrop, 'PlayerProfileModal failed to close via Backdrop click');
-    console.log('✓ Backdrop click successfully dismissed profile modal.\n');
-
-    // =========================================================================
-    // SCENARIO 7: Test Done button dismissal
-    // =========================================================================
-    console.log('[Step 10] Testing Done button dismissal...');
+    // Tap #1 player row in mobile view
     await cdp.eval(`(() => {
       const rows = document.querySelectorAll('[aria-label*="View gaming profile"]');
       if (rows[0]) rows[0].click();
     })()`);
-    await sleep(800);
+    await sleep(1200);
 
+    // Verify mobile layout
+    const mobileLayout = await cdp.eval(`(() => {
+      const modal = document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]');
+      const card = document.querySelector('.modal-card');
+      if (!modal || !card) return { hasOverflow: true };
+      const docWidth = document.documentElement.clientWidth;
+      const modalRect = modal.getBoundingClientRect();
+      return {
+        hasOverflow: modalRect.width > docWidth || modal.scrollWidth > modal.clientWidth + 1,
+        docWidth,
+        modalWidth: Math.round(modalRect.width),
+        modalScrollWidth: modal.scrollWidth
+      };
+    })()`);
+
+    assert(!mobileLayout.hasOverflow, `Mobile profile has horizontal overflow! modalWidth: ${mobileLayout.modalWidth}, docWidth: ${mobileLayout.docWidth}`);
+    console.log(`✓ Mobile Portrait Responsive: 0 horizontal overflow (viewport: 390px, modal: ${mobileLayout.modalWidth}px).\n`);
+
+    const mobileImg = await saveScreenshot(cdp, 'mobile_player_profile.png');
+    console.log(`✓ Captured Mobile Portrait screenshot at: ${mobileImg}\n`);
+
+    // Test Back button on mobile
+    await cdp.eval(`(() => {
+      const backBtn = document.querySelector('button[aria-label="Back to Leaderboard"]');
+      if (backBtn) backBtn.click();
+    })()`);
+    await sleep(500);
+    const isClosedMobileBack = await cdp.eval(`!document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]')`);
+    assert(isClosedMobileBack, 'Mobile Back to Leaderboard button failed to dismiss profile');
+    console.log('✓ Mobile Back button successfully returned to Leaderboard.\n');
+
+    // =========================================================================
+    // SCENARIO 7: Mobile Landscape Emulation (844 x 390)
+    // =========================================================================
+    console.log('[Step 10] Emulating Mobile Landscape Viewport (844x390)...');
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: 844,
+      height: 390,
+      deviceScaleFactor: 2,
+      mobile: true
+    });
+    await sleep(500);
+
+    await cdp.eval(`(() => {
+      const rows = document.querySelectorAll('[aria-label*="View gaming profile"]');
+      if (rows[0]) rows[0].click();
+    })()`);
+    await sleep(1000);
+
+    const landscapeImg = await saveScreenshot(cdp, 'mobile_landscape_player_profile.png');
+    console.log(`✓ Captured Mobile Landscape screenshot at: ${landscapeImg}\n`);
+
+    // Close profile via Done button
     await cdp.eval(`(() => {
       const buttons = Array.from(document.querySelectorAll('[role="dialog"][aria-label="Player Gaming Profile"] button'));
       const doneBtn = buttons.find(b => b.textContent && b.textContent.includes('Done'));
@@ -415,8 +497,8 @@ async function runBrowserVerification() {
     await sleep(500);
 
     const isClosedAfterDone = await cdp.eval(`!document.querySelector('[role="dialog"][aria-label="Player Gaming Profile"]')`);
-    assert(isClosedAfterDone, 'PlayerProfileModal failed to close via Done button');
-    console.log('✓ Done button successfully dismissed profile modal.\n');
+    assert(isClosedAfterDone, 'PlayerProfile failed to dismiss via Done button');
+    console.log('✓ Done button successfully dismissed profile.\n');
 
     console.log('================================================================');
     console.log('   ALL REAL-BROWSER VERIFICATION SCENARIOS PASSED (EXIT CODE 0) ');

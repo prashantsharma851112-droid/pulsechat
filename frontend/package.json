@@ -22,6 +22,7 @@
     "@capacitor/core": "^6.0.0",
     "@matrix-org/matrix-sdk-crypto-wasm": "^18.9.0",
     "@matrix-org/olm": "^3.2.15",
+    "chess.js": "^1.4.0",
     "fix-webm-duration": "^1.0.6",
     "lucide-react": "^0.380.0",
     "react": "^18.3.1",

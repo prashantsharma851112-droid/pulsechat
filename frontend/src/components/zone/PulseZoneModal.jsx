@@ -24,6 +24,7 @@ import TicTacToeAIGame from './TicTacToeAIGame';
 import OfflineWhiteboardGame from './OfflineWhiteboardGame';
 const TempleRunGame = lazyWithRetry(() => import('./TempleRunGame'));
 const CandyCrushGame = lazyWithRetry(() => import('./CandyCrushGame'));
+const PulseChessGame = lazyWithRetry(() => import('./PulseChessGame'));
 // =========================================================================
 // ATOMIC ISOLATED ARCADE & LEADERBOARD COMPONENTS (React.memo + 0ms GPU Tap Feedback)
 // =========================================================================
@@ -503,7 +504,7 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
         className="modal-card modal-responsive"
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: (selectedGame === 'temple' || selectedGame === 'racer' || selectedGame === 'draw') ? '960px' : (selectedGame === 'candy' ? '580px' : '540px'),
+          maxWidth: (selectedGame === 'temple' || selectedGame === 'racer' || selectedGame === 'draw' || selectedGame === 'chess') ? '960px' : (selectedGame === 'candy' ? '580px' : (selectedPlayerId ? '580px' : '540px')),
           width: '100%',
           maxHeight: '94dvh',
           display: 'flex',
@@ -557,7 +558,7 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
             borderRadius: '14px'
           }}>
             <button
-              onClick={() => setActiveTab('games')}
+              onClick={() => { setActiveTab('games'); setSelectedPlayerId(null); }}
               style={{
                 flex: 1,
                 padding: '8px',
@@ -578,7 +579,7 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
             </button>
 
             <button
-              onClick={() => setActiveTab('leaderboard')}
+              onClick={() => { setActiveTab('leaderboard'); setSelectedPlayerId(null); }}
               style={{
                 flex: 1,
                 padding: '8px',
@@ -606,21 +607,23 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
           flex: 1,
           minHeight: 0,
           overflowY: 'auto',
+          overflowX: 'hidden',
           WebkitOverflowScrolling: 'touch',
           willChange: 'scroll-position',
           transform: 'translateZ(0)'
         }}>
-          {/* Daily Task & 7-Day Gaming Streak Card */}
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16) 0%, rgba(99, 102, 241, 0.12) 100%)',
-            borderRadius: '18px',
-            border: '1px solid rgba(245, 158, 11, 0.35)',
-            padding: '14px',
-            marginBottom: '14px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '10px'
-          }}>
+          {/* Daily Task & 7-Day Gaming Streak Card - only when not viewing player profile */}
+          {!selectedPlayerId && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16) 0%, rgba(99, 102, 241, 0.12) 100%)',
+              borderRadius: '18px',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+              padding: '14px',
+              marginBottom: '14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px'
+            }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Flame size={20} color="#f59e0b" />
@@ -689,6 +692,7 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
               </div>
             )}
           </div>
+          )}
 
           {activeTab === 'games' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -730,6 +734,19 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
                     cardBorder="1.5px solid rgba(236, 72, 153, 0.55)"
                     cardShadow="0 4px 16px rgba(236, 72, 153, 0.25)"
                     onPlay={() => setSelectedGame('candy')}
+                  />
+
+                  {/* 3D Chess vs Computer Card */}
+                  <ZoneGameLauncherCard
+                    icon="♟️"
+                    iconBg="linear-gradient(135deg, #f59e0b, #b45309)"
+                    title="3D Chess vs Computer"
+                    badgeText="3D • AI MASTER"
+                    subtitle="Levels 1–10+ progressive AI with 3D Staunton board!"
+                    cardBg="linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(180, 83, 9, 0.16))"
+                    cardBorder="1.5px solid rgba(245, 158, 11, 0.55)"
+                    cardShadow="0 4px 16px rgba(245, 158, 11, 0.25)"
+                    onPlay={() => setSelectedGame('chess')}
                   />
 
                   {/* Speed Tapper Card */}
@@ -801,6 +818,7 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
                     <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       {selectedGame === 'candy' && <span>🍬 Candy Crush Saga</span>}
                       {selectedGame === 'temple' && <span>🗿 Temple Run 3D</span>}
+                      {selectedGame === 'chess' && <span>♟️ 3D Chess</span>}
                       {selectedGame === 'arrow' && <span>🎯 Arrow Puzzle</span>}
                       {selectedGame === 'tapper' && <span>⚡ Speed Tapper</span>}
                       {selectedGame === 'tictactoe' && <span>❌⭕ Tic-Tac-Toe Arena</span>}
@@ -816,6 +834,13 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
                   }>
                     {selectedGame === 'candy' && (
                       <CandyCrushGame
+                        onScoreUpdate={handleGameScoreUpdate}
+                        onBack={handleBackFromGame}
+                      />
+                    )}
+
+                    {selectedGame === 'chess' && (
+                      <PulseChessGame
                         onScoreUpdate={handleGameScoreUpdate}
                         onBack={handleBackFromGame}
                       />
@@ -989,101 +1014,102 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
       )}
 
           {activeTab === 'leaderboard' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px', flexWrap: 'wrap', gap: '8px' }}>
-                <div style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Trophy size={16} color="#f59e0b" />
-                  <span>Pulse Champions</span>
+            selectedPlayerId ? (
+              <PlayerProfileModal
+                userId={selectedPlayerId}
+                onClose={() => setSelectedPlayerId(null)}
+                onBack={() => setSelectedPlayerId(null)}
+                token={token}
+              />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Trophy size={16} color="#f59e0b" />
+                    <span>Pulse Champions</span>
+                  </div>
+
+                  {(!isOnline || cacheInfo.cachedAt) && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '0.7rem',
+                      color: !isOnline ? '#f87171' : '#94a3b8',
+                      background: !isOnline ? 'rgba(239, 68, 68, 0.12)' : 'rgba(255, 255, 255, 0.05)',
+                      padding: '3px 8px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(255, 255, 255, 0.1)'
+                    }}>
+                      {!isOnline ? <WifiOff size={12} /> : null}
+                      <span>{isOnline ? `Cached (${formatCacheAge(cacheInfo.cachedAt)})` : 'Offline rankings'}</span>
+                      {isOnline && (
+                        <button
+                          onClick={() => fetchLeaderboard(leaderboardCategory)}
+                          style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', padding: 0 }}
+                          title="Refresh"
+                        >
+                          <RefreshCw size={11} />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {(!isOnline || cacheInfo.cachedAt) && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '0.7rem',
-                    color: !isOnline ? '#f87171' : '#94a3b8',
-                    background: !isOnline ? 'rgba(239, 68, 68, 0.12)' : 'rgba(255, 255, 255, 0.05)',
-                    padding: '3px 8px',
-                    borderRadius: '10px',
-                    border: '1px solid rgba(255, 255, 255, 0.1)'
-                  }}>
-                    {!isOnline ? <WifiOff size={12} /> : null}
-                    <span>{isOnline ? `Cached (${formatCacheAge(cacheInfo.cachedAt)})` : 'Offline rankings'}</span>
-                    {isOnline && (
-                      <button
-                        onClick={() => fetchLeaderboard(leaderboardCategory)}
-                        style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', padding: 0 }}
-                        title="Refresh"
-                      >
-                        <RefreshCw size={11} />
-                      </button>
-                    )}
+                {/* Game Filter Pills */}
+                <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
+                  {[
+                    { id: 'all', label: 'All Games' },
+                    { id: 'temple', label: '🗿 Temple Run' },
+                    { id: 'chess', label: '♟️ Chess' },
+                    { id: 'arrow', label: '🎯 Arrow' },
+                    { id: 'candy', label: '🍬 Candy' },
+                    { id: 'tapper', label: '⚡ Tapper' },
+                    { id: 'tictactoe', label: '❌ AI Arena' }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        setLeaderboardCategory(tab.id);
+                        fetchLeaderboard(tab.id);
+                      }}
+                      style={{
+                        background: leaderboardCategory === tab.id ? 'linear-gradient(135deg, #f59e0b, #ea580c)' : 'rgba(255, 255, 255, 0.06)',
+                        border: leaderboardCategory === tab.id ? '1px solid #fbbf24' : '1px solid rgba(255, 255, 255, 0.1)',
+                        color: leaderboardCategory === tab.id ? '#fff' : 'var(--text-muted)',
+                        borderRadius: '16px',
+                        padding: '4px 11px',
+                        fontSize: '0.74rem',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.12s ease'
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {leaderboard.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '30px 15px', color: 'var(--text-muted)', fontSize: '0.86rem' }}>
+                    🏆 No scores yet for this category! Play to claim the #1 spot!
                   </div>
+                ) : (
+                  leaderboard.map((item, idx) => (
+                    <ZoneLeaderboardRow
+                      key={item.id || item.userId || idx}
+                      item={item}
+                      idx={idx}
+                      onSelectPlayer={(id) => setSelectedPlayerId(id)}
+                    />
+                  ))
                 )}
               </div>
-
-              {/* Game Filter Pills */}
-              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
-                {[
-                  { id: 'all', label: 'All Games' },
-                  { id: 'temple', label: '🗿 Temple Run' },
-                  { id: 'arrow', label: '🎯 Arrow' },
-                  { id: 'candy', label: '🍬 Candy' },
-                  { id: 'tapper', label: '⚡ Tapper' },
-                  { id: 'tictactoe', label: '❌ AI Arena' }
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => {
-                      setLeaderboardCategory(tab.id);
-                      fetchLeaderboard(tab.id);
-                    }}
-                    style={{
-                      background: leaderboardCategory === tab.id ? 'linear-gradient(135deg, #f59e0b, #ea580c)' : 'rgba(255, 255, 255, 0.06)',
-                      border: leaderboardCategory === tab.id ? '1px solid #fbbf24' : '1px solid rgba(255, 255, 255, 0.1)',
-                      color: leaderboardCategory === tab.id ? '#fff' : 'var(--text-muted)',
-                      borderRadius: '16px',
-                      padding: '4px 11px',
-                      fontSize: '0.74rem',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      transition: 'all 0.12s ease'
-                    }}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {leaderboard.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '30px 15px', color: 'var(--text-muted)', fontSize: '0.86rem' }}>
-                  🏆 No scores yet for this category! Play to claim the #1 spot!
-                </div>
-              ) : (
-                leaderboard.map((item, idx) => (
-                  <ZoneLeaderboardRow
-                    key={item.id || item.userId || idx}
-                    item={item}
-                    idx={idx}
-                    onSelectPlayer={(id) => setSelectedPlayerId(id)}
-                  />
-                ))
-              )}
-            </div>
+            )
           )}
         </div>
       </div>
-
-      {/* Player Gaming Profile Modal */}
-      {selectedPlayerId && (
-        <PlayerProfileModal
-          userId={selectedPlayerId}
-          onClose={() => setSelectedPlayerId(null)}
-          token={token}
-        />
-      )}
     </div>
   );
 });

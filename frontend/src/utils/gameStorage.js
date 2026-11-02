@@ -64,6 +64,16 @@ export const GAME_METADATA = {
     offlineReady: true,
     scoringRule: '+50 pts per AI win, +15 pts per draw'
   },
+  chess: {
+    key: 'chess',
+    name: '3D Chess',
+    category: 'strategy',
+    icon: '♟️',
+    badge: '3D AI MASTER',
+    is3D: true,
+    offlineReady: true,
+    scoringRule: '+100 pts per AI win x Level, +25 pts per draw'
+  },
   draw: {
     key: 'draw',
     name: 'Whiteboard Studio',
@@ -83,6 +93,7 @@ export function normalizeGameKey(name) {
   const n = String(name || '').toLowerCase();
   if (n.includes('temple')) return 'temple';
   if (n.includes('candy')) return 'candy';
+  if (n.includes('chess')) return 'chess';
   if (n.includes('arrow')) return 'arrow';
   if (n.includes('tapper') || n.includes('speed')) return 'tapper';
   if (n.includes('tic') || n.includes('toe')) return 'tictactoe';

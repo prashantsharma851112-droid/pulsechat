@@ -36,6 +36,14 @@ const gameScoreSchema = new mongoose.Schema({
       draws: { type: Number, default: 0 },
       losses: { type: Number, default: 0 },
       gamesPlayed: { type: Number, default: 0 }
+    },
+    chess: {
+      bestScore: { type: Number, default: 0 },
+      maxLevel: { type: Number, default: 1 },
+      wins: { type: Number, default: 0 },
+      draws: { type: Number, default: 0 },
+      losses: { type: Number, default: 0 },
+      gamesPlayed: { type: Number, default: 0 }
     }
   },
   // Anti-replay / processed submission IDs (capped for efficiency)
@@ -49,5 +57,6 @@ gameScoreSchema.index({ 'gameStats.candy.bestScore': -1 });
 gameScoreSchema.index({ 'gameStats.arrow.bestScore': -1 });
 gameScoreSchema.index({ 'gameStats.tapper.bestScore': -1 });
 gameScoreSchema.index({ 'gameStats.tictactoe.wins': -1 });
+gameScoreSchema.index({ 'gameStats.chess.bestScore': -1 });
 
 module.exports = mongoose.model('GameScore', gameScoreSchema);

@@ -27,6 +27,7 @@ const keyRoutes = require('./routes/keys');
 const { uploadToCloudinary } = require('./utils/cloudinary');
 const { checkAndUpdateFileQuota } = require('./utils/fileQuota');
 const redis = require('./utils/redis');
+const chessMatchManager = require('./chat/chessMatchManager');
 
 const compression = require('compression');
 const app = express();
@@ -3174,6 +3175,164 @@ io.on('connection', (socket) => {
   socket.on('tictactoe_move', (data) => relayTicTacToeEvent('tictactoe_move', data));
   socket.on('tictactoe_reset', (data) => relayTicTacToeEvent('tictactoe_reset', data));
 
+  // Real-Time 1v1 Chess Arena Handlers
+  const relayChessEvent = (eventName, data) => {
+    if (!data || !data.chatId) return;
+    io.to(data.chatId).emit(eventName, data);
+    if (data.chatId.includes('::')) {
+      const parts = data.chatId.split('::').filter(Boolean);
+      parts.forEach(pId => {
+        io.to(`user_${pId}`).emit(eventName, data);
+        io.to(pId).emit(eventName, data);
+      });
+    } else if (data.chatId.includes('_')) {
+      const parts = data.chatId.split('_').filter(Boolean);
+      const canonical = parts.slice().sort().join('_');
+      if (canonical !== data.chatId) io.to(canonical).emit(eventName, data);
+      parts.forEach(pId => {
+        io.to(`user_${pId}`).emit(eventName, data);
+        io.to(pId).emit(eventName, data);
+      });
+    }
+    if (data.recipientId) {
+      io.to(`user_${data.recipientId}`).emit(eventName, data);
+      io.to(data.recipientId).emit(eventName, data);
+    }
+  };
+
+  socket.on('chess_invite', (data) => {
+    if (!data || !data.chatId) return;
+    relayChessEvent('chess_invited', data);
+    relayChessEvent('chess_invitation', data);
+  });
+
+  socket.on('chess_accept', (data) => {
+    if (!data || !data.chatId) return;
+    const { chatId, inviter, recipient, color } = data;
+    const pickWhite = color === 'w' ? inviter : (color === 'b' ? recipient : (Math.random() < 0.5 ? inviter : recipient));
+    const pickBlack = pickWhite.id === inviter.id ? recipient : inviter;
+
+    const match = chessMatchManager.createMatch({
+      chatId,
+      whitePlayer: pickWhite,
+      blackPlayer: pickBlack
+    });
+
+    relayChessEvent('chess_match_started', { chatId, match });
+  });
+
+  socket.on('chess_decline', (data) => {
+    if (!data || !data.chatId) return;
+    relayChessEvent('chess_declined', data);
+  });
+
+  socket.on('chess_move', (data, ack) => {
+    if (!data || !data.matchId) {
+      if (typeof ack === 'function') ack({ success: false, error: 'INVALID_PAYLOAD' });
+      return;
+    }
+    const userId = socket.authenticatedUserId || socket.userId || data.userId;
+    const result = chessMatchManager.applyMove(data.matchId, userId, data.move, data.moveNumber);
+
+    if (result.success) {
+      if (typeof ack === 'function') ack({ success: true, move: result.move, san: result.san });
+      relayChessEvent('chess_move_applied', {
+        matchId: data.matchId,
+        chatId: result.match.chatId,
+        move: result.move,
+        san: result.san,
+        fen: result.match.fen,
+        turn: result.match.turn,
+        moveNumber: result.match.moveNumber,
+        status: result.match.status,
+        statusReason: result.match.statusReason,
+        winner: result.match.winner,
+        inCheck: result.match.inCheck,
+        history: result.match.history
+      });
+
+      if (result.match.status !== 'active' && result.match.status !== 'check') {
+        relayChessEvent('chess_game_over', {
+          matchId: data.matchId,
+          chatId: result.match.chatId,
+          status: result.match.status,
+          statusReason: result.match.statusReason,
+          winner: result.match.winner
+        });
+      }
+    } else {
+      if (typeof ack === 'function') ack(result);
+    }
+  });
+
+  socket.on('chess_resign', (data, ack) => {
+    if (!data || !data.matchId) return;
+    const userId = socket.authenticatedUserId || socket.userId || data.userId;
+    const result = chessMatchManager.resignMatch(data.matchId, userId);
+    if (result.success) {
+      if (typeof ack === 'function') ack({ success: true });
+      relayChessEvent('chess_game_over', {
+        matchId: data.matchId,
+        chatId: result.match.chatId,
+        status: result.match.status,
+        statusReason: result.match.statusReason,
+        winner: result.match.winner
+      });
+    } else {
+      if (typeof ack === 'function') ack(result);
+    }
+  });
+
+  socket.on('chess_draw_offer', (data) => {
+    if (!data || !data.matchId) return;
+    const userId = socket.authenticatedUserId || socket.userId || data.userId;
+    const match = chessMatchManager.getMatch(data.matchId);
+    if (!match) return;
+    chessMatchManager.offerDraw(data.matchId, userId);
+    relayChessEvent('chess_draw_offered', { ...data, chatId: match.chatId, userId });
+  });
+
+  socket.on('chess_draw_response', (data) => {
+    if (!data || !data.matchId) return;
+    const userId = socket.authenticatedUserId || socket.userId || data.userId;
+    const result = chessMatchManager.respondDraw(data.matchId, userId, data.accepted);
+    if (result.success) {
+      if (data.accepted) {
+        relayChessEvent('chess_game_over', {
+          matchId: data.matchId,
+          chatId: result.match.chatId,
+          status: result.match.status,
+          statusReason: result.match.statusReason,
+          winner: result.match.winner
+        });
+      } else {
+        relayChessEvent('chess_draw_declined', { matchId: data.matchId, chatId: data.chatId });
+      }
+    }
+  });
+
+  socket.on('chess_rematch', (data) => {
+    if (!data || !data.matchId) return;
+    const newMatch = chessMatchManager.createRematch(data.matchId);
+    if (newMatch) {
+      relayChessEvent('chess_match_started', { chatId: newMatch.chatId, match: newMatch });
+    }
+  });
+
+  socket.on('chess_sync', (data, ack) => {
+    if (!data || !data.chatId) {
+      if (typeof ack === 'function') ack({ hasActiveMatch: false });
+      return;
+    }
+    const match = chessMatchManager.getMatchByChatId(data.chatId);
+    if (typeof ack === 'function') {
+      ack({
+        hasActiveMatch: Boolean(match && match.status !== 'abandoned'),
+        match: match || null
+      });
+    }
+  });
+
   // Audio/Video Call WebRTC Signaling (1-to-1)
   socket.on('call_user', async ({ userToCall, signalData, from, callerName, callerAvatar, isVideo }) => {
     // Check if target user has blocked caller or caller has blocked target user
@@ -3421,12 +3580,14 @@ io.on('connection', (socket) => {
   socket.on('request_open_arrow_game', (data) => broadcastActivityOpen('auto_open_arrow_game', data));
   socket.on('request_open_whiteboard', (data) => broadcastActivityOpen('auto_open_whiteboard', data));
   socket.on('request_open_tictactoe', (data) => broadcastActivityOpen('auto_open_tictactoe', data));
+  socket.on('request_open_chess', (data) => broadcastActivityOpen('auto_open_chess', data));
   socket.on('request_open_music', (data) => broadcastActivityOpen('auto_open_music', data));
 
   // Symmetrical two-way close synchronization for live activities
   socket.on('request_close_arrow_game', (data) => broadcastActivityOpen('auto_close_arrow_game', data));
   socket.on('request_close_whiteboard', (data) => broadcastActivityOpen('auto_close_whiteboard', data));
   socket.on('request_close_tictactoe', (data) => broadcastActivityOpen('auto_close_tictactoe', data));
+  socket.on('request_close_chess', (data) => broadcastActivityOpen('auto_close_chess', data));
 
   // =========================================================================
   // REAL-TIME IN-GAME VOICE CHAT (FREE FIRE / DISCORD GAMING MIC & AUDIO)
