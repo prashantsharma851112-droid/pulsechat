@@ -173,7 +173,7 @@ function quiescence(chess, alpha, beta, isMaximizing, depthLimit = 2) {
   if (depthLimit <= 0) return standPat;
 
   if (isMaximizing) {
-    if (standPat >= beta) return beta;
+    if (standPat >= beta) return standPat;
     let maxVal = standPat;
     let a = Math.max(alpha, standPat);
 
@@ -190,7 +190,7 @@ function quiescence(chess, alpha, beta, isMaximizing, depthLimit = 2) {
     }
     return maxVal;
   } else {
-    if (standPat <= alpha) return alpha;
+    if (standPat <= alpha) return standPat;
     let minVal = standPat;
     let b = Math.min(beta, standPat);
 
