@@ -281,10 +281,13 @@ const TicTacToeAIGame = React.memo(function TicTacToeAIGame({ onScoreUpdate }) {
         }
         if (onScoreUpdate) {
           const pts = difficulty === 'hard' ? 25 : (difficulty === 'medium' ? 15 : 10);
-          onScoreUpdate('tictactoe', pts, newStreak);
+          onScoreUpdate('tictactoe', pts, newStreak, { outcome: 'win', bestScore: pts });
         }
       } else if (result.winner === 'draw') {
         setScores(s => ({ ...s, draws: s.draws + 1 }));
+        if (onScoreUpdate) {
+          onScoreUpdate('tictactoe', 5, streak, { outcome: 'draw' });
+        }
       }
       return;
     }

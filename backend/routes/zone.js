@@ -211,22 +211,59 @@ async function getLeaderboardList(gameCategory = 'all', rank1UserId, rank2UserId
   let sort = { score: -1, level: -1, gamesPlayed: -1, updatedAt: 1 };
 
   if (gameCategory === 'temple') {
-    query = { 'gameStats.temple.bestScore': { $gt: 0 } };
-    sort = { 'gameStats.temple.bestScore': -1, score: -1, updatedAt: 1 };
+    query = {
+      $or: [
+        { 'gameStats.temple.bestScore': { $gt: 0 } },
+        { 'gameStats.temple.bestDistance': { $gt: 0 } },
+        { gameName: /temple/i }
+      ]
+    };
+    sort = { 'gameStats.temple.bestScore': -1, 'gameStats.temple.bestDistance': -1, score: -1, updatedAt: 1 };
   } else if (gameCategory === 'arrow') {
-    query = { $or: [{ 'gameStats.arrow.bestScore': { $gt: 0 } }, { level: { $gt: 1 } }] };
+    query = {
+      $or: [
+        { 'gameStats.arrow.bestScore': { $gt: 0 } },
+        { 'gameStats.arrow.maxLevel': { $gt: 0 } },
+        { level: { $gt: 1 } },
+        { gameName: /arrow/i }
+      ]
+    };
     sort = { 'gameStats.arrow.maxLevel': -1, 'gameStats.arrow.bestScore': -1, level: -1, updatedAt: 1 };
   } else if (gameCategory === 'candy') {
-    query = { 'gameStats.candy.bestScore': { $gt: 0 } };
+    query = {
+      $or: [
+        { 'gameStats.candy.bestScore': { $gt: 0 } },
+        { 'gameStats.candy.maxLevel': { $gt: 0 } },
+        { gameName: /candy/i }
+      ]
+    };
     sort = { 'gameStats.candy.bestScore': -1, 'gameStats.candy.maxLevel': -1, updatedAt: 1 };
   } else if (gameCategory === 'tapper') {
-    query = { 'gameStats.tapper.bestScore': { $gt: 0 } };
+    query = {
+      $or: [
+        { 'gameStats.tapper.bestScore': { $gt: 0 } },
+        { gameName: /tapper/i }
+      ]
+    };
     sort = { 'gameStats.tapper.bestScore': -1, updatedAt: 1 };
   } else if (gameCategory === 'tictactoe') {
-    query = { 'gameStats.tictactoe.wins': { $gt: 0 } };
-    sort = { 'gameStats.tictactoe.wins': -1, 'gameStats.tictactoe.draws': -1, updatedAt: 1 };
+    query = {
+      $or: [
+        { 'gameStats.tictactoe.wins': { $gt: 0 } },
+        { 'gameStats.tictactoe.bestScore': { $gt: 0 } },
+        { 'gameStats.tictactoe.gamesPlayed': { $gt: 0 } },
+        { gameName: /tic.*toe/i }
+      ]
+    };
+    sort = { 'gameStats.tictactoe.wins': -1, 'gameStats.tictactoe.draws': -1, 'gameStats.tictactoe.bestScore': -1, updatedAt: 1 };
   } else if (gameCategory === 'chess') {
-    query = { 'gameStats.chess.bestScore': { $gt: 0 } };
+    query = {
+      $or: [
+        { 'gameStats.chess.bestScore': { $gt: 0 } },
+        { 'gameStats.chess.wins': { $gt: 0 } },
+        { gameName: /chess/i }
+      ]
+    };
     sort = { 'gameStats.chess.bestScore': -1, 'gameStats.chess.maxLevel': -1, updatedAt: 1 };
   }
 
@@ -234,14 +271,6 @@ async function getLeaderboardList(gameCategory = 'all', rank1UserId, rank2UserId
     .sort(sort)
     .limit(30)
     .lean();
-
-  // If specific category has no entries yet, fallback to general top scores
-  if (scores.length === 0 && gameCategory !== 'all') {
-    scores = await GameScore.find({})
-      .sort({ score: -1, level: -1, gamesPlayed: -1 })
-      .limit(30)
-      .lean();
-  }
 
   const userIds = scores.map(s => s.userId).filter(Boolean);
   const validObjectIds = userIds.filter(id => mongoose.Types.ObjectId.isValid(id));
@@ -262,8 +291,8 @@ async function getLeaderboardList(gameCategory = 'all', rank1UserId, rank2UserId
 
   return scores.map((s, idx) => {
     const uDoc = userMap.get(s.userId);
-    const isRank1 = idx === 0 || s.userId === rank1UserId;
-    const isRank2 = idx === 1 || s.userId === rank2UserId;
+    const isRank1 = idx === 0 || (gameCategory === 'all' && s.userId === rank1UserId);
+    const isRank2 = idx === 1 || (gameCategory === 'all' && s.userId === rank2UserId);
     const hasCrown = isRank1 || Boolean(uDoc && uDoc.hasKingCrown);
     const hasSilverCrown = isRank2 || Boolean(uDoc && uDoc.hasSilverCrown);
     const hasStreakCrown = Boolean(uDoc && uDoc.hasStreakCrown);
@@ -271,24 +300,24 @@ async function getLeaderboardList(gameCategory = 'all', rank1UserId, rank2UserId
     let displayScore = s.score || 0;
     let displayDetail = `Level ${s.level || 1}`;
 
-    if (gameCategory === 'temple' && s.gameStats?.temple?.bestScore) {
-      displayScore = s.gameStats.temple.bestScore;
-      displayDetail = `${s.gameStats.temple.bestDistance || 0}m run`;
-    } else if (gameCategory === 'candy' && s.gameStats?.candy?.bestScore) {
-      displayScore = s.gameStats.candy.bestScore;
-      displayDetail = `Level ${s.gameStats.candy.maxLevel || 1}`;
-    } else if (gameCategory === 'arrow' && s.gameStats?.arrow?.maxLevel) {
-      displayScore = s.gameStats.arrow.bestScore || s.score || 0;
-      displayDetail = `Level ${s.gameStats.arrow.maxLevel}`;
-    } else if (gameCategory === 'tapper' && s.gameStats?.tapper?.bestScore) {
-      displayScore = s.gameStats.tapper.bestScore;
+    if (gameCategory === 'temple') {
+      displayScore = s.gameStats?.temple?.bestScore || s.score || 0;
+      displayDetail = `${s.gameStats?.temple?.bestDistance || displayScore}m run`;
+    } else if (gameCategory === 'candy') {
+      displayScore = s.gameStats?.candy?.bestScore || s.score || 0;
+      displayDetail = `Level ${s.gameStats?.candy?.maxLevel || s.level || 1}`;
+    } else if (gameCategory === 'arrow') {
+      displayScore = s.gameStats?.arrow?.bestScore || s.score || 0;
+      displayDetail = `Level ${s.gameStats?.arrow?.maxLevel || s.level || 1}`;
+    } else if (gameCategory === 'tapper') {
+      displayScore = s.gameStats?.tapper?.bestScore || s.score || 0;
       displayDetail = `${displayScore} taps/15s`;
-    } else if (gameCategory === 'tictactoe' && s.gameStats?.tictactoe) {
-      displayScore = (s.gameStats.tictactoe.wins || 0) * 50;
-      displayDetail = `${s.gameStats.tictactoe.wins || 0} Wins`;
-    } else if (gameCategory === 'chess' && s.gameStats?.chess) {
-      displayScore = s.gameStats.chess.bestScore || ((s.gameStats.chess.wins || 0) * 100);
-      displayDetail = `Level ${s.gameStats.chess.maxLevel || 1} • ${s.gameStats.chess.wins || 0}W`;
+    } else if (gameCategory === 'tictactoe') {
+      displayScore = s.gameStats?.tictactoe?.bestScore || ((s.gameStats?.tictactoe?.wins || 0) * 50) || s.score || 0;
+      displayDetail = `${s.gameStats?.tictactoe?.wins || 0} Wins`;
+    } else if (gameCategory === 'chess') {
+      displayScore = s.gameStats?.chess?.bestScore || ((s.gameStats?.chess?.wins || 0) * 100) || s.score || 0;
+      displayDetail = `Level ${s.gameStats?.chess?.maxLevel || s.level || 1} • ${s.gameStats?.chess?.wins || 0}W`;
     }
 
     return {
@@ -454,7 +483,7 @@ async function applyScoreUpdate({ user, resolvedUserId, gameName, score, level, 
     else if (stats?.outcome === 'draw') gameEntry.draws = (gameEntry.draws || 0) + 1;
     else if (stats?.outcome === 'loss') gameEntry.losses = (gameEntry.losses || 0) + 1;
   } else if (gameKey === 'tictactoe') {
-    if (stats?.outcome === 'win') gameEntry.wins = (gameEntry.wins || 0) + 1;
+    if (stats?.outcome === 'win' || (!stats?.outcome && rawScore > 0)) gameEntry.wins = (gameEntry.wins || 0) + 1;
     else if (stats?.outcome === 'draw') gameEntry.draws = (gameEntry.draws || 0) + 1;
     else if (stats?.outcome === 'loss') gameEntry.losses = (gameEntry.losses || 0) + 1;
   }
@@ -664,9 +693,16 @@ router.post('/game-score', authMiddleware, async (req, res) => {
     await user.save();
 
     const leaderboardList = await getLeaderboardList('all', rank1UserId, rank2UserId);
+    const categoryLeaderboard = await getLeaderboardList(gameKey, rank1UserId, rank2UserId);
 
     if (io) {
-      io.emit('leaderboard_updated', leaderboardList);
+      io.emit('leaderboard_updated', {
+        category: 'all',
+        gameCategory: gameKey,
+        leaderboard: leaderboardList,
+        categoryLeaderboard
+      });
+      io.emit('leaderboard_list', leaderboardList);
       io.to(`user_${resolvedUserId}`).emit('user_profile_updated', {
         userId: resolvedUserId,
         pulseSparks: user.pulseSparks,
@@ -744,7 +780,11 @@ router.post('/sync-offline-scores', authMiddleware, async (req, res) => {
     const updatedLeaderboard = await getLeaderboardList('all', rank1UserId, rank2UserId);
 
     if (io && syncedCount > 0) {
-      io.emit('leaderboard_updated', updatedLeaderboard);
+      io.emit('leaderboard_updated', {
+        category: 'all',
+        leaderboard: updatedLeaderboard
+      });
+      io.emit('leaderboard_list', updatedLeaderboard);
     }
 
     const updatedDoc = await GameScore.findOne({ userId: resolvedUserId }).lean();
