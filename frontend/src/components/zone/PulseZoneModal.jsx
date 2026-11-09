@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, Suspense, useCallback } from 'react';
+import React, { useState, useEffect, useContext, Suspense, useCallback, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
 import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Sparkles, Award, ArrowLeft, Loader2, WifiOff, RefreshCw } from 'lucide-react';
