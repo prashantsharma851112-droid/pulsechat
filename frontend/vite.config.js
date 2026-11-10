@@ -23,6 +23,7 @@ export default defineConfig({
     minify: 'esbuild',
     target: 'es2020',
     cssMinify: true,
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         compact: true,
