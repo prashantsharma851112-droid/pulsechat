@@ -5,7 +5,7 @@ const queuedMessageSchema = new mongoose.Schema(
     messageId: { type: String, required: true, unique: true, index: true },
     senderId: { type: String, required: true, index: true },
     receiverId: { type: String, required: true, index: true },
-    content: { type: String, required: true, maxlength: 50000 },
+    content: { type: String, default: '', maxlength: 50000 },
     createdAt: { type: Date, required: true },
     expiresAt: { type: Date, required: true, index: { expires: 0 } },
     receiptToken: { type: String, required: true },

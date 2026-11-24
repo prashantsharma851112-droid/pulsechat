@@ -1932,7 +1932,7 @@ io.on('connection', (socket) => {
             receiverId: callerId,
             state: 'delivered',
             createdAt: now,
-            queueExpiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+            queueExpiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
             expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
           });
         } catch (createErr) {

@@ -7,14 +7,17 @@ import {
   Sparkles, Bell, BellOff, Ban, Unlock, Users, ArrowRightLeft, UserCheck, Trash2, 
   Crown, Lock, Shield, FileText, HelpCircle, RefreshCw, AlertTriangle, Loader2,
   ChevronRight, ArrowLeft, HardDrive, Palette, Info, Mail, Compass, Send, CheckCircle2, MessageSquare,
-  Ghost, Search, Volume2, VolumeX, Download, Upload, Database, CheckCircle, KeyRound, QrCode
+  Ghost, Search, Volume2, VolumeX, Download, Upload, Database, CheckCircle, KeyRound, QrCode,
+  Camera, Smartphone
 } from 'lucide-react';
 import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
 import { playSound } from '../../utils/audio';
 import { BACKEND_URL } from '../../utils/config';
 import { getCachedRecentChats, getCachedFriends, getCachedAllUsers } from '../../utils/offlineStorage';
 import { createFullDeviceBackup, restoreFullDeviceBackup, getLocalDatabaseStats, isChatBackupEnabled, setChatBackupEnabled } from '../../utils/localDatabase';
-import { initiateQrSyncSession, approveAndStreamHistory, listenAndImportHistory } from '../../utils/qrSyncManager';
+import { startOldDeviceTransfer, startNewDeviceRecovery } from '../../utils/qrSyncManager';
+import QrCodeView from '../common/QrCodeView';
+import QrScannerModal from '../common/QrScannerModal';
 import { lazyWithRetry, ModalLoadingFallback } from '../../utils/lazyRetry';
 const PulseProModal = lazyWithRetry(() => import('../chat/PulseProModal'));
 import PulseVipBadge from '../common/PulseVipBadge';
@@ -278,34 +281,91 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
 
   const { socket } = useContext(SocketContext) || {};
   const [qrDisplayData, setQrDisplayData] = useState(null);
+  const [qrExpiresAt, setQrExpiresAt] = useState(null);
+  const [qrCountdown, setQrCountdown] = useState(120);
   const [isTransferring, setIsTransferring] = useState(false);
   const [transferProgress, setTransferProgress] = useState(null);
+  const [showScanner, setShowScanner] = useState(false);
+  const [approvalRequest, setApprovalRequest] = useState(null);
+  const cancelSessionRef = useRef(null);
 
-  const handleStartQrTransfer = async () => {
+  // Countdown timer for active QR code
+  useEffect(() => {
+    if (!qrExpiresAt) return;
+    const interval = setInterval(() => {
+      const remainingSec = Math.max(0, Math.floor((qrExpiresAt - Date.now()) / 1000));
+      setQrCountdown(remainingSec);
+      if (remainingSec <= 0) {
+        clearInterval(interval);
+        setQrDisplayData(null);
+        setQrExpiresAt(null);
+        setIsTransferring(false);
+        setTransferProgress(null);
+        setStatusMsg({ type: 'error', text: 'Transfer session expired. Please tap Transfer again.' });
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [qrExpiresAt]);
+
+  // 1. Old Phone: Transfer chats to new device
+  const handleTransferToNewDevice = async () => {
     if (!socket) {
       setStatusMsg({ type: 'error', text: 'Connecting to network...' });
       return;
     }
     setIsTransferring(true);
-    setTransferProgress('Creating secure pairing session...');
+    setTransferProgress('Generating secure pairing code...');
+    setStatusMsg(null);
+
     try {
-      const session = await initiateQrSyncSession(socket);
-      setQrDisplayData(session.qrPayload);
-      setTransferProgress('Waiting for other device to approve...');
-      listenAndImportHistory(socket, session.sessionId, session.ephemeralKeyPair.privateKey, (curr, total) => {
-        setTransferProgress(`Importing chats: ${curr}/${total} chunks...`);
-      }).then(res => {
-        setStatusMsg({ type: 'success', text: `Synced ${res.importedMessages} messages from linked device!` });
+      const transferPromise = startOldDeviceTransfer(socket, currentUser, {
+        onSessionReady: ({ qrPayload, expiresAt, cancel }) => {
+          setQrDisplayData(qrPayload);
+          setQrExpiresAt(expiresAt);
+          setTransferProgress('Scan this QR code using PulseChat on your new phone');
+          cancelSessionRef.current = cancel;
+        },
+        onPromptApproval: ({ deviceName, deviceId, approve, reject }) => {
+          setApprovalRequest({
+            deviceName,
+            deviceId,
+            approve: () => {
+              setApprovalRequest(null);
+              setTransferProgress(`Approved! Streaming chats to ${deviceName}...`);
+              approve();
+            },
+            reject: () => {
+              setApprovalRequest(null);
+              setIsTransferring(false);
+              setQrDisplayData(null);
+              setQrExpiresAt(null);
+              setTransferProgress(null);
+              reject();
+            }
+          });
+        },
+        onProgress: (chunk, total, count, totalMsgs) => {
+          setTransferProgress(`Streaming chats: ${count} / ${totalMsgs} messages (${chunk}/${total} chunks)...`);
+        }
+      });
+
+      transferPromise.then((res) => {
+        setStatusMsg({
+          type: 'success',
+          text: `Transferred ${res.transferredMessages} messages to new device!`
+        });
         setQrDisplayData(null);
-        setTransferProgress(null);
-        loadStats();
-        window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
-      }).catch(err => {
-        setStatusMsg({ type: 'error', text: err.message || 'Transfer cancelled' });
-        setQrDisplayData(null);
-        setTransferProgress(null);
-      }).finally(() => {
+        setQrExpiresAt(null);
         setIsTransferring(false);
+        setTransferProgress(null);
+      }).catch((err) => {
+        if (err?.message !== 'Transfer rejected by user.') {
+          setStatusMsg({ type: 'error', text: err?.message || 'Transfer failed' });
+        }
+        setQrDisplayData(null);
+        setQrExpiresAt(null);
+        setIsTransferring(false);
+        setTransferProgress(null);
       });
     } catch (err) {
       setStatusMsg({ type: 'error', text: err.message || 'Failed to initiate transfer' });
@@ -314,27 +374,51 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
     }
   };
 
-  const handleApproveQrTransfer = async () => {
+  // 2. New Phone: Transfer chats from old device via camera scanner
+  const handleTransferFromOldDevice = () => {
     if (!socket) {
       setStatusMsg({ type: 'error', text: 'Connecting to network...' });
       return;
     }
-    const code = prompt('Enter the Pairing Code displayed on your other device:');
-    if (!code || !code.trim()) return;
+    setShowScanner(true);
+  };
+
+  const handleScanSuccess = async (scannedPayload) => {
+    setShowScanner(false);
     setIsTransferring(true);
-    setTransferProgress('Authorizing device...');
+    setTransferProgress('Connecting & requesting approval from your old phone...');
+    setStatusMsg(null);
+
     try {
-      const res = await approveAndStreamHistory(socket, code.trim(), (curr, total) => {
-        setTransferProgress(`Streaming chats: ${curr}/${total} chunks...`);
+      const res = await startNewDeviceRecovery(socket, scannedPayload, currentUser, {
+        onProgress: (chunk, total, count) => {
+          setTransferProgress(`Importing chats: ${count} messages (${chunk}/${total} chunks)...`);
+        }
       });
-      setStatusMsg({ type: 'success', text: `Transferred ${res.transferredMessages} messages to new device!` });
-      setTransferProgress(null);
+
+      setStatusMsg({
+        type: 'success',
+        text: `Recovered ${res.importedMessages} messages across ${res.importedChats} conversations!`
+      });
+      loadStats();
+      window.dispatchEvent(new CustomEvent('pulsechat_recent_updated'));
     } catch (err) {
-      setStatusMsg({ type: 'error', text: err.message || 'Transfer failed' });
-      setTransferProgress(null);
+      setStatusMsg({ type: 'error', text: err?.message || 'Recovery failed or was rejected.' });
     } finally {
       setIsTransferring(false);
+      setTransferProgress(null);
     }
+  };
+
+  const handleCancelTransfer = () => {
+    if (cancelSessionRef.current) {
+      try { cancelSessionRef.current(); } catch (_) {}
+    }
+    setQrDisplayData(null);
+    setQrExpiresAt(null);
+    setIsTransferring(false);
+    setTransferProgress(null);
+    setApprovalRequest(null);
   };
 
   useEffect(() => {
@@ -785,106 +869,197 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
           <div style={{
             background: 'var(--bg-card)',
             border: '1px solid rgba(16, 185, 129, 0.3)',
-            borderRadius: '10px',
-            padding: '12px',
+            borderRadius: '12px',
+            padding: '14px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px'
+            gap: '10px'
           }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <QrCode size={16} /> Link Device / Instant History Sync
+            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <QrCode size={17} /> Direct Phone-to-Phone Chat Transfer
             </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-              Transfer encrypted chat history directly between your phones without downloading files.
+            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+              Switching phones? Securely transfer your full chat history directly between your phones over an encrypted channel with zero cloud storage.
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
               <button
                 type="button"
-                onClick={handleStartQrTransfer}
+                onClick={handleTransferToNewDevice}
                 disabled={isTransferring}
                 className="interactive-tap"
                 style={{
                   border: '1px solid rgba(16, 185, 129, 0.5)',
-                  background: 'rgba(16, 185, 129, 0.1)',
+                  background: 'rgba(16, 185, 129, 0.12)',
                   color: '#10b981',
-                  borderRadius: '8px',
-                  padding: '8px',
+                  borderRadius: '10px',
+                  padding: '10px 8px',
                   fontSize: '0.76rem',
                   fontWeight: 700,
                   cursor: isTransferring ? 'wait' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '4px'
+                  gap: '5px'
                 }}
               >
-                <QrCode size={13} />
-                <span>Show QR Code</span>
+                <QrCode size={14} />
+                <span>Transfer to New Phone</span>
               </button>
 
               <button
                 type="button"
-                onClick={handleApproveQrTransfer}
+                onClick={handleTransferFromOldDevice}
                 disabled={isTransferring}
                 className="interactive-tap"
                 style={{
                   border: '1px solid var(--border)',
                   background: 'rgba(255, 255, 255, 0.06)',
                   color: 'var(--text-main)',
-                  borderRadius: '8px',
-                  padding: '8px',
+                  borderRadius: '10px',
+                  padding: '10px 8px',
                   fontSize: '0.76rem',
                   fontWeight: 700,
                   cursor: isTransferring ? 'wait' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '4px'
+                  gap: '5px'
                 }}
               >
-                <RefreshCw size={13} />
-                <span>Pair With Code</span>
+                <Camera size={14} />
+                <span>Transfer from Old Phone</span>
               </button>
             </div>
 
-            {/* QR Pairing Code Display */}
+            {/* Old Phone: QR Code Display Card */}
             {qrDisplayData && (
               <div style={{
-                background: 'rgba(0,0,0,0.3)',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px dashed rgba(16, 185, 129, 0.4)',
-                textAlign: 'center'
+                background: 'rgba(0,0,0,0.4)',
+                padding: '16px',
+                borderRadius: '14px',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '12px'
               }}>
-                <div style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 700, marginBottom: '4px' }}>
-                  Scan / Enter on your other device (Expires in 120s):
+                <div style={{ fontSize: '0.78rem', color: '#10b981', fontWeight: 700 }}>
+                  Scan on your new phone (Expires in {qrCountdown}s)
                 </div>
-                <div style={{
-                  fontSize: '0.68rem',
-                  wordBreak: 'break-all',
-                  fontFamily: 'monospace',
-                  background: '#000',
-                  padding: '6px',
-                  borderRadius: '6px',
-                  color: '#a7f3d0',
-                  userSelect: 'all'
-                }}>
-                  {qrDisplayData}
+
+                <QrCodeView value={qrDisplayData} size={200} />
+
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', maxWidth: '240px' }}>
+                  Open PulseChat on your new phone and tap <strong>"Transfer from Old Phone"</strong>
                 </div>
-                {transferProgress && (
-                  <div style={{ fontSize: '0.72rem', color: '#10b981', marginTop: '6px', fontWeight: 600 }}>
-                    {transferProgress}
-                  </div>
-                )}
+
+                <button
+                  type="button"
+                  onClick={handleCancelTransfer}
+                  className="interactive-tap"
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    color: '#f87171',
+                    borderRadius: '8px',
+                    padding: '6px 14px',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel Session
+                </button>
               </div>
             )}
-            {!qrDisplayData && transferProgress && (
-              <div style={{ fontSize: '0.72rem', color: 'var(--accent)', fontWeight: 600, textAlign: 'center' }}>
+
+            {/* Old Phone: Device Transfer Approval Request Prompt */}
+            {approvalRequest && (
+              <div style={{
+                background: 'rgba(99, 102, 241, 0.15)',
+                border: '1px solid rgba(99, 102, 241, 0.4)',
+                borderRadius: '12px',
+                padding: '14px',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                animation: 'pulse 2s infinite'
+              }}>
+                <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#a5b4fc', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                  <Smartphone size={16} /> Approve Chat Transfer?
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#e2e8f0' }}>
+                  Device <strong>{approvalRequest.deviceName}</strong> is requesting to transfer your chat history.
+                </div>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={approvalRequest.reject}
+                    className="interactive-tap"
+                    style={{
+                      flex: 1,
+                      padding: '8px',
+                      borderRadius: '8px',
+                      background: 'rgba(239, 68, 68, 0.2)',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      color: '#f87171',
+                      fontWeight: 600,
+                      fontSize: '0.78rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Decline
+                  </button>
+                  <button
+                    type="button"
+                    onClick={approvalRequest.approve}
+                    className="interactive-tap"
+                    style={{
+                      flex: 2,
+                      padding: '8px',
+                      borderRadius: '8px',
+                      background: '#10b981',
+                      border: 'none',
+                      color: '#000',
+                      fontWeight: 700,
+                      fontSize: '0.78rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Approve Transfer
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Live Progress Display */}
+            {transferProgress && !approvalRequest && (
+              <div style={{
+                fontSize: '0.75rem',
+                color: '#10b981',
+                fontWeight: 600,
+                textAlign: 'center',
+                padding: '6px',
+                background: 'rgba(16, 185, 129, 0.08)',
+                borderRadius: '8px'
+              }}>
                 {transferProgress}
               </div>
             )}
           </div>
+
+          {/* Camera QR Scanner Modal */}
+          {showScanner && (
+            <QrScannerModal
+              isOpen={showScanner}
+              onClose={() => setShowScanner(false)}
+              onScanSuccess={handleScanSuccess}
+              title="Scan QR on Old Phone"
+            />
+          )}
 
           {statusMsg && (
             <div style={{

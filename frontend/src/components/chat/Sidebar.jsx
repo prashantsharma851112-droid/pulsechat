@@ -284,6 +284,251 @@ export const SidebarMenuItem = React.memo(function SidebarMenuItem({
   );
 });
 
+// =========================================================================
+// ATOMIC ISOLATED CONVERSATION ROW (React.memo + Mobile Touch Slop Optimization)
+// =========================================================================
+
+export const ConversationItemRow = React.memo(function ConversationItemRow({
+  chat,
+  isSelected,
+  isActive,
+  isPinned,
+  isLocked,
+  isMuted,
+  friendAura,
+  silentMode,
+  isOnline,
+  isContactOnline,
+  isContactTyping,
+  onClick,
+  onTouchStart,
+  onTouchMove,
+  onTouchEnd,
+  onTouchCancel,
+  onMouseDown,
+  onMouseMove,
+  onMouseUp,
+  onContextMenu,
+  onAvatarClick
+}) {
+  const isFromMe = Boolean(chat.lastMessageFromMe);
+  const status = (chat.lastMessageStatus === 'sent' && isContactOnline) ? 'delivered' : (chat.lastMessageStatus || 'sent');
+
+  let statusIcon = null;
+  if (isFromMe && chat.lastMessage) {
+    if (status === 'read' || status === 'seen') {
+      statusIcon = (
+        <CheckCheck
+          size={14}
+          style={{
+            color: '#38bdf8',
+            flexShrink: 0,
+            filter: 'drop-shadow(0 0 2px rgba(56,189,248,0.5))'
+          }}
+        />
+      );
+    } else if (status === 'delivered') {
+      statusIcon = (
+        <CheckCheck
+          size={14}
+          style={{
+            color: 'var(--text-muted, #94a3b8)',
+            flexShrink: 0
+          }}
+        />
+      );
+    } else {
+      statusIcon = (
+        <Check
+          size={14}
+          style={{
+            color: 'var(--text-muted, #94a3b8)',
+            flexShrink: 0
+          }}
+        />
+      );
+    }
+  }
+
+  let textSnippet = `@${chat.username}`;
+  if (chat.lastMessage) {
+    textSnippet = typeof chat.lastMessage === 'string' ? chat.lastMessage : (chat.lastMessage.content || `@${chat.username}`);
+  }
+
+  return (
+    <div
+      onClick={onClick}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchCancel}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onContextMenu={onContextMenu}
+      className={`chat-item-row ${isSelected ? 'selected' : (isActive ? 'active' : '')}`}
+      style={{
+        padding: '0.85rem 0.75rem',
+        gap: '0.85rem',
+        background: isSelected ? 'rgba(99, 102, 241, 0.16)' : undefined,
+        boxShadow: isSelected ? 'inset 3px 0 0 var(--accent)' : undefined,
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
+        touchAction: 'pan-y',
+        willChange: 'transform',
+        transform: 'translateZ(0)',
+        transition: 'background 0.15s ease'
+      }}
+    >
+      <VibeAuraRing aura={friendAura} size={48} isGroup={chat.isGroup} hasCrown={Boolean(chat.hasKingCrown || chat.hasSilverCrown || chat.hasStreakCrown)}>
+        <div
+          className={!chat.isGroup ? getProAuraRingClass(friendAura, chat.isPro) : ''}
+          style={{ position: 'relative', flexShrink: 0 }}
+        >
+          {chat.hasKingCrown ? (
+            <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
+          ) : chat.hasSilverCrown ? (
+            <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
+          ) : chat.hasStreakCrown ? (
+            <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
+          ) : null}
+          <img
+            src={chat.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(chat.username || chat.displayName || 'User')}`}
+            alt="Avatar"
+            onClick={onAvatarClick}
+            onError={(e) => {
+              e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(chat.username || chat.displayName || 'User')}`;
+            }}
+            style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              cursor: 'pointer',
+              objectFit: 'cover',
+              border: chat.hasKingCrown
+                ? '2.5px solid #fbbf24'
+                : chat.hasSilverCrown
+                ? '2.5px solid #cbd5e1'
+                : chat.hasStreakCrown
+                ? '2.5px solid #f97316'
+                : 'none'
+            }}
+            title="Click to view full screen DP"
+          />
+          {!silentMode && isOnline && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
+          {isSelected && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '-2px',
+                right: '-2px',
+                width: '20px',
+                height: '20px',
+                borderRadius: '50%',
+                background: 'var(--accent)',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                zIndex: 15
+              }}
+            >
+              <Check size={12} strokeWidth={3.2} />
+            </div>
+          )}
+        </div>
+      </VibeAuraRing>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h4 style={{ fontSize: '1.02rem', fontWeight: chat.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span>{(typeof chat.nickname === 'string' && chat.nickname.trim()) ? chat.nickname : (chat.displayName || chat.username || 'User')}</span>
+            {isPinned && (
+              <span title="Pinned Chat" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center' }}>
+                📌
+              </span>
+            )}
+            {chat.isPro && (
+              <PulseVipBadge size={14} showLabel={false} />
+            )}
+            {chat.streakCount > 0 && (
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  padding: '1px 6px',
+                  borderRadius: '8px',
+                  background: 'rgba(239, 68, 68, 0.16)',
+                  color: '#ff7a29',
+                  border: '1px solid rgba(249, 115, 22, 0.5)',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '2px',
+                  flexShrink: 0
+                }}
+                title={`🔥 ${chat.streakCount}-day Pulse Streak!`}
+              >
+                🔥 {chat.streakCount}
+              </span>
+            )}
+            {isLocked && (
+              <span title="Locked Chat" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center' }}>
+                🔒
+              </span>
+            )}
+            {isMuted && (
+              <span title="Notifications Muted" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', opacity: 0.7 }}>
+                🔕
+              </span>
+            )}
+          </h4>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {(chat.lastMessageTimestamp || chat.lastMessageTime) && (
+              <span style={{
+                fontSize: '0.72rem',
+                color: chat.unreadCount > 0 ? '#38bdf8' : 'var(--text-muted)',
+                fontWeight: chat.unreadCount > 0 ? 600 : 400,
+                flexShrink: 0
+              }}>
+                {formatChatListTime(chat.lastMessageTimestamp || chat.lastMessageTime)}
+              </span>
+            )}
+            {chat.unreadCount > 0 && (
+              <span className="unread-badge">
+                {chat.unreadCount}
+              </span>
+            )}
+          </div>
+        </div>
+        <p style={{
+          fontSize: '0.84rem',
+          color: chat.unreadCount > 0 ? 'var(--text-color)' : 'var(--text-muted)',
+          fontWeight: chat.unreadCount > 0 ? 500 : 400,
+          margin: '2px 0 0 0',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px'
+        }}>
+          {isContactTyping ? (
+            <span style={{ color: '#22c55e', fontWeight: 600 }}>✍️ typing...</span>
+          ) : (
+            <>
+              {statusIcon}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {textSnippet}
+              </span>
+            </>
+          )}
+        </p>
+      </div>
+    </div>
+  );
+});
+
 export default function Sidebar({ activeChat, setActiveChat, openProfileModal, openSettingsModal, onOpenFullDp }) {
   const { user, logout, token, savedAccounts, switchAccount, addAccount, removeSavedAccount, blockUser } = useContext(AuthContext);
   const { socket, onlineUsers, typingMap, lastNotification, vibeAuras } = useContext(SocketContext);
@@ -4059,248 +4304,57 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
                   const cid = u.id || u._id;
                   const isPinned = pinnedChatIds.includes(cid);
                   const isSelected = selectedChatIds.includes(cid);
+                  const isActive = activeChat?.id === u.id;
+                  const contactChatId = u.isGroup ? u.id : (user?.id ? [user.id, u.id].sort().join('_') : u.id);
+                  const isLocked = isChatLocked(contactChatId);
+                  const isMuted = isChatMuted(contactChatId);
+                  const isOnline = !silentMode && onlineUsers.includes(u.id);
+                  const isContactOnline = !u.isGroup && Array.isArray(onlineUsers) && (
+                    (u.id && onlineUsers.some(uid => String(uid) === String(u.id))) ||
+                    (u._id && onlineUsers.some(uid => String(uid) === String(u._id))) ||
+                    (u.username && onlineUsers.some(uid => String(uid).toLowerCase() === String(u.username).toLowerCase()))
+                  );
+                  const typingUser = typingMap ? typingMap[contactChatId] : null;
+                  const isContactTyping = Boolean(typingUser && typingUser !== user?.username && typingUser !== user?.id);
+
                   return (
-                  <div
-                    key={u.id}
-                    onClick={(e) => handleChatItemClick(u, u.isGroup, e)}
-                    onTouchStart={(e) => handleChatTouchStart(u, e)}
-                    onTouchMove={handleChatTouchMove}
-                    onTouchEnd={handleChatTouchEnd}
-                    onTouchCancel={handleChatTouchCancel}
-                    onMouseDown={(e) => handleChatMouseDown(u, e)}
-                    onMouseMove={handleChatMouseMove}
-                    onMouseUp={handleChatMouseUp}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setSelectedChatIds(prev => prev.includes(cid) ? prev : [...prev, cid]);
-                    }}
-                    className={`chat-item-row ${isSelected ? 'selected' : (activeChat?.id === u.id ? 'active' : '')}`}
-                    style={{
-                      padding: '0.85rem 0.75rem',
-                      gap: '0.85rem',
-                      background: isSelected ? 'rgba(99, 102, 241, 0.16)' : undefined,
-                      boxShadow: isSelected ? 'inset 3px 0 0 var(--accent)' : undefined,
-                      userSelect: 'none',
-                      WebkitUserSelect: 'none',
-                      WebkitTouchCallout: 'none',
-                      touchAction: 'pan-y',
-                      willChange: 'transform',
-                      transform: 'translateZ(0)',
-                      transition: 'background 0.15s ease'
-                    }}
-                  >
-                    <VibeAuraRing aura={friendAura} size={48} isGroup={u.isGroup} hasCrown={Boolean(u.hasKingCrown || u.hasSilverCrown || u.hasStreakCrown)}>
-                      <div
-                        className={!u.isGroup ? getProAuraRingClass(friendAura, u.isPro) : ''}
-                        style={{ position: 'relative', flexShrink: 0 }}
-                      >
-                        {u.hasKingCrown ? (
-                          <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(245, 158, 11, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #1 Gold Leaderboard King">👑</div>
-                        ) : u.hasSilverCrown ? (
-                          <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(203, 213, 225, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 #2 Silver Leaderboard Champion">👑</div>
-                        ) : u.hasStreakCrown ? (
-                          <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.1rem', filter: 'drop-shadow(0 2px 5px rgba(239, 68, 68, 0.95))', zIndex: 10, pointerEvents: 'none' }} title="👑 7-Day Gaming Streak Crown">👑</div>
-                        ) : null}
-                        <img
-                          src={u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`}
-                          alt="Avatar"
-                          onClick={(e) => {
-                            if (selectedChatIds.length > 0) {
-                              e.stopPropagation();
-                              handleChatItemClick(u, u.isGroup);
-                              return;
-                            }
-                            handleAvatarStoryClick(e, u);
-                          }}
-                          onError={(e) => {
-                            e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username || u.displayName || 'User')}`;
-                          }}
-                          style={{
-                            width: '48px',
-                            height: '48px',
-                            borderRadius: '50%',
-                            cursor: 'pointer',
-                            objectFit: 'cover',
-                            border: u.hasKingCrown
-                              ? '2.5px solid #fbbf24'
-                              : u.hasSilverCrown
-                              ? '2.5px solid #cbd5e1'
-                              : u.hasStreakCrown
-                              ? '2.5px solid #f97316'
-                              : 'none'
-                          }}
-                          title="Click to view full screen DP"
-                        />
-                        {!silentMode && onlineUsers.includes(u.id) && <div className="online-indicator-dot" style={{ width: '12px', height: '12px' }} />}
-                        {isSelected && (
-                          <div
-                            style={{
-                              position: 'absolute',
-                              bottom: '-2px',
-                              right: '-2px',
-                              width: '20px',
-                              height: '20px',
-                              borderRadius: '50%',
-                              background: 'var(--accent)',
-                              color: '#ffffff',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-                              zIndex: 15
-                            }}
-                          >
-                            <Check size={12} strokeWidth={3.2} />
-                          </div>
-                        )}
-                      </div>
-                    </VibeAuraRing>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <h4 style={{ fontSize: '1.02rem', fontWeight: u.unreadCount > 0 ? 700 : 600, margin: 0, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <span>{(typeof u.nickname === 'string' && u.nickname.trim()) ? u.nickname : (u.displayName || u.username || 'User')}</span>
-                          {isPinned && (
-                            <span title="Pinned Chat" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center' }}>
-                              📌
-                            </span>
-                          )}
-                          {u.isPro && (
-                            <PulseVipBadge size={14} showLabel={false} />
-                          )}
-                          {u.streakCount > 0 && (
-                            <span
-                              style={{
-                                fontSize: '0.72rem',
-                                padding: '1px 6px',
-                                borderRadius: '8px',
-                                background: 'rgba(239, 68, 68, 0.16)',
-                                color: '#ff7a29',
-                                border: '1px solid rgba(249, 115, 22, 0.5)',
-                                fontWeight: 700,
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '2px',
-                                flexShrink: 0
-                              }}
-                              title={`🔥 ${u.streakCount}-day Pulse Streak!`}
-                            >
-                              🔥 {u.streakCount}
-                            </span>
-                          )}
-                          {/* Locked Chat Indicator */}
-                          {isChatLocked(u.isGroup ? u.id : (user?.id ? [user.id, u.id].sort().join('_') : u.id)) && (
-                            <span title="Locked Chat" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center' }}>
-                              🔒
-                            </span>
-                          )}
-                          {/* Muted Chat Indicator */}
-                          {isChatMuted(u.isGroup ? u.id : (user?.id ? [user.id, u.id].sort().join('_') : u.id)) && (
-                            <span title="Notifications Muted" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', opacity: 0.7 }}>
-                              🔕
-                            </span>
-                          )}
-                        </h4>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          {(u.lastMessageTimestamp || u.lastMessageTime) && (
-                            <span style={{
-                              fontSize: '0.72rem',
-                              color: u.unreadCount > 0 ? '#38bdf8' : 'var(--text-muted)',
-                              fontWeight: u.unreadCount > 0 ? 600 : 400,
-                              flexShrink: 0
-                            }}>
-                              {formatChatListTime(u.lastMessageTimestamp || u.lastMessageTime)}
-                            </span>
-                          )}
-                          {u.unreadCount > 0 && (
-                            <span className="unread-badge">
-                              {u.unreadCount}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <p style={{
-                        fontSize: '0.84rem',
-                        color: u.unreadCount > 0 ? 'var(--text-color)' : 'var(--text-muted)',
-                        fontWeight: u.unreadCount > 0 ? 500 : 400,
-                        margin: '2px 0 0 0',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}>
-                        {(() => {
-                          const contactChatId = u.isGroup ? u.id : (user?.id ? [user.id, u.id].sort().join('_') : u.id);
-                          const typingUser = typingMap ? typingMap[contactChatId] : null;
-                          const isContactTyping = Boolean(typingUser && typingUser !== user?.username && typingUser !== user?.id);
-                          if (isContactTyping) {
-                            return <span style={{ color: '#22c55e', fontWeight: 600 }}>✍️ typing...</span>;
-                          }
-
-                          const isFromMe = Boolean(u.lastMessageFromMe);
-                          const isContactOnline = !u.isGroup && Array.isArray(onlineUsers) && (
-                            (u.id && onlineUsers.some(uid => String(uid) === String(u.id))) ||
-                            (u._id && onlineUsers.some(uid => String(uid) === String(u._id))) ||
-                            (u.username && onlineUsers.some(uid => String(uid).toLowerCase() === String(u.username).toLowerCase()))
-                          );
-                          const status = (u.lastMessageStatus === 'sent' && isContactOnline) ? 'delivered' : (u.lastMessageStatus || 'sent');
-
-                          let statusIcon = null;
-                          if (isFromMe && u.lastMessage) {
-                            if (status === 'read' || status === 'seen') {
-                              statusIcon = (
-                                <CheckCheck
-                                  size={14}
-                                  style={{
-                                    color: '#38bdf8',
-                                    flexShrink: 0,
-                                    filter: 'drop-shadow(0 0 2px rgba(56,189,248,0.5))'
-                                  }}
-                                />
-                              );
-                            } else if (status === 'delivered') {
-                              statusIcon = (
-                                <CheckCheck
-                                  size={14}
-                                  style={{
-                                    color: 'var(--text-muted, #94a3b8)',
-                                    flexShrink: 0
-                                  }}
-                                />
-                              );
-                            } else {
-                              statusIcon = (
-                                <Check
-                                  size={14}
-                                  style={{
-                                    color: 'var(--text-muted, #94a3b8)',
-                                    flexShrink: 0
-                                  }}
-                                />
-                              );
-                            }
-                          }
-
-                          let textSnippet = `@${u.username}`;
-                          if (u.lastMessage) {
-                            textSnippet = typeof u.lastMessage === 'string' ? u.lastMessage : (u.lastMessage.content || `@${u.username}`);
-                          }
-
-                          return (
-                            <>
-                              {statusIcon}
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {textSnippet}
-                              </span>
-                            </>
-                          );
-                        })()}
-                      </p>
-                    </div>
-                  </div>
-                ); })}
+                    <ConversationItemRow
+                      key={cid}
+                      chat={u}
+                      isSelected={isSelected}
+                      isActive={isActive}
+                      isPinned={isPinned}
+                      isLocked={isLocked}
+                      isMuted={isMuted}
+                      friendAura={friendAura}
+                      silentMode={silentMode}
+                      isOnline={isOnline}
+                      isContactOnline={isContactOnline}
+                      isContactTyping={isContactTyping}
+                      onClick={(e) => handleChatItemClick(u, u.isGroup, e)}
+                      onTouchStart={(e) => handleChatTouchStart(u, e)}
+                      onTouchMove={handleChatTouchMove}
+                      onTouchEnd={handleChatTouchEnd}
+                      onTouchCancel={handleChatTouchCancel}
+                      onMouseDown={(e) => handleChatMouseDown(u, e)}
+                      onMouseMove={handleChatMouseMove}
+                      onMouseUp={handleChatMouseUp}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedChatIds(prev => prev.includes(cid) ? prev : [...prev, cid]);
+                      }}
+                      onAvatarClick={(e) => {
+                        if (selectedChatIds.length > 0) {
+                          e.stopPropagation();
+                          handleChatItemClick(u, u.isGroup);
+                          return;
+                        }
+                        handleAvatarStoryClick(e, u);
+                      }}
+                    />
+                  );
+                })}
               </>
             )}
 

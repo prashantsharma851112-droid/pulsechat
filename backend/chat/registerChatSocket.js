@@ -40,11 +40,79 @@ function validId(value) {
   return typeof value === 'string' && value.length >= 1 && value.length <= 128;
 }
 
+function isValidBase64(str) {
+  if (typeof str !== 'string' || str.length === 0) return false;
+  return /^[A-Za-z0-9+/=_-]+$/.test(str);
+}
+
+function isValidJwkEcKey(key) {
+  return (
+    Boolean(key) &&
+    typeof key === 'object' &&
+    key.kty === 'EC' &&
+    (key.crv === 'P-256' || key.crv === 'secp256r1') &&
+    typeof key.x === 'string' &&
+    typeof key.y === 'string' &&
+    key.x.length > 0 &&
+    key.y.length > 0
+  );
+}
+
+function isSingleEnvelopeValid(env) {
+  if (!env || typeof env !== 'object') return false;
+  if (env.format && env.format !== 'pulse_e2ee_v1') return false;
+  if (!isValidJwkEcKey(env.ephemeralPublicKey)) return false;
+  if (typeof env.iv !== 'string' || env.iv.length < 12 || !isValidBase64(env.iv)) return false;
+  if (typeof env.ciphertext !== 'string' || env.ciphertext.length === 0 || !isValidBase64(env.ciphertext)) return false;
+  return true;
+}
+
+function validateE2EEEnvelope(envelope) {
+  if (!envelope || typeof envelope !== 'object') {
+    return { valid: false, error: 'MISSING_OR_INVALID_ENVELOPE' };
+  }
+  if (envelope.format && envelope.format !== 'pulse_e2ee_v1') {
+    return { valid: false, error: 'UNSUPPORTED_ENCRYPTION_PROTOCOL' };
+  }
+
+  // Check direct single envelope
+  if (isSingleEnvelopeValid(envelope)) {
+    if (envelope.devices && typeof envelope.devices === 'object') {
+      const devKeys = Object.keys(envelope.devices);
+      for (const devId of devKeys) {
+        if (!isSingleEnvelopeValid(envelope.devices[devId])) {
+          return { valid: false, error: 'INVALID_DEVICE_ENVELOPE' };
+        }
+      }
+    }
+    return { valid: true };
+  }
+
+  // Check multi-device dictionary envelope
+  if (envelope.devices && typeof envelope.devices === 'object') {
+    const devKeys = Object.keys(envelope.devices);
+    if (devKeys.length > 0) {
+      for (const devId of devKeys) {
+        if (!isSingleEnvelopeValid(envelope.devices[devId])) {
+          return { valid: false, error: 'INVALID_DEVICE_ENVELOPE' };
+        }
+      }
+      return { valid: true };
+    }
+  }
+
+  return { valid: false, error: 'INVALID_ENVELOPE_STRUCTURE' };
+}
+
 function validateOutgoing(payload) {
-  return Boolean(
-    payload &&
-    validId(payload.messageId) &&
-    validId(payload.receiverId) &&
+  if (!payload || !validId(payload.messageId) || !validId(payload.receiverId)) {
+    return false;
+  }
+  const hasEnvelope = Boolean(payload.envelope && typeof payload.envelope === 'object');
+  if (hasEnvelope || payload.isEncrypted) {
+    return typeof payload.content === 'string' && payload.content.length <= MAX_MESSAGE_LENGTH;
+  }
+  return (
     typeof payload.content === 'string' &&
     payload.content.trim().length > 0 &&
     payload.content.length <= MAX_MESSAGE_LENGTH
@@ -293,24 +361,62 @@ function registerChatSocket(io, { receiptSecret }) {
         return;
       }
 
+      // Validate envelope structure and protocol metadata
+      const hasEnvelope = Boolean(payload?.envelope && typeof payload.envelope === 'object');
+      const envelopeValidation = hasEnvelope
+        ? validateE2EEEnvelope(payload.envelope)
+        : { valid: false, error: 'NO_ENVELOPE' };
+
+      if (payload?.envelope?.format && payload.envelope.format !== 'pulse_e2ee_v1') {
+        safeAck(ack, { ok: false, error: 'UNSUPPORTED_ENCRYPTION_PROTOCOL' });
+        return;
+      }
+
+      if (payload?.isEncrypted) {
+        if (!envelopeValidation.valid) {
+          safeAck(ack, {
+            ok: false,
+            error: envelopeValidation.error === 'UNSUPPORTED_ENCRYPTION_PROTOCOL'
+              ? 'UNSUPPORTED_ENCRYPTION_PROTOCOL'
+              : 'INVALID_ENCRYPTED_ENVELOPE'
+          });
+          return;
+        }
+      }
+
+      // Server-side classification: genuine envelope implies encrypted!
+      const isTrulyEncrypted = envelopeValidation.valid;
+
       try {
         await withMessageLock(messageId, async () => {
           const now = new Date();
-          const queueExpiresAt = new Date(now.getTime() + (payload.isEncrypted ? ENCRYPTED_QUEUE_TTL_MS : QUEUE_TTL_MS));
-          const ledgerExpiresAt = new Date(now.getTime() + LEDGER_TTL_MS);
-          const receiptToken = createReceiptToken({ messageId, senderId, receiverId, expiresAt: queueExpiresAt }, receiptSecret);
           let ledger = await MessageLedger.findOne({ messageId });
+
+          let effectiveQueueExpiresAt;
+          let receiptToken;
 
           if (ledger) {
             if (ledger.senderId !== senderId || ledger.receiverId !== receiverId) {
               safeAck(ack, { ok: false, error: 'MESSAGE_ID_CONFLICT' });
               return;
             }
-            if (ledger.state === 'expired' || ledger.queueExpiresAt <= now) {
+
+            const originalEnqueueTime = new Date(ledger.createdAt || now);
+            const originalQueueCeiling = new Date(
+              originalEnqueueTime.getTime() + (isTrulyEncrypted ? ENCRYPTED_QUEUE_TTL_MS : QUEUE_TTL_MS)
+            );
+
+            // If already expired, or original queue ceiling elapsed, or recorded queueExpiresAt elapsed:
+            if (
+              ledger.state === 'expired' ||
+              originalQueueCeiling <= now ||
+              (ledger.queueExpiresAt && ledger.queueExpiresAt <= now)
+            ) {
               await MessageLedger.updateOne({ messageId }, { $set: { state: 'expired' } });
               safeAck(ack, { ok: false, error: 'MESSAGE_EXPIRED' });
               return;
             }
+
             if (ledger.state !== 'queued') {
               safeAck(ack, {
                 ok: true,
@@ -319,7 +425,38 @@ function registerChatSocket(io, { receiptSecret }) {
               });
               return;
             }
+
+            // Calculate effective expiry:
+            // Encrypted envelopes MUST NEVER inherit a 7-day expiry from legacy ledger metadata
+            // and must never extend past originalEnqueueTime + 24h
+            if (isTrulyEncrypted) {
+              effectiveQueueExpiresAt = originalQueueCeiling;
+              if (ledger.queueExpiresAt && ledger.queueExpiresAt < effectiveQueueExpiresAt) {
+                effectiveQueueExpiresAt = ledger.queueExpiresAt;
+              }
+            } else {
+              effectiveQueueExpiresAt = ledger.queueExpiresAt ?? originalQueueCeiling;
+            }
+
+            // Correct ledger queueExpiresAt if it was higher than ceiling (e.g. stale 7-day ledger)
+            if (ledger.queueExpiresAt > effectiveQueueExpiresAt) {
+              await MessageLedger.updateOne({ messageId }, { $set: { queueExpiresAt: effectiveQueueExpiresAt } });
+            }
+
+            receiptToken = createReceiptToken(
+              { messageId, senderId, receiverId, expiresAt: effectiveQueueExpiresAt },
+              receiptSecret
+            );
           } else {
+            effectiveQueueExpiresAt = new Date(
+              now.getTime() + (isTrulyEncrypted ? ENCRYPTED_QUEUE_TTL_MS : QUEUE_TTL_MS)
+            );
+            const ledgerExpiresAt = new Date(now.getTime() + LEDGER_TTL_MS);
+            receiptToken = createReceiptToken(
+              { messageId, senderId, receiverId, expiresAt: effectiveQueueExpiresAt },
+              receiptSecret
+            );
+
             try {
               ledger = await MessageLedger.create({
                 messageId,
@@ -327,7 +464,7 @@ function registerChatSocket(io, { receiptSecret }) {
                 receiverId,
                 state: 'queued',
                 createdAt: now,
-                queueExpiresAt,
+                queueExpiresAt: effectiveQueueExpiresAt,
                 expiresAt: ledgerExpiresAt
               });
             } catch (error) {
@@ -337,7 +474,15 @@ function registerChatSocket(io, { receiptSecret }) {
                 safeAck(ack, { ok: false, error: 'MESSAGE_ID_CONFLICT' });
                 return;
               }
-              if (ledger.state === 'expired' || ledger.queueExpiresAt <= now) {
+              const origTime = new Date(ledger.createdAt || now);
+              const ceiling = new Date(
+                origTime.getTime() + (isTrulyEncrypted ? ENCRYPTED_QUEUE_TTL_MS : QUEUE_TTL_MS)
+              );
+              if (
+                ledger.state === 'expired' ||
+                ceiling <= now ||
+                (ledger.queueExpiresAt && ledger.queueExpiresAt <= now)
+              ) {
                 await MessageLedger.updateOne({ messageId }, { $set: { state: 'expired' } });
                 safeAck(ack, { ok: false, error: 'MESSAGE_EXPIRED' });
                 return;
@@ -346,6 +491,18 @@ function registerChatSocket(io, { receiptSecret }) {
                 safeAck(ack, { ok: true, alreadyDelivered: true, messageId });
                 return;
               }
+              let effExpires = isTrulyEncrypted ? ceiling : (ledger.queueExpiresAt ?? ceiling);
+              if (isTrulyEncrypted && ledger.queueExpiresAt && ledger.queueExpiresAt < effExpires) {
+                effExpires = ledger.queueExpiresAt;
+              }
+              if (ledger.queueExpiresAt > effExpires) {
+                await MessageLedger.updateOne({ messageId }, { $set: { queueExpiresAt: effExpires } });
+              }
+              effectiveQueueExpiresAt = effExpires;
+              receiptToken = createReceiptToken(
+                { messageId, senderId, receiverId, expiresAt: effectiveQueueExpiresAt },
+                receiptSecret
+              );
             }
           }
 
@@ -357,15 +514,17 @@ function registerChatSocket(io, { receiptSecret }) {
                 messageId,
                 senderId,
                 receiverId,
-                content: payload.isEncrypted ? '' : (content || ''),
-                isEncrypted: Boolean(payload.isEncrypted),
-                envelope: payload.envelope || null,
+                content: isTrulyEncrypted ? '' : (content || ''),
+                isEncrypted: isTrulyEncrypted,
+                envelope: isTrulyEncrypted ? payload.envelope : null,
                 chatId: payload.chatId || null,
                 senderDeviceId: payload.senderDeviceId || null,
                 recipientDeviceId: payload.recipientDeviceId || null,
                 createdAt: ledger.createdAt ?? now,
-                expiresAt: ledger.queueExpiresAt ?? queueExpiresAt,
                 receiptToken
+              },
+              $min: {
+                expiresAt: effectiveQueueExpiresAt
               }
             },
             { upsert: true }
@@ -395,26 +554,55 @@ function registerChatSocket(io, { receiptSecret }) {
         return;
       }
 
+      if (payload?.senderId && String(payload.senderId) !== String(receipt.senderId)) {
+        safeAck(ack, { ok: false, error: 'SENDER_MISMATCH' });
+        return;
+      }
+
       const { messageId, senderId, receiverId } = receipt;
       try {
         await withMessageLock(messageId, async () => {
           const ledger = await MessageLedger.findOne({ messageId, senderId, receiverId });
-          if (ledger && ledger.state === 'delivered') {
+          if (!ledger) {
+            safeAck(ack, { ok: false, error: 'MESSAGE_NOT_FOUND' });
+            return;
+          }
+
+          if (ledger.state === 'delivered') {
             // Idempotent: already delivered. Clean up queue if lingering and return safe ACK
-            await QueuedMessage.deleteOne({ messageId, receiverId });
+            await QueuedMessage.deleteOne({ messageId, senderId, receiverId });
             safeAck(ack, { ok: true, alreadyDelivered: true });
             return;
           }
 
-          // Mark delivering first
-          await MessageLedger.updateOne(
-            { messageId, senderId, receiverId, state: 'queued' },
-            { $set: { state: 'delivering' } }
-          );
+          if (ledger.state === 'expired') {
+            safeAck(ack, { ok: false, error: 'MESSAGE_EXPIRED' });
+            return;
+          }
+
+          // Crash recovery or normal transition
+          let transitionSuccess = false;
+          if (ledger.state === 'delivering') {
+            // Safe crash recovery: already marked delivering in previous attempt
+            transitionSuccess = true;
+          } else if (ledger.state === 'queued') {
+            const transitionResult = await MessageLedger.updateOne(
+              { messageId, senderId, receiverId, state: 'queued' },
+              { $set: { state: 'delivering' } }
+            );
+            if (transitionResult.matchedCount > 0) {
+              transitionSuccess = true;
+            }
+          }
+
+          if (!transitionSuccess) {
+            safeAck(ack, { ok: false, retry: true, error: 'LEDGER_TRANSITION_FAILED' });
+            return;
+          }
 
           // The receiver has already committed the message to IndexedDB.
-          // Remove the text/body from MongoDB immediately at this point (0 bytes stored).
-          await QueuedMessage.deleteOne({ messageId, receiverId });
+          // Remove the envelope/body from MongoDB immediately scoped by full 3-tuple (0 bytes stored).
+          await QueuedMessage.deleteOne({ messageId, senderId, receiverId });
 
           await MessageLedger.updateOne(
             { messageId, senderId, receiverId },

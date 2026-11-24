@@ -24,7 +24,7 @@ setInterval(cleanExpiredSessions, 15000).unref();
 function registerQrSyncSocket(io, socket) {
   const callerId = socket.authenticatedUserId;
 
-  // 1. New device creates pairing session
+  // 1. Initiator creates pairing session (Shows QR code)
   socket.on('qr_sync:initiate', async (data, ack) => {
     try {
       if (!callerId) {
@@ -32,7 +32,7 @@ function registerQrSyncSocket(io, socket) {
         return;
       }
 
-      const { ephemeralPublicKey } = data || {};
+      const { ephemeralPublicKey, role = 'source', deviceName = 'PulseChat Device' } = data || {};
       if (!ephemeralPublicKey || typeof ephemeralPublicKey !== 'object') {
         if (typeof ack === 'function') ack({ success: false, error: 'INVALID_EPHEMERAL_PUBLIC_KEY' });
         return;
@@ -52,6 +52,11 @@ function registerQrSyncSocket(io, socket) {
         sessionId,
         pairingToken,
         userId: callerId,
+        initiatorSocketId: socket.id,
+        initiatorPublicKey: ephemeralPublicKey,
+        initiatorRole: role,
+        initiatorDeviceName: deviceName,
+        // Backward-compatibility aliases
         newDeviceSocketId: socket.id,
         newDevicePublicKey: ephemeralPublicKey,
         status: 'pending',
@@ -74,7 +79,83 @@ function registerQrSyncSocket(io, socket) {
     }
   });
 
-  // 2. Old device approves transfer after scanning QR code
+  // 2. Responder scans QR code and requests pairing (Triggers approval prompt on initiator)
+  socket.on('qr_sync:request_pair', async (data, ack) => {
+    try {
+      if (!callerId) {
+        if (typeof ack === 'function') ack({ success: false, error: 'UNAUTHORIZED' });
+        return;
+      }
+
+      const { sessionId, pairingToken, ephemeralPublicKey, deviceName = 'New Phone', deviceId } = data || {};
+      const session = activeSyncSessions.get(sessionId);
+
+      if (!session) {
+        if (typeof ack === 'function') ack({ success: false, error: 'SESSION_EXPIRED_OR_NOT_FOUND' });
+        return;
+      }
+
+      if (session.expiresAt <= Date.now()) {
+        activeSyncSessions.delete(sessionId);
+        if (typeof ack === 'function') ack({ success: false, error: 'SESSION_EXPIRED' });
+        return;
+      }
+
+      if (session.pairingToken !== pairingToken) {
+        if (typeof ack === 'function') ack({ success: false, error: 'INVALID_PAIRING_TOKEN' });
+        return;
+      }
+
+      if (session.userId !== callerId) {
+        if (typeof ack === 'function') ack({ success: false, error: 'ACCOUNT_MISMATCH' });
+        return;
+      }
+
+      if (session.status !== 'pending') {
+        if (typeof ack === 'function') ack({ success: false, error: 'SESSION_ALREADY_USED' });
+        return;
+      }
+
+      // Reject if private key material is present
+      if (ephemeralPublicKey?.d) {
+        if (typeof ack === 'function') ack({ success: false, error: 'PRIVATE_KEY_FORBIDDEN' });
+        return;
+      }
+
+      session.status = 'requested';
+      session.responderSocketId = socket.id;
+      session.responderPublicKey = ephemeralPublicKey;
+      session.responderDevice = { deviceName, deviceId };
+      // Backward-compatibility alias
+      session.oldDeviceSocketId = socket.id;
+      session.oldDevicePublicKey = ephemeralPublicKey;
+
+      socket.join(sessionId);
+
+      // Prompt the initiator device (e.g. old phone) for explicit user confirmation
+      const promptTargetSocket = session.initiatorSocketId || session.newDeviceSocketId;
+      if (promptTargetSocket) {
+        io.to(promptTargetSocket).emit('qr_sync:prompt_approval', {
+          sessionId,
+          deviceName,
+          deviceId
+        });
+      }
+
+      if (typeof ack === 'function') {
+        ack({
+          success: true,
+          sessionId,
+          status: 'waiting_for_approval'
+        });
+      }
+    } catch (err) {
+      console.error('Error requesting pair in qr_sync:', err);
+      if (typeof ack === 'function') ack({ success: false, error: 'INTERNAL_ERROR' });
+    }
+  });
+
+  // 3. User approves transfer
   socket.on('qr_sync:approve', async (data, ack) => {
     try {
       if (!callerId) {
@@ -96,39 +177,65 @@ function registerQrSyncSocket(io, socket) {
         return;
       }
 
-      if (session.pairingToken !== pairingToken) {
+      // Pairing token check if provided
+      if (pairingToken && session.pairingToken !== pairingToken) {
         if (typeof ack === 'function') ack({ success: false, error: 'INVALID_PAIRING_TOKEN' });
         return;
       }
 
-      // Strict account isolation: both devices must belong to the exact same authenticated user
+      // Account isolation
       if (session.userId !== callerId) {
         if (typeof ack === 'function') ack({ success: false, error: 'ACCOUNT_MISMATCH' });
         return;
       }
 
-      if (session.status !== 'pending') {
+      if (session.status === 'approved') {
         if (typeof ack === 'function') ack({ success: false, error: 'SESSION_ALREADY_USED' });
         return;
       }
 
       session.status = 'approved';
-      session.oldDeviceSocketId = socket.id;
-      session.oldDevicePublicKey = ephemeralPublicKey;
+
+      // If ephemeralPublicKey was provided on approval (legacy single-step approval flow)
+      if (ephemeralPublicKey && !session.oldDevicePublicKey) {
+        session.oldDeviceSocketId = socket.id;
+        session.oldDevicePublicKey = ephemeralPublicKey;
+        session.responderSocketId = socket.id;
+        session.responderPublicKey = ephemeralPublicKey;
+      }
 
       socket.join(sessionId);
 
-      // Notify new device with old device's ephemeral public key
-      io.to(session.newDeviceSocketId).emit('qr_sync:paired', {
-        sessionId,
-        oldDevicePublicKey: ephemeralPublicKey
-      });
+      const initiatorSocket = session.initiatorSocketId || session.newDeviceSocketId;
+      const responderSocket = session.responderSocketId || session.oldDeviceSocketId;
+      const initiatorPk = session.initiatorPublicKey || session.newDevicePublicKey;
+      const responderPk = session.responderPublicKey || session.oldDevicePublicKey;
+
+      // Notify initiator
+      if (initiatorSocket) {
+        io.to(initiatorSocket).emit('qr_sync:paired', {
+          sessionId,
+          peerPublicKey: responderPk,
+          oldDevicePublicKey: responderPk
+        });
+      }
+
+      // Notify responder
+      if (responderSocket) {
+        io.to(responderSocket).emit('qr_sync:paired', {
+          sessionId,
+          peerPublicKey: initiatorPk,
+          newDevicePublicKey: initiatorPk,
+          oldDevicePublicKey: initiatorPk
+        });
+      }
 
       if (typeof ack === 'function') {
         ack({
           success: true,
           sessionId,
-          newDevicePublicKey: session.newDevicePublicKey
+          newDevicePublicKey: initiatorPk,
+          peerPublicKey: responderPk
         });
       }
     } catch (err) {
@@ -137,7 +244,7 @@ function registerQrSyncSocket(io, socket) {
     }
   });
 
-  // 3. Ephemeral Relay for encrypted history chunk
+  // 4. Ephemeral Relay for encrypted history chunk
   socket.on('qr_sync:chunk', (data) => {
     const { sessionId, chunkIndex, totalChunks, encryptedPayload, iv } = data || {};
     const session = activeSyncSessions.get(sessionId);
@@ -145,10 +252,11 @@ function registerQrSyncSocket(io, socket) {
       return;
     }
 
-    // Determine target recipient socket
-    const targetSocketId = socket.id === session.oldDeviceSocketId
-      ? session.newDeviceSocketId
-      : session.oldDeviceSocketId;
+    const initiatorSocket = session.initiatorSocketId || session.newDeviceSocketId;
+    const responderSocket = session.responderSocketId || session.oldDeviceSocketId;
+
+    // Relay to the other peer in the pairing
+    const targetSocketId = socket.id === initiatorSocket ? responderSocket : initiatorSocket;
 
     if (targetSocketId) {
       io.to(targetSocketId).emit('qr_sync:chunk_received', {
@@ -161,7 +269,7 @@ function registerQrSyncSocket(io, socket) {
     }
   });
 
-  // 4. Complete session and clean up
+  // 5. Complete session and clean up
   socket.on('qr_sync:complete', ({ sessionId }) => {
     const session = activeSyncSessions.get(sessionId);
     if (session && session.userId === callerId) {
@@ -170,7 +278,7 @@ function registerQrSyncSocket(io, socket) {
     }
   });
 
-  // 5. Cancel session
+  // 6. Cancel session
   socket.on('qr_sync:cancel', ({ sessionId }) => {
     const session = activeSyncSessions.get(sessionId);
     if (session && session.userId === callerId) {
