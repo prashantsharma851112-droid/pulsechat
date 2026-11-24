@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, X, RefreshCw, Zap, ZapOff, AlertCircle, KeyRound, Check } from 'lucide-react';
+import { Camera, X, RefreshCw, Zap, ZapOff, AlertCircle, KeyRound, Check, Upload, Image as ImageIcon } from 'lucide-react';
 import jsQR from 'jsqr';
 import { useBackHandler } from '../../utils/backNavigation';
 
 /**
  * Mobile-Optimized QR Scanner Modal for Device-to-Device Chat Transfer.
- * Supports hardware BarcodeDetector with pure-JS jsQR fallback.
+ * Supports:
+ * 1. Hardware BarcodeDetector with pure-JS jsQR live stream fallback.
+ * 2. 3-tier camera constraint fallback (ideal 720p -> facingMode -> any video).
+ * 3. Native system camera / gallery photo snap fallback via file input (works 100% reliably everywhere, including non-HTTPS).
+ * 4. Manual pairing code text input fallback.
  */
 export default function QrScannerModal({ isOpen, onClose, onScanSuccess, title = 'Scan QR Code' }) {
   const [hasPermission, setHasPermission] = useState(null); // null = requesting, true = granted, false = denied
@@ -15,12 +19,14 @@ export default function QrScannerModal({ isOpen, onClose, onScanSuccess, title =
   const [torchOn, setTorchOn] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualCode, setManualCode] = useState('');
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const animationFrameRef = useRef(null);
   const isScanningRef = useRef(true);
+  const fileInputRef = useRef(null);
 
   useBackHandler(() => {
     if (isOpen) {
@@ -61,26 +67,70 @@ export default function QrScannerModal({ isOpen, onClose, onScanSuccess, title =
     isScanningRef.current = true;
 
     try {
-      if (!navigator?.mediaDevices?.getUserMedia) {
-        throw new Error('Camera access is not supported by this browser.');
+      const getUserMediaFn = (
+        navigator?.mediaDevices?.getUserMedia?.bind(navigator.mediaDevices) ||
+        navigator?.getUserMedia?.bind(navigator) ||
+        navigator?.webkitGetUserMedia?.bind(navigator) ||
+        navigator?.mozGetUserMedia?.bind(navigator)
+      );
+
+      if (!getUserMediaFn) {
+        throw new Error('Live camera streaming is not supported in this browser context (e.g. non-HTTPS). Tap "Snap Photo of QR" below!');
       }
 
-      const constraints = {
-        video: {
-          facingMode: { ideal: facingMode },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: false
-      };
+      let stream = null;
+      let lastErr = null;
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      // Tier 1: Try with preferred facingMode and 720p resolution
+      try {
+        stream = await getUserMediaFn({
+          video: {
+            facingMode: { ideal: facingMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+      } catch (err1) {
+        lastErr = err1;
+      }
+
+      // Tier 2: Try with basic facingMode
+      if (!stream) {
+        try {
+          stream = await getUserMediaFn({
+            video: { facingMode: facingMode },
+            audio: false
+          });
+        } catch (err2) {
+          lastErr = err2;
+        }
+      }
+
+      // Tier 3: Try with any video stream
+      if (!stream) {
+        try {
+          stream = await getUserMediaFn({
+            video: true,
+            audio: false
+          });
+        } catch (err3) {
+          lastErr = err3;
+        }
+      }
+
+      if (!stream) {
+        throw lastErr || new Error('Could not access any camera on this device.');
+      }
+
       streamRef.current = stream;
       setHasPermission(true);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute('playsinline', 'true');
+        videoRef.current.setAttribute('autoplay', 'true');
+        videoRef.current.setAttribute('muted', 'true');
         await videoRef.current.play().catch(() => {});
       }
 
@@ -98,13 +148,78 @@ export default function QrScannerModal({ isOpen, onClose, onScanSuccess, title =
       console.warn('QR Scanner camera init error:', err);
       setHasPermission(false);
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setErrorMessage('Camera permission was denied. Please allow camera access in your browser settings to scan the QR code.');
+        setErrorMessage('Camera permission was denied. Tap "Snap Photo of QR" below, or allow camera in browser settings.');
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        setErrorMessage('No camera found on this device.');
+        setErrorMessage('No camera found on this device. Tap "Snap Photo of QR" or enter code manually.');
       } else {
-        setErrorMessage(err.message || 'Unable to access camera.');
+        setErrorMessage(err.message || 'Unable to access live camera.');
       }
     }
+  };
+
+  const handleImageFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessingFile(true);
+    setErrorMessage(null);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const maxDim = 1280;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            const scale = maxDim / Math.max(w, h);
+            w = Math.round(w * scale);
+            h = Math.round(h * scale);
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          if (!ctx) throw new Error('Canvas context not available');
+
+          ctx.drawImage(img, 0, 0, w, h);
+          const imgData = ctx.getImageData(0, 0, w, h);
+          const code = jsQR(imgData.data, imgData.width, imgData.height, {
+            inversionAttempts: 'attemptBoth'
+          });
+
+          if (code && code.data) {
+            isScanningRef.current = false;
+            stopStream();
+            setIsProcessingFile(false);
+            onScanSuccess?.(code.data);
+          } else {
+            setIsProcessingFile(false);
+            setErrorMessage('No QR code detected in this photo. Please hold the phone closer to the QR code and try again.');
+            setHasPermission(false);
+          }
+        } catch (err) {
+          console.warn('QR decode from image error:', err);
+          setIsProcessingFile(false);
+          setErrorMessage('Failed to decode QR image. Please try again.');
+          setHasPermission(false);
+        }
+      };
+      img.onerror = () => {
+        setIsProcessingFile(false);
+        setErrorMessage('Could not load image file.');
+        setHasPermission(false);
+      };
+      img.src = reader.result;
+    };
+    reader.onerror = () => {
+      setIsProcessingFile(false);
+      setErrorMessage('Failed to read image.');
+      setHasPermission(false);
+    };
+    reader.readAsDataURL(file);
+    if (e.target) e.target.value = '';
   };
 
   const toggleTorch = async () => {
@@ -300,6 +415,16 @@ export default function QrScannerModal({ isOpen, onClose, onScanSuccess, title =
           </button>
         </div>
 
+        {/* Hidden native camera/gallery input for 100% reliable QR photo scan fallback */}
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          ref={fileInputRef}
+          onChange={handleImageFileSelect}
+          style={{ display: 'none' }}
+        />
+
         {/* Viewfinder or Fallback Body */}
         {!showManualInput ? (
           <div
@@ -361,7 +486,7 @@ export default function QrScannerModal({ isOpen, onClose, onScanSuccess, title =
                   />
                 </div>
 
-                {/* Floating Viewfinder Controls (Torch + Flip) */}
+                {/* Floating Viewfinder Controls (Torch + Flip + Snap) */}
                 <div
                   style={{
                     position: 'absolute',
@@ -371,7 +496,7 @@ export default function QrScannerModal({ isOpen, onClose, onScanSuccess, title =
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '16px',
+                    gap: '14px',
                     zIndex: 10
                   }}
                 >
@@ -418,6 +543,27 @@ export default function QrScannerModal({ isOpen, onClose, onScanSuccess, title =
                   >
                     <RefreshCw size={18} />
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="interactive-tap"
+                    style={{
+                      background: 'rgba(0, 0, 0, 0.6)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      color: '#38bdf8',
+                      borderRadius: '50%',
+                      width: '40px',
+                      height: '40px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer'
+                    }}
+                    title="Snap or Upload Photo"
+                  >
+                    <Camera size={18} />
+                  </button>
                 </div>
               </>
             )}
@@ -430,28 +576,83 @@ export default function QrScannerModal({ isOpen, onClose, onScanSuccess, title =
             )}
 
             {hasPermission === false && (
-              <div style={{ padding: '24px', textAlign: 'center', color: '#f87171', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+              <div style={{ padding: '24px 20px', textAlign: 'center', color: '#f87171', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                 <AlertCircle size={36} color="#ef4444" />
-                <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#fff' }}>Camera Unavailable</div>
-                <div style={{ fontSize: '0.78rem', color: '#94a3b8', lineHeight: 1.4 }}>{errorMessage}</div>
-                <button
-                  type="button"
-                  onClick={startCamera}
-                  className="interactive-tap"
-                  style={{
-                    marginTop: '8px',
-                    padding: '8px 16px',
-                    borderRadius: '10px',
-                    background: '#10b981',
-                    color: '#000',
-                    border: 'none',
-                    fontWeight: 700,
-                    fontSize: '0.8rem',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Try Again
-                </button>
+                <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#fff' }}>Camera Unavailable</div>
+                <div style={{ fontSize: '0.78rem', color: '#94a3b8', lineHeight: 1.4, maxWidth: '300px' }}>{errorMessage}</div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: '260px', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="interactive-tap"
+                    disabled={isProcessingFile}
+                    style={{
+                      padding: '11px 16px',
+                      borderRadius: '12px',
+                      background: 'linear-gradient(135deg, #10b981, #059669)',
+                      color: '#fff',
+                      border: 'none',
+                      fontWeight: 700,
+                      fontSize: '0.86rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)'
+                    }}
+                  >
+                    <Camera size={17} />
+                    <span>{isProcessingFile ? 'Scanning photo...' : 'Snap Photo of QR Code'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowManualInput(true)}
+                    className="interactive-tap"
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '12px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      color: '#f8fafc',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      fontWeight: 600,
+                      fontSize: '0.82rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <KeyRound size={15} />
+                    <span>Enter Pairing Code</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    className="interactive-tap"
+                    style={{
+                      padding: '7px 12px',
+                      borderRadius: '8px',
+                      background: 'transparent',
+                      color: '#64748b',
+                      border: 'none',
+                      fontWeight: 500,
+                      fontSize: '0.76rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <RefreshCw size={13} />
+                    <span>Retry Live Camera</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -459,7 +660,7 @@ export default function QrScannerModal({ isOpen, onClose, onScanSuccess, title =
           /* Manual Pairing Code Entry Fallback */
           <form onSubmit={handleManualSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ fontSize: '0.82rem', color: '#94a3b8', lineHeight: 1.4 }}>
-              If your camera cannot scan, paste or enter the pairing code text shown on your old device:
+              If your camera cannot scan, paste the pairing code text copied from your old phone:
             </div>
             <textarea
               rows={4}
@@ -508,17 +709,38 @@ export default function QrScannerModal({ isOpen, onClose, onScanSuccess, title =
         {/* Footer Toggle for Manual Code Input */}
         <div
           style={{
-            padding: '12px 20px',
+            padding: '12px 18px',
             borderTop: '1px solid rgba(255, 255, 255, 0.08)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: '8px',
             background: 'rgba(255, 255, 255, 0.02)'
           }}
         >
-          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-            Point camera at the QR code on your old phone
-          </span>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="interactive-tap"
+            disabled={isProcessingFile}
+            style={{
+              background: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              borderRadius: '8px',
+              padding: '6px 12px',
+              color: '#38bdf8',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
+          >
+            <Camera size={14} />
+            <span>{isProcessingFile ? 'Scanning...' : 'Snap Photo'}</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setShowManualInput(!showManualInput)}

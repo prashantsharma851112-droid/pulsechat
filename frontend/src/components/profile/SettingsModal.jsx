@@ -8,7 +8,7 @@ import {
   Crown, Lock, Shield, FileText, HelpCircle, RefreshCw, AlertTriangle, Loader2,
   ChevronRight, ArrowLeft, HardDrive, Palette, Info, Mail, Compass, Send, CheckCircle2, MessageSquare,
   Ghost, Search, Volume2, VolumeX, Download, Upload, Database, CheckCircle, KeyRound, QrCode,
-  Camera, Smartphone
+  Camera, Smartphone, Copy
 } from 'lucide-react';
 import { requestNotificationPermission, showPushNotification } from '../../utils/notifications';
 import { playSound } from '../../utils/audio';
@@ -287,6 +287,7 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
   const [transferProgress, setTransferProgress] = useState(null);
   const [showScanner, setShowScanner] = useState(false);
   const [approvalRequest, setApprovalRequest] = useState(null);
+  const [copiedCode, setCopiedCode] = useState(false);
   const cancelSessionRef = useRef(null);
 
   // Countdown timer for active QR code
@@ -950,6 +951,47 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
                 </div>
 
                 <QrCodeView value={qrDisplayData} size={200} />
+
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (qrDisplayData) {
+                        try {
+                          if (navigator.clipboard?.writeText) {
+                            navigator.clipboard.writeText(qrDisplayData);
+                          } else {
+                            const ta = document.createElement('textarea');
+                            ta.value = qrDisplayData;
+                            document.body.appendChild(ta);
+                            ta.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(ta);
+                          }
+                          setCopiedCode(true);
+                          setTimeout(() => setCopiedCode(false), 2000);
+                        } catch (_) {}
+                      }
+                    }}
+                    className="interactive-tap"
+                    style={{
+                      background: copiedCode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                      border: copiedCode ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.15)',
+                      color: copiedCode ? '#10b981' : '#f8fafc',
+                      borderRadius: '8px',
+                      padding: '6px 12px',
+                      fontSize: '0.74rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}
+                  >
+                    {copiedCode ? <Check size={13} /> : <Copy size={13} />}
+                    <span>{copiedCode ? 'Copied Code!' : 'Copy Pairing Code'}</span>
+                  </button>
+                </div>
 
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', maxWidth: '240px' }}>
                   Open PulseChat on your new phone and tap <strong>"Transfer from Old Phone"</strong>
