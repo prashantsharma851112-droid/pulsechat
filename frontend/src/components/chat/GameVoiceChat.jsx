@@ -8,6 +8,8 @@ const RTC_CONFIG = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
     {
       urls: 'turn:openrelay.metered.ca:80',
       username: 'openrelay',
@@ -15,6 +17,11 @@ const RTC_CONFIG = {
     },
     {
       urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelay',
+      credential: 'openrelay'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
       username: 'openrelay',
       credential: 'openrelay'
     }
@@ -32,6 +39,7 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', partnerId = null, comp
   const [isPartnerSpeaking, setIsPartnerSpeaking] = useState(false);
   const [partnerVoiceState, setPartnerVoiceState] = useState({ isConnected: false, isMuted: true, isDeafened: false });
   const [voiceConnected, setVoiceConnected] = useState(false);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
 
   const localStreamRef = useRef(null);
   const remoteStreamRef = useRef(null);
@@ -48,8 +56,11 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', partnerId = null, comp
 
   const myUserId = String(user?.id || user?._id || 'user');
   const myUserName = user?.displayName || user?.username || 'Player';
-  const resolvedPartnerUserId = partnerId || (String(chatId).includes('_')
-    ? String(chatId).split('_').find(id => String(id) !== myUserId)
+  
+  // Safe partner ID resolution (never extract 'couple' or non-user strings)
+  const isCoupleVoice = String(chatId).toLowerCase().startsWith('couple_');
+  const resolvedPartnerUserId = (partnerId && partnerId !== 'couple') ? String(partnerId) : (!isCoupleVoice && String(chatId).includes('_')
+    ? String(chatId).split('_').find(id => String(id) !== myUserId && id !== 'couple')
     : null);
   const targetPeerIdRef = useRef(resolvedPartnerUserId || null);
   const targetSocketIdRef = useRef(null);
@@ -62,7 +73,11 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', partnerId = null, comp
       }
       remoteAudioRef.current.muted = isDeafened;
       remoteAudioRef.current.volume = 1.0;
-      remoteAudioRef.current.play().catch(() => {});
+      const p = remoteAudioRef.current.play();
+      if (p !== undefined) {
+        p.then(() => setAutoplayBlocked(false))
+         .catch(() => setAutoplayBlocked(true));
+      }
     }
     if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
       audioContextRef.current.resume().catch(() => {});
@@ -71,8 +86,8 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', partnerId = null, comp
 
   // 1. Initialize PeerConnection with Pre-allocated Audio Transceiver & Candidate Queuing
   const createPeerConnection = useCallback((targetPeerId) => {
-    if (targetPeerId) {
-      targetPeerIdRef.current = targetPeerId;
+    if (targetPeerId && targetPeerId !== 'couple') {
+      targetPeerIdRef.current = String(targetPeerId);
     }
     if (pcRef.current) {
       try { pcRef.current.close(); } catch (e) {}
@@ -102,12 +117,12 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', partnerId = null, comp
     }
 
     pc.onicecandidate = (event) => {
-      const toId = targetPeerId || targetPeerIdRef.current;
-      if (event.candidate && socket && (toId || targetSocketIdRef.current)) {
+      const toId = (targetPeerIdRef.current && targetPeerIdRef.current !== 'couple') ? targetPeerIdRef.current : (targetPeerId && targetPeerId !== 'couple' ? targetPeerId : null);
+      if (event.candidate && socket && chatId) {
         socket.emit('game_voice_signal', {
           chatId,
           toUserId: toId,
-          toSocketId: targetSocketIdRef.current,
+          toSocketId: targetSocketIdRef.current || null,
           fromUserId: myUserId,
           signal: event.candidate,
           type: 'candidate'
@@ -253,14 +268,20 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', partnerId = null, comp
   const startMicAudio = async () => {
     try {
       ensureAudioPlayback();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        },
-        video: false
-      });
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          },
+          video: false
+        });
+      } catch (err1) {
+        console.warn('Advanced audio constraints failed, trying basic audio fallback:', err1);
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      }
 
       localStreamRef.current = stream;
       setupLocalVAD(stream);
@@ -359,7 +380,7 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', partnerId = null, comp
 
     // When another peer enters the game voice chat, this peer initiates the WebRTC offer
     const handlePeerJoined = async ({ userId, userName, socketId }) => {
-      targetPeerIdRef.current = userId;
+      if (userId && userId !== 'couple') targetPeerIdRef.current = String(userId);
       if (socketId) targetSocketIdRef.current = socketId;
       setPartnerVoiceState(prev => ({ ...prev, isConnected: true }));
       isInitiatorRef.current = true;
@@ -372,7 +393,7 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', partnerId = null, comp
       if (!Array.isArray(peers) || peers.length === 0) return;
       const partner = peers[0];
       if (partner && partner.userId !== myUserId) {
-        targetPeerIdRef.current = partner.userId;
+        if (partner.userId && partner.userId !== 'couple') targetPeerIdRef.current = String(partner.userId);
         if (partner.socketId) targetSocketIdRef.current = partner.socketId;
         setPartnerVoiceState(prev => ({ ...prev, isConnected: true }));
         // Ensure PeerConnection is ready to receive partner's incoming offer
@@ -385,7 +406,7 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', partnerId = null, comp
     // When receiving WebRTC signals (offer / answer / candidate) with Polite-Peer Glare Resolution
     const handleSignal = async ({ fromUserId, fromSocketId, signal, type }) => {
       if (String(fromUserId) === myUserId) return;
-      if (fromUserId) targetPeerIdRef.current = fromUserId;
+      if (fromUserId && fromUserId !== 'couple') targetPeerIdRef.current = String(fromUserId);
       if (fromSocketId) targetSocketIdRef.current = fromSocketId;
       try {
         if (type === 'offer') {
@@ -516,6 +537,34 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', partnerId = null, comp
 
   return (
     <>
+      {autoplayBlocked && (
+        <button
+          type="button"
+          onClick={() => {
+            ensureAudioPlayback();
+            setAutoplayBlocked(false);
+          }}
+          style={{
+            background: 'linear-gradient(135deg, #ef4444, #f97316)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '16px',
+            padding: '5px 12px',
+            fontSize: '0.72rem',
+            fontWeight: 900,
+            cursor: 'pointer',
+            boxShadow: '0 4px 16px rgba(239, 68, 68, 0.6)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            marginRight: '6px'
+          }}
+          title="Tap to unblock partner voice audio"
+        >
+          <Volume2 size={13} /> Unblock Audio
+        </button>
+      )}
+
       {/* WebRTC Remote Audio Player - Off-screen active audio element (Never display: none) */}
       <audio
         ref={remoteAudioRef}

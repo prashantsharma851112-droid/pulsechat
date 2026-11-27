@@ -1,14 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Heart, Sparkles, ShieldCheck, Play, Users, Compass, Flame, Key, Radio } from 'lucide-react';
 import CoupleIsland3DGame from './CoupleIsland3DGame';
 import CoupleMazeQuestGame from './CoupleMazeQuestGame';
 import CoupleDeepHeartsGame from './CoupleDeepHeartsGame';
 
-export default function CoupleGamesHub() {
+export default function CoupleGamesHub({ onGameActiveChange }) {
   const [selectedGame, setSelectedGame] = useState(null); // 'island' | 'maze' | 'hearts'
   const [roomCode, setRoomCode] = useState('');
   const [inputCode, setInputCode] = useState('');
   const [role, setRole] = useState('host');
+
+  // Notify parent modal of active game status for edge-to-edge mobile fullscreen
+  useEffect(() => {
+    if (onGameActiveChange) {
+      onGameActiveChange(Boolean(selectedGame));
+    }
+  }, [selectedGame, onGameActiveChange]);
+
+  // Handle auto-join from URL deep links (?coupleRoom=CODE)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.__pendingCoupleRoomCode) {
+      const code = String(window.__pendingCoupleRoomCode).trim().toUpperCase();
+      window.__pendingCoupleRoomCode = null;
+      if (code) {
+        if (code.startsWith('MAZE')) {
+          launchGame('maze', 'partner', code);
+        } else if (code.startsWith('HEART')) {
+          launchGame('hearts', 'partner', code);
+        } else {
+          launchGame('island', 'partner', code);
+        }
+      }
+    }
+  }, []);
 
   const launchGame = (gameId, asRole = 'host', customCode = '') => {
     setSelectedGame(gameId);

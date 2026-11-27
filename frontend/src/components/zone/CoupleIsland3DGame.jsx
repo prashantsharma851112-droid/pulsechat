@@ -19,7 +19,11 @@ import {
   Eye,
   Camera,
   Flame,
-  Award
+  Award,
+  Share2,
+  MessageSquare,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 // =========================================================================
@@ -108,6 +112,8 @@ export default function CoupleIsland3DGame({
   const [inputCode, setInputCode] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionError, setConnectionError] = useState('');
+  const [toastMessage, setToastMessage] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Adventure Quests & In-Game State
   const [crystalsCount, setCrystalsCount] = useState(0);
@@ -122,8 +128,75 @@ export default function CoupleIsland3DGame({
 
   // Real-time synchronization refs
   const localPosRef = useRef({ x: 0, y: 1.2, z: 0, rot: 0, isMoving: false, isJumping: false });
-  const remotePosRef = useRef({ x: 2, y: 1.2, z: 2, rot: 0, isMoving: false, isJumping: false });
+  const remotePosRef = useRef({ x: 2, y: 1.2, z: 2, rot: 0, isMoving: false, isJumping: false, partnerName: '' });
   const lastSyncTimeRef = useRef(0);
+  const roomCodeRef = useRef(roomCode);
+  const partnerNameRef = useRef(partner?.name || '');
+
+  useEffect(() => {
+    roomCodeRef.current = roomCode;
+  }, [roomCode]);
+
+  useEffect(() => {
+    partnerNameRef.current = partner?.name || '';
+  }, [partner]);
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3000);
+  };
+
+  const getShareUrl = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${origin}?coupleRoom=${roomCode}`;
+  };
+
+  const handleShareLink = async () => {
+    if (!roomCode) return;
+    const url = getShareUrl();
+    const text = `🎮 Join my Couple Adventure on PulseChat!\nRoom Code: ${roomCode}\n👉 ${url}`;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: 'PulseChat Couple Adventure',
+          text,
+          url
+        });
+        showToast('Shared successfully!');
+      } catch (e) {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(url);
+          showToast('Direct join link copied to clipboard!');
+        }
+      }
+    } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(url);
+      showToast('Direct join link copied to clipboard!');
+    }
+  };
+
+  const handleShareInChat = () => {
+    if (!roomCode) return;
+    const url = getShareUrl();
+    const inviteMsg = `🎮 Join my Couple Adventure in PulseChat!\nRoom Code: ${roomCode}\n👉 ${url}`;
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(inviteMsg);
+      showToast('Chat invitation copied! Paste in any chat 💬');
+    }
+  };
+
+  const toggleFullscreen = () => {
+    if (typeof document === 'undefined') return;
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      }).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => {
+        setIsFullscreen(false);
+      }).catch(() => {});
+    }
+  };
 
   // Initialize native audio synthesizer
   useEffect(() => {
@@ -137,21 +210,42 @@ export default function CoupleIsland3DGame({
   useEffect(() => {
     if (!socket) return;
 
-    if (!roomCode && initialRole === 'host') {
-      const generatedCode = 'LOVE-' + Math.floor(1000 + Math.random() * 9000);
+    const myUser = {
+      id: user?.id || user?._id || (initialRole === 'host' ? 'host' : 'partner'),
+      name: user?.displayName || user?.username || (initialRole === 'host' ? 'Partner 1' : 'Partner 2'),
+      avatar: user?.avatar || '',
+      color: initialRole === 'host' ? '#38bdf8' : '#ec4899'
+    };
+
+    const targetCode = roomCode || initialRoomCode || ('LOVE-' + Math.floor(1000 + Math.random() * 9000));
+    setRoomCode(targetCode);
+
+    if (initialRole === 'host') {
       socket.emit('couple_room_create', {
-        roomCode: generatedCode,
+        roomCode: targetCode,
         gameType: 'island3d',
-        user: {
-          id: user?.id || user?._id || 'host',
-          name: user?.displayName || user?.username || 'Partner 1',
-          avatar: user?.avatar || '',
-          color: '#38bdf8'
-        }
+        user: myUser
       }, (res) => {
         if (res && res.success) {
           setRoomCode(res.roomCode);
           setRole('host');
+          if (res.roomData?.partner) {
+            setPartner(res.roomData.partner);
+          }
+        }
+      });
+    } else {
+      socket.emit('couple_room_join', {
+        roomCode: targetCode,
+        user: myUser
+      }, (res) => {
+        if (res && res.success) {
+          setRoomCode(res.roomCode);
+          setRole('partner');
+          if (res.roomData?.host) {
+            setPartner(res.roomData.host);
+          }
+          playSound('success');
         }
       });
     }
@@ -174,6 +268,11 @@ export default function CoupleIsland3DGame({
           ...remotePosRef.current,
           ...playerState
         };
+        // Ensure partner presence is recognized immediately
+        setPartner(prev => prev || {
+          id: senderRole === 'host' ? 'host' : 'partner',
+          name: senderRole === 'host' ? 'Partner 1' : 'Partner 2'
+        });
       }
     };
 
@@ -210,11 +309,17 @@ export default function CoupleIsland3DGame({
       socket.off('couple_player_updated', handlePlayerUpdated);
       socket.off('couple_action_received', handleActionReceived);
       socket.off('couple_partner_left', handlePartnerLeft);
-      if (roomCode) {
-        socket.emit('couple_room_leave', { roomCode });
+    };
+  }, [socket, initialRole]);
+
+  // Clean unmount-only room leave
+  useEffect(() => {
+    return () => {
+      if (socket && roomCodeRef.current) {
+        socket.emit('couple_room_leave', { roomCode: roomCodeRef.current });
       }
     };
-  }, [socket, user, roomCode, role, initialRole]);
+  }, [socket]);
 
   // Join Room by Code
   const handleJoinByCode = () => {
@@ -542,6 +647,40 @@ export default function CoupleIsland3DGame({
 
     const localAvatar = createPlayerAvatar(localColor, true);
     const remoteAvatar = createPlayerAvatar(remoteColor, false);
+
+    // 3D Nametag for Partner Avatar
+    const createNametagTexture = (nameText) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(8, 8, 240, 48, 14);
+      } else {
+        ctx.rect(8, 8, 240, 48);
+      }
+      ctx.fill();
+      ctx.strokeStyle = '#ec4899';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.font = 'bold 22px system-ui, -apple-system, sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(nameText, 128, 32);
+      return new THREE.CanvasTexture(canvas);
+    };
+
+    const nametagMat = new THREE.SpriteMaterial({
+      map: createNametagTexture(partnerNameRef.current || (role === 'host' ? 'Partner 2' : 'Partner 1')),
+      transparent: true
+    });
+    const remoteNametagSprite = new THREE.Sprite(nametagMat);
+    remoteNametagSprite.scale.set(2.8, 0.7, 1);
+    remoteNametagSprite.position.y = 3.35;
+    remoteAvatar.group.add(remoteNametagSprite);
 
     // Initial Positions
     localAvatar.group.position.set(role === 'host' ? -2 : 2, 3.0, 0);
@@ -917,8 +1056,8 @@ export default function CoupleIsland3DGame({
         zIndex: 50,
         pointerEvents: 'none'
       }}>
-        {/* Left: Back button + Room Pill */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'auto' }}>
+        {/* Left: Back button + Room Pill + Share Buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', pointerEvents: 'auto', flexWrap: 'wrap' }}>
           <button
             onClick={onBack}
             style={{
@@ -941,30 +1080,95 @@ export default function CoupleIsland3DGame({
           </button>
 
           {roomCode && (
-            <button
-              onClick={copyRoomCode}
-              title="Tap to copy Couple Room Code"
-              style={{
-                background: 'linear-gradient(135deg, rgba(244, 63, 94, 0.25) 0%, rgba(236, 72, 153, 0.25) 100%)',
-                border: '1.5px solid rgba(244, 63, 94, 0.6)',
-                color: '#fff',
-                borderRadius: '12px',
-                padding: '6px 12px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '0.78rem',
-                fontWeight: 900,
-                backdropFilter: 'blur(8px)',
-                boxShadow: '0 4px 12px rgba(244, 63, 94, 0.3)'
-              }}
-            >
-              <Heart size={14} color="#f43f5e" fill="#f43f5e" />
-              <span>{roomCode}</span>
-              {copiedCode ? <Check size={14} color="#34d399" /> : <Copy size={13} color="#fbcfe8" />}
-            </button>
+            <>
+              <button
+                onClick={copyRoomCode}
+                title="Tap to copy Couple Room Code"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(244, 63, 94, 0.25) 0%, rgba(236, 72, 153, 0.25) 100%)',
+                  border: '1.5px solid rgba(244, 63, 94, 0.6)',
+                  color: '#fff',
+                  borderRadius: '12px',
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  fontSize: '0.78rem',
+                  fontWeight: 900,
+                  backdropFilter: 'blur(8px)',
+                  boxShadow: '0 4px 12px rgba(244, 63, 94, 0.3)'
+                }}
+              >
+                <Heart size={13} color="#f43f5e" fill="#f43f5e" />
+                <span>{roomCode}</span>
+                {copiedCode ? <Check size={13} color="#34d399" /> : <Copy size={12} color="#fbcfe8" />}
+              </button>
+
+              <button
+                onClick={handleShareLink}
+                title="Share Direct Link (WhatsApp, Instagram, etc.)"
+                style={{
+                  background: 'rgba(56, 189, 248, 0.2)',
+                  border: '1.5px solid rgba(56, 189, 248, 0.6)',
+                  color: '#38bdf8',
+                  borderRadius: '12px',
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.76rem',
+                  fontWeight: 800,
+                  backdropFilter: 'blur(8px)'
+                }}
+              >
+                <Share2 size={13} />
+                <span>Share Link</span>
+              </button>
+
+              <button
+                onClick={handleShareInChat}
+                title="Copy Chat Invite"
+                style={{
+                  background: 'rgba(168, 85, 247, 0.2)',
+                  border: '1.5px solid rgba(168, 85, 247, 0.6)',
+                  color: '#c084fc',
+                  borderRadius: '12px',
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.76rem',
+                  fontWeight: 800,
+                  backdropFilter: 'blur(8px)'
+                }}
+              >
+                <MessageSquare size={13} />
+                <span>Chat</span>
+              </button>
+            </>
           )}
+
+          <button
+            onClick={toggleFullscreen}
+            title="Toggle Fullscreen"
+            style={{
+              background: 'rgba(15, 23, 42, 0.85)',
+              border: '1.5px solid rgba(255, 255, 255, 0.2)',
+              color: '#fff',
+              borderRadius: '12px',
+              padding: '6px 9px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backdropFilter: 'blur(8px)'
+            }}
+          >
+            {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
         </div>
 
         {/* Center/Right: Free Fire Style Live WebRTC Voice Chat HUD */}
@@ -1196,6 +1400,28 @@ export default function CoupleIsland3DGame({
         </div>
       </div>
 
+      {/* TOAST NOTIFICATION */}
+      {toastMessage && (
+        <div style={{
+          position: 'absolute',
+          top: '64px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'linear-gradient(135deg, #059669, #10b981)',
+          color: '#fff',
+          padding: '8px 20px',
+          borderRadius: '24px',
+          fontWeight: 800,
+          fontSize: '0.84rem',
+          zIndex: 100,
+          boxShadow: '0 8px 25px rgba(16, 185, 129, 0.6)',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap'
+        }}>
+          {toastMessage}
+        </div>
+      )}
+
       {/* ROOM PAIRING OVERLAY (When Partner is not connected yet) */}
       {!partner && (
         <div style={{
@@ -1203,23 +1429,67 @@ export default function CoupleIsland3DGame({
           bottom: '80px',
           left: '50%',
           transform: 'translateX(-50%)',
-          background: 'rgba(15, 23, 42, 0.92)',
-          border: '1.5px solid rgba(244, 63, 94, 0.4)',
-          borderRadius: '16px',
-          padding: '12px 18px',
+          background: 'rgba(15, 23, 42, 0.94)',
+          border: '1.5px solid rgba(244, 63, 94, 0.5)',
+          borderRadius: '18px',
+          padding: '14px 18px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: '8px',
+          gap: '10px',
           zIndex: 45,
-          backdropFilter: 'blur(10px)',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
-          maxWidth: '360px',
-          width: '90%'
+          backdropFilter: 'blur(12px)',
+          boxShadow: '0 12px 35px rgba(0,0,0,0.7)',
+          maxWidth: '380px',
+          width: '92%'
         }}>
-          <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#fbcfe8', textAlign: 'center' }}>
-            💌 Share code with your partner to explore together!
+          <div style={{ fontSize: '0.86rem', fontWeight: 900, color: '#fbcfe8', textAlign: 'center' }}>
+            💌 Share with your partner to explore together!
           </div>
+
+          <div style={{ display: 'flex', gap: '8px', width: '100%', justifyContent: 'center' }}>
+            <button
+              onClick={handleShareLink}
+              style={{
+                flex: 1,
+                background: 'linear-gradient(135deg, #0284c7, #38bdf8)',
+                border: 'none',
+                color: '#fff',
+                borderRadius: '12px',
+                padding: '8px 10px',
+                fontSize: '0.78rem',
+                fontWeight: 900,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px'
+              }}
+            >
+              <Share2 size={14} /> Share Link
+            </button>
+            <button
+              onClick={handleShareInChat}
+              style={{
+                flex: 1,
+                background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
+                border: 'none',
+                color: '#fff',
+                borderRadius: '12px',
+                padding: '8px 10px',
+                fontSize: '0.78rem',
+                fontWeight: 900,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px'
+              }}
+            >
+              <MessageSquare size={14} /> In Chat
+            </button>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
             <input
               type="text"

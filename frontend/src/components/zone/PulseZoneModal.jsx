@@ -270,7 +270,13 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
   useBackHandler(onClose, true);
   const { user, token, updateUserProfile } = useContext(AuthContext);
   const { socket } = useContext(SocketContext);
-  const [activeTab, setActiveTab] = useState('games'); // 'games' | 'leaderboard'
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined' && window.__pendingCoupleRoomCode) {
+      return 'couples';
+    }
+    return 'games';
+  });
+  const [isCoupleGameActive, setIsCoupleGameActive] = useState(false);
   const [selectedGame, setSelectedGame] = useState(null); // null = games launcher hub, 'racer' | 'arrow' | 'tapper'
 
   // Speed Tapper Game State
@@ -538,7 +544,22 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
       <div
         className="modal-card modal-responsive"
         onClick={(e) => e.stopPropagation()}
-        style={{
+        style={isCoupleGameActive ? {
+          position: 'fixed',
+          inset: 0,
+          width: '100vw',
+          height: '100dvh',
+          maxHeight: '100dvh',
+          maxWidth: '100vw',
+          display: 'flex',
+          flexDirection: 'column',
+          borderRadius: 0,
+          margin: 0,
+          padding: 0,
+          border: 'none',
+          background: '#090d16',
+          zIndex: 9999
+        } : {
           maxWidth: (activeTab === 'couples' || selectedGame === 'temple' || selectedGame === 'racer' || selectedGame === 'draw' || selectedGame === 'chess') ? '960px' : (selectedGame === 'candy' ? '580px' : (selectedPlayerId ? '580px' : '540px')),
           width: '100%',
           maxHeight: '94dvh',
@@ -551,122 +572,124 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
           boxShadow: '0 20px 50px rgba(0,0,0,0.6), 0 0 30px rgba(245, 158, 11, 0.18)'
         }}
       >
-        {/* Banner Header */}
-        <div style={{
-          padding: '18px 18px 14px 18px',
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311042 100%)',
-          borderBottom: '1px solid rgba(255, 215, 0, 0.2)',
-          color: '#fff',
-          flexShrink: 0
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '12px',
-                background: 'linear-gradient(135deg, #2563eb, #3b82f6)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 15px rgba(37, 99, 235, 0.5)'
-              }}>
-                <Gamepad2 size={22} color="#fff" />
-              </div>
-              <div>
-                <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  Pulse Zone <span style={{ color: '#fbbf24' }}>🎮</span>
-                </h2>
-              </div>
-            </div>
-            <button className="icon-btn-ghost" onClick={onClose} style={{ color: '#fff', background: 'rgba(0,0,0,0.3)', borderRadius: '50%' }}>
-              <X size={18} />
-            </button>
-          </div>
-
-          {/* Navigation Tabs */}
+        {/* Banner Header - Hidden when playing couple adventure game for immersive edge-to-edge gameplay */}
+        {!isCoupleGameActive && (
           <div style={{
-            display: 'flex',
-            gap: '6px',
-            background: 'rgba(0,0,0,0.35)',
-            padding: '4px',
-            borderRadius: '14px'
+            padding: '18px 18px 14px 18px',
+            background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311042 100%)',
+            borderBottom: '1px solid rgba(255, 215, 0, 0.2)',
+            color: '#fff',
+            flexShrink: 0
           }}>
-            <button
-              onClick={() => { setActiveTab('games'); setSelectedPlayerId(null); }}
-              style={{
-                flex: 1,
-                padding: '8px',
-                borderRadius: '10px',
-                border: 'none',
-                background: activeTab === 'games' ? 'linear-gradient(90deg, #2563eb, #3b82f6)' : 'transparent',
-                color: activeTab === 'games' ? '#fff' : 'rgba(255,255,255,0.7)',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '5px'
-              }}
-            >
-              <Gamepad2 size={15} /> Mini-Games
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #2563eb, #3b82f6)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 15px rgba(37, 99, 235, 0.5)'
+                }}>
+                  <Gamepad2 size={22} color="#fff" />
+                </div>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    Pulse Zone <span style={{ color: '#fbbf24' }}>🎮</span>
+                  </h2>
+                </div>
+              </div>
+              <button className="icon-btn-ghost" onClick={onClose} style={{ color: '#fff', background: 'rgba(0,0,0,0.3)', borderRadius: '50%' }}>
+                <X size={18} />
+              </button>
+            </div>
 
-            <button
-              onClick={() => { setActiveTab('couples'); setSelectedPlayerId(null); setSelectedGame(null); }}
-              style={{
-                flex: 1,
-                padding: '8px',
-                borderRadius: '10px',
-                border: 'none',
-                background: activeTab === 'couples' ? 'linear-gradient(90deg, #f43f5e, #ec4899)' : 'transparent',
-                color: activeTab === 'couples' ? '#fff' : 'rgba(255,255,255,0.7)',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '5px'
-              }}
-            >
-              <Heart size={15} color={activeTab === 'couples' ? '#fff' : '#f43f5e'} fill={activeTab === 'couples' ? '#fff' : '#f43f5e'} /> Couples 💖
-            </button>
+            {/* Navigation Tabs */}
+            <div style={{
+              display: 'flex',
+              gap: '6px',
+              background: 'rgba(0,0,0,0.35)',
+              padding: '4px',
+              borderRadius: '14px'
+            }}>
+              <button
+                onClick={() => { setActiveTab('games'); setSelectedPlayerId(null); }}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: activeTab === 'games' ? 'linear-gradient(90deg, #2563eb, #3b82f6)' : 'transparent',
+                  color: activeTab === 'games' ? '#fff' : 'rgba(255,255,255,0.7)',
+                  fontWeight: 800,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '5px'
+                }}
+              >
+                <Gamepad2 size={15} /> Mini-Games
+              </button>
 
-            <button
-              onClick={() => {
-                setActiveTab('leaderboard');
-                setSelectedPlayerId(null);
-                fetchLeaderboard(leaderboardCategoryRef.current);
-              }}
-              style={{
-                flex: 1,
-                padding: '8px',
-                borderRadius: '10px',
-                border: 'none',
-                background: activeTab === 'leaderboard' ? 'linear-gradient(90deg, #6366f1, #a855f7)' : 'transparent',
-                color: activeTab === 'leaderboard' ? '#fff' : 'rgba(255,255,255,0.7)',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '5px'
-              }}
-            >
-              <Trophy size={15} /> Leaderboard
-            </button>
+              <button
+                onClick={() => { setActiveTab('couples'); setSelectedPlayerId(null); setSelectedGame(null); }}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: activeTab === 'couples' ? 'linear-gradient(90deg, #f43f5e, #ec4899)' : 'transparent',
+                  color: activeTab === 'couples' ? '#fff' : 'rgba(255,255,255,0.7)',
+                  fontWeight: 800,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '5px'
+                }}
+              >
+                <Heart size={15} color={activeTab === 'couples' ? '#fff' : '#f43f5e'} fill={activeTab === 'couples' ? '#fff' : '#f43f5e'} /> Couples 💖
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('leaderboard');
+                  setSelectedPlayerId(null);
+                  fetchLeaderboard(leaderboardCategoryRef.current);
+                }}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: activeTab === 'leaderboard' ? 'linear-gradient(90deg, #6366f1, #a855f7)' : 'transparent',
+                  color: activeTab === 'leaderboard' ? '#fff' : 'rgba(255,255,255,0.7)',
+                  fontWeight: 800,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '5px'
+                }}
+              >
+                <Trophy size={15} /> Leaderboard
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Tab Body */}
         <div style={{
-          padding: '14px',
+          padding: isCoupleGameActive ? 0 : '14px',
           flex: 1,
           minHeight: 0,
-          overflowY: 'auto',
+          overflowY: isCoupleGameActive ? 'hidden' : 'auto',
           overflowX: 'hidden',
           WebkitOverflowScrolling: 'touch',
           willChange: 'scroll-position',
@@ -1187,7 +1210,7 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
                 <span>Loading Couples Zone...</span>
               </div>
             }>
-              <CoupleGamesHub />
+              <CoupleGamesHub onGameActiveChange={setIsCoupleGameActive} />
             </Suspense>
           )}
         </div>

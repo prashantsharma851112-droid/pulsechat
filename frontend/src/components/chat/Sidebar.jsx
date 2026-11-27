@@ -603,6 +603,17 @@ export default function Sidebar({ activeChat, setActiveChat, openProfileModal, o
   const scrollEndTimerRef = useRef(null);
 
   useEffect(() => {
+    const handleOpenCoupleRoom = (e) => {
+      setShowPulseZone(true);
+      if (e.detail?.roomCode) {
+        window.__pendingCoupleRoomCode = e.detail.roomCode;
+      }
+    };
+    window.addEventListener('pulsechat_open_couple_room', handleOpenCoupleRoom);
+    return () => window.removeEventListener('pulsechat_open_couple_room', handleOpenCoupleRoom);
+  }, []);
+
+  useEffect(() => {
     const handleLockUpdated = () => {
       setLockedChatIdsState(getLockedChats());
       setHiddenChatIdsState(getHiddenLockedChats());

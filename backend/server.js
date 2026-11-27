@@ -3607,9 +3607,21 @@ io.on('connection', (socket) => {
   // =========================================================================
   // REAL-TIME IN-GAME VOICE CHAT (FREE FIRE / DISCORD GAMING MIC & AUDIO)
   // =========================================================================
+  const getCanonicalVoiceRoom = (chatId) => {
+    if (!chatId) return '';
+    const str = String(chatId).trim();
+    if (str.toLowerCase().startsWith('couple_')) {
+      return str.toUpperCase();
+    }
+    if (str.includes('_') && str.split('_').length === 2 && !str.startsWith('group_')) {
+      return str.split('_').sort().join('_');
+    }
+    return str;
+  };
+
   socket.on('game_voice_join', ({ chatId, userId, userName, userAvatar }) => {
     if (!chatId || !userId) return;
-    const canonicalChatId = String(chatId).includes('_') ? String(chatId).split('_').sort().join('_') : String(chatId);
+    const canonicalChatId = getCanonicalVoiceRoom(chatId);
     const room = `game_voice_${canonicalChatId}`;
     socket.join(room);
     if (room !== `game_voice_${chatId}`) {
@@ -3646,7 +3658,7 @@ io.on('connection', (socket) => {
 
   socket.on('game_voice_signal', ({ chatId, toUserId, fromUserId, signal, type, toSocketId }) => {
     if (!chatId) return;
-    const canonical = String(chatId).includes('_') ? String(chatId).split('_').sort().join('_') : String(chatId);
+    const canonical = getCanonicalVoiceRoom(chatId);
     const payload = {
       fromUserId: String(fromUserId || socket.gameVoiceUserId || ''),
       fromSocketId: socket.id,
@@ -3654,19 +3666,20 @@ io.on('connection', (socket) => {
       type
     };
 
+    // Always broadcast to the room so all peers in this voice room receive it
+    socket.to(`game_voice_${canonical}`).to(`game_voice_${chatId}`).emit('game_voice_signal', payload);
+
     if (toSocketId && io.sockets.sockets.has(toSocketId)) {
       io.to(toSocketId).emit('game_voice_signal', payload);
-    } else {
-      socket.to(`game_voice_${canonical}`).to(`game_voice_${chatId}`).emit('game_voice_signal', payload);
-      if (toUserId) {
-        io.to(`user_${toUserId}`).to(String(toUserId)).emit('game_voice_signal', payload);
-      }
+    }
+    if (toUserId && toUserId !== 'couple' && toUserId !== 'null' && toUserId !== 'undefined') {
+      io.to(`user_${toUserId}`).to(String(toUserId)).emit('game_voice_signal', payload);
     }
   });
 
   socket.on('game_voice_state', ({ chatId, userId, isMuted, isDeafened }) => {
     if (!chatId) return;
-    const canonical = String(chatId).includes('_') ? String(chatId).split('_').sort().join('_') : String(chatId);
+    const canonical = getCanonicalVoiceRoom(chatId);
     const room = `game_voice_${canonical}`;
     socket.to(room).to(`game_voice_${chatId}`).emit('game_voice_state_changed', {
       userId,
@@ -3677,7 +3690,7 @@ io.on('connection', (socket) => {
 
   socket.on('game_voice_leave', ({ chatId, userId }) => {
     if (!chatId) return;
-    const canonical = String(chatId).includes('_') ? String(chatId).split('_').sort().join('_') : String(chatId);
+    const canonical = getCanonicalVoiceRoom(chatId);
     const room = `game_voice_${canonical}`;
     socket.leave(room);
     socket.leave(`game_voice_${chatId}`);
@@ -3691,11 +3704,6 @@ io.on('connection', (socket) => {
     try {
       const code = String(roomCode || Math.floor(100000 + Math.random() * 900000)).trim().toUpperCase();
       const existing = ephemeralCoupleRooms.get(code);
-      if (existing && existing.host && existing.host.socketId !== socket.id) {
-        const err = { success: false, message: 'Room code already in use' };
-        if (typeof callback === 'function') callback(err);
-        return socket.emit('couple_room_error', err);
-      }
 
       const roomData = {
         roomCode: code,
@@ -3707,8 +3715,8 @@ io.on('connection', (socket) => {
           color: userInfo?.color || '#38bdf8',
           socketId: socket.id
         },
-        partner: null,
-        state: {
+        partner: existing ? existing.partner : null,
+        state: existing ? existing.state : {
           crystalsCollected: 0,
           dualPadsActive: false,
           bridgeUnlocked: false,
@@ -3726,6 +3734,17 @@ io.on('connection', (socket) => {
       const res = { success: true, roomCode: code, roomData, role: 'host' };
       if (typeof callback === 'function') callback(res);
       socket.emit('couple_room_created', res);
+
+      // If partner was already waiting in room, emit ready
+      if (roomData.partner) {
+        io.to(`couple_room_${code}`).emit('couple_room_ready', {
+          roomCode: code,
+          gameType: roomData.gameType,
+          host: roomData.host,
+          partner: roomData.partner,
+          state: roomData.state
+        });
+      }
     } catch (e) {
       if (typeof callback === 'function') callback({ success: false, message: e.message });
     }
@@ -3734,15 +3753,43 @@ io.on('connection', (socket) => {
   socket.on('couple_room_join', ({ roomCode, user: userInfo }, callback) => {
     try {
       const code = String(roomCode || '').trim().toUpperCase();
-      const roomData = ephemeralCoupleRooms.get(code);
+      let roomData = ephemeralCoupleRooms.get(code);
+      
+      const myId = String(userInfo?.id || socket.userId || 'partner');
+
       if (!roomData) {
-        const err = { success: false, message: 'Couple Room not found or has expired.' };
-        if (typeof callback === 'function') callback(err);
-        return socket.emit('couple_room_error', err);
+        // If room does not exist yet (e.g. partner entered code first), create placeholder room
+        roomData = {
+          roomCode: code,
+          gameType: 'island3d',
+          host: null,
+          partner: {
+            id: myId,
+            name: userInfo?.name || userInfo?.displayName || userInfo?.username || 'Partner 2',
+            avatar: userInfo?.avatar || '',
+            color: userInfo?.color || '#ec4899',
+            socketId: socket.id
+          },
+          state: {
+            crystalsCollected: 0,
+            dualPadsActive: false,
+            bridgeUnlocked: false,
+            currentQuestionIdx: 0,
+            questStep: 1
+          },
+          createdAt: Date.now()
+        };
+        ephemeralCoupleRooms.set(code, roomData);
+        socket.coupleRoomCode = code;
+        socket.coupleRole = 'partner';
+        socket.join(`couple_room_${code}`);
+        const res = { success: true, roomCode: code, roomData, role: 'partner', waitingForHost: true };
+        if (typeof callback === 'function') callback(res);
+        return;
       }
 
-      const partnerId = String(userInfo?.id || socket.userId || 'partner');
-      if (roomData.host && roomData.host.id === partnerId && roomData.host.socketId === socket.id) {
+      if (roomData.host && roomData.host.id === myId) {
+        roomData.host.socketId = socket.id;
         socket.coupleRoomCode = code;
         socket.coupleRole = 'host';
         socket.join(`couple_room_${code}`);
@@ -3751,7 +3798,7 @@ io.on('connection', (socket) => {
       }
 
       roomData.partner = {
-        id: partnerId,
+        id: myId,
         name: userInfo?.name || userInfo?.displayName || userInfo?.username || 'Partner 2',
         avatar: userInfo?.avatar || '',
         color: userInfo?.color || '#ec4899',

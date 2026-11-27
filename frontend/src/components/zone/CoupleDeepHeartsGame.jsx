@@ -14,7 +14,11 @@ import {
   Check,
   Smile,
   Compass,
-  Award
+  Award,
+  Share2,
+  MessageSquare,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 const DECKS = {
@@ -85,31 +89,104 @@ export default function CoupleDeepHeartsGame({
   const [role, setRole] = useState(initialRole || 'host');
   const [partner, setPartner] = useState(initialPartner || null);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [activeCategory, setActiveCategory] = useState('spark');
   const [cardIndex, setCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [syncCount, setSyncCount] = useState(0);
 
+  const roomCodeRef = useRef(roomCode);
+  useEffect(() => {
+    roomCodeRef.current = roomCode;
+  }, [roomCode]);
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3000);
+  };
+
+  const getShareUrl = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${origin}?coupleRoom=${roomCode}`;
+  };
+
+  const handleShareLink = async () => {
+    if (!roomCode) return;
+    const url = getShareUrl();
+    const text = `🎮 Join my Deep Hearts Game on PulseChat!\nRoom Code: ${roomCode}\n👉 ${url}`;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: 'PulseChat Deep Hearts', text, url });
+        showToast('Shared successfully!');
+      } catch (e) {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(url);
+          showToast('Direct link copied to clipboard!');
+        }
+      }
+    } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(url);
+      showToast('Direct link copied to clipboard!');
+    }
+  };
+
+  const handleShareInChat = () => {
+    if (!roomCode) return;
+    const url = getShareUrl();
+    const inviteMsg = `🎮 Join my Deep Hearts Game in PulseChat!\nRoom Code: ${roomCode}\n👉 ${url}`;
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(inviteMsg);
+      showToast('Chat invitation copied! Paste in any chat 💬');
+    }
+  };
+
+  const toggleFullscreen = () => {
+    if (typeof document === 'undefined') return;
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  };
+
   // Lifecycle
   useEffect(() => {
     if (!socket) return;
 
-    if (!roomCode && initialRole === 'host') {
-      const code = 'HEART-' + Math.floor(1000 + Math.random() * 9000);
+    const myUser = {
+      id: user?.id || user?._id || (initialRole === 'host' ? 'host' : 'partner'),
+      name: user?.displayName || user?.username || (initialRole === 'host' ? 'Partner 1' : 'Partner 2'),
+      avatar: user?.avatar || '',
+      color: '#ec4899'
+    };
+
+    const targetCode = roomCode || initialRoomCode || ('HEART-' + Math.floor(1000 + Math.random() * 9000));
+    setRoomCode(targetCode);
+
+    if (initialRole === 'host') {
       socket.emit('couple_room_create', {
-        roomCode: code,
+        roomCode: targetCode,
         gameType: 'deep_hearts',
-        user: {
-          id: user?.id || user?._id || 'host',
-          name: user?.displayName || user?.username || 'Partner 1',
-          avatar: user?.avatar || '',
-          color: '#ec4899'
-        }
+        user: myUser
       }, (res) => {
         if (res && res.success) {
           setRoomCode(res.roomCode);
           setRole('host');
+          if (res.roomData?.partner) setPartner(res.roomData.partner);
+        }
+      });
+    } else {
+      socket.emit('couple_room_join', {
+        roomCode: targetCode,
+        user: myUser
+      }, (res) => {
+        if (res && res.success) {
+          setRoomCode(res.roomCode);
+          setRole('partner');
+          if (res.roomData?.host) setPartner(res.roomData.host);
+          playSound('success');
         }
       });
     }
@@ -144,9 +221,17 @@ export default function CoupleDeepHeartsGame({
       socket.off('couple_room_ready', handleRoomReady);
       socket.off('couple_action_received', handleActionReceived);
       socket.off('couple_partner_left', handlePartnerLeft);
-      if (roomCode) socket.emit('couple_room_leave', { roomCode });
     };
-  }, [socket, user, roomCode, role, initialRole]);
+  }, [socket, initialRole]);
+
+  // Clean unmount-only room leave
+  useEffect(() => {
+    return () => {
+      if (socket && roomCodeRef.current) {
+        socket.emit('couple_room_leave', { roomCode: roomCodeRef.current });
+      }
+    };
+  }, [socket]);
 
   const selectDeck = (deckKey) => {
     setActiveCategory(deckKey);
@@ -224,7 +309,7 @@ export default function CoupleDeepHeartsGame({
         borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
         background: 'rgba(15, 23, 42, 0.9)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           <button
             onClick={onBack}
             style={{
@@ -244,27 +329,90 @@ export default function CoupleDeepHeartsGame({
             <ArrowLeft size={16} /> Exit
           </button>
           {roomCode && (
-            <button
-              onClick={copyRoomCode}
-              style={{
-                background: 'rgba(244, 63, 94, 0.2)',
-                border: '1px solid rgba(244, 63, 94, 0.5)',
-                color: '#fbcfe8',
-                borderRadius: '10px',
-                padding: '6px 10px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '0.75rem',
-                fontWeight: 900
-              }}
-            >
-              <Heart size={13} color="#f43f5e" fill="#f43f5e" />
-              {roomCode}
-              {copiedCode ? <Check size={13} color="#34d399" /> : <Copy size={12} />}
-            </button>
+            <>
+              <button
+                onClick={copyRoomCode}
+                title="Tap to copy Room Code"
+                style={{
+                  background: 'rgba(244, 63, 94, 0.2)',
+                  border: '1px solid rgba(244, 63, 94, 0.5)',
+                  color: '#fbcfe8',
+                  borderRadius: '10px',
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  fontSize: '0.75rem',
+                  fontWeight: 900
+                }}
+              >
+                <Heart size={13} color="#f43f5e" fill="#f43f5e" />
+                {roomCode}
+                {copiedCode ? <Check size={13} color="#34d399" /> : <Copy size={12} />}
+              </button>
+
+              <button
+                onClick={handleShareLink}
+                title="Share Direct Link"
+                style={{
+                  background: 'rgba(56, 189, 248, 0.2)',
+                  border: '1px solid rgba(56, 189, 248, 0.5)',
+                  color: '#38bdf8',
+                  borderRadius: '10px',
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.75rem',
+                  fontWeight: 800
+                }}
+              >
+                <Share2 size={13} />
+                <span>Link</span>
+              </button>
+
+              <button
+                onClick={handleShareInChat}
+                title="Copy Chat Invitation"
+                style={{
+                  background: 'rgba(168, 85, 247, 0.2)',
+                  border: '1px solid rgba(168, 85, 247, 0.5)',
+                  color: '#c084fc',
+                  borderRadius: '10px',
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.75rem',
+                  fontWeight: 800
+                }}
+              >
+                <MessageSquare size={13} />
+                <span>Chat</span>
+              </button>
+            </>
           )}
+
+          <button
+            onClick={toggleFullscreen}
+            title="Toggle Fullscreen"
+            style={{
+              background: 'rgba(255, 255, 255, 0.1)',
+              border: 'none',
+              color: '#fff',
+              borderRadius: '10px',
+              padding: '6px 9px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
         </div>
 
         {/* Free Fire Style Voice Chat HUD */}
@@ -279,6 +427,28 @@ export default function CoupleDeepHeartsGame({
           )}
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div style={{
+          position: 'absolute',
+          top: '56px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'linear-gradient(135deg, #059669, #10b981)',
+          color: '#fff',
+          padding: '6px 18px',
+          borderRadius: '20px',
+          fontWeight: 800,
+          fontSize: '0.8rem',
+          zIndex: 100,
+          boxShadow: '0 8px 20px rgba(16, 185, 129, 0.5)',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap'
+        }}>
+          {toastMessage}
+        </div>
+      )}
 
       {/* 4 Deck Category Tabs */}
       <div style={{

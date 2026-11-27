@@ -588,8 +588,15 @@ export default function App() {
     const openChat = urlParams.get('openChat');
     const senderId = urlParams.get('senderId');
     const isGroup = urlParams.get('isGroup') === '1' || urlParams.get('isGroup') === 'true';
+    const coupleRoom = urlParams.get('coupleRoom') || urlParams.get('joinGame') || urlParams.get('room');
 
-    if (openChat || senderId) {
+    if (coupleRoom) {
+      window.__pendingCoupleRoomCode = coupleRoom.trim().toUpperCase();
+      window.history.replaceState({}, document.title, window.location.pathname);
+      window.dispatchEvent(new CustomEvent('pulsechat_open_couple_room', {
+        detail: { roomCode: coupleRoom.trim().toUpperCase() }
+      }));
+    } else if (openChat || senderId) {
       window.history.replaceState({}, document.title, window.location.pathname);
       openChatById(openChat, senderId, isGroup);
     }
