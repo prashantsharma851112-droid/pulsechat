@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, Suspense, useCallback, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { SocketContext } from '../../context/SocketContext';
-import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Sparkles, Award, ArrowLeft, Loader2, WifiOff, RefreshCw } from 'lucide-react';
+import { X, Trophy, Gamepad2, Flame, Clock, Play, RotateCcw, Sparkles, Award, ArrowLeft, Loader2, WifiOff, RefreshCw, Heart } from 'lucide-react';
 import { BACKEND_URL } from '../../utils/config';
 import { playSound } from '../../utils/audio';
 import { lazyWithRetry } from '../../utils/lazyRetry';
@@ -25,6 +25,7 @@ import OfflineWhiteboardGame from './OfflineWhiteboardGame';
 const TempleRunGame = lazyWithRetry(() => import('./TempleRunGame'));
 const CandyCrushGame = lazyWithRetry(() => import('./CandyCrushGame'));
 const PulseChessGame = lazyWithRetry(() => import('./PulseChessGame'));
+const CoupleGamesHub = lazyWithRetry(() => import('./CoupleGamesHub'));
 // =========================================================================
 // ATOMIC ISOLATED ARCADE & LEADERBOARD COMPONENTS (React.memo + 0ms GPU Tap Feedback)
 // =========================================================================
@@ -538,7 +539,7 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
         className="modal-card modal-responsive"
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: (selectedGame === 'temple' || selectedGame === 'racer' || selectedGame === 'draw' || selectedGame === 'chess') ? '960px' : (selectedGame === 'candy' ? '580px' : (selectedPlayerId ? '580px' : '540px')),
+          maxWidth: (activeTab === 'couples' || selectedGame === 'temple' || selectedGame === 'racer' || selectedGame === 'draw' || selectedGame === 'chess') ? '960px' : (selectedGame === 'candy' ? '580px' : (selectedPlayerId ? '580px' : '540px')),
           width: '100%',
           maxHeight: '94dvh',
           display: 'flex',
@@ -613,6 +614,27 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
             </button>
 
             <button
+              onClick={() => { setActiveTab('couples'); setSelectedPlayerId(null); setSelectedGame(null); }}
+              style={{
+                flex: 1,
+                padding: '8px',
+                borderRadius: '10px',
+                border: 'none',
+                background: activeTab === 'couples' ? 'linear-gradient(90deg, #f43f5e, #ec4899)' : 'transparent',
+                color: activeTab === 'couples' ? '#fff' : 'rgba(255,255,255,0.7)',
+                fontWeight: 800,
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '5px'
+              }}
+            >
+              <Heart size={15} color={activeTab === 'couples' ? '#fff' : '#f43f5e'} fill={activeTab === 'couples' ? '#fff' : '#f43f5e'} /> Couples 💖
+            </button>
+
+            <button
               onClick={() => {
                 setActiveTab('leaderboard');
                 setSelectedPlayerId(null);
@@ -651,7 +673,7 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
           transform: 'translateZ(0)'
         }}>
           {/* Daily Task & 7-Day Gaming Streak Card - only when not viewing player profile */}
-          {!selectedPlayerId && (
+          {!selectedPlayerId && activeTab !== 'couples' && (
             <div style={{
               background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16) 0%, rgba(99, 102, 241, 0.12) 100%)',
               borderRadius: '18px',
@@ -1156,6 +1178,17 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
                 )}
               </div>
             )
+          )}
+
+          {activeTab === 'couples' && (
+            <Suspense fallback={
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#fff', fontSize: '0.9rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                <Loader2 size={32} className="animate-spin" />
+                <span>Loading Couples Zone...</span>
+              </div>
+            }>
+              <CoupleGamesHub />
+            </Suspense>
           )}
         </div>
       </div>

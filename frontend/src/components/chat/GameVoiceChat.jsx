@@ -22,7 +22,7 @@ const RTC_CONFIG = {
   iceCandidatePoolSize: 10
 };
 
-function GameVoiceChat({ chatId, partnerName = 'Partner', compact = false }) {
+function GameVoiceChat({ chatId, partnerName = 'Partner', partnerId = null, compact = false }) {
   const { socket } = useContext(SocketContext);
   const { user } = useContext(AuthContext);
 
@@ -48,10 +48,10 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', compact = false }) {
 
   const myUserId = String(user?.id || user?._id || 'user');
   const myUserName = user?.displayName || user?.username || 'Player';
-  const partnerUserId = String(chatId).includes('_')
+  const resolvedPartnerUserId = partnerId || (String(chatId).includes('_')
     ? String(chatId).split('_').find(id => String(id) !== myUserId)
-    : null;
-  const targetPeerIdRef = useRef(partnerUserId || null);
+    : null);
+  const targetPeerIdRef = useRef(resolvedPartnerUserId || null);
   const targetSocketIdRef = useRef(null);
 
   // Ensure Audio Playback (Bypasses mobile autoplay blocks)
@@ -231,8 +231,10 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', compact = false }) {
     const pc = pcRef.current;
     const toId = targetId || targetPeerIdRef.current;
     if (!pc || !socket || !chatId) return;
+    if (pc.signalingState !== 'stable') return;
     try {
       const offer = await pc.createOffer({ offerToReceiveAudio: true });
+      if (pc.signalingState !== 'stable') return;
       await pc.setLocalDescription(offer);
       socket.emit('game_voice_signal', {
         chatId,
@@ -263,18 +265,18 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', compact = false }) {
       localStreamRef.current = stream;
       setupLocalVAD(stream);
 
-      // Attach audio track to PeerConnection via replaceTrack or addTrack
-      if (pcRef.current) {
+      // Attach audio track to PeerConnection via replaceTrack (Zero renegotiation storm)
+      if (pcRef.current && pcRef.current.signalingState !== 'closed') {
         const audioTrack = stream.getAudioTracks()[0];
         if (audioTrack) {
           const senders = pcRef.current.getSenders();
-          const audioSender = senders.find(s => s.track && s.track.kind === 'audio') || senders.find(s => !s.track);
+          const audioSender = senders.find(s => s.track && s.track.kind === 'audio') || senders.find(s => !s.track) || senders[0];
           if (audioSender) {
             await audioSender.replaceTrack(audioTrack);
           } else {
             pcRef.current.addTrack(audioTrack, stream);
+            await sendVoiceOffer();
           }
-          await sendVoiceOffer();
         }
       }
 
@@ -295,7 +297,7 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', compact = false }) {
     }
   };
 
-  // 3. Toggle Mic ON / Mute (Free Fire Style One-Tap Control)
+  // 3. Toggle Mic ON / Mute (Free Fire Style Instant 0ms Mute/Unmute)
   const toggleMic = async () => {
     ensureAudioPlayback();
     if (!isMicOn) {
@@ -303,14 +305,13 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', compact = false }) {
         await startMicAudio();
       } else {
         localStreamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
-        if (pcRef.current) {
+        if (pcRef.current && pcRef.current.signalingState !== 'closed') {
           const audioTrack = localStreamRef.current.getAudioTracks()[0];
           const senders = pcRef.current.getSenders();
-          const audioSender = senders.find(s => s.track && s.track.kind === 'audio') || senders.find(s => !s.track);
-          if (audioSender && audioTrack) {
-            audioSender.replaceTrack(audioTrack).catch(() => {});
+          const audioSender = senders.find(s => s.track && s.track.kind === 'audio') || senders.find(s => !s.track) || senders[0];
+          if (audioSender && audioTrack && audioSender.track !== audioTrack) {
+            await audioSender.replaceTrack(audioTrack).catch(() => {});
           }
-          await sendVoiceOffer();
         }
         setIsMicOn(true);
         if (socket && chatId) {
@@ -390,17 +391,23 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', compact = false }) {
         if (type === 'offer') {
           let pc = pcRef.current;
           const isPolite = myUserId.localeCompare(String(fromUserId)) > 0;
-          if (pc && pc.signalingState !== 'stable') {
-            if (!isPolite) {
-              return; // Ignore glare offer on impolite peer
-            }
-            try {
-              await Promise.all([
-                pc.setLocalDescription({ type: 'rollback' }),
-                pc.setRemoteDescription(new RTCSessionDescription(signal))
-              ]);
-            } catch (e) {
-              pc = createPeerConnection(fromUserId);
+          if (pc && pc.signalingState !== 'closed') {
+            if (pc.signalingState !== 'stable') {
+              if (!isPolite) {
+                return; // Ignore glare offer on impolite peer
+              }
+              try {
+                await Promise.all([
+                  pc.setLocalDescription({ type: 'rollback' }),
+                  pc.setRemoteDescription(new RTCSessionDescription(signal))
+                ]);
+              } catch (e) {
+                // If rollback failed, recreate cleanly
+                pc = createPeerConnection(fromUserId);
+                await pc.setRemoteDescription(new RTCSessionDescription(signal));
+              }
+            } else {
+              // Existing stable connection: smoothly accept new description without closing PC
               await pc.setRemoteDescription(new RTCSessionDescription(signal));
             }
           } else {
@@ -409,10 +416,10 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', compact = false }) {
           }
 
           // Drain queued ICE candidates
-          for (const cand of pendingCandidatesRef.current) {
+          while (pendingCandidatesRef.current.length > 0) {
+            const cand = pendingCandidatesRef.current.shift();
             try { await pc.addIceCandidate(new RTCIceCandidate(cand)); } catch (e) {}
           }
-          pendingCandidatesRef.current = [];
 
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
@@ -429,10 +436,10 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', compact = false }) {
           if (pcRef.current && (pcRef.current.signalingState === 'have-local-offer' || pcRef.current.signalingState === 'have-remote-pranswer')) {
             await pcRef.current.setRemoteDescription(new RTCSessionDescription(signal));
             // Drain queued ICE candidates
-            for (const cand of pendingCandidatesRef.current) {
+            while (pendingCandidatesRef.current.length > 0) {
+              const cand = pendingCandidatesRef.current.shift();
               try { await pcRef.current.addIceCandidate(new RTCIceCandidate(cand)); } catch (e) {}
             }
-            pendingCandidatesRef.current = [];
             ensureAudioPlayback();
           }
         } else if (type === 'candidate') {

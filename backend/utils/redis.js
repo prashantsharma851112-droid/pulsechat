@@ -6,7 +6,9 @@ const config = require('../config');
 let redisClient = null;
 let isConnected = false;
 
-const redisUrl = process.env.REDIS_URL || config.REDIS_URL || '';
+const redisUrl = process.env.NODE_ENV === 'test' && !process.env.TEST_REDIS
+  ? ''
+  : (process.env.REDIS_URL || config.REDIS_URL || '');
 
 if (redisUrl) {
   try {

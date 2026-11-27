@@ -109,8 +109,12 @@ export default function ChatRestorePromptModal({ user, onClose, onRestoreComplet
 
     try {
       const res = await startNewDeviceRecovery(socket, scannedPayload, user, {
-        onProgress: (chunk, total, count) => {
-          setRestoreProgressText(`Importing chats: ${count} messages (${chunk}/${total} chunks)...`);
+        onProgress: (chunk, total, count, meta) => {
+          if (meta?.status === 'waiting_for_approval') {
+            setRestoreProgressText(`Security Code: ${meta.sasCode || ''} — Waiting for approval on your old phone...`);
+          } else {
+            setRestoreProgressText(`Importing chats: ${count} messages (${chunk}/${total} chunks)...`);
+          }
         }
       });
 

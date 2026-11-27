@@ -57,14 +57,43 @@ const QueuedMessage = {
     if (idx !== -1) mockQueue.splice(idx, 1);
     return { deletedCount: idx !== -1 ? 1 : 0 };
   },
-  updateOne: async (query, update) => {
-    const idx = mockQueue.findIndex(m => m.messageId === query.messageId);
-    if (idx !== -1) {
-      if (update.$set) Object.assign(mockQueue[idx], update.$set);
-    } else if (update.$setOnInsert) {
-      mockQueue.push({ ...update.$setOnInsert });
+  updateOne: async (query, update, options) => {
+    let doc = mockQueue.find(m => m.messageId === query.messageId);
+    if (!doc && options?.upsert) {
+      doc = { messageId: query.messageId };
+      mockQueue.push(doc);
+    }
+    if (doc) {
+      if (update.$setOnInsert) Object.assign(doc, update.$setOnInsert);
+      if (update.$set) Object.assign(doc, update.$set);
+      if (update.$min?.expiresAt) {
+        if (!doc.expiresAt || new Date(update.$min.expiresAt) < new Date(doc.expiresAt)) {
+          doc.expiresAt = update.$min.expiresAt;
+        }
+      }
+      if (!doc.createdAt) doc.createdAt = new Date();
+      if (!doc.expiresAt) doc.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     }
     return { acknowledged: true };
+  },
+  findOneAndUpdate: async (query, update, options) => {
+    let doc = mockQueue.find(m => m.messageId === query.messageId);
+    if (!doc && options?.upsert) {
+      doc = { messageId: query.messageId };
+      mockQueue.push(doc);
+    }
+    if (doc) {
+      if (update.$setOnInsert) Object.assign(doc, update.$setOnInsert);
+      if (update.$set) Object.assign(doc, update.$set);
+      if (update.$min?.expiresAt) {
+        if (!doc.expiresAt || new Date(update.$min.expiresAt) < new Date(doc.expiresAt)) {
+          doc.expiresAt = update.$min.expiresAt;
+        }
+      }
+      if (!doc.createdAt) doc.createdAt = new Date();
+      if (!doc.expiresAt) doc.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    }
+    return doc ? { ...doc } : null;
   }
 };
 
@@ -103,9 +132,18 @@ const MessageLedger = {
     return doc;
   },
   updateOne: async (query, update) => {
-    const l = mockLedger.find(m => m.messageId === query.messageId);
-    if (l && update.$set) Object.assign(l, update.$set);
-    return { acknowledged: true };
+    const l = mockLedger.find(m => {
+      if (query.messageId && m.messageId !== query.messageId) return false;
+      if (query.senderId && m.senderId !== query.senderId) return false;
+      if (query.receiverId && m.receiverId !== query.receiverId) return false;
+      if (query.state && m.state !== query.state) return false;
+      return true;
+    });
+    if (l) {
+      if (update.$set) Object.assign(l, update.$set);
+      return { acknowledged: true, matchedCount: 1, modifiedCount: 1 };
+    }
+    return { acknowledged: true, matchedCount: 0, modifiedCount: 0 };
   }
 };
 

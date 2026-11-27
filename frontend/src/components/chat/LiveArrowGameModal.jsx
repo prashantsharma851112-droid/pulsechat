@@ -716,7 +716,7 @@ const LiveArrowGameModal = React.memo(function LiveArrowGameModal({ activeChat, 
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {chatId && (
-                <GameVoiceChat chatId={chatId} partnerName={partnerName} compact={true} />
+                <GameVoiceChat chatId={chatId} partnerName={partnerName} partnerId={partnerId} compact={true} />
               )}
               <button
                 onClick={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')}

@@ -540,6 +540,21 @@ const invalidateUserRoomsCache = (rawUserId) => {
 
 app.set('invalidateUserRoomsCache', invalidateUserRoomsCache);
 
+// =========================================================================
+// EPHEMERAL REAL-TIME COUPLE ADVENTURE GAMES (100% IN-MEMORY, ZERO DB STORAGE)
+// =========================================================================
+const ephemeralCoupleRooms = new Map();
+
+// Periodic garbage collection for stale couple rooms (2 hour TTL)
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, r] of ephemeralCoupleRooms.entries()) {
+    if (now - (r.createdAt || 0) > 2 * 60 * 60 * 1000) {
+      ephemeralCoupleRooms.delete(code);
+    }
+  }
+}, 10 * 60 * 1000);
+
 io.on('connection', (socket) => {
   console.log('⚡ Socket Connected:', socket.id);
   registerQrSyncSocket(io, socket);
@@ -3639,12 +3654,13 @@ io.on('connection', (socket) => {
       type
     };
 
-    if (toSocketId) {
+    if (toSocketId && io.sockets.sockets.has(toSocketId)) {
       io.to(toSocketId).emit('game_voice_signal', payload);
-    } else if (toUserId) {
-      io.to(`user_${toUserId}`).to(String(toUserId)).emit('game_voice_signal', payload);
     } else {
       socket.to(`game_voice_${canonical}`).to(`game_voice_${chatId}`).emit('game_voice_signal', payload);
+      if (toUserId) {
+        io.to(`user_${toUserId}`).to(String(toUserId)).emit('game_voice_signal', payload);
+      }
     }
   });
 
@@ -3668,8 +3684,144 @@ io.on('connection', (socket) => {
     socket.to(room).to(`game_voice_${chatId}`).emit('game_voice_peer_left', { userId });
   });
 
+  // =========================================================================
+  // EPHEMERAL COUPLE ADVENTURE GAMES (100% IN-MEMORY, ZERO DATABASE STORAGE)
+  // =========================================================================
+  socket.on('couple_room_create', ({ roomCode, gameType = 'island3d', user: userInfo }, callback) => {
+    try {
+      const code = String(roomCode || Math.floor(100000 + Math.random() * 900000)).trim().toUpperCase();
+      const existing = ephemeralCoupleRooms.get(code);
+      if (existing && existing.host && existing.host.socketId !== socket.id) {
+        const err = { success: false, message: 'Room code already in use' };
+        if (typeof callback === 'function') callback(err);
+        return socket.emit('couple_room_error', err);
+      }
+
+      const roomData = {
+        roomCode: code,
+        gameType,
+        host: {
+          id: String(userInfo?.id || socket.userId || 'host'),
+          name: userInfo?.name || userInfo?.displayName || userInfo?.username || 'Partner 1',
+          avatar: userInfo?.avatar || '',
+          color: userInfo?.color || '#38bdf8',
+          socketId: socket.id
+        },
+        partner: null,
+        state: {
+          crystalsCollected: 0,
+          dualPadsActive: false,
+          bridgeUnlocked: false,
+          currentQuestionIdx: 0,
+          questStep: 1
+        },
+        createdAt: Date.now()
+      };
+
+      ephemeralCoupleRooms.set(code, roomData);
+      socket.coupleRoomCode = code;
+      socket.coupleRole = 'host';
+      socket.join(`couple_room_${code}`);
+
+      const res = { success: true, roomCode: code, roomData, role: 'host' };
+      if (typeof callback === 'function') callback(res);
+      socket.emit('couple_room_created', res);
+    } catch (e) {
+      if (typeof callback === 'function') callback({ success: false, message: e.message });
+    }
+  });
+
+  socket.on('couple_room_join', ({ roomCode, user: userInfo }, callback) => {
+    try {
+      const code = String(roomCode || '').trim().toUpperCase();
+      const roomData = ephemeralCoupleRooms.get(code);
+      if (!roomData) {
+        const err = { success: false, message: 'Couple Room not found or has expired.' };
+        if (typeof callback === 'function') callback(err);
+        return socket.emit('couple_room_error', err);
+      }
+
+      const partnerId = String(userInfo?.id || socket.userId || 'partner');
+      if (roomData.host && roomData.host.id === partnerId && roomData.host.socketId === socket.id) {
+        socket.coupleRoomCode = code;
+        socket.coupleRole = 'host';
+        socket.join(`couple_room_${code}`);
+        if (typeof callback === 'function') callback({ success: true, roomCode: code, roomData, role: 'host' });
+        return;
+      }
+
+      roomData.partner = {
+        id: partnerId,
+        name: userInfo?.name || userInfo?.displayName || userInfo?.username || 'Partner 2',
+        avatar: userInfo?.avatar || '',
+        color: userInfo?.color || '#ec4899',
+        socketId: socket.id
+      };
+
+      socket.coupleRoomCode = code;
+      socket.coupleRole = 'partner';
+      socket.join(`couple_room_${code}`);
+
+      const response = { success: true, roomCode: code, roomData, role: 'partner' };
+      if (typeof callback === 'function') callback(response);
+
+      // Notify all players in room that couple session is ready
+      io.to(`couple_room_${code}`).emit('couple_room_ready', {
+        roomCode: code,
+        gameType: roomData.gameType,
+        host: roomData.host,
+        partner: roomData.partner,
+        state: roomData.state
+      });
+    } catch (e) {
+      if (typeof callback === 'function') callback({ success: false, message: e.message });
+    }
+  });
+
+  socket.on('couple_player_sync', ({ roomCode, playerState }) => {
+    if (!roomCode) return;
+    const code = String(roomCode).trim().toUpperCase();
+    socket.to(`couple_room_${code}`).emit('couple_player_updated', {
+      senderRole: socket.coupleRole,
+      playerState
+    });
+  });
+
+  socket.on('couple_action_sync', ({ roomCode, actionType, payload }) => {
+    if (!roomCode) return;
+    const code = String(roomCode).trim().toUpperCase();
+    const roomData = ephemeralCoupleRooms.get(code);
+    if (roomData && roomData.state && payload && payload.updateState) {
+      Object.assign(roomData.state, payload.updateState);
+    }
+    socket.to(`couple_room_${code}`).emit('couple_action_received', {
+      senderRole: socket.coupleRole,
+      actionType,
+      payload
+    });
+  });
+
+  socket.on('couple_room_leave', ({ roomCode }) => {
+    if (!roomCode) return;
+    const code = String(roomCode).trim().toUpperCase();
+    socket.leave(`couple_room_${code}`);
+    socket.to(`couple_room_${code}`).emit('couple_partner_left', { role: socket.coupleRole });
+    const roomSet = io.sockets.adapter.rooms.get(`couple_room_${code}`);
+    if (!roomSet || roomSet.size === 0) {
+      ephemeralCoupleRooms.delete(code);
+    }
+  });
+
   // Disconnect
   socket.on('disconnect', () => {
+    if (socket.coupleRoomCode) {
+      const code = socket.coupleRoomCode;
+      io.to(`couple_room_${code}`).emit('couple_partner_left', { role: socket.coupleRole });
+      const roomSet = io.sockets.adapter.rooms.get(`couple_room_${code}`);
+      if (!roomSet || roomSet.size === 0) {
+        ephemeralCoupleRooms.delete(code);
+      }
+    }
     if (socket.gameVoiceChatId && socket.gameVoiceUserId) {
       io.to(`game_voice_${socket.gameVoiceChatId}`).emit('game_voice_peer_left', { userId: socket.gameVoiceUserId });
     }

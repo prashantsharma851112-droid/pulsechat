@@ -29,7 +29,10 @@ const testFiles = [
   'test_history_reconciliation_and_cross_device_sync.js',
   'test_final_coordinated_invariants.js',
   'test_deletion_safeguards_and_e2ee_retry.cjs',
-  'test_emergency_recovery_and_delivery_latency.cjs'
+  'test_emergency_recovery_and_delivery_latency.cjs',
+  'test_queue_ttl_and_ack_safety.cjs',
+  'test_real_qr_device_transfer_flow.cjs',
+  'test_qr_security_hardening_negative.cjs'
 ];
 
 let failedSuites = 0;
@@ -47,7 +50,12 @@ for (const testFile of testFiles) {
   try {
     const output = execFileSync(process.execPath, [filePath], {
       cwd: path.resolve(testDir, '..'),
-      env: { ...process.env, NODE_ENV: 'test' },
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        JWT_SECRET: process.env.JWT_SECRET || 'test_jwt_secret_pulsechat_1234567890_32char',
+        RECEIPT_SECRET: process.env.RECEIPT_SECRET || 'test_receipt_secret_pulsechat_1234567890_32char'
+      },
       encoding: 'utf8'
     });
     console.log(output.trim());

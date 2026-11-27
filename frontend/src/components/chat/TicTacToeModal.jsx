@@ -344,7 +344,12 @@ const TicTacToeModal = React.memo(function TicTacToeModal({ chatId, partnerName,
         {/* Live In-Game Voice Chat */}
         {chatId && (
           <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
-            <GameVoiceChat chatId={chatId} partnerName={partnerName || 'Friend'} compact={false} />
+            <GameVoiceChat
+              chatId={chatId}
+              partnerName={partnerName || 'Friend'}
+              partnerId={chatId.includes('_') ? chatId.split('_').find(id => String(id) !== String(user?.id || user?._id || '')) : null}
+              compact={false}
+            />
           </div>
         )}
 

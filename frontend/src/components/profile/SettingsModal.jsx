@@ -326,10 +326,11 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
           setTransferProgress('Scan this QR code using PulseChat on your new phone');
           cancelSessionRef.current = cancel;
         },
-        onPromptApproval: ({ deviceName, deviceId, approve, reject }) => {
+        onPromptApproval: ({ deviceName, deviceId, sasCode, approve, reject }) => {
           setApprovalRequest({
             deviceName,
             deviceId,
+            sasCode,
             approve: () => {
               setApprovalRequest(null);
               setTransferProgress(`Approved! Streaming chats to ${deviceName}...`);
@@ -392,8 +393,12 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
 
     try {
       const res = await startNewDeviceRecovery(socket, scannedPayload, currentUser, {
-        onProgress: (chunk, total, count) => {
-          setTransferProgress(`Importing chats: ${count} messages (${chunk}/${total} chunks)...`);
+        onProgress: (chunk, total, count, meta) => {
+          if (meta?.status === 'waiting_for_approval') {
+            setTransferProgress(`Security Code: ${meta.sasCode || ''} — Waiting for approval on old device...`);
+          } else {
+            setTransferProgress(`Importing chats: ${count} messages (${chunk}/${total} chunks)...`);
+          }
         }
       });
 
@@ -1036,6 +1041,18 @@ export const ChatBackupSection = React.memo(function ChatBackupSection({ current
                 <div style={{ fontSize: '0.75rem', color: '#e2e8f0' }}>
                   Device <strong>{approvalRequest.deviceName}</strong> is requesting to transfer your chat history.
                 </div>
+                {approvalRequest.sasCode && (
+                  <div style={{
+                    margin: '2px 0',
+                    padding: '6px 12px',
+                    background: 'rgba(0, 0, 0, 0.35)',
+                    borderRadius: '8px',
+                    border: '1px dashed rgba(165, 180, 252, 0.4)'
+                  }}>
+                    <span style={{ fontSize: '0.68rem', color: '#94a3b8', display: 'block' }}>Security Code (Compare with New Phone):</span>
+                    <strong style={{ fontSize: '1.05rem', letterSpacing: '2px', color: '#38bdf8', fontFamily: 'monospace' }}>{approvalRequest.sasCode}</strong>
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                   <button
                     type="button"

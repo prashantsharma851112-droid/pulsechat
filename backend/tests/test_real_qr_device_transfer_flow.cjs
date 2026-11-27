@@ -39,7 +39,7 @@ function base64ToArrayBuffer(base64) {
   return Buffer.from(base64, 'base64');
 }
 
-async function deriveSyncSessionKey(subtle, myPrivateKey, peerPublicJwk) {
+async function deriveSyncSessionKey(subtle, myPrivateKey, peerPublicJwk, context = {}) {
   const peerKey = await subtle.importKey(
     'jwk',
     peerPublicJwk,
@@ -62,18 +62,36 @@ async function deriveSyncSessionKey(subtle, myPrivateKey, peerPublicJwk) {
     ['deriveKey']
   );
 
+  const protocolVersion = context.protocolVersion || 'pulsechat-qr-device-transfer-v2';
+  const sessionId = context.sessionId || 'default_session';
+  const userId = context.userId || '';
+  const oldDeviceId = context.oldDeviceId || 'old_device';
+  const newDeviceId = context.newDeviceId || 'new_device';
+
+  const saltSource = `salt|${protocolVersion}|${sessionId}|${userId}`;
+  const saltDigest = await subtle.digest('SHA-256', new TextEncoder().encode(saltSource));
+  const salt = new Uint8Array(saltDigest).slice(0, 16);
+
+  const infoSource = `info|${protocolVersion}|${sessionId}|${userId}|${oldDeviceId}|${newDeviceId}`;
+  const info = new TextEncoder().encode(infoSource);
+
   return subtle.deriveKey(
     {
       name: 'HKDF',
       hash: 'SHA-256',
-      salt: new Uint8Array(16),
-      info: new TextEncoder().encode('pulsechat-qr-device-transfer-v1')
+      salt,
+      info
     },
     hkdfKey,
     { name: 'AES-GCM', length: 256 },
     false,
     ['encrypt', 'decrypt']
   );
+}
+
+function constructChunkAad({ protocolVersion = 'pulsechat-qr-device-transfer-v2', sessionId, userId, senderDeviceId, receiverDeviceId, chunkIndex, totalChunks }) {
+  const aadString = `${protocolVersion}|${sessionId}|${userId}|${senderDeviceId || 'old'}|${receiverDeviceId || 'new'}|${chunkIndex}|${totalChunks}`;
+  return new TextEncoder().encode(aadString);
 }
 
 async function runQrTransferTestSuite() {
@@ -259,7 +277,8 @@ async function runQrTransferTestSuite() {
     const promptData = await oldPhonePromptPromise;
     assert.strictEqual(promptData.sessionId, initRes.sessionId);
     assert.strictEqual(promptData.deviceName, 'Pixel 8 (New Phone)');
-    console.log(`✓ PASS 4: New Phone requested pair; Old Phone received approval prompt for "${promptData.deviceName}"`);
+    assert(promptData.sasCode && /^\d{3}-\d{3}$/.test(promptData.sasCode), 'Prompt must include 6-digit SAS code');
+    console.log(`✓ PASS 4: New Phone requested pair; Old Phone received approval prompt for "${promptData.deviceName}" (SAS: ${promptData.sasCode})`);
 
     // =========================================================================
     // STEP 5: Old Phone user clicks "Approve Transfer"
@@ -269,17 +288,26 @@ async function runQrTransferTestSuite() {
     const newPairedPromise = new Promise((resolve) => newPhoneSocket.once('qr_sync:paired', resolve));
 
     const approveRes = await new Promise((resolve) => {
-      oldPhoneSocket.emit('qr_sync:approve', { sessionId: initRes.sessionId }, resolve);
+      oldPhoneSocket.emit('qr_sync:approve', { sessionId: initRes.sessionId, sasCode: promptData.sasCode }, resolve);
     });
     assert.strictEqual(approveRes.success, true);
 
     const [oldPaired, newPaired] = await Promise.all([oldPairedPromise, newPairedPromise]);
     assert(oldPaired.peerPublicKey, 'Old Phone received peer public key');
     assert(newPaired.peerPublicKey, 'New Phone received peer public key');
+    assert.strictEqual(oldPaired.sasCode, promptData.sasCode, 'Old Phone paired event carries verified SAS code');
+    assert.strictEqual(newPaired.sasCode, promptData.sasCode, 'New Phone paired event carries verified SAS code');
 
-    // Both devices derive shared session key
-    const oldDeviceSessionKey = await deriveSyncSessionKey(subtle, oldPhoneKeyPair.privateKey, oldPaired.peerPublicKey);
-    const newDeviceSessionKey = await deriveSyncSessionKey(subtle, newPhoneKeyPair.privateKey, newPaired.peerPublicKey);
+    // Both devices derive shared session key with authenticated context
+    const transferContext = {
+      protocolVersion: 'pulsechat-qr-device-transfer-v2',
+      sessionId: initRes.sessionId,
+      userId: aliceId,
+      oldDeviceId: 'Pixel 7 (Android)',
+      newDeviceId: 'dev_alice_new_01'
+    };
+    const oldDeviceSessionKey = await deriveSyncSessionKey(subtle, oldPhoneKeyPair.privateKey, oldPaired.peerPublicKey, transferContext);
+    const newDeviceSessionKey = await deriveSyncSessionKey(subtle, newPhoneKeyPair.privateKey, newPaired.peerPublicKey, transferContext);
     console.log('✓ PASS 5: Both devices approved and independently derived matching E2EE session key');
 
     // =========================================================================
@@ -316,8 +344,18 @@ async function runQrTransferTestSuite() {
 
     const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
     const encoded = new TextEncoder().encode(JSON.stringify(chunkPayload));
+    const aad = constructChunkAad({
+      protocolVersion: 'pulsechat-qr-device-transfer-v2',
+      sessionId: initRes.sessionId,
+      userId: aliceId,
+      senderDeviceId: 'Pixel 7 (Android)',
+      receiverDeviceId: 'dev_alice_new_01',
+      chunkIndex: 0,
+      totalChunks: 1
+    });
+
     const encryptedBytes = await subtle.encrypt(
-      { name: 'AES-GCM', iv, tagLength: 128 },
+      { name: 'AES-GCM', iv, additionalData: aad, tagLength: 128 },
       oldDeviceSessionKey,
       encoded
     );
@@ -327,6 +365,8 @@ async function runQrTransferTestSuite() {
       sessionId: initRes.sessionId,
       chunkIndex: 0,
       totalChunks: 1,
+      senderDeviceId: 'Pixel 7 (Android)',
+      receiverDeviceId: 'dev_alice_new_01',
       encryptedPayload: arrayBufferToBase64(encryptedBytes),
       iv: arrayBufferToBase64(iv)
     });
@@ -341,7 +381,7 @@ async function runQrTransferTestSuite() {
     // New Phone decrypts the received chunk
     const receivedChunk = receivedChunks[0];
     const decryptedBytes = await subtle.decrypt(
-      { name: 'AES-GCM', iv: base64ToArrayBuffer(receivedChunk.iv), tagLength: 128 },
+      { name: 'AES-GCM', iv: base64ToArrayBuffer(receivedChunk.iv), additionalData: aad, tagLength: 128 },
       newDeviceSessionKey,
       base64ToArrayBuffer(receivedChunk.encryptedPayload)
     );

@@ -16,6 +16,7 @@ import React, { useState, useEffect, useRef, useCallback, useContext } from 'rea
 import { X, Trophy, Sparkles, Swords, User, Bot, RotateCcw, AlertCircle, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { SocketContext } from '../../context/SocketContext';
 import { AuthContext } from '../../context/AuthContext';
+import GameVoiceChat from './GameVoiceChat';
 import ChessGameView from '../chess/ChessGameView';
 import {
   createChessInstance,
@@ -463,24 +464,29 @@ export default function ChatChessModal({
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              background: 'rgba(255, 255, 255, 0.08)',
-              border: 'none',
-              borderRadius: '50%',
-              width: '32px',
-              height: '32px',
-              color: '#fff',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <X size={18} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {chatId && (
+              <GameVoiceChat chatId={chatId} partnerName={partnerName} partnerId={resolvedPartnerId} compact={true} />
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                color: '#fff',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}
