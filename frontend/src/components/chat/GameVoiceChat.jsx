@@ -29,7 +29,7 @@ const RTC_CONFIG = {
   iceCandidatePoolSize: 10
 };
 
-function GameVoiceChat({ chatId, partnerName = 'Partner', partnerId = null, compact = false }) {
+function GameVoiceChat({ chatId, partnerName = 'Partner', partnerId = null, compact = false, iconOnly = false }) {
   const { socket } = useContext(SocketContext);
   const { user } = useContext(AuthContext);
 
@@ -596,116 +596,173 @@ function GameVoiceChat({ chatId, partnerName = 'Partner', partnerId = null, comp
       `}</style>
 
       {/* Free Fire / Discord Tactical Voice Bar */}
-      <div style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: compact ? '6px' : '10px',
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
-        border: isMicOn ? '1.5px solid #10b981' : '1.5px solid rgba(255, 255, 255, 0.16)',
-        borderRadius: compact ? '22px' : '26px',
-        padding: compact ? '4px 8px' : '5px 14px',
-        boxShadow: isMicOn ? '0 0 16px rgba(16, 185, 129, 0.4), 0 4px 15px rgba(0,0,0,0.6)' : '0 4px 12px rgba(0,0,0,0.5)',
-        transition: 'all 0.25s ease',
-        userSelect: 'none'
-      }}>
-        {/* MIC TOGGLE BUTTON (FREE FIRE STYLE TACTICAL MIC) */}
-        <button
-          type="button"
-          onClick={toggleMic}
-          title={isMicOn ? 'Tap to Mute Mic' : 'Tap to Turn Mic ON'}
-          style={{
-            background: isMicOn
-              ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
-              : 'rgba(239, 68, 68, 0.22)',
-            border: isMicOn ? '2px solid #34d399' : '1.5px solid rgba(239, 68, 68, 0.6)',
-            color: isMicOn ? '#ffffff' : '#fca5a5',
-            borderRadius: '50%',
-            width: compact ? '32px' : '36px',
-            height: compact ? '32px' : '36px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            animation: (isMicOn && isSpeaking) ? 'voicePulseRing 1.1s infinite' : 'none',
-            boxShadow: isMicOn ? '0 0 12px rgba(16, 185, 129, 0.7)' : 'none',
-            transition: 'all 0.2s ease',
-            flexShrink: 0
-          }}
-        >
-          {isMicOn ? <Mic size={compact ? 16 : 18} /> : <MicOff size={compact ? 16 : 18} />}
-        </button>
+      {iconOnly ? (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', userSelect: 'none' }}>
+          {/* Circular Mic Button (Icon Only - Zero Clutter) */}
+          <button
+            type="button"
+            onClick={toggleMic}
+            title={isMicOn ? 'Mic ON (Tap to Mute)' : 'Mic OFF (Tap to Unmute)'}
+            style={{
+              background: isMicOn
+                ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                : 'rgba(15, 23, 42, 0.88)',
+              border: isMicOn ? '2px solid #34d399' : '1.5px solid rgba(239, 68, 68, 0.7)',
+              color: isMicOn ? '#ffffff' : '#f87171',
+              borderRadius: '50%',
+              width: '38px',
+              height: '38px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              animation: (isMicOn && isSpeaking) ? 'voicePulseRing 1.1s infinite' : 'none',
+              boxShadow: isMicOn ? '0 0 16px rgba(16, 185, 129, 0.75)' : '0 4px 12px rgba(0,0,0,0.5)',
+              transition: 'all 0.2s ease',
+              backdropFilter: 'blur(8px)',
+              flexShrink: 0
+            }}
+          >
+            {isMicOn ? <Mic size={18} /> : <MicOff size={18} />}
+          </button>
 
-        {/* SPEAKER / DEAFEN TOGGLE BUTTON */}
-        <button
-          type="button"
-          onClick={toggleDeafen}
-          title={isDeafened ? 'Tap to Unmute Friend' : 'Tap to Deafen Friend'}
-          style={{
-            background: isDeafened ? 'rgba(239, 68, 68, 0.22)' : 'rgba(56, 189, 248, 0.18)',
-            border: isDeafened ? '1.5px solid rgba(239, 68, 68, 0.6)' : '1.5px solid rgba(56, 189, 248, 0.5)',
-            color: isDeafened ? '#fca5a5' : '#38bdf8',
-            borderRadius: '50%',
-            width: compact ? '28px' : '32px',
-            height: compact ? '28px' : '32px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            flexShrink: 0
-          }}
-        >
-          {isDeafened ? <VolumeX size={compact ? 14 : 16} /> : <Volume2 size={compact ? 14 : 16} />}
-        </button>
+          {/* Speaker Button (Icon Only) */}
+          <button
+            type="button"
+            onClick={toggleDeafen}
+            title={isDeafened ? 'Audio Muted (Tap to Unmute)' : 'Audio ON (Tap to Mute)'}
+            style={{
+              background: isDeafened ? 'rgba(239, 68, 68, 0.3)' : 'rgba(15, 23, 42, 0.88)',
+              border: isDeafened ? '1.5px solid rgba(239, 68, 68, 0.7)' : '1.5px solid rgba(255, 255, 255, 0.25)',
+              color: isDeafened ? '#fca5a5' : '#38bdf8',
+              borderRadius: '50%',
+              width: '34px',
+              height: '34px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              backdropFilter: 'blur(8px)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              transition: 'all 0.2s ease',
+              flexShrink: 0
+            }}
+          >
+            {isDeafened ? <VolumeX size={15} /> : <Volume2 size={15} />}
+          </button>
+        </div>
+      ) : (
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: compact ? '6px' : '10px',
+          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
+          border: isMicOn ? '1.5px solid #10b981' : '1.5px solid rgba(255, 255, 255, 0.16)',
+          borderRadius: compact ? '22px' : '26px',
+          padding: compact ? '4px 8px' : '5px 14px',
+          boxShadow: isMicOn ? '0 0 16px rgba(16, 185, 129, 0.4), 0 4px 15px rgba(0,0,0,0.6)' : '0 4px 12px rgba(0,0,0,0.5)',
+          transition: 'all 0.25s ease',
+          userSelect: 'none'
+        }}>
+          {/* MIC TOGGLE BUTTON (FREE FIRE STYLE TACTICAL MIC) */}
+          <button
+            type="button"
+            onClick={toggleMic}
+            title={isMicOn ? 'Tap to Mute Mic' : 'Tap to Turn Mic ON'}
+            style={{
+              background: isMicOn
+                ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                : 'rgba(239, 68, 68, 0.22)',
+              border: isMicOn ? '2px solid #34d399' : '1.5px solid rgba(239, 68, 68, 0.6)',
+              color: isMicOn ? '#ffffff' : '#fca5a5',
+              borderRadius: '50%',
+              width: compact ? '32px' : '36px',
+              height: compact ? '32px' : '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              animation: (isMicOn && isSpeaking) ? 'voicePulseRing 1.1s infinite' : 'none',
+              boxShadow: isMicOn ? '0 0 12px rgba(16, 185, 129, 0.7)' : 'none',
+              transition: 'all 0.2s ease',
+              flexShrink: 0
+            }}
+          >
+            {isMicOn ? <Mic size={compact ? 16 : 18} /> : <MicOff size={compact ? 16 : 18} />}
+          </button>
 
-        {/* Status / Voice Indicator */}
-        {!compact ? (
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: '85px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                background: isMicOn ? '#10b981' : (voiceConnected ? '#38bdf8' : '#64748b'),
-                boxShadow: isMicOn ? '0 0 6px #10b981' : 'none'
-              }} />
-              <span style={{
-                fontSize: '0.74rem',
-                fontWeight: 900,
-                color: isMicOn ? '#34d399' : '#cbd5e1',
-                letterSpacing: '0.4px',
-                textTransform: 'uppercase'
-              }}>
-                {isMicOn ? (isSpeaking ? 'Talking...' : 'Mic ON') : 'Mic OFF'}
-              </span>
-            </div>
+          {/* SPEAKER / DEAFEN TOGGLE BUTTON */}
+          <button
+            type="button"
+            onClick={toggleDeafen}
+            title={isDeafened ? 'Tap to Unmute Friend' : 'Tap to Deafen Friend'}
+            style={{
+              background: isDeafened ? 'rgba(239, 68, 68, 0.22)' : 'rgba(56, 189, 248, 0.18)',
+              border: isDeafened ? '1.5px solid rgba(239, 68, 68, 0.6)' : '1.5px solid rgba(56, 189, 248, 0.5)',
+              color: isDeafened ? '#fca5a5' : '#38bdf8',
+              borderRadius: '50%',
+              width: compact ? '28px' : '32px',
+              height: compact ? '28px' : '32px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              flexShrink: 0
+            }}
+          >
+            {isDeafened ? <VolumeX size={compact ? 14 : 16} /> : <Volume2 size={compact ? 14 : 16} />}
+          </button>
 
-            {/* Partner voice activity readout */}
-            {isPartnerSpeaking ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '1px' }}>
-                <div style={{ width: '3px', height: '10px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.4s infinite alternate' }} />
-                <div style={{ width: '3px', height: '14px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.3s infinite alternate 0.1s' }} />
-                <div style={{ width: '3px', height: '8px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.5s infinite alternate 0.2s' }} />
-                <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#38bdf8', marginLeft: '2px' }}>
-                  {partnerName} Talking
+          {/* Status / Voice Indicator */}
+          {!compact ? (
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: '85px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{
+                  width: '7px',
+                  height: '7px',
+                  borderRadius: '50%',
+                  background: isMicOn ? '#10b981' : (voiceConnected ? '#38bdf8' : '#64748b'),
+                  boxShadow: isMicOn ? '0 0 6px #10b981' : 'none'
+                }} />
+                <span style={{
+                  fontSize: '0.74rem',
+                  fontWeight: 900,
+                  color: isMicOn ? '#34d399' : '#cbd5e1',
+                  letterSpacing: '0.4px',
+                  textTransform: 'uppercase'
+                }}>
+                  {isMicOn ? (isSpeaking ? 'Talking...' : 'Mic ON') : 'Mic OFF'}
                 </span>
               </div>
-            ) : (
-              <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700 }}>
-                {partnerVoiceState.isMuted ? `${partnerName}: Muted` : `${partnerName}: In Game`}
-              </span>
-            )}
-          </div>
-        ) : (
-          isPartnerSpeaking ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '0 4px' }} title={`${partnerName} is talking`}>
-              <div style={{ width: '2.5px', height: '9px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.4s infinite alternate' }} />
-              <div style={{ width: '2.5px', height: '13px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.3s infinite alternate 0.1s' }} />
-              <div style={{ width: '2.5px', height: '7px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.5s infinite alternate 0.2s' }} />
+
+              {/* Partner voice activity readout */}
+              {isPartnerSpeaking ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '1px' }}>
+                  <div style={{ width: '3px', height: '10px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.4s infinite alternate' }} />
+                  <div style={{ width: '3px', height: '14px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.3s infinite alternate 0.1s' }} />
+                  <div style={{ width: '3px', height: '8px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.5s infinite alternate 0.2s' }} />
+                  <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#38bdf8', marginLeft: '2px' }}>
+                    {partnerName} Talking
+                  </span>
+                </div>
+              ) : (
+                <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700 }}>
+                  {partnerVoiceState.isMuted ? `${partnerName}: Muted` : `${partnerName}: In Game`}
+                </span>
+              )}
             </div>
-          ) : null
-        )}
-      </div>
+          ) : (
+            isPartnerSpeaking ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '0 4px' }} title={`${partnerName} is talking`}>
+                <div style={{ width: '2.5px', height: '9px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.4s infinite alternate' }} />
+                <div style={{ width: '2.5px', height: '13px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.3s infinite alternate 0.1s' }} />
+                <div style={{ width: '2.5px', height: '7px', background: '#38bdf8', borderRadius: '2px', animation: 'voiceEqualizerBar 0.5s infinite alternate 0.2s' }} />
+              </div>
+            ) : null
+          )}
+        </div>
+      )}
     </>
   );
 }

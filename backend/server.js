@@ -544,8 +544,9 @@ app.set('invalidateUserRoomsCache', invalidateUserRoomsCache);
 // EPHEMERAL REAL-TIME COUPLE ADVENTURE GAMES (100% IN-MEMORY, ZERO DB STORAGE)
 // =========================================================================
 const ephemeralCoupleRooms = new Map();
+const activeIslandExplorers = new Map();
 
-// Periodic garbage collection for stale couple rooms (2 hour TTL)
+// Periodic garbage collection for stale couple rooms & idle island explorers (100% in-memory)
 setInterval(() => {
   const now = Date.now();
   for (const [code, r] of ephemeralCoupleRooms.entries()) {
@@ -553,7 +554,12 @@ setInterval(() => {
       ephemeralCoupleRooms.delete(code);
     }
   }
-}, 10 * 60 * 1000);
+  for (const [sId, exp] of activeIslandExplorers.entries()) {
+    if (now - (exp.lastSeen || 0) > 2 * 60 * 1000) {
+      activeIslandExplorers.delete(sId);
+    }
+  }
+}, 60 * 1000);
 
 io.on('connection', (socket) => {
   console.log('⚡ Socket Connected:', socket.id);
@@ -3859,8 +3865,79 @@ io.on('connection', (socket) => {
     }
   });
 
+  // =========================================================================
+  // SHARED MULTIPLAYER ISLAND WORLD (ALL EXPLORERS VISIBLE IN REAL TIME)
+  // =========================================================================
+  socket.on('island_world_join', ({ user, roomCode, role }) => {
+    try {
+      socket.join('couple_island_world');
+      socket.islandUser = {
+        socketId: socket.id,
+        userId: String(user?.id || user?._id || socket.userId || socket.id),
+        name: String(user?.name || user?.displayName || user?.username || 'Explorer').slice(0, 30),
+        avatar: user?.avatar || '',
+        roomCode: String(roomCode || '').trim().toUpperCase(),
+        role: role || 'host',
+        x: role === 'partner' ? 2 : -2,
+        y: 3.0,
+        z: 0,
+        rot: 0,
+        isMoving: false,
+        lastSeen: Date.now()
+      };
+      activeIslandExplorers.set(socket.id, socket.islandUser);
+
+      // Return all currently active players on the island
+      const currentPlayers = Array.from(activeIslandExplorers.values()).filter(p => p.socketId !== socket.id);
+      socket.emit('island_world_players', currentPlayers);
+
+      // Broadcast new player arrival to all other players on the island
+      socket.to('couple_island_world').emit('island_player_joined', socket.islandUser);
+    } catch (e) {
+      console.warn('island_world_join error:', e.message);
+    }
+  });
+
+  socket.on('island_player_sync', ({ playerState }) => {
+    if (!socket.islandUser || !playerState) return;
+    socket.islandUser.x = playerState.x;
+    socket.islandUser.y = playerState.y;
+    socket.islandUser.z = playerState.z;
+    socket.islandUser.rot = playerState.rot;
+    socket.islandUser.isMoving = playerState.isMoving;
+    socket.islandUser.lastSeen = Date.now();
+
+    // Broadcast 3D position to everyone on the island
+    socket.to('couple_island_world').emit('island_player_moved', {
+      socketId: socket.id,
+      userId: socket.islandUser.userId,
+      roomCode: socket.islandUser.roomCode,
+      playerState
+    });
+  });
+
+  socket.on('island_world_leave', () => {
+    if (activeIslandExplorers.has(socket.id)) {
+      activeIslandExplorers.delete(socket.id);
+      socket.leave('couple_island_world');
+      socket.to('couple_island_world').emit('island_player_left', {
+        socketId: socket.id,
+        userId: socket.islandUser?.userId
+      });
+      socket.islandUser = null;
+    }
+  });
+
   // Disconnect
   socket.on('disconnect', () => {
+    if (activeIslandExplorers.has(socket.id)) {
+      activeIslandExplorers.delete(socket.id);
+      socket.to('couple_island_world').emit('island_player_left', {
+        socketId: socket.id,
+        userId: socket.islandUser?.userId
+      });
+      socket.islandUser = null;
+    }
     if (socket.coupleRoomCode) {
       const code = socket.coupleRoomCode;
       io.to(`couple_room_${code}`).emit('couple_partner_left', { role: socket.coupleRole });

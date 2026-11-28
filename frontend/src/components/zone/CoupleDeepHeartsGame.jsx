@@ -422,7 +422,7 @@ export default function CoupleDeepHeartsGame({
               chatId={`couple_${roomCode}`}
               partnerName={partner?.name || (role === 'host' ? 'Partner 2' : 'Partner 1')}
               partnerId={partner?.id || null}
-              compact={true}
+              iconOnly={true}
             />
           )}
         </div>
