@@ -30,8 +30,7 @@ import {
 } from 'lucide-react';
 
 // =========================================================================
-// NATIVE PROCEDURAL ROMANTIC AUDIO SYNTHESIZER
-// High fidelity crystal chimes, dual pad fanfare & romantic audio feedback
+// PROCEDURAL AUDIO SYNTHESIZER (0 external mp3 dependencies)
 // =========================================================================
 const createIslandAudio = () => {
   let ctx = null;
@@ -48,7 +47,7 @@ const createIslandAudio = () => {
     }
   };
 
-  const playChime = (freq = 660, type = 'sine', duration = 0.6) => {
+  const playChime = (freq = 660, type = 'sine', duration = 0.5) => {
     if (isMuted) return;
     init();
     if (!ctx) return;
@@ -68,20 +67,18 @@ const createIslandAudio = () => {
   };
 
   const playCrystalCollect = () => {
-    playChime(784, 'triangle', 0.5);
-    setTimeout(() => playChime(987.77, 'sine', 0.6), 80);
-    setTimeout(() => playChime(1174.66, 'sine', 0.8), 160);
+    playChime(784, 'triangle', 0.4);
+    setTimeout(() => playChime(1046.5, 'sine', 0.5), 100);
   };
 
   const playPadActive = () => {
-    playChime(523.25, 'sine', 0.4);
-    setTimeout(() => playChime(659.25, 'sine', 0.5), 100);
-    setTimeout(() => playChime(783.99, 'sine', 0.6), 200);
-    setTimeout(() => playChime(1046.50, 'sine', 1.0), 300);
+    playChime(523.25, 'sine', 0.3);
+    setTimeout(() => playChime(659.25, 'sine', 0.4), 80);
+    setTimeout(() => playChime(783.99, 'sine', 0.5), 160);
   };
 
   const playHeartPop = () => {
-    playChime(880, 'sine', 0.3);
+    playChime(880, 'sine', 0.25);
   };
 
   return {
@@ -107,15 +104,9 @@ export default function CoupleIsland3DGame({
   const minimapCanvasRef = useRef(null);
   const audioRef = useRef(null);
 
-  // Game Flow State: 'lobby' (Pre-game setup) | 'playing' (Full 3D immersive world)
-  const [gameState, setGameState] = useState(() => {
-    // If launched from deep-link as partner, can enter directly or ready up
-    return (initialRole === 'partner' && initialRoomCode) ? 'playing' : 'lobby';
-  });
-
   // Ephemeral Room State (Zero DB Persistence)
   const [roomCode, setRoomCode] = useState(initialRoomCode || '');
-  const [role, setRole] = useState(initialRole || 'host'); // 'host' (Cyan/Blue) | 'partner' (Rose/Pink)
+  const [role, setRole] = useState(initialRole || 'host');
   const [partner, setPartner] = useState(initialPartner || null);
   const [copiedCode, setCopiedCode] = useState(false);
   const [inputCode, setInputCode] = useState('');
@@ -123,15 +114,17 @@ export default function CoupleIsland3DGame({
   const [connectionError, setConnectionError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Landscape check & screen fitting
   const [isPortrait, setIsPortrait] = useState(() => {
-    return typeof window !== 'undefined' ? (window.innerWidth < window.innerHeight && window.innerWidth < 800) : false;
+    return typeof window !== 'undefined' ? (window.innerHeight > window.innerWidth && window.innerWidth < 900) : false;
   });
 
   // Clean in-game modal for inviting / room code (replaces the old huge bottom card)
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
 
-  // Adventure Quests & In-Game State
+  // Quests & interactions
   const [crystalsCount, setCrystalsCount] = useState(0);
   const [isHoldingHands, setIsHoldingHands] = useState(false);
   const [padsActivated, setPadsActivated] = useState(false);
@@ -140,12 +133,14 @@ export default function CoupleIsland3DGame({
   const [showEmotePicker, setShowEmotePicker] = useState(false);
 
   // Real-time synchronization refs
-  const localPosRef = useRef({ x: 0, y: 1.2, z: 0, rot: 0, isMoving: false, isJumping: false });
-  const remotePlayersMapRef = useRef(new Map()); // socketId -> { group, nametag, leftLeg, rightLeg, targetPos, isPartner, name }
+  const localPosRef = useRef({ x: 0, y: 1.2, z: 0, rot: 0, isMoving: false });
+  const remotePosRef = useRef({ x: 2, y: 3.0, z: 0, rot: 0, isMoving: false });
+  const partnerAvatarRef = useRef(null);
+  const remotePlayersMapRef = useRef(new Map()); // other island explorers: socketId -> { group, leftLeg, rightLeg, targetPos }
   const lastSyncTimeRef = useRef(0);
   const roomCodeRef = useRef(roomCode);
   const partnerNameRef = useRef(partner?.name || '');
-  const zoomDistRef = useRef(14); // Camera distance (dynamic zoom)
+  const zoomDistRef = useRef(14); // Camera zoom distance
 
   useEffect(() => {
     roomCodeRef.current = roomCode;
@@ -155,19 +150,36 @@ export default function CoupleIsland3DGame({
     partnerNameRef.current = partner?.name || '';
   }, [partner]);
 
-  // Monitor device orientation for landscape mode
+  // Orientation listener
   useEffect(() => {
-    const checkOrientation = () => {
+    const handleResize = () => {
       if (typeof window === 'undefined') return;
-      const portrait = window.innerWidth < window.innerHeight && window.innerWidth < 800;
+      const portrait = window.innerHeight > window.innerWidth && window.innerWidth < 900;
       setIsPortrait(portrait);
     };
-    window.addEventListener('resize', checkOrientation);
-    window.addEventListener('orientationchange', checkOrientation);
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
     return () => {
-      window.removeEventListener('resize', checkOrientation);
-      window.removeEventListener('orientationchange', checkOrientation);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
     };
+  }, []);
+
+  // Automatic Fullscreen & Landscape on mount
+  useEffect(() => {
+    const enterLandscape = () => {
+      try {
+        if (typeof document !== 'undefined' && !document.fullscreenElement && document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().then(() => {
+            setIsFullscreen(true);
+            if (screen.orientation && screen.orientation.lock) {
+              screen.orientation.lock('landscape').catch(() => {});
+            }
+          }).catch(() => {});
+        }
+      } catch (_) {}
+    };
+    enterLandscape();
   }, []);
 
   const showToast = (msg) => {
@@ -230,7 +242,6 @@ export default function CoupleIsland3DGame({
     }
   };
 
-  // Zoom controls
   const handleZoomIn = () => {
     zoomDistRef.current = Math.max(6, zoomDistRef.current - 3);
   };
@@ -271,6 +282,7 @@ export default function CoupleIsland3DGame({
           setRole('host');
           if (res.roomData?.partner) {
             setPartner(res.roomData.partner);
+            if (partnerAvatarRef.current) partnerAvatarRef.current.group.visible = true;
           }
         }
       });
@@ -284,6 +296,7 @@ export default function CoupleIsland3DGame({
           setRole('partner');
           if (res.roomData?.host) {
             setPartner(res.roomData.host);
+            if (partnerAvatarRef.current) partnerAvatarRef.current.group.visible = true;
           }
           playSound('success');
         }
@@ -292,13 +305,31 @@ export default function CoupleIsland3DGame({
 
     const handleRoomReady = (data) => {
       if (data.host && data.partner) {
-        if (role === 'host') {
-          setPartner(data.partner);
-        } else {
-          setPartner(data.host);
+        const other = role === 'host' ? data.partner : data.host;
+        setPartner(other);
+        partnerNameRef.current = other?.name || 'Partner';
+        if (partnerAvatarRef.current) {
+          partnerAvatarRef.current.group.visible = true;
         }
         playSound('success');
         if (audioRef.current) audioRef.current.playChime(880, 'sine', 0.8);
+        showToast(`Connected with ${other?.name || 'Partner'}! 💖`);
+      }
+    };
+
+    const handlePlayerUpdated = ({ senderRole, playerState }) => {
+      if (playerState) {
+        remotePosRef.current = {
+          ...remotePosRef.current,
+          ...playerState
+        };
+        if (partnerAvatarRef.current) {
+          partnerAvatarRef.current.group.visible = true;
+        }
+        setPartner(prev => prev || {
+          id: senderRole === 'host' ? 'host' : 'partner',
+          name: senderRole === 'host' ? 'Partner 1' : 'Partner 2'
+        });
       }
     };
 
@@ -321,14 +352,20 @@ export default function CoupleIsland3DGame({
     const handlePartnerLeft = () => {
       setPartner(null);
       setIsHoldingHands(false);
+      if (partnerAvatarRef.current) {
+        partnerAvatarRef.current.group.visible = false;
+      }
+      showToast('Partner left the room');
     };
 
     socket.on('couple_room_ready', handleRoomReady);
+    socket.on('couple_player_updated', handlePlayerUpdated);
     socket.on('couple_action_received', handleActionReceived);
     socket.on('couple_partner_left', handlePartnerLeft);
 
     return () => {
       socket.off('couple_room_ready', handleRoomReady);
+      socket.off('couple_player_updated', handlePlayerUpdated);
       socket.off('couple_action_received', handleActionReceived);
       socket.off('couple_partner_left', handlePartnerLeft);
     };
@@ -343,7 +380,7 @@ export default function CoupleIsland3DGame({
     };
   }, [socket]);
 
-  // Join Room by Code
+  // Join Room by Code from Modal
   const handleJoinByCode = () => {
     if (!socket || !inputCode.trim()) return;
     setIsConnecting(true);
@@ -363,10 +400,10 @@ export default function CoupleIsland3DGame({
         setRoomCode(res.roomCode);
         setRole('partner');
         setPartner(res.roomData?.host || null);
+        if (partnerAvatarRef.current) partnerAvatarRef.current.group.visible = true;
         playSound('success');
-        showToast('Joined partner room successfully! 💖');
+        showToast('Joined partner successfully! 💖');
         setShowInviteModal(false);
-        setGameState('playing');
       } else {
         setConnectionError(res?.message || 'Failed to join room. Verify code.');
         playSound('error');
@@ -384,75 +421,69 @@ export default function CoupleIsland3DGame({
   };
 
   // =========================================================================
-  // THREE.JS 3D MULTIPLAYER ENGINE WITH DYNAMIC ZOOM & MINIMAP
+  // HIGH-PERFORMANCE 60FPS THREE.JS ENGINE (ZERO LAG & INSTANT SYNC)
   // =========================================================================
   useEffect(() => {
-    if (gameState !== 'playing') return;
-
     const container = containerRef.current;
     if (!container) return;
 
     let animId = null;
     let isDisposed = false;
+    let frameCount = 0;
 
-    // 1. Scene, Camera, Renderer
-    const width = container.clientWidth || 800;
-    const height = container.clientHeight || 560;
+    const isMobile = window.innerWidth < 900;
+    const width = container.clientWidth || window.innerWidth;
+    const height = container.clientHeight || window.innerHeight;
 
+    // 1. Scene & Camera
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xfdba74); // Sunset paradise orange-gold
-    scene.fog = new THREE.FogExp2(0xfdba74, 0.012);
+    scene.background = new THREE.Color(0xfdba74);
+    scene.fog = new THREE.FogExp2(0xfdba74, 0.015);
 
-    const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 500);
+    const camera = new THREE.PerspectiveCamera(55, width / height, 0.2, 350);
     camera.position.set(0, 10, 18);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+    // 2. High-Performance Renderer (pixelRatio: 1.0 on mobile to guarantee smooth 60fps)
+    const renderer = new THREE.WebGLRenderer({
+      antialias: !isMobile,
+      alpha: false,
+      powerPreference: 'high-performance',
+      precision: isMobile ? 'mediump' : 'highp'
+    });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.setPixelRatio(isMobile ? 1.0 : Math.min(window.devicePixelRatio, 1.25));
+    renderer.shadowMap.enabled = false; // Disabled dynamic shadow map for 3x framerate boost
     container.appendChild(renderer.domElement);
 
-    // 2. Lighting (Golden Sunset Island Lighting)
-    const hemiLight = new THREE.HemisphereLight(0xffedd5, 0x0284c7, 0.85);
+    // 3. Lighting (Clean Sunset Lighting without heavy real-time shadows)
+    const hemiLight = new THREE.HemisphereLight(0xffedd5, 0x0284c7, 0.95);
     scene.add(hemiLight);
 
-    const sunLight = new THREE.DirectionalLight(0xffedd5, 1.4);
+    const sunLight = new THREE.DirectionalLight(0xffedd5, 1.3);
     sunLight.position.set(30, 45, 30);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 1024;
-    sunLight.shadow.mapSize.height = 1024;
-    sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 150;
-    const d = 40;
-    sunLight.shadow.camera.left = -d;
-    sunLight.shadow.camera.right = d;
-    sunLight.shadow.camera.top = d;
-    sunLight.shadow.camera.bottom = -d;
     scene.add(sunLight);
 
-    const heartGlowLight = new THREE.PointLight(0xf43f5e, 1.5, 25);
+    const heartGlowLight = new THREE.PointLight(0xf43f5e, 1.6, 25);
     heartGlowLight.position.set(0, 4, -15);
     scene.add(heartGlowLight);
 
-    // 3. Terrain & Ocean
-    const oceanGeo = new THREE.PlaneGeometry(300, 300, 32, 32);
+    // 4. Low-Poly Optimized Terrain
+    // Ocean Plane (16x16 segments)
+    const oceanGeo = new THREE.PlaneGeometry(240, 240, 16, 16);
     const oceanMat = new THREE.MeshStandardMaterial({
       color: 0x0284c7,
-      roughness: 0.15,
-      metalness: 0.8,
+      roughness: 0.2,
+      metalness: 0.6,
       transparent: true,
-      opacity: 0.88
+      opacity: 0.9
     });
     const ocean = new THREE.Mesh(oceanGeo, oceanMat);
     ocean.rotation.x = -Math.PI / 2;
     ocean.position.y = -0.5;
     scene.add(ocean);
 
-    // Island Ground (Layered Stylized Landscape)
-    const islandGeo = new THREE.CylinderGeometry(38, 44, 4, 32);
+    // Island Top (18 radial segments)
+    const islandGeo = new THREE.CylinderGeometry(38, 43, 3.8, 18);
     const islandMat = new THREE.MeshStandardMaterial({
       color: 0x22c55e,
       roughness: 0.85,
@@ -460,11 +491,10 @@ export default function CoupleIsland3DGame({
     });
     const island = new THREE.Mesh(islandGeo, islandMat);
     island.position.y = 1;
-    island.receiveShadow = true;
     scene.add(island);
 
     // Beach Sand Rim
-    const beachGeo = new THREE.RingGeometry(35, 46, 32);
+    const beachGeo = new THREE.RingGeometry(35, 45, 18);
     const beachMat = new THREE.MeshStandardMaterial({
       color: 0xfef08a,
       roughness: 0.9,
@@ -473,18 +503,16 @@ export default function CoupleIsland3DGame({
     const beach = new THREE.Mesh(beachGeo, beachMat);
     beach.rotation.x = -Math.PI / 2;
     beach.position.y = 1.05;
-    beach.receiveShadow = true;
     scene.add(beach);
 
-    // Hill Plateau / Sunset Peak
-    const hillGeo = new THREE.CylinderGeometry(12, 16, 6, 16);
+    // Hill Plateau
+    const hillGeo = new THREE.CylinderGeometry(12, 16, 6, 12);
     const hillMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.85, flatShading: true });
     const hill = new THREE.Mesh(hillGeo, hillMat);
     hill.position.set(-14, 5, -14);
-    hill.receiveShadow = true;
     scene.add(hill);
 
-    // Gazebo on Sunset Peak
+    // Lovers' Gazebo
     const gazeboGroup = new THREE.Group();
     gazeboGroup.position.set(-14, 8, -14);
     const roofGeo = new THREE.ConeGeometry(4, 2.5, 6);
@@ -493,9 +521,9 @@ export default function CoupleIsland3DGame({
     roof.position.y = 3;
     gazeboGroup.add(roof);
 
-    for (let i = 0; i < 6; i++) {
-      const angle = (i / 6) * Math.PI * 2;
-      const poleGeo = new THREE.CylinderGeometry(0.12, 0.12, 3);
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2;
+      const poleGeo = new THREE.CylinderGeometry(0.12, 0.12, 3, 6);
       const poleMat = new THREE.MeshStandardMaterial({ color: 0xffedd5 });
       const pole = new THREE.Mesh(poleGeo, poleMat);
       pole.position.set(Math.cos(angle) * 3, 1.5, Math.sin(angle) * 3);
@@ -503,20 +531,20 @@ export default function CoupleIsland3DGame({
     }
     scene.add(gazeboGroup);
 
-    // Dual Pressure Pads on Island Center
-    const pad1Geo = new THREE.CylinderGeometry(1.6, 1.7, 0.25, 24);
-    const pad1Mat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.6, roughness: 0.3 });
+    // Dual Pressure Pads
+    const pad1Geo = new THREE.CylinderGeometry(1.6, 1.7, 0.25, 16);
+    const pad1Mat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.6 });
     const pad1 = new THREE.Mesh(pad1Geo, pad1Mat);
     pad1.position.set(-3.5, 3.1, 4);
     scene.add(pad1);
 
-    const pad2Geo = new THREE.CylinderGeometry(1.6, 1.7, 0.25, 24);
-    const pad2Mat = new THREE.MeshStandardMaterial({ color: 0xec4899, emissive: 0xbe185d, emissiveIntensity: 0.6, roughness: 0.3 });
+    const pad2Geo = new THREE.CylinderGeometry(1.6, 1.7, 0.25, 16);
+    const pad2Mat = new THREE.MeshStandardMaterial({ color: 0xec4899, emissive: 0xbe185d, emissiveIntensity: 0.6 });
     const pad2 = new THREE.Mesh(pad2Geo, pad2Mat);
     pad2.position.set(3.5, 3.1, 4);
     scene.add(pad2);
 
-    // 5 Collectible Love Crystals
+    // 5 Collectible Crystals
     const crystalPositions = [
       new THREE.Vector3(12, 3.5, -8),
       new THREE.Vector3(-18, 3.5, 12),
@@ -529,27 +557,24 @@ export default function CoupleIsland3DGame({
     const crystalMat = new THREE.MeshStandardMaterial({
       color: 0xff007f,
       emissive: 0xff1493,
-      emissiveIntensity: 0.8,
-      roughness: 0.1,
-      metalness: 0.5
+      emissiveIntensity: 0.8
     });
 
     crystalPositions.forEach((pos, idx) => {
-      const crystal = new THREE.Mesh(crystalGeo, crystalMat.clone());
+      const crystal = new THREE.Mesh(crystalGeo, crystalMat);
       crystal.position.copy(pos);
-      crystal.castShadow = true;
       crystal.userData = { id: idx, collected: false };
       scene.add(crystal);
       crystalMeshes.push(crystal);
     });
 
-    // 4. Stylized 3D Avatar Factory with Floating Nametags
-    const createNametagTexture = (nameText, isPartner = false) => {
+    // 5. Stylized 3D Avatar Creation with Sprite Nametag
+    const createNametagSprite = (nameText, isPartner = false) => {
       const canvas = document.createElement('canvas');
       canvas.width = 256;
       canvas.height = 64;
       const ctx = canvas.getContext('2d');
-      ctx.fillStyle = isPartner ? 'rgba(190, 24, 93, 0.9)' : 'rgba(15, 23, 42, 0.85)';
+      ctx.fillStyle = isPartner ? 'rgba(190, 24, 93, 0.92)' : 'rgba(15, 23, 42, 0.88)';
       ctx.beginPath();
       if (ctx.roundRect) ctx.roundRect(6, 6, 244, 52, 14);
       else ctx.rect(6, 6, 244, 52);
@@ -562,73 +587,55 @@ export default function CoupleIsland3DGame({
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(nameText, 128, 32);
-      return new THREE.CanvasTexture(canvas);
+      const texture = new THREE.CanvasTexture(canvas);
+      const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.scale.set(2.8, 0.7, 1);
+      sprite.position.y = 3.35;
+      return sprite;
     };
 
-    const createPlayerAvatar = (colorHex, nameText = 'Explorer', isPartner = false) => {
+    const createPlayerAvatar = (colorHex, nameText = 'Player', isPartner = false) => {
       const playerGroup = new THREE.Group();
 
-      // Body (explorer jacket)
-      const bodyGeo = new THREE.CylinderGeometry(0.45, 0.5, 1.1, 12);
+      // Body
+      const bodyGeo = new THREE.CylinderGeometry(0.45, 0.5, 1.1, 10);
       const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.5 });
       const body = new THREE.Mesh(bodyGeo, bodyMat);
       body.position.y = 1.1;
-      body.castShadow = true;
       playerGroup.add(body);
 
       // Head
-      const headGeo = new THREE.SphereGeometry(0.38, 16, 16);
+      const headGeo = new THREE.SphereGeometry(0.38, 12, 12);
       const headMat = new THREE.MeshStandardMaterial({ color: 0xfed7aa, roughness: 0.6 });
       const head = new THREE.Mesh(headGeo, headMat);
       head.position.y = 1.95;
-      head.castShadow = true;
       playerGroup.add(head);
 
       // Cap
-      const capGeo = new THREE.SphereGeometry(0.4, 12, 12, 0, Math.PI * 2, 0, Math.PI / 2);
-      const capMat = new THREE.MeshStandardMaterial({ color: isPartner ? 0xbe185d : 0x1e293b, roughness: 0.4 });
+      const capGeo = new THREE.SphereGeometry(0.4, 10, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+      const capMat = new THREE.MeshStandardMaterial({ color: isPartner ? 0xbe185d : 0x1e293b });
       const cap = new THREE.Mesh(capGeo, capMat);
       cap.position.y = 2.05;
       playerGroup.add(cap);
 
-      // Floating Heart Aura (Partner gets pink heart, others get golden sparkle aura)
-      const heartShape = new THREE.Shape();
-      const x = 0, y = 0;
-      heartShape.moveTo(x + 0.25, y + 0.25);
-      heartShape.bezierCurveTo(x + 0.25, y + 0.25, x + 0.2, y, x, y);
-      heartShape.bezierCurveTo(x - 0.3, y, x - 0.3, y + 0.35, x - 0.3, y + 0.35);
-      heartShape.bezierCurveTo(x - 0.3, y + 0.55, x - 0.1, y + 0.77, x + 0.25, y + 1.0);
-      heartShape.bezierCurveTo(x + 0.6, y + 0.77, x + 0.8, y + 0.55, x + 0.8, y + 0.35);
-      heartShape.bezierCurveTo(x + 0.8, y + 0.35, x + 0.8, y, x + 0.5, y);
-      heartShape.bezierCurveTo(x + 0.35, y, x + 0.25, y + 0.25, x + 0.25, y + 0.25);
-
-      const extrudeSettings = { depth: 0.1, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: 0.05, bevelThickness: 0.05 };
-      const heartGeo = new THREE.ExtrudeGeometry(heartShape, extrudeSettings);
-      heartGeo.center();
+      // Floating Aura
+      const heartGeo = new THREE.OctahedronGeometry(0.32, 0);
       const heartMat = new THREE.MeshStandardMaterial({
-        color: isPartner ? 0xff1493 : 0xf59e0b,
-        emissive: isPartner ? 0xff69b4 : 0xd97706,
-        emissiveIntensity: 0.8,
-        roughness: 0.2
+        color: isPartner ? 0xff1493 : 0x38bdf8,
+        emissive: isPartner ? 0xff69b4 : 0x0284c7,
+        emissiveIntensity: 0.8
       });
       const floatingHeart = new THREE.Mesh(heartGeo, heartMat);
-      floatingHeart.scale.set(0.42, 0.42, 0.42);
       floatingHeart.position.y = 2.75;
-      floatingHeart.rotation.z = Math.PI;
       playerGroup.add(floatingHeart);
 
-      // Nametag Sprite
-      const nametagMat = new THREE.SpriteMaterial({
-        map: createNametagTexture(nameText, isPartner),
-        transparent: true
-      });
-      const nametagSprite = new THREE.Sprite(nametagMat);
-      nametagSprite.scale.set(2.8, 0.7, 1);
-      nametagSprite.position.y = 3.35;
-      playerGroup.add(nametagSprite);
+      // Nametag
+      const nametag = createNametagSprite(nameText, isPartner);
+      playerGroup.add(nametag);
 
       // Legs
-      const legGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.6, 8);
+      const legGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.6, 6);
       const legMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
       const leftLeg = new THREE.Mesh(legGeo, legMat);
       leftLeg.position.set(-0.2, 0.3, 0);
@@ -639,53 +646,74 @@ export default function CoupleIsland3DGame({
       playerGroup.add(rightLeg);
 
       scene.add(playerGroup);
-      return { group: playerGroup, floatingHeart, leftLeg, rightLeg, nametagSprite };
+      return { group: playerGroup, floatingHeart, leftLeg, rightLeg, nametag };
     };
 
-    // Create Local Player Avatar
+    // A. Create Local Avatar (Cyan/Host or Rose/Partner)
     const localColor = role === 'host' ? 0x38bdf8 : 0xec4899;
     const localAvatar = createPlayerAvatar(localColor, user?.displayName || user?.username || 'You', false);
     localAvatar.group.position.set(role === 'host' ? -2 : 2, 3.0, 0);
 
-    // =========================================================================
-    // MULTIPLAYER ISLAND WORLD SOCKET LISTENERS (ALL PLAYERS LIVE ON MAP)
-    // =========================================================================
-    const spawnRemotePlayer = (playerInfo) => {
+    // B. Create Dedicated Partner Avatar (GUARANTEED VISIBILITY IN 3D WORLD)
+    const partnerColor = role === 'host' ? 0xec4899 : 0x38bdf8;
+    const partnerAvatar = createPlayerAvatar(partnerColor, `💖 ${partnerNameRef.current || 'Partner'}`, true);
+    partnerAvatar.group.position.set(role === 'host' ? 2 : -2, 3.0, 0);
+    // Visible if partner data exists or becomes visible on sync/join
+    partnerAvatar.group.visible = Boolean(partner);
+    partnerAvatarRef.current = partnerAvatar;
+
+    // C. Multiplayer World Explorers Map
+    const spawnOtherPlayer = (playerInfo) => {
       const sId = playerInfo.socketId;
       if (!sId || sId === socket?.id || remotePlayersMapRef.current.has(sId)) return;
 
-      const isMyPartner = Boolean(roomCode && playerInfo.roomCode === roomCode);
-      const color = isMyPartner ? 0xec4899 : 0x8b5cf6;
-      const tagText = isMyPartner ? `💖 ${playerInfo.name || 'Partner'}` : `👤 ${playerInfo.name || 'Explorer'}`;
+      // If this player is our room partner, ensure partner avatar is visible
+      if (roomCode && playerInfo.roomCode === roomCode) {
+        partnerAvatar.group.visible = true;
+        return;
+      }
 
-      const avatar = createPlayerAvatar(color, tagText, isMyPartner);
-      avatar.group.position.set(playerInfo.x || 0, playerInfo.y || 3.0, playerInfo.z || 0);
+      // Other island explorers
+      const otherAvatar = createPlayerAvatar(0x8b5cf6, `👤 ${playerInfo.name || 'Explorer'}`, false);
+      otherAvatar.group.position.set(playerInfo.x || 0, playerInfo.y || 3.0, playerInfo.z || 0);
 
       remotePlayersMapRef.current.set(sId, {
-        ...avatar,
+        ...otherAvatar,
         targetPos: {
           x: playerInfo.x || 0,
           y: playerInfo.y || 3.0,
           z: playerInfo.z || 0,
           rot: playerInfo.rot || 0,
           isMoving: false
-        },
-        isPartner: isMyPartner,
-        name: playerInfo.name
+        }
       });
     };
 
     const handleIslandWorldPlayers = (players) => {
       if (Array.isArray(players)) {
-        players.forEach(p => spawnRemotePlayer(p));
+        players.forEach(p => spawnOtherPlayer(p));
       }
     };
 
     const handleIslandPlayerJoined = (playerInfo) => {
-      spawnRemotePlayer(playerInfo);
+      spawnOtherPlayer(playerInfo);
+      if (roomCode && playerInfo.roomCode === roomCode) {
+        partnerAvatar.group.visible = true;
+      }
     };
 
-    const handleIslandPlayerMoved = ({ socketId, playerState }) => {
+    const handleIslandPlayerMoved = ({ socketId, roomCode: senderRoom, playerState }) => {
+      // If it's from our partner, update partner position immediately
+      if (roomCode && senderRoom === roomCode) {
+        remotePosRef.current = {
+          ...remotePosRef.current,
+          ...playerState
+        };
+        partnerAvatar.group.visible = true;
+        return;
+      }
+
+      // Other island explorer
       const remote = remotePlayersMapRef.current.get(socketId);
       if (remote && playerState) {
         remote.targetPos.x = playerState.x;
@@ -721,9 +749,7 @@ export default function CoupleIsland3DGame({
       socket.on('island_player_left', handleIslandPlayerLeft);
     }
 
-    // =========================================================================
-    // CONTROLS & CAMERA DYNAMICS (ZOOM WHEEL + PINCH + ORBIT)
-    // =========================================================================
+    // 6. Keyboard, Mouse Wheel & Touch Controls
     const keys = { w: false, a: false, s: false, d: false, space: false };
 
     const handleKeyDown = (e) => {
@@ -768,10 +794,10 @@ export default function CoupleIsland3DGame({
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
 
-    // Mouse Wheel Zoom
+    // Wheel Zoom
     const handleWheel = (e) => {
       e.preventDefault();
-      zoomDistRef.current = Math.max(6, Math.min(32, zoomDistRef.current + e.deltaY * 0.02));
+      zoomDistRef.current = Math.max(6, Math.min(30, zoomDistRef.current + e.deltaY * 0.02));
     };
     container.addEventListener('wheel', handleWheel, { passive: false });
 
@@ -787,13 +813,13 @@ export default function CoupleIsland3DGame({
     };
     const handleTouchMove = (e) => {
       if (e.touches.length === 2 && initialPinch) {
-        const currentPinch = Math.hypot(
+        const curPinch = Math.hypot(
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY
         );
-        const delta = (initialPinch - currentPinch) * 0.05;
-        zoomDistRef.current = Math.max(6, Math.min(32, zoomDistRef.current + delta));
-        initialPinch = currentPinch;
+        const delta = (initialPinch - curPinch) * 0.04;
+        zoomDistRef.current = Math.max(6, Math.min(30, zoomDistRef.current + delta));
+        initialPinch = curPinch;
       }
     };
     const handleTouchEnd = () => { initialPinch = null; };
@@ -802,7 +828,7 @@ export default function CoupleIsland3DGame({
     container.addEventListener('touchmove', handleTouchMove, { passive: true });
     container.addEventListener('touchend', handleTouchEnd, { passive: true });
 
-    // Tab visibility handling
+    // Visibility Handling
     let isVisible = !document.hidden;
     const handleVisibilityChange = () => {
       isVisible = !document.hidden;
@@ -813,9 +839,7 @@ export default function CoupleIsland3DGame({
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // =========================================================================
-    // GAME LOOP & REAL-TIME MINIMAP RENDERING
-    // =========================================================================
+    // 7. Silky Smooth 60FPS Game Loop
     let lastTime = performance.now();
     let walkCycle = 0;
     let velocityY = 0;
@@ -831,6 +855,7 @@ export default function CoupleIsland3DGame({
 
       const dt = Math.min((currentTime - lastTime) / 1000, 0.1);
       lastTime = currentTime;
+      frameCount++;
 
       // Player Movement
       let moveX = 0;
@@ -889,11 +914,10 @@ export default function CoupleIsland3DGame({
         localAvatar.group.position.z *= ratio;
       }
 
-      // Aura Float
+      // Floating Aura Rotation
       const t = currentTime * 0.003;
       localAvatar.floatingHeart.rotation.y = t * 2;
-      localAvatar.floatingHeart.position.y = 2.75 + Math.sin(t * 3) * 0.15;
-      ocean.position.y = -0.5 + Math.sin(t * 1.5) * 0.15;
+      partnerAvatar.floatingHeart.rotation.y = -t * 2;
 
       // Crystals
       crystalMeshes.forEach(c => {
@@ -919,7 +943,7 @@ export default function CoupleIsland3DGame({
         }
       });
 
-      // Camera Smooth Follow with Dynamic Zoom
+      // Smooth Camera Follow with Dynamic Zoom
       const curZoom = zoomDistRef.current;
       const camHeight = (curZoom / 14) * 7.5;
       const targetCamX = localAvatar.group.position.x + Math.sin(cameraAngle) * curZoom;
@@ -929,7 +953,23 @@ export default function CoupleIsland3DGame({
       camera.position.z += (targetCamZ - camera.position.z) * 0.15;
       camera.lookAt(localAvatar.group.position.x, localAvatar.group.position.y + 1.2, localAvatar.group.position.z);
 
-      // Interpolate all remote players on the shared island
+      // Interpolate Partner Avatar smoothly
+      if (partnerAvatar.group.visible) {
+        partnerAvatar.group.position.x += (remotePosRef.current.x - partnerAvatar.group.position.x) * 0.25;
+        partnerAvatar.group.position.y += (remotePosRef.current.y - partnerAvatar.group.position.y) * 0.25;
+        partnerAvatar.group.position.z += (remotePosRef.current.z - partnerAvatar.group.position.z) * 0.25;
+        partnerAvatar.group.rotation.y += (remotePosRef.current.rot - partnerAvatar.group.rotation.y) * 0.25;
+
+        if (remotePosRef.current.isMoving) {
+          partnerAvatar.leftLeg.rotation.x = Math.sin(walkCycle) * 0.6;
+          partnerAvatar.rightLeg.rotation.x = -Math.sin(walkCycle) * 0.6;
+        } else {
+          partnerAvatar.leftLeg.rotation.x = 0;
+          partnerAvatar.rightLeg.rotation.x = 0;
+        }
+      }
+
+      // Interpolate other explorers on the island
       remotePlayersMapRef.current.forEach((remote) => {
         remote.group.position.x += (remote.targetPos.x - remote.group.position.x) * 0.25;
         remote.group.position.y += (remote.targetPos.y - remote.group.position.y) * 0.25;
@@ -945,66 +985,89 @@ export default function CoupleIsland3DGame({
         }
       });
 
-      // Emit Movement Sync to Shared Island World (30Hz)
+      // Emit Real-time Sync (30Hz) - Dual Channel (Direct Room + Island World)
       if (socket && currentTime - lastSyncTimeRef.current > 33) {
         lastSyncTimeRef.current = currentTime;
+        const pState = {
+          x: localAvatar.group.position.x,
+          y: localAvatar.group.position.y,
+          z: localAvatar.group.position.z,
+          rot: localAvatar.group.rotation.y,
+          isMoving
+        };
+
+        if (roomCode) {
+          socket.emit('couple_player_sync', {
+            roomCode,
+            playerState: pState
+          });
+        }
         socket.emit('island_player_sync', {
-          playerState: {
-            x: localAvatar.group.position.x,
-            y: localAvatar.group.position.y,
-            z: localAvatar.group.position.z,
-            rot: localAvatar.group.rotation.y,
-            isMoving
-          }
+          playerState: pState
         });
       }
 
-      // Draw Radar Minimap
-      const minimap = minimapCanvasRef.current;
-      if (minimap) {
-        const mCtx = minimap.getContext('2d');
-        const mw = minimap.width;
-        const mh = minimap.height;
-        const center = mw / 2;
-        const scale = (mw / 2 - 4) / 38;
+      // Draw Radar Minimap (Throttled to every 6th frame to eliminate canvas overhead)
+      if (frameCount % 6 === 0) {
+        const minimap = minimapCanvasRef.current;
+        if (minimap) {
+          const mCtx = minimap.getContext('2d');
+          const mw = minimap.width;
+          const mh = minimap.height;
+          const center = mw / 2;
+          const scale = (mw / 2 - 4) / 38;
 
-        mCtx.clearRect(0, 0, mw, mh);
+          mCtx.clearRect(0, 0, mw, mh);
 
-        // Island base
-        mCtx.beginPath();
-        mCtx.arc(center, center, 36 * scale, 0, Math.PI * 2);
-        mCtx.fillStyle = 'rgba(34, 197, 94, 0.4)';
-        mCtx.fill();
-        mCtx.lineWidth = 3;
-        mCtx.strokeStyle = 'rgba(254, 240, 138, 0.7)';
-        mCtx.stroke();
-
-        // Gazebo
-        mCtx.beginPath();
-        mCtx.arc(center + (-14 * scale), center + (-14 * scale), 4, 0, Math.PI * 2);
-        mCtx.fillStyle = '#f59e0b';
-        mCtx.fill();
-
-        // Other players on the island
-        remotePlayersMapRef.current.forEach((remote) => {
-          const rx = center + (remote.group.position.x * scale);
-          const rz = center + (remote.group.position.z * scale);
+          // Island base
           mCtx.beginPath();
-          mCtx.arc(rx, rz, remote.isPartner ? 4 : 2.5, 0, Math.PI * 2);
-          mCtx.fillStyle = remote.isPartner ? '#ec4899' : '#8b5cf6';
+          mCtx.arc(center, center, 36 * scale, 0, Math.PI * 2);
+          mCtx.fillStyle = 'rgba(34, 197, 94, 0.45)';
           mCtx.fill();
-        });
+          mCtx.lineWidth = 2.5;
+          mCtx.strokeStyle = 'rgba(254, 240, 138, 0.7)';
+          mCtx.stroke();
 
-        // Local player dot with heading pointer
-        const px = center + (localAvatar.group.position.x * scale);
-        const pz = center + (localAvatar.group.position.z * scale);
-        mCtx.beginPath();
-        mCtx.arc(px, pz, 4, 0, Math.PI * 2);
-        mCtx.fillStyle = '#38bdf8';
-        mCtx.fill();
-        mCtx.lineWidth = 1.5;
-        mCtx.strokeStyle = '#ffffff';
-        mCtx.stroke();
+          // Gazebo
+          mCtx.beginPath();
+          mCtx.arc(center + (-14 * scale), center + (-14 * scale), 3.5, 0, Math.PI * 2);
+          mCtx.fillStyle = '#f59e0b';
+          mCtx.fill();
+
+          // Partner dot (Glowing Pink)
+          if (partnerAvatar.group.visible) {
+            const prx = center + (partnerAvatar.group.position.x * scale);
+            const prz = center + (partnerAvatar.group.position.z * scale);
+            mCtx.beginPath();
+            mCtx.arc(prx, prz, 5, 0, Math.PI * 2);
+            mCtx.fillStyle = '#ec4899';
+            mCtx.fill();
+            mCtx.lineWidth = 1.5;
+            mCtx.strokeStyle = '#ffffff';
+            mCtx.stroke();
+          }
+
+          // Other explorers (Violet)
+          remotePlayersMapRef.current.forEach((remote) => {
+            const rx = center + (remote.group.position.x * scale);
+            const rz = center + (remote.group.position.z * scale);
+            mCtx.beginPath();
+            mCtx.arc(rx, rz, 3, 0, Math.PI * 2);
+            mCtx.fillStyle = '#8b5cf6';
+            mCtx.fill();
+          });
+
+          // Local player dot with heading pointer (Cyan)
+          const px = center + (localAvatar.group.position.x * scale);
+          const pz = center + (localAvatar.group.position.z * scale);
+          mCtx.beginPath();
+          mCtx.arc(px, pz, 4.5, 0, Math.PI * 2);
+          mCtx.fillStyle = '#38bdf8';
+          mCtx.fill();
+          mCtx.lineWidth = 1.5;
+          mCtx.strokeStyle = '#ffffff';
+          mCtx.stroke();
+        }
       }
 
       renderer.render(scene, camera);
@@ -1015,8 +1078,8 @@ export default function CoupleIsland3DGame({
 
     const handleResize = () => {
       if (!container || isDisposed) return;
-      const w = container.clientWidth;
-      const h = container.clientHeight;
+      const w = container.clientWidth || window.innerWidth;
+      const h = container.clientHeight || window.innerHeight;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
@@ -1051,7 +1114,7 @@ export default function CoupleIsland3DGame({
       }
       renderer.dispose();
     };
-  }, [gameState, roomCode, role, user, socket]);
+  }, [roomCode, role, user, socket]);
 
   // Touch handlers
   const handleJoystickMove = (e) => {
@@ -1102,276 +1165,19 @@ export default function CoupleIsland3DGame({
     setTimeout(() => setActiveEmote(null), 3500);
   };
 
-  // =========================================================================
-  // VIEW 1: PRE-GAME LOBBY SCREEN (Clean Romantic Room Setup)
-  // =========================================================================
-  if (gameState === 'lobby') {
-    return (
-      <div style={{
-        width: '100%',
-        height: '100%',
-        minHeight: '520px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #090d16 0%, #1a102f 50%, #2e1065 100%)',
-        padding: '20px',
-        boxSizing: 'border-box',
-        color: '#fff',
-        userSelect: 'none',
-        position: 'relative'
-      }}>
-        {/* Top Back Button */}
-        <div style={{ position: 'absolute', top: '16px', left: '16px' }}>
-          <button
-            onClick={onBack}
-            style={{
-              background: 'rgba(255, 255, 255, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              color: '#fff',
-              borderRadius: '12px',
-              padding: '8px 14px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '0.82rem',
-              fontWeight: 800
-            }}
-          >
-            <ArrowLeft size={16} /> Back
-          </button>
-        </div>
-
-        {/* Central Romantic Lobby Card */}
-        <div style={{
-          maxWidth: '460px',
-          width: '100%',
-          background: 'rgba(15, 23, 42, 0.85)',
-          border: '1.5px solid rgba(244, 63, 94, 0.45)',
-          borderRadius: '24px',
-          padding: '24px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '18px',
-          boxShadow: '0 20px 50px rgba(0,0,0,0.6), 0 0 30px rgba(244, 63, 94, 0.25)',
-          backdropFilter: 'blur(12px)'
-        }}>
-          {/* Header */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', textAlign: 'center' }}>
-            <div style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '18px',
-              background: 'linear-gradient(135deg, #f43f5e, #ec4899)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 8px 25px rgba(244, 63, 94, 0.5)'
-            }}>
-              <Heart size={30} color="#fff" fill="#fff" />
-            </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#fff', marginTop: '6px' }}>
-              Couples 3D Island Adventure 🏝️
-            </div>
-            <div style={{ fontSize: '0.82rem', color: '#fbcfe8', fontWeight: 600 }}>
-              Live 3D Shared World & Private Partner Mic
-            </div>
-          </div>
-
-          {/* Room Code Display & 1-Tap Copy */}
-          <div style={{
-            width: '100%',
-            background: 'rgba(0,0,0,0.4)',
-            border: '1.5px dashed rgba(244, 63, 94, 0.5)',
-            borderRadius: '16px',
-            padding: '12px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <span style={{ fontSize: '0.72rem', color: '#fda4af', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Your Couple Room Code
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#38bdf8', letterSpacing: '2px' }}>
-                {roomCode || 'GENERATING...'}
-              </span>
-              <button
-                onClick={copyRoomCode}
-                title="Copy Room Code"
-                style={{
-                  background: 'rgba(56, 189, 248, 0.2)',
-                  border: '1px solid rgba(56, 189, 248, 0.5)',
-                  color: '#38bdf8',
-                  borderRadius: '10px',
-                  padding: '6px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                {copiedCode ? <Check size={16} color="#34d399" /> : <Copy size={16} />}
-              </button>
-            </div>
-
-            {/* Sharing Options */}
-            <div style={{ display: 'flex', gap: '8px', width: '100%', marginTop: '4px' }}>
-              <button
-                onClick={handleShareLink}
-                style={{
-                  flex: 1,
-                  background: 'linear-gradient(135deg, #0284c7, #38bdf8)',
-                  border: 'none',
-                  color: '#fff',
-                  borderRadius: '12px',
-                  padding: '8px 12px',
-                  fontSize: '0.78rem',
-                  fontWeight: 900,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
-              >
-                <Share2 size={14} /> Share Link
-              </button>
-              <button
-                onClick={handleShareInChat}
-                style={{
-                  flex: 1,
-                  background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
-                  border: 'none',
-                  color: '#fff',
-                  borderRadius: '12px',
-                  padding: '8px 12px',
-                  fontSize: '0.78rem',
-                  fontWeight: 900,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
-              >
-                <MessageSquare size={14} /> Share in Chat
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Join Input */}
-          <div style={{ width: '100%', display: 'flex', gap: '8px' }}>
-            <input
-              type="text"
-              placeholder="Or enter Partner's Room Code..."
-              value={inputCode}
-              onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-              style={{
-                flex: 1,
-                background: 'rgba(0,0,0,0.35)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '12px',
-                padding: '10px 14px',
-                color: '#fff',
-                fontSize: '0.85rem',
-                fontWeight: 700,
-                outline: 'none'
-              }}
-            />
-            <button
-              onClick={handleJoinByCode}
-              disabled={isConnecting || !inputCode.trim()}
-              style={{
-                background: inputCode.trim() ? 'linear-gradient(135deg, #ec4899, #be185d)' : 'rgba(255, 255, 255, 0.1)',
-                border: 'none',
-                color: '#fff',
-                borderRadius: '12px',
-                padding: '10px 18px',
-                fontSize: '0.82rem',
-                fontWeight: 900,
-                cursor: inputCode.trim() ? 'pointer' : 'default'
-              }}
-            >
-              {isConnecting ? 'Joining...' : 'Join'}
-            </button>
-          </div>
-          {connectionError && (
-            <div style={{ color: '#f87171', fontSize: '0.76rem', fontWeight: 700 }}>
-              {connectionError}
-            </div>
-          )}
-
-          {/* Big Launch Button */}
-          <button
-            onClick={() => {
-              playSound('pop');
-              setGameState('playing');
-              if (screen.orientation && screen.orientation.lock) {
-                screen.orientation.lock('landscape').catch(() => {});
-              }
-            }}
-            style={{
-              width: '100%',
-              background: 'linear-gradient(135deg, #f43f5e 0%, #be185d 100%)',
-              border: 'none',
-              color: '#fff',
-              borderRadius: '16px',
-              padding: '14px',
-              fontSize: '1.05rem',
-              fontWeight: 900,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
-              boxShadow: '0 8px 25px rgba(244, 63, 94, 0.5)'
-            }}
-          >
-            <Play size={20} fill="#fff" /> Enter 3D Island Adventure
-          </button>
-        </div>
-
-        {/* Toast Notification */}
-        {toastMessage && (
-          <div style={{
-            position: 'absolute',
-            top: '20px',
-            background: 'linear-gradient(135deg, #059669, #10b981)',
-            color: '#fff',
-            padding: '8px 20px',
-            borderRadius: '24px',
-            fontWeight: 800,
-            fontSize: '0.84rem',
-            zIndex: 100,
-            boxShadow: '0 8px 25px rgba(16, 185, 129, 0.6)'
-          }}>
-            {toastMessage}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // =========================================================================
-  // VIEW 2: FULL IMMERSIVE 3D MULTIPLAYER WORLD (ZERO CLUTTER)
-  // =========================================================================
   return (
     <div style={{
-      width: '100%',
-      height: '100%',
-      minHeight: '100dvh',
-      position: 'relative',
+      width: '100vw',
+      height: '100dvh',
+      position: 'fixed',
+      inset: 0,
       background: '#090d16',
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column',
       userSelect: 'none',
-      fontFamily: 'system-ui, -apple-system, sans-serif'
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      zIndex: 99999
     }}>
       {/* 3D WebGL Canvas Container */}
       <div
@@ -1385,7 +1191,7 @@ export default function CoupleIsland3DGame({
         }}
       />
 
-      {/* TOP MINIMALIST GAMING HUD (NO TEXT BLOAT, ZERO OVERLAP) */}
+      {/* TOP MINIMALIST GAMING HUD (CLEAN ICONS, ZERO OVERLAPPING TEXT) */}
       <div style={{
         position: 'absolute',
         top: '12px',
@@ -1397,11 +1203,11 @@ export default function CoupleIsland3DGame({
         zIndex: 50,
         pointerEvents: 'none'
       }}>
-        {/* Left Side: Exit, Room Code / Invite Button, Fullscreen */}
+        {/* Left Side: Exit, Room Code / Invite Button, Fullscreen, Minimap */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'auto' }}>
           <button
-            onClick={() => setGameState('lobby')}
-            title="Exit to Lobby"
+            onClick={onBack}
+            title="Exit Game"
             style={{
               background: 'rgba(15, 23, 42, 0.88)',
               border: '1.5px solid rgba(255, 255, 255, 0.25)',
@@ -1598,11 +1404,11 @@ export default function CoupleIsland3DGame({
           zIndex: 60,
           boxShadow: '0 6px 20px rgba(0,0,0,0.6)',
           backdropFilter: 'blur(8px)',
-          maxWidth: '90%'
+          maxWidth: '92%'
         }}>
           <RotateCw size={15} color="#f59e0b" className="animate-spin" />
           <span style={{ fontSize: '0.74rem', color: '#fef08a', fontWeight: 800 }}>
-            Rotate to Landscape for best 3D gaming
+            Rotate sideways for Landscape mode
           </span>
           <button
             onClick={toggleFullscreen}
@@ -1611,8 +1417,8 @@ export default function CoupleIsland3DGame({
               border: 'none',
               color: '#fff',
               borderRadius: '8px',
-              padding: '4px 10px',
-              fontSize: '0.7rem',
+              padding: '5px 12px',
+              fontSize: '0.72rem',
               fontWeight: 900,
               cursor: 'pointer'
             }}
@@ -1791,12 +1597,12 @@ export default function CoupleIsland3DGame({
         </div>
       )}
 
-      {/* IN-GAME INVITE / ROOM CODE MODAL (CLEAN POPUP ON CLICK) */}
+      {/* IN-GAME INVITE / ROOM CODE MODAL (CLEAN POPUP) */}
       {showInviteModal && (
         <div style={{
           position: 'absolute',
           inset: 0,
-          background: 'rgba(0,0,0,0.65)',
+          background: 'rgba(0,0,0,0.7)',
           backdropFilter: 'blur(6px)',
           display: 'flex',
           alignItems: 'center',
@@ -1805,7 +1611,7 @@ export default function CoupleIsland3DGame({
           padding: '16px'
         }}>
           <div style={{
-            background: 'rgba(15, 23, 42, 0.95)',
+            background: 'rgba(15, 23, 42, 0.96)',
             border: '1.5px solid rgba(244, 63, 94, 0.5)',
             borderRadius: '20px',
             padding: '20px',

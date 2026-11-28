@@ -540,7 +540,21 @@ const PulseZoneModal = React.memo(function PulseZoneModal({ onClose }) {
   const handleBackFromGame = useCallback(() => setSelectedGame(null), []);
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1300 }}>
+    <div
+      className="modal-overlay"
+      onClick={onClose}
+      style={isCoupleGameActive ? {
+        position: 'fixed',
+        inset: 0,
+        padding: 0,
+        margin: 0,
+        width: '100vw',
+        height: '100dvh',
+        zIndex: 99999,
+        background: '#090d16',
+        overflow: 'hidden'
+      } : { zIndex: 1300 }}
+    >
       <div
         className="modal-card modal-responsive"
         onClick={(e) => e.stopPropagation()}

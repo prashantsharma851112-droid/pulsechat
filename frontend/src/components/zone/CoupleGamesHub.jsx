@@ -35,6 +35,16 @@ export default function CoupleGamesHub({ onGameActiveChange }) {
   }, []);
 
   const launchGame = (gameId, asRole = 'host', customCode = '') => {
+    // Trigger automatic fullscreen & landscape lock on user touch gesture
+    try {
+      if (typeof document !== 'undefined' && !document.fullscreenElement && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+      if (typeof screen !== 'undefined' && screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').catch(() => {});
+      }
+    } catch (_) {}
+
     setSelectedGame(gameId);
     setRole(asRole);
     if (customCode) {
